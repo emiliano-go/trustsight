@@ -100,7 +100,7 @@ AUR packages are community-maintained. Maintainer accounts get compromised; upst
 
 ```
                  ┌──────────────────┐
-                 │  AUR (aur.archlinux.org)
+                 │       AUR        │
                  └────────┬─────────┘
                           │ git clone / fetch
                  ┌────────▼─────────┐
@@ -108,35 +108,35 @@ AUR packages are community-maintained. Maintainer accounts get compromised; upst
                  └────────┬─────────┘
                           │ old vs new commits
                  ┌────────▼─────────┐
-                 │   differ.py      │  git diff, extract URLs, detect checksum changes
+                 │    differ.py     │  git diff, extract URLs, detect checksum changes
                  └────────┬─────────┘
                           │ diff text
                  ┌────────▼─────────┐
-                 │  tokenizer.py    │  Resolve variables, extract resolved commands
+                 │   tokenizer.py   │  Resolve variables, extract resolved commands
                  └────────┬─────────┘
                           │ resolved strings + raw lines
                  ┌────────▼─────────┐
-                 │   rules.py       │  Apply R001-R011 patterns
+                 │    rules.py      │  Apply R001-R011 patterns
                  └────────┬─────────┘
                           │ triggered rules
                  ┌────────▼─────────┐
-                 │   buckets.py     │  Classify source URLs
+                 │    buckets.py    │  Classify source URLs
                  └────────┬─────────┘
                           │ bucket map
                  ┌────────▼─────────┐
-                 │   novelty.py     │  Check first-seen URLs and maintainers
+                 │    novelty.py    │  Check first-seen URLs and maintainers
                  └────────┬─────────┘
                           │ novelty context
                  ┌────────▼─────────┐
-                 │   scoring.py     │  Calculate deterministic 0-100 score
+                 │    scoring.py    │  Calculate deterministic 0-100 score
                  └────────┬─────────┘
                           │ score + breakdown
                  ┌────────▼─────────┐
-                 │  llm.py (opt.)   │  Generate plain-English verdict
+                 │   llm.py (opt.)  │  Generate plain-English verdict
                  └────────┬─────────┘
                           │ verdict
                  ┌────────▼─────────┐
-                 │   cli.py         │  Display results (rich table or fallback)
+                 │      cli.py      │  Display results (rich table or fallback)
                  └──────────────────┘
 ```
 

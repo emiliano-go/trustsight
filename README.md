@@ -50,6 +50,14 @@ View analysis history:
 trustsight history sketchy-package --score-breakdown
 ```
 
+Configure API credentials:
+
+```bash
+trustsight config set api_key sk-xxxx
+trustsight config set base_url https://api.openai.com/v1
+trustsight config show
+```
+
 That is it. Run `trustsight review` before `yay -Syu` to catch suspicious package updates before they land on your system.
 
 ---
@@ -219,6 +227,11 @@ trustsight inspect my-aur-package
 trustsight history my-aur-package
 trustsight history my-aur-package --limit 10
 trustsight history my-aur-package --score-breakdown
+
+# Manage configuration
+trustsight config set api_key sk-xxxx
+trustsight config set base_url https://api.openai.com/v1
+trustsight config show
 ```
 
 LLM verdict with scoring tool definitions:
@@ -246,8 +259,6 @@ Current test count: 218 tests across 11 test files covering all modules, edge ca
 ---
 
 ## Documentation
-
-- [Implementation plan](docs/plan.md)
 
 ## License
 

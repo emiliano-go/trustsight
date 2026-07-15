@@ -1,9 +1,13 @@
+import shutil
 import sys
 from unittest.mock import patch
 
 import pytest
 
-
+pytestmark = pytest.mark.skipif(
+    not shutil.which("pacman"),
+    reason="pacman not available (non-Arch system)",
+)
 
 
 def test_cli_help():
@@ -67,13 +71,14 @@ def test_cli_review_runs(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.analysis.discover_updates", return_value=[]):
-        with patch.object(sys, "argv", ["trustsight", "review", "--limit", "5"]):
-            try:
-                from trustsight.cli import main
-                main()
-            except SystemExit:
-                pytest.fail("review should not exit")
+    with patch("trustsight.discovery.get_installed_aur_packages", return_value={}):
+        with patch("trustsight.analysis.discover_updates", return_value=[]):
+            with patch.object(sys, "argv", ["trustsight", "review", "--limit", "5"]):
+                try:
+                    from trustsight.cli import main
+                    main()
+                except SystemExit:
+                    pytest.fail("review should not exit")
 
 
 def test_cli_history_no_history(tmp_path, monkeypatch, capsys):

@@ -68,6 +68,22 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     triggered_rules = apply_rules(resolved_strings, raw_lines)
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
+    checksum_map = {
+        "changed_from_sha256_to_skip": ("R012", "Checksum changed to SKIP", "HIGH"),
+        "checksum_array_emptied": ("R013", "Checksum array emptied", "HIGH"),
+    }
+    cs_behavior = source_changes.checksum_behavior
+    if cs_behavior in checksum_map:
+        rid, rname, rsev = checksum_map[cs_behavior]
+        triggered_rules.append({
+            "rule_id": rid,
+            "name": rname,
+            "severity": rsev,
+            "category": "integrity",
+            "match": cs_behavior,
+        })
+        rule_ids.append(rid)
+
     score, breakdown, risk = calculate_score(triggered_rules, source_buckets, novelty, config)
 
     fact = PackageFact(

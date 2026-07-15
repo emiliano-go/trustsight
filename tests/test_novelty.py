@@ -92,7 +92,6 @@ def test_url_tracking_increments_counter(db):
     check_url_novelty("https://example.com/pkg.tar.gz", 1)
     check_url_novelty("https://example.com/pkg.tar.gz", 2)
     check_url_novelty("https://example.com/pkg.tar.gz", 3)
-    conn = get_connection()
-    row = conn.execute("SELECT total_uses FROM source_urls WHERE url = ?", ("https://example.com/pkg.tar.gz",)).fetchone()
-    conn.close()
+    with get_connection() as conn:
+        row = conn.execute("SELECT total_uses FROM source_urls WHERE url = ?", ("https://example.com/pkg.tar.gz",)).fetchone()
     assert row["total_uses"] == 3

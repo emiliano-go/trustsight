@@ -39,16 +39,32 @@ def calculate_score(
         )
 
     bucket_weights = config.get("source_bucket_weights", {})
+    total_forge_modifier = 0
     for url, bucket in source_buckets.items():
         modifier = bucket_weights.get(bucket, 0)
+        if modifier < 0:
+            total_forge_modifier += modifier
+            continue
         base += modifier
         severity = "INFO" if modifier <= 0 else "MEDIUM"
+        weight_display = modifier
         breakdown.append(
             ScoreEntry(
                 rule_id="SOURCE_BUCKET",
                 severity=severity,
-                weight=modifier,
+                weight=weight_display,
                 reason=f"Source URL classified as {bucket} ({url})",
+            )
+        )
+    if total_forge_modifier < 0:
+        capped = max(total_forge_modifier, -20)
+        base += capped
+        breakdown.append(
+            ScoreEntry(
+                rule_id="SOURCE_BUCKET",
+                severity="INFO",
+                weight=capped,
+                reason="Trusted forge modifier (capped at -20)",
             )
         )
 

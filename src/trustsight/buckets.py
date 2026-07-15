@@ -1,8 +1,21 @@
+import unicodedata
 from urllib.parse import urlparse
 
 import tldextract
 
 from .config import load_domains
+
+CONFUSABLES = {
+    "g": "ɡ", "a": "а", "e": "е", "o": "о", "c": "с",
+    "p": "р", "x": "х", "y": "у", "i": "і", "l": "ӏ",
+}
+
+
+def has_homograph(domain: str) -> bool:
+    for ch in domain:
+        if unicodedata.name(ch, "").startswith("LATIN") and ord(ch) > 127:
+            return True
+    return False
 
 
 def classify_url(url: str, domain_config: dict | None = None) -> tuple[str, str]:
@@ -11,6 +24,9 @@ def classify_url(url: str, domain_config: dict | None = None) -> tuple[str, str]
 
     parsed = urlparse(url)
     domain = parsed.netloc.lower()
+
+    if has_homograph(domain):
+        return "homograph_attack", domain
 
     extracted = tldextract.extract(url)
     registered = f"{extracted.domain}.{extracted.suffix}"

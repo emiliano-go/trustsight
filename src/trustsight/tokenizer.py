@@ -10,8 +10,8 @@ def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
                 additions.append(content)
 
     var_table: dict[str, str] = {}
-    unresolved: list[str] = []
     resolved: list[str] = []
+    unresolved_candidates: list[str] = []
 
     for line in additions:
         m = re.match(r"^(\w+)\s*=\s*(.+)", line)
@@ -27,11 +27,28 @@ def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
             if "$(" not in value and "`" not in value:
                 var_table[name] = value
             else:
-                unresolved.append(line)
+                unresolved_candidates.append(line)
         else:
-            unresolved.append(line)
+            unresolved_candidates.append(line)
 
-    for line in unresolved:
+    for _ in range(10):
+        changed = False
+        new_table = {}
+        for k, v in var_table.items():
+
+            def replacer(m: re.Match) -> str:
+                var = m.group(1) or m.group(2)
+                return var_table.get(var, m.group(0))
+
+            new_val = re.sub(r"\$\{(\w+)\}|\$(\w+)", replacer, v)
+            if new_val != v:
+                changed = True
+            new_table[k] = new_val
+        var_table = new_table
+        if not changed:
+            break
+
+    for line in unresolved_candidates:
 
         def replacer(m: re.Match) -> str:
             var = m.group(1) or m.group(2)
@@ -40,4 +57,4 @@ def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
         resolved_line = re.sub(r"\$\{(\w+)\}|\$(\w+)", replacer, line)
         resolved.append(resolved_line)
 
-    return resolved, [u for u in unresolved if u not in resolved]
+    return resolved, [u for u in unresolved_candidates if u not in resolved]

@@ -16,7 +16,7 @@ def generate_diff(
     for patch in diff:
         delta = patch.delta
         path = delta.new_file.path
-        if path == "PKGBUILD" or path.endswith(".install"):
+        if path in ("PKGBUILD", ".SRCINFO") or path.endswith(".install"):
             filtered_patches.append(patch.text)
 
     unified = "\n".join(filtered_patches)
@@ -40,10 +40,15 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     for line in diff_text.splitlines():
         if line.startswith("+") and "http" in line:
             urls = re.findall(r"https?://[^\s\'\"\)]+", line)
-            added_urls.update(urls)
+            for u in urls:
+                u = re.sub(r"[\)]+$", "", u)
+                u = re.sub(r"[\)]+", ")", u)
+                added_urls.add(u)
         elif line.startswith("-") and "http" in line:
             urls = re.findall(r"https?://[^\s\'\"\)]+", line)
-            removed_urls.update(urls)
+            for u in urls:
+                u = re.sub(r"[\)]+$", "", u)
+                removed_urls.add(u)
 
     checksum_behavior = detect_checksum_changes(diff_text)
 

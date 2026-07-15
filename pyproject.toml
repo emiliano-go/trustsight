@@ -4,16 +4,37 @@ version = "0.1.0"
 description = "CLI-based AUR package update vetting tool"
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [
+    { name = "Emiliano Gandini Outeda", email = "emiliano.gandini@protonmail.com" }
+]
+license = "MIT"
+keywords = ["aur", "arch-linux", "security", "vetting", "pkgbuild"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Topic :: Security",
+    "Topic :: System :: Archiving :: Packaging",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+]
 dependencies = [
     "pygit2>=1.15",
     "tldextract>=5.0",
     "rich>=13.0",
     "openai>=1.0",
 ]
+license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 ollama = ["ollama"]
 dev = ["pytest", "ruff"]
+
+[project.urls]
+Documentation = "https://github.com/emiliano-go/trustsight"
 
 [project.scripts]
 trustsight = "trustsight.cli:main"

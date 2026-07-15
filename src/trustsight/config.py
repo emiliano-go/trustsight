@@ -19,6 +19,7 @@ official = 0
 self_hosted = 10
 raw_hosting = 15
 unknown = 20
+homograph_attack = 30
 
 [novelty_weights]
 url_first_in_package = 10
@@ -57,7 +58,7 @@ DEFAULT_RULES = """\
 [[rules]]
 id = "R001"
 name = "Remote Script Execution"
-pattern = 'curl.*\\|\\s*(bash|sh|python|zsh)'
+pattern = 'curl.*\\|\\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\\s+sh|source\\s+/dev/stdin)'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
@@ -65,7 +66,7 @@ match_target = "resolved"
 [[rules]]
 id = "R002"
 name = "Wget Pipe to Shell"
-pattern = 'wget.*\\|\\s*(bash|sh|python|zsh)'
+pattern = 'wget.*\\|\\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\\s+sh|source\\s+/dev/stdin)'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
@@ -73,7 +74,7 @@ match_target = "resolved"
 [[rules]]
 id = "R003"
 name = "Base64 Decode and Execute"
-pattern = 'base64.*\\-d.*\\|'
+pattern = 'base64.*(?:\\-d|\\-\\-decode).*\\|'
 severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
@@ -81,7 +82,7 @@ match_target = "resolved"
 [[rules]]
 id = "R004"
 name = "Checksum Disabled"
-pattern = 'sha256sums\\s*=\\s*\\(?\\s*(?:SKIP|NONE)'
+pattern = 'sha256sums\\s*=\\s*\\(?\\s*[\\x27\\"]?(?:SKIP|NONE)[\\x27\\"]?'
 severity = "HIGH"
 category = "integrity"
 match_target = "raw_line"
@@ -201,6 +202,70 @@ def load_toml(name: str) -> dict:
         ensure_default_configs()
     with open(path, "rb") as f:
         return tomllib.load(f)
+
+
+def _toml_value(val: str) -> str:
+    if val.lower() in ("true", "false"):
+        return val.lower()
+    try:
+        int(val)
+        return val
+    except ValueError:
+        pass
+    escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def set_config(key: str, value: str):
+    path = CONFIG_DIR / "config.toml"
+    if not path.exists():
+        ensure_default_configs()
+    text = path.read_text()
+    section_path = key.rsplit(".", 1)
+    section = section_path[0] if len(section_path) > 1 else ""
+    key_name = section_path[-1] if len(section_path) > 1 else key
+
+    if section:
+        header = f"[{section}]"
+        if header in text:
+            new_text = []
+            in_section = False
+            replaced = False
+            for line in text.splitlines(keepends=True):
+                stripped = line.strip()
+                if stripped == header:
+                    in_section = True
+                    new_text.append(line)
+                    continue
+                if in_section:
+                    if stripped.startswith("["):
+                        in_section = False
+                        if not replaced:
+                            new_text.append(f'{key_name} = {_toml_value(value)}\n')
+                            replaced = True
+                        new_text.append(line)
+                        continue
+                    if stripped.startswith(f"{key_name} ") or stripped.startswith(f"{key_name}="):
+                        new_text.append(f'{key_name} = {_toml_value(value)}\n')
+                        replaced = True
+                        continue
+                    new_text.append(line)
+                    continue
+                new_text.append(line)
+            if not replaced:
+                new_text.append(f'{key_name} = {_toml_value(value)}\n')
+            text = "".join(new_text)
+        else:
+            text += f"\n{header}\n{key_name} = {_toml_value(value)}\n"
+    else:
+        import re
+        pattern = re.compile(rf"^{re.escape(key_name)}\s*=\s*.*", re.MULTILINE)
+        if pattern.search(text):
+            text = pattern.sub(f'{key_name} = {_toml_value(value)}', text)
+        else:
+            text += f'\n{key_name} = {_toml_value(value)}\n'
+
+    path.write_text(text)
 
 
 def load_config() -> dict:

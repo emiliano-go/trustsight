@@ -1,8 +1,8 @@
 import argparse
-import json
+import sys
 
 from .analysis import analyze_package, discover_updates
-from .config import ensure_default_configs, load_config
+from .config import ensure_default_configs, load_config, set_config, CONFIG_DIR
 from .db import get_history, get_package_id, get_triggered_rules, init_db
 from .scoring import risk_level
 
@@ -67,6 +67,10 @@ def cmd_inspect(args):
         console.print(f"  Files changed: {', '.join(fact.diff_summary.files_changed) or 'none'}")
         console.print(f"  Lines: +{fact.diff_summary.lines_added}/-{fact.diff_summary.lines_removed}")
 
+        cs_behavior = fact.source_changes.checksum_behavior
+        if cs_behavior and cs_behavior != "unchanged":
+            console.print(f"\n  [yellow]Checksum behavior: {cs_behavior}[/]")
+
         if fact.source_changes.added_urls:
             console.print("\n  [underline]Source URLs Added[/]")
             for url in fact.source_changes.added_urls:
@@ -89,7 +93,16 @@ def cmd_inspect(args):
         from .llm import fallback_verdict
         console.print(f"  {fallback_verdict(fact)}")
     else:
-        print(json.dumps(type("fact_dict", (), {}).__class__.__dict__, indent=2))
+        print(f"TrustSight Inspect: {fact.package_name}")
+        print(f"  Version: {fact.old_version} -> {fact.new_version}")
+        print(f"  Score: {fact.final_score}/100 ({risk_level(fact.final_score)})")
+        if fact.source_changes.checksum_behavior and fact.source_changes.checksum_behavior != "unchanged":
+            print(f"  Checksum: {fact.source_changes.checksum_behavior}")
+        if fact.source_changes.added_urls:
+            print("  Source URLs Added:")
+            for url in fact.source_changes.added_urls:
+                bucket = fact.source_buckets.get(url, "unknown")
+                print(f"    {url} ({bucket})")
 
 
 def cmd_history(args):
@@ -144,6 +157,32 @@ def cmd_history(args):
             print(f"{h.get('timestamp','')[:10]:<12} {str(h.get('old_version','')):<12} → {str(h.get('new_version','')):<12} Score: {h.get('final_score',0)}")
 
 
+def cmd_config(args):
+    ensure_default_configs()
+    if args.action == "show":
+        cfg = load_config()
+        print(f"Config file: {CONFIG_DIR / 'config.toml'}")
+        print()
+        llm = cfg.get("llm", {})
+        provider = llm.get("provider", "ollama")
+        model = llm.get("model", "gpt-4o-mini")
+        print(f"  provider: {provider}")
+        print(f"  model:    {model}")
+        openai_cfg = llm.get("openai", {})
+        api_key = openai_cfg.get("api_key", "")
+        base_url = openai_cfg.get("base_url", "https://api.openai.com/v1")
+        mask = api_key[:4] + "..." if len(api_key) > 8 else "(not set)"
+        print(f"  api_key:  {mask}")
+        print(f"  base_url: {base_url}")
+    elif args.action == "set":
+        if args.key in ("api_key", "base_url"):
+            set_config(f"llm.openai.{args.key}", args.value)
+            print(f"Set llm.openai.{args.key} in {CONFIG_DIR / 'config.toml'}")
+        else:
+            print(f"Unknown key: {args.key}. Use api_key or base_url.")
+            sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="TrustSight - AUR Package Update Vetting Tool")
     sub = parser.add_subparsers(dest="command")
@@ -159,6 +198,14 @@ def main():
     p_history.add_argument("--limit", type=int, default=20, help="Max history entries")
     p_history.add_argument("--score-breakdown", action="store_true", help="Show score breakdown")
 
+    p_config = sub.add_parser("config", help="Manage configuration")
+    p_config_sub = p_config.add_subparsers(dest="action")
+
+    p_config_sub.add_parser("show", help="Show current configuration")
+    p_config_set = p_config_sub.add_parser("set", help="Set a configuration value")
+    p_config_set.add_argument("key", choices=["api_key", "base_url"], help="Config key")
+    p_config_set.add_argument("value", help="Config value")
+
     args = parser.parse_args()
 
     if args.command == "review":
@@ -167,6 +214,8 @@ def main():
         cmd_inspect(args)
     elif args.command == "history":
         cmd_history(args)
+    elif args.command == "config":
+        cmd_config(args)
     else:
         parser.print_help()
 

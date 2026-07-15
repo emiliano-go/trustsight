@@ -1,0 +1,33 @@
+[project]
+name = "trustsight"
+version = "0.1.0"
+description = "CLI-based AUR package update vetting tool"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pygit2>=1.15",
+    "tldextract>=5.0",
+    "rich>=13.0",
+    "openai>=1.0",
+]
+
+[project.optional-dependencies]
+ollama = ["ollama"]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+trustsight = "trustsight.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trustsight"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

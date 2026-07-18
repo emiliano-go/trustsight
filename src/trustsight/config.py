@@ -7,6 +7,7 @@ CACHE_DIR = Path.home() / ".cache" / "trustsight" / "repos"
 
 DEFAULT_CONFIG = """\
 [severity_weights]
+FATAL = 0
 CRITICAL = 40
 HIGH = 25
 MEDIUM = 15
@@ -27,7 +28,7 @@ url_first_globally = 15
 maintainer_first_in_package = 20
 
 [llm]
-provider = "ollama"
+provider = "openai"
 model = "gpt-4o-mini"
 enabled = true
 max_tokens = 1024
@@ -52,6 +53,17 @@ max_diff_chars_for_llm = 2000
 
 [limits]
 default_review_limit = 20
+
+[verification_evidence]
+checksum_present = -10
+validpgpkeys_declared = -10
+gpg_verify_present = -5
+
+[pinning_weights]
+checksum_pinned = -5
+tag_pinned = -3
+branch_pinned = 0
+unpinned = 0
 """
 
 DEFAULT_RULES = """\
@@ -78,22 +90,6 @@ pattern = 'base64.*(?:\\-d|\\-\\-decode).*\\|'
 severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
-
-[[rules]]
-id = "R004"
-name = "Checksum Disabled"
-pattern = 'sha256sums\\s*=\\s*\\(?\\s*[\\x27\\"]?(?:SKIP|NONE)[\\x27\\"]?'
-severity = "HIGH"
-category = "integrity"
-match_target = "raw_line"
-
-[[rules]]
-id = "R005"
-name = "Checksum Emptied"
-pattern = 'sha256sums\\s*=\\s*\\(\\s*\\)'
-severity = "HIGH"
-category = "integrity"
-match_target = "raw_line"
 
 [[rules]]
 id = "R006"
@@ -125,7 +121,8 @@ name = "Privilege Escalation"
 pattern = '\\bsudo\\b'
 severity = "CRITICAL"
 category = "privilege"
-match_target = "resolved"
+match_target = "raw_line"
+scope = ["function_body"]
 
 [[rules]]
 id = "R010"
@@ -134,6 +131,7 @@ pattern = '\\bcurl\\s'
 severity = "LOW"
 category = "network_usage"
 match_target = "raw_line"
+scope = ["function_body"]
 
 [[rules]]
 id = "R011"
@@ -141,6 +139,23 @@ name = "Uses wget in PKGBUILD"
 pattern = '\\bwget\\s'
 severity = "LOW"
 category = "network_usage"
+match_target = "raw_line"
+scope = ["function_body"]
+
+[[rules]]
+id = "R012"
+name = "LLM Prompt Injection"
+pattern = 'ignore\\s+(?:all\\s+)?previous\\s+(?:instructions|commands|input)'
+severity = "FATAL"
+category = "injection"
+match_target = "resolved"
+
+[[rules]]
+id = "R013"
+name = "Unicode Bidi Override"
+pattern = '[\\u202A-\\u202E\\u2066-\\u2069\\u200B-\\u200D\\uFEFF]'
+severity = "FATAL"
+category = "unicode"
 match_target = "raw_line"
 """
 

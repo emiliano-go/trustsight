@@ -1,0 +1,14 @@
+{
+  "R015-depends-added.diff": {
+    "must_fire": [],
+    "max_score": 0
+  },
+  "R016-makedepends-added.diff": {
+    "must_fire": [],
+    "max_score": 0
+  },
+  "R016-optdepends-added.diff": {
+    "must_fire": [],
+    "max_score": 0
+  }
+}

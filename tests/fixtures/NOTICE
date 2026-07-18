@@ -1,0 +1,41 @@
+TrustSight Calibration Corpora
+==============================
+
+This directory contains vendored AUR package diff files used for
+TrustSight calibration and regression testing.
+
+Corpora:
+
+  v0.1-finding-corpus/
+    Source: https://github.com/archlinux/aur.git (read-only mirror)
+    Fetched: 2026-07-16
+    Selection: convenience sample, hand-typed by maintainer.
+               83% -bin. Not representative.
+    Purpose: preserve reproducibility of the v0.1.0 FP baseline.
+    Status: EXISTING — shipped with v0.1.0 findings.
+
+  benign-corpus/
+    Source: https://github.com/archlinux/aur.git
+    Fetched: 2026-07-16
+    Selection: stratified by package shape (see scripts/strata.toml,
+               tests/fixtures/corpus.lock). 8 strata, ~190 packages total.
+    Purpose: PR-blocking calibration gates.
+    Status: PLACEHOLDER — generate with scripts/build_corpus.py.
+
+  malicious/
+    Source: generated + reconstructed + holdout
+    Purpose: synthetic (100% recall gate), historical (report-only),
+             holdout (generalization measurement).
+    Status: PLACEHOLDER — generate with scripts/gen_injection_fixtures.py
+            (already present for R012/R013).
+
+License: Each diff file is derived from the Arch Linux AUR git mirror
+(https://github.com/archlinux/aur.git), which is distributed under
+the terms of the ISC license or the GNU GPL as indicated by each
+PKGBUILD. These diff files are redistributed for the sole purpose of
+enabling reproducible CI testing of the TrustSight tool. No
+modification has been made to the content.
+
+If you are a package maintainer and object to the inclusion of your
+package's diffs here, please open an issue at
+https://github.com/anomalyco/trustsight.

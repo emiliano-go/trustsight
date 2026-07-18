@@ -1,0 +1,14 @@
+{
+  "hidden-git-submodule.diff": {
+    "description": "Attack via .gitmodules in source, not caught by SKIP/VCS checks"
+  },
+  "credential-leak-in-cflags.diff": {
+    "description": "Credentials leaked via environment variable in build"
+  },
+  "signed-commit-dropped-to-unsigned.diff": {
+    "description": "Downgrade from signed tag to unsigned commit in -git package"
+  },
+  "futile-double-skip.diff": {
+    "description": "SKIP on both md5sums and sha256sums with no validpgpkeys"
+  }
+}

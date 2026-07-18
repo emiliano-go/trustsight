@@ -1,0 +1,6 @@
+Corpus: v0.1-finding-corpus
+Source: https://github.com/archlinux/aur.git (read-only mirror)
+Fetched: 2026-07-16
+Selection: convenience sample, hand-typed by maintainer. 83% -bin. Not representative.
+Purpose: preserve reproducibility of the v0.1.0 FP baseline.
+See: ../NOTICE for full license and provenance.

@@ -1,0 +1,1055 @@
+{
+  "R001-curl-pipe-bash.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40,
+    "max_score": 70
+  },
+  "R001-curl-pipe-sh.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-curl-pipe-dash.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-curl-pipe-zsh.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-curl-pipe-source-stdin.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-curl-pipe-python.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-wget-pipe-bash.diff": {
+    "must_fire": [
+      "R002"
+    ],
+    "min_score": 40
+  },
+  "R001-wget-pipe-sh.diff": {
+    "must_fire": [
+      "R002"
+    ],
+    "min_score": 40
+  },
+  "R003-base64-decode-bash.diff": {
+    "must_fire": [
+      "R003"
+    ],
+    "min_score": 40
+  },
+  "R003-base64-decode-sh.diff": {
+    "must_fire": [
+      "R003"
+    ],
+    "min_score": 40
+  },
+  "R004-skip-https-bare.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "min_score": 20
+  },
+  "R004-skip-https-named.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "min_score": 20
+  },
+  "R004-skip-git-justified.diff": {
+    "must_not_fire": [
+      "R004",
+      "R012",
+      "R013"
+    ]
+  },
+  "R004-skip-git-pkgname.diff": {
+    "must_not_fire": [
+      "R004",
+      "R012",
+      "R013"
+    ]
+  },
+  "R004-skip-validpgpkeys.diff": {
+    "must_not_fire": [
+      "R004",
+      "R012",
+      "R013"
+    ]
+  },
+  "R004-skip-indexed.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "min_score": 20
+  },
+  "R005-empty-checksum.diff": {
+    "must_fire": [
+      "R005"
+    ],
+    "min_score": 20
+  },
+  "R006-http-url.diff": {
+    "must_fire": [
+      "R006"
+    ],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "min_score": 10
+  },
+  "R006-https-url.diff": {
+    "must_not_fire": [
+      "R006",
+      "R012",
+      "R013"
+    ]
+  },
+  "R007-install-added.diff": {
+    "must_fire": [
+      "R007"
+    ],
+    "min_score": 15
+  },
+  "R007-install-modified.diff": {
+    "must_fire": [
+      "R007"
+    ],
+    "min_score": 15
+  },
+  "R008-python-c-url.diff": {
+    "must_fire": [
+      "R008"
+    ],
+    "min_score": 25
+  },
+  "R008-ruby-e-url.diff": {
+    "must_fire": [
+      "R008"
+    ],
+    "min_score": 25
+  },
+  "R009-sudo-in-build.diff": {
+    "must_fire": [
+      "R009"
+    ],
+    "min_score": 40
+  },
+  "R010-curl-fetch.diff": {
+    "must_fire": [
+      "R010"
+    ],
+    "min_score": 5
+  },
+  "R011-wget-fetch.diff": {
+    "must_fire": [
+      "R011"
+    ],
+    "min_score": 5
+  },
+  "R014-validpgpkeys-added.diff": {
+    "must_fire": [
+      "R014"
+    ],
+    "min_score": 25
+  },
+  "R017-chmod-suid.diff": {
+    "must_fire": [
+      "R017"
+    ],
+    "min_score": 25
+  },
+  "R017-chmod-sgid.diff": {
+    "must_fire": [
+      "R017"
+    ],
+    "min_score": 25
+  },
+  "R018-ln-sf.diff": {
+    "must_fire": [
+      "R018"
+    ],
+    "min_score": 15
+  },
+  "R019-cflags-suspicious.diff": {
+    "must_fire": [
+      "R019"
+    ],
+    "min_score": 10
+  },
+  "R025-eval.diff": {
+    "must_fire": [
+      "R010",
+      "R025"
+    ],
+    "min_score": 15
+  },
+  "R025-exec.diff": {
+    "must_fire": [
+      "R011",
+      "R025"
+    ],
+    "min_score": 15
+  },
+  "control-benign-version-bump.diff": {
+    "must_not_fire": [
+      "R001",
+      "R002",
+      "R003",
+      "R004",
+      "R005",
+      "R006",
+      "R007",
+      "R008",
+      "R009",
+      "R012",
+      "R013",
+      "R025",
+      "R026",
+      "R027"
+    ]
+  },
+  "R012-v0.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v1.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v2.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v3.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v4.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v5.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012"
+    ],
+    "max_score": 50
+  },
+  "R012-v6.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v7.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v8.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v9.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v10.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v11.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v12.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v13.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v14.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v15.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012"
+    ],
+    "max_score": 50
+  },
+  "R012-v16.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v17.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v18.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v19.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v20.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v21.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R013-v0.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT EMBEDDING"
+  },
+  "R013-v1.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT EMBEDDING"
+  },
+  "R013-v2.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with POP DIRECTIONAL FORMATTING"
+  },
+  "R013-v3.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT OVERRIDE"
+  },
+  "R013-v4.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT OVERRIDE"
+  },
+  "R013-v5.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT ISOLATE"
+  },
+  "R013-v6.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT ISOLATE"
+  },
+  "R013-v7.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with FIRST STRONG ISOLATE"
+  },
+  "R013-v8.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with POP DIRECTIONAL ISOLATE"
+  },
+  "R013-v9.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with ZERO WIDTH SPACE"
+  },
+  "R013-v10.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with ZERO WIDTH NON-JOINER"
+  },
+  "R013-v11.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with ZERO WIDTH JOINER"
+  },
+  "R013-v12.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT MARK"
+  },
+  "R013-v13.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT MARK"
+  },
+  "R013-v14.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with WORD JOINER"
+  },
+  "R013-v15.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with FUNCTION APPLICATION"
+  },
+  "R013-v16.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with INVISIBLE TIMES"
+  },
+  "R013-v17.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with INVISIBLE SEPARATOR"
+  },
+  "R013-v18.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with INVISIBLE PLUS"
+  },
+  "R013-v19.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with ZERO WIDTH NO-BREAK SPACE"
+  },
+  "R013-v20.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LANGUAGE TAG"
+  },
+  "R013-v21.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with TAG SPACE"
+  },
+  "R013-v22.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with CANCEL TAG"
+  },
+  "R013-v23.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with LEFT-TO-RIGHT EMBEDDING"
+  },
+  "R013-v24.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with RIGHT-TO-LEFT EMBEDDING"
+  },
+  "R013-v25.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with POP DIRECTIONAL FORMATTING"
+  },
+  "R013-v26.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with LEFT-TO-RIGHT OVERRIDE"
+  },
+  "R013-v27.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with RIGHT-TO-LEFT OVERRIDE"
+  },
+  "R013-v28.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with LEFT-TO-RIGHT ISOLATE"
+  },
+  "R013-v29.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with RIGHT-TO-LEFT ISOLATE"
+  },
+  "R013-v30.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with FIRST STRONG ISOLATE"
+  },
+  "R013-v31.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with POP DIRECTIONAL ISOLATE"
+  },
+  "R013-v32.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with ZERO WIDTH SPACE"
+  },
+  "R013-v33.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with ZERO WIDTH NON-JOINER"
+  },
+  "R013-v34.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with ZERO WIDTH JOINER"
+  },
+  "R013-v35.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with LEFT-TO-RIGHT MARK"
+  },
+  "R013-v36.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with RIGHT-TO-LEFT MARK"
+  },
+  "R013-v37.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with WORD JOINER"
+  },
+  "R013-v38.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with FUNCTION APPLICATION"
+  },
+  "R013-v39.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with INVISIBLE TIMES"
+  },
+  "R013-v40.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with INVISIBLE SEPARATOR"
+  },
+  "R013-v41.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with INVISIBLE PLUS"
+  },
+  "R013-v42.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with ZERO WIDTH NO-BREAK SPACE"
+  },
+  "R013-v43.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with LANGUAGE TAG"
+  },
+  "R013-v44.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with TAG SPACE"
+  },
+  "R013-v45.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "source_url with CANCEL TAG"
+  },
+  "R013-v46.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with LEFT-TO-RIGHT EMBEDDING"
+  },
+  "R013-v47.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with RIGHT-TO-LEFT EMBEDDING"
+  },
+  "R013-v48.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with POP DIRECTIONAL FORMATTING"
+  },
+  "R013-v49.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with LEFT-TO-RIGHT OVERRIDE"
+  },
+  "R013-v50.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with RIGHT-TO-LEFT OVERRIDE"
+  },
+  "R013-v51.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with LEFT-TO-RIGHT ISOLATE"
+  },
+  "R013-v52.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with RIGHT-TO-LEFT ISOLATE"
+  },
+  "R013-v53.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with FIRST STRONG ISOLATE"
+  },
+  "R013-v54.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with POP DIRECTIONAL ISOLATE"
+  },
+  "R013-v55.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with ZERO WIDTH SPACE"
+  },
+  "R013-v56.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with ZERO WIDTH NON-JOINER"
+  },
+  "R013-v57.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with ZERO WIDTH JOINER"
+  },
+  "R013-v58.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with LEFT-TO-RIGHT MARK"
+  },
+  "R013-v59.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with RIGHT-TO-LEFT MARK"
+  },
+  "R013-v60.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with WORD JOINER"
+  },
+  "R013-v61.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with FUNCTION APPLICATION"
+  },
+  "R013-v62.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with INVISIBLE TIMES"
+  },
+  "R013-v63.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with INVISIBLE SEPARATOR"
+  },
+  "R013-v64.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with INVISIBLE PLUS"
+  },
+  "R013-v65.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with ZERO WIDTH NO-BREAK SPACE"
+  },
+  "R013-v66.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with LANGUAGE TAG"
+  },
+  "R013-v67.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with TAG SPACE"
+  },
+  "R013-v68.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "body with CANCEL TAG"
+  },
+  "R013-control-no-unicode.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "max_score": 0
+  },
+  "R012-control-no-injection.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "max_score": 0
+  },
+  "R029-known-dep-added.diff": {
+    "must_fire": [],
+    "max_score": 0,
+    "known_packages": {
+      "python": true
+    }
+  }
+}

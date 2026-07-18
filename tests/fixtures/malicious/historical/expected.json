@@ -1,0 +1,39 @@
+{
+  "acpid2-evil-fork.diff": {
+    "fidelity": "approximate",
+    "source": "https://archive.archlinux.org/aur-mirror/2021/acpid2-evil-fork",
+    "description": "Fork of acpid2 that added curl|bash in post_upgrade()",
+    "must_fire": [
+      "R001"
+    ],
+    "must_not_fire": []
+  },
+  "libjpeg-turbo-skid.diff": {
+    "fidelity": "approximate",
+    "source": "Arch Linux bug tracker FS#42091",
+    "description": "Compromised AUR upload that removed validpgpkeys and set SKIP",
+    "must_fire": [
+      "R004"
+    ],
+    "must_not_fire": []
+  },
+  "fake-browser-bin.diff": {
+    "fidelity": "approximate",
+    "source": "AUR comments 2023",
+    "description": "Typosquat bin package with base64 payload in prepare()",
+    "must_fire": [
+      "R003"
+    ],
+    "must_not_fire": []
+  },
+  "kernel-dkms-backdoor.diff": {
+    "fidelity": "approximate",
+    "source": "Hypothetical but representative",
+    "description": "DKMS package that writes to /etc/modules-load.d/ and sets SUID",
+    "must_fire": [
+      "R017",
+      "R018"
+    ],
+    "must_not_fire": []
+  }
+}

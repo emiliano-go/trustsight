@@ -1,0 +1,47 @@
+[strata.bin_repack]
+description = "Prebuilt .deb/.tar unpackers. Trivial build(), templated URLs."
+target = 40
+selection = "pkgname ends in '-bin' and not '-git'"
+source = "aur_rpc"
+
+[strata.vcs_git]
+description = "Live VCS checkouts. SKIP is mandatory → must NOT fire R004."
+target = 30
+selection = "pkgname ends in '-git'"
+source = "aur_rpc"
+
+[strata.source_patched]
+description = "Real prepare() with patches. Exercises tokenizer and R001 scope."
+target = 30
+selection = "PKGBUILD contains 'prepare()'"
+source = "grep"
+
+[strata.dkms_kernel]
+description = "Kernel modules. .install runs depmod/dkms as root."
+target = 20
+selection = "pkgname contains 'dkms' or .install contains 'depmod'"
+source = "aur_rpc + grep"
+
+[strata.lang_ecosystem]
+description = "python-/ruby-/perl-/rust-/go- packages. May build-download."
+target = 25
+selection = "pkgname starts with python- ruby- perl- rust- go-"
+source = "aur_rpc"
+
+[strata.autotools]
+description = "./configure generators. The xz shape."
+target = 20
+selection = "PKGBUILD contains './configure'"
+source = "grep"
+
+[strata.data_fonts]
+description = "NEGATIVE CONTROL. Font packages must never score HIGH/CRITICAL/FATAL."
+target = 15
+selection = "pkgname starts with ttf- otf- fonts-"
+source = "aur_rpc"
+
+[strata.large_electron]
+description = "Electron/asar surgery. Long weird diffs."
+target = 10
+selection = "PKGBUILD contains 'electron' or 'asar'"
+source = "grep"

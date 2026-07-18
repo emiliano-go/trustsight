@@ -1,3 +1,4 @@
+import re
 import unicodedata
 from urllib.parse import urlparse
 
@@ -57,3 +58,35 @@ def classify_urls(
         bucket, matched_domain = classify_url(url, domain_config)
         result[url] = bucket
     return result
+
+
+# A path component that looks like a version number (e.g. v1.0.0, 2.0, 3.1.4)
+_VERSION_LIKE_RE = re.compile(r"(?:^|/)(?:v\d+(?:\.\d+)*|\d+(?:\.\d+){1,})(?:/|$|\.)")
+# Explicit branch refs
+_BRANCH_REF_RE = re.compile(
+    r"(?:/branches?/|/heads/|/refs/heads/|/master[\./\"]|/main[\./\"]|/develop[\./\"])",
+    re.IGNORECASE,
+)
+# Tag or release paths
+_TAG_PATH_RE = re.compile(
+    r"(?:/releases?/|/tags?/|/download/)",
+    re.IGNORECASE,
+)
+
+
+def classify_pinning_level(url: str, checksum_present: bool = False) -> str:
+    """Return the pinning level for a source URL.
+
+    Levels from most to least pinned:
+    - ``checksum_pinned``: URL covered by a valid sha256 checksum
+    - ``tag_pinned``: URL references a tag or version (immutable ref)
+    - ``branch_pinned``: URL references a mutable branch
+    - ``unpinned``: none of the above
+    """
+    if checksum_present:
+        return "checksum_pinned"
+    if _BRANCH_REF_RE.search(url):
+        return "branch_pinned"
+    if _TAG_PATH_RE.search(url) or _VERSION_LIKE_RE.search(url):
+        return "tag_pinned"
+    return "unpinned"

@@ -87,6 +87,41 @@ def _get_model(config: dict) -> str:
     return config.get("llm", {}).get("model", "gpt-4o-mini")
 
 
+def _assert_verdict(verdict: str, fact: PackageFact) -> bool:
+    """Assert that an LLM-generated verdict meets quality criteria.
+
+    Returns ``True`` if the verdict passes all checks, ``False`` if it
+    should be suppressed and replaced with the fallback.
+    """
+    if not verdict or len(verdict) < 20:
+        return False
+    if len(verdict) > 2000:
+        return False
+    score_str = str(fact.final_score)
+    if score_str in verdict:
+        return False
+    has_fatal = any(e.severity == "FATAL" for e in fact.score_breakdown)
+    if has_fatal and "injection" not in verdict.lower() and "unicode" not in verdict.lower() and "bidi" not in verdict.lower():
+        return False
+    if fact.final_score <= 10 and any(
+        w in verdict.lower() for w in ["malicious", "dangerous", "critical", "attack"]
+    ):
+        return False
+    return True
+
+
+def _checked_verdict(verdict: str, fact: PackageFact, was_streamed: bool) -> str:
+    """Return the verdict if it passes assertions, otherwise the fallback."""
+    if _assert_verdict(verdict, fact):
+        return verdict
+    result = fallback_verdict(fact)
+    msg = f"\n[{_REASONING_COLOR}LLM verdict suppressed — using fallback{_RESET_COLOR}]"
+    if was_streamed:
+        print(msg)
+        print(result)
+    return result
+
+
 def generate_verdict_stream(
     fact: PackageFact,
     *,
@@ -128,8 +163,9 @@ def generate_verdict_stream(
 
         if not stream:
             content = completion.choices[0].message.content or ""
-            print(content)
-            return content.strip()
+            result = _checked_verdict(content.strip(), fact, stream)
+            print(result)
+            return result
 
         collected = []
         for chunk in completion:
@@ -151,7 +187,8 @@ def generate_verdict_stream(
                 collected.append(content)
 
         print()
-        return "".join(collected).strip()
+        raw = "".join(collected).strip()
+        return _checked_verdict(raw, fact, stream)
 
     except Exception as e:
         result = fallback_verdict(fact)

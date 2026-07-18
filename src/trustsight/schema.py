@@ -27,6 +27,7 @@ class NoveltyContext:
     url_first_seen_in_this_package: bool = False
     url_first_seen_globally: bool = False
     maintainer_first_seen_for_this_package: bool = False
+    observation_count: int = 0
 
 
 @dataclass

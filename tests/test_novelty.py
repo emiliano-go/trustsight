@@ -5,6 +5,7 @@ from trustsight.novelty import (
     build_novelty_context,
     check_maintainer_novelty,
     check_url_novelty,
+    normalize_url,
 )
 
 
@@ -89,9 +90,59 @@ def test_build_novelty_context_some_already_seen(db):
 
 
 def test_url_tracking_increments_counter(db):
-    check_url_novelty("https://example.com/pkg.tar.gz", 1)
-    check_url_novelty("https://example.com/pkg.tar.gz", 2)
-    check_url_novelty("https://example.com/pkg.tar.gz", 3)
+    url = "https://example.com/pkg.tar.gz"
+    nurl = normalize_url(url)
+    check_url_novelty(url, 1)
+    check_url_novelty(url, 2)
+    check_url_novelty(url, 3)
     with get_connection() as conn:
-        row = conn.execute("SELECT total_uses FROM source_urls WHERE url = ?", ("https://example.com/pkg.tar.gz",)).fetchone()
+        row = conn.execute("SELECT total_uses FROM source_urls WHERE url = ?", (nurl,)).fetchone()
     assert row["total_uses"] == 3
+
+
+# --- URL normalization ---
+
+def test_normalize_strips_version():
+    n = normalize_url("https://github.com/user/pro/archive/v2.0.0.tar.gz")
+    assert "2.0.0" not in n
+
+
+def test_normalize_strips_two_part_version():
+    n = normalize_url("https://example.com/releases/1.2/file.tar.gz")
+    assert "1.2" not in n
+
+
+def test_normalize_deduplicates_version_templates():
+    a = normalize_url("https://example.com/pkg/v2.0.0.tar.gz")
+    b = normalize_url("https://example.com/pkg/v2.0.1.tar.gz")
+    assert a == b
+
+
+def test_normalize_strips_hash():
+    n = normalize_url("https://example.com/pkg/abc123def456abc789abc123def456abc123def4.tar.gz")
+    assert "HASH" in n
+
+
+def test_normalize_strips_date():
+    n = normalize_url("https://example.com/snapshots/2024-03-15/file.tar.gz")
+    assert "2024" not in n
+
+
+def test_normalize_unchanged_simple_url():
+    n = normalize_url("https://github.com/user/project.git")
+    assert n == "https://github.com/user/project.git"
+
+
+def test_normalize_version_bump_same_template():
+    v1 = normalize_url("https://github.com/rust-lang/cargo/archive/0.80.0.tar.gz")
+    v2 = normalize_url("https://github.com/rust-lang/cargo/archive/0.81.0.tar.gz")
+    assert v1 == v2
+
+
+def test_novelty_not_fired_on_version_bump(db):
+    url_old = "https://github.com/user/proj/archive/v1.0.0.tar.gz"
+    url_new = "https://github.com/user/proj/archive/v2.0.0.tar.gz"
+    check_url_novelty(url_old, 1)
+    first_pkg, first_global = check_url_novelty(url_new, 1)
+    assert first_global is False
+    assert first_pkg is False

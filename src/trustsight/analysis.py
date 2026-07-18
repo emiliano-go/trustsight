@@ -1,6 +1,6 @@
 import json
 
-from .buckets import classify_urls
+from .buckets import classify_pinning_level, classify_urls
 from .config import ensure_default_configs, load_config
 from .db import (
     get_last_analysis,
@@ -9,7 +9,7 @@ from .db import (
     update_package_version,
     upsert_package,
 )
-from .differ import extract_urls_from_diff, generate_diff
+from .differ import _has_checksum_in_post_diff, detect_verification_evidence, extract_urls_from_diff, generate_diff, is_skip_justified
 from .discovery import find_outdated_packages, get_aur_latest_versions, get_installed_aur_packages
 from .fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
 from .llm import generate_verdict
@@ -20,10 +20,23 @@ from .llm import fallback_verdict
 from .schema import (
     DiffSummary,
     ExecutionChanges,
+    NoveltyContext,
     PackageFact,
     fact_to_dict,
 )
 from .tokenizer import tokenize_and_resolve
+
+
+def _pkgver_changed_in_diff(diff_text: str) -> bool:
+    """Check whether the diff changes the *value* of ``pkgver``."""
+    old_val: str | None = None
+    new_val: str | None = None
+    for line in diff_text.splitlines():
+        if line.startswith("-pkgver="):
+            old_val = line.removeprefix("-pkgver=").strip().strip("'\"")
+        elif line.startswith("+pkgver="):
+            new_val = line.removeprefix("+pkgver=").strip().strip("'\"")
+    return old_val is not None and new_val is not None and old_val != new_val
 
 
 def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") -> PackageFact:
@@ -39,6 +52,9 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
         head_version = new_version
 
     package_id = upsert_package(pkg_name, head_version)
+
+    if not head_commit:
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config)
 
     if not old_commit:
         last = get_last_analysis(package_id)
@@ -68,23 +84,78 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     triggered_rules = apply_rules(resolved_strings, raw_lines)
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
-    checksum_map = {
-        "changed_from_sha256_to_skip": ("R012", "Checksum changed to SKIP", "HIGH"),
-        "checksum_array_emptied": ("R013", "Checksum array emptied", "HIGH"),
-    }
     cs_behavior = source_changes.checksum_behavior
-    if cs_behavior in checksum_map:
-        rid, rname, rsev = checksum_map[cs_behavior]
+    if cs_behavior == "changed_from_sha256_to_skip":
+        skip_reason = is_skip_justified(diff_text)
+        sev = "INFO" if skip_reason else "HIGH"
         triggered_rules.append({
-            "rule_id": rid,
-            "name": rname,
-            "severity": rsev,
+            "rule_id": "R004",
+            "name": "Checksum Disabled",
+            "severity": sev,
+            "category": "integrity",
+            "match": f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP",
+        })
+        rule_ids.append("R004")
+    elif cs_behavior == "checksum_array_emptied":
+        triggered_rules.append({
+            "rule_id": "R005",
+            "name": "Checksum Emptied",
+            "severity": "HIGH",
             "category": "integrity",
             "match": cs_behavior,
         })
-        rule_ids.append(rid)
+        rule_ids.append("R005")
 
-    score, breakdown, risk = calculate_score(triggered_rules, source_buckets, novelty, config)
+    pkgver_changed = _pkgver_changed_in_diff(diff_text)
+    if cs_behavior == "checksum_added_or_changed" and not source_changes.added_urls and not source_changes.removed_urls:
+        if not pkgver_changed:
+            triggered_rules.append({
+                "rule_id": "C001",
+                "name": "Checksum Changed Without Source Change With Stable Version",
+                "severity": "HIGH",
+                "category": "integrity",
+                "match": "sha256sums changed but source URLs and pkgver unchanged",
+            })
+            rule_ids.append("C001")
+        else:
+            triggered_rules.append({
+                "rule_id": "C002",
+                "name": "Checksum Updated With Version Bump",
+                "severity": "INFO",
+                "category": "integrity",
+                "match": "sha256sums updated alongside pkgver",
+            })
+            rule_ids.append("C002")
+    if source_changes.removed_urls and source_changes.added_urls and not pkgver_changed:
+        src_changed = set(source_changes.removed_urls) != set(source_changes.added_urls)
+        if src_changed:
+            triggered_rules.append({
+                "rule_id": "C003",
+                "name": "Source URL Changed Without Version Bump",
+                "severity": "INFO",
+                "category": "integrity",
+                "match": f"URLs changed: {source_changes.removed_urls} -> {source_changes.added_urls}",
+            })
+            rule_ids.append("C003")
+
+    has_checksum = _has_checksum_in_post_diff(diff_text)
+    pinning_levels = [
+        classify_pinning_level(url, checksum_present=has_checksum)
+        for url in source_changes.added_urls
+    ]
+    _PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
+    aggregate_pinning = "unpinned"
+    if pinning_levels:
+        worst_idx = max(_PINNING_ORDER.index(p) for p in pinning_levels)
+        aggregate_pinning = _PINNING_ORDER[worst_idx]
+
+    verification_evidence = detect_verification_evidence(diff_text)
+
+    score, breakdown, risk = calculate_score(
+        triggered_rules, source_buckets, novelty, config,
+        verification_evidence=verification_evidence,
+        pinning_level=aggregate_pinning,
+    )
 
     fact = PackageFact(
         package_name=pkg_name,
@@ -124,6 +195,142 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     return fact
 
 
+def scan_diff(
+    diff_text: str,
+    rules: list[dict] | None = None,
+    config: dict | None = None,
+    package_name: str = "",
+    seen_urls: dict[str, set[str]] | None = None,
+) -> PackageFact:
+    """Run the full analysis pipeline on raw diff text.
+
+    Used by benchmark scripts (rebaseline, calibration) that consume
+    pre-extracted ``.diff`` files rather than live git repositories.
+
+    When ``seen_urls`` is provided (``{pkg_name: {url, ...}}``), novelty
+    is tracked in-memory instead of hitting the database — necessary for
+    offline corpus replay where each package has many diffs processed in
+    chronological order.
+    """
+    if config is None:
+        config = load_config()
+
+    source_changes = extract_urls_from_diff(diff_text)
+    cs_behavior = source_changes.checksum_behavior
+
+    source_buckets = classify_urls(source_changes.added_urls)
+
+    resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
+    raw_lines = get_raw_diff_lines(diff_text)
+
+    triggered_rules = apply_rules(resolved_strings, raw_lines, rules)
+    rule_ids = [r["rule_id"] for r in triggered_rules]
+
+    if cs_behavior == "changed_from_sha256_to_skip":
+        skip_reason = is_skip_justified(diff_text)
+        sev = "INFO" if skip_reason else "HIGH"
+        triggered_rules.append({
+            "rule_id": "R004",
+            "name": "Checksum Disabled",
+            "severity": sev,
+            "category": "integrity",
+            "match": f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP",
+        })
+        rule_ids.append("R004")
+    elif cs_behavior == "checksum_array_emptied":
+        triggered_rules.append({
+            "rule_id": "R005",
+            "name": "Checksum Emptied",
+            "severity": "HIGH",
+            "category": "integrity",
+            "match": cs_behavior,
+        })
+        rule_ids.append("R005")
+
+    pkgver_changed = _pkgver_changed_in_diff(diff_text)
+    if cs_behavior == "checksum_added_or_changed" and not source_changes.added_urls and not source_changes.removed_urls:
+        if not pkgver_changed:
+            triggered_rules.append({
+                "rule_id": "C001",
+                "name": "Checksum Changed Without Source Change With Stable Version",
+                "severity": "HIGH",
+                "category": "integrity",
+                "match": "sha256sums changed but source URLs and pkgver unchanged",
+            })
+            rule_ids.append("C001")
+        else:
+            triggered_rules.append({
+                "rule_id": "C002",
+                "name": "Checksum Updated With Version Bump",
+                "severity": "INFO",
+                "category": "integrity",
+                "match": "sha256sums updated alongside pkgver",
+            })
+            rule_ids.append("C002")
+    if source_changes.removed_urls and source_changes.added_urls and not pkgver_changed:
+        src_changed = set(source_changes.removed_urls) != set(source_changes.added_urls)
+        if src_changed:
+            triggered_rules.append({
+                "rule_id": "C003",
+                "name": "Source URL Changed Without Version Bump",
+                "severity": "INFO",
+                "category": "integrity",
+                "match": f"URLs changed: {source_changes.removed_urls} -> {source_changes.added_urls}",
+            })
+            rule_ids.append("C003")
+
+    has_checksum = _has_checksum_in_post_diff(diff_text)
+    pinning_levels = [
+        classify_pinning_level(url, checksum_present=has_checksum)
+        for url in source_changes.added_urls
+    ]
+    _PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
+    aggregate_pinning = "unpinned"
+    if pinning_levels:
+        worst_idx = max(_PINNING_ORDER.index(p) for p in pinning_levels)
+        aggregate_pinning = _PINNING_ORDER[worst_idx]
+
+    verification_evidence = detect_verification_evidence(diff_text)
+
+    novelty = NoveltyContext()
+    pkgs_seen = seen_urls or {}
+    pkg_set = pkgs_seen.setdefault(package_name, set())
+    for url in source_changes.added_urls:
+        if url not in pkg_set:
+            novelty.url_first_seen_in_this_package = True
+            novelty.url_first_seen_globally = True
+            pkg_set.add(url)
+        else:
+            novelty.url_first_seen_in_this_package = False
+            novelty.url_first_seen_globally = False
+
+    score, breakdown, risk = calculate_score(
+        triggered_rules, source_buckets, novelty, config,
+        verification_evidence=verification_evidence,
+        pinning_level=aggregate_pinning,
+    )
+
+    exec_changes = ExecutionChanges(
+        resolved_commands=resolved_strings,
+        suspicious_patterns_detected=rule_ids,
+        unresolved_patterns=unresolved_strings,
+    )
+
+    return PackageFact(
+        package_name=package_name,
+        diff_summary=DiffSummary(
+            lines_added=sum(1 for line in diff_text.splitlines() if line.startswith("+")),
+            lines_removed=sum(1 for line in diff_text.splitlines() if line.startswith("-")),
+        ),
+        source_changes=source_changes,
+        source_buckets=source_buckets,
+        execution_changes=exec_changes,
+        novelty_context=novelty,
+        score_breakdown=breakdown,
+        final_score=score,
+    )
+
+
 def _make_fresh_analysis(
     pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict
 ) -> PackageFact:
@@ -151,7 +358,7 @@ def _make_fresh_analysis(
     return fact
 
 
-def discover_updates(limit: int = 20) -> list[dict]:
+def discover_updates(limit: int = 20, progress_callback=None) -> list[dict]:
     ensure_default_configs()
     init_db()
 
@@ -160,8 +367,14 @@ def discover_updates(limit: int = 20) -> list[dict]:
     latest = get_aur_latest_versions(names)
     outdated = find_outdated_packages(installed, latest)
 
+    if progress_callback:
+        progress_callback(0, 0, "AUR info gathered")
+
     results = []
-    for name, (old_ver, new_ver) in list(outdated.items())[:limit]:
+    pkg_items = list(outdated.items())[:limit]
+    for i, (name, (old_ver, new_ver)) in enumerate(pkg_items):
+        if progress_callback:
+            progress_callback(i, len(pkg_items), name)
         fact = analyze_package(name)
         verdict = generate_verdict(fact) if fact.final_score > 0 else fallback_verdict(fact)
         results.append(

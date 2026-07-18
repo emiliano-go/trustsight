@@ -10,6 +10,7 @@ RISK_COLORS = {"Low": "green", "Medium": "yellow", "High": "red", "Critical": "b
 
 try:
     from rich.console import Console
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
     from rich.table import Table
     from rich.text import Text
 
@@ -23,17 +24,34 @@ def cmd_review(args):
     config = load_config()
     limit = args.limit or config.get("limits", {}).get("default_review_limit", 20)
 
-    results = discover_updates(limit=limit)
-
-    if not results:
-        print("No outdated AUR packages found.")
-        return
-
     if HAS_RICH:
         console = Console()
+        progress_columns = [
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeElapsedColumn(),
+        ]
+        with Progress(*progress_columns, console=console, transient=False) as progress:
+            task = progress.add_task("Fetching AUR packages...", total=None)
+
+            def on_progress(_current, total, name):
+                if total:
+                    progress.update(task, total=total, completed=_current, description=f"Analyzing {name}")
+                else:
+                    progress.update(task, description=name)
+
+            results = discover_updates(limit=limit, progress_callback=on_progress)
+            progress.update(task, visible=False)
+
+        if not results:
+            console.print("[yellow]No outdated AUR packages found.[/]")
+            return
+
         table = Table(title="TrustSight Review")
         table.add_column("Package", style="cyan")
-        table.add_column("Score", justify="right")
+        table.add_column("Risk Score", justify="right")
         table.add_column("Verdict")
 
         for r in results:
@@ -42,7 +60,13 @@ def cmd_review(args):
 
         console.print(table)
     else:
-        print(f"{'Package':<20} {'Score':<10} Verdict")
+        results = discover_updates(limit=limit)
+
+        if not results:
+            print("No outdated AUR packages found.")
+            return
+
+        print(f"{'Package':<20} {'Risk Score':<10} Verdict")
         print("-" * 80)
         for r in results:
             print(f"{r['package']:<20} {r['score']:<10} {r['verdict']}")

@@ -5,6 +5,8 @@ BASE_CONFIG = {
     "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
     "source_bucket_weights": {"trusted_forge": -10, "official": 0, "raw_hosting": 15, "unknown": 20, "self_hosted": 10},
     "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10, "maintainer_first_in_package": 20},
+    "verification_evidence": {"checksum_present": -10, "validpgpkeys_declared": -10, "gpg_verify_present": -5},
+    "pinning_weights": {"checksum_pinned": -5, "tag_pinned": -3, "branch_pinned": 0, "unpinned": 0},
 }
 
 
@@ -104,20 +106,20 @@ def test_score_mixed_buckets():
 # --- Score with novelty ---
 
 def test_score_novelty_url_first_globally():
-    novelty = NoveltyContext(url_first_seen_globally=True)
+    novelty = NoveltyContext(url_first_seen_globally=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, BASE_CONFIG)
     assert score == 15
     assert any(e.rule_id == "NOVELTY" for e in breakdown)
 
 
 def test_score_novelty_url_first_in_package():
-    novelty = NoveltyContext(url_first_seen_in_this_package=True)
+    novelty = NoveltyContext(url_first_seen_in_this_package=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, BASE_CONFIG)
     assert score == 10
 
 
 def test_score_novelty_maintainer_first():
-    novelty = NoveltyContext(maintainer_first_seen_for_this_package=True)
+    novelty = NoveltyContext(maintainer_first_seen_for_this_package=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, BASE_CONFIG)
     assert score == 20
 
@@ -127,6 +129,7 @@ def test_score_novelty_all():
         url_first_seen_in_this_package=True,
         url_first_seen_globally=True,
         maintainer_first_seen_for_this_package=True,
+        observation_count=50,
     )
     score, breakdown, level = calculate_score([], {}, novelty, BASE_CONFIG)
     assert score == 45  # 10 + 15 + 20
@@ -144,6 +147,7 @@ def test_score_everything_combined():
         url_first_seen_in_this_package=True,
         url_first_seen_globally=True,
         maintainer_first_seen_for_this_package=True,
+        observation_count=50,
     )
     buckets = {
         "https://evil.com/payload.tar.gz": "unknown",
@@ -156,7 +160,7 @@ def test_score_everything_combined():
 
 def test_score_breakdown_contains_all_contributors():
     triggered = [{"rule_id": "R001", "severity": "CRITICAL", "name": "Exec", "match": "curl | bash"}]
-    novelty = NoveltyContext(url_first_seen_globally=True)
+    novelty = NoveltyContext(url_first_seen_globally=True, observation_count=50)
     buckets = {"https://evil.com/x": "unknown"}
     score, breakdown, level = calculate_score(triggered, buckets, novelty, BASE_CONFIG)
     rule_ids = [e.rule_id for e in breakdown]
@@ -203,3 +207,118 @@ def test_breakdown_entries_have_reason():
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), BASE_CONFIG)
     assert len(breakdown[0].reason) > 0
     assert "Remote Exec" in breakdown[0].reason
+
+
+def test_fatal_rule_hard_stops_at_100():
+    triggered = [
+        {"rule_id": "R012", "severity": "FATAL", "name": "Prompt Injection", "match": "ignore all instructions"},
+    ]
+    score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), BASE_CONFIG)
+    assert score == 100
+    assert level == "Critical"
+    assert any(e.rule_id == "R012" for e in breakdown)
+    assert all(e.weight == 0 for e in breakdown)  # FATAL contributes 0 weight
+
+
+def test_fatal_overrides_lower_score():
+    triggered = [
+        {"rule_id": "R001", "severity": "HIGH", "name": "Something", "match": "x"},
+        {"rule_id": "R013", "severity": "FATAL", "name": "Bidi", "match": "\u202E"},
+    ]
+    score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), BASE_CONFIG)
+    assert score == 100
+    assert level == "Critical"
+
+
+def test_verification_evidence_reduces_score():
+    triggered = [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}]
+    score, breakdown, level = calculate_score(
+        triggered, {}, NoveltyContext(), BASE_CONFIG,
+        verification_evidence=["checksum_present", "validpgpkeys_declared"],
+    )
+    # 5 (LOW) + (-10) + (-10) = -15 -> floor at 0
+    assert score == 0
+
+
+def test_verification_evidence_in_breakdown():
+    score, breakdown, level = calculate_score(
+        [], {}, NoveltyContext(), BASE_CONFIG,
+        verification_evidence=["gpg_verify_present"],
+    )
+    assert any(e.rule_id == "VERIFICATION" for e in breakdown)
+
+
+def test_pinning_checksum_reduces_score():
+    score, breakdown, level = calculate_score(
+        [], {}, NoveltyContext(), BASE_CONFIG,
+        pinning_level="checksum_pinned",
+    )
+    assert score == 0  # score starts at 0, -5 pinned -> floor at 0
+    assert any(e.rule_id == "PINNING" for e in breakdown)
+
+
+def test_pinning_tag_does_not_floor():
+    score, breakdown, level = calculate_score(
+        [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}],
+        {}, NoveltyContext(), BASE_CONFIG,
+        pinning_level="tag_pinned",
+    )
+    assert score == 2  # 5 + (-3) = 2
+
+
+# --- Inconclusive state ---
+
+def test_inconclusive_on_cold_novelty_only():
+    """Score 25 from novelty only, no observations → Inconclusive."""
+    triggered = [{"rule_id": "R010", "severity": "LOW", "name": "Curl", "match": "curl"}]
+    novelty = NoveltyContext(
+        url_first_seen_globally=True,
+        observation_count=0,
+    )
+    score, breakdown, level = calculate_score(
+        triggered, {"https://evil.com/x": "unknown"}, novelty, BASE_CONFIG,
+    )
+    # 5 (LOW) + 20 (unknown) + 15*0 (maturity=0) = 25 → Medium → Inconclusive
+    assert score == 25
+    assert level == "Inconclusive"
+
+
+def test_inconclusive_medium_score_cold_db():
+    """Score 30 from novelty only, cold DB → Inconclusive."""
+    triggered = [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}]
+    novelty = NoveltyContext(
+        url_first_seen_globally=True,
+        url_first_seen_in_this_package=True,
+        observation_count=0,
+    )
+    score, breakdown, level = calculate_score(
+        triggered, {"https://evil.com/x": "unknown"}, novelty, BASE_CONFIG,
+    )
+    # 5 (LOW) + 20 (unknown) + 0*15 + 0*10 = 25 → Medium
+    # No HIGH/CRITICAL/FATAL in breakdown
+    assert score == 25
+    assert level == "Inconclusive"
+
+
+def test_inconclusive_not_when_high_severity():
+    """HIGH rule present → stays Medium, not Inconclusive."""
+    triggered = [{"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip", "match": "SKIP"}]
+    novelty = NoveltyContext(observation_count=0)
+    score, breakdown, level = calculate_score(triggered, {}, novelty, BASE_CONFIG)
+    assert score == 25
+    assert level == "Medium"  # stays Medium because HIGH signal is present
+
+
+def test_inconclusive_not_warm_db():
+    """Warm DB (obs >= 25) → Medium, not Inconclusive."""
+    triggered = [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}]
+    novelty = NoveltyContext(
+        url_first_seen_globally=True,
+        observation_count=30,
+    )
+    score, breakdown, level = calculate_score(
+        triggered, {"https://evil.com/x": "unknown"}, novelty, BASE_CONFIG,
+    )
+    # 5 (LOW) + 20 (unknown) + 15*0.6 (maturity=30/50) = 34 → Medium
+    assert score == 34
+    assert level == "Medium"

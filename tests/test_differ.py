@@ -1,4 +1,4 @@
-from trustsight.differ import detect_checksum_changes, extract_urls_from_diff
+from trustsight.differ import detect_checksum_changes, detect_verification_evidence, extract_urls_from_diff
 
 
 # --- URL extraction ---
@@ -147,3 +147,37 @@ def test_detect_checksum_multiline():
     diff = """+sha256sums=('SKIP')"""
     result = detect_checksum_changes(diff)
     assert result == "changed_from_sha256_to_skip"
+
+
+# --- Verification evidence ---
+
+def test_detect_verification_checksum_present():
+    diff = """+sha256sums=('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')"""
+    ev = detect_verification_evidence(diff, checksum_behavior="checksum_added_or_changed")
+    assert "checksum_present" in ev
+
+
+def test_detect_verification_validpgpkeys():
+    diff = """+validpgpkeys=('A1B2C3D4E5F6A7B8')"""
+    ev = detect_verification_evidence(diff)
+    assert "validpgpkeys_declared" in ev
+
+
+def test_detect_verification_gpg_verify():
+    diff = """+  gpg --verify signature.sig"""
+    ev = detect_verification_evidence(diff)
+    assert "gpg_verify_present" in ev
+
+
+def test_detect_verification_no_evidence():
+    ev = detect_verification_evidence("", checksum_behavior="unchanged")
+    assert ev == []
+
+
+def test_detect_verification_skip_not_evidence():
+    """SKIP checksum is NOT verification evidence — it's the opposite."""
+    ev = detect_verification_evidence(
+        "+sha256sums=('SKIP')",
+        checksum_behavior="changed_from_sha256_to_skip",
+    )
+    assert "checksum_present" not in ev

@@ -1,4 +1,4 @@
-from trustsight.buckets import classify_url, classify_urls
+from trustsight.buckets import classify_pinning_level, classify_url, classify_urls
 
 DOMAIN_CONFIG = {
     "trusted_forges": {"domains": ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"]},
@@ -112,3 +112,29 @@ def test_unknown_fileio():
 def test_official_via_subdomain():
     bucket, matched = classify_url("https://download.python.org/packages/3.12/pip-23.0.tar.gz", DOMAIN_CONFIG)
     assert bucket == "official"
+
+
+# --- Pinning level ---
+
+def test_pinning_checksum():
+    assert classify_pinning_level("https://example.com/pkg.tar.gz", checksum_present=True) == "checksum_pinned"
+
+
+def test_pinning_tag_archive():
+    assert classify_pinning_level("https://github.com/user/proj/archive/v1.0.0.tar.gz") == "tag_pinned"
+
+
+def test_pinning_tag_releases():
+    assert classify_pinning_level("https://github.com/user/proj/releases/download/v1.0/pkg.tar.gz") == "tag_pinned"
+
+
+def test_pinning_branch():
+    assert classify_pinning_level("https://github.com/user/proj/archive/master.tar.gz") == "branch_pinned"
+
+
+def test_pinning_branch_path():
+    assert classify_pinning_level("https://github.com/user/proj/archive/refs/heads/main.tar.gz") == "branch_pinned"
+
+
+def test_pinning_unpinned():
+    assert classify_pinning_level("https://mirror.example.com/somefile.tar.gz") == "unpinned"

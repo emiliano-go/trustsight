@@ -1,0 +1,70 @@
+name: Mirror Integrity Check
+on:
+  schedule:
+    - cron: "0 6 * * 0"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Verify corpus lock entries match diffs
+        id: verify
+        run: |
+          import json, hashlib, sys
+          from pathlib import Path
+
+          corpus = Path("tests/fixtures/benign-corpus")
+          lock_path = Path("tests/fixtures/corpus.lock")
+          lock = json.loads(lock_path.read_text())
+
+          errors = []
+          for entry in lock.get("entries", []):
+              fname = entry["file"]
+              fpath = corpus / fname
+              if not fpath.exists():
+                  errors.append(f"MISSING: {fname}")
+                  continue
+              content = fpath.read_bytes()
+              actual = hashlib.sha256(content).hexdigest()
+              expected = entry.get("sha256", "")
+              if expected and actual != expected:
+                  errors.append(f"CORRUPT: {fname} (sha256 mismatch)")
+
+          # Check for orphaned diffs (in dir but not in lock)
+          locked = {e["file"] for e in lock.get("entries", [])}
+          for fpath in sorted(corpus.rglob("*.diff")):
+              rel = str(fpath.relative_to(corpus))
+              if rel not in locked:
+                  errors.append(f"ORPHAN: {rel} (in dir but not in lock)")
+
+          if errors:
+              for e in errors:
+                  print(e)
+              sys.exit(1)
+          else:
+              print(f"All {len(lock.get('entries', []))} lock entries verified OK")
+        shell: python
+
+      - name: Alert on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Mirror integrity check failed',
+              body: `The weekly mirror integrity check found issues with the vendored corpus.
+
+    Run \`.github/workflows/mirror-check.yml\` manually to reproduce.
+    Check \`tests/fixtures/corpus.lock\` vs \`tests/fixtures/benign-corpus/\` for mismatches.`
+            });

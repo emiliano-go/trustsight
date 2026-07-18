@@ -1,0 +1,56 @@
+name: Corpus Drift Detection
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Compute current baseline
+        id: rebaseline
+        run: |
+          python scripts/rebaseline.py \
+            --corpus tests/fixtures/benign-corpus \
+            --manifest tests/fixtures/corpus.lock \
+            --baseline /tmp/baseline-current.json
+
+      - name: Compare with stored baseline
+        id: diff
+        run: |
+          mismatch=$(diff <(python -c "import json; d=json.load(open('tests/fixtures/baseline.json')); print(json.dumps(d, sort_keys=True))") \
+                          <(python -c "import json; d=json.load(open('/tmp/baseline-current.json')); print(json.dumps(d, sort_keys=True))") || true)
+          if [ -n "$mismatch" ]; then
+            echo "DRIFT_DETECTED=yes" >> "$GITHUB_OUTPUT"
+            {
+              echo 'CHANGES<<EOF'
+              echo "$mismatch"
+              echo 'EOF'
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "DRIFT_DETECTED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Raise issue on drift
+        if: steps.diff.outputs.DRIFT_DETECTED == 'yes'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const changes = process.env.CHANGES;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Corpus baseline drift detected',
+              body: `Monthly re-baseline detected changes in FP rates.\n\n\`\`\`\n${changes}\n\`\`\`\n\nRun \`scripts/rebaseline.py\` to update \`baseline.json\`.`
+            });
+        env:
+          CHANGES: ${{ steps.diff.outputs.CHANGES }}

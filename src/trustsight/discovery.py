@@ -1,9 +1,10 @@
 import json
 import subprocess
+import urllib.parse
 import urllib.request
 from typing import Optional
 
-AUR_RPC_BASE = "https://aur.archlinux.org/rpc?v=5&type=info"
+AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
 
 
 def get_installed_aur_packages() -> dict[str, str]:
@@ -22,17 +23,17 @@ def get_installed_aur_packages() -> dict[str, str]:
 
 
 def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:
-    results = {}
-    for name in pkg_names:
-        url = f"{AUR_RPC_BASE}&arg[]={name}"
-        try:
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                data = json.load(resp)
-                if data["resultcount"] > 0:
-                    results[name] = data["results"][0]["Version"]
-        except (urllib.error.URLError, json.JSONDecodeError):
-            continue
-    return results
+    if not pkg_names:
+        return {}
+    params = [("v", "5"), ("type", "info")]
+    params.extend(("arg[]", name) for name in pkg_names)
+    url = f"{AUR_RPC_BASE}?{urllib.parse.urlencode(params)}"
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            data = json.load(resp)
+            return {r["Name"]: r["Version"] for r in data.get("results", [])}
+    except (urllib.error.URLError, json.JSONDecodeError):
+        return {}
 
 
 def find_outdated_packages(
@@ -47,7 +48,7 @@ def find_outdated_packages(
 
 
 def fetch_package_info(name: str) -> Optional[dict]:
-    url = f"{AUR_RPC_BASE}&arg[]={name}"
+    url = f"{AUR_RPC_BASE}?v=5&type=info&arg[]={name}"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
             data = json.load(resp)

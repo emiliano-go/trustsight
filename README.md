@@ -20,9 +20,6 @@ Audits AUR PKGBUILDs before you update: catches careless malice and structural r
   <a href="https://pypi.org/project/trustsight/">
     <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge" alt="PyPI">
   </a>
-  <a href="https://codecov.io/gh/emiliano-go/trustsight">
-    <img src="https://img.shields.io/codecov/c/github/emiliano-go/trustsight?style=for-the-badge&logo=codecov&label=Coverage" alt="Coverage">
-  </a>
 </p>
 
 ---

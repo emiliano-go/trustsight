@@ -1,10 +1,10 @@
 {
-  "title": "Running the Sandbox - trustsight",
+  "title": "Running the Sandbox - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/running-the-sandbox/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Running the Sandbox - trustsight",
+    "title": "Running the Sandbox - TrustSight",
     "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
     "url": "https://trustsight.emiliano-go.com/guides/running-the-sandbox/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Running the Sandbox - trustsight",
+    "title": "Running the Sandbox - TrustSight",
     "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Running the Sandbox - trustsight",
+    "name": "Running the Sandbox - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/running-the-sandbox/",
     "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

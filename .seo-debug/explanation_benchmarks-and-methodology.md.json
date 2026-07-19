@@ -1,10 +1,10 @@
 {
-  "title": "Benchmarks and Methodology - trustsight",
+  "title": "Benchmarks and Methodology - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Benchmarks and Methodology - trustsight",
+    "title": "Benchmarks and Methodology - TrustSight",
     "description": "How separation is measured: per-class, not pooled",
     "url": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Benchmarks and Methodology - trustsight",
+    "title": "Benchmarks and Methodology - TrustSight",
     "description": "How separation is measured: per-class, not pooled",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Benchmarks and Methodology - trustsight",
+    "name": "Benchmarks and Methodology - TrustSight",
     "url": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
     "description": "How separation is measured: per-class, not pooled",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

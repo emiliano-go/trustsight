@@ -1,10 +1,10 @@
 {
-  "title": "Corpus and Priors - trustsight",
+  "title": "Corpus and Priors - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Corpus and Priors - trustsight",
+    "title": "Corpus and Priors - TrustSight",
     "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
     "url": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Corpus and Priors - trustsight",
+    "title": "Corpus and Priors - TrustSight",
     "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Corpus and Priors - trustsight",
+    "name": "Corpus and Priors - TrustSight",
     "url": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
     "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

@@ -1,10 +1,10 @@
 {
-  "title": "Trust Model - trustsight",
+  "title": "Trust Model - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/explanation/trust-model/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Trust Model - trustsight",
+    "title": "Trust Model - TrustSight",
     "description": "Core thesis: trust evidence, not verdicts.",
     "url": "https://trustsight.emiliano-go.com/explanation/trust-model/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Trust Model - trustsight",
+    "title": "Trust Model - TrustSight",
     "description": "Core thesis: trust evidence, not verdicts.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Trust Model - trustsight",
+    "name": "Trust Model - TrustSight",
     "url": "https://trustsight.emiliano-go.com/explanation/trust-model/",
     "description": "Core thesis: trust evidence, not verdicts.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

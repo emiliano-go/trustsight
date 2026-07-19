@@ -1,10 +1,10 @@
 {
-  "title": "Auditing Before Update - trustsight",
+  "title": "Auditing Before Update - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/auditing-before-update/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Auditing Before Update - trustsight",
+    "title": "Auditing Before Update - TrustSight",
     "description": "--- description: The core TrustSight workflow : run a review before updating AUR packages. ---",
     "url": "https://trustsight.emiliano-go.com/guides/auditing-before-update/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Auditing Before Update - trustsight",
+    "title": "Auditing Before Update - TrustSight",
     "description": "--- description: The core TrustSight workflow : run a review before updating AUR packages. ---",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Auditing Before Update - trustsight",
+    "name": "Auditing Before Update - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/auditing-before-update/",
     "description": "--- description: The core TrustSight workflow : run a review before updating AUR packages. ---",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

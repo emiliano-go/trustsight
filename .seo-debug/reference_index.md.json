@@ -1,10 +1,10 @@
 {
-  "title": "Reference - trustsight",
+  "title": "Reference - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/reference/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Reference - trustsight",
+    "title": "Reference - TrustSight",
     "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
     "url": "https://trustsight.emiliano-go.com/reference/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Reference - trustsight",
+    "title": "Reference - TrustSight",
     "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Reference - trustsight",
+    "name": "Reference - TrustSight",
     "url": "https://trustsight.emiliano-go.com/reference/",
     "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

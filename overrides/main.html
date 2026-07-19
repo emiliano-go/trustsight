@@ -7,15 +7,13 @@
 {% endblock %}
 
 {% block site_meta %}
-{% if page.meta %}
-{% if page.meta._seo_head %}
+{% if page.meta and page.meta._seo_head %}
 {{ page.meta._seo_head | safe }}
-{% elif page.meta.seo_html %}
+{% elif page.meta and page.meta.seo_html %}
 {{ page.meta.seo_html | safe }}
 {% else %}
 {{ super() }}
 {% endif %}
-{% else %}
-{{ super() }}
-{% endif %}
+<link rel="alternate" type="text/plain" title="LLMs TXT" href="/llms.txt">
+<link rel="alternate" type="text/plain" title="LLMs Full" href="/llms-full.txt">
 {% endblock %}

@@ -32,6 +32,10 @@ license-files = ["LICENSE"]
 [project.optional-dependencies]
 ollama = ["ollama"]
 dev = ["pytest", "ruff"]
+docs = [
+    "seoslug>=2.0.1",
+    "zensical>=0.0.44",
+]
 
 [project.urls]
 Documentation = "https://github.com/emiliano-go/trustsight"

@@ -1,10 +1,10 @@
 {
-  "title": "Quickstart - trustsight",
+  "title": "Quickstart - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Quickstart - trustsight",
+    "title": "Quickstart - TrustSight",
     "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
     "url": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Quickstart - trustsight",
+    "title": "Quickstart - TrustSight",
     "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Quickstart - trustsight",
+    "name": "Quickstart - TrustSight",
     "url": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
     "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

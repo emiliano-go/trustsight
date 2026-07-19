@@ -1,10 +1,10 @@
 {
-  "title": "Development Setup - trustsight",
+  "title": "Development Setup - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/contributing/development-setup/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Development Setup - trustsight",
+    "title": "Development Setup - TrustSight",
     "description": "Prerequisites",
     "url": "https://trustsight.emiliano-go.com/contributing/development-setup/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Development Setup - trustsight",
+    "title": "Development Setup - TrustSight",
     "description": "Prerequisites",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Development Setup - trustsight",
+    "name": "Development Setup - TrustSight",
     "url": "https://trustsight.emiliano-go.com/contributing/development-setup/",
     "description": "Prerequisites",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

@@ -1,10 +1,10 @@
 {
-  "title": "Rules Reference - trustsight",
+  "title": "Rules Reference - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/reference/rules/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Rules Reference - trustsight",
+    "title": "Rules Reference - TrustSight",
     "description": "Two rule namespaces:",
     "url": "https://trustsight.emiliano-go.com/reference/rules/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Rules Reference - trustsight",
+    "title": "Rules Reference - TrustSight",
     "description": "Two rule namespaces:",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Rules Reference - trustsight",
+    "name": "Rules Reference - TrustSight",
     "url": "https://trustsight.emiliano-go.com/reference/rules/",
     "description": "Two rule namespaces:",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

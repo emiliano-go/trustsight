@@ -1,10 +1,10 @@
 {
-  "title": "Acting on a Flag - trustsight",
+  "title": "Acting on a Flag - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/acting-on-a-flag/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Acting on a Flag - trustsight",
+    "title": "Acting on a Flag - TrustSight",
     "description": "What to do when a package is FLAGGED or INCONCLUSIVE.",
     "url": "https://trustsight.emiliano-go.com/guides/acting-on-a-flag/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Acting on a Flag - trustsight",
+    "title": "Acting on a Flag - TrustSight",
     "description": "What to do when a package is FLAGGED or INCONCLUSIVE.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Acting on a Flag - trustsight",
+    "name": "Acting on a Flag - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/acting-on-a-flag/",
     "description": "What to do when a package is FLAGGED or INCONCLUSIVE.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

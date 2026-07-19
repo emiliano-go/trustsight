@@ -1,10 +1,10 @@
 {
-  "title": "Guides - trustsight",
+  "title": "Guides - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Guides - trustsight",
+    "title": "Guides - TrustSight",
     "description": "Task-oriented guides for common TrustSight workflows.",
     "url": "https://trustsight.emiliano-go.com/guides/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Guides - trustsight",
+    "title": "Guides - TrustSight",
     "description": "Task-oriented guides for common TrustSight workflows.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Guides - trustsight",
+    "name": "Guides - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/",
     "description": "Task-oriented guides for common TrustSight workflows.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

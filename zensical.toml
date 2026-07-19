@@ -133,6 +133,18 @@ name = "trustsight on PyPI"
 tables = {}
 admonition = {}
 toc = { permalink = true }
+"seoslug.contrib.zensical" = {
+  canonical_host = "trustsight.emiliano-go.com",
+  public_base_url = "https://trustsight.emiliano-go.com/",
+  site_name = "trustsight",
+  title_template = "{title} - TrustSight",
+  default_og_image = "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+  publisher_name = "Emiliano Gandini Outeda",
+  locale = "en_US",
+  twitter_site = "@emiliano_go_",
+  auto_generate_schema = true,
+  debug_dir = ".seo-debug",
+}
 
 [project.markdown_extensions.pymdownx]
 highlight = { anchor_linenums = true, line_spans = "__span", pygments_lang_class = true }

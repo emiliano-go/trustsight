@@ -1,10 +1,10 @@
 {
-  "title": "How TrustSight Works - trustsight",
+  "title": "How TrustSight Works - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/explanation/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "How TrustSight Works - trustsight",
+    "title": "How TrustSight Works - TrustSight",
     "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
     "url": "https://trustsight.emiliano-go.com/explanation/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "How TrustSight Works - trustsight",
+    "title": "How TrustSight Works - TrustSight",
     "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "How TrustSight Works - trustsight",
+    "name": "How TrustSight Works - TrustSight",
     "url": "https://trustsight.emiliano-go.com/explanation/",
     "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

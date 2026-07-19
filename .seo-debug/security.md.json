@@ -1,10 +1,10 @@
 {
-  "title": "Security - trustsight",
+  "title": "Security - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/security/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Security - trustsight",
+    "title": "Security - TrustSight",
     "description": "Vulnerability disclosure policy",
     "url": "https://trustsight.emiliano-go.com/security/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Security - trustsight",
+    "title": "Security - TrustSight",
     "description": "Vulnerability disclosure policy",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Security - trustsight",
+    "name": "Security - TrustSight",
     "url": "https://trustsight.emiliano-go.com/security/",
     "description": "Vulnerability disclosure policy",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

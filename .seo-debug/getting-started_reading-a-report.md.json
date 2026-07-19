@@ -1,10 +1,10 @@
 {
-  "title": "Reading a Report - trustsight",
+  "title": "Reading a Report - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/getting-started/reading-a-report/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Reading a Report - trustsight",
+    "title": "Reading a Report - TrustSight",
     "description": "A misread verdict is worse than no verdict. This page explains exactly what every part of a TrustSight report means : and what it does not.",
     "url": "https://trustsight.emiliano-go.com/getting-started/reading-a-report/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Reading a Report - trustsight",
+    "title": "Reading a Report - TrustSight",
     "description": "A misread verdict is worse than no verdict. This page explains exactly what every part of a TrustSight report means : and what it does not.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Reading a Report - trustsight",
+    "name": "Reading a Report - TrustSight",
     "url": "https://trustsight.emiliano-go.com/getting-started/reading-a-report/",
     "description": "A misread verdict is worse than no verdict. This page explains exactly what every part of a TrustSight report means : and what it does not.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

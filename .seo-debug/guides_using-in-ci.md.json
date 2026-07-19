@@ -1,10 +1,10 @@
 {
-  "title": "Using TrustSight in CI - trustsight",
+  "title": "Using TrustSight in CI - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Using TrustSight in CI - trustsight",
+    "title": "Using TrustSight in CI - TrustSight",
     "description": "How to integrate TrustSight into CI/CD pipelines.",
     "url": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Using TrustSight in CI - trustsight",
+    "title": "Using TrustSight in CI - TrustSight",
     "description": "How to integrate TrustSight into CI/CD pipelines.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Using TrustSight in CI - trustsight",
+    "name": "Using TrustSight in CI - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
     "description": "How to integrate TrustSight into CI/CD pipelines.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

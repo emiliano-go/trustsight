@@ -1,10 +1,10 @@
 {
-  "title": "Configuring Rules and Weights - trustsight",
+  "title": "Configuring Rules and Weights - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/guides/configuring-rules-and-weights/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Configuring Rules and Weights - trustsight",
+    "title": "Configuring Rules and Weights - TrustSight",
     "description": "How to edit rules.toml, config.toml, and adjust severity and evidence weights.",
     "url": "https://trustsight.emiliano-go.com/guides/configuring-rules-and-weights/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Configuring Rules and Weights - trustsight",
+    "title": "Configuring Rules and Weights - TrustSight",
     "description": "How to edit rules.toml, config.toml, and adjust severity and evidence weights.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Configuring Rules and Weights - trustsight",
+    "name": "Configuring Rules and Weights - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/configuring-rules-and-weights/",
     "description": "How to edit rules.toml, config.toml, and adjust severity and evidence weights.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

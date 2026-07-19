@@ -1,10 +1,10 @@
 {
-  "title": "Re-baselining - trustsight",
+  "title": "Re-baselining - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/contributing/re-baselining/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "Re-baselining - trustsight",
+    "title": "Re-baselining - TrustSight",
     "description": "The baseline tests/fixtures/baseline.json records the expected score distribution over the pinned corpus. It must be regenerated whenever the scoring logic...",
     "url": "https://trustsight.emiliano-go.com/contributing/re-baselining/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "Re-baselining - trustsight",
+    "title": "Re-baselining - TrustSight",
     "description": "The baseline tests/fixtures/baseline.json records the expected score distribution over the pinned corpus. It must be regenerated whenever the scoring logic...",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "Re-baselining - trustsight",
+    "name": "Re-baselining - TrustSight",
     "url": "https://trustsight.emiliano-go.com/contributing/re-baselining/",
     "description": "The baseline tests/fixtures/baseline.json records the expected score distribution over the pinned corpus. It must be regenerated whenever the scoring logic...",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

@@ -24,7 +24,7 @@ TrustSight takes the security of its analysis pipeline seriously. If you believe
 
 **Out of scope:**
 - Compromised upstream AUR packages: TrustSight audits them; that is the point
-- Side-channel attacks on the sandbox environment (sandbox is gated until shipped)
+- Runtime behavioral analysis is not yet implemented
 
 ## Security-relevant defaults
 

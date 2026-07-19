@@ -34,16 +34,16 @@ This command:
 
 ```
                                TrustSight Review
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Package                  ┃ Score    ┃ Verdict                                   ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ some-app-bin             │    0/100 │ Version bump. No structural changes.      │
-│ sketchy-package          │   55/100 │ Checksum disabled (R004). New domain:     │
-│                          │          │ sketchy-cdn.example.com (unknown).        │
-│ first-run-pkg            │   25/100 │ New source URL first seen globally         │
-│                          │          │ (novelty), no strong structural signals.   │
-│ unknown-pkg              │   22/100 │ Source URL added from unknown domain.      │
-└──────────────────────────┴──────────┴───────────────────────────────────────────┘
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Package                  ┃ Risk Score ┃ Verdict                                   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ some-app-bin             │      0/100 │ Version bump. No structural changes.      │
+│ sketchy-package          │     55/100 │ Checksum disabled (R004). New domain:     │
+│                          │            │ sketchy-cdn.example.com (unknown).        │
+│ first-run-pkg            │     25/100 │ New source URL first seen globally         │
+│                          │            │ (novelty), no strong structural signals.   │
+│ unknown-pkg              │     22/100 │ Source URL added from unknown domain.      │
+└──────────────────────────┴────────────┴───────────────────────────────────────────┘
 ```
 
 ### Columns

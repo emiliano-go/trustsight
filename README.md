@@ -1,11 +1,29 @@
 # TrustSight
 
+<img src="https://raw.githubusercontent.com/emiliano-go/trustsight/refs/heads/master/docs/assets/images/trustsight-banner.png" alt="TrustSight" width="700"/>
+
 Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify.
 
-[![CI](https://img.shields.io/badge/CI-passing-brightgreen?style=flat-square)]()
-[![Tests](https://img.shields.io/badge/tests-267-blue?style=flat-square)]()
-[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)]()
-[![License](https://img.shields.io/badge/License-MIT-10AC84?style=flat-square)]()
+<p align="center">
+  <a href="https://www.python.org/downloads/">
+    <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
+  </a>
+  <a href="https://deepwiki.com/emiliano-go/trustsight/">
+    <img src="https://img.shields.io/badge/DeepWiki-8A2BE2?logo=readthedocs&logoColor=white&style=for-the-badge" alt="DeepWiki">
+  </a>
+  <a href="https://github.com/emiliano-go/trustsight/actions/workflows/test.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests" alt="Tests">
+  </a>
+  <a href="https://pypi.org/project/trustsight/">
+    <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge" alt="PyPI">
+  </a>
+  <a href="https://codecov.io/gh/emiliano-go/trustsight">
+    <img src="https://img.shields.io/codecov/c/github/emiliano-go/trustsight?style=for-the-badge&logo=codecov&label=Coverage" alt="Coverage">
+  </a>
+</p>
 
 ---
 
@@ -40,7 +58,7 @@ trustsight review
 └─────────────────┴──────────┴─────────────────────────────────────────────┘
 ```
 
-The tiered evidence display is the differentiator: every signal — rule, bucket, novelty, pinning, verification — is shown with its contribution and severity. You see **why** the score is what it is.
+The tiered evidence display is the differentiator: every signal (rule, bucket, novelty, pinning, verification) is shown with its contribution and severity. You see **why** the score is what it is.
 
 ---
 
@@ -48,10 +66,10 @@ The tiered evidence display is the differentiator: every signal — rule, bucket
 
 | Detected by TrustSight | Outside TrustSight's scope |
 |---|---|
-| **Careless malice** — `curl \| bash`, `base64 --decode`, wget pipe sh (R001 recall ~100%). Obfuscated casing, embedded URLs in function bodies. | **Signed upstream payload** — the PKGBUILD is not the binary. A benign build file can fetch a tampered release tarball. |
-| **Structural risk** — checksums disabled (R004), checksums emptied (R005), URL typosquatting (`githab.com`), source URLs swapped without a version bump (C003). | **Deliberately-unremarkable PKGBUILDs** — no added commands, no new URLs, no checksum changes → no signal. The update is invisible to diff analysis. |
-| **Anomaly-vs-history** — first-seen URLs (global or per-package), first-seen maintainer, low-observation-count gating with INCONCLUSIVE verdict. | **Build-dependency attacks** — a malicious `makedepends` or `depends` is outside PKGBUILD scope; TrustSight audits the recipe, not the supply chain's second-order dependencies. |
-| **Reviewer manipulation** — Unicode bidi overrides (R013, 88% recall) that make displayed text differ from executed text. Prompt injection in comments/descriptions (R012, 17% recall — kept as tripwire; primary defense is verdict-integrity assertions). | **Unpinned sources** → INCONCLUSIVE. A `source=($pkgname-$pkgver.tar.gz)` with no checksum, tag, or commit pin is reported as structurally weak, not silently accepted. |
+| **Careless malice**: `curl \| bash`, `base64 \| sh`, wget pipe sh (R001 recall ~100%). Obfuscated casing, embedded URLs in function bodies. | **Signed upstream payload**: the PKGBUILD is not the binary. A benign build file can fetch a tampered release tarball. |
+| **Structural risk**: checksums disabled (R004), checksums emptied (R005), URL typosquatting (`githab.com`), source URLs swapped without a version bump (C003). | **Deliberately-unremarkable PKGBUILDs**: no added commands, no new URLs, no checksum changes; no signal. The update is invisible to diff analysis. |
+| **Anomaly-vs-history**: first-seen URLs (global or per-package), first-seen maintainer, low-observation-count gating with INCONCLUSIVE verdict. | **Build-dependency attacks**: a malicious `makedepends` or `depends` is outside PKGBUILD scope. TrustSight audits the recipe, not the supply chain's second-order dependencies. |
+| **Reviewer manipulation**: Unicode bidi overrides (R013, 88% recall) that make displayed text differ from executed text. Prompt injection in comments/descriptions (R012, 17% recall; kept as tripwire; primary defense is verdict-integrity assertions). | **Unpinned sources** result in INCONCLUSIVE. A `source=($pkgname-$pkgver.tar.gz)` with no checksum, tag, or commit pin is reported as structurally weak, not silently accepted. |
 
 ---
 
@@ -61,7 +79,7 @@ The tiered evidence display is the differentiator: every signal — rule, bucket
 pip install trustsight
 ```
 
-AUR: `trustsight` (dogfood — TrustSight audits its own updates).
+AUR: `trustsight` (dogfood: TrustSight audits its own updates).
 
 From source:
 
@@ -87,19 +105,19 @@ Requires **Python 3.12+**.
 
 ## How scoring works
 
-Scoring is deterministic (same input → same score, always). A core of 13 detection rules (R001–R013) and 3 code-structure rules (C001–C003) produces signals across four evidence tiers: **A** (structural — rules on PKGBUILD lines), **B** (priors/context — URL classification, forge trust), **C** (history/novelty — first-seen URLs and maintainers, gated by observation count), and **D** (verification — checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates — it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
+Scoring is deterministic: same input always produces the same score. A core of 13 detection rules (R001 to R013) and 3 code-structure rules (C001 to C003) produces signals across four evidence tiers: **A** (structural, rules on PKGBUILD lines), **B** (priors/context, URL classification and forge trust), **C** (history/novelty, first-seen URLs and maintainers gated by observation count), and **D** (verification, checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates; it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 
 ---
 
 ## Security model
 
-TrustSight is evidence-producing, not proof-of-safety. It audits — it does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
+TrustSight is evidence-producing, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
 
 ---
 
 ## License
 
-MIT — deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security communities.
+MIT. Deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security communities.
 
 ---
 

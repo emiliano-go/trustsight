@@ -59,7 +59,6 @@ The ceiling of sandbox analysis is "observed clean in this specific execution." 
 
 ## Security model
 
-See [sandbox security model](../explanation/sandbox-security-model.md) for the detailed threat model, escape scenarios, and the gating criteria for each backend.
 
 ## When to use the sandbox
 
@@ -73,6 +72,6 @@ See [sandbox security model](../explanation/sandbox-security-model.md) for the d
 
 ## See also
 
-- [Sandbox security model](../explanation/sandbox-security-model.md)
+
 - [Acting on a flag](acting-on-a-flag.md)
 - [Evidence tiers](../reference/evidence-tiers.md)

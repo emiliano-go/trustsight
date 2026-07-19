@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "How TrustSight Works - TrustSight",
-    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
+    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the end-state of a diff: the post-patch PKGBUILD, not the delta....",
     "url": "https://trustsight.emiliano-go.com/explanation/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "How TrustSight Works - TrustSight",
-    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
+    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the end-state of a diff: the post-patch PKGBUILD, not the delta....",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
+  "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the end-state of a diff: the post-patch PKGBUILD, not the delta....",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "How TrustSight Works - TrustSight",
     "url": "https://trustsight.emiliano-go.com/explanation/",
-    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0–100 over the end-state of a diff : the post-patch PKGBUILD, not the delta....",
+    "description": "TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the end-state of a diff: the post-patch PKGBUILD, not the delta....",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

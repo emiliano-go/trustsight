@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "Getting Started - TrustSight",
-    "description": "The fastest path from zero to your first trustsight review. If you already understand the basics, jump directly to the guides../guides/index.md or...",
+    "description": "<img src=\"../assets/images/trustsight-banner.png\" alt=\"TrustSight\" width=\"700\"/",
     "url": "https://trustsight.emiliano-go.com/getting-started/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "Getting Started - TrustSight",
-    "description": "The fastest path from zero to your first trustsight review. If you already understand the basics, jump directly to the guides../guides/index.md or...",
+    "description": "<img src=\"../assets/images/trustsight-banner.png\" alt=\"TrustSight\" width=\"700\"/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "The fastest path from zero to your first trustsight review. If you already understand the basics, jump directly to the guides../guides/index.md or...",
+  "description": "<img src=\"../assets/images/trustsight-banner.png\" alt=\"TrustSight\" width=\"700\"/",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Getting Started - TrustSight",
     "url": "https://trustsight.emiliano-go.com/getting-started/",
-    "description": "The fastest path from zero to your first trustsight review. If you already understand the basics, jump directly to the guides../guides/index.md or...",
+    "description": "<img src=\"../assets/images/trustsight-banner.png\" alt=\"TrustSight\" width=\"700\"/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

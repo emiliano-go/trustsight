@@ -109,7 +109,6 @@ name = "trustsight on PyPI"
 "Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"
 "Corpus and Priors" = "explanation/corpus-and-priors.md"
 "What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
-"Sandbox Security Model" = "explanation/sandbox-security-model.md"
 "Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
 
 [[project.nav]]

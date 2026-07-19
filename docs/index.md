@@ -1,5 +1,5 @@
 ---
-description: Full documentation for TrustSight : deterministic AUR PKGBUILD audit tool.
+description: "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool."
 ---
 
 # TrustSight documentation

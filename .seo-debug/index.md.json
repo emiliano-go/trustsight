@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "TrustSight documentation - TrustSight",
-    "description": "--- description: Full documentation for TrustSight : deterministic AUR PKGBUILD audit tool. ---",
+    "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "url": "https://trustsight.emiliano-go.com/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "TrustSight documentation - TrustSight",
-    "description": "--- description: Full documentation for TrustSight : deterministic AUR PKGBUILD audit tool. ---",
+    "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "--- description: Full documentation for TrustSight : deterministic AUR PKGBUILD audit tool. ---",
+  "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "TrustSight documentation - TrustSight",
     "url": "https://trustsight.emiliano-go.com/",
-    "description": "--- description: Full documentation for TrustSight : deterministic AUR PKGBUILD audit tool. ---",
+    "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

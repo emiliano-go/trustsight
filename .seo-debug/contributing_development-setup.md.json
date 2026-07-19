@@ -1,0 +1,34 @@
+{
+  "title": "Development Setup - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/contributing/development-setup/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Development Setup - trustsight",
+    "description": "Prerequisites",
+    "url": "https://trustsight.emiliano-go.com/contributing/development-setup/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Development Setup - trustsight",
+    "description": "Prerequisites",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Prerequisites",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Development Setup - trustsight",
+    "url": "https://trustsight.emiliano-go.com/contributing/development-setup/",
+    "description": "Prerequisites",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

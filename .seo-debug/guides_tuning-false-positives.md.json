@@ -1,0 +1,34 @@
+{
+  "title": "Tuning False Positives - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/guides/tuning-false-positives/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Tuning False Positives - trustsight",
+    "description": "How to identify and fix rules that fire too often on your package set.",
+    "url": "https://trustsight.emiliano-go.com/guides/tuning-false-positives/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Tuning False Positives - trustsight",
+    "description": "How to identify and fix rules that fire too often on your package set.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "How to identify and fix rules that fire too often on your package set.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Tuning False Positives - trustsight",
+    "url": "https://trustsight.emiliano-go.com/guides/tuning-false-positives/",
+    "description": "How to identify and fix rules that fire too often on your package set.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

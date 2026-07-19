@@ -1,0 +1,34 @@
+{
+  "title": "License - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/license/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "License - trustsight",
+    "description": "TrustSight is released under the MIT License : deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security...",
+    "url": "https://trustsight.emiliano-go.com/license/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "License - trustsight",
+    "description": "TrustSight is released under the MIT License : deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight is released under the MIT License : deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security...",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "License - trustsight",
+    "url": "https://trustsight.emiliano-go.com/license/",
+    "description": "TrustSight is released under the MIT License : deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

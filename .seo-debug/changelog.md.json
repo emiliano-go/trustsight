@@ -1,0 +1,34 @@
+{
+  "title": "Changelog - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/changelog/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Changelog - trustsight",
+    "description": "Unreleased",
+    "url": "https://trustsight.emiliano-go.com/changelog/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Changelog - trustsight",
+    "description": "Unreleased",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Unreleased",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Changelog - trustsight",
+    "url": "https://trustsight.emiliano-go.com/changelog/",
+    "description": "Unreleased",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "title": "Evidence Tiers - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/reference/evidence-tiers/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Evidence Tiers - trustsight",
+    "description": "TrustSight groups scoring signals into four evidence tiers. Each tier represents a fundamentally different kind of information with different availability and...",
+    "url": "https://trustsight.emiliano-go.com/reference/evidence-tiers/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Evidence Tiers - trustsight",
+    "description": "TrustSight groups scoring signals into four evidence tiers. Each tier represents a fundamentally different kind of information with different availability and...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight groups scoring signals into four evidence tiers. Each tier represents a fundamentally different kind of information with different availability and...",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Evidence Tiers - trustsight",
+    "url": "https://trustsight.emiliano-go.com/reference/evidence-tiers/",
+    "description": "TrustSight groups scoring signals into four evidence tiers. Each tier represents a fundamentally different kind of information with different availability and...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

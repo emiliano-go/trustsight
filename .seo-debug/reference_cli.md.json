@@ -1,0 +1,34 @@
+{
+  "title": "CLI Reference - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/reference/cli/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "CLI Reference - trustsight",
+    "description": "Synopsis",
+    "url": "https://trustsight.emiliano-go.com/reference/cli/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "CLI Reference - trustsight",
+    "description": "Synopsis",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Synopsis",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "CLI Reference - trustsight",
+    "url": "https://trustsight.emiliano-go.com/reference/cli/",
+    "description": "Synopsis",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

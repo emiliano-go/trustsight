@@ -1,0 +1,34 @@
+{
+  "title": "Contributing to TrustSight - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/contributing/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Contributing to TrustSight - trustsight",
+    "description": "TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It uses a hybrid rule system, TOML-defined patterns R-series and code-level...",
+    "url": "https://trustsight.emiliano-go.com/contributing/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Contributing to TrustSight - trustsight",
+    "description": "TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It uses a hybrid rule system, TOML-defined patterns R-series and code-level...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It uses a hybrid rule system, TOML-defined patterns R-series and code-level...",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Contributing to TrustSight - trustsight",
+    "url": "https://trustsight.emiliano-go.com/contributing/",
+    "description": "TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It uses a hybrid rule system, TOML-defined patterns R-series and code-level...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

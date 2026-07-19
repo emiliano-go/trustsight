@@ -1,0 +1,34 @@
+{
+  "title": "Writing a Rule - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/contributing/writing-a-rule/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Writing a Rule - trustsight",
+    "description": "TrustSight has two rule namespaces to avoid identifier collision:",
+    "url": "https://trustsight.emiliano-go.com/contributing/writing-a-rule/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Writing a Rule - trustsight",
+    "description": "TrustSight has two rule namespaces to avoid identifier collision:",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight has two rule namespaces to avoid identifier collision:",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Writing a Rule - trustsight",
+    "url": "https://trustsight.emiliano-go.com/contributing/writing-a-rule/",
+    "description": "TrustSight has two rule namespaces to avoid identifier collision:",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

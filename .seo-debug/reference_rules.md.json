@@ -1,0 +1,34 @@
+{
+  "title": "Rules Reference - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/reference/rules/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Rules Reference - trustsight",
+    "description": "Two rule namespaces:",
+    "url": "https://trustsight.emiliano-go.com/reference/rules/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Rules Reference - trustsight",
+    "description": "Two rule namespaces:",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Two rule namespaces:",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Rules Reference - trustsight",
+    "url": "https://trustsight.emiliano-go.com/reference/rules/",
+    "description": "Two rule namespaces:",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

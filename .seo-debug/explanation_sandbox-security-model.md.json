@@ -1,0 +1,34 @@
+{
+  "title": "Sandbox Security Model - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/sandbox-security-model/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Sandbox Security Model - trustsight",
+    "description": "GATED: The sandbox is not yet available in the current release. This page describes the planned design.",
+    "url": "https://trustsight.emiliano-go.com/explanation/sandbox-security-model/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Sandbox Security Model - trustsight",
+    "description": "GATED: The sandbox is not yet available in the current release. This page describes the planned design.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "GATED: The sandbox is not yet available in the current release. This page describes the planned design.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Sandbox Security Model - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/sandbox-security-model/",
+    "description": "GATED: The sandbox is not yet available in the current release. This page describes the planned design.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

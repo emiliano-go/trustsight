@@ -1,0 +1,34 @@
+{
+  "title": "Quickstart - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Quickstart - trustsight",
+    "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
+    "url": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Quickstart - trustsight",
+    "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Quickstart - trustsight",
+    "url": "https://trustsight.emiliano-go.com/getting-started/quickstart/",
+    "description": "This guide walks through the single happy path: install, run a review, and understand the output.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

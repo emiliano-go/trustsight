@@ -1,0 +1,34 @@
+{
+  "title": "Cold Start and Maturity - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/cold-start-and-maturity/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Cold Start and Maturity - trustsight",
+    "description": "TrustSight operates in two regimes: cold DB first run, no history and warm DB established observation history. The behaviour is different by design.",
+    "url": "https://trustsight.emiliano-go.com/explanation/cold-start-and-maturity/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Cold Start and Maturity - trustsight",
+    "description": "TrustSight operates in two regimes: cold DB first run, no history and warm DB established observation history. The behaviour is different by design.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight operates in two regimes: cold DB first run, no history and warm DB established observation history. The behaviour is different by design.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Cold Start and Maturity - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/cold-start-and-maturity/",
+    "description": "TrustSight operates in two regimes: cold DB first run, no history and warm DB established observation history. The behaviour is different by design.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

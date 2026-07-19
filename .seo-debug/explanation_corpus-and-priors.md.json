@@ -1,0 +1,34 @@
+{
+  "title": "Corpus and Priors - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Corpus and Priors - trustsight",
+    "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
+    "url": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Corpus and Priors - trustsight",
+    "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Corpus and Priors - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/corpus-and-priors/",
+    "description": "TrustSight maintains an AUR-wide snapshot that serves as the prior distribution for all URL classification and novelty detection.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

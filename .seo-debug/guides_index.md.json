@@ -1,0 +1,34 @@
+{
+  "title": "Guides - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/guides/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Guides - trustsight",
+    "description": "Task-oriented guides for common TrustSight workflows.",
+    "url": "https://trustsight.emiliano-go.com/guides/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Guides - trustsight",
+    "description": "Task-oriented guides for common TrustSight workflows.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Task-oriented guides for common TrustSight workflows.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Guides - trustsight",
+    "url": "https://trustsight.emiliano-go.com/guides/",
+    "description": "Task-oriented guides for common TrustSight workflows.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

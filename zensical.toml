@@ -1,0 +1,147 @@
+[project]
+site_name = "trustsight"
+site_description = "Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify."
+site_url = "https://trustsight.emiliano-go.com/"
+docs_dir = "docs"
+site_dir = "site"
+
+copyright = "&copy; 2026 Emiliano Gandini Outeda"
+
+extra_css = ["stylesheets/extra.css"]
+
+# ==============================================================================
+# Theme
+# ==============================================================================
+
+[project.theme]
+variant = "modern"
+custom_dir = "overrides"
+favicon = "assets/images/favicon.png"
+
+font.text = "Ubuntu"
+font.code = "JetBrains Mono"
+
+features = [
+    "navigation.instant",
+    "navigation.instant.prefetch",
+    "navigation.tabs",
+    "navigation.indexes",
+    "navigation.top",
+    "navigation.footer",
+    "search.suggest",
+    "search.highlight",
+    "content.code.copy",
+    "content.code.annotate",
+    "toc.follow",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "custom"
+accent = "custom"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+# ==============================================================================
+# Footer / extra
+# ==============================================================================
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/emiliano-go/trustsight"
+name = "trustsight on GitHub"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/python"
+link = "https://pypi.org/project/trustsight/"
+name = "trustsight on PyPI"
+
+# ==============================================================================
+# Navigation
+# ==============================================================================
+
+[[project.nav]]
+"Home" = "index.md"
+
+[[project.nav]]
+"Getting Started" = "getting-started/index.md"
+
+[[project.nav.getting-started]]
+"Installation" = "getting-started/installation.md"
+"Quickstart" = "getting-started/quickstart.md"
+"Reading a Report" = "getting-started/reading-a-report.md"
+
+[[project.nav]]
+"Guides" = "guides/index.md"
+
+[[project.nav.guides]]
+"Auditing Before Update" = "guides/auditing-before-update.md"
+"Using in CI" = "guides/using-in-ci.md"
+"Acting on a Flag" = "guides/acting-on-a-flag.md"
+"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"
+"Tuning False Positives" = "guides/tuning-false-positives.md"
+"Running the Sandbox" = "guides/running-the-sandbox.md"
+
+[[project.nav]]
+"Reference" = "reference/index.md"
+
+[[project.nav.reference]]
+"CLI Reference" = "reference/cli.md"
+"Rules Reference" = "reference/rules.md"
+"Configuration Reference" = "reference/configuration.md"
+"Report Schema" = "reference/report-schema.md"
+"Evidence Tiers" = "reference/evidence-tiers.md"
+"Exit Codes" = "reference/exit-codes.md"
+
+[[project.nav]]
+"Explanation" = "explanation/index.md"
+
+[[project.nav.explanation]]
+"Trust Model" = "explanation/trust-model.md"
+"Scoring Philosophy" = "explanation/scoring-philosophy.md"
+"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"
+"Corpus and Priors" = "explanation/corpus-and-priors.md"
+"What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
+"Sandbox Security Model" = "explanation/sandbox-security-model.md"
+"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
+
+[[project.nav]]
+"Contributing" = "contributing/index.md"
+
+[[project.nav.contributing]]
+"Development Setup" = "contributing/development-setup.md"
+"Writing a Rule" = "contributing/writing-a-rule.md"
+"Re-baselining" = "contributing/re-baselining.md"
+
+[[project.nav]]
+"Changelog" = "changelog.md"
+"Security" = "security.md"
+"License" = "license.md"
+
+# ==============================================================================
+# Markdown extensions
+# ==============================================================================
+
+[project.markdown_extensions]
+tables = {}
+admonition = {}
+toc = { permalink = true }
+
+[project.markdown_extensions.pymdownx]
+highlight = { anchor_linenums = true, line_spans = "__span", pygments_lang_class = true }
+inlinehilite = {}
+snippets = {}
+superfences = {}
+tabbed = { alternate_style = true }
+tasklist = { custom_checkbox = true }
+
+[project.markdown_extensions.attr_list]
+
+[project.markdown_extensions.md_in_html]

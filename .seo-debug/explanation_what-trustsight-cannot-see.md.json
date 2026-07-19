@@ -1,0 +1,34 @@
+{
+  "title": "What TrustSight Cannot See - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/what-trustsight-cannot-see/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "What TrustSight Cannot See - trustsight",
+    "description": "This page describes the reasoned ceiling of the tool. These are not bugs; they are inherent limits of auditing PKGBUILD metadata rather than build artifacts....",
+    "url": "https://trustsight.emiliano-go.com/explanation/what-trustsight-cannot-see/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "What TrustSight Cannot See - trustsight",
+    "description": "This page describes the reasoned ceiling of the tool. These are not bugs; they are inherent limits of auditing PKGBUILD metadata rather than build artifacts....",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "This page describes the reasoned ceiling of the tool. These are not bugs; they are inherent limits of auditing PKGBUILD metadata rather than build artifacts....",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "What TrustSight Cannot See - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/what-trustsight-cannot-see/",
+    "description": "This page describes the reasoned ceiling of the tool. These are not bugs; they are inherent limits of auditing PKGBUILD metadata rather than build artifacts....",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

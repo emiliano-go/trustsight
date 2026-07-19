@@ -1,0 +1,34 @@
+{
+  "title": "Trust Model - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/trust-model/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Trust Model - trustsight",
+    "description": "Core thesis: trust evidence, not verdicts.",
+    "url": "https://trustsight.emiliano-go.com/explanation/trust-model/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Trust Model - trustsight",
+    "description": "Core thesis: trust evidence, not verdicts.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Core thesis: trust evidence, not verdicts.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Trust Model - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/trust-model/",
+    "description": "Core thesis: trust evidence, not verdicts.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

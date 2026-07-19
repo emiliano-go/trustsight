@@ -1,0 +1,34 @@
+{
+  "title": "Benchmarks and Methodology - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Benchmarks and Methodology - trustsight",
+    "description": "How separation is measured: per-class, not pooled",
+    "url": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Benchmarks and Methodology - trustsight",
+    "description": "How separation is measured: per-class, not pooled",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "How separation is measured: per-class, not pooled",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Benchmarks and Methodology - trustsight",
+    "url": "https://trustsight.emiliano-go.com/explanation/benchmarks-and-methodology/",
+    "description": "How separation is measured: per-class, not pooled",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

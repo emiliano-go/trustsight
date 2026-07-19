@@ -1,0 +1,34 @@
+{
+  "title": "Using TrustSight in CI - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Using TrustSight in CI - trustsight",
+    "description": "How to integrate TrustSight into CI/CD pipelines.",
+    "url": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Using TrustSight in CI - trustsight",
+    "description": "How to integrate TrustSight into CI/CD pipelines.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "How to integrate TrustSight into CI/CD pipelines.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Using TrustSight in CI - trustsight",
+    "url": "https://trustsight.emiliano-go.com/guides/using-in-ci/",
+    "description": "How to integrate TrustSight into CI/CD pipelines.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

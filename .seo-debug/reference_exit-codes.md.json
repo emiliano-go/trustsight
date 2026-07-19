@@ -1,0 +1,34 @@
+{
+  "title": "Exit Codes - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/reference/exit-codes/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Exit Codes - trustsight",
+    "description": "Code Name Condition ----------------------- 0 Success : CLEAN All reviewed packages scored ≤20. No FLAGGED or INCONCLUSIVE verdicts. 1 Flagged One or more...",
+    "url": "https://trustsight.emiliano-go.com/reference/exit-codes/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Exit Codes - trustsight",
+    "description": "Code Name Condition ----------------------- 0 Success : CLEAN All reviewed packages scored ≤20. No FLAGGED or INCONCLUSIVE verdicts. 1 Flagged One or more...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Code Name Condition ----------------------- 0 Success : CLEAN All reviewed packages scored ≤20. No FLAGGED or INCONCLUSIVE verdicts. 1 Flagged One or more...",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Exit Codes - trustsight",
+    "url": "https://trustsight.emiliano-go.com/reference/exit-codes/",
+    "description": "Code Name Condition ----------------------- 0 Success : CLEAN All reviewed packages scored ≤20. No FLAGGED or INCONCLUSIVE verdicts. 1 Flagged One or more...",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

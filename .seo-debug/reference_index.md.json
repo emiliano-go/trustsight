@@ -1,0 +1,34 @@
+{
+  "title": "Reference - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/reference/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Reference - trustsight",
+    "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
+    "url": "https://trustsight.emiliano-go.com/reference/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Reference - trustsight",
+    "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Reference - trustsight",
+    "url": "https://trustsight.emiliano-go.com/reference/",
+    "description": "Complete reference documentation for TrustSight CLI, rules, configuration, report schema, evidence tiers, and exit codes.",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

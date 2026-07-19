@@ -1,0 +1,34 @@
+{
+  "title": "Security - trustsight",
+  "canonical": "https://trustsight.emiliano-go.com/security/",
+  "robots": "index,follow",
+  "og": {
+    "type": "website",
+    "title": "Security - trustsight",
+    "description": "Vulnerability disclosure policy",
+    "url": "https://trustsight.emiliano-go.com/security/",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site_name": "trustsight",
+    "locale": "en_US"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "title": "Security - trustsight",
+    "description": "Vulnerability disclosure policy",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "site": "@emiliano_go_"
+  },
+  "description": "Vulnerability disclosure policy",
+  "schema_jsonld": {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Security - trustsight",
+    "url": "https://trustsight.emiliano-go.com/security/",
+    "description": "Vulnerability disclosure policy",
+    "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Emiliano Gandini Outeda"
+    }
+  }
+}

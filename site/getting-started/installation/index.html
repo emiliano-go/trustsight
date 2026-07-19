@@ -573,21 +573,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#pip-recommended" class="md-nav__link">
+  <a href="#pip" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
-        pip (recommended)
-      </span>
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#aur-dogfooding" class="md-nav__link">
-    <span class="md-ellipsis">
-      <span class="md-typeset">
-        AUR (dogfooding)
+        pip
       </span>
     </span>
   </a>
@@ -656,43 +645,37 @@
 <h1 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">&para;</a></h1>
 <p>TrustSight requires <strong>Python 3.12 or later</strong> and <strong>git</strong> (for cloning AUR repositories during analysis).</p>
 <hr />
-<h2 id="pip-recommended">pip (recommended)<a class="headerlink" href="#pip-recommended" title="Permanent link">&para;</a></h2>
+<h2 id="pip">pip<a class="headerlink" href="#pip" title="Permanent link">&para;</a></h2>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pip<span class="w"> </span>install<span class="w"> </span>trustsight
 </span></code></pre></div>
 <p>This installs the tool and its core dependencies: <code>pygit2</code>, <code>tldextract</code>, <code>rich</code>, and <code>openai</code>.</p>
-<h2 id="aur-dogfooding">AUR (dogfooding)<a class="headerlink" href="#aur-dogfooding" title="Permanent link">&para;</a></h2>
-<p>Arch users can install the <code>trustsight</code> AUR package via their preferred helper:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>yay<span class="w"> </span>-S<span class="w"> </span>trustsight
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># or</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>paru<span class="w"> </span>-S<span class="w"> </span>trustsight
-</span></code></pre></div>
 <h2 id="from-source">From source<a class="headerlink" href="#from-source" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/emiliano-go/trustsight.git
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>trustsight
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/emiliano-go/trustsight.git
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">cd</span><span class="w"> </span>trustsight
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
 </span></code></pre></div>
 <p>The editable install (<code>-e</code>) lets you pull and test new versions immediately.</p>
 <hr />
 <h2 id="llm-setup-optional">LLM setup (optional)<a class="headerlink" href="#llm-setup-optional" title="Permanent link">&para;</a></h2>
 <p>TrustSight scores every package <strong>without</strong> an LLM. The scoring pipeline is fully deterministic : the LLM never calculates, modifies, or influences a score. It only translates the existing score and breakdown into a plain-English sentence. See <a href="../../explanation/trust-model/">how the trust model works</a> for a deeper explanation.</p>
 <p>If you want English verdicts instead of template strings, set an API key:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Environment variable (recommended : never checked into repos)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TRUSTSIGHT_API_KEY</span><span class="o">=</span>sk-...
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Or stored in config</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>trustsight<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>api_key<span class="w"> </span>sk-...
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Environment variable (recommended : never checked into repos)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">TRUSTSIGHT_API_KEY</span><span class="o">=</span>sk-...
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Or stored in config</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>trustsight<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>api_key<span class="w"> </span>sk-...
 </span></code></pre></div>
 <p>The provider defaults to <code>openai</code> (compatible with OpenAI, NVIDIA, Together, and any OpenAI-compatible endpoint). To change the model or provider:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>trustsight<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>base_url<span class="w"> </span>https://integrate.api.nvidia.com/v1
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>trustsight<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>base_url<span class="w"> </span>https://integrate.api.nvidia.com/v1
 </span></code></pre></div>
 <p>If no API key is configured, template verdicts are used. The tool works identically in either mode : only the prose changes.</p>
 <hr />
 <h2 id="verify-the-installation">Verify the installation<a class="headerlink" href="#verify-the-installation" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>trustsight<span class="w"> </span>--help
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>trustsight<span class="w"> </span>--help
 </span></code></pre></div>
 <p>You should see a list of available commands: <code>review</code>, <code>inspect</code>, <code>history</code>, <code>config</code>.</p>
 <p>Check your configuration:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>trustsight<span class="w"> </span>config<span class="w"> </span>show
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>trustsight<span class="w"> </span>config<span class="w"> </span>show
 </span></code></pre></div>
 <hr />
 <h2 id="common-failures">Common failures<a class="headerlink" href="#common-failures" title="Permanent link">&para;</a></h2>

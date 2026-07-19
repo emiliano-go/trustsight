@@ -4,23 +4,13 @@ TrustSight requires **Python 3.12 or later** and **git** (for cloning AUR reposi
 
 ---
 
-## pip (recommended)
+## pip
 
 ```bash
 pip install trustsight
 ```
 
 This installs the tool and its core dependencies: `pygit2`, `tldextract`, `rich`, and `openai`.
-
-## AUR (dogfooding)
-
-Arch users can install the `trustsight` AUR package via their preferred helper:
-
-```bash
-yay -S trustsight
-# or
-paru -S trustsight
-```
 
 ## From source
 

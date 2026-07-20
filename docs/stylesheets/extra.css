@@ -22,7 +22,22 @@
         transform: translateX(-100%) !important;
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
-    body:has([data-md-toggle="drawer"]:checked) .md-sidebar--primary {
+    body.drawer-open .md-sidebar--primary {
         transform: translateX(0) !important;
+    }
+
+    .md-overlay {
+        position: fixed !important;
+        inset: 0 !important;
+        z-index: 98 !important;
+        background: rgba(0,0,0,0.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    body.drawer-open .md-overlay {
+        opacity: 1;
+        pointer-events: auto;
     }
 }

@@ -55,6 +55,8 @@ class PackageFact:
     execution_changes: ExecutionChanges = field(default_factory=ExecutionChanges)
     novelty_context: NoveltyContext = field(default_factory=NoveltyContext)
 
+    first_seen: bool = False
+
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0
 
@@ -90,6 +92,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
             "url_first_seen_globally": fact.novelty_context.url_first_seen_globally,
             "maintainer_first_seen_for_this_package": fact.novelty_context.maintainer_first_seen_for_this_package,
         },
+        "first_seen": fact.first_seen,
         "score_breakdown": [
             {
                 "rule_id": e.rule_id,

@@ -56,7 +56,10 @@ def cmd_review(args):
 
         for r in results:
             score_text = Text(f"{r['score']}/100", style=RISK_COLORS.get(r["risk"], "white"))
-            table.add_row(r["package"], score_text, r["verdict"])
+            verdict = r["verdict"]
+            if r.get("first_seen"):
+                verdict = f"[yellow]⚠ First analysis - {verdict}[/]"
+            table.add_row(r["package"], score_text, verdict)
 
         console.print(table)
     else:
@@ -69,7 +72,10 @@ def cmd_review(args):
         print(f"{'Package':<20} {'Risk Score':<10} Verdict")
         print("-" * 80)
         for r in results:
-            print(f"{r['package']:<20} {r['score']:<10} {r['verdict']}")
+            verdict = r["verdict"]
+            if r.get("first_seen"):
+                verdict = f"[First analysis] {verdict}"
+            print(f"{r['package']:<20} {r['score']:<10} {verdict}")
 
 
 def cmd_inspect(args):
@@ -80,6 +86,8 @@ def cmd_inspect(args):
 
     if HAS_RICH:
         console = Console()
+        if fact.first_seen:
+            console.print("\n[yellow]⚠ First time analysis[/] - [italic]no prior analysis history; automated scoring may be less accurate without historical context.[/]")
         console.print(f"\n[bold cyan]TrustSight Inspect: {fact.package_name}[/]")
         console.print(f"  Version: {fact.old_version} → {fact.new_version}")
         console.print(f"  Score: {fact.final_score}/100 [bold {RISK_COLORS.get(risk_level(fact.final_score), 'white')}]({risk_level(fact.final_score)})[/]")
@@ -117,6 +125,8 @@ def cmd_inspect(args):
         from .llm import fallback_verdict
         console.print(f"  {fallback_verdict(fact)}")
     else:
+        if fact.first_seen:
+            print("[First analysis] No prior analysis history; automated scoring may be less accurate without historical context.")
         print(f"TrustSight Inspect: {fact.package_name}")
         print(f"  Version: {fact.old_version} -> {fact.new_version}")
         print(f"  Score: {fact.final_score}/100 ({risk_level(fact.final_score)})")

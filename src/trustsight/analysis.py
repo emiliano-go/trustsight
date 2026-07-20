@@ -341,6 +341,7 @@ def _make_fresh_analysis(
         new_commit=commit,
         diff_summary=DiffSummary(),
         novelty_context=novelty,
+        first_seen=True,
         final_score=0,
     )
     insert_analysis(
@@ -385,6 +386,7 @@ def discover_updates(limit: int = 20, progress_callback=None) -> list[dict]:
                 "score": fact.final_score,
                 "verdict": verdict,
                 "risk": "Low" if fact.final_score <= 20 else "Medium" if fact.final_score <= 50 else "High" if fact.final_score <= 80 else "Critical",
+                "first_seen": fact.first_seen,
             }
         )
 

@@ -73,7 +73,13 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 ## Install
 
 ```bash
-pip install trustsight
+pipx install trustsight
+```
+
+On Arch Linux, `pip install` is blocked by the system Python's `externally-managed-environment` protection. Use **pipx** (above) or:
+
+```bash
+pip install --break-system-packages trustsight
 ```
 
 AUR: `trustsight` (dogfood: TrustSight audits its own updates).
@@ -84,6 +90,7 @@ From source:
 git clone https://github.com/emiliano-go/trustsight
 cd trustsight
 pip install -e .
+# Or with pipx: pipx install .
 ```
 
 Requires **Python 3.12+**.

@@ -1,3 +1,28 @@
 :root {
     --md-primary-fg-color: #cd4bfb;
 }
+
+/*
+ * Mobile sidebar drawer.
+ */
+@media screen and (max-width: 76.234375em) {
+    .md-sidebar--primary {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        height: 100dvh !important;
+        max-width: 20rem;
+        width: 80vw !important;
+        z-index: 99 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border-radius: 0 !important;
+        border-right: 1px solid var(--md-default-fg-color--lightest);
+        transform: translateX(-100%) !important;
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    body:has([data-md-toggle="drawer"]:checked) .md-sidebar--primary {
+        transform: translateX(0) !important;
+    }
+}

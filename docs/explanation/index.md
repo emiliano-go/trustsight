@@ -149,6 +149,7 @@ The LLM is entirely optional. The score, evidence breakdown, and verdict classif
 |------|----------------|
 | [Trust Model](trust-model.md) | Why deterministic core + LLM-as-translator, not LLM-as-judge; verdict integrity |
 | [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights |
+| [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |
 | [What TrustSight Cannot See](what-trustsight-cannot-see.md) | The reasoned ceiling of the tool |

@@ -1,10 +1,10 @@
 {
-  "title": "trustsight - TrustSight",
+  "title": "TrustSight - TrustSight",
   "canonical": "https://trustsight.emiliano-go.com/",
   "robots": "index,follow",
   "og": {
     "type": "website",
-    "title": "trustsight - TrustSight",
+    "title": "TrustSight - TrustSight",
     "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "url": "https://trustsight.emiliano-go.com/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
@@ -13,7 +13,7 @@
   },
   "twitter": {
     "card": "summary_large_image",
-    "title": "trustsight - TrustSight",
+    "title": "TrustSight - TrustSight",
     "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
@@ -22,7 +22,7 @@
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
-    "name": "trustsight - TrustSight",
+    "name": "TrustSight - TrustSight",
     "url": "https://trustsight.emiliano-go.com/",
     "description": "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",

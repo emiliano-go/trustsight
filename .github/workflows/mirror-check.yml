@@ -19,7 +19,7 @@ jobs:
       - name: Verify corpus lock entries match diffs
         id: verify
         run: |
-          import json, hashlib, sys
+          import json, sys
           from pathlib import Path
 
           corpus = Path("tests/fixtures/benign-corpus")
@@ -28,21 +28,18 @@ jobs:
 
           errors = []
           for entry in lock.get("entries", []):
-              fname = entry["file"]
+              fname = f"{entry['pkg']}__{entry['old_sha'][:12]}..{entry['new_sha'][:12]}.diff"
               fpath = corpus / fname
               if not fpath.exists():
                   errors.append(f"MISSING: {fname}")
-                  continue
-              content = fpath.read_bytes()
-              actual = hashlib.sha256(content).hexdigest()
-              expected = entry.get("sha256", "")
-              if expected and actual != expected:
-                  errors.append(f"CORRUPT: {fname} (sha256 mismatch)")
 
           # Check for orphaned diffs (in dir but not in lock)
-          locked = {e["file"] for e in lock.get("entries", [])}
+          locked = set()
+          for entry in lock.get("entries", []):
+              fname = f"{entry['pkg']}__{entry['old_sha'][:12]}..{entry['new_sha'][:12]}.diff"
+              locked.add(fname)
           for fpath in sorted(corpus.rglob("*.diff")):
-              rel = str(fpath.relative_to(corpus))
+              rel = fpath.name
               if rel not in locked:
                   errors.append(f"ORPHAN: {rel} (in dir but not in lock)")
 

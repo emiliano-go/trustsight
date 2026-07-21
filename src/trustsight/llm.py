@@ -13,6 +13,12 @@ _REASONING_COLOR = "\033[90m" if _USE_COLOR else ""
 _RESET_COLOR = "\033[0m" if _USE_COLOR else ""
 
 
+def _sanitize_prompt_field(s: str) -> str:
+    """Strip control characters and newlines from untrusted fields to
+    prevent LLM prompt injection via package metadata."""
+    return s.replace("\n", " ").replace("\r", " ").replace("\x00", "")
+
+
 def _build_prompt(fact: PackageFact) -> str:
     fact_dict = fact_to_dict(fact)
     diff_trunc = json.dumps(fact_dict.get("diff_summary", {}), indent=2)
@@ -41,8 +47,12 @@ def _build_prompt(fact: PackageFact) -> str:
     elif fact.final_score > 20:
         risk = "Medium"
 
-    return f"""Package: {fact.package_name}
-Change: {fact.old_version} → {fact.new_version}
+    pkg = _sanitize_prompt_field(fact.package_name)
+    old_ver = _sanitize_prompt_field(fact.old_version)
+    new_ver = _sanitize_prompt_field(fact.new_version)
+
+    return f"""Package: {pkg}
+Change: {old_ver} → {new_ver}
 Maintainer changed: {fact.maintainer_changed}
 
 Diff Summary:
@@ -53,6 +63,8 @@ Score Breakdown:
 
 Novelty:
 {novelty}
+
+--- END OF DATA ---
 
 Write exactly 2 concise sentences for a developer:
 1. What technically changed in the build process (focus on new commands/sources).

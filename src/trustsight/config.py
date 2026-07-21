@@ -50,6 +50,7 @@ threshold = 80
 [diff]
 max_context_lines = 3
 max_diff_chars_for_llm = 2000
+max_diff_bytes = 5242880
 
 [limits]
 default_review_limit = 20

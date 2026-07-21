@@ -54,6 +54,13 @@ COMBINED = re.compile(
     '\U000e0000-\U000e007f]'
 )
 
+ANSI_ESCAPE = re.compile(r'\x1b\[[\d;]*[A-Za-z]|\x1b[\W_]')
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape sequences from *text*."""
+    return ANSI_ESCAPE.sub("", text)
+
 
 def has_fatal_codepoints(text: str) -> bool:
     return bool(COMBINED.search(text))

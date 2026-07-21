@@ -2,9 +2,10 @@ import argparse
 import sys
 
 from .analysis import analyze_package, discover_updates
-from .config import ensure_default_configs, load_config, set_config, CONFIG_DIR
+from .config import ensure_default_configs, load_config, CONFIG_DIR
 from .db import get_history, get_package_id, get_triggered_rules, init_db
 from .scoring import risk_level
+from .unicode import strip_ansi
 
 RISK_COLORS = {"Low": "green", "Medium": "yellow", "High": "red", "Critical": "bold red"}
 
@@ -107,7 +108,8 @@ def cmd_inspect(args):
             console.print("\n  [underline]Source URLs Added[/]")
             for url in fact.source_changes.added_urls:
                 bucket = fact.source_buckets.get(url, "unknown")
-                console.print(f"    {url} [dim]({bucket})[/]")
+                display_url = strip_ansi(url)
+                console.print("    ", Text(display_url), f" [dim]({bucket})[/]")
 
         if fact.execution_changes.resolved_commands:
             console.print("\n  [underline]Resolved Commands[/]")

@@ -1,6 +1,9 @@
 import json
+import logging
 
 from .buckets import classify_pinning_level, classify_urls
+
+log = logging.getLogger(__name__)
 from .config import ensure_default_configs, load_config
 from .db import (
     get_last_analysis,
@@ -64,6 +67,12 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
             return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config)
 
     diff_text, diff_summary = generate_diff(repo, old_commit, head_commit, config.get("diff", {}).get("max_context_lines", 3))
+
+    max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
+    if len(diff_text.encode()) > max_bytes:
+        log.warning("diff for %s exceeds %d bytes — truncating", pkg_name, max_bytes)
+        diff_text = diff_text[:max_bytes]
+
     source_changes = extract_urls_from_diff(diff_text)
 
     old_maintainer = get_maintainer_from_commit(repo, old_commit) or ""

@@ -58,8 +58,8 @@ TrustSight tracks both:
 
 | Signal | Condition | Full weight | Why the weight differs |
 |--------|-----------|-------------|------------------------|
-| `url_first_globally` | URL never seen in any AUR package | 15 | A globally novel URL is genuinely rare. It has not appeared in any of the 89k packages in the corpus. This is the strongest novelty signal. |
-| `url_first_in_package` | URL never seen in this specific package, but seen elsewhere | 10 | A per-package novel URL is weaker. It might mean the package is new to your observation set, not that the URL is unusual. |
+| `url_first_globally` | URL never seen in any AUR package | 10 | A globally novel URL is genuinely rare. It has not appeared in any of the 89k packages in the corpus. This is the strongest novelty signal. |
+| `url_first_in_package` | URL never seen in this specific package, but seen elsewhere | 5 | A per-package novel URL is weaker. It might mean the package is new to your observation set, not that the URL is unusual. |
 
 The globally-first signal carries more weight because it is rarer and more specific. The per-package-first signal is weaker because it may just mean the package has not been observed before in your local database.
 

@@ -28,7 +28,7 @@ This is inverted. Verification presence is risk mitigation, not risk evidence. T
 |--------|--------|
 | `checksum_present` | −10 |
 | `validpgpkeys` | −10 |
-| `gpg_signature` | −5 |
+| `gpg_verify_present` | −5 |
 
 A package with checksums starts at −10, and only positive signals (new URLs, curl|bash, untrusted source bucket) push it up.
 

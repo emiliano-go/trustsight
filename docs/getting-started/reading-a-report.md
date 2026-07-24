@@ -31,20 +31,20 @@ One or more risk signals fired. The severity category (Medium / High / Critical)
 
 | Range | Label | Interpretation |
 |-------|-------|----------------|
-| 21–50 | Medium | Novelty, unknown domains, or single moderate signals |
-| 51–80 | High | Multiple signals or strong structural changes |
-| 81–100 | Critical | Strong evidence, or FATAL rules (R012/R013) |
+| 21-50 | Medium | Novelty, unknown domains, or single moderate signals |
+| 51-80 | High | Multiple signals or strong structural changes |
+| 81-100 | Critical | Strong evidence, or FATAL rules (R012/R013) |
 
 #### How to use FLAGGED
 
-- Score 21–34: inspect with `trustsight inspect <name>` to understand context.
-- Score 35–50: manual review recommended before `yay -Syu`.
+- Score 21-34: inspect with `trustsight inspect <name>` to understand context.
+- Score 35-50: manual review recommended before `yay -Syu`.
 - Score 51+: treat as suspicious. Investigate fully before updating.
 - Score 100: a FATAL rule fired. **Do not install** without understanding why.
 
 ### INCONCLUSIVE
 
-The score is in the Medium range (21–50), but **every contributing signal came from novelty** and the **observation database is cold** (shallower than 50 prior runs). The tool is telling you it does not have enough data.
+The score is in the Medium range (21-50), but **every contributing signal came from novelty** and the **observation database is cold** (shallower than 50 prior runs). The tool is telling you it does not have enough data.
 
 INCONCLUSIVE is **not** CLEAN. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
@@ -56,7 +56,7 @@ The maturity gate scales novelty weights by `observation_count / 50`. At zero ob
 
 The score breakdown in `trustsight inspect` groups signals into four evidence tiers. Each tier represents a fundamentally different kind of information:
 
-### Tier A : Structural (rules R001–R013)
+### Tier A : Structural (rules R001-R013 + R039-R059 + C001-C007)
 
 Pattern-matched from the PKGBUILD diff. These are direct, observable facts about what the build script does:
 
@@ -76,7 +76,7 @@ Tier A signals are the strongest evidence. CRITICAL recall is **100 %**: every C
 
 R012's low recall is intentional. It is a tripwire: when it fires, you know something is almost certainly malicious. When it does not, nothing can be concluded. Attackers have too many ways to rephrase injection payloads.
 
-Rules span **R001–R013** (detection rules) and **C001–C003** (context rules for checksum and source-integrity heuristics). C-rules are advisory (INFO severity) and do not raise scores significantly.
+Rules span **R001-R013** and **R039-R059** (detection rules) and **C001-C007** (context rules for checksum and source-integrity heuristics). C-rules range from INFO to CRITICAL severity depending on the specific finding.
 
 ### Tier B : Priors / Context (source bucket classification)
 
@@ -84,14 +84,14 @@ Every new source URL in the diff is classified into a domain bucket. These are p
 
 | Bucket | Modifier | Examples |
 |--------|----------|---------|
-| Trusted forge | –10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
+| Trusted forge | -10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | Official | 0 | python.org, kernel.org, nginx.org, archlinux.org |
 | Self-hosted | +10 | Custom domains under the maintainer's control |
 | Raw hosting | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | Unknown | +20 | Any domain not in the allowlist |
 | Homograph attack | +30 | Visually confusable characters (githab.com with Cyrillic letters) |
 
-The trusted forge modifier is capped at –20 total across all URLs.
+The trusted forge modifier is capped at -20 total across all URLs.
 
 Tier B signals are weaker than Tier A. An unknown domain alone does not prove malice : many legitimate projects self-host.
 
@@ -101,9 +101,9 @@ Tracks whether URLs and maintainers have been seen before, both globally and per
 
 | Signal | Raw weight | Maturity scaling |
 |--------|-----------|-----------------|
-| URL first seen globally | +15 | × maturity multiplier |
-| URL first seen in this package | +10 | × maturity multiplier |
-| Maintainer first seen for this package | +20 | × maturity multiplier |
+| URL first seen globally | +10 | × maturity multiplier |
+| URL first seen in this package | +5 | × maturity multiplier |
+| Maintainer first seen for this package | +15 | × maturity multiplier |
 
 All novelty signals are **maturity-gated** by the number of prior observations of this package. A completely fresh database produces zero novelty weight. This prevents false-positive floods on first run.
 
@@ -113,9 +113,9 @@ When the post-diff PKGBUILD contains structural integrity protections, they redu
 
 | Evidence | Modifier |
 |----------|----------|
-| checksum_present | –10 |
-| validpgpkeys_declared | –10 |
-| gpg_verify_present | –5 |
+| checksum_present | -10 |
+| validpgpkeys_declared | -10 |
+| gpg_verify_present | -5 |
 
 Verification evidence is computed over the resolved end-state of the PKGBUILD, not over the diff delta. A checksum that was already present and unchanged still counts.
 
@@ -135,7 +135,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Positive = risk increase. Negative = risk decrease (verification, trusted forges). |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier. R001–R013 are detection rules; C001–C003 are context rules; SOURCE_BUCKET, NOVELTY, PINNING, VERIFICATION are structural categories. |
+| `R004` | Rule identifier. R001-R013 are detection rules; C001-C003 are context rules; SOURCE_BUCKET, NOVELTY, PINNING, VERIFICATION are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 
@@ -188,7 +188,7 @@ TrustSight Inspect: sketchy-package
   URL from sketchy-cdn.example.com : domain not seen before.
 ```
 
-**Interpretation**: The total is 25 + 20 + 15 – 10 = **50**, floored to max with the R004 weight. The checksum was disabled (Tier A, strong signal) without justification. The new source URL comes from an unknown domain (Tier B, moderate) and has never been seen before (Tier C, moderate : maturity at 80 % so near full weight). There is PGP key evidence (Tier D, –10). The verdict is FLAGGED at Medium severity. This package warrants manual inspection before update.
+**Interpretation**: The total is 25 + 20 + 15 - 10 = **50**, floored to max with the R004 weight. The checksum was disabled (Tier A, strong signal) without justification. The new source URL comes from an unknown domain (Tier B, moderate) and has never been seen before (Tier C, moderate : maturity at 80 % so near full weight). There is PGP key evidence (Tier D, -10). The verdict is FLAGGED at Medium severity. This package warrants manual inspection before update.
 
 ---
 

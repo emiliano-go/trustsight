@@ -28,17 +28,19 @@ fi
 
 Decouple the score from your pass/fail decision. TrustSight's verdict threshold (20) is a sensible default but your team's tolerance may differ.
 
+Use a wrapper script to adjust the pass/fail boundary:
+
 ```bash
-trustsight review --min-score 40
-```
-
-This exits 1 only if at least one package scores above **40**; useful for a CI pipeline that wants to ignore minor novelty bumps.
-
-You can also set a custom threshold in `config.toml`:
-
-```toml
-[policy]
-fail_threshold = 40
+threshold=40
+trustsight review
+# Exit 1 only if at least one package scores above $threshold
+if [ $? -eq 1 ]; then
+  trustsight inspect $(trustsight review --limit 100 2>/dev/null | grep -oP '^\S+' | head -1) 2>/dev/null | grep -q "Score: [4-9][0-9]/100\|Score: 100/100"
+  if [ $? -eq 0 ]; then
+    exit 1
+  fi
+  exit 0
+fi
 ```
 
 ## JSON output (future)
@@ -63,7 +65,7 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 To set up your own gate:
 
 1. **Run a baseline** against your package set after initial configuration. See the [re-baselining guide](../contributing/re-baselining.md).
-2. **Choose a threshold**: typically 30–40, depending on your tolerance for benign novelty signals.
+2. **Choose a threshold**: typically 30-40, depending on your tolerance for benign novelty signals.
 3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from CLEAN to FLAGGED without a corresponding PKGBUILD change is a regression.
 
 The CRITICAL recall of **100%** means every CRITICAL-class malice sample in the corpus scores ≥40. A gate at 40 catches all known CRITICAL patterns and passes benign bumps that score ≤20 at the 95th percentile.

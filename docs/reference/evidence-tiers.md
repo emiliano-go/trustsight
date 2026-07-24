@@ -17,9 +17,9 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Sources
 
-- R001–R013 rules firing against resolved command strings or raw diff lines.
+- R001-R013 rules firing against resolved command strings or raw diff lines.
 - R004/R005 checksum integrity rules (hard-coded, not TOML).
-- C001–C003 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C003 structural anomaly rules (checksum/source integrity heuristics).
 
 ### Availability
 
@@ -47,21 +47,21 @@ Domain reputation classification for every new source URL in the diff.
 
 ### Sources
 
-- Source bucket assignment via `classify_url()` in `src/trustsight/buckets.py:22`.
+- Source bucket assignment via `classify_url()` in `src/trustsight/buckets.py`.
 - Domain allowlists in `~/.config/trustsight/trusted_domains.toml`.
 
 ### Buckets
 
 | Bucket | Modifier | Examples |
 |--------|----------|----------|
-| `trusted_forge` | –10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
+| `trusted_forge` | -10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | `official` | 0 | kernel.org, python.org, nginx.org, archlinux.org |
 | `self_hosted` | +10 | Custom domain under maintainer control |
 | `raw_hosting` | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | `unknown` | +20 | Domain not in any allowlist |
 | `homograph_attack` | +30 | Domain with Cyrillic homoglyphs (e.g. githab.com) |
 
-The trusted forge modifier is capped at **–20** total across all URLs (`src/trustsight/scoring.py:108`).
+The trusted forge modifier is capped at **-20** total across all URLs (`src/trustsight/scoring.py`).
 
 ### Availability
 
@@ -79,18 +79,18 @@ First-seen tracking for URLs and maintainers, backed by the local SQLite databas
 
 ### Sources
 
-- `build_novelty_context()` in `src/trustsight/novelty.py:81`.
+- `build_novelty_context()` in `src/trustsight/novelty.py`.
 - `source_urls` and `maintainers` tables in the local database at `~/.local/share/trustsight/`.
 
 ### Signals
 
 | Signal | Raw weight | Description |
 |--------|-----------|-------------|
-| `url_first_seen_globally` | +15 | Normalised URL never seen in any package. |
-| `url_first_seen_in_this_package` | +10 | Normalised URL never seen for this package. |
-| `maintainer_first_seen_for_this_package` | +20 | Maintainer never recorded for this package. |
+| `url_first_seen_globally` | +10 | Normalised URL never seen in any package. |
+| `url_first_seen_in_this_package` | +5 | Normalised URL never seen for this package. |
+| `maintainer_first_seen_for_this_package` | +15 | Maintainer never recorded for this package. |
 
-URLs are normalised before novelty checking: version numbers are replaced with `0`, hashes with `HASH`, dates with `DATE`. This prevents routine bumps from generating false novelty signals. See `normalize_url()` in `src/trustsight/novelty.py:12`.
+URLs are normalised before novelty checking: version numbers are replaced with `0`, hashes with `HASH`, dates with `DATE`. This prevents routine bumps from generating false novelty signals. See `normalize_url()` in `src/trustsight/novelty.py`.
 
 ### Maturity gate
 
@@ -114,7 +114,7 @@ maturity = min(1.0, observation_count / 50)
 
 ### INCONCLUSIVE verdict
 
-When the final score is in the Medium range (21–50) **and** all contributing signals are Tier C novelty **and** maturity is below 0.5 (fewer than ~25 observations), the verdict is downgraded from "Medium" to "Inconclusive". This signals insufficient data rather than actual risk. Logic at `src/trustsight/scoring.py:192`.
+When the final score is in the Medium range (21-50) **and** all contributing signals are Tier C novelty **and** maturity is below 0.5 (fewer than ~25 observations), the verdict is downgraded from "Medium" to "Inconclusive". This signals insufficient data rather than actual risk. Logic at `src/trustsight/scoring.py`.
 
 ---
 
@@ -124,15 +124,15 @@ Structural integrity protections in the resolved (post-diff) PKGBUILD. These sub
 
 ### Sources
 
-- `detect_verification_evidence()` in `src/trustsight/differ.py:149`.
+- `detect_verification_evidence()` in `src/trustsight/differ.py`.
 
 ### Evidence
 
 | Evidence | Modifier | Condition |
 |----------|----------|-----------|
-| `checksum_present` | –10 | Post-diff PKGBUILD has a non-empty sha256/sha512/b2/md5 checksum array. |
-| `validpgpkeys_declared` | –10 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
-| `gpg_verify_present` | –5 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
+| `checksum_present` | -10 | Post-diff PKGBUILD has a non-empty sha256/sha512/b2/md5 checksum array. |
+| `validpgpkeys_declared` | -10 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
+| `gpg_verify_present` | -5 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
 
 ### End-state, not delta
 
@@ -151,6 +151,6 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 | Tier | Name | Cold? | Maturity-gated? | Direction | Max contribution per signal |
 |------|------|-------|-----------------|-----------|---------------------------|
 | A | Structural | Yes | No | Positive | 40 (CRITICAL) or 100 (FATAL) |
-| B | Priors/Context | Yes | No | Positive/negative | +30 (homograph) / –10 (trusted forge, capped –20) |
+| B | Priors/Context | Yes | No | Positive/negative | +30 (homograph) / -10 (trusted forge, capped -20) |
 | C | History/Novelty | No : zero | Yes (×0→1) | Positive only | +20 (maintainer) |
-| D | Verification | Yes | No | Negative only | –10 (checksum or PGP) |
+| D | Verification | Yes | No | Negative only | -10 (checksum or PGP) |

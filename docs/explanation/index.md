@@ -62,9 +62,9 @@ FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the sco
 
 | Evidence | Subtraction | Why |
 |----------|-------------|-----|
-| `checksum_present` | 5 | Integrity verification of the downloaded artifact |
-| `validpgpkeys_declared` | 10 | Declared PGP key fingerprints narrow trust to specific signers |
-| `gpg_verify_present` | 5 | Runtime signature verification |
+| `checksum_present` | −10 | Integrity verification of the downloaded artifact |
+| `validpgpkeys_declared` | −10 | Declared PGP key fingerprints narrow trust to specific signers |
+| `gpg_verify_present` | −5 | Runtime signature verification |
 
 Verification presence is risk mitigation, not risk evidence. A package with checksums is safer than one without, all else being equal. The naive design (which scored checksum-missing packages higher) was inverted; TrustSight fixes this by making verification subtractive.
 
@@ -72,7 +72,7 @@ Verification presence is risk mitigation, not risk evidence. A package with chec
 
 | Bucket | Modifier | Rationale |
 |--------|----------|-----------|
-| `trusted_forge` | 5 | GitHub, GitLab, Codeberg provide platform integrity |
+| `trusted_forge` | −10 | GitHub, GitLab, Codeberg provide platform integrity |
 | `official` | 0 | Known upstream domains are neutral |
 | `unknown` | +20 | Never-before-seen domain requires scrutiny |
 | `homograph` | +30 | Visually confusable domain is high risk |
@@ -83,9 +83,9 @@ The trusted_forge discount is capped at a total of 20 across all URLs. This prev
 
 | Signal | Full weight | Scaled by maturity |
 |--------|-------------|-------------------|
-| `url_first_globally` | 15 | x min(1, observations/50) |
-| `url_first_in_package` | 10 | x min(1, observations/50) |
-| `maintainer_first` | 20 | x min(1, observations/50) |
+| `url_first_globally` | 10 | x min(1, observations/50) |
+| `url_first_in_package` | 5 | x min(1, observations/50) |
+| `maintainer_first` | 15 | x min(1, observations/50) |
 
 The maturity gate exists because novelty is meaningless in a cold database. On first run, every URL is first-seen, every maintainer is first-seen. Full-weight novelty from a cold DB would flag every package, producing zero information. The gate phases in novelty weight linearly as observations accumulate, reaching full weight at 50 observations.
 
@@ -93,8 +93,8 @@ The maturity gate exists because novelty is meaningless in a cold database. On f
 
 | Pinning | Discount |
 |---------|----------|
-| `checksum_pinned` | 5 |
-| `tag_pinned` | 3 |
+| `checksum_pinned` | −5 |
+| `tag_pinned` | −3 |
 
 The final score is clamped to 0 to 100. A package with checksums, a trusted forge source, and no rule firings starts at 15 (5 for checksum + 10 for trusted forge) and will score 0 after the floor clamp.
 
@@ -139,8 +139,9 @@ The LLM is entirely optional. The score, evidence breakdown, and verdict classif
 
 ## Key numbers
 
-- **267 tests**, **81.5% zero-rate** on benign corpus, **100% CRITICAL recall** (12/12).
-- **CRITICAL p5 = 40**, **benign p95 = 20**: the gap that matters.
+- **456 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
+- **CRITICAL p5 = 40**, **benign p95 = 25**: the gap that matters.
+- Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 16 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire; primary defence is verdict assertions).
 
 ## Start here

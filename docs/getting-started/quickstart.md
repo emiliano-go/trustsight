@@ -24,10 +24,10 @@ This command:
 2. Checks the AUR for newer versions,
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
-5. Applies detection rules (R001–R013) and context rules (C001–C003),
+5. Applies detection rules (R001-R013) and context rules (C001-C003),
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
-8. Calculates a deterministic score from 0–100,
+8. Calculates a deterministic score from 0-100,
 9. Prints a summary table.
 
 ## 3. Read the output
@@ -56,10 +56,10 @@ This command:
 
 ### What the scores mean in context
 
-- **0–20 (CLEAN)**: No significant risk signals. Routine version bumps with checksum updates land here. **Most packages will score 0**; this is normal and expected.
-- **21–50 (FLAGGED: Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
-- **51–80 (FLAGGED: High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
-- **81–100 (FLAGGED: Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
+- **0-20 (CLEAN)**: No significant risk signals. Routine version bumps with checksum updates land here. **Most packages will score 0**; this is normal and expected.
+- **21-50 (FLAGGED: Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
+- **51-80 (FLAGGED: High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
+- **81-100 (FLAGGED: Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
 - **INCONCLUSIVE**: Score fell in the Medium range, but the only signals came from **novelty** and the database is cold (fewer than 50 prior observations). The tool is telling you it does not have enough data yet; this is **not** the same as CLEAN.
 
 ### Key teaching moments

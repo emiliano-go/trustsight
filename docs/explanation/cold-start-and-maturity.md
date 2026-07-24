@@ -47,9 +47,9 @@ Below 50 observations, the novelty weight is linearly scaled. At 0 observations,
 
 | Novelty signal | Full weight (at maturity) | Why this weight |
 |----------------|---------------------------|-----------------|
-| `url_first_globally` | 15 | A URL never seen in any package is genuinely unusual. This is the strongest novelty signal. |
-| `url_first_in_package` | 10 | A URL new to this specific package but seen elsewhere. Weaker because it may just reflect a new package in your set. |
-| `maintainer_first` | 20 | A maintainer never recorded for this package is a significant flag. Maintainer changes are a known attack vector (xz utils). The highest novelty weight reflects this. |
+| `url_first_globally` | 10 | A URL never seen in any package is genuinely unusual. This is the strongest novelty signal. |
+| `url_first_in_package` | 5 | A URL new to this specific package but seen elsewhere. Weaker because it may just reflect a new package in your set. |
+| `maintainer_first` | 15 | A maintainer never recorded for this package is a significant flag. Maintainer changes are a known attack vector (xz utils). The highest novelty weight reflects this. |
 
 The maintainer-first weight is highest because a maintainer change without a corresponding announcement or discussion is a social-engineering red flag. Unlike URLs, which change routinely with version bumps, maintainer changes are rare and structurally significant.
 
@@ -62,6 +62,14 @@ Novelty signals do not fire in isolation. They are evaluated alongside:
 - **Verification signals (tier D)**: a novel URL with a checksum and PGP signature is less concerning than one without.
 
 The interaction is additive, not multiplicative. Each signal contributes independently, so a package with a novel URL on an unknown domain with no checksum accumulates contributions from all three.
+
+## The seed database
+
+A cold database is no longer the default state. TrustSight ships a novelty seed built from the AUR git mirror (178,491 normalised source URLs, 35,903 maintainers) and imports it on first run, which supplies both halves of what maturity is asking about: a body of known source URLs, and a bootstrap observation count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
+
+Measured against the AUR mirror, the seed recognises **86%** of the source URLs in a package's most recent update. That figure falls off for older updates (62% mid-history, 20% for the oldest commit in a 30-commit window) because the seed is a snapshot of current `.SRCINFO` state, and historical versions used paths that no longer exist. Since a review always concerns the newest update, 86% is the number that matters in practice; corpus replays over deep history understate it.
+
+These weights were calibrated only after tier C became live. They had previously never been exercised: `observation_count` was never populated, so the maturity multiplier was permanently 0 and every novelty weight resolved to zero regardless of its configured value.
 
 ## The INCONCLUSIVE downgrade
 

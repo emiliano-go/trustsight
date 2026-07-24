@@ -56,6 +56,7 @@ class PackageFact:
     novelty_context: NoveltyContext = field(default_factory=NoveltyContext)
 
     first_seen: bool = False
+    suppressed_rules: list[dict] = field(default_factory=list)
 
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0
@@ -93,6 +94,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
             "maintainer_first_seen_for_this_package": fact.novelty_context.maintainer_first_seen_for_this_package,
         },
         "first_seen": fact.first_seen,
+        "suppressed_rules": fact.suppressed_rules,
         "score_breakdown": [
             {
                 "rule_id": e.rule_id,

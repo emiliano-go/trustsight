@@ -31,11 +31,63 @@ def _corpus_content_hash(corpus_dir: Path) -> str:
     return h.hexdigest()
 
 
+def _build_chain_index(entries: list[dict]) -> dict[str, list[str]]:
+    """Return ``{pkg: [diff stem, ...]}`` in true commit order.
+
+    Novelty is order-dependent: "first seen" is meaningless if diffs are
+    replayed in an arbitrary sequence.  The manifest records each diff as
+    an ``old_sha -> new_sha`` pair, and those pairs form a chain per
+    package, so commit order can be recovered without the repository.
+    """
+    by_pkg: dict[str, list[dict]] = defaultdict(list)
+    for entry in entries:
+        by_pkg[entry["pkg"]].append(entry)
+
+    index: dict[str, list[str]] = {}
+    for pkg, items in by_pkg.items():
+        by_old = {e["old_sha"]: e for e in items}
+        new_shas = {e["new_sha"] for e in items}
+        starts = [e for e in items if e["old_sha"] not in new_shas]
+        if len(starts) != 1:
+            continue  # branched or incomplete history; caller falls back
+        ordered, cur, seen = [], starts[0], set()
+        while cur is not None and cur["new_sha"] not in seen:
+            ordered.append(cur)
+            seen.add(cur["new_sha"])
+            cur = by_old.get(cur["new_sha"])
+        if len(ordered) == len(items):
+            index[pkg] = [
+                f"{pkg}__{e['old_sha'][:12]}..{e['new_sha'][:12]}" for e in ordered
+            ]
+    return index
+
+
+def _order_by_chain(diff_files: list[Path], stems: list[str]) -> tuple[list[Path], bool]:
+    """Sort *diff_files* by *stems*; fall back to filename order if unusable."""
+    if not stems:
+        return sorted(diff_files, key=lambda p: p.stem), False
+    rank = {stem: i for i, stem in enumerate(stems)}
+    if any(p.stem not in rank for p in diff_files):
+        return sorted(diff_files, key=lambda p: p.stem), False
+    return sorted(diff_files, key=lambda p: rank[p.stem]), True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Rebaseline FP rates")
     parser.add_argument("--corpus", type=Path, default=FIXTURES / "benign-corpus")
     parser.add_argument("--manifest", type=Path, default=FIXTURES / "corpus.lock")
     parser.add_argument("--baseline", type=Path, default=FIXTURES / "baseline.json")
+    parser.add_argument(
+        "--order", choices=["chain", "filename"], default="chain",
+        help="Replay order within a package. 'chain' follows the manifest's "
+             "old_sha -> new_sha links (true commit order); 'filename' is the "
+             "legacy SHA-hex sort, kept only to reproduce older baselines.",
+    )
+    parser.add_argument(
+        "--warm", action="store_true",
+        help="Model database warm-up: pass a running observation count so "
+             "tier C novelty is scored as it would be for a real user.",
+    )
     args = parser.parse_args()
 
     if not args.corpus.exists():
@@ -47,9 +99,11 @@ def main():
     rules = load_rules()
 
     strata_lookup = {}
+    chain_index: dict[str, list[str]] = {}
     if args.manifest.exists():
         lock = json.loads(args.manifest.read_text())
         strata_lookup = {e["pkg"]: e["stratum"] for e in lock.get("entries", [])}
+        chain_index = _build_chain_index(lock.get("entries", []))
 
     per_stratum = defaultdict(
         lambda: {"diffs": 0, "pkgs": set(), "scores": [], "rules": Counter()}
@@ -61,12 +115,21 @@ def main():
         pkg_diffs.setdefault(pkg, []).append(diff_file)
 
     seen_urls: dict[str, set[str]] = {}
+    observations = 0
+    fallbacks = 0
     for pkg, diff_files in pkg_diffs.items():
-        diff_files.sort(key=lambda p: p.stem)  # stem = pkg__oldsha..newsha, sorts by sha
+        if args.order == "chain":
+            ordered, ok = _order_by_chain(diff_files, chain_index.get(pkg, []))
+            fallbacks += not ok
+            diff_files = ordered
+        else:
+            diff_files.sort(key=lambda p: p.stem)
         for diff_file in diff_files:
             stratum = strata_lookup.get(pkg, "unknown")
             fact = scan_diff(diff_file.read_text(), rules=rules, config=config,
-                             package_name=pkg, seen_urls=seen_urls)
+                             package_name=pkg, seen_urls=seen_urls,
+                             observation_count=observations if args.warm else 0)
+            observations += 1
             per_stratum[stratum]["diffs"] += 1
             per_stratum[stratum]["pkgs"].add(pkg)
             per_stratum[stratum]["scores"].append(fact.final_score)
@@ -96,6 +159,12 @@ def main():
                 rid: count / n for rid, count in data["rules"].items()
             },
         }
+
+    baseline["replay_order"] = args.order
+    baseline["warm_novelty"] = args.warm
+    if args.order == "chain" and fallbacks:
+        print(f"  note: {fallbacks} package(s) had an unusable commit chain "
+              f"and fell back to filename order", file=sys.stderr)
 
     args.baseline.parent.mkdir(parents=True, exist_ok=True)
     args.baseline.write_text(json.dumps(baseline, indent=2) + "\n")

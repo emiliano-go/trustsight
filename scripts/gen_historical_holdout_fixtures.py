@@ -88,7 +88,7 @@ historical_fixtures = [
 ]
 
 
-# ── Holdout (never opened while writing rules — tests generalization) ────────
+# ── Holdout (never opened while writing rules; tests generalization) ────────
 
 holdout_fixtures = [
     {

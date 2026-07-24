@@ -14,9 +14,9 @@ Usage:
 import argparse
 import gzip
 import json
+import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import tomllib
 import urllib.request
@@ -44,18 +44,57 @@ def fetch_meta(force: bool = False) -> list[dict]:
     return data
 
 
+CLONE_TIMEOUT_S = 6 * 60 * 60
+
+
+def _clone_is_usable(repo_dir: Path) -> bool:
+    """Check that *repo_dir* is a complete, readable bare repository.
+
+    A clone interrupted partway leaves the directory in place.  Without
+    this check the next run would silently reuse the partial repo and
+    produce a corpus with missing packages.
+
+    ``rev-parse --git-dir`` is not sufficient: ``git clone --bare``
+    creates a structurally valid git directory before it starts
+    transferring objects, so an interrupted clone still answers it.  A
+    complete clone has refs and no leftover temporary pack.
+    """
+    result = subprocess.run(
+        ["git", "-C", str(repo_dir), "for-each-ref", "--count=1"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    return not list((repo_dir / "objects" / "pack").glob("tmp_pack_*"))
+
+
 def ensure_aur_clone() -> Path:
     """One bare clone of the AUR monorepo, reused across runs."""
     repo_dir = CACHE_DIR / "aur.git"
     if repo_dir.exists():
-        return repo_dir
-    print("  Cloning AUR mirror (first time, may take a while)...")
+        if _clone_is_usable(repo_dir):
+            return repo_dir
+        print("  Existing clone is incomplete, removing and re-cloning...")
+        shutil.rmtree(repo_dir, ignore_errors=True)
+
+    print("  Cloning AUR mirror (first time, tens of GB, can take hours)...")
     start = time.time()
-    result = subprocess.run(
-        ["git", "clone", "--bare", REPO_BASE, str(repo_dir)],
-        capture_output=True, text=True, timeout=600,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "clone", "--bare", "--progress", REPO_BASE, str(repo_dir)],
+            capture_output=True, text=True, timeout=CLONE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        # Leaving the partial clone behind would poison every later run.
+        shutil.rmtree(repo_dir, ignore_errors=True)
+        print(f"  Clone exceeded {CLONE_TIMEOUT_S}s and was removed", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        shutil.rmtree(repo_dir, ignore_errors=True)
+        raise
+
     if result.returncode != 0:
+        shutil.rmtree(repo_dir, ignore_errors=True)
         print(f"  Clone failed: {result.stderr.strip()[:200]}", file=sys.stderr)
         sys.exit(1)
     _ensure_xfuncname(repo_dir)
@@ -206,7 +245,7 @@ def main():
             t_fetch = time.time() - t0
             total_fetch_time += t_fetch
             if not ok:
-                print(f"no branch")
+                print("no branch")
                 continue
 
             commit_count = count_commits(aur_repo, name)

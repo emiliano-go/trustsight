@@ -13,8 +13,7 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from trustsight.analysis import scan_diff
-from trustsight.config import load_config, load_rules, ensure_default_configs
+from trustsight.config import load_rules, ensure_default_configs
 from trustsight.rules import apply_rules, get_raw_diff_lines
 from trustsight.tokenizer import tokenize_and_resolve
 
@@ -45,7 +44,9 @@ def scan_diff_ablate(diff_text: str, ablate: str, rules: list[dict]) -> dict:
             diff_text
         )
 
-    triggered_rules = apply_rules(resolved_strings, raw_lines, rules)
+    triggered_rules = apply_rules(
+        resolved_strings, raw_lines, rules, include_experimental=True
+    )
 
     return {
         "triggered_rules": triggered_rules,
@@ -183,7 +184,6 @@ def main():
     args = parser.parse_args()
 
     ensure_default_configs()
-    config = load_config()
     rules = load_rules()
 
     corpus_dir = args.from_dir or (FIXTURES / "benign-corpus")

@@ -147,7 +147,8 @@ def cmd_review(args):
                 else:
                     progress.update(task, description=name)
 
-            results = discover_updates(limit=limit, progress_callback=on_progress)
+            results = discover_updates(limit=limit, progress_callback=on_progress,
+                                       verbose=args.verbose)
             progress.update(task, visible=False)
 
         if not results:
@@ -165,33 +166,53 @@ def cmd_review(args):
         table.add_column("Score", justify="right")
         table.add_column("Risk")
         table.add_column("Verdict", overflow="fold")
+        if args.verbose:
+            table.add_column("Triggered Rules", overflow="fold")
 
         for r in results:
             verdict = Text(strip_ansi(r["verdict"]))
             if r.get("first_seen"):
                 verdict = Text.assemble(("first analysis: ", "yellow"), verdict)
-            table.add_row(
+            row = [
                 r["package"],
                 _score_text(r["score"], r["risk"]),
                 Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
                 verdict,
-            )
+            ]
+            if args.verbose:
+                rules_text = ", ".join(
+                    f"{rule['rule_id']}"
+                    for rule in r.get("triggered_rules", [])
+                ) if r.get("triggered_rules") else "[dim]none[/]"
+                row.append(Text(strip_ansi(rules_text)))
+            table.add_row(*row)
 
         con.print(table)
     else:
-        results = discover_updates(limit=limit)
+        results = discover_updates(limit=limit, verbose=args.verbose)
 
         if not results:
             print("No outdated AUR packages found.")
             return
 
-        print(f"{'Package':<20} {'Risk Score':<10} Verdict")
-        print("-" * 80)
+        print(f"{'Package':<20} {'Risk Score':<10} Verdict", end="")
+        if args.verbose:
+            print("  Rules")
+        else:
+            print()
+        print("-" * (80 if not args.verbose else 120))
         for r in results:
             verdict = r["verdict"]
             if r.get("first_seen"):
                 verdict = f"[First analysis] {verdict}"
-            print(f"{r['package']:<20} {r['score']:<10} {verdict}")
+            line = f"{r['package']:<20} {r['score']:<10} {verdict}"
+            if args.verbose:
+                rules_str = ", ".join(
+                    rule["rule_id"]
+                    for rule in r.get("triggered_rules", [])
+                ) if r.get("triggered_rules") else "none"
+                line += f"  {rules_str}"
+            print(line)
 
 
 def _inspect_rich(fact):
@@ -582,7 +603,8 @@ def cmd_override(args):
         table.add_column("Reason", overflow="fold")
         table.add_column("Added", style="dim")
         for o in overrides:
-            table.add_row(o.rule_id, o.package or "all packages", o.reason, o.created_at)
+            table.add_row(o.rule_id, o.package or "all packages",
+                          strip_ansi(o.reason), o.created_at)
         console().print(table)
         console().print(
             f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
@@ -590,7 +612,7 @@ def cmd_override(args):
         )
     else:
         for o in overrides:
-            print(f"{o.rule_id:<8} {o.package or 'all':<20} {o.reason}")
+            print(f"{o.rule_id:<8} {o.package or 'all':<20} {strip_ansi(o.reason)}")
 
 
 def cmd_lint_rules(args):
@@ -696,6 +718,7 @@ def main():
 
     p_review = sub.add_parser("review", help="Scan AUR and analyze outdated packages")
     p_review.add_argument("--limit", type=int, default=0, help="Max packages to review")
+    p_review.add_argument("--verbose", action="store_true", help="Show triggered rules per package")
 
     p_inspect = sub.add_parser("inspect", help="Analyze a specific package")
     p_inspect.add_argument("package", help="Package name")

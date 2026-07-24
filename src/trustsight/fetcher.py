@@ -1,12 +1,38 @@
 import os
 import re
 import shutil
+import signal
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 
 import pygit2
 
 from .config import CACHE_DIR
+
+_VALID_PKG_NAME = re.compile(r"^[a-zA-Z0-9@._+\-]+$")
+
+
+class _TimeoutError(Exception):
+    pass
+
+
+@contextmanager
+def _timeout(seconds: int):
+    if not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _handler(_sig, _frame):
+        raise _TimeoutError(f"operation timed out after {seconds}s")
+
+    old = signal.signal(signal.SIGALRM, _handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old)
 
 
 def _head_commit_id(repo: pygit2.Repository) -> str:
@@ -32,22 +58,28 @@ def _head_commit_id(repo: pygit2.Repository) -> str:
 
 
 def repo_path(pkg_name: str) -> Path:
+    if not _VALID_PKG_NAME.match(pkg_name):
+        raise ValueError(f"Invalid package name: {pkg_name!r}")
     return CACHE_DIR / pkg_name
 
 
 def clone_or_fetch(pkg_name: str) -> pygit2.Repository:
+    if not _VALID_PKG_NAME.match(pkg_name):
+        raise ValueError(f"Invalid package name: {pkg_name!r}")
     path = repo_path(pkg_name)
     if path.exists():
         try:
             repo = pygit2.Repository(str(path))
             _head_commit_id(repo)
-            repo.remotes["origin"].fetch()
+            with _timeout(120):
+                repo.remotes["origin"].fetch()
             return repo
-        except pygit2.GitError:
+        except (_TimeoutError, pygit2.GitError):
             shutil.rmtree(path)
     os.makedirs(path.parent, exist_ok=True)
     url = f"https://aur.archlinux.org/{pkg_name}.git"
-    return pygit2.clone_repository(url, str(path))
+    with _timeout(120):
+        return pygit2.clone_repository(url, str(path))
 
 
 def get_commit_for_version(

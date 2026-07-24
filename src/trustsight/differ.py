@@ -16,7 +16,9 @@ def generate_diff(
     for patch in diff:
         delta = patch.delta
         path = delta.new_file.path
-        if path in ("PKGBUILD", ".SRCINFO") or path.endswith(".install"):
+        old_path = delta.old_file.path
+        if (path in ("PKGBUILD", ".SRCINFO") or path.endswith(".install")
+                or old_path in ("PKGBUILD", ".SRCINFO") or old_path.endswith(".install")):
             filtered_patches.append(patch.text)
 
     unified = "\n".join(filtered_patches)

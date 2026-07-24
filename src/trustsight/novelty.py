@@ -4,7 +4,7 @@ from .db import effective_observation_count, get_connection
 from .schema import NoveltyContext
 
 _VERSION_RE = re.compile(r"\d+(?:\.\d+){1,}")
-_HASH_RE = re.compile(r"[a-f0-9]{7,}", re.IGNORECASE)
+_HASH_RE = re.compile(r"(?<=[./])[a-f0-9]{7,40}(?=[./]|$)", re.IGNORECASE)
 _DATE_RE = re.compile(r"\d{4}[-_]\d{2}[-_]\d{2}")
 _TRAILING_RE = re.compile(r"/+$")
 

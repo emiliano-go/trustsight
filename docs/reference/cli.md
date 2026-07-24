@@ -36,6 +36,7 @@ trustsight review [--limit N]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--limit` | `int` | `20` | Maximum number of outdated packages to review. Falls back to `limits.default_review_limit` from config if omitted (default: 20). |
+| `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
 
 ### Behaviour
 

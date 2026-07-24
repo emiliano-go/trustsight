@@ -9,8 +9,10 @@ log = logging.getLogger(__name__)
 from .config import ensure_default_configs, load_config
 from .db import (
     get_last_analysis,
+    get_package,
     init_db,
     insert_analysis,
+    update_package_maintainer,
     update_package_version,
     upsert_package,
 )
@@ -210,14 +212,22 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     diff_text, diff_summary = generate_diff(repo, old_commit, head_commit, config.get("diff", {}).get("max_context_lines", 3))
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
-    if len(diff_text.encode()) > max_bytes:
+    diff_bytes = diff_text.encode("utf-8", errors="replace")
+    if len(diff_bytes) > max_bytes:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
-        diff_text = diff_text[:max_bytes]
+        diff_bytes = diff_bytes[:max_bytes]
+        diff_text = diff_bytes.decode("utf-8", errors="replace")
 
     source_changes = extract_urls_from_diff(diff_text)
 
     old_maintainer = get_maintainer_from_commit(repo, old_commit) or ""
     new_maintainer = get_maintainer_from_commit(repo, head_commit) or ""
+
+    if not old_maintainer:
+        pkg_row = get_package(pkg_name)
+        if pkg_row and pkg_row.get("current_maintainer"):
+            old_maintainer = pkg_row["current_maintainer"]
+
     maintainer_changed = bool(old_maintainer and new_maintainer and old_maintainer != new_maintainer)
 
     novelty = build_novelty_context(
@@ -295,6 +305,8 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     )
 
     update_package_version(pkg_name, head_version)
+    if new_maintainer:
+        update_package_maintainer(pkg_name, new_maintainer)
     return fact
 
 
@@ -422,7 +434,7 @@ def _make_fresh_analysis(
     return fact
 
 
-def discover_updates(limit: int = 20, progress_callback=None) -> list[dict]:
+def discover_updates(limit: int = 20, progress_callback=None, verbose: bool = False) -> list[dict]:
     ensure_default_configs()
     init_db()
 
@@ -441,16 +453,23 @@ def discover_updates(limit: int = 20, progress_callback=None) -> list[dict]:
             progress_callback(i, len(pkg_items), name)
         fact = analyze_package(name)
         verdict = generate_verdict(fact) if fact.final_score > 0 else fallback_verdict(fact)
-        results.append(
-            {
-                "package": name,
-                "old_version": old_ver,
-                "new_version": new_ver,
-                "score": fact.final_score,
-                "verdict": verdict,
-                "risk": "Low" if fact.final_score <= 20 else "Medium" if fact.final_score <= 50 else "High" if fact.final_score <= 80 else "Critical",
-                "first_seen": fact.first_seen,
-            }
-        )
+        entry = {
+            "package": name,
+            "old_version": old_ver,
+            "new_version": new_ver,
+            "score": fact.final_score,
+            "verdict": verdict,
+            "risk": "Low" if fact.final_score <= 20 else "Medium" if fact.final_score <= 50 else "High" if fact.final_score <= 80 else "Critical",
+            "first_seen": fact.first_seen,
+        }
+        if verbose:
+            fired = [
+                {"rule_id": e.rule_id, "severity": e.severity}
+                for e in fact.score_breakdown
+                if e.weight > 0 or e.severity == "FATAL"
+            ]
+            entry["triggered_rules"] = fired
+            entry["suppressed_rules"] = fact.suppressed_rules
+        results.append(entry)
 
     return results

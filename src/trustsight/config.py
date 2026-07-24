@@ -504,7 +504,7 @@ def _toml_value(val: str) -> str:
         return val
     except ValueError:
         pass
-    escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+    escaped = val.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
     return f'"{escaped}"'
 
 

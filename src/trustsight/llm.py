@@ -1,7 +1,11 @@
 import json
+import logging
 import os
+import re
 import sys
 from typing import Optional
+
+log = logging.getLogger(__name__)
 
 from openai import OpenAI
 
@@ -13,10 +17,23 @@ _REASONING_COLOR = "\033[90m" if _USE_COLOR else ""
 _RESET_COLOR = "\033[0m" if _USE_COLOR else ""
 
 
+_CONTROL_CHAR_RE = re.compile(
+    "[\u0000-\u001F"          # C0 controls (incl. \n \r \x00)
+    "\u007F-\u009F"           # C1 controls
+    "\u200B-\u200F"           # zero-width / joiners / directional marks
+    "\u2028-\u202F"           # line/paragraph separator + bidi general
+    "\u202A-\u202E"           # bidi overrides
+    "\u2060-\u2064"           # invisible operators
+    "\u2066-\u2069"           # bidi isolates
+    "\uFEFF"                  # BOM
+    "\U000E0000-\U000E007F"   # tag characters
+    "]")
+
+
 def _sanitize_prompt_field(s: str) -> str:
-    """Strip control characters and newlines from untrusted fields to
+    """Strip control characters from untrusted fields to
     prevent LLM prompt injection via package metadata."""
-    return s.replace("\n", " ").replace("\r", " ").replace("\x00", "")
+    return _CONTROL_CHAR_RE.sub(" ", s)
 
 
 def _build_prompt(fact: PackageFact) -> str:
@@ -202,9 +219,10 @@ def generate_verdict_stream(
         return _checked_verdict(raw, fact, stream)
 
     except Exception as e:
+        log.debug("LLM request failed: %s", e)
         result = fallback_verdict(fact)
         if stream:
-            print(f"\nLLM error: {e}")
+            print("\nLLM request failed. Using fallback verdict.")
             print(result)
         return result
 

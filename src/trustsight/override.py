@@ -1,4 +1,7 @@
 import json
+import os
+import re
+import tempfile
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,9 +50,18 @@ def load_overrides() -> list[RuleOverride]:
 
 def save_overrides(overrides: list[RuleOverride]) -> None:
     _ensure_file()
-    OVERRIDES_PATH.write_text(
-        json.dumps({"overrides": [asdict(o) for o in overrides]}, indent=2) + "\n"
-    )
+    content = json.dumps({"overrides": [asdict(o) for o in overrides]}, indent=2) + "\n"
+    fd, tmp = tempfile.mkstemp(dir=OVERRIDES_PATH.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp, OVERRIDES_PATH)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+_OVERRIDE_SANITIZE = re.compile(r"[\x00-\x1F\x7F]")
 
 
 def add_override(
@@ -59,7 +71,7 @@ def add_override(
     overrides = load_overrides()
     override = RuleOverride(
         rule_id=rule_id.upper(),
-        reason=reason.strip(),
+        reason=_OVERRIDE_SANITIZE.sub(" ", reason.strip()),
         package=package,
         created_at=_now(),
     )

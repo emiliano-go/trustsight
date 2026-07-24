@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -30,6 +31,7 @@ def init_db():
                 id INTEGER PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL,
                 current_version TEXT,
+                current_maintainer TEXT DEFAULT '',
                 last_checked TEXT
             );
 
@@ -172,6 +174,15 @@ def update_package_version(name: str, version: str):
         conn.commit()
 
 
+def update_package_maintainer(name: str, maintainer: str):
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE packages SET current_maintainer = ? WHERE name = ?",
+            (maintainer, name),
+        )
+        conn.commit()
+
+
 def count_observations() -> int:
     """Total analyses recorded across all packages.
 
@@ -262,7 +273,9 @@ def import_seed(seed_path: Path) -> dict:
 
     temp: Optional[Path] = None
     if path.suffix == ".gz":
-        temp = Path(tempfile.mkstemp(suffix=".db")[1])
+        fd, tmp_name = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        temp = Path(tmp_name)
         with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
             shutil.copyfileobj(src, dst)
         path = temp

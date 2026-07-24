@@ -1,3 +1,4 @@
+import re
 import tomllib
 from pathlib import Path
 
@@ -23,9 +24,15 @@ unknown = 20
 homograph_attack = 30
 
 [novelty_weights]
-url_first_in_package = 10
-url_first_globally = 15
-maintainer_first_in_package = 20
+# Calibrated once tier C actually became live.  The previous 10/15/20 was
+# set while maturity was permanently 0, so the weights had never been
+# exercised: at full maturity a novel URL plus a novel maintainer took a
+# borderline 15-point package to 60 (High).  These values keep that case
+# in Medium (45) while leaving maintainer novelty the strongest signal,
+# since a maintainer change is the xz-utils attack vector.
+url_first_in_package = 5
+url_first_globally = 10
+maintainer_first_in_package = 15
 
 [llm]
 provider = "openai"
@@ -54,6 +61,20 @@ max_diff_bytes = 5242880
 
 [limits]
 default_review_limit = 20
+
+[seed]
+# Import the bundled novelty seed the first time TrustSight runs against
+# an empty database.  Without it every source URL looks novel and
+# maturity stays at zero, which downgrades every Medium verdict to
+# INCONCLUSIVE.  The seed is public AUR data and is additive; it can
+# never overwrite something learned from a real analysis.
+auto_import = true
+
+[rules]
+# Run rules marked experimental in rules.toml.  The R039+ set is now
+# calibrated and runs unconditionally; this gates future additions whose
+# false-positive rate has not been measured yet.
+experimental = false
 
 [verification_evidence]
 checksum_present = -10
@@ -154,10 +175,253 @@ match_target = "resolved"
 [[rules]]
 id = "R013"
 name = "Unicode Bidi Override"
-pattern = '[\\u202A-\\u202E\\u2066-\\u2069\\u200B-\\u200D\\uFEFF]'
+# Two alternatives with different rules about context.
+#
+# 1. Bidi overrides/isolates, invisible operators, and tag characters.
+#    None has any legitimate use in a build recipe, so they fire
+#    unconditionally.  Covers U+200E/200F and U+2060-2064 and the tag
+#    block, which the previous pattern omitted.
+#
+# 2. Zero-width characters, but only between ASCII neighbours.  U+200B-
+#    U+200D are mandatory joiners in Malayalam, Lao, Devanagari and
+#    others: a localized 'GenericName[ml]=' line in a browser package
+#    legitimately contains U+200D.  Firing FATAL on that scored benign
+#    packages 100/100.  Requiring ASCII on both sides keeps the attack
+#    (a joiner hidden inside an ASCII command or URL) and drops the
+#    false positive.
+pattern = '[\\u202A-\\u202E\\u2066-\\u2069\\u2060-\\u2064\\U000E0000-\\U000E007F]|(?<![^\\x00-\\x7F])[\\u200B-\\u200F\\uFEFF](?![^\\x00-\\x7F])'
 severity = "FATAL"
 category = "unicode"
 match_target = "raw_line"
+
+# ---------------------------------------------------------------------
+# Expanded ruleset (R039+).
+#
+# Numbering starts at R039 because R014-R026 are already referenced by
+# tests/fixtures/baseline.json and the malicious fixture generators.
+# Reusing those ids would silently change what they mean.
+#
+# Calibrated against a 3322-diff stratified benign corpus.  Fourteen of
+# these fire on zero benign diffs; every remaining hit was inspected and
+# all but one were true positives (real setuid bits, real network access
+# in pkgver(), real writes outside $pkgdir).  Enabling them costs 0.5pp
+# of zero-rate and leaves p95 unchanged, so they run by default.
+#
+# The experimental flag remains supported for future additions: set
+# experimental = true on a rule and it is skipped unless
+# [rules] experimental = true in config.toml.
+#
+# raw_line rules set added_only = true.  Raw diff lines include removals,
+# so without it a maintainer *deleting* a suspicious line would raise the
+# package's score.
+# ---------------------------------------------------------------------
+
+# --- Execution and obfuscation ---
+
+[[rules]]
+id = "R039"
+name = "Eval With Dynamic Content"
+pattern = '\\beval\\s+(?:"|\\$\\(|\\$\\{|`|\\$[a-zA-Z_])'
+severity = "CRITICAL"
+category = "execution"
+match_target = "resolved"
+
+[[rules]]
+id = "R040"
+name = "Shell -c With Dynamic Payload"
+pattern = '\\b(?:bash|sh|zsh|dash)\\s+-c\\s+(?:\\$\\(|`|\\$\\{|"[^"]*\\$)'
+severity = "CRITICAL"
+category = "execution"
+match_target = "resolved"
+
+[[rules]]
+id = "R041"
+name = "Shell Network Redirection"
+pattern = '/dev/(?:tcp|udp)/'
+severity = "CRITICAL"
+category = "network_execution"
+match_target = "resolved"
+
+[[rules]]
+id = "R042"
+name = "Download Then Execute"
+pattern = '(?:curl|wget)\\s+[^;&|]*-o\\s*\\S+[^;&|]*(?:&&|;)\\s*(?:chmod\\s+\\+x[^;&|]*(?:&&|;)\\s*)?(?:\\./|/tmp/|bash\\s|sh\\s)'
+severity = "CRITICAL"
+category = "execution"
+match_target = "resolved"
+
+[[rules]]
+id = "R043"
+name = "Base64 Blob Decode"
+pattern = 'base64\\s+(?:-d|--decode)\\s*(?:<<<|<<\\w*|\\$\\{?[a-zA-Z_])'
+severity = "CRITICAL"
+category = "obfuscation"
+match_target = "resolved"
+
+[[rules]]
+id = "R044"
+name = "Interpreter One-Liner With Network"
+pattern = '\\b(?:python3?|perl|ruby)\\s+-e\\s+.*(?:socket|urllib|urlopen|Net::|LWP|open-uri|https?://)'
+severity = "HIGH"
+category = "network_execution"
+match_target = "resolved"
+
+[[rules]]
+id = "R045"
+name = "Binary Encoding Pipe"
+pattern = '\\b(?:xxd|uudecode)\\s+[^|]*\\|'
+severity = "MEDIUM"
+category = "obfuscation"
+match_target = "resolved"
+
+# --- Source provenance ---
+
+[[rules]]
+id = "R046"
+name = "Source URL Uses IP Address"
+pattern = 'https?://\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}'
+severity = "MEDIUM"
+category = "network"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R047"
+name = "Source URL Uses Non-Standard Port"
+pattern = 'https?://[^/\\s:]+:(?!(?:80|443|8080|8443)(?:[/\\s"\\x27]|$))\\d{2,5}'
+severity = "LOW"
+category = "network"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R048"
+name = "Source URL On Free Registrar TLD"
+pattern = 'https?://[^/\\s]*\\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\\x27\\s)]|$)'
+severity = "LOW"
+category = "network"
+match_target = "raw_line"
+added_only = true
+
+# --- Build-time weakening ---
+
+[[rules]]
+id = "R049"
+name = "Compiler Plugin Or Loader Override"
+pattern = '\\b(?:CFLAGS|CXXFLAGS|LDFLAGS)\\s*\\+?=.*(?:-fplugin=|-Wl,--dynamic-linker=)'
+severity = "MEDIUM"
+category = "build"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R050"
+name = "Compiler Hardening Disabled"
+pattern = '\\b(?:CFLAGS|CXXFLAGS|LDFLAGS)\\s*\\+?=.*(?:-fno-stack-protector|-z\\s*execstack)'
+severity = "MEDIUM"
+category = "build"
+match_target = "raw_line"
+added_only = true
+
+# --- Packaging subterfuge ---
+
+[[rules]]
+id = "R051"
+name = "Network Access In pkgver"
+pattern = '\\b(?:curl|wget|git\\s+(?:clone|fetch|pull|ls-remote)|svn\\s+(?:co|checkout)|hg\\s+pull)\\b'
+severity = "HIGH"
+category = "packaging"
+match_target = "raw_line"
+scope = ["pkgver"]
+added_only = true
+
+[[rules]]
+id = "R052"
+name = "Dotfile Written To User Profile"
+pattern = '\\b(?:install|cp|mv|tee)\\s+[^;&|]*(?:\\$HOME|~|/root|/home/[^/\\s]+)/\\.\\w+'
+severity = "HIGH"
+category = "persistence"
+match_target = "raw_line"
+# Everything except "message": an echo telling the user to run
+# `cp ... ~/.zshrc` is an instruction, not a write.
+scope = ["function_body", "other"]
+added_only = true
+
+[[rules]]
+id = "R053"
+name = "Setuid Or Setgid Bit Set In Package Root"
+# Setuid on a path being staged into the package.  Chromium's sandbox
+# helper legitimately needs 4755, so this fires on every Electron
+# package; measured across the benign corpus it changes no package's
+# risk band at MEDIUM, which keeps the evidence visible without
+# reclassifying ordinary updates.
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+(?!["\\x27]?/)'
+severity = "MEDIUM"
+category = "privilege"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R059"
+name = "Setuid Or Setgid Bit Set Outside Package Root"
+# The same operation against an absolute path touches the live
+# filesystem rather than $pkgdir, so it is a privilege change on the
+# build host and not packaging.
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+["\\x27]?/'
+severity = "HIGH"
+category = "privilege"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R054"
+name = "Persistence Unit Outside Package Root"
+pattern = '[\\s"\\x27](?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/'
+severity = "HIGH"
+category = "persistence"
+match_target = "raw_line"
+scope = ["function_body", "other"]
+added_only = true
+
+[[rules]]
+id = "R055"
+name = "Git Clone With Variable Branch"
+pattern = 'git\\s+clone\\s+[^;&|]*(?:--branch|-b)\\s+\\$\\{?[a-zA-Z_]'
+severity = "MEDIUM"
+category = "source"
+match_target = "resolved"
+
+[[rules]]
+id = "R056"
+name = "Download Then Source"
+pattern = '(?:curl|wget)\\s+[^;&|]*-o\\s*\\S+[^;&|]*(?:&&|;)\\s*(?:source|\\.)\\s'
+severity = "CRITICAL"
+category = "execution"
+match_target = "resolved"
+
+# --- Transport security ---
+
+[[rules]]
+id = "R057"
+name = "TLS Verification Disabled"
+pattern = '(?:curl\\s+(?:[^;&|]*\\s)?(?:--insecure|-k)\\b|wget\\s+(?:[^;&|]*\\s)?--no-check-certificate\\b)'
+severity = "HIGH"
+category = "network"
+match_target = "resolved"
+
+[[rules]]
+id = "R058"
+name = "Write Outside Package Root"
+# The command must be the first token on the line, so that an absolute
+# path quoted inside an echo string does not count as a write.  The
+# lookbehinds require the path to start an argument: this rejects the
+# ubiquitous "${pkgdir}"/usr/lib/... idiom, where the quote closing the
+# variable would otherwise look like an argument boundary.
+pattern = '^\\+?\\s*(?:sudo\\s+)?(?:install|cp|mv|dd|tee)\\s+[^;&|]*(?:(?<=\\s)|(?<=\\s["\\x27]))(?:/etc|/boot|/usr/bin|/usr/lib)/'
+severity = "HIGH"
+category = "system"
+match_target = "raw_line"
+added_only = true
 """
 
 DEFAULT_DOMAINS = """\
@@ -191,6 +455,18 @@ domains = [
     "paste.ee",
     "0x0.st",
     "termbin.com",
+    # Ephemeral paste and file-drop services.  These belong here rather
+    # than in a detection rule: bucket classification already carries a
+    # weight for them, and a rule would double-count the same evidence.
+    "hastebin.com",
+    "ix.io",
+    "transfer.sh",
+    "file.io",
+    "bashupload.com",
+    "temp.sh",
+    "anonfiles.com",
+    "dpaste.com",
+    "sprunge.us",
 ]
 """
 
@@ -282,6 +558,110 @@ def set_config(key: str, value: str):
             text += f'\n{key_name} = {_toml_value(value)}\n'
 
     path.write_text(text)
+
+
+def _rule_blocks(toml_text: str) -> dict[str, str]:
+    """Map rule id to its raw ``[[rules]]`` block text."""
+    blocks: dict[str, str] = {}
+    for chunk in toml_text.split("[[rules]]")[1:]:
+        block = "[[rules]]" + chunk
+        match = re.search(r'^id\s*=\s*["\']([^"\']+)["\']', block, re.MULTILINE)
+        if match:
+            blocks[match.group(1)] = block.rstrip() + "\n"
+    return blocks
+
+
+# Patterns this project shipped in earlier releases, per rule id.  A rule
+# on disk whose pattern matches one of these is untouched by the user, so
+# replacing it is safe.  A rule whose pattern matches neither the current
+# default nor a legacy entry has been customised and is never overwritten.
+#
+# This exists because rules.toml is written once, at install time.  A
+# correctness fix to a shipped pattern otherwise never reaches anyone who
+# already has the file.
+LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
+    # Pre-0.2.1: fired FATAL on U+200B-U+200D regardless of context, so a
+    # localized desktop entry in a benign package scored 100/100.
+    "R013": {r"[\u202A-\u202E\u2066-\u2069\u200B-\u200D\uFEFF]"},
+}
+
+
+def outdated_shipped_rules() -> list[str]:
+    """Ids whose on-disk pattern is a superseded shipped pattern."""
+    path = CONFIG_DIR / "rules.toml"
+    if not path.exists():
+        return []
+    current = {rid: b for rid, b in _rule_blocks(DEFAULT_RULES).items()}
+    outdated = []
+    for rule in load_rules():
+        rid = rule.get("id")
+        if rid not in current or rid not in LEGACY_RULE_PATTERNS:
+            continue
+        if rule.get("pattern") in LEGACY_RULE_PATTERNS[rid]:
+            outdated.append(rid)
+    return outdated
+
+
+def missing_shipped_rules() -> list[str]:
+    """Ids present in ``DEFAULT_RULES`` but absent from the user's file.
+
+    ``write_default_file`` only writes when the file does not exist, so an
+    install that predates a rule addition never receives it.  Without this
+    check, enabling a new rule in ``config.toml`` silently does nothing.
+    """
+    path = CONFIG_DIR / "rules.toml"
+    if not path.exists():
+        return []
+    existing = {r.get("id") for r in load_rules()}
+    return [rid for rid in _rule_blocks(DEFAULT_RULES) if rid not in existing]
+
+
+def _replace_rule_block(text: str, rule_id: str, new_block: str) -> str:
+    """Swap the ``[[rules]]`` block for *rule_id* in *text*."""
+    parts = text.split("[[rules]]")
+    out = [parts[0]]
+    for chunk in parts[1:]:
+        block = "[[rules]]" + chunk
+        match = re.search(r'^id\s*=\s*["\']([^"\']+)["\']', block, re.MULTILINE)
+        if match and match.group(1) == rule_id:
+            trailing = len(block) - len(block.rstrip())
+            out.append(new_block.rstrip() + block[len(block.rstrip()):] if trailing else new_block.rstrip())
+        else:
+            out.append(block)
+    return "".join(out)
+
+
+def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
+    """Bring the user's ``rules.toml`` in line with the shipped defaults.
+
+    Appending is always safe, so missing rules are added unconditionally.
+    Replacing is not, so a rule is only rewritten when *update_outdated*
+    is set **and** its current pattern is one this project shipped before
+    (meaning the user never edited it).  Customised rules are left alone.
+
+    Returns ``(added_ids, updated_ids)``.
+    """
+    path = CONFIG_DIR / "rules.toml"
+    if not path.exists():
+        ensure_default_configs()
+        return [], []
+
+    blocks = _rule_blocks(DEFAULT_RULES)
+    text = path.read_text().rstrip() + "\n"
+
+    updated: list[str] = []
+    if update_outdated:
+        for rid in outdated_shipped_rules():
+            text = _replace_rule_block(text, rid, blocks[rid])
+            updated.append(rid)
+
+    added = missing_shipped_rules()
+    for rid in added:
+        text += "\n" + blocks[rid]
+
+    if added or updated:
+        path.write_text(text)
+    return added, updated
 
 
 def load_config() -> dict:

@@ -11,10 +11,83 @@ CONFUSABLES = {
     "p": "р", "x": "х", "y": "у", "i": "і", "l": "ӏ",
 }
 
+# Scripts whose letters are commonly used to build confusable domains.
+# A label mixing two of these is a homograph attack; a label written
+# wholly in one of them is a legitimate internationalised domain.
+_SCRIPT_PREFIXES = (
+    "LATIN", "CYRILLIC", "GREEK", "ARMENIAN", "HEBREW", "ARABIC",
+    "CHEROKEE", "GEORGIAN", "COPTIC", "DEVANAGARI", "BENGALI", "THAI",
+    "HIRAGANA", "KATAKANA", "HANGUL", "BOPOMOFO",
+)
+
+# Script combinations that occur in legitimate domains.  Japanese mixes
+# Han with kana, Korean mixes Han with Hangul, and all of them mix with
+# ASCII.  Latin paired with Cyrillic or Greek has no legitimate use and
+# is the classic confusable construction.
+_COMPATIBLE_GROUPS = (
+    {"LATIN"},
+    {"LATIN", "HAN", "HIRAGANA", "KATAKANA"},
+    {"LATIN", "HAN", "HANGUL"},
+    {"LATIN", "HAN", "BOPOMOFO"},
+)
+
+
+def _script_of(ch: str) -> str:
+    """Return the script name for *ch*, or ``"COMMON"`` for non-letters.
+
+    Digits, hyphens and dots belong to every script, so they are reported
+    as ``COMMON`` and never contribute to a mixed-script verdict.
+    """
+    if not ch.isalpha():
+        return "COMMON"
+    if ch.isascii():
+        return "LATIN"
+    name = unicodedata.name(ch, "")
+    if name.startswith("CJK"):
+        return "HAN"
+    for prefix in _SCRIPT_PREFIXES:
+        if name.startswith(prefix):
+            return prefix
+    return "OTHER"
+
+
+def _decode_punycode(label: str) -> str:
+    """Decode an ``xn--`` label, returning it unchanged if undecodable.
+
+    Without this, an attacker can bypass detection by writing the
+    punycode form (``xn--githb-6rd.com``) directly into ``source=()``.
+    """
+    if not label.lower().startswith("xn--"):
+        return label
+    try:
+        return label.encode("ascii").decode("idna")
+    except (UnicodeError, ValueError):
+        return label
+
 
 def has_homograph(domain: str) -> bool:
-    for ch in domain:
-        if unicodedata.name(ch, "").startswith("LATIN") and ord(ch) > 127:
+    """Detect confusable characters in a domain.
+
+    Two independent signals:
+
+    1. **Mixed script within a label**: ``github.cоm`` with a Cyrillic
+       ``о`` reads as Latin but is not.  A label wholly in one non-Latin
+       script is a legitimate IDN and is not flagged.
+    2. **Non-ASCII Latin**: ``githuḅ.com`` stays within the Latin script,
+       so mixed-script detection cannot see it, but a Latin letter with a
+       diacritic in a domain is still a confusable.
+    """
+    host = domain.split("@")[-1].split(":")[0]
+    for raw_label in host.split("."):
+        if not raw_label:
+            continue
+        label = _decode_punycode(raw_label)
+        scripts = {_script_of(ch) for ch in label} - {"COMMON"}
+        if len(scripts) > 1 and not any(
+            scripts <= group for group in _COMPATIBLE_GROUPS
+        ):
+            return True
+        if any(not ch.isascii() and _script_of(ch) == "LATIN" for ch in label):
             return True
     return False
 

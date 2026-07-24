@@ -42,7 +42,7 @@ Every rule in the output references the line(s) that triggered it. Cross-referen
 
 **Always inspect manually.** INCONCLUSIVE means the tool could not form a complete picture:
 
-- The score sits in the **25–50** range (Medium).
+- The score sits in the **25-50** range (Medium).
 - No HIGH, CRITICAL, or FATAL signals fired.
 - The database is **cold**: fewer than 50 observations, so novelty weight is not at full strength.
 
@@ -65,5 +65,5 @@ After investigation you may decide a rule is over-firing on your package set. Se
 ## See also
 
 - [Auditing before update](auditing-before-update.md): the review workflow.
-- [Rules reference (R001–R013)](../reference/rules.md): what each rule detects.
+- [Rules reference (R001-R013)](../reference/rules.md): what each rule detects.
 - [Evidence tiers](../reference/evidence-tiers.md): how evidence is weighted.

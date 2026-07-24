@@ -4,8 +4,8 @@ TrustSight has two rule namespaces to avoid identifier collision:
 
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|
-| R-series  | R001 – R013  | `rules.toml`     | Yes               | Regex-detectable patterns   |
-| C-series  | C001 – C003  | `analysis.py`    | No                | Structural / multi-condition |
+| R-series  | R001 - R013  | `rules.toml`     | Yes               | Regex-detectable patterns   |
+| C-series  | C001 - C003  | `analysis.py`    | No                | Structural / multi-condition |
 
 ## R-series rules (TOML)
 
@@ -79,7 +79,7 @@ The `.diff` must trigger the rule. The `expected.json` must contain a non-zero s
 
 ```json
 {
-  "expected_score": <0–100>,
+  "expected_score": <0-100>,
   "expected_rule": "<rule-id>",
   "expected_severity": "<severity>"
 }

@@ -1,3 +1,13 @@
+
+!!! warning "Not implemented"
+
+    There is no `trustsight sandbox` command. This page describes a
+    design that was explored and not built. It also conflicts with the
+    position stated in
+    [What TrustSight Cannot See](../explanation/what-trustsight-cannot-see.md):
+    TrustSight is a static analysis tool by design and does not execute
+    PKGBUILDs, sandboxed or otherwise. Treat this page as a record of a
+    rejected direction, not as documentation of behaviour.
 ---
 description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it.
 ---

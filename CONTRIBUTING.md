@@ -6,7 +6,7 @@ Read the [README](README.md) for the one-liner, the 30-second example, and the s
 
 ## Reporting bugs
 
-Open a [GitHub issue](https://github.com/emiliano-go/trustsight/issues). Include the package name, the score TrustSight produced, and — if possible — the diff or package version. Paste the output of `trustsight inspect <package>`.
+Open a [GitHub issue](https://github.com/emiliano-go/trustsight/issues). Include the package name, the score TrustSight produced, and (if possible) the diff or package version. Paste the output of `trustsight inspect <package>`.
 
 ## Security issues
 

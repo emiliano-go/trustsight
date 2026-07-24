@@ -21,8 +21,8 @@ TrustSight has two rule namespaces:
 
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
-| **R-series** (R001–R013) | `rules.toml` | Yes | Detection rules : PKGBUILD pattern matching. Users can enable, disable, and re-weight these. |
-| **C-series** (C001–C003) | Code only | No | Structural invariants : domain classification, checksum coherence, dependency graph anomalies. These cannot be disabled through `rules.toml`. |
+| **R-series** (R001-R013) | `rules.toml` | Yes | Detection rules : PKGBUILD pattern matching. Users can enable, disable, and re-weight these. |
+| **C-series** (C001-C003) | Code only | No | Structural invariants : domain classification, checksum coherence, dependency graph anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.
 
@@ -91,6 +91,6 @@ After editing `rules.toml` or `config.toml`:
 ## See also
 
 - [Config reference](../reference/configuration.md): full schema for both files.
-- [Rules reference (R001–R013)](../reference/rules.md): per-rule defaults.
+- [Rules reference (R001-R013)](../reference/rules.md): per-rule defaults.
 - [Tuning false positives](tuning-false-positives.md): how to fix rules that over-fire on your packages.
 - [Running the sandbox](running-the-sandbox.md): isolated build execution.

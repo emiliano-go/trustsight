@@ -104,12 +104,15 @@ Requires **Python 3.12+**.
 | [`trustsight review`](docs/reference/cli.md) | Scan all outdated AUR packages and produce a scored table with tiered evidence. |
 | [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
 | [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package, with optional `--score-breakdown`. |
+| [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled novelty seed (178,491 AUR source URLs) so a fresh install is not cold. Runs automatically on first use. |
+| [`trustsight lint-rules`](docs/reference/cli.md) | Check `rules.toml` for unreachable, over-broad or malformed rules. Exits non-zero on errors, for use in CI. |
+| [`trustsight config`](docs/reference/cli.md) | Show configuration, set LLM keys, and run `sync-rules` to receive newly shipped detection rules. |
 
 ---
 
 ## How scoring works
 
-Scoring is deterministic: same input always produces the same score. A core of 13 detection rules (R001 to R013) and 3 code-structure rules (C001 to C003) produces signals across four evidence tiers: **A** (structural, rules on PKGBUILD lines), **B** (priors/context, URL classification and forge trust), **C** (history/novelty, first-seen URLs and maintainers gated by observation count), and **D** (verification, checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates; it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
+Scoring is deterministic: same input always produces the same score. A core of 13 detection rules (R001 to R013), an expanded set (R039 to R059) calibrated against a 3,322-diff benign corpus, and 7 code-structure rules (C001 to C007) produce signals across four evidence tiers: **A** (structural, rules on PKGBUILD lines), **B** (priors/context, URL classification and forge trust), **C** (history/novelty, first-seen URLs and maintainers gated by observation count), and **D** (verification, checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates; it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 
 ---
 

@@ -19,7 +19,7 @@ TrustSight takes the security of its analysis pipeline seriously. If you believe
 **In scope:**
 - Scoring bypass: crafting a PKGBUILD diff that produces a lower score than the risk warrants
 - LLM prompt injection that changes the verdict despite verdict-integrity assertions
-- Rule evasion: bypassing R001–R013 or C001–C003 detection patterns
+- Rule evasion: bypassing R001-R013 or C001-C003 detection patterns
 - Cache poisoning: manipulating the SQLite novelty database to suppress signals
 
 **Out of scope:**

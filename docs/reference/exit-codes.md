@@ -31,12 +31,6 @@ Exit code 2 if the database cannot be opened. Exits 0 even if no history is foun
 - **`show`**: exits 0 on success, 2 on config read error.
 - **`set`**: exits 0 on success, 1 if the key is not `api_key` or `base_url`, 2 on write error.
 
-### `trustsight sandbox`
-
-Not yet implemented. Exits 2 with an error message.
-
----
-
 ## Rationale
 
 The exit code design follows the principle that **CLEAN is the default expected state**: 81.5 % of benign diffs score 0. Exit 1 is a deliberate signal that the review found something requiring human attention. Exit 2 is reserved for operational failures where no useful result could be produced.

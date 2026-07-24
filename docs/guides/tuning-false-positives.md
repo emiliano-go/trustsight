@@ -98,8 +98,8 @@ If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Rest
 
 ## When not to tune
 
-- **First-seen novelty scores** (5–15) are not false positives. They are honest uncertainty that resolves as the maturity gate accumulates observations.
-- **C-series rules** (C001–C003) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
+- **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the maturity gate accumulates observations.
+- **C-series rules** (C001-C003) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
 - **INCONCLUSIVE** verdicts from a cold database are not rule false positives. Let the maturity gate accumulate 50 observations before judging.
 
 ## See also

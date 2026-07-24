@@ -14,17 +14,17 @@ trustsight review
 
 Most packages score **0**. A clean version bump, checksums updated, no structural changes, known domains, produces no risk signals.
 
-Some packages may score **5–15** on their first few appearances. This is novelty weight: the first time a source URL is observed globally, the [novelty evidence tier](../reference/evidence-tiers.md) (tier C) contributes a small score. The [maturity gate](../explanation/cold-start-and-maturity.md) scales this contribution up to full weight over 50 observations.
+Some packages may score **5-15** on their first few appearances. This is novelty weight: the first time a source URL is observed globally, the [novelty evidence tier](../reference/evidence-tiers.md) (tier C) contributes a small score. The [maturity gate](../explanation/cold-start-and-maturity.md) scales this contribution up to full weight over 50 observations.
 
-A table of 20 packages where 18 score 0, 2 score 8–12, and the verdict reads **CLEAN** on every row; that is normal. Proceed with your update.
+A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **CLEAN** on every row; that is normal. Proceed with your update.
 
 ## What anomalies look like
 
 | Score range | What it means |
 |-------------|---------------|
-| **25–40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules.md) matched. |
-| **41–80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
-| **81–100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
+| **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules.md) matched. |
+| **41-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
+| **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
 | **INCONCLUSIVE** | Score landed in the Medium range but only novelty (tier C) fired, and the database has fewer than 50 observations. The tool cannot form a confident picture; see [cold start](../explanation/cold-start-and-maturity.md). |
 
 > **Practical threshold:** score **25+** warrants attention. **40+** means skip the update and inspect first.
@@ -60,7 +60,7 @@ Three verdict states are possible:
 |---------|-------|---------|
 | **CLEAN** | ≤20 | No significant risk signals |
 | **FLAGGED** | >20 | One or more signals fired; investigate |
-| **INCONCLUSIVE** | 25–50 | Medium score, but only novelty signals and a cold database |
+| **INCONCLUSIVE** | 25-50 | Medium score, but only novelty signals and a cold database |
 
 See the [report schema](../reference/report-schema.md) for the full scoring breakdown.
 

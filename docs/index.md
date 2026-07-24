@@ -32,13 +32,13 @@ The scoring system is organized into four evidence tiers:
 
 A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 75+. FATAL rules (prompt injection, unicode bidi overrides) hard-stop at 100.
 
-**Key numbers:** 81.5% benign zero-rate, 100% CRITICAL recall, CRITICAL p5 = 40, benign p95 = 20.
+**Key numbers:** 82.0% benign zero-rate and p95 = 20 on a rebuilt 3,322-diff stratified corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
 
 See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules.md) for the complete rule catalog.
 
 !!! tip "Rules Reference"
 
-    TrustSight ships with 16 rules across two namespaces. **R001 to R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **C001 to C003** catch structural anomalies (checksum changed without source change, source URLs swapped without version bump). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships with 39 rules across two namespaces. **R001 to R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **R039 to R059** extend that surface (eval of dynamic content, reverse shells, setuid bits, network access in `pkgver()`, writes outside `$pkgdir`) and were calibrated against the benign corpus before being enabled. **C001 to C007** catch structural anomalies that a single-line pattern cannot express (checksum changed without source change, source URLs swapped without version bump, checksum removed for an unchanged source, command substitution in the source array). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules.md)
 
@@ -67,7 +67,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 | Page | What it covers |
 |------|----------------|
-| [Rules](reference/rules.md) | R001 to R013 and C001 to C003 with severity, weight, and description. |
+| [Rules](reference/rules.md) | R001 to R013, R039 to R059, and C001 to C007 with severity, weight, and description. |
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml, rules.toml, and trusted_domains.toml schema. |
 | [Report Schema](reference/report-schema.md) | PackageFact JSON structure. |

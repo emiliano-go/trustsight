@@ -1,6 +1,6 @@
 import re
 
-from .db import get_connection
+from .db import effective_observation_count, get_connection
 from .schema import NoveltyContext
 
 _VERSION_RE = re.compile(r"\d+(?:\.\d+){1,}")
@@ -84,6 +84,11 @@ def build_novelty_context(
     maintainer: str = "",
 ) -> NoveltyContext:
     ctx = NoveltyContext()
+
+    # Read maturity before this analysis is recorded, so a package is
+    # never counted as an observation of itself.  Falls back to a seeded
+    # bootstrap count when there is no real history yet.
+    ctx.observation_count = effective_observation_count()
 
     if maintainer:
         ctx.maintainer_first_seen_for_this_package = check_maintainer_novelty(

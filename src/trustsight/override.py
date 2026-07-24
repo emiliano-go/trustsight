@@ -102,16 +102,36 @@ def get_active_overrides(
 
 def filter_triggered_rules(
     triggered_rules: list[dict], package: str | None = None
-) -> tuple[list[dict], list[RuleOverride]]:
+) -> tuple[list[dict], list[dict]]:
+    """Drop overridden rules from *triggered_rules*.
+
+    Returns ``(kept, suppressed)``.  Suppressed findings are returned
+    rather than discarded so the report can state what was hidden and
+    why: a silent suppression is indistinguishable from a missed
+    detection.
+
+    A FATAL finding is never suppressed, whatever the overrides file
+    says.  :func:`add_override` refuses to create one, but the file is
+    user-editable, and prompt injection and unicode deception are the
+    two things an attacker would most want switched off.
+    """
     overrides = load_overrides()
     if not overrides:
         return triggered_rules, []
 
-    active = []
-    for o in overrides:
-        if o.package is None or (package is not None and o.package == package):
-            active.append(o)
+    active = [
+        o for o in overrides
+        if o.package is None or (package is not None and o.package == package)
+    ]
+    by_id = {o.rule_id: o for o in active}
 
-    active_ids = {o.rule_id for o in active}
-    filtered = [r for r in triggered_rules if r["rule_id"] not in active_ids]
-    return filtered, active
+    kept: list[dict] = []
+    suppressed: list[dict] = []
+    for rule in triggered_rules:
+        override = by_id.get(rule["rule_id"])
+        if override is None or rule.get("severity") == "FATAL":
+            kept.append(rule)
+            continue
+        suppressed.append({**rule, "override_reason": override.reason,
+                           "override_package": override.package})
+    return kept, suppressed

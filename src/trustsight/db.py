@@ -72,6 +72,16 @@ def init_db():
                 FOREIGN KEY (history_id) REFERENCES analysis_history(id)
             );
 
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS maintainer_counts (
+                name TEXT PRIMARY KEY,
+                count INTEGER
+            );
+
             CREATE INDEX IF NOT EXISTS idx_source_urls_url ON source_urls(url);
             CREATE INDEX IF NOT EXISTS idx_packages_name ON packages(name);
             CREATE INDEX IF NOT EXISTS idx_history_package ON analysis_history(package_id);
@@ -160,6 +170,178 @@ def update_package_version(name: str, version: str):
             (version, name),
         )
         conn.commit()
+
+
+def count_observations() -> int:
+    """Total analyses recorded across all packages.
+
+    This is the database-maturity figure that gates tier C novelty
+    weights.  It is deliberately global rather than per-package: the
+    question maturity answers is "has this database seen enough updates
+    for 'first seen' to carry information", which is a property of the
+    corpus as a whole, not of one package.
+    """
+    with get_connection() as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM analysis_history").fetchone()
+        return row["n"] if row else 0
+
+
+SEED_OBSERVATION_KEY = "seed_observation_count"
+SEED_VERSION_KEY = "seed_version"
+
+
+def get_metadata(key: str) -> Optional[str]:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT value FROM metadata WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+
+def set_metadata(key: str, value: str) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (key, value),
+        )
+        conn.commit()
+
+
+def seed_observation_count() -> int:
+    """Bootstrap observation count supplied by an imported seed.
+
+    A fresh install has no analysis history, so tier C novelty would be
+    gated off entirely (see :func:`~trustsight.scoring.maturity`).  A
+    seed asserts that the database already knows a large body of AUR
+    source URLs, which is what maturity is really asking about.
+    """
+    raw = get_metadata(SEED_OBSERVATION_KEY)
+    if raw is None:
+        return 0
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 0
+
+
+def effective_observation_count() -> int:
+    """Observations for maturity purposes: real history or the seed.
+
+    Real analyses take over as soon as there are more of them than the
+    seed asserts, so ordinary use eventually replaces the seed entirely
+    and the tool never depends on external data permanently.
+    """
+    return max(count_observations(), seed_observation_count())
+
+
+def get_maintainer_global_count(name: str) -> int:
+    """How many packages a maintainer is recorded against by the seed."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
+        ).fetchone()
+        return row["count"] if row else 0
+
+
+def import_seed(seed_path: Path) -> dict:
+    """Merge a seed database into the user's database.
+
+    Additive and idempotent: existing rows win, so a seed can never
+    overwrite something learned from a real analysis.  Returns counts of
+    what was imported.
+    """
+    import gzip
+    import shutil
+    import tempfile
+
+    init_db()
+    path = Path(seed_path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    temp: Optional[Path] = None
+    if path.suffix == ".gz":
+        temp = Path(tempfile.mkstemp(suffix=".db")[1])
+        with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        path = temp
+
+    try:
+        with get_connection() as conn:
+            # source_urls.first_seen_package_id references packages(id),
+            # and foreign_keys is ON, so the sentinel row must exist.
+            conn.execute(
+                "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+            )
+            conn.execute("ATTACH DATABASE ? AS seed", (str(path),))
+            before = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+            conn.execute(
+                """INSERT OR IGNORE INTO source_urls
+                   (url, first_seen_package_id, first_seen_globally_timestamp,
+                    total_uses, last_seen_timestamp)
+                   SELECT url, 0, first_seen_globally_timestamp,
+                          total_uses, last_seen_timestamp
+                   FROM seed.source_urls"""
+            )
+            after = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+            conn.execute(
+                """INSERT OR REPLACE INTO maintainer_counts (name, count)
+                   SELECT name, count FROM seed.maintainer_counts"""
+            )
+            maint = conn.execute(
+                "SELECT COUNT(*) AS n FROM maintainer_counts"
+            ).fetchone()["n"]
+            conn.execute(
+                """INSERT OR REPLACE INTO metadata (key, value)
+                   SELECT key, value FROM seed.metadata"""
+            )
+            conn.commit()
+            conn.execute("DETACH DATABASE seed")
+        return {
+            "urls_added": after - before,
+            "urls_total": after,
+            "maintainers": maint,
+            "observations": seed_observation_count(),
+        }
+    finally:
+        if temp is not None:
+            temp.unlink(missing_ok=True)
+
+
+def bundled_seed_path() -> Path:
+    return Path(__file__).parent / "data" / "seed.db.gz"
+
+
+def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
+    """Import the bundled seed on a database that has never been seeded.
+
+    A cold database makes every source URL look novel and holds maturity
+    at zero, which downgrades every Medium verdict to INCONCLUSIVE.  The
+    seed is derived from public AUR data and is additive, so importing it
+    automatically costs the user nothing and makes the first run useful.
+
+    Returns import stats, or ``None`` if nothing was done.
+    """
+    if seed_observation_count() > 0:
+        return None
+    if count_observations() > 0:
+        # A database with real history does not need a bootstrap.
+        return None
+    seed = bundled_seed_path()
+    if not seed.exists():
+        return None
+    try:
+        stats = import_seed(seed)
+    except (FileNotFoundError, sqlite3.Error):
+        return None
+    if not quiet:
+        print(
+            f"Imported novelty seed: {stats['urls_total']} source URLs, "
+            f"{stats['maintainers']} maintainers "
+            f"({stats['observations']} observations)."
+        )
+    return stats
 
 
 def get_history(package_id: int, limit: int = 20) -> list[dict]:

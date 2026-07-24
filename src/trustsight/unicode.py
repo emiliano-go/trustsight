@@ -1,21 +1,21 @@
 import re
 
-# Bidirectional text overrides (U+202A–U+202E)
+# Bidirectional text overrides (U+202A-U+202E)
 BIDI_OVERRIDES = re.compile(
     '[\u202a\u202b\u202c\u202d\u202e]'
 )
 
-# Bidirectional isolates (U+2066–U+2069)
+# Bidirectional isolates (U+2066-U+2069)
 BIDI_ISOLATES = re.compile(
     '[\u2066\u2067\u2068\u2069]'
 )
 
-# Zero-width characters and joiners (U+200B–U+200F)
+# Zero-width characters and joiners (U+200B-U+200F)
 ZERO_WIDTH = re.compile(
     '[\u200b\u200c\u200d\u200e\u200f]'
 )
 
-# Invisible operators (U+2060–U+2064)
+# Invisible operators (U+2060-U+2064)
 INVISIBLE_OPS = re.compile(
     '[\u2060\u2061\u2062\u2063\u2064]'
 )
@@ -23,7 +23,7 @@ INVISIBLE_OPS = re.compile(
 # Byte order mark mid-file (U+FEFF)
 BOM = re.compile('\ufeff')
 
-# Tag characters (U+E0000–U+E007F)
+# Tag characters (U+E0000-U+E007F)
 TAG_CHARS = re.compile(
     '[\U000e0000\U000e0001\U000e0002\U000e0003\U000e0004\U000e0005'
     '\U000e0006\U000e0007\U000e0008\U000e0009\U000e000a\U000e000b'
@@ -55,6 +55,18 @@ COMBINED = re.compile(
 )
 
 ANSI_ESCAPE = re.compile(r'\x1b\[[\d;]*[A-Za-z]|\x1b[\W_]')
+
+# Codepoints that are only ever deceptive, whatever their neighbours.
+# Zero-width joiners are deliberately excluded: they are mandatory in
+# Malayalam, Lao and Devanagari, so R013 gates those on ASCII context.
+UNCONDITIONAL = re.compile(
+    '[\u202a-\u202e\u2066-\u2069\u2060-\u2064'
+    '\U000e0000-\U000e007f]'
+)
+
+# Zero-width and directional marks: deceptive between ASCII, legitimate
+# inside non-Latin script runs.
+CONTEXTUAL = re.compile('[\u200b-\u200f\ufeff]')
 
 
 def strip_ansi(text: str) -> str:

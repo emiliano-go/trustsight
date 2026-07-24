@@ -127,7 +127,7 @@ def _checked_verdict(verdict: str, fact: PackageFact, was_streamed: bool) -> str
     if _assert_verdict(verdict, fact):
         return verdict
     result = fallback_verdict(fact)
-    msg = f"\n[{_REASONING_COLOR}LLM verdict suppressed — using fallback{_RESET_COLOR}]"
+    msg = f"\n[{_REASONING_COLOR}LLM verdict suppressed; using fallback{_RESET_COLOR}]"
     if was_streamed:
         print(msg)
         print(result)
@@ -214,7 +214,18 @@ def generate_verdict(fact: PackageFact) -> str:
     return generate_verdict_stream(fact, stream=False, show_reasoning=False)
 
 
+_SEVERITY_ORDER = ["FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+
+
 def fallback_verdict(fact: PackageFact) -> str:
+    """Describe the finding without an LLM.
+
+    This is the verdict shown whenever the LLM is disabled, unreachable,
+    or its output fails the integrity assertions, so it has to be
+    accurate on its own.  It previously ended every verdict with "No
+    suspicious patterns detected", including on packages scoring 100/100
+    with a CRITICAL rule fired.
+    """
     reasons = []
     if fact.diff_summary.files_changed:
         reasons.append(f"modified {', '.join(fact.diff_summary.files_changed)}")
@@ -225,4 +236,24 @@ def fallback_verdict(fact: PackageFact) -> str:
     if not reasons:
         reasons.append("no structural changes")
     change_summary = "; ".join(reasons)
-    return f"Version bump. {change_summary}. No suspicious patterns detected."
+
+    # Report what actually fired, worst first.
+    fired = [e for e in fact.score_breakdown if e.weight > 0 or e.severity == "FATAL"]
+    if not fired:
+        return f"Version bump. {change_summary}. No risk signals fired."
+
+    fired.sort(key=lambda e: (
+        _SEVERITY_ORDER.index(e.severity) if e.severity in _SEVERITY_ORDER else 99,
+        -e.weight,
+    ))
+    worst = fired[0]
+    if worst.severity == "FATAL":
+        return (
+            f"{change_summary}. {worst.rule_id} ({worst.severity}) fired: "
+            f"the package is attempting to deceive the reviewer, so the score "
+            f"is capped at maximum regardless of other evidence."
+        )
+
+    top = ", ".join(f"{e.rule_id} ({e.severity})" for e in fired[:3])
+    more = f" and {len(fired) - 3} more signal(s)" if len(fired) > 3 else ""
+    return f"Version bump. {change_summary}. Signals: {top}{more}."

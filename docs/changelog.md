@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-24
+
+### Fixed
+
+- Verdict text no longer printed to stdout during `review` for every package (stray `print(result)` in `generate_verdict_stream` non-streaming path)
+- Stale `~/.pyenv/shims/trustsight` shadowed pipx install, causing `trustsight -v` to report 0.1.0 instead of the actual installed version
+
+### Added
+
+- `-v` / `--version` CLI flags via `importlib.metadata.version()`
+- Graceful `KeyboardInterrupt` handling: clean `Interrupted.` message and exit code 130 instead of an SSL/httpx traceback
+
+### Changed
+
+- `-h` help now includes config subcommands section (`config show`, `config set`, `config sync-rules`) and usage examples
+
 ## [0.2.2] - 2026-07-24
 
 This release fixes a critical false positive in R013 that could score benign

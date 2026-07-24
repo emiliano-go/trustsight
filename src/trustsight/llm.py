@@ -176,7 +176,6 @@ def generate_verdict_stream(
         if not stream:
             content = completion.choices[0].message.content or ""
             result = _checked_verdict(content.strip(), fact, stream)
-            print(result)
             return result
 
         collected = []

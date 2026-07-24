@@ -8,6 +8,19 @@ trustsight <command> [options]
 
 Global entry point defined at `src/trustsight/cli.py`.
 
+## Global flags
+
+| Flag | Description |
+|------|-------------|
+| `-h`, `--help` | Show help message, including config subcommands and usage examples. |
+| `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
+
+The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
+
+## Interrupt handling
+
+`Ctrl+C` during any operation prints `Interrupted.` and exits with code 130 instead of dumping an SSL/httpx traceback.
+
 ---
 
 ## trustsight review
@@ -135,14 +148,15 @@ View or modify TrustSight configuration.
 ```
 trustsight config show
 trustsight config set <key> <value>
+trustsight config sync-rules [--update]
 ```
 
 ### Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays LLM provider, model, API key (masked), and base URL. |
-| `set <key> <value>` | Set a configuration value. Only `api_key` and `base_url` are supported. Writes to `llm.openai.<key>` in `config.toml`. |
+| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays LLM provider, model, API key (masked), base URL, seed auto-import status, and scoring weights. |
+| `set <key> <value>` | Set a configuration value. Only `api_key` and `base_url` are supported. Writes to `llm.openai.<key>` in `config.toml`. Example: `trustsight config set base_url https://api.openai.com/v1`. |
 | `sync-rules` | Add rules that ship with this version but are absent from your `rules.toml`. |
 
 ### `sync-rules`

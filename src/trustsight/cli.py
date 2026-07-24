@@ -1,6 +1,7 @@
 import argparse
 import sys
 
+from . import __version__
 from .analysis import analyze_package, discover_updates
 from .config import (
     ensure_default_configs,
@@ -668,7 +669,29 @@ def cmd_lint_rules(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TrustSight - AUR Package Update Vetting Tool")
+    parser = argparse.ArgumentParser(
+        prog="trustsight",
+        description="TrustSight - AUR Package Update Vetting Tool",
+        epilog=(
+            "config subcommands:\n"
+            "  config show        Show current configuration and scoring weights\n"
+            "  config set <key> <value>\n"
+            "                     Set a config value (keys: api_key, base_url)\n"
+            "                     Example: trustsight config set base_url https://api.openai.com/v1\n"
+            "  config sync-rules  Append newly shipped rules to your rules.toml\n"
+            "                     Use --update to also replace superseded patterns\n\n"
+            "examples:\n"
+            "  trustsight review              Check all outdated AUR packages\n"
+            "  trustsight inspect <pkg>       Deep analysis of one package\n"
+            "  trustsight history <pkg>       Show past analysis results\n"
+            "  trustsight config show         Display current settings\n"
+            "  trustsight config set api_key sk-...\n"
+            "                                 Configure OpenAI-compatible API key"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+
     sub = parser.add_subparsers(dest="command")
 
     p_review = sub.add_parser("review", help="Scan AUR and analyze outdated packages")
@@ -709,10 +732,10 @@ def main():
     p_ov_rm.add_argument("rule_id", help="Rule to stop suppressing")
     p_ov_rm.add_argument("--package", help="Scope the removal to one package")
 
-    p_config = sub.add_parser("config", help="Manage configuration")
+    p_config = sub.add_parser("config", help="Manage configuration (aliases: show, set, sync-rules)")
     p_config_sub = p_config.add_subparsers(dest="action")
 
-    p_config_sub.add_parser("show", help="Show current configuration")
+    p_config_sub.add_parser("show", help="Show current configuration and scoring weights")
     p_sync = p_config_sub.add_parser(
         "sync-rules", help="Append shipped rules missing from your rules.toml"
     )
@@ -721,30 +744,38 @@ def main():
         help="Also replace rules whose pattern is a superseded shipped one "
              "(rules you have edited are never touched)",
     )
-    p_config_set = p_config_sub.add_parser("set", help="Set a configuration value")
-    p_config_set.add_argument("key", choices=["api_key", "base_url"], help="Config key")
+    p_config_set = p_config_sub.add_parser("set", help="Set a config value (api_key or base_url)")
+    p_config_set.add_argument("key", choices=["api_key", "base_url"],
+                              help="Config key to set. Example: trustsight config set api_key sk-...")
     p_config_set.add_argument("value", help="Config value")
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit:
+        sys.exit(1)
 
-    if args.command == "review":
-        cmd_review(args)
-    elif args.command == "inspect":
-        cmd_inspect(args)
-    elif args.command == "history":
-        cmd_history(args)
-    elif args.command == "override":
-        if args.action is None:
-            args.action = "list"
-        cmd_override(args)
-    elif args.command == "seed-db":
-        cmd_seed_db(args)
-    elif args.command == "lint-rules":
-        cmd_lint_rules(args)
-    elif args.command == "config":
-        cmd_config(args)
-    else:
-        parser.print_help()
+    try:
+        if args.command == "review":
+            cmd_review(args)
+        elif args.command == "inspect":
+            cmd_inspect(args)
+        elif args.command == "history":
+            cmd_history(args)
+        elif args.command == "override":
+            if args.action is None:
+                args.action = "list"
+            cmd_override(args)
+        elif args.command == "seed-db":
+            cmd_seed_db(args)
+        elif args.command == "lint-rules":
+            cmd_lint_rules(args)
+        elif args.command == "config":
+            cmd_config(args)
+        else:
+            parser.print_help()
+    except KeyboardInterrupt:
+        print("\nInterrupted.")
+        sys.exit(130)
 
 
 if __name__ == "__main__":

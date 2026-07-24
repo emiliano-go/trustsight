@@ -112,6 +112,44 @@ def detect_checksum_changes(diff_text: str) -> str:
     return "unchanged"
 
 
+_CHECKSUM_LINE_RE = re.compile(
+    r"(?:sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums)\s*=",
+    re.IGNORECASE,
+)
+
+# ``source=(... $(cmd) ...)`` or backticks inside the source array: the
+# source list is data, and a command substitution there executes at parse
+# time, before any rule that inspects build() has anything to look at.
+_SOURCE_CMD_SUBST_RE = re.compile(
+    r"^\+\s*(?:_?\w*source\w*)\s*=\s*\(?[^)]*(?:\$\(|`)",
+    re.IGNORECASE,
+)
+
+
+def detect_checksum_removed(diff_text: str) -> bool:
+    """Detect a checksum array deleted without a replacement.
+
+    Distinct from ``checksum_array_emptied`` (``sha256sums=()`` added):
+    here the declaration disappears from the file entirely, which leaves
+    makepkg with nothing to verify.
+    """
+    removed = False
+    added = False
+    for line in diff_text.splitlines():
+        if line.startswith("-") and _CHECKSUM_LINE_RE.search(line):
+            removed = True
+        elif line.startswith("+") and _CHECKSUM_LINE_RE.search(line):
+            added = True
+    return removed and not added
+
+
+def source_array_has_command_substitution(diff_text: str) -> bool:
+    """Detect command substitution inside an added ``source=()`` array."""
+    return any(
+        _SOURCE_CMD_SUBST_RE.search(line) for line in diff_text.splitlines()
+    )
+
+
 _GPG_VERIFY_RE = re.compile(
     r"(?:gpg|gpgv|openpgp)\s+(?:--verify|--decrypt|\-\-check-signatures)",
     re.IGNORECASE,
@@ -151,7 +189,7 @@ def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") ->
 
     Each item is a key into ``config.verification_evidence`` weights.
     Evidence is computed over the resolved PKGBUILD-as-it-will-be-installed,
-    not over the diff delta — a checksum's protective value doesn't depend
+    not over the diff delta; a checksum's protective value doesn't depend
     on whether it changed in this commit.
     """
     evidence: list[str] = []

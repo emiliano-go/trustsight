@@ -88,26 +88,56 @@ def get_pkgver_from_head(repo: pygit2.Repository) -> Optional[str]:
     return None
 
 
+# The maintainer is a PKGBUILD comment, not a .SRCINFO field.  makepkg
+# does not propagate it: checked against the AUR mirror, 0 of 200
+# .SRCINFO files carry a `maintainer =` line, while every PKGBUILD opens
+# with `# Maintainer: Name <email>`.  Reading .SRCINFO therefore always
+# returned None, which silently disabled maintainer_changed, the
+# maintainer novelty weight, and C006.
+_MAINTAINER_COMMENT_RE = re.compile(
+    r"^#\s*Maintainer\s*:\s*(.+?)\s*$", re.MULTILINE | re.IGNORECASE
+)
+_MAINTAINER_SRCINFO_RE = re.compile(
+    r"^\s*maintainer\s*=\s*(.+)", re.MULTILINE | re.IGNORECASE
+)
+
+
+def extract_maintainer(pkgbuild: str = "", srcinfo: str = "") -> Optional[str]:
+    """Return the maintainer name, preferring the PKGBUILD comment.
+
+    ``.SRCINFO`` is still consulted as a fallback: some tooling does
+    write the field, and it costs nothing to accept it.
+    """
+    match = _MAINTAINER_COMMENT_RE.search(pkgbuild)
+    if match:
+        return match.group(1).strip()
+    match = _MAINTAINER_SRCINFO_RE.search(srcinfo)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def _read_blob(tree, name: str) -> str:
+    try:
+        return tree[name].data.decode("utf-8", errors="replace")
+    except (KeyError, AttributeError, ValueError, TypeError):
+        return ""
+
+
 def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
     try:
-        blob = repo[_head_commit_id(repo)].tree[".SRCINFO"]
-        srcinfo = blob.data.decode()
-        match = re.search(r"^\s*maintainer\s*=\s*(.+)", srcinfo, re.MULTILINE)
-        if match:
-            return match.group(1).strip()
-    except (KeyError, AttributeError, ValueError):
-        pass
-    return None
+        tree = repo[_head_commit_id(repo)].tree
+    except (KeyError, AttributeError, ValueError, TypeError):
+        return None
+    return extract_maintainer(_read_blob(tree, "PKGBUILD"), _read_blob(tree, ".SRCINFO"))
 
 
 def get_maintainer_from_commit(repo: pygit2.Repository, commit_oid: str) -> Optional[str]:
     try:
         commit = repo.get(commit_oid)
-        blob = commit.tree[".SRCINFO"]
-        srcinfo = blob.data.decode()
-        match = re.search(r"^\s*maintainer\s*=\s*(.+)", srcinfo, re.MULTILINE)
-        if match:
-            return match.group(1).strip()
+        tree = commit.tree
     except (KeyError, AttributeError, TypeError):
-        pass
-    return None
+        return None
+    if tree is None:
+        return None
+    return extract_maintainer(_read_blob(tree, "PKGBUILD"), _read_blob(tree, ".SRCINFO"))

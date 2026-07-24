@@ -1,0 +1,41 @@
+# Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
+
+pkgname=trustsight
+pkgver=0.2.2
+pkgrel=1
+pkgdesc="Audits AUR PKGBUILDs before you update: catches careless malice and structural risk"
+arch=('any')
+url="https://github.com/emiliano-go/trustsight"
+license=('MIT')
+depends=(
+  'python'
+  'python-pygit2'
+  'python-tldextract'
+  'python-rich'
+  'python-openai'
+)
+makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling')
+optdepends=('ollama: run verdict generation against a local model instead of a remote API')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+
+# Regenerate with `updpkgsums` after the release tag is pushed.  Do not use
+# SKIP: TrustSight flags a disabled checksum as R004/HIGH, and this package
+# is audited by the tool it ships.
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  PYTHONPATH="$PWD/src" python -m pytest tests/ -q
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

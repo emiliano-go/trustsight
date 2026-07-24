@@ -1,0 +1,21 @@
+pkgbase = trustsight
+	pkgdesc = Audits AUR PKGBUILDs before you update: catches careless malice and structural risk
+	pkgver = 0.2.2
+	pkgrel = 1
+	url = https://github.com/emiliano-go/trustsight
+	arch = any
+	license = MIT
+	makedepends = python-build
+	makedepends = python-installer
+	makedepends = python-wheel
+	makedepends = python-hatchling
+	depends = python
+	depends = python-pygit2
+	depends = python-tldextract
+	depends = python-rich
+	depends = python-openai
+	optdepends = ollama: run verdict generation against a local model instead of a remote API
+	source = trustsight-0.2.2.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.2.2.tar.gz
+	sha256sums = 0000000000000000000000000000000000000000000000000000000000000000
+
+pkgname = trustsight

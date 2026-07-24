@@ -182,3 +182,204 @@ def test_init_db_idempotent(db):
     with get_connection() as conn:
         tables = conn.execute("SELECT count(*) as cnt FROM sqlite_master WHERE type='table'").fetchone()
     assert tables["cnt"] >= 5
+
+
+# --- Seed import and maturity bootstrap ---
+
+def _make_seed(path, urls=("https://github.com/a/v0.tar.gz",), observations=279):
+    import sqlite3
+
+    conn = sqlite3.connect(str(path))
+    conn.executescript("""
+        CREATE TABLE packages (id INTEGER PRIMARY KEY, name TEXT UNIQUE,
+                               current_version TEXT, last_checked TEXT);
+        CREATE TABLE source_urls (id INTEGER PRIMARY KEY, url TEXT UNIQUE,
+                                  first_seen_package_id INTEGER,
+                                  first_seen_globally_timestamp TEXT,
+                                  total_uses INTEGER, last_seen_timestamp TEXT);
+        CREATE TABLE maintainer_counts (name TEXT PRIMARY KEY, count INTEGER);
+        CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT);
+    """)
+    conn.execute("INSERT INTO packages (id, name) VALUES (0, '__seed__')")
+    for u in urls:
+        conn.execute(
+            """INSERT INTO source_urls (url, first_seen_package_id,
+               first_seen_globally_timestamp, total_uses, last_seen_timestamp)
+               VALUES (?, 0, '2024-01-01', 500, '2024-01-01')""", (u,))
+    conn.execute("INSERT INTO maintainer_counts (name, count) VALUES ('Someone', 12)")
+    conn.execute("INSERT INTO metadata (key, value) VALUES ('seed_observation_count', ?)",
+                 (str(observations),))
+    conn.commit()
+    conn.close()
+
+
+def test_seed_observation_count_defaults_to_zero(db):
+    from trustsight.db import seed_observation_count
+
+    assert seed_observation_count() == 0
+
+
+def test_import_seed_populates_urls_and_bootstrap(db, tmp_path):
+    from trustsight.db import (
+        effective_observation_count,
+        import_seed,
+        seed_observation_count,
+    )
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    stats = import_seed(seed)
+
+    assert stats["urls_added"] == 1
+    assert seed_observation_count() == 279
+    assert effective_observation_count() == 279
+
+
+def test_real_history_overtakes_the_seed(db, tmp_path):
+    """Ordinary use eventually replaces the seed, so the tool never
+    depends on external data permanently."""
+    from trustsight.db import (
+        count_observations,
+        effective_observation_count,
+        import_seed,
+        insert_analysis,
+        upsert_package,
+    )
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed, observations=10)
+    import_seed(seed)
+    assert effective_observation_count() == 10
+
+    pkg_id = upsert_package("p", "1.0")
+    for i in range(15):
+        insert_analysis(package_id=pkg_id, old_version="1", new_version=f"1.{i}",
+                        old_commit="a" * 40, new_commit="b" * 40, final_score=0,
+                        raw_diff="", fact_json="{}", triggered_rules=[])
+    assert count_observations() == 15
+    assert effective_observation_count() == 15
+
+
+def test_import_seed_never_overwrites_learned_rows(db, tmp_path):
+    """A seed must not clobber something a real analysis recorded."""
+    from trustsight.db import get_connection, import_seed
+
+    url = "https://github.com/a/v0.tar.gz"
+    with get_connection() as conn:
+        conn.execute("INSERT INTO packages (id, name) VALUES (7, 'real')")
+        conn.execute(
+            """INSERT INTO source_urls (url, first_seen_package_id,
+               first_seen_globally_timestamp, total_uses)
+               VALUES (?, 7, '2026-01-01', 3)""", (url,))
+        conn.commit()
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed, urls=(url,))
+    import_seed(seed)
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT first_seen_package_id, total_uses FROM source_urls WHERE url = ?",
+            (url,)).fetchone()
+    assert row["first_seen_package_id"] == 7
+    assert row["total_uses"] == 3
+
+
+def test_import_seed_is_idempotent(db, tmp_path):
+    from trustsight.db import import_seed
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    import_seed(seed)
+    second = import_seed(seed)
+    assert second["urls_added"] == 0
+
+
+def test_import_seed_accepts_gzip(db, tmp_path):
+    import gzip
+    import shutil
+
+    from trustsight.db import import_seed
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    gz = tmp_path / "seed.db.gz"
+    with open(seed, "rb") as s, gzip.open(gz, "wb") as d:
+        shutil.copyfileobj(s, d)
+    seed.unlink()
+
+    assert import_seed(gz)["urls_total"] == 1
+
+
+def test_missing_seed_raises(db, tmp_path):
+    from trustsight.db import import_seed
+
+    try:
+        import_seed(tmp_path / "nope.db")
+    except FileNotFoundError:
+        return
+    raise AssertionError("expected FileNotFoundError")
+
+
+def test_auto_import_is_skipped_when_already_seeded(db, tmp_path, monkeypatch):
+    import trustsight.db as dbmod
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    assert dbmod.maybe_auto_import_seed(quiet=True) is not None
+    assert dbmod.maybe_auto_import_seed(quiet=True) is None
+
+
+def test_auto_import_is_skipped_when_history_exists(db, tmp_path, monkeypatch):
+    """A database with real analyses does not need a bootstrap."""
+    import trustsight.db as dbmod
+
+    pkg_id = dbmod.upsert_package("p", "1.0")
+    dbmod.insert_analysis(package_id=pkg_id, old_version="1", new_version="2",
+                          old_commit="a" * 40, new_commit="b" * 40, final_score=0,
+                          raw_diff="", fact_json="{}", triggered_rules=[])
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    assert dbmod.maybe_auto_import_seed(quiet=True) is None
+
+
+def test_auto_import_is_a_noop_without_a_bundled_seed(db, tmp_path, monkeypatch):
+    import trustsight.db as dbmod
+
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: tmp_path / "absent.db.gz")
+    assert dbmod.maybe_auto_import_seed(quiet=True) is None
+
+
+def test_seeded_url_is_not_novel_after_version_bump(db, tmp_path, monkeypatch):
+    """The whole point of the seed: an ordinary AUR source URL, and the
+    same URL at a new version, must both be recognised."""
+    import trustsight.db as dbmod
+    from trustsight.novelty import build_novelty_context, normalize_url
+
+    url = "https://github.com/acme/tool/archive/v1.0.0.tar.gz"
+    seed = tmp_path / "seed.db"
+    _make_seed(seed, urls=(normalize_url(url),))
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    dbmod.maybe_auto_import_seed(quiet=True)
+
+    pkg_id = dbmod.upsert_package("demo", "1.0")
+    bumped = "https://github.com/acme/tool/archive/v2.5.1.tar.gz"
+    ctx = build_novelty_context([bumped], pkg_id)
+    assert ctx.url_first_seen_globally is False
+    assert ctx.observation_count == 279
+
+
+def test_unseeded_domain_is_still_novel(db, tmp_path, monkeypatch):
+    import trustsight.db as dbmod
+    from trustsight.novelty import build_novelty_context
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed)
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
+    dbmod.maybe_auto_import_seed(quiet=True)
+
+    pkg_id = dbmod.upsert_package("demo", "1.0")
+    ctx = build_novelty_context(["https://unknown-host.invalid/x-1.0.tar.gz"], pkg_id)
+    assert ctx.url_first_seen_globally is True

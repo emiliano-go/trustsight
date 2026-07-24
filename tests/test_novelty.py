@@ -146,3 +146,93 @@ def test_novelty_not_fired_on_version_bump(db):
     first_pkg, first_global = check_url_novelty(url_new, 1)
     assert first_global is False
     assert first_pkg is False
+
+
+# --- Database maturity (tier C gating) ---
+
+def test_observation_count_starts_at_zero(db):
+    from trustsight.db import count_observations
+
+    assert count_observations() == 0
+
+
+def test_observation_count_tracks_recorded_analyses(db):
+    from trustsight.db import count_observations, insert_analysis
+
+    pkg_id = get_package_id("testpkg")
+    for i in range(3):
+        insert_analysis(
+            package_id=pkg_id, old_version="1.0", new_version=f"1.{i}",
+            old_commit="a" * 40, new_commit="b" * 40, final_score=0,
+            raw_diff="", fact_json="{}", triggered_rules=[],
+        )
+    assert count_observations() == 3
+
+
+def test_build_novelty_context_populates_observation_count(db):
+    """Regression: observation_count was never assigned, so maturity()
+    always saw 0 and every tier C novelty weight scored zero."""
+    from trustsight.db import insert_analysis
+
+    pkg_id = get_package_id("testpkg")
+    for i in range(5):
+        insert_analysis(
+            package_id=pkg_id, old_version="1.0", new_version=f"1.{i}",
+            old_commit="a" * 40, new_commit="b" * 40, final_score=0,
+            raw_diff="", fact_json="{}", triggered_rules=[],
+        )
+
+    ctx = build_novelty_context(["https://new.example.com/x.tar.gz"], pkg_id)
+    assert ctx.observation_count == 5
+
+
+def test_novelty_scores_zero_on_a_cold_database(db):
+    """The cold-start guarantee: novelty must contribute nothing until
+    the database has observations."""
+    from trustsight.scoring import calculate_score
+
+    pkg_id = get_package_id("testpkg")
+    ctx = build_novelty_context(["https://brand-new.example.com/x.tar.gz"], pkg_id)
+    assert ctx.url_first_seen_globally is True
+    assert ctx.observation_count == 0
+
+    config = {
+        "severity_weights": {},
+        "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10},
+    }
+    score, breakdown, _ = calculate_score([], {}, ctx, config)
+    assert score == 0
+    assert not [e for e in breakdown if e.rule_id == "NOVELTY"]
+
+
+def test_novelty_contributes_once_database_is_warm(db):
+    """The counterpart: with observations recorded, tier C is live."""
+    from trustsight.db import insert_analysis
+    from trustsight.scoring import calculate_score
+
+    pkg_id = get_package_id("testpkg")
+    for i in range(50):
+        insert_analysis(
+            package_id=pkg_id, old_version="1.0", new_version=f"1.{i}",
+            old_commit="a" * 40, new_commit="b" * 40, final_score=0,
+            raw_diff="", fact_json="{}", triggered_rules=[],
+        )
+
+    ctx = build_novelty_context(["https://brand-new.example.com/x.tar.gz"], pkg_id)
+    assert ctx.observation_count == 50
+
+    config = {
+        "severity_weights": {},
+        "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10},
+    }
+    score, breakdown, _ = calculate_score([], {}, ctx, config)
+    assert score == 25
+    assert [e for e in breakdown if e.rule_id == "NOVELTY"]
+
+
+def test_observation_count_excludes_the_current_analysis(db):
+    """Maturity is read before the current run is recorded, so a package
+    is never counted as an observation of itself."""
+    pkg_id = get_package_id("testpkg")
+    ctx = build_novelty_context(["https://x.example.com/a.tar.gz"], pkg_id)
+    assert ctx.observation_count == 0

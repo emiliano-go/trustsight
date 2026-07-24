@@ -322,3 +322,39 @@ def test_inconclusive_not_warm_db():
     # 5 (LOW) + 20 (unknown) + 15*0.6 (maturity=30/50) = 34 → Medium
     assert score == 34
     assert level == "Medium"
+
+
+def test_novelty_weights_keep_a_borderline_package_out_of_high():
+    """Calibration criterion: at full maturity, a genuinely novel URL --
+    even alongside a novel maintainer, must lift a borderline package
+    into Medium, not High.  The pre-calibration 15/10/20 reached 60."""
+    import tomllib
+
+    from trustsight.config import DEFAULT_CONFIG
+
+    config = tomllib.loads(DEFAULT_CONFIG)
+    borderline = [
+        {"rule_id": "X", "name": "n", "severity": "LOW", "category": "c", "match": "m"}
+    ] * 3  # 15 points
+
+    novelty = NoveltyContext(
+        url_first_seen_globally=True,
+        url_first_seen_in_this_package=True,
+        maintainer_first_seen_for_this_package=True,
+        observation_count=148720,
+    )
+    score, _, level = calculate_score(borderline, {}, novelty, config)
+    assert 20 < score <= 50, f"expected Medium, got {score}"
+    assert level == "Medium"
+
+
+def test_maintainer_novelty_remains_the_strongest_signal():
+    """A maintainer change is the xz-utils vector; it should outweigh a
+    novel URL."""
+    import tomllib
+
+    from trustsight.config import DEFAULT_CONFIG
+
+    weights = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
+    assert weights["maintainer_first_in_package"] > weights["url_first_globally"]
+    assert weights["url_first_globally"] > weights["url_first_in_package"]

@@ -1,4 +1,9 @@
-from trustsight.buckets import classify_pinning_level, classify_url, classify_urls
+from trustsight.buckets import (
+    classify_pinning_level,
+    classify_url,
+    classify_urls,
+    has_homograph,
+)
 
 DOMAIN_CONFIG = {
     "trusted_forges": {"domains": ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"]},
@@ -138,3 +143,70 @@ def test_pinning_branch_path():
 
 def test_pinning_unpinned():
     assert classify_pinning_level("https://mirror.example.com/somefile.tar.gz") == "unpinned"
+
+
+# --- Homograph / confusable domain detection ---
+
+CYRILLIC_O = "о"   # CYRILLIC SMALL LETTER O, confusable with ASCII 'o'
+LATIN_B_DOT = "ḅ"  # LATIN SMALL LETTER B WITH DOT BELOW
+
+
+def test_ascii_domain_is_not_homograph():
+    assert has_homograph("github.com") is False
+
+
+def test_mixed_latin_cyrillic_is_homograph():
+    """The confusable that motivated CONFUSABLES: Cyrillic 'o' in a
+    Latin label reads as github.com but is a different domain."""
+    assert has_homograph(f"github.c{CYRILLIC_O}m") is True
+
+
+def test_non_ascii_latin_is_homograph():
+    """Stays within the Latin script, so mixed-script detection alone
+    would miss it."""
+    assert has_homograph(f"githu{LATIN_B_DOT}.com") is True
+
+
+def test_punycode_encoded_confusable_is_homograph():
+    """An attacker can write the punycode form directly into source=()."""
+    encoded = f"github.c{CYRILLIC_O}m".encode("idna").decode()
+    assert encoded.startswith("github.xn--")
+    assert has_homograph(encoded) is True
+
+
+def test_legitimate_cyrillic_idn_is_not_homograph():
+    """A domain written wholly in one non-Latin script is a real IDN."""
+    assert has_homograph("xn--e1afmkfd.xn--p1ai") is False
+
+
+def test_legitimate_japanese_idn_is_not_homograph():
+    """Japanese legitimately mixes Han with kana."""
+    assert has_homograph("例え.jp") is False
+
+
+def test_legitimate_korean_idn_is_not_homograph():
+    assert has_homograph("한국.kr") is False
+
+
+def test_digits_and_hyphens_are_script_neutral():
+    assert has_homograph("sub-1.github.io") is False
+
+
+def test_domain_with_port_is_not_homograph():
+    assert has_homograph("github.com:8080") is False
+
+
+def test_confusable_domain_classifies_as_homograph_attack():
+    bucket, _ = classify_url(
+        f"https://github.c{CYRILLIC_O}m/user/repo.tar.gz", DOMAIN_CONFIG
+    )
+    assert bucket == "homograph_attack"
+
+
+def test_confusable_domain_does_not_reach_trusted_forge():
+    """Regression: a Cyrillic lookalike must never earn the -10 trusted
+    forge credit."""
+    bucket, _ = classify_url(
+        f"https://github.c{CYRILLIC_O}m/user/repo.tar.gz", DOMAIN_CONFIG
+    )
+    assert bucket != "trusted_forge"

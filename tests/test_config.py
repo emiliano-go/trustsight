@@ -22,8 +22,10 @@ def test_load_config_creates_default(tmp_path, monkeypatch):
     assert config["severity_weights"]["LOW"] == 5
     assert "source_bucket_weights" in config
     assert "novelty_weights" in config
-    assert config["novelty_weights"]["url_first_globally"] == 15
-    assert config["novelty_weights"]["maintainer_first_in_package"] == 20
+    # Calibrated after tier C became live; see
+    # test_novelty_weights_keep_a_borderline_package_out_of_high.
+    assert config["novelty_weights"]["url_first_globally"] == 10
+    assert config["novelty_weights"]["maintainer_first_in_package"] == 15
 
 
 def test_load_config_llm_defaults(tmp_path, monkeypatch):
@@ -141,3 +143,122 @@ def test_ensure_default_configs_idempotent(tmp_path, monkeypatch):
     config = (cfg_dir / "config.toml").read_text()
     ensure_default_configs()
     assert (cfg_dir / "config.toml").read_text() == config
+
+
+# --- Shipped-rule synchronisation ---
+
+def _install_partial_rules(tmp_path, monkeypatch, count=11, edit=True):
+    """Simulate an install predating a rule addition."""
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    blocks = cfg.DEFAULT_RULES.split("[[rules]]")[1:]
+    text = "".join("[[rules]]" + b for b in blocks[:count])
+    if edit:
+        text = text.replace(
+            'severity = "CRITICAL"\ncategory = "privilege"',
+            'severity = "HIGH"\ncategory = "privilege"',
+        )
+    (tmp_path / "rules.toml").write_text(text)
+    return cfg
+
+
+def test_missing_shipped_rules_detects_stale_config(tmp_path, monkeypatch):
+    """write_default_file only writes when absent, so an existing install
+    never receives newly shipped rules."""
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    missing = cfg.missing_shipped_rules()
+    assert "R039" in missing
+    assert "R058" in missing
+    assert "R001" not in missing
+
+
+def test_sync_rules_appends_missing_rules(tmp_path, monkeypatch):
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    added, _ = cfg.sync_rules()
+    ids = {r["id"] for r in cfg.load_rules()}
+    assert set(added) <= ids
+    assert "R058" in ids
+
+
+def test_sync_rules_preserves_user_edits(tmp_path, monkeypatch):
+    """A user who retuned a severity must not lose it to a sync."""
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    cfg.sync_rules()
+    by_id = {r["id"]: r for r in cfg.load_rules()}
+    assert by_id["R009"]["severity"] == "HIGH"
+
+
+def test_sync_rules_is_idempotent(tmp_path, monkeypatch):
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    cfg.sync_rules()
+    assert cfg.sync_rules() == ([], [])
+
+
+def test_sync_rules_produces_valid_toml(tmp_path, monkeypatch):
+    import tomllib
+
+    cfg = _install_partial_rules(tmp_path, monkeypatch)
+    cfg.sync_rules()
+    parsed = tomllib.loads((tmp_path / "rules.toml").read_text())
+    assert len(parsed["rules"]) == len(cfg.missing_shipped_rules()) + len(parsed["rules"])
+
+
+def test_no_missing_rules_on_a_fresh_install(tmp_path, monkeypatch):
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    cfg.ensure_default_configs()
+    assert cfg.missing_shipped_rules() == []
+
+
+# --- Replacing superseded shipped patterns ---
+
+def _install_with_legacy_r013(tmp_path, monkeypatch, edited=False):
+    """An install carrying the pre-0.2.1 R013 pattern."""
+    import tomllib
+
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    legacy = next(iter(cfg.LEGACY_RULE_PATTERNS["R013"]))
+    blocks = cfg.DEFAULT_RULES.split("[[rules]]")[1:]
+    text = "".join("[[rules]]" + b for b in blocks[:11])
+    current = [r for r in tomllib.loads(text)["rules"] if r["id"] == "R013"][0]["pattern"]
+    text = text.replace(current, "MY-OWN-PATTERN" if edited else legacy)
+    (tmp_path / "rules.toml").write_text(text)
+    return cfg, legacy
+
+
+def test_superseded_pattern_is_detected(tmp_path, monkeypatch):
+    """rules.toml is written once, so a corrected pattern otherwise never
+    reaches an existing install."""
+    cfg, _ = _install_with_legacy_r013(tmp_path, monkeypatch)
+    assert cfg.outdated_shipped_rules() == ["R013"]
+
+
+def test_update_replaces_superseded_pattern(tmp_path, monkeypatch):
+    cfg, _ = _install_with_legacy_r013(tmp_path, monkeypatch)
+    _, updated = cfg.sync_rules(update_outdated=True)
+    assert updated == ["R013"]
+    r013 = {r["id"]: r for r in cfg.load_rules()}["R013"]
+    assert "(?<![^" in r013["pattern"]
+
+
+def test_update_never_overwrites_a_customised_rule(tmp_path, monkeypatch):
+    """A pattern matching neither the current default nor a known legacy
+    one was edited by the user and must survive."""
+    cfg, _ = _install_with_legacy_r013(tmp_path, monkeypatch, edited=True)
+    assert cfg.outdated_shipped_rules() == []
+    _, updated = cfg.sync_rules(update_outdated=True)
+    assert updated == []
+    r013 = {r["id"]: r for r in cfg.load_rules()}["R013"]
+    assert r013["pattern"] == "MY-OWN-PATTERN"
+
+
+def test_sync_without_update_leaves_superseded_pattern(tmp_path, monkeypatch):
+    cfg, legacy = _install_with_legacy_r013(tmp_path, monkeypatch)
+    _, updated = cfg.sync_rules(update_outdated=False)
+    assert updated == []
+    r013 = {r["id"]: r for r in cfg.load_rules()}["R013"]
+    assert r013["pattern"] == legacy

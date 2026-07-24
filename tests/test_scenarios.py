@@ -345,3 +345,111 @@ def test_benign_desktop_file_update():
 +Categories=AudioVideo;Audio;"""
     r = _run_pipeline(diff)
     assert r["score"] <= 5
+
+
+# --- Regressions surfaced by rendering the tiered report ---
+
+def test_skip_checksum_earns_no_verification_credit():
+    """detect_verification_evidence accepts checksum_behavior, but both
+    call sites in analysis.py omitted it, so `sha256sums=('SKIP')` earned
+    a -10 'checksum present' credit while also firing R004."""
+    import tomllib
+
+    from trustsight.analysis import scan_diff
+    from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
+
+    diff = (
+        '+source=("https://example.com/tool-1.0.tar.gz")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    cfg = tomllib.loads(DEFAULT_CONFIG)
+    rules = tomllib.loads(DEFAULT_RULES)["rules"]
+    fact = scan_diff(diff, rules=rules, config=cfg, package_name="p", seen_urls={})
+
+    ids = [(e.rule_id, e.reason) for e in fact.score_breakdown]
+    assert not any(
+        rid == "VERIFICATION" and "checksum_present" in reason for rid, reason in ids
+    ), f"SKIP must not credit checksum_present: {ids}"
+
+
+def test_skip_checksum_earns_no_pinning_discount():
+    """A SKIP array is not a checksum, so it must not earn checksum_pinned."""
+    import tomllib
+
+    from trustsight.analysis import scan_diff
+    from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
+
+    diff = (
+        '+source=("https://example.com/tool-1.0.tar.gz")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    cfg = tomllib.loads(DEFAULT_CONFIG)
+    rules = tomllib.loads(DEFAULT_RULES)["rules"]
+    fact = scan_diff(diff, rules=rules, config=cfg, package_name="p", seen_urls={})
+
+    assert not any(
+        e.rule_id == "PINNING" and "checksum_pinned" in e.reason
+        for e in fact.score_breakdown
+    )
+
+
+def test_real_checksum_still_earns_credit():
+    """The counterpart: a genuine digest must still be credited."""
+    import tomllib
+
+    from trustsight.analysis import scan_diff
+    from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
+
+    diff = (
+        '+source=("https://example.com/tool-1.0.tar.gz")\n'
+        "+sha256sums=('3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8')\n"
+    )
+    cfg = tomllib.loads(DEFAULT_CONFIG)
+    rules = tomllib.loads(DEFAULT_RULES)["rules"]
+    fact = scan_diff(diff, rules=rules, config=cfg, package_name="p", seen_urls={})
+
+    assert any(
+        e.rule_id == "VERIFICATION" and "checksum_present" in e.reason
+        for e in fact.score_breakdown
+    )
+
+
+def test_fallback_verdict_does_not_claim_a_flagged_package_is_clean():
+    """The fallback is shown whenever the LLM is off or suppressed, so it
+    must never end 'No suspicious patterns detected' on a package that
+    fired a CRITICAL rule."""
+    from trustsight.llm import fallback_verdict
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    fact = PackageFact(package_name="p", final_score=100)
+    fact.score_breakdown = [
+        ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40,
+                   reason="Remote Script Execution: curl | bash"),
+    ]
+    verdict = fallback_verdict(fact)
+    assert "No suspicious patterns detected" not in verdict
+    assert "R001" in verdict and "CRITICAL" in verdict
+
+
+def test_fallback_verdict_reports_fatal_distinctly():
+    from trustsight.llm import fallback_verdict
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    fact = PackageFact(package_name="p", final_score=100)
+    fact.score_breakdown = [
+        ScoreEntry(rule_id="R013", severity="FATAL", weight=0, reason="bidi override"),
+    ]
+    verdict = fallback_verdict(fact)
+    assert "R013" in verdict and "deceive" in verdict.lower()
+
+
+def test_fallback_verdict_on_a_clean_package():
+    from trustsight.llm import fallback_verdict
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    fact = PackageFact(package_name="p", final_score=0)
+    fact.score_breakdown = [
+        ScoreEntry(rule_id="VERIFICATION", severity="INFO", weight=-10,
+                   reason="checksum_present"),
+    ]
+    assert "No risk signals fired" in fallback_verdict(fact)

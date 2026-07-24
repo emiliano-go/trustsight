@@ -175,7 +175,7 @@ def test_detect_verification_no_evidence():
 
 
 def test_detect_verification_skip_not_evidence():
-    """SKIP checksum is NOT verification evidence — it's the opposite."""
+    """SKIP checksum is NOT verification evidence; it's the opposite."""
     ev = detect_verification_evidence(
         "+sha256sums=('SKIP')",
         checksum_behavior="changed_from_sha256_to_skip",

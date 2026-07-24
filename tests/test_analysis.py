@@ -227,3 +227,56 @@ def test_checksum_changed_no_url_change():
     assert score == 25
     assert level == "Medium"
     assert any(e.rule_id == "R016" for e in breakdown)
+
+
+# --- Offline novelty tracking must match the live path ---
+
+def test_scan_diff_normalizes_urls_for_novelty():
+    """A routine version bump is not novelty. check_url_novelty applies
+    normalize_url in the live path; the offline replay must too, or every
+    bump reads as a first-seen URL."""
+    from trustsight.analysis import scan_diff
+
+    cfg = {"severity_weights": {}, "novelty_weights": {"url_first_globally": 15}}
+    seen = {}
+    d1 = '+source=("https://example.com/tool-1.0.0.tar.gz")\n'
+    d2 = '+source=("https://example.com/tool-1.0.1.tar.gz")\n'
+
+    f1 = scan_diff(d1, rules=[], config=cfg, package_name="p", seen_urls=seen)
+    f2 = scan_diff(d2, rules=[], config=cfg, package_name="p", seen_urls=seen)
+    assert f1.novelty_context.url_first_seen_globally is True
+    assert f2.novelty_context.url_first_seen_globally is False
+
+
+def test_scan_diff_tracks_global_novelty_across_packages():
+    """'First seen globally' means across every package, not merely first
+    in this one."""
+    from trustsight.analysis import scan_diff
+
+    cfg = {"severity_weights": {}, "novelty_weights": {}}
+    seen = {}
+    diff = '+source=("https://shared.example.com/lib-1.0.tar.gz")\n'
+
+    a = scan_diff(diff, rules=[], config=cfg, package_name="pkg-a", seen_urls=seen)
+    b = scan_diff(diff, rules=[], config=cfg, package_name="pkg-b", seen_urls=seen)
+
+    assert a.novelty_context.url_first_seen_globally is True
+    assert b.novelty_context.url_first_seen_in_this_package is True
+    assert b.novelty_context.url_first_seen_globally is False
+
+
+def test_scan_diff_ors_novelty_across_multiple_urls():
+    """A familiar URL must not mask a novel one listed after it."""
+    from trustsight.analysis import scan_diff
+
+    cfg = {"severity_weights": {}, "novelty_weights": {}}
+    seen = {}
+    first = '+source=("https://known.example.com/a-1.0.tar.gz")\n'
+    scan_diff(first, rules=[], config=cfg, package_name="p", seen_urls=seen)
+
+    both = (
+        '+source=("https://known.example.com/a-1.0.tar.gz"\n'
+        '+        "https://brandnew.example.org/b-1.0.tar.gz")\n'
+    )
+    fact = scan_diff(both, rules=[], config=cfg, package_name="p", seen_urls=seen)
+    assert fact.novelty_context.url_first_seen_globally is True

@@ -12,6 +12,12 @@ from .config import CACHE_DIR
 
 _VALID_PKG_NAME = re.compile(r"^[a-zA-Z0-9@._+\-]+$")
 
+# "." and ".." satisfy _VALID_PKG_NAME but are directory references, not
+# names.  CACHE_DIR / ".." escapes the cache root, and clone_or_fetch
+# rmtree()s that path when it fails to open as a repository, so allowing
+# them turns a bad package name into a recursive delete of the parent.
+_RESERVED_PKG_NAMES = frozenset({".", ".."})
+
 
 class _TimeoutError(Exception):
     pass
@@ -57,15 +63,23 @@ def _head_commit_id(repo: pygit2.Repository) -> str:
     raise pygit2.GitError("cannot resolve HEAD to a commit")
 
 
-def repo_path(pkg_name: str) -> Path:
-    if not _VALID_PKG_NAME.match(pkg_name):
+def _validate_pkg_name(pkg_name: str) -> None:
+    if not _VALID_PKG_NAME.match(pkg_name) or pkg_name in _RESERVED_PKG_NAMES:
         raise ValueError(f"Invalid package name: {pkg_name!r}")
-    return CACHE_DIR / pkg_name
+
+
+def repo_path(pkg_name: str) -> Path:
+    _validate_pkg_name(pkg_name)
+    path = (CACHE_DIR / pkg_name).resolve()
+    # Belt and braces: the name has already been checked, but this is the
+    # value that later gets rmtree()d, so confirm it really is contained
+    # in the cache root before anyone acts on it.
+    if path.parent != CACHE_DIR.resolve():
+        raise ValueError(f"Package path escapes cache directory: {pkg_name!r}")
+    return path
 
 
 def clone_or_fetch(pkg_name: str) -> pygit2.Repository:
-    if not _VALID_PKG_NAME.match(pkg_name):
-        raise ValueError(f"Invalid package name: {pkg_name!r}")
     path = repo_path(pkg_name)
     if path.exists():
         try:

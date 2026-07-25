@@ -274,11 +274,13 @@ def _check_reachability(rule: dict, compiled: re.Pattern) -> list[LintFinding]:
 
     if rule.get("scope") and _FUNCTION_HEADER_PATTERN_RE.search(rule.get("pattern", "")):
         findings.append(LintFinding(
-            rid, SEVERITY_ERROR, "scope-contradiction",
+            rid, SEVERITY_WARNING, "scope-contradiction",
             f"pattern matches a function header line, but scope "
-            f"{rule['scope']} excludes it: _classify_line_context assigns the "
-            f"header itself to 'other' and only *subsequent* lines to "
-            f"'function_body', so this rule can never fire",
+            f"{rule['scope']} covers a bare header only from the line after "
+            f"it: _classify_line_context assigns `build() {{` itself to "
+            f"'other'. The rule can still fire on a single-line definition "
+            f"(`build() {{ ...; }}`), which counts as 'function_body', so it "
+            f"is reachable but will miss the ordinary multi-line form",
         ))
 
     if match_target == "raw_line" and _TRAILING_ANCHOR_RE.search(rule.get("pattern", "")):

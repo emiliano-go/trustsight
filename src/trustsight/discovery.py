@@ -75,7 +75,10 @@ def find_outdated_packages(
 
 
 def fetch_package_info(name: str) -> Optional[dict]:
-    url = f"{AUR_RPC_BASE}?v=5&type=info&arg[]={name}"
+    # Encoded, not interpolated: an unescaped "&" or "#" in the name would
+    # otherwise inject or truncate RPC query parameters.
+    query = urllib.parse.urlencode([("v", "5"), ("type", "info"), ("arg[]", name)])
+    url = f"{AUR_RPC_BASE}?{query}"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
             data = json.load(resp)

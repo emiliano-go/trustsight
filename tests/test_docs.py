@@ -78,7 +78,7 @@ def _cli_flags() -> set[str]:
     flags: set[str] = set()
     # typer.Option("...", "--flag-name")
     flags.update(re.findall(r'typer\.Option\([^)]*"(--[a-z-]+)"', text))
-    # typer.Argument(..., help="...")  -- only positional args, no flag prefix
+    # typer.Argument(..., help="..."): only positional args, no flag prefix
     return flags
 
 

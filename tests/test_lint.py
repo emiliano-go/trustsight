@@ -75,15 +75,17 @@ def test_comment_only_rule_is_unreachable():
 
 
 def test_function_header_with_function_body_scope_is_contradictory():
-    """A function's own header line is classified 'other', so a pattern
-    matching the header cannot also require function_body scope."""
+    """A bare function header is classified 'other', so a pattern matching
+    the header misses the ordinary multi-line form.  It is a warning, not an
+    error: a single-line definition (`pkgver() { curl ...; }`) is
+    function_body context, so such a rule is still reachable."""
     findings = lint_rules([
         _rule(
             pattern=r"pkgver\(\)\s*\{.*\b(?:curl|wget)",
             scope=["function_body"],
         )
     ])
-    assert _checks(findings, "scope-contradiction")[0].level == SEVERITY_ERROR
+    assert _checks(findings, "scope-contradiction")[0].level == SEVERITY_WARNING
 
 
 def test_high_severity_rule_firing_on_benign_packaging_warns():

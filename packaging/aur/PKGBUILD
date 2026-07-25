@@ -1,7 +1,7 @@
 # Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
 
 pkgname=trustsight
-pkgver=0.3.0
+pkgver=0.4.0
 pkgrel=1
 pkgdesc='A CLI tool to vet AUR package updates before install'
 arch=('any')
@@ -26,8 +26,7 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 
-# Regenerate with `updpkgsums` after the release tag is pushed.
-sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
+sha256sums=('6fa38693f0a67b044665a0ac5d4b59f2e6961935c83abe03bfdd4d6e017e2217')
 
 build() {
   cd "$pkgname-$pkgver"

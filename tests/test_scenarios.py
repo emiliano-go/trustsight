@@ -358,7 +358,6 @@ def test_skip_checksum_earns_no_verification_credit():
     """detect_verification_evidence accepts checksum_behavior, but both
     call sites in analysis.py omitted it, so `sha256sums=('SKIP')` earned
     a -10 'checksum present' credit while also firing R004."""
-    import tomllib
 
     from trustsight.analysis import scan_diff
     from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
@@ -379,7 +378,6 @@ def test_skip_checksum_earns_no_verification_credit():
 
 def test_skip_checksum_earns_no_pinning_discount():
     """A SKIP array is not a checksum, so it must not earn checksum_pinned."""
-    import tomllib
 
     from trustsight.analysis import scan_diff
     from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
@@ -400,8 +398,6 @@ def test_skip_checksum_earns_no_pinning_discount():
 
 def test_real_checksum_still_earns_credit():
     """The counterpart: a genuine digest must still be credited."""
-    import tomllib
-
     from trustsight.analysis import scan_diff
     from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
 

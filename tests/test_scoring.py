@@ -333,8 +333,6 @@ def test_novelty_weights_keep_a_borderline_package_out_of_high():
     """Calibration criterion: at full maturity, a genuinely novel URL --
     even alongside a novel maintainer, must lift a borderline package
     into Medium, not High.  The pre-calibration 15/10/20 reached 60."""
-    import tomllib
-
     from trustsight.config import DEFAULT_CONFIG
 
     config = tomllib.loads(DEFAULT_CONFIG)
@@ -356,8 +354,6 @@ def test_novelty_weights_keep_a_borderline_package_out_of_high():
 def test_maintainer_novelty_remains_the_strongest_signal():
     """A maintainer change is the xz-utils vector; it should outweigh a
     novel URL."""
-    import tomllib
-
     from trustsight.config import DEFAULT_CONFIG
 
     weights = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]

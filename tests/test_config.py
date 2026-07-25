@@ -201,8 +201,6 @@ def test_sync_rules_is_idempotent(tmp_path, monkeypatch):
 
 
 def test_sync_rules_produces_valid_toml(tmp_path, monkeypatch):
-    import tomllib
-
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     cfg.sync_rules()
     parsed = tomllib.loads((tmp_path / "rules.toml").read_text())
@@ -221,7 +219,6 @@ def test_no_missing_rules_on_a_fresh_install(tmp_path, monkeypatch):
 
 def _install_with_legacy_r013(tmp_path, monkeypatch, edited=False):
     """An install carrying the pre-0.2.1 R013 pattern."""
-    import tomllib
 
     import trustsight.config as cfg
 

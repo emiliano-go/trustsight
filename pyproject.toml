@@ -1,6 +1,6 @@
 [project]
 name = "trustsight"
-version = "0.4.0"
+version = "0.4.1"
 description = "CLI-based AUR package update vetting tool"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,9 +24,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    "pygit2>=1.15",
+    "pygit2>=1.14",
     "tldextract>=5.0",
     "rich>=13.0",
+    "typer>=0.12",
     "openai>=1.0",
     "tomli>=2.0.1; python_version < '3.11'",
 ]
@@ -44,7 +45,7 @@ docs = [
 Documentation = "https://github.com/emiliano-go/trustsight"
 
 [project.scripts]
-trustsight = "trustsight.cli:main"
+trustsight = "trustsight.cli:app"
 
 [build-system]
 requires = ["hatchling"]

@@ -61,11 +61,25 @@ def test_documented_severity_matches_shipped_severity(rule):
 
 
 def _cli_names() -> set[str]:
-    return set(re.findall(r'add_parser\(\s*\n?\s*"([a-z-]+)"', CLI_PY.read_text()))
+    text = CLI_PY.read_text()
+    names: set[str] = set()
+    # Typer sub-app registration: app.add_typer(X, name="name")
+    names.update(re.findall(r'add_typer\(\w+,\s*name="([a-z-]+)"', text))
+    # Explicit name: @X.command("name")
+    names.update(re.findall(r'@\w+\.command\("([a-z-]+)"', text))
+    # Implicit name from def: @app.command() / @X.command()  above def func_name()
+    for func_name in re.findall(r'@\w+\.command\(\)\s*\n\s*def (\w+)', text):
+        names.add(func_name.replace("_", "-"))
+    return names
 
 
 def _cli_flags() -> set[str]:
-    return set(re.findall(r'add_argument\(\s*\n?\s*"(--[a-z-]+)"', CLI_PY.read_text()))
+    text = CLI_PY.read_text()
+    flags: set[str] = set()
+    # typer.Option("...", "--flag-name")
+    flags.update(re.findall(r'typer\.Option\([^)]*"(--[a-z-]+)"', text))
+    # typer.Argument(..., help="...")  -- only positional args, no flag prefix
+    return flags
 
 
 def test_every_command_and_subcommand_is_documented():

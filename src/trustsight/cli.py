@@ -1,10 +1,15 @@
-import argparse
+import json
 import sys
+from pathlib import Path
+from typing import Optional
+
+import typer
 
 from . import __version__
 from .analysis import analyze_package
 from .discovery import discover_packages
 from .config import (
+    CONFIG_DIR,
     ensure_default_configs,
     load_config,
     load_rules,
@@ -12,7 +17,6 @@ from .config import (
     outdated_shipped_rules,
     set_config,
     sync_rules,
-    CONFIG_DIR,
 )
 from .db import (
     effective_observation_count,
@@ -25,13 +29,7 @@ from .db import (
     seed_observation_count,
 )
 from .lint import SEVERITY_ERROR, lint_rules
-from .override import (
-    FATAL_RULES,
-    OVERRIDES_PATH,
-    add_override,
-    list_overrides,
-    remove_override,
-)
+from .override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides, remove_override
 from .scoring import risk_level
 from .unicode import describe_fatal_codepoints, strip_ansi
 
@@ -52,9 +50,6 @@ SEVERITY_COLORS = {
     "INFO": "dim",
 }
 
-# Which evidence tier a breakdown entry belongs to.  The tiers are the
-# tool's explanation of itself, so the report groups by them rather than
-# listing findings in the order they happened to fire.
 TIER_OF = {
     "SOURCE_BUCKET": ("B", "Priors / context"),
     "NOVELTY": ("C", "History / novelty"),
@@ -73,13 +68,7 @@ try:
     from rich.box import SIMPLE_HEAD
     from rich.console import Console
     from rich.panel import Panel
-    from rich.progress import (
-        BarColumn,
-        Progress,
-        SpinnerColumn,
-        TextColumn,
-        TimeElapsedColumn,
-    )
+    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
     from rich.rule import Rule
     from rich.table import Table
     from rich.text import Text
@@ -88,12 +77,10 @@ try:
 except ImportError:
     HAS_RICH = False
 
-
 _console = None
 
 
 def console() -> "Console":
-    """One Console for the process, so styling and width stay consistent."""
     global _console
     if _console is None:
         _console = Console()
@@ -109,7 +96,6 @@ def _severity_text(severity: str) -> "Text":
 
 
 def _weight_text(weight: int) -> "Text":
-    """Credits are as meaningful as penalties, so colour them apart."""
     if weight > 0:
         return Text(f"+{weight}", style="red")
     if weight < 0:
@@ -122,36 +108,118 @@ def _score_text(score: int, risk: str | None = None) -> "Text":
     return Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
 
 
-def cmd_review(args):
+def _fact_to_dict(fact):
+    data = {
+        "package": fact.package_name,
+        "old_version": fact.old_version,
+        "new_version": fact.new_version,
+        "score": fact.final_score,
+        "risk": risk_level(fact.final_score),
+        "first_seen": fact.first_seen,
+        "maintainer_changed": fact.maintainer_changed,
+        "checksum_behavior": fact.source_changes.checksum_behavior if hasattr(fact.source_changes, "checksum_behavior") else None,
+        "score_breakdown": [
+            {
+                "rule_id": e.rule_id,
+                "severity": e.severity,
+                "weight": e.weight,
+                "reason": e.reason,
+            }
+            for e in fact.score_breakdown
+        ],
+        "suppressed_rules": fact.suppressed_rules,
+    }
+    if fact.maintainer_changed:
+        data["previous_maintainer"] = fact.previous_maintainer
+        data["current_maintainer"] = fact.current_maintainer
+    if fact.source_changes.added_urls:
+        data["added_urls"] = [
+            {"url": url, "bucket": fact.source_buckets.get(url, "unknown")}
+            for url in fact.source_changes.added_urls
+        ]
+    if fact.execution_changes.resolved_commands:
+        data["resolved_commands"] = fact.execution_changes.resolved_commands[:50]
+    return data
+
+
+app = typer.Typer(
+    name="trustsight",
+    help="TrustSight - AUR Package Update Vetting Tool",
+    no_args_is_help=True,
+    add_completion=False,
+)
+config_app = typer.Typer(
+    help="Manage configuration (aliases: show, set, sync-rules)",
+    no_args_is_help=True,
+    add_completion=False,
+)
+override_app = typer.Typer(
+    help="Suppress a rule that misfires on your packages",
+    no_args_is_help=True,
+    add_completion=False,
+)
+app.add_typer(config_app, name="config")
+app.add_typer(override_app, name="override")
+
+
+def _version_callback(value: bool):
+    if value:
+        typer.echo(f"trustsight {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _main(
+    version: bool = typer.Option(
+        False, "-v", "--version",
+        callback=_version_callback,
+        help="Show program's version number and exit",
+    ),
+):
+    pass
+
+
+# --- review ---
+
+@app.command()
+def review(
+    limit: int = typer.Option(20, "--limit", help="Max packages to review"),
+    verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules per package"),
+    repo: Optional[list[str]] = typer.Option(
+        None, "--repo", help="Scan packages from a specific local repository (can be repeated)"
+    ),
+    foreign: bool = typer.Option(False, "--foreign", help="Include foreign packages (pacman -Qm)"),
+    all_repos: bool = typer.Option(
+        False, "--all-repos",
+        help="Auto-detect all local repos from pacman.conf (excludes official repos)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
     ensure_default_configs()
     config = load_config()
     init_db()
     if config.get("seed", {}).get("auto_import", True):
         maybe_auto_import_seed()
-    limit = args.limit or config.get("limits", {}).get("default_review_limit", 20)
+    effective_limit = limit or config.get("limits", {}).get("default_review_limit", 20)
 
-    user_specified = (
-        getattr(args, "repo", None) is not None
-        or getattr(args, "foreign", None) is not None
-        or getattr(args, "all_repos", None) is not None
-    )
+    user_specified = not (repo is None and not foreign and not all_repos)
     if user_specified:
-        repos = args.repo or []
-        include_foreign = bool(args.foreign)
-        all_repos = bool(args.all_repos)
+        repos = repo or []
+        include_foreign = foreign
+        all_flag = all_repos
     else:
         discovery_cfg = config.get("discovery", {})
         repos = discovery_cfg.get("default_repos", [])
         include_foreign = discovery_cfg.get("include_foreign", False)
-        all_repos = discovery_cfg.get("all_repos", False)
-        if not repos and not all_repos and not include_foreign:
+        all_flag = discovery_cfg.get("all_repos", False)
+        if not repos and not all_flag and not include_foreign:
             include_foreign = True
 
     def _warn(msg: str):
         con = console()
         con.print(f"[yellow]Warning:[/] {msg}")
 
-    if all_repos:
+    if all_flag:
         from .discovery import get_local_repos_from_pacman_conf
         try:
             get_local_repos_from_pacman_conf()
@@ -165,27 +233,25 @@ def cmd_review(args):
     outdated_pkgs = discover_packages(
         repos=repos,
         include_foreign=include_foreign,
-        all_repos=all_repos,
+        all_repos=all_flag,
         _warn_func=_warn if repos else None,
     )
 
     if not outdated_pkgs:
-        if HAS_RICH:
-            console().print("[green]No outdated packages found.[/green]")
-        else:
-            print("No outdated packages found.")
+        _print_green("No outdated packages found.")
         return
 
-    _run_analysis_loop(outdated_pkgs, limit, args.verbose, config)
+    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, json_output)
 
 
-def _run_analysis_loop(outdated_pkgs: list[dict], limit: int,
-                       verbose: bool, config: dict) -> None:
+def _run_analysis_loop(
+    outdated_pkgs: list[dict], limit: int, verbose: bool, json_output: bool
+) -> None:
     from .llm import fallback_verdict, generate_verdict
 
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
 
-    if HAS_RICH:
+    if HAS_RICH and not json_output:
         con = console()
         progress_columns = [
             SpinnerColumn(),
@@ -199,13 +265,19 @@ def _run_analysis_loop(outdated_pkgs: list[dict], limit: int,
 
             def on_progress(_current, total, name):
                 if total:
-                    progress.update(task, total=total, completed=_current,
-                                    description=f"Analyzing {name}")
+                    progress.update(
+                        task, total=total, completed=_current,
+                        description=f"Analyzing {name}"
+                    )
                 else:
                     progress.update(task, description=name)
 
             results = _analyze_outdated_batch(limited, on_progress, verbose)
             progress.update(task, visible=False)
+
+        if json_output:
+            typer.echo(json.dumps(results, indent=2))
+            return
 
         if not results:
             con.print("[yellow]No outdated AUR packages found.[/]")
@@ -236,16 +308,20 @@ def _run_analysis_loop(outdated_pkgs: list[dict], limit: int,
                 verdict,
             ]
             if verbose:
-                rules_text = ", ".join(
-                    f"{rule['rule_id']}"
-                    for rule in r.get("triggered_rules", [])
-                ) if r.get("triggered_rules") else "[dim]none[/]"
+                rules_text = (
+                    ", ".join(f"{rule['rule_id']}" for rule in r.get("triggered_rules", []))
+                    if r.get("triggered_rules") else "[dim]none[/]"
+                )
                 row.append(Text(strip_ansi(rules_text)))
             table.add_row(*row)
 
         con.print(table)
     else:
         results = _analyze_outdated_batch(limited, None, verbose)
+
+        if json_output:
+            typer.echo(json.dumps(results, indent=2))
+            return
 
         if not results:
             print("No outdated AUR packages found.")
@@ -263,10 +339,10 @@ def _run_analysis_loop(outdated_pkgs: list[dict], limit: int,
                 verdict = f"[First analysis] {verdict}"
             line = f"{r['package']:<20} {r['score']:<10} {verdict}"
             if verbose:
-                rules_str = ", ".join(
-                    rule["rule_id"]
-                    for rule in r.get("triggered_rules", [])
-                ) if r.get("triggered_rules") else "none"
+                rules_str = (
+                    ", ".join(rule["rule_id"] for rule in r.get("triggered_rules", []))
+                    if r.get("triggered_rules") else "none"
+                )
                 line += f"  {rules_str}"
             print(line)
 
@@ -313,6 +389,29 @@ def _analyze_outdated_batch(
     return results
 
 
+# --- inspect ---
+
+@app.command()
+def inspect(
+    package: str = typer.Argument(..., help="Package name"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    ensure_default_configs()
+    init_db()
+    if load_config().get("seed", {}).get("auto_import", True):
+        maybe_auto_import_seed()
+
+    fact = analyze_package(package)
+    if json_output:
+        typer.echo(json.dumps(_fact_to_dict(fact), indent=2))
+        return
+
+    if HAS_RICH:
+        _inspect_rich(fact)
+    else:
+        _inspect_plain(fact)
+
+
 def _inspect_rich(fact):
     con = console()
     risk = risk_level(fact.final_score)
@@ -323,7 +422,8 @@ def _inspect_rich(fact):
     header.append_text(_score_text(fact.final_score, risk))
     header.append(f"  ({risk})", style=RISK_COLORS.get(risk, "white"))
     con.print()
-    con.print(Panel(header, title="TrustSight Inspect", border_style=RISK_COLORS.get(risk, "white")))
+    con.print(Panel(header, title="TrustSight Inspect",
+                    border_style=RISK_COLORS.get(risk, "white")))
 
     if fact.first_seen:
         con.print(
@@ -388,16 +488,16 @@ def _inspect_rich(fact):
             table.add_column("Rule", style="cyan", width=14)
             table.add_column("Evidence", overflow="fold")
             for e in entries:
-                table.add_row(_weight_text(e.weight), _severity_text(e.severity),
-                              e.rule_id, Text(strip_ansi(e.reason)))
+                table.add_row(
+                    _weight_text(e.weight), _severity_text(e.severity),
+                    e.rule_id, Text(strip_ansi(e.reason))
+                )
             con.print(table)
 
         total = sum(e.weight for e in fact.score_breakdown)
         con.print(f"  [dim]sum of contributions: {total:+d}, "
                   f"clamped to {fact.final_score}/100[/]")
 
-    # A FATAL unicode finding is unreadable without saying exactly which
-    # invisible characters were found and where.
     fatal = [e for e in fact.score_breakdown if e.severity == "FATAL"]
     for entry in fatal:
         found = describe_fatal_codepoints(entry.reason)
@@ -455,44 +555,59 @@ def _inspect_plain(fact):
     print(f"  Verdict: {fallback_verdict(fact)}")
 
 
-def cmd_inspect(args):
-    ensure_default_configs()
-    init_db()
-    if load_config().get("seed", {}).get("auto_import", True):
-        maybe_auto_import_seed()
+# --- history ---
 
-    fact = analyze_package(args.package)
-    if HAS_RICH:
-        _inspect_rich(fact)
-    else:
-        _inspect_plain(fact)
-
-
-def cmd_history(args):
+@app.command()
+def history(
+    package: str = typer.Argument(..., help="Package name"),
+    limit: int = typer.Option(20, "--limit", help="Max history entries"),
+    score_breakdown: bool = typer.Option(
+        False, "--score-breakdown", help="Show score breakdown"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
     ensure_default_configs()
     init_db()
 
-    pkg_id = get_package_id(args.package)
+    pkg_id = get_package_id(package)
     if pkg_id is None:
-        print(f"Package '{args.package}' not found in history.")
+        print(f"Package '{package}' not found in history.")
         return
 
-    history = get_history(pkg_id, limit=args.limit or 20)
+    history_records = get_history(pkg_id, limit=limit)
 
-    if not history:
-        print(f"No analysis history for '{args.package}'.")
+    if not history_records:
+        print(f"No analysis history for '{package}'.")
+        return
+
+    if json_output:
+        data = []
+        for h in history_records:
+            item = {
+                "timestamp": h.get("timestamp", ""),
+                "old_version": h.get("old_version", ""),
+                "new_version": h.get("new_version", ""),
+                "score": h.get("final_score", 0),
+                "risk": risk_level(h.get("final_score", 0)),
+            }
+            if score_breakdown:
+                rules = get_triggered_rules(h["id"])
+                if rules:
+                    item["triggered_rules"] = rules
+            data.append(item)
+        typer.echo(json.dumps(data, indent=2))
         return
 
     if HAS_RICH:
         con = console()
-        table = Table(title=f"History: {args.package}")
+        table = Table(title=f"History: {package}")
         table.add_column("Date", style="dim")
         table.add_column("Old", justify="right")
-        table.add_column("→ New", justify="right")
+        table.add_column("-> New", justify="right")
         table.add_column("Score", justify="right")
         table.add_column("Risk")
 
-        for h in history:
+        for h in history_records:
             ts = h.get("timestamp", "")[:10] if h.get("timestamp") else ""
             score = h.get("final_score", 0)
             risk = risk_level(score)
@@ -507,8 +622,8 @@ def cmd_history(args):
 
         con.print(table)
 
-        if args.score_breakdown and history:
-            rules = get_triggered_rules(history[0]["id"])
+        if score_breakdown and history_records:
+            rules = get_triggered_rules(history_records[0]["id"])
             if rules:
                 bd = Table(title="Latest run: rules that fired", box=SIMPLE_HEAD)
                 bd.add_column("Rule", style="cyan")
@@ -519,126 +634,300 @@ def cmd_history(args):
             else:
                 con.print("[dim]No rules fired on the latest run.[/]")
     else:
-        for h in history:
-            print(f"{h.get('timestamp','')[:10]:<12} {str(h.get('old_version','')):<12} → {str(h.get('new_version','')):<12} Score: {h.get('final_score',0)}")
+        for h in history_records:
+            print(
+                f"{h.get('timestamp','')[:10]:<12} "
+                f"{str(h.get('old_version','')):<12} -> "
+                f"{str(h.get('new_version','')):<12} "
+                f"Score: {h.get('final_score',0)}"
+            )
 
 
-def cmd_config(args):
+# --- config subcommands ---
+
+@config_app.command("show")
+def config_show(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
     ensure_default_configs()
-    if args.action == "show":
-        cfg = load_config()
-        llm = cfg.get("llm", {})
-        openai_cfg = llm.get("openai", {})
-        api_key = openai_cfg.get("api_key", "")
-        masked = api_key[:4] + "..." if len(api_key) > 8 else "(not set)"
-        rows = [
-            ("config file", str(CONFIG_DIR / "config.toml")),
-            ("llm.provider", llm.get("provider", "ollama")),
-            ("llm.model", llm.get("model", "gpt-4o-mini")),
-            ("llm.enabled", str(llm.get("enabled", True))),
-            ("llm.openai.api_key", masked),
-            ("llm.openai.base_url",
-             openai_cfg.get("base_url", "https://api.openai.com/v1")),
-            ("seed.auto_import", str(cfg.get("seed", {}).get("auto_import", True))),
-            ("rules.experimental", str(cfg.get("rules", {}).get("experimental", False))),
+    cfg = load_config()
+    llm = cfg.get("llm", {})
+    openai_cfg = llm.get("openai", {})
+    api_key = openai_cfg.get("api_key", "")
+    masked = api_key[:4] + "..." if len(api_key) > 8 else "(not set)"
+    rows = [
+        ("config file", str(CONFIG_DIR / "config.toml")),
+        ("llm.provider", llm.get("provider", "ollama")),
+        ("llm.model", llm.get("model", "gpt-4o-mini")),
+        ("llm.enabled", str(llm.get("enabled", True))),
+        ("llm.openai.api_key", masked),
+        ("llm.openai.base_url", openai_cfg.get("base_url", "https://api.openai.com/v1")),
+        ("seed.auto_import", str(cfg.get("seed", {}).get("auto_import", True))),
+        ("rules.experimental", str(cfg.get("rules", {}).get("experimental", False))),
+    ]
+
+    if json_output:
+        data = dict(rows)
+        data["scoring_weights"] = {}
+        for group in (
+            "severity_weights", "source_bucket_weights",
+            "novelty_weights", "verification_evidence", "pinning_weights",
+        ):
+            data["scoring_weights"][group] = (cfg.get(group) or {}).copy()
+        typer.echo(json.dumps(data, indent=2))
+        return
+
+    if HAS_RICH:
+        table = Table(title="TrustSight configuration", box=SIMPLE_HEAD)
+        table.add_column("Key", style="cyan")
+        table.add_column("Value", overflow="fold")
+        for k, v in rows:
+            table.add_row(k, v)
+        console().print(table)
+
+        weights = Table(title="Scoring weights", box=SIMPLE_HEAD)
+        weights.add_column("Group", style="dim")
+        weights.add_column("Key", style="cyan")
+        weights.add_column("Weight", justify="right")
+        for group in (
+            "severity_weights", "source_bucket_weights",
+            "novelty_weights", "verification_evidence", "pinning_weights",
+        ):
+            for key, value in (cfg.get(group) or {}).items():
+                weights.add_row(group, key, _weight_text(int(value)))
+        console().print(weights)
+    else:
+        for k, v in rows:
+            print(f"  {k}: {v}")
+
+
+@config_app.command("set")
+def config_set(
+    key: str = typer.Argument(..., help="Config key (api_key or base_url)"),
+    value: str = typer.Argument(..., help="Config value"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    if key not in ("api_key", "base_url"):
+        msg = f"Unknown key: {key}. Use api_key or base_url."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_red(msg)
+        raise typer.Exit(code=1)
+    set_config(f"llm.openai.{key}", value)
+    msg = f"Set llm.openai.{key} in {CONFIG_DIR / 'config.toml'}"
+    if json_output:
+        typer.echo(json.dumps({"status": "ok", "key": f"llm.openai.{key}"}))
+    else:
+        _print_green(msg)
+
+
+@config_app.command("sync-rules")
+def config_sync_rules(
+    update: bool = typer.Option(
+        False, "--update",
+        help="Also replace rules whose pattern is a superseded shipped one "
+             "(rules you have edited are never touched)",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    ensure_default_configs()
+    added, updated = sync_rules(update_outdated=update)
+    target = CONFIG_DIR / "rules.toml"
+
+    if json_output:
+        typer.echo(json.dumps({
+            "target": str(target),
+            "added": added,
+            "updated": updated,
+        }, indent=2))
+        return
+
+    lines = []
+    if updated:
+        lines.append(f"Updated {len(updated)} superseded rule(s): {', '.join(updated)}")
+    if added:
+        lines.append(f"Added {len(added)} rule(s): {', '.join(added)}")
+    if not added and not updated:
+        pending = outdated_shipped_rules()
+        if pending:
+            lines.append(
+                f"{len(pending)} rule(s) use a superseded pattern: "
+                f"{', '.join(pending)}. Re-run with --update to replace them "
+                f"(only rules you have not edited are touched)."
+            )
+        else:
+            lines.append("rules.toml is already up to date.")
+    body = "\n".join(lines)
+    if HAS_RICH:
+        console().print(Panel(body, title=str(target), border_style="cyan"))
+    else:
+        print(body)
+
+
+# --- override subcommands ---
+
+@override_app.command("list")
+def override_list(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    ensure_default_configs()
+    overrides = list_overrides()
+    if not overrides:
+        msg = (
+            f"No overrides configured. File: {OVERRIDES_PATH}\n"
+            f"Add one with: trustsight override add R010 --reason \"...\""
+        )
+        if json_output:
+            typer.echo(json.dumps({"overrides": []}))
+        else:
+            console().print(msg) if HAS_RICH else print(msg)
+        return
+
+    if json_output:
+        data = [
+            {"rule_id": o.rule_id, "package": o.package, "reason": o.reason, "created_at": o.created_at}
+            for o in overrides
         ]
-        if HAS_RICH:
-            table = Table(title="TrustSight configuration", box=SIMPLE_HEAD)
-            table.add_column("Key", style="cyan")
-            table.add_column("Value", overflow="fold")
-            for k, v in rows:
-                table.add_row(k, v)
-            console().print(table)
+        typer.echo(json.dumps(data, indent=2))
+        return
 
-            weights = Table(title="Scoring weights", box=SIMPLE_HEAD)
-            weights.add_column("Group", style="dim")
-            weights.add_column("Key", style="cyan")
-            weights.add_column("Weight", justify="right")
-            for group in ("severity_weights", "source_bucket_weights",
-                          "novelty_weights", "verification_evidence",
-                          "pinning_weights"):
-                for key, value in (cfg.get(group) or {}).items():
-                    weights.add_row(group, key, _weight_text(int(value)))
-            console().print(weights)
+    if HAS_RICH:
+        table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
+        table.add_column("Rule", style="cyan")
+        table.add_column("Scope")
+        table.add_column("Reason", overflow="fold")
+        table.add_column("Added", style="dim")
+        for o in overrides:
+            table.add_row(o.rule_id, o.package or "all packages",
+                          strip_ansi(o.reason), o.created_at)
+        console().print(table)
+        console().print(
+            f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
+            f"finding is never suppressed.[/]"
+        )
+    else:
+        for o in overrides:
+            print(f"{o.rule_id:<8} {o.package or 'all':<20} {strip_ansi(o.reason)}")
+
+
+@override_app.command("add")
+def override_add(
+    rule_id: str = typer.Argument(..., help="Rule to suppress, e.g. R010"),
+    reason: str = typer.Option(..., "--reason", help="Why this rule is being suppressed (required)"),
+    package: Optional[str] = typer.Option(None, "--package", help="Limit to one package"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    ensure_default_configs()
+    try:
+        ov = add_override(rule_id, reason, package)
+    except ValueError as exc:
+        msg = str(exc)
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
         else:
-            for k, v in rows:
-                print(f"  {k}: {v}")
-    elif args.action == "sync-rules":
-        added, updated = sync_rules(update_outdated=args.update)
-        target = CONFIG_DIR / "rules.toml"
-        lines = []
-        if updated:
-            lines.append(f"Updated {len(updated)} superseded rule(s): {', '.join(updated)}")
-        if added:
-            lines.append(f"Added {len(added)} rule(s): {', '.join(added)}")
-        if not added and not updated:
-            pending = outdated_shipped_rules()
-            if pending:
-                lines.append(
-                    f"{len(pending)} rule(s) use a superseded pattern: "
-                    f"{', '.join(pending)}. Re-run with --update to replace them "
-                    f"(only rules you have not edited are touched)."
-                )
-            else:
-                lines.append("rules.toml is already up to date.")
-        body = "\n".join(lines)
-        if HAS_RICH:
-            console().print(Panel(body, title=str(target), border_style="cyan"))
+            _print_red(msg)
+        raise typer.Exit(code=1)
+    scope = ov.package or "all packages"
+    msg = f"Override added: {ov.rule_id} for {scope}"
+    if json_output:
+        typer.echo(json.dumps({
+            "status": "ok",
+            "rule_id": ov.rule_id,
+            "package": ov.package,
+            "reason": ov.reason,
+        }))
+    else:
+        _print_green(msg)
+
+
+@override_app.command("rm")
+def override_rm(
+    rule_id: str = typer.Argument(..., help="Rule to stop suppressing"),
+    package: Optional[str] = typer.Option(None, "--package", help="Scope the removal to one package"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    ensure_default_configs()
+    if remove_override(rule_id.upper(), package):
+        msg = f"Override removed: {rule_id.upper()}"
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "rule_id": rule_id.upper()}))
         else:
-            print(body)
-    elif args.action == "set":
-        if args.key in ("api_key", "base_url"):
-            set_config(f"llm.openai.{args.key}", args.value)
-            msg = f"Set llm.openai.{args.key} in {CONFIG_DIR / 'config.toml'}"
-            console().print(f"[green]{msg}[/]") if HAS_RICH else print(msg)
+            _print_green(msg)
+    else:
+        msg = f"No matching override for {rule_id.upper()}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
         else:
-            msg = f"Unknown key: {args.key}. Use api_key or base_url."
-            console().print(f"[red]{msg}[/]") if HAS_RICH else print(msg, file=sys.stderr)
-            sys.exit(1)
+            _print_yellow(msg)
+        raise typer.Exit(code=1)
 
 
-def cmd_seed_db(args):
-    """Import the novelty seed so a fresh install is not cold."""
-    from pathlib import Path
+# --- seed-db ---
 
+@app.command()
+def seed_db(
+    do_import: bool = typer.Option(
+        False, "--import", help="Import the seed (default action)"
+    ),
+    file: Optional[str] = typer.Option(
+        None, "--file", help="Seed .db or .db.gz to import (default: bundled)"
+    ),
+    force: bool = typer.Option(False, "--force", help="Re-import even if already seeded"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
     ensure_default_configs()
     init_db()
 
-    if args.file:
-        seed = Path(args.file)
+    if file:
+        seed = Path(file)
     else:
         bundled = Path(__file__).parent / "data" / "seed.db.gz"
         if not bundled.exists():
-            msg = ("No bundled seed found. Build one with:\n"
-                   "  python scripts/generate_seed.py --out src/trustsight/data/seed.db\n"
-                   "or pass an existing seed with --file.")
-            if HAS_RICH:
-                console().print(f"[red]{msg}[/]")
+            msg = (
+                "No bundled seed found. Build one with:\n"
+                "  python scripts/generate_seed.py --out src/trustsight/data/seed.db\n"
+                "or pass an existing seed with --file."
+            )
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
             else:
-                print(msg, file=sys.stderr)
-            sys.exit(2)
+                _print_red(msg)
+            raise typer.Exit(code=2)
         seed = bundled
 
     already = seed_observation_count()
-    if already and not args.force:
-        msg = (f"A seed is already imported ({already} observations). "
-               f"Use --force to re-import.")
-        console().print(msg) if HAS_RICH else print(msg)
+    if already and not force:
+        msg = (
+            f"A seed is already imported ({already} observations). "
+            f"Use --force to re-import."
+        )
+        if json_output:
+            typer.echo(json.dumps({"status": "already_imported", "observations": already}))
+        else:
+            console().print(msg) if HAS_RICH else print(msg)
         return
 
     try:
-        if HAS_RICH:
-            # The import decompresses ~12 MB and merges ~178k rows; it takes
-            # several seconds, so say so rather than appear hung.
+        if HAS_RICH and not json_output:
             with console().status(f"Importing seed from {seed.name}...", spinner="dots"):
                 stats = import_seed(seed)
         else:
-            print(f"Importing seed from {seed}...")
+            if not json_output:
+                print(f"Importing seed from {seed}...")
             stats = import_seed(seed)
     except FileNotFoundError:
         msg = f"Seed file not found: {seed}"
-        console().print(f"[red]{msg}[/]") if HAS_RICH else print(msg, file=sys.stderr)
-        sys.exit(2)
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_red(msg)
+        raise typer.Exit(code=2)
+
+    if json_output:
+        stats["effective_observations"] = effective_observation_count()
+        typer.echo(json.dumps(stats, indent=2))
+        return
 
     if HAS_RICH:
         table = Table(title="Novelty seed imported", box=SIMPLE_HEAD)
@@ -661,67 +950,22 @@ def cmd_seed_db(args):
         print(f"  observations      : {stats['observations']}")
 
 
-def cmd_override(args):
-    """Suppress a rule that misfires on your packages, with a reason."""
-    ensure_default_configs()
+# --- lint-rules ---
 
-    if args.action == "add":
-        try:
-            ov = add_override(args.rule_id, args.reason, args.package)
-        except ValueError as exc:
-            msg = str(exc)
-            console().print(f"[red]{msg}[/]") if HAS_RICH else print(msg, file=sys.stderr)
-            sys.exit(1)
-        scope = ov.package or "all packages"
-        msg = f"Override added: {ov.rule_id} for {scope}"
-        console().print(f"[green]{msg}[/]") if HAS_RICH else print(msg)
-        return
-
-    if args.action == "rm":
-        if remove_override(args.rule_id.upper(), args.package):
-            msg = f"Override removed: {args.rule_id.upper()}"
-            console().print(f"[green]{msg}[/]") if HAS_RICH else print(msg)
-        else:
-            msg = f"No matching override for {args.rule_id.upper()}"
-            console().print(f"[yellow]{msg}[/]") if HAS_RICH else print(msg)
-            sys.exit(1)
-        return
-
-    overrides = list_overrides()
-    if not overrides:
-        msg = (f"No overrides configured. File: {OVERRIDES_PATH}\n"
-               f"Add one with: trustsight override add R010 --reason \"...\"")
-        console().print(msg) if HAS_RICH else print(msg)
-        return
-
-    if HAS_RICH:
-        table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
-        table.add_column("Rule", style="cyan")
-        table.add_column("Scope")
-        table.add_column("Reason", overflow="fold")
-        table.add_column("Added", style="dim")
-        for o in overrides:
-            table.add_row(o.rule_id, o.package or "all packages",
-                          strip_ansi(o.reason), o.created_at)
-        console().print(table)
-        console().print(
-            f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
-            f"finding is never suppressed.[/]"
-        )
-    else:
-        for o in overrides:
-            print(f"{o.rule_id:<8} {o.package or 'all':<20} {strip_ansi(o.reason)}")
-
-
-def cmd_lint_rules(args):
-    if args.file:
+@app.command("lint-rules")
+def lint_rules_cmd(
+    file: Optional[str] = typer.Option(
+        None, "--file", help="Lint a specific rules TOML file instead of the user config"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    if file:
         from ._toml import tomllib
-        from pathlib import Path
 
-        path = Path(args.file)
+        path = Path(file)
         if not path.exists():
-            print(f"Rules file not found: {path}", file=sys.stderr)
-            sys.exit(2)
+            _print_red(f"Rules file not found: {path}")
+            raise typer.Exit(code=2)
         with open(path, "rb") as fh:
             rules = tomllib.load(fh).get("rules", [])
         source = path
@@ -731,11 +975,29 @@ def cmd_lint_rules(args):
         source = CONFIG_DIR / "rules.toml"
 
     findings = lint_rules(rules)
-    missing = [] if args.file else missing_shipped_rules()
-    outdated = [] if args.file else outdated_shipped_rules()
+    missing = [] if file else missing_shipped_rules()
+    outdated = [] if file else outdated_shipped_rules()
 
     errors = [f for f in findings if f.level == SEVERITY_ERROR]
     warnings = [f for f in findings if f.level != SEVERITY_ERROR]
+
+    if json_output:
+        data = {
+            "source": str(source),
+            "total_rules": len(rules),
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "findings": [
+                {"rule_id": f.rule_id, "level": f.level, "check": f.check, "message": f.message}
+                for f in findings
+            ],
+        }
+        if missing:
+            data["missing_shipped_rules"] = missing
+        if outdated:
+            data["outdated_shipped_rules"] = outdated
+        typer.echo(json.dumps(data, indent=2))
+        return
 
     if HAS_RICH:
         con = console()
@@ -785,129 +1047,37 @@ def cmd_lint_rules(args):
             print(f"\n{msg}")
 
     if errors:
-        sys.exit(1)
+        raise typer.Exit(code=1)
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        prog="trustsight",
-        description="TrustSight - AUR Package Update Vetting Tool",
-        epilog=(
-            "config subcommands:\n"
-            "  config show        Show current configuration and scoring weights\n"
-            "  config set <key> <value>\n"
-            "                     Set a config value (keys: api_key, base_url)\n"
-            "                     Example: trustsight config set base_url https://api.openai.com/v1\n"
-            "  config sync-rules  Append newly shipped rules to your rules.toml\n"
-            "                     Use --update to also replace superseded patterns\n\n"
-            "examples:\n"
-            "  trustsight review              Check all outdated AUR packages\n"
-            "  trustsight review --repo aur   Scan packages from the aur repo\n"
-            "  trustsight review --repo aur --repo testing --foreign\n"
-            "                                 Scan aur + testing + foreign pkgs\n"
-            "  trustsight review --all-repos  Auto-detect all local repos\n"
-            "  trustsight inspect <pkg>       Deep analysis of one package\n"
-            "  trustsight history <pkg>       Show past analysis results\n"
-            "  trustsight config show         Display current settings\n"
-            "  trustsight config set api_key sk-...\n"
-            "                                 Configure OpenAI-compatible API key"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
+# --- helpers ---
 
-    sub = parser.add_subparsers(dest="command")
+def _print_green(msg: str):
+    if HAS_RICH:
+        console().print(f"[green]{msg}[/]")
+    else:
+        print(msg)
 
-    p_review = sub.add_parser("review", help="Scan AUR and analyze outdated packages")
-    p_review.add_argument("--limit", type=int, default=0, help="Max packages to review")
-    p_review.add_argument("--verbose", action="store_true", help="Show triggered rules per package")
-    p_review.add_argument("--repo", action="append", dest="repo", default=None,
-                          help="Scan packages from a specific local repository (can be repeated)")
-    p_review.add_argument("--foreign", action="store_true", dest="foreign", default=None,
-                          help="Include foreign packages (pacman -Qm)")
-    p_review.add_argument("--all-repos", action="store_true", dest="all_repos", default=None,
-                          help="Auto-detect all local repos from pacman.conf (excludes official repos)")
 
-    p_inspect = sub.add_parser("inspect", help="Analyze a specific package")
-    p_inspect.add_argument("package", help="Package name")
+def _print_red(msg: str):
+    if HAS_RICH:
+        console().print(f"[red]{msg}[/]")
+    else:
+        print(msg, file=sys.stderr)
 
-    p_history = sub.add_parser("history", help="Show analysis history for a package")
-    p_history.add_argument("package", help="Package name")
-    p_history.add_argument("--limit", type=int, default=20, help="Max history entries")
-    p_history.add_argument("--score-breakdown", action="store_true", help="Show score breakdown")
 
-    p_lint = sub.add_parser("lint-rules", help="Check rules.toml for unreachable or over-broad rules")
-    p_lint.add_argument("--file", help="Lint a specific rules TOML file instead of the user config")
+def _print_yellow(msg: str):
+    if HAS_RICH:
+        console().print(f"[yellow]{msg}[/]")
+    else:
+        print(msg)
 
-    p_seed = sub.add_parser(
-        "seed-db", help="Import the novelty seed database (removes cold-start INCONCLUSIVE)"
-    )
-    p_seed.add_argument(
-        "--import", dest="do_import", action="store_true",
-        help="Import the seed (default action)",
-    )
-    p_seed.add_argument("--file", help="Seed .db or .db.gz to import (default: bundled)")
-    p_seed.add_argument("--force", action="store_true", help="Re-import even if already seeded")
 
-    p_override = sub.add_parser(
-        "override", help="Suppress a rule that misfires on your packages"
-    )
-    p_override_sub = p_override.add_subparsers(dest="action")
-    p_override_sub.add_parser("list", help="List configured overrides")
-    p_ov_add = p_override_sub.add_parser("add", help="Add an override")
-    p_ov_add.add_argument("rule_id", help="Rule to suppress, e.g. R010")
-    p_ov_add.add_argument("--reason", required=True,
-                          help="Why this rule is being suppressed (required)")
-    p_ov_add.add_argument("--package", help="Limit to one package (default: all)")
-    p_ov_rm = p_override_sub.add_parser("rm", help="Remove an override")
-    p_ov_rm.add_argument("rule_id", help="Rule to stop suppressing")
-    p_ov_rm.add_argument("--package", help="Scope the removal to one package")
+# --- entry point ---
 
-    p_config = sub.add_parser("config", help="Manage configuration (aliases: show, set, sync-rules)")
-    p_config_sub = p_config.add_subparsers(dest="action")
-
-    p_config_sub.add_parser("show", help="Show current configuration and scoring weights")
-    p_sync = p_config_sub.add_parser(
-        "sync-rules", help="Append shipped rules missing from your rules.toml"
-    )
-    p_sync.add_argument(
-        "--update", action="store_true",
-        help="Also replace rules whose pattern is a superseded shipped one "
-             "(rules you have edited are never touched)",
-    )
-    p_config_set = p_config_sub.add_parser("set", help="Set a config value (api_key or base_url)")
-    p_config_set.add_argument("key", choices=["api_key", "base_url"],
-                              help="Config key to set. Example: trustsight config set api_key sk-...")
-    p_config_set.add_argument("value", help="Config value")
-
+if __name__ == "__main__":
     try:
-        args = parser.parse_args()
-    except SystemExit:
-        sys.exit(1)
-
-    try:
-        if args.command == "review":
-            cmd_review(args)
-        elif args.command == "inspect":
-            cmd_inspect(args)
-        elif args.command == "history":
-            cmd_history(args)
-        elif args.command == "override":
-            if args.action is None:
-                args.action = "list"
-            cmd_override(args)
-        elif args.command == "seed-db":
-            cmd_seed_db(args)
-        elif args.command == "lint-rules":
-            cmd_lint_rules(args)
-        elif args.command == "config":
-            cmd_config(args)
-        else:
-            parser.print_help()
+        app()
     except KeyboardInterrupt:
         print("\nInterrupted.")
         sys.exit(130)
-
-
-if __name__ == "__main__":
-    main()

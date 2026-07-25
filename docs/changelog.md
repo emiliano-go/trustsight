@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.4.1] - 2026-07-25
+
+### Added
+
+- `--json` flag on all commands for machine-readable output.
+- PKGBUILD build+install CI workflow using `archlinux:latest` container.
+- AUR install instructions in README and getting-started guide.
+
+### Changed
+
+- CLI migrated from `argparse` to `typer`: auto-generated `--help`, type-annotated callbacks, `--json` flag per command. Entry point renamed from `main` to `app`.
+- CLI tests updated from `patch(sys.argv)` pattern to `typer.testing.CliRunner`.
+- Documentation tests parse typer patterns (`add_typer`, `@command`) instead of argparse `add_parser`.
+
+### Fixed
+
+- Mirror-check CI now triggers on `push` for corpus.lock and benign-corpus changes.
+
 ## [0.4.0] - 2026-07-25
 
 ### Added

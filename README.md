@@ -6,7 +6,7 @@ Audits AUR PKGBUILDs before you update: catches careless malice and structural r
 
 <p align="center">
   <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
+    <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
@@ -93,7 +93,7 @@ pip install -e .
 # Or with pipx: pipx install .
 ```
 
-Requires **Python 3.12+**.
+Requires **Python 3.10+**.
 
 ---
 

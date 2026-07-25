@@ -72,36 +72,15 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 ## Install
 
-### pip / pipx
-
 ```bash
-pipx install trustsight
-```
-
-On Arch Linux, `pip install` is blocked by the system Python's `externally-managed-environment` protection. Use **pipx** (above) or:
-
-```bash
-pip install --break-system-packages trustsight
-```
-
-### AUR
-
-```bash
-git clone https://aur.archlinux.org/trustsight.git
-cd trustsight
+git clone https://github.com/emiliano-go/trustsight.git
+cd trustsight/packaging/aur
 makepkg -si
 ```
 
-The AUR PKGBUILD is maintained in the same repository; TrustSight audits its own updates.
+> **Not published to the AUR yet.** Build from the PKGBUILD in this repository, as above.
 
-### From source
-
-```bash
-git clone https://github.com/emiliano-go/trustsight
-cd trustsight
-pip install -e .
-# Or with pipx: pipx install .
-```
+The PKGBUILD runs the full test suite during build and installs the dependencies (`pygit2`, `tldextract`, `rich`, `openai`, `typer`) as `pacman`-tracked system packages.
 
 Requires **Python 3.10+**.
 

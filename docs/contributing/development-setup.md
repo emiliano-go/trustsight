@@ -9,7 +9,7 @@
 ## Clone the repository
 
 ```bash
-git clone https://github.com/your-org/trustsight.git
+git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
 ```
 
@@ -56,7 +56,15 @@ Evaluation recomputes the baseline against the pinned corpus:
 python scripts/rebaseline.py
 ```
 
-This requires the corpus to be checked out. See [Re-baselining](re-baselining.md) for details.
+The corpus is gitignored, so rebuild it from the lock first:
+
+```bash
+python scripts/build_corpus.py --from-manifest \
+  --manifest tests/fixtures/corpus.lock \
+  --out tests/fixtures/benign-corpus
+```
+
+See [Re-baselining](re-baselining.md) for details.
 
 ## Debug a single package
 

@@ -4,33 +4,23 @@ TrustSight requires **Python 3.10 or later** and **git** (for cloning AUR reposi
 
 ---
 
-## pip
-
-```bash
-pip install trustsight
-```
-
-This installs the tool and its core dependencies: `pygit2`, `tldextract`, `rich`, `openai`, and `tomli` (Python 3.10 only).
-
-## AUR
-
-```bash
-git clone https://aur.archlinux.org/trustsight.git
-cd trustsight
-makepkg -si
-```
-
-The AUR PKGBUILD is maintained alongside the source; it runs the full test suite during build.
-
-## From source
+## Install
 
 ```bash
 git clone https://github.com/emiliano-go/trustsight.git
-cd trustsight
-pip install -e .
+cd trustsight/packaging/aur
+makepkg -si
 ```
 
-The editable install (`-e`) lets you pull and test new versions immediately.
+!!! note "Not published to the AUR yet"
+
+    `aur.archlinux.org/trustsight.git` does not exist. Build from the PKGBUILD in this repository, as above.
+
+The PKGBUILD runs the full test suite during build, and `makepkg -si` pulls in the dependencies (`pygit2`, `tldextract`, `rich`, `openai`, `typer`) as proper system packages. The result is tracked by `pacman`, so it upgrades and uninstalls like anything else on the system.
+
+Do not install with `pip`: it is blocked by the system Python's `externally-managed-environment` protection, and forcing it with `--break-system-packages` risks conflicting with `pacman`-managed files.
+
+For a development checkout with the test dependencies, use a virtualenv instead (see [development setup](../contributing/development-setup.md)).
 
 ---
 
@@ -80,4 +70,4 @@ trustsight config show
 |---------|-------|-----|
 | LLM verdict reads as a template ("Version bump. No structural changes.") | No API key set | Set `TRUSTSIGHT_API_KEY` or run `trustsight config set api_key` |
 | `trustsight review` prints "No outdated packages found." | No AUR packages installed, or all are up to date | Install an AUR package or wait for updates |
-| `ModuleNotFoundError: No module named 'pygit2'` | System git not found or libgit2 headers missing | Install `libgit2-dev` (Debian) / `libgit2` (Arch), then reinstall |
+| `ModuleNotFoundError: No module named 'pygit2'` | System git not found or libgit2 headers missing | `sudo pacman -S libgit2`, then reinstall |

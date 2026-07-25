@@ -7,10 +7,12 @@ This guide walks through the single happy path: install, run a review, and under
 ## 1. Install
 
 ```bash
-pip install trustsight
+git clone https://github.com/emiliano-go/trustsight.git
+cd trustsight/packaging/aur
+makepkg -si
 ```
 
-See [installation](installation.md) for alternative methods and LLM setup.
+See [installation](installation.md) for details and LLM setup.
 
 ## 2. Run a review
 

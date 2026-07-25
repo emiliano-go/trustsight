@@ -89,15 +89,25 @@ The `.diff` must trigger the rule. The `expected.json` must contain a non-zero s
 
 Any new **scored** rule (severity other than `INFO`) must pass the benign-corpus fire-rate check:
 
-1. Run the rule against the full **benign corpus** (`tests/fixtures/benign/`).
-2. Compute the fire rate: `hits / total_packages`.
+1. Run the rule against the full **benign corpus** (`tests/fixtures/benign-corpus/`).
+2. Compute the fire rate: `hits / n_diffs`.
 3. If **fire rate < 30%** → rule passes, keep its severity.
 4. If **fire rate ≥ 30%** → demote to `INFO`/severity 0 (cannot affect scoring).
 
-To check the fire rate manually:
+To check the fire rate, re-baseline and read the per-rule rates it records. Rebuild the corpus first, as it is gitignored (see [Re-baselining](re-baselining.md)):
 
 ```bash
-python scripts/rebaseline.py --check-fire-rate
+python scripts/build_corpus.py --from-manifest \
+  --manifest tests/fixtures/corpus.lock \
+  --out tests/fixtures/benign-corpus
+python scripts/rebaseline.py --baseline /tmp/baseline-check.json
+```
+
+Each stratum's `rules` map in the output holds that rule's fire rate:
+
+```bash
+python -c "import json; d=json.load(open('/tmp/baseline-check.json')); \
+  print({s: v['rules'].get('R0XX') for s, v in d['strata'].items()})"
 ```
 
 ## Tests

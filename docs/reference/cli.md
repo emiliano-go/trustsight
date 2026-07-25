@@ -330,7 +330,7 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 | `severity` | error | Unknown severity. Unknown severities score 0. |
 | `match-target` / `scope` | error | Unknown `match_target`, or an unknown scope value. |
 | `comment-shadowed` | error | Every line the pattern matches is a comment or `depends` declaration, which `filter_raw_lines()` strips before matching. |
-| `scope-contradiction` | error | The pattern matches a function header line while scoping itself to `function_body`. The header is classified `other`, so the rule can never fire. |
+| `scope-contradiction` | warning | The pattern matches a function header line while scoping itself to `function_body`. A bare header is classified `other`, so the rule misses the ordinary multi-line form; it still fires on a single-line definition. |
 | `benign-hit` | warning | A MEDIUM-or-higher rule fires on ordinary packaging in the probe corpus (for example `chmod 644` or an `install` into `$pkgdir/etc`). |
 | `end-anchor` | warning | A `raw_line` pattern is anchored with `$`, but raw diff lines keep trailing quotes and parentheses. |
 | `scope-shadowed` | warning | The pattern matches probe lines, but none within its declared scope. |

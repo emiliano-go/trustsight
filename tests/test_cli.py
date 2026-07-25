@@ -71,14 +71,243 @@ def test_cli_review_runs(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.discovery.get_installed_aur_packages", return_value={}):
-        with patch("trustsight.analysis.discover_updates", return_value=[]):
-            with patch.object(sys, "argv", ["trustsight", "review", "--limit", "5"]):
-                try:
-                    from trustsight.cli import main
-                    main()
-                except SystemExit:
-                    pytest.fail("review should not exit")
+    with patch("trustsight.discovery.discover_packages", return_value=[]):
+        with patch.object(sys, "argv", ["trustsight", "review", "--limit", "5"]):
+            try:
+                from trustsight.cli import main
+                main()
+            except SystemExit:
+                pytest.fail("review should not exit")
+
+
+# --- Discovery flags ---
+
+def test_cli_review_help_shows_flags(capsys):
+    with patch.object(sys, "argv", ["trustsight", "review", "--help"]):
+        with pytest.raises(SystemExit):
+            from trustsight.cli import main
+            main()
+    captured = capsys.readouterr()
+    assert "--repo" in captured.out
+    assert "--foreign" in captured.out
+    assert "--all-repos" in captured.out
+
+
+def test_cli_review_flag_repo(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv",
+                          ["trustsight", "review", "--repo", "aur"]):
+            from trustsight.cli import main
+            main()
+        mock_disc.assert_called_once()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs == {
+            "repos": ["aur"],
+            "include_foreign": False,
+            "all_repos": False,
+            "_warn_func": mock_disc.call_args[1]["_warn_func"],
+        }
+
+
+def test_cli_review_flag_foreign(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv",
+                          ["trustsight", "review", "--foreign"]):
+            from trustsight.cli import main
+            main()
+        mock_disc.assert_called_once()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["include_foreign"] is True
+        assert kwargs["repos"] == []
+        assert kwargs["all_repos"] is False
+
+
+def test_cli_review_flag_all_repos(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv",
+                          ["trustsight", "review", "--all-repos"]):
+            from trustsight.cli import main
+            main()
+        mock_disc.assert_called_once()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["all_repos"] is True
+        assert kwargs["repos"] == []
+        assert kwargs["include_foreign"] is False
+
+
+def test_cli_review_flag_repo_twice(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(
+            sys, "argv",
+            ["trustsight", "review", "--repo", "aur", "--repo", "testing"],
+        ):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["repos"] == ["aur", "testing"]
+
+
+def test_cli_review_flag_repo_plus_foreign(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(
+            sys, "argv",
+            ["trustsight", "review", "--repo", "aur", "--foreign"],
+        ):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["repos"] == ["aur"]
+        assert kwargs["include_foreign"] is True
+
+
+def test_cli_review_flag_all_repos_plus_foreign(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(
+            sys, "argv",
+            ["trustsight", "review", "--all-repos", "--foreign"],
+        ):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["all_repos"] is True
+        assert kwargs["include_foreign"] is True
+
+
+# --- Config-driven discovery (no CLI flags) ---
+
+def _make_config_with_discovery(tmp_path, monkeypatch, **discovery_overrides):
+    """Write a config.toml with [discovery] section and patch paths."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    cfg_dir = tmp_path / ".config"  
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = cfg_dir / "config.toml"
+
+    from trustsight.config import DEFAULT_CONFIG
+    if cfg_path.exists():
+        cfg_path.unlink()
+    text = DEFAULT_CONFIG
+    import re
+    text = re.sub(r"\n\[discovery\].*?(?=\n\[|\Z)", "", text, flags=re.DOTALL)
+    text = text.rstrip() + "\n"
+    discovery_lines = [
+        "[discovery]",
+        f'default_repos = {discovery_overrides.get("default_repos", "[]")}',
+        f'include_foreign = {str(discovery_overrides.get("include_foreign", False)).lower()}',
+        f'all_repos = {str(discovery_overrides.get("all_repos", False)).lower()}',
+    ]
+    text += "\n".join(discovery_lines) + "\n"
+    cfg_path.write_text(text)
+
+
+def test_cli_review_config_default_repos(tmp_path, monkeypatch):
+    _make_config_with_discovery(
+        tmp_path, monkeypatch,
+        default_repos='["aur"]',
+        include_foreign=True,
+    )
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv", ["trustsight", "review"]):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        assert kwargs["repos"] == ["aur"]
+        assert kwargs["include_foreign"] is True
+
+
+def test_cli_review_config_cli_overrides(tmp_path, monkeypatch):
+    """CLI flags take precedence over config defaults."""
+    _make_config_with_discovery(
+        tmp_path, monkeypatch,
+        default_repos='["aur"]',
+        include_foreign=True,
+    )
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv",
+                          ["trustsight", "review", "--repo", "cli-repo"]):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        # CLI --repo overrides config default_repos
+        assert kwargs["repos"] == ["cli-repo"]
+        # --foreign not passed, so include_foreign is False (not config's True)
+        assert kwargs["include_foreign"] is False
+
+
+def test_cli_review_config_no_flags_fallback_foreign(tmp_path, monkeypatch):
+    """When config has no discovery settings, default to foreign-only."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with patch("trustsight.cli.discover_packages") as mock_disc:
+        mock_disc.return_value = []
+        with patch.object(sys, "argv", ["trustsight", "review"]):
+            from trustsight.cli import main
+            main()
+        kwargs = mock_disc.call_args[1]
+        # No [discovery] in default config, so fallback to include_foreign=True
+        assert kwargs["include_foreign"] is True
+        assert kwargs["repos"] == []
+        assert kwargs["all_repos"] is False
 
 
 def test_cli_history_no_history(tmp_path, monkeypatch, capsys):

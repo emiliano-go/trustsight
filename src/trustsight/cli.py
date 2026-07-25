@@ -2,7 +2,8 @@ import argparse
 import sys
 
 from . import __version__
-from .analysis import analyze_package, discover_updates
+from .analysis import analyze_package
+from .discovery import discover_packages
 from .config import (
     ensure_default_configs,
     load_config,
@@ -129,6 +130,61 @@ def cmd_review(args):
         maybe_auto_import_seed()
     limit = args.limit or config.get("limits", {}).get("default_review_limit", 20)
 
+    user_specified = (
+        getattr(args, "repo", None) is not None
+        or getattr(args, "foreign", None) is not None
+        or getattr(args, "all_repos", None) is not None
+    )
+    if user_specified:
+        repos = args.repo or []
+        include_foreign = bool(args.foreign)
+        all_repos = bool(args.all_repos)
+    else:
+        discovery_cfg = config.get("discovery", {})
+        repos = discovery_cfg.get("default_repos", [])
+        include_foreign = discovery_cfg.get("include_foreign", False)
+        all_repos = discovery_cfg.get("all_repos", False)
+        if not repos and not all_repos and not include_foreign:
+            include_foreign = True
+
+    def _warn(msg: str):
+        con = console()
+        con.print(f"[yellow]Warning:[/] {msg}")
+
+    if all_repos:
+        from .discovery import get_local_repos_from_pacman_conf
+        try:
+            get_local_repos_from_pacman_conf()
+        except RuntimeError as exc:
+            if repos:
+                _warn(str(exc) + "; falling back to explicit repos.")
+            else:
+                console().print(f"[red]Error:[/] {exc}")
+                sys.exit(1)
+
+    outdated_pkgs = discover_packages(
+        repos=repos,
+        include_foreign=include_foreign,
+        all_repos=all_repos,
+        _warn_func=_warn if repos else None,
+    )
+
+    if not outdated_pkgs:
+        if HAS_RICH:
+            console().print("[green]No outdated packages found.[/green]")
+        else:
+            print("No outdated packages found.")
+        return
+
+    _run_analysis_loop(outdated_pkgs, limit, args.verbose, config)
+
+
+def _run_analysis_loop(outdated_pkgs: list[dict], limit: int,
+                       verbose: bool, config: dict) -> None:
+    from .llm import fallback_verdict, generate_verdict
+
+    limited = outdated_pkgs[:limit] if limit else outdated_pkgs
+
     if HAS_RICH:
         con = console()
         progress_columns = [
@@ -143,12 +199,12 @@ def cmd_review(args):
 
             def on_progress(_current, total, name):
                 if total:
-                    progress.update(task, total=total, completed=_current, description=f"Analyzing {name}")
+                    progress.update(task, total=total, completed=_current,
+                                    description=f"Analyzing {name}")
                 else:
                     progress.update(task, description=name)
 
-            results = discover_updates(limit=limit, progress_callback=on_progress,
-                                       verbose=args.verbose)
+            results = _analyze_outdated_batch(limited, on_progress, verbose)
             progress.update(task, visible=False)
 
         if not results:
@@ -166,7 +222,7 @@ def cmd_review(args):
         table.add_column("Score", justify="right")
         table.add_column("Risk")
         table.add_column("Verdict", overflow="fold")
-        if args.verbose:
+        if verbose:
             table.add_column("Triggered Rules", overflow="fold")
 
         for r in results:
@@ -179,7 +235,7 @@ def cmd_review(args):
                 Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
                 verdict,
             ]
-            if args.verbose:
+            if verbose:
                 rules_text = ", ".join(
                     f"{rule['rule_id']}"
                     for rule in r.get("triggered_rules", [])
@@ -189,30 +245,72 @@ def cmd_review(args):
 
         con.print(table)
     else:
-        results = discover_updates(limit=limit, verbose=args.verbose)
+        results = _analyze_outdated_batch(limited, None, verbose)
 
         if not results:
             print("No outdated AUR packages found.")
             return
 
         print(f"{'Package':<20} {'Risk Score':<10} Verdict", end="")
-        if args.verbose:
+        if verbose:
             print("  Rules")
         else:
             print()
-        print("-" * (80 if not args.verbose else 120))
+        print("-" * (80 if not verbose else 120))
         for r in results:
             verdict = r["verdict"]
             if r.get("first_seen"):
                 verdict = f"[First analysis] {verdict}"
             line = f"{r['package']:<20} {r['score']:<10} {verdict}"
-            if args.verbose:
+            if verbose:
                 rules_str = ", ".join(
                     rule["rule_id"]
                     for rule in r.get("triggered_rules", [])
                 ) if r.get("triggered_rules") else "none"
                 line += f"  {rules_str}"
             print(line)
+
+
+def _analyze_outdated_batch(
+    pkgs: list[dict], progress_callback=None, verbose: bool = False
+) -> list[dict]:
+    from .llm import fallback_verdict, generate_verdict
+
+    results = []
+    total = len(pkgs)
+    for i, entry in enumerate(pkgs):
+        name = entry["name"]
+        if progress_callback:
+            progress_callback(i, total, name)
+        fact = analyze_package(name)
+        verdict = (
+            generate_verdict(fact) if fact.final_score > 0
+            else fallback_verdict(fact)
+        )
+        res = {
+            "package": name,
+            "old_version": entry.get("current_version", ""),
+            "new_version": entry.get("latest_version", ""),
+            "score": fact.final_score,
+            "verdict": verdict,
+            "risk": (
+                "Low" if fact.final_score <= 20
+                else "Medium" if fact.final_score <= 50
+                else "High" if fact.final_score <= 80
+                else "Critical"
+            ),
+            "first_seen": fact.first_seen,
+        }
+        if verbose:
+            fired = [
+                {"rule_id": e.rule_id, "severity": e.severity}
+                for e in fact.score_breakdown
+                if e.weight > 0 or e.severity == "FATAL"
+            ]
+            res["triggered_rules"] = fired
+            res["suppressed_rules"] = fact.suppressed_rules
+        results.append(res)
+    return results
 
 
 def _inspect_rich(fact):
@@ -704,6 +802,10 @@ def main():
             "                     Use --update to also replace superseded patterns\n\n"
             "examples:\n"
             "  trustsight review              Check all outdated AUR packages\n"
+            "  trustsight review --repo aur   Scan packages from the aur repo\n"
+            "  trustsight review --repo aur --repo testing --foreign\n"
+            "                                 Scan aur + testing + foreign pkgs\n"
+            "  trustsight review --all-repos  Auto-detect all local repos\n"
             "  trustsight inspect <pkg>       Deep analysis of one package\n"
             "  trustsight history <pkg>       Show past analysis results\n"
             "  trustsight config show         Display current settings\n"
@@ -719,6 +821,12 @@ def main():
     p_review = sub.add_parser("review", help="Scan AUR and analyze outdated packages")
     p_review.add_argument("--limit", type=int, default=0, help="Max packages to review")
     p_review.add_argument("--verbose", action="store_true", help="Show triggered rules per package")
+    p_review.add_argument("--repo", action="append", dest="repo", default=None,
+                          help="Scan packages from a specific local repository (can be repeated)")
+    p_review.add_argument("--foreign", action="store_true", dest="foreign", default=None,
+                          help="Include foreign packages (pacman -Qm)")
+    p_review.add_argument("--all-repos", action="store_true", dest="all_repos", default=None,
+                          help="Auto-detect all local repos from pacman.conf (excludes official repos)")
 
     p_inspect = sub.add_parser("inspect", help="Analyze a specific package")
     p_inspect.add_argument("package", help="Package name")

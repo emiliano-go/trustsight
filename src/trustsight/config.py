@@ -71,6 +71,13 @@ default_review_limit = 20
 # never overwrite something learned from a real analysis.
 auto_import = true
 
+[discovery]
+# Default repositories to scan when no --repo/--foreign/--all-repos CLI
+# flags are given.  Only packages found on the AUR are reviewed.
+default_repos = []
+include_foreign = false
+all_repos = false
+
 [rules]
 # Run rules marked experimental in rules.toml.  The R039+ set is now
 # calibrated and runs unconditionally; this gates future additions whose

@@ -25,14 +25,11 @@ from .differ import (
     is_skip_justified,
     source_array_has_command_substitution,
 )
-from .discovery import find_outdated_packages, get_aur_latest_versions, get_installed_aur_packages
 from .fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
-from .llm import generate_verdict
 from .novelty import build_novelty_context, normalize_url
 from .override import filter_triggered_rules
 from .rules import apply_rules, get_raw_diff_lines
 from .scoring import calculate_score
-from .llm import fallback_verdict
 from .schema import (
     DiffSummary,
     ExecutionChanges,
@@ -434,42 +431,4 @@ def _make_fresh_analysis(
     return fact
 
 
-def discover_updates(limit: int = 20, progress_callback=None, verbose: bool = False) -> list[dict]:
-    ensure_default_configs()
-    init_db()
 
-    installed = get_installed_aur_packages()
-    names = list(installed.keys())
-    latest = get_aur_latest_versions(names)
-    outdated = find_outdated_packages(installed, latest)
-
-    if progress_callback:
-        progress_callback(0, 0, "AUR info gathered")
-
-    results = []
-    pkg_items = list(outdated.items())[:limit]
-    for i, (name, (old_ver, new_ver)) in enumerate(pkg_items):
-        if progress_callback:
-            progress_callback(i, len(pkg_items), name)
-        fact = analyze_package(name)
-        verdict = generate_verdict(fact) if fact.final_score > 0 else fallback_verdict(fact)
-        entry = {
-            "package": name,
-            "old_version": old_ver,
-            "new_version": new_ver,
-            "score": fact.final_score,
-            "verdict": verdict,
-            "risk": "Low" if fact.final_score <= 20 else "Medium" if fact.final_score <= 50 else "High" if fact.final_score <= 80 else "Critical",
-            "first_seen": fact.first_seen,
-        }
-        if verbose:
-            fired = [
-                {"rule_id": e.rule_id, "severity": e.severity}
-                for e in fact.score_breakdown
-                if e.weight > 0 or e.severity == "FATAL"
-            ]
-            entry["triggered_rules"] = fired
-            entry["suppressed_rules"] = fact.suppressed_rules
-        results.append(entry)
-
-    return results

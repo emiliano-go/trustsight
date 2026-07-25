@@ -72,6 +72,8 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 ## Install
 
+### pip / pipx
+
 ```bash
 pipx install trustsight
 ```
@@ -82,9 +84,17 @@ On Arch Linux, `pip install` is blocked by the system Python's `externally-manag
 pip install --break-system-packages trustsight
 ```
 
-AUR: `trustsight` (dogfood: TrustSight audits its own updates).
+### AUR
 
-From source:
+```bash
+git clone https://aur.archlinux.org/trustsight.git
+cd trustsight
+makepkg -si
+```
+
+The AUR PKGBUILD is maintained in the same repository; TrustSight audits its own updates.
+
+### From source
 
 ```bash
 git clone https://github.com/emiliano-go/trustsight

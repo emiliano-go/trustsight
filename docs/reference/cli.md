@@ -14,6 +14,7 @@ Global entry point defined at `src/trustsight/cli.py`.
 |------|-------------|
 | `-h`, `--help` | Show help message, including config subcommands and usage examples. |
 | `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
+| `--json` | Output in JSON format instead of the default rich/plain text. Available on all commands. |
 
 The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
 
@@ -62,7 +63,7 @@ trustsight review --all-repos --foreign
 1. Collects package names and versions from the requested sources (repos via `pacman -Q --repo`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Sends the combined set to `https://aur.archlinux.org/rpc?v=5&type=info&arg[]=<names>` in a single batched request.
 3. Filters to packages whose installed version is older than the latest AUR version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies R001-R013 and C001-C003 rules, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001-R013, R039-R059) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
 
 ### Output
@@ -339,7 +340,7 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 
 Rules are run through the real matching engine against a small annotated probe diff, so comment filtering and function-body scoping apply exactly as they do in production. Probe lines are tagged benign or suspicious; a high-severity rule firing on a benign line is reported as `benign-hit`, because a rule that matches ordinary packaging will fire across a large share of the AUR.
 
-Backtracking is measured rather than guessed. Static nested-quantifier heuristics false-positive on safe patterns such as `(?:-\S+\s+)*`, where the inner and outer character classes are disjoint. Probe inputs are capped at 18 characters so that detecting an exponential pattern does not itself hang the linter.
+Backtracking is measured rather than guessed. Static nested-quantifier heuristics false-positive on safe patterns such as `(?:-\S+\s+)*`, where the inner and outer character classes are disjoint. Probe inputs are capped at 22 characters (adjusted for Python 3.12+ optimized `re` engine) so that detecting an exponential pattern does not itself hang the linter.
 
 ### Exit codes
 

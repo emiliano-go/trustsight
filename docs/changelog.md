@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- Multi-repo and foreign package discovery: new `--repo`, `--foreign`, `--all-repos` flags for `trustsight review`. Packages can be scanned from specific local repositories, all auto-detected local repos (excluding official ones), and/or foreign packages. Config-driven defaults via new `[discovery]` section in `config.toml`.
+- `vercmp`-based version comparison for accurate detection of outdated packages (replaces string inequality).
+- Graceful fallback to string comparison when `vercmp` binary is missing.
+
+### Changed
+
+- Python requirement lowered from `>=3.12` to `>=3.10`. `tomllib` usage replaced with a `tomli` fallback shim for 3.10 compatibility.
+- CI matrix expanded to test Python 3.10 through 3.14.
+- Catastrophic backtracking detection threshold raised (`_BACKTRACK_REPS` 18 -> 22) to remain effective on Python 3.12+ optimized regex engine.
+
 ## [0.3.1] - 2026-07-24
 
 ### Fixed

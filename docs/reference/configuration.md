@@ -135,6 +135,18 @@ Deep analysis mode : gates LLM-assisted analysis for scores above threshold.
 | `max_context_lines` | int | `3` | Number of context lines in git diffs passed to `pygit2.Diff`. |
 | `max_diff_chars_for_llm` | int | `2000` | Maximum characters of the prompt sent to the LLM. Truncated from the start. |
 
+### `[discovery]`
+
+Controls which packages are scanned when no `--repo`/`--foreign`/`--all-repos` flags are given on the command line. See [CLI Reference](cli.md#trustsight-review) for the full precedence rules.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `default_repos` | array of strings | `[]` | List of repository names to scan by default when no CLI flags are given. |
+| `include_foreign` | bool | `false` | Whether to also include foreign packages (`pacman -Qm`) when `default_repos` is non-empty or `all_repos` is true. When all defaults are empty/false, foreign packages are scanned as a fallback. |
+| `all_repos` | bool | `false` | If true, automatically detect all local repositories from `/etc/pacman.conf` (excluding official repos) and use them as the default scope. `default_repos` are added to the auto-detected list. |
+
+If none of these settings are explicitly configured, the tool scans foreign packages only (backward-compatible default).
+
 ### `[limits]`
 
 | Key | Type | Default | Description |

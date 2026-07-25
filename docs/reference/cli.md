@@ -25,10 +25,10 @@ The help output also documents `trustsight config show`, `trustsight config set 
 
 ## trustsight review
 
-Scan all installed AUR packages, check for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
+Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
 
 ```
-trustsight review [--limit N]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos]
 ```
 
 ### Flags
@@ -37,12 +37,31 @@ trustsight review [--limit N]
 |------|------|---------|-------------|
 | `--limit` | `int` | `20` | Maximum number of outdated packages to review. Falls back to `limits.default_review_limit` from config if omitted (default: 20). |
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
+| `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
+| `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
+| `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
+
+#### Flag precedence
+
+If any discovery flag (`--repo`, `--foreign`, `--all-repos`) is given on the command line, the `[discovery]` config section is ignored for that run. Otherwise, the config defaults apply (see [Configuration Reference](configuration.md)).
+
+### Examples
+
+```
+trustsight review                      # Foreign packages only (default)
+trustsight review --repo aur           # Packages from the aur repo only
+trustsight review --repo aur --repo testing --foreign
+                                       # aur + testing repos + foreign
+trustsight review --all-repos          # All local repos, no foreign
+trustsight review --all-repos --foreign
+                                       # All local repos + foreign
+```
 
 ### Behaviour
 
-1. Lists every AUR-installed package via `pacman -Qm`.
-2. Queries `https://aur.archlinux.org/rpc?v=5&type=info&arg[]=<names>` in a single batched request.
-3. Filters to packages whose installed version differs from the latest AUR version.
+1. Collects package names and versions from the requested sources (repos via `pacman -Q --repo`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
+2. Sends the combined set to `https://aur.archlinux.org/rpc?v=5&type=info&arg[]=<names>` in a single batched request.
+3. Filters to packages whose installed version is older than the latest AUR version (using `vercmp`).
 4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies R001-R013 and C001-C003 rules, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
 

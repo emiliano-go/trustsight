@@ -101,7 +101,7 @@ Requires **Python 3.12+**.
 
 | Command | What it does |
 |---|---|
-| [`trustsight review`](docs/reference/cli.md) | Scan all outdated AUR packages and produce a scored table with tiered evidence. |
+| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos` flags and config-driven multi-repo discovery. |
 | [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
 | [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package, with optional `--score-breakdown`. |
 | [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled novelty seed (178,491 AUR source URLs) so a fresh install is not cold. Runs automatically on first use. |

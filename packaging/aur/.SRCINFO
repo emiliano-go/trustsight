@@ -1,6 +1,6 @@
 pkgbase = trustsight
 	pkgdesc = A CLI tool to vet AUR package updates before install
-	pkgver = 0.5.1
+	pkgver = 0.6.0
 	pkgrel = 1
 	url = https://github.com/emiliano-go/trustsight
 	arch = any
@@ -17,7 +17,7 @@ pkgbase = trustsight
 	depends = python-typer
 	depends = python-openai
 	optdepends = ollama: local LLM verdict generation instead of remote API
-	source = trustsight-0.5.1.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.5.1.tar.gz
-	sha256sums = ee7048c5229c1f928d96c77446105a45ce90d4e0514cf99c2a5c63929a5d9ad7
+source = trustsight-0.5.1.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.5.1.tar.gz
+sha256sums = ee7048c5229c1f928d96c77446105a45ce90d4e0514cf99c2a5c63929a5d9ad7
 
 pkgname = trustsight

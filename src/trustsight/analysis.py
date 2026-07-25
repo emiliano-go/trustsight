@@ -16,19 +16,31 @@ from .db import (
     update_package_version,
     upsert_package,
 )
+from .deps import _strip_comment, extract_dependency_changes, is_related_package
+from .db import (
+    is_established_package,
+    record_dependency_names,
+    top_dependency_names,
+)
 from .differ import (
     _has_checksum_in_post_diff,
     detect_checksum_removed,
     detect_verification_evidence,
+    extract_source_array_urls,
     extract_urls_from_diff,
     generate_diff,
     is_skip_justified,
     source_array_has_command_substitution,
 )
 from .fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
-from .novelty import build_novelty_context, normalize_url
+from .novelty import (
+    build_novelty_context,
+    is_dependency_novel,
+    normalize_url,
+    typosquat_target,
+)
 from .override import filter_triggered_rules
-from .rules import apply_rules, get_raw_diff_lines
+from .rules import _classify_enclosing_function, apply_rules, get_raw_diff_lines
 from .scoring import calculate_score
 from .schema import (
     DiffSummary,
@@ -37,7 +49,7 @@ from .schema import (
     PackageFact,
     fact_to_dict,
 )
-from .tokenizer import tokenize_and_resolve
+from .tokenizer import resolve_added_lines, tokenize_and_resolve
 
 
 def _pkgver_changed_in_diff(diff_text: str) -> bool:
@@ -100,11 +112,80 @@ def _aggregate_pinning(
     return _PINNING_ORDER[max(_PINNING_ORDER.index(p) for p in levels)]
 
 
+_CRITICAL_FUNCTIONS = ("build", "prepare", "check", "package")
+
+# Tools whose appearance in makedepends means the build can now reach the
+# network, and therefore fetch code that no checksum covers.
+_NETWORK_TOOLS = frozenset({
+    "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+    "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
+    "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
+})
+
+_INSTALL_HOOKS = (
+    "post_install", "post_upgrade", "pre_install",
+    "pre_upgrade", "pre_remove", "post_remove",
+)
+
+# Privileged operations in a hook body.  These run as root, so enabling a
+# unit or setting a setuid bit from here is materially different from doing
+# it under $pkgdir during build.
+_HOOK_EXEC_RE = re.compile(
+    r"\b(?:eval|bash\s+-c|sh\s+-c|source\s+/|systemctl\s+enable|"
+    r"chmod\s+[0-7]*[2467][0-7]{3}|chmod\s+[ugoa]*\+s|useradd|usermod|visudo)\b",
+    re.IGNORECASE,
+)
+
+# Patch content from outside the build tree.  Deliberately not "absent from
+# source=()": patches routinely arrive inside the extracted tarball, so that
+# check fires on 2.13% of benign diffs and cannot distinguish the two.
+_UNTRUSTED_PATCH_RE = re.compile(
+    r"(?:patch\b|git\s+apply\b)[^|;&]*?"
+    r"(<\([^)]*\)"                     # process substitution
+    r"|https?://[^\s'\"]+"             # fetched over the network
+    r"|[<\s-][ip]?\s*['\"]?/(?!usr/bin/patch)[^\s'\"$]+\.(?:patch|diff))",
+    re.IGNORECASE,
+)
+
+_NETWORK_FETCH_RE = re.compile(
+    r"(?:curl|wget|aria2c|git\s+clone|svn\s+(?:co|checkout)|"
+    r"python\s+-c\s+.*urllib|python\s+-m\s+http)\b[^|;&]*?"
+    r"(https?://[^\s|;&'\"\)]+)",
+    re.IGNORECASE,
+)
+
+
+# Fallbacks for a config written before [experimental_rules] existed.
+# load_toml() reads the user's file verbatim and never merges the defaults
+# in, so an existing install would otherwise never see a new key and R060
+# would be dead for every user who already has a config.toml.
+_EXPERIMENTAL_DEFAULTS = {
+    "D001": False, "D002": False, "D003": False, "D004": False,
+    "R060": True,   # INFO severity, weight 0: cannot move a score
+    "R061": False, "R062": False, "R063": False, "R064": False,
+}
+
+
+def _experimental_enabled(config: dict, rule_id: str) -> bool:
+    """D-series and the new build rules are opt-in until calibrated.
+
+    They are emitted from code rather than ``rules.toml``, so the
+    ``experimental`` flag that :func:`~trustsight.rules.apply_rules`
+    honours does not reach them; they need their own gate.
+    """
+    section = config.get("experimental_rules") if config else None
+    if section is None:
+        return _EXPERIMENTAL_DEFAULTS.get(rule_id, False)
+    return bool(section.get(rule_id, _EXPERIMENTAL_DEFAULTS.get(rule_id, False)))
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
     source_buckets: dict[str, str] | None = None,
     maintainer_changed: bool = False,
+    package_name: str = "",
+    config: dict | None = None,
 ) -> list[dict]:
     """Findings that need diff-pair context a single-line regex cannot see.
 
@@ -179,7 +260,148 @@ def _structural_findings(
         add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",
             "source=() contains $( ) or backtick substitution")
 
+    _dependency_findings(diff_text, package_name, config or {}, add)
+    _build_findings(diff_text, config or {}, add)
+
     return findings
+
+
+def _dependency_findings(diff_text, package_name, config, add) -> None:
+    """D-series: rules over the dependency graph.
+
+    ``rules.py`` strips dependency lines before any pattern runs, so these
+    read the diff through :mod:`~trustsight.deps` instead.
+    """
+    wanted = {r for r in ("D001", "D002", "D003", "D004")
+              if _experimental_enabled(config, r)}
+    if not wanted:
+        return
+
+    added_deps = extract_dependency_changes(diff_text, package_name)
+
+    if wanted & {"D001", "D002"}:
+        # D002 refines D001: only a name already established as globally
+        # unknown is worth an edit-distance comparison.  The candidate list
+        # is loaded lazily because the overwhelming majority of diffs add no
+        # novel dependency at all, and it is thousands of rows.
+        candidates: list[str] | None = None
+        for field in ("depends", "makedepends", "optdepends", "checkdepends"):
+            for name in sorted(added_deps.get(field, ())):
+                if not is_dependency_novel(name):
+                    continue
+                impersonated = None
+                if "D002" in wanted:
+                    if candidates is None:
+                        candidates = top_dependency_names()
+                    impersonated = typosquat_target(name, candidates)
+                if impersonated:
+                    add("D002", "Typosquatted Dependency", "HIGH", "dependency",
+                        f"{field} '{name}' resembles '{impersonated}'")
+                elif "D001" in wanted:
+                    add("D001", "Novel Dependency Added", "HIGH", "dependency",
+                        f"{field} '{name}' has never been seen in the AUR")
+
+    if "D003" in wanted:
+        new_network = sorted(added_deps.get("makedepends", set()) & _NETWORK_TOOLS)
+        if new_network:
+            add("D003", "New Network-Using Makedepends", "MEDIUM", "dependency",
+                f"build can now reach the network via {new_network}")
+
+    if "D004" in wanted:
+        for field in ("provides", "replaces"):
+            for name in sorted(added_deps.get(field, ())):
+                # Declaring a variant of yourself is the ordinary pattern
+                # (htop-vim provides htop); claiming an unrelated package is
+                # how you get installed in front of it.
+                if is_related_package(name, package_name):
+                    continue
+                if is_established_package(name):
+                    add("D004", "Dependency Hijack Via Provides", "HIGH", "dependency",
+                        f"{field} '{name}', an established package unrelated to "
+                        f"'{package_name}'")
+                    return
+
+
+def _build_findings(diff_text, config, add) -> None:
+    """R060 to R064: changes to the code that actually executes."""
+    wanted = {r for r in ("R060", "R061", "R062", "R063", "R064")
+              if _experimental_enabled(config, r)}
+    if not wanted:
+        return
+    wants_060 = "R060" in wanted
+    wants_061 = "R061" in wanted
+
+    # Resolved with positions intact, so each line keeps its enclosing
+    # function.  The hunk header cannot be used: the corpus is built with
+    # `git diff -W` and an xfuncname, so its headers name the function,
+    # while the live pygit2 path emits none.
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+
+    touched = sorted({
+        fn for i, line in enumerate(lines)
+        if line[:1] in ("+", "-")
+        and (fn := enclosing.get(i)) in _CRITICAL_FUNCTIONS
+    })
+    if wants_060 and touched:
+        # INFO, not LOW: this fires on 21.4% of benign diffs, because
+        # maintainers rewrite build functions constantly.  No narrowing
+        # reaches triage quality (restricting to an unchanged pkgver still
+        # leaves 11.6%), so it carries weight 0 and serves as context in
+        # the report rather than as a scoring signal.
+        add("R060", "Critical Build Function Modified", "INFO", "build",
+            f"diff modifies {', '.join(f'{f}()' for f in touched)}")
+
+    if wants_061:
+        declared = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
+        for i, line in enumerate(lines):
+            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+                continue
+            for match in _NETWORK_FETCH_RE.finditer(line):
+                url = match.group(1)
+                if normalize_url(url) not in declared:
+                    add("R061", "Hidden Network Fetch In Build", "HIGH", "network",
+                        f"{enclosing[i]}() downloads {url}, which is not in source=()")
+                    break
+            else:
+                continue
+            break
+
+    if "R062" in wanted:
+        # .install hooks run as root at install time, which makes them the
+        # highest-privilege code a PKGBUILD carries.  generate_diff() already
+        # includes *.install patches, and _classify_enclosing_function()
+        # recognises post_install() exactly as it recognises build(), so the
+        # hook body needs no separate parser.
+        for i, line in enumerate(lines):
+            if not line.startswith("+") or enclosing.get(i) not in _INSTALL_HOOKS:
+                continue
+            body = _strip_comment(line)
+            if _NETWORK_FETCH_RE.search(body) or _HOOK_EXEC_RE.search(body):
+                add("R062", "Install Hook Fetches Or Executes", "HIGH", "installer",
+                    f"{enclosing[i]}() runs as root and contains: {body.strip()[:80]}")
+                break
+
+    if "R063" in wanted:
+        for i, line in enumerate(lines):
+            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+                continue
+            match = _UNTRUSTED_PATCH_RE.search(_strip_comment(line))
+            if match:
+                add("R063", "Patch Applied From Outside The Build Tree", "HIGH", "integrity",
+                    f"{enclosing[i]}() applies a patch from {match.group(1).strip()[:70]}")
+                break
+
+    if "R064" in wanted:
+        before = extract_source_array_urls(diff_text, side="before")
+        after = extract_source_array_urls(diff_text, side="after")
+        for url in sorted(before):
+            if not url.startswith("https://"):
+                continue
+            if url.replace("https://", "http://", 1) in after:
+                add("R064", "Source URL Downgraded To HTTP", "MEDIUM", "network",
+                    f"source URL downgraded from https to http: {url[:70]}")
+                break
 
 
 def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") -> PackageFact:
@@ -246,6 +468,7 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
         _structural_findings(
             diff_text, source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
+            package_name=pkg_name, config=config,
         )
     )
     triggered_rules, suppressed_rules = filter_triggered_rules(
@@ -304,6 +527,17 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     update_package_version(pkg_name, head_version)
     if new_maintainer:
         update_package_maintainer(pkg_name, new_maintainer)
+
+    # Fold the dependencies just seen into the local corpus, as the URL
+    # path already does, so the database keeps growing and the shipped seed
+    # matters less over time.  Deliberately not done in scan_diff(): an
+    # offline corpus scan that recorded as it went would mark every name
+    # known on first sight and destroy its own novelty signal.
+    record_dependency_names(sorted(
+        name
+        for names in extract_dependency_changes(diff_text, pkg_name).values()
+        for name in names
+    ))
     return fact
 
 
@@ -347,7 +581,10 @@ def scan_diff(
         include_experimental=config.get("rules", {}).get("experimental", False),
     )
     triggered_rules.extend(
-        _structural_findings(diff_text, source_changes, source_buckets)
+        _structural_findings(
+            diff_text, source_changes, source_buckets,
+            package_name=package_name, config=config,
+        )
     )
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

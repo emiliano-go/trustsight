@@ -84,6 +84,39 @@ all_repos = false
 # false-positive rate has not been measured yet.
 experimental = false
 
+[experimental_rules]
+# Rules emitted from code rather than rules.toml, so the [rules]
+# experimental flag above cannot reach them.  All default to false until
+# their fire rates have been measured against the benign corpus and
+# folded into baseline.json.
+#
+# D001  novel dependency: a name never seen anywhere in the AUR
+# D002  typosquatted dependency: a novel name one or two edits from a
+#       popular one (refines D001, so enabling it alone is meaningful)
+# D003  new network-using makedepends: the build can now fetch code that
+#       no checksum covers
+# D004  provides/replaces claims an established, unrelated package, which
+#       installs this package in front of it
+# R061  a download inside build() whose URL is not in source=()
+# R062  a .install hook, which runs as root, fetches or executes
+# R063  a patch applied from outside the build tree (a URL, an absolute
+#       path, or process substitution)
+# R064  a source= URL downgraded from https to http
+D001 = false
+D002 = false
+D003 = false
+D004 = false
+R061 = false
+R062 = false
+R063 = false
+R064 = false
+
+# R060 reports that a critical build function was modified.  It is INFO
+# severity, so it carries weight 0 and cannot move a score: it fires on
+# 21.4% of benign diffs and is context for a reviewer, not a signal.  That
+# is why it is the one rule here safe to leave on.
+R060 = true
+
 [verification_evidence]
 checksum_present = -10
 validpgpkeys_declared = -10

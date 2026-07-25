@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -84,6 +85,19 @@ def init_db():
                 count INTEGER
             );
 
+            /* Every dependency name ever observed in the AUR, so that a
+               name nobody has ever depended on can be recognised as novel.
+               Package names and provides() aliases are recorded here too:
+               a dependency satisfied by an alias is not novel either. */
+            CREATE TABLE IF NOT EXISTS dependency_names (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE,
+                first_seen_globally_timestamp TEXT,
+                observation_count INTEGER
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dependency_names_name
+                ON dependency_names(name);
             CREATE INDEX IF NOT EXISTS idx_source_urls_url ON source_urls(url);
             CREATE INDEX IF NOT EXISTS idx_packages_name ON packages(name);
             CREATE INDEX IF NOT EXISTS idx_history_package ON analysis_history(package_id);
@@ -219,6 +233,120 @@ def set_metadata(key: str, value: str) -> None:
         conn.commit()
 
 
+# A database created before dependency_names existed is still perfectly
+# usable, and scan_diff() never calls init_db(), so every read of this
+# table has to tolerate its absence rather than raising.
+def dependency_observation_count(name: str) -> int:
+    """How many times *name* has been seen as a dependency, package, or alias."""
+    with get_connection() as conn:
+        try:
+            row = conn.execute(
+                "SELECT observation_count FROM dependency_names WHERE name = ?",
+                (name,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return 0
+        return int(row["observation_count"] or 0) if row else 0
+
+
+def top_dependency_names(limit: int = 5000) -> list[str]:
+    """The most-depended-on names, as a popularity proxy for typosquatting.
+
+    Observation count already ranks names by how many packages rely on
+    them, so no separate "top packages" list needs shipping.
+    """
+    with get_connection() as conn:
+        try:
+            rows = conn.execute(
+                """SELECT name FROM dependency_names
+                   ORDER BY observation_count DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [r["name"] for r in rows]
+
+
+# A name this many packages depend on is established enough to be worth
+# protecting, used only when pacman cannot be consulted.
+_ESTABLISHED_OBSERVATIONS = 10
+
+_official_names: Optional[frozenset] = None
+
+
+def official_package_names() -> frozenset:
+    """Package names in the configured official repositories.
+
+    Read once per process via pacman, the same way ``discovery.py`` already
+    queries it.  An empty set is returned when pacman is unavailable or its
+    databases have never been synced, and callers fall back to observation
+    counts rather than failing.
+    """
+    global _official_names
+    if _official_names is None:
+        try:
+            result = subprocess.run(
+                ["pacman", "-Slq"], capture_output=True, text=True,
+                check=False, timeout=30,
+            )
+            _official_names = frozenset(
+                line.strip().lower()
+                for line in result.stdout.splitlines() if line.strip()
+            )
+        except (OSError, subprocess.SubprocessError):
+            _official_names = frozenset()
+    return _official_names
+
+
+def is_established_package(name: str) -> bool:
+    """True when *name* is a package worth impersonating.
+
+    Prefers the official repositories, which is an exact answer.  Falls back
+    to how many packages depend on the name: a poor proxy for repo
+    membership (at 10 observations it covers 30% of official packages) but
+    the best available signal when pacman cannot be reached.
+    """
+    if not name:
+        return False
+    official = official_package_names()
+    if official:
+        return name in official
+    return dependency_observation_count(name) >= _ESTABLISHED_OBSERVATIONS
+
+
+def dependency_table_populated() -> bool:
+    """True when the dependency corpus is loaded.
+
+    Without this the D-series cannot distinguish "never seen anywhere" from
+    "no seed imported yet", and every dependency on a fresh install would
+    look novel.
+    """
+    with get_connection() as conn:
+        try:
+            row = conn.execute(
+                "SELECT 1 AS present FROM dependency_names LIMIT 1"
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return False
+        return row is not None
+
+
+def record_dependency_names(names: list[str]) -> None:
+    """Fold observed dependency names into the local corpus."""
+    if not names:
+        return
+    with get_connection() as conn:
+        conn.executemany(
+            """INSERT INTO dependency_names
+               (name, first_seen_globally_timestamp, observation_count)
+               VALUES (?, datetime('now'), 1)
+               ON CONFLICT(name) DO UPDATE SET
+                   observation_count = observation_count + 1""",
+            [(n,) for n in names],
+        )
+        conn.commit()
+
+
 def seed_observation_count() -> int:
     """Bootstrap observation count supplied by an imported seed.
 
@@ -305,6 +433,27 @@ def import_seed(seed_path: Path) -> dict:
             maint = conn.execute(
                 "SELECT COUNT(*) AS n FROM maintainer_counts"
             ).fetchone()["n"]
+            # A seed predating dependency_names is still importable; the
+            # table simply stays empty and every dependency reads as novel,
+            # which is why the D-series checks for an empty table.
+            deps = 0
+            has_deps = conn.execute(
+                "SELECT name FROM seed.sqlite_master "
+                "WHERE type='table' AND name='dependency_names'"
+            ).fetchone()
+            if has_deps:
+                conn.execute(
+                    """INSERT INTO dependency_names
+                       (name, first_seen_globally_timestamp, observation_count)
+                       SELECT name, first_seen_globally_timestamp, observation_count
+                       FROM seed.dependency_names WHERE true
+                       ON CONFLICT(name) DO UPDATE SET
+                           observation_count = observation_count
+                                               + excluded.observation_count"""
+                )
+                deps = conn.execute(
+                    "SELECT COUNT(*) AS n FROM dependency_names"
+                ).fetchone()["n"]
             conn.execute(
                 """INSERT OR REPLACE INTO metadata (key, value)
                    SELECT key, value FROM seed.metadata"""
@@ -315,6 +464,7 @@ def import_seed(seed_path: Path) -> dict:
             "urls_added": after - before,
             "urls_total": after,
             "maintainers": maint,
+            "dependency_names": deps,
             "observations": seed_observation_count(),
         }
     finally:

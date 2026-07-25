@@ -1,6 +1,13 @@
 import re
 
-from .db import effective_observation_count, get_connection
+from .db import (
+    dependency_observation_count,
+    dependency_table_populated,
+    effective_observation_count,
+    get_connection,
+    top_dependency_names,
+)
+from .deps import normalize_dependency
 from .schema import NoveltyContext
 
 _VERSION_RE = re.compile(r"\d+(?:\.\d+){1,}")
@@ -21,6 +28,70 @@ def normalize_url(url: str) -> str:
     n = _DATE_RE.sub("DATE", n)
     n = _TRAILING_RE.sub("", n)
     return n
+
+
+def is_dependency_novel(name: str) -> bool:
+    """True when *name* has never been observed anywhere in the AUR.
+
+    Returns False when the dependency corpus has not been seeded.  Without
+    that guard a fresh install has an empty table, every dependency looks
+    novel, and D001 fires on every package it sees.
+    """
+    if not dependency_table_populated():
+        return False
+    normalized = normalize_dependency(name)
+    if not normalized:
+        return False
+    return dependency_observation_count(normalized) == 0
+
+
+def _damerau_levenshtein(a: str, b: str, limit: int) -> int:
+    """Edit distance including transpositions, abandoned once past *limit*."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    prev2: list[int] = []
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i] + [0] * len(b)
+        for j, cb in enumerate(b, 1):
+            cost = 0 if ca == cb else 1
+            cur[j] = min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+            if i > 1 and j > 1 and ca == b[j - 2] and a[i - 2] == cb:
+                cur[j] = min(cur[j], prev2[j - 2] + cost)
+        if min(cur) > limit:
+            return limit + 1
+        prev2, prev = prev, cur
+    return prev[len(b)]
+
+
+def typosquat_target(name: str, candidates: list[str] | None = None) -> str | None:
+    """Return the popular package *name* appears to impersonate, if any.
+
+    Only ever called for a name D001 has already found to be globally
+    unknown, which is what makes a runtime edit-distance check affordable
+    and correct.  A precomputed pair table cannot work here: any table
+    built from existing package names can only contain names that must
+    *not* fire, while the names that should fire do not exist yet.
+
+    The threshold scales with length because short names sit close to many
+    unrelated real packages (``yay`` is one edit from ``yak``, ``yam``,
+    ``jay``, and ``may``).
+    """
+    if len(name) < 4:
+        return None
+    limit = 1 if len(name) < 8 else 2
+    if candidates is None:
+        candidates = top_dependency_names()
+    best: tuple[int, str] | None = None
+    for candidate in candidates:
+        if candidate == name or abs(len(candidate) - len(name)) > limit:
+            continue
+        distance = _damerau_levenshtein(name, candidate, limit)
+        if distance <= limit and (best is None or distance < best[0]):
+            best = (distance, candidate)
+            if distance == 1:
+                break
+    return best[1] if best else None
 
 
 def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:

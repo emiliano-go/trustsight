@@ -145,6 +145,42 @@ def detect_checksum_removed(diff_text: str) -> bool:
     return removed and not added
 
 
+_SOURCE_ARRAY_START_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
+
+
+def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
+    """URLs declared in ``source=()``, on one side of the diff.
+
+    Distinct from :func:`extract_urls_from_diff`, which collects URLs from
+    *any* added line.  R061 asks whether a download inside ``build()`` is
+    also a declared source, and the broader helper would include the
+    download's own URL, so the comparison could never fail.
+
+    ``side="after"`` is the post-diff end-state (the default, which R061
+    relies on); ``side="before"`` is the pre-diff state, so R064 can tell a
+    URL that was downgraded from one that was always plain http.
+    """
+    skip = "-" if side == "after" else "+"
+    urls: set[str] = set()
+    in_array = False
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        if line.startswith(skip):
+            continue
+        body = line[1:] if line[:1] in ("+", "-") else line
+
+        if not in_array:
+            if not _SOURCE_ARRAY_START_RE.match(body):
+                continue
+            in_array = True
+        for candidate in re.findall(r"https?://[^\s'\"\)]+", body):
+            urls.add(re.sub(r"[\)]+$", "", candidate))
+        if ")" in body:
+            in_array = False
+    return urls
+
+
 def source_array_has_command_substitution(diff_text: str) -> bool:
     """Detect command substitution inside an added ``source=()`` array."""
     return any(

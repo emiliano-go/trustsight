@@ -1,4 +1,4 @@
-from trustsight.tokenizer import tokenize_and_resolve
+from trustsight.tokenizer import resolve_added_lines, tokenize_and_resolve
 
 
 def test_simple_assignment_usage():
@@ -127,3 +127,28 @@ def test_multi_line_source_array():
 +)"""
     resolved, unresolved = tokenize_and_resolve(diff)
     assert len(resolved) > 0
+
+
+def test_resolve_added_lines_preserves_positions():
+    """Regression: resolution was zipped against tokenize_and_resolve, whose
+    output omits assignment lines.  An added assignment made the sequences
+    different lengths and shifted every later line onto the wrong position,
+    so a rule scoped to build() saw the wrong function and a dependency
+    array lost its header."""
+    diff = (
+        "+optdepends=(\n"
+        "+  'foo: a thing'\n"
+        "+  'bar: another'\n"
+        "+)\n"
+    )
+    lines = resolve_added_lines(diff)
+    assert len(lines) == len(diff.splitlines())
+    assert lines[0] == "+optdepends=("
+    assert lines[-1] == "+)"
+
+
+def test_resolve_added_lines_substitutes_variables():
+    diff = "+_name=mytool\n+build() {\n+  ./$_name --check\n+}\n"
+    lines = resolve_added_lines(diff)
+    assert len(lines) == 4
+    assert "./mytool --check" in lines[2]

@@ -34,6 +34,7 @@ import pygit2
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from trustsight.novelty import normalize_url  # noqa: E402
+from trustsight.deps import normalize_dependency  # noqa: E402
 from trustsight.fetcher import extract_maintainer  # noqa: E402
 from trustsight.srcinfo import parse_srcinfo  # noqa: E402
 
@@ -65,7 +66,14 @@ CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+CREATE TABLE IF NOT EXISTS dependency_names (
+    id INTEGER PRIMARY KEY,
+    name TEXT UNIQUE,
+    first_seen_globally_timestamp TEXT,
+    observation_count INTEGER
+);
 CREATE INDEX IF NOT EXISTS idx_source_urls_url ON source_urls(url);
+CREATE INDEX IF NOT EXISTS idx_dependency_names_name ON dependency_names(name);
 """
 
 
@@ -127,6 +135,33 @@ def extract_sources(srcinfo_text: str) -> list[str]:
     return urls
 
 
+_DEP_FIELDS = ("depends", "makedepends", "optdepends", "checkdepends")
+
+
+def extract_dependency_names(srcinfo_text: str) -> list[str]:
+    """Return every dependency, package, and provides name in a .SRCINFO.
+
+    Package names and ``provides`` aliases are included deliberately: a
+    dependency satisfied by an alias (``libfoo.so``) or by a package that
+    nothing else depends on is not novel, and omitting them would make
+    D001 fire on ordinary packages.
+
+    Arch-suffixed arrays (``depends_x86_64``) count too, since that is
+    where -bin packages put their real dependencies.
+    """
+    parsed = parse_srcinfo(srcinfo_text)
+    names: list[str] = []
+    for key, values in parsed.items():
+        base = key.split("_")[0]
+        if base not in _DEP_FIELDS and key not in ("pkgname", "pkgbase", "provides"):
+            continue
+        for value in values:
+            name = normalize_dependency(value)
+            if name:
+                names.append(name)
+    return names
+
+
 def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
     if not AUR_REPO.exists():
         print(f"AUR mirror not found at {AUR_REPO}.", file=sys.stderr)
@@ -142,6 +177,7 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
 
     url_counter: Counter[str] = Counter()
     maint_counter: Counter[str] = Counter()
+    dep_counter: Counter[str] = Counter()
     packages_with_sources = 0
     start = time.time()
 
@@ -158,6 +194,8 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
             packages_with_sources += 1
         for url in urls:
             url_counter[normalize_url(url)] += 1
+        for dep in extract_dependency_names(srcinfo_text):
+            dep_counter[dep] += 1
         if maintainer:
             maint_counter[maintainer] += 1
         if i % progress_every == 0:
@@ -168,6 +206,7 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
     print(f"\n  {packages_with_sources} packages had source URLs")
     print(f"  {len(url_counter)} distinct normalized URLs")
     print(f"  {len(maint_counter)} distinct maintainers")
+    print(f"  {len(dep_counter)} distinct dependency names")
 
     if out_path.exists():
         out_path.unlink()
@@ -191,6 +230,12 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
         "INSERT OR REPLACE INTO maintainer_counts (name, count) VALUES (?, ?)",
         list(maint_counter.items()),
     )
+    conn.executemany(
+        """INSERT OR IGNORE INTO dependency_names
+           (name, first_seen_globally_timestamp, observation_count)
+           VALUES (?, ?, ?)""",
+        [(n, SEED_TIMESTAMP, c) for n, c in dep_counter.items()],
+    )
     # The bootstrap maturity value.  It is the number of packages the seed
     # actually observed, not an arbitrary constant, so a partial seed
     # produces proportionally lower maturity.
@@ -200,6 +245,7 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
             ("seed_observation_count", str(packages_with_sources)),
             ("seed_version", time.strftime("%Y-%m-%d")),
             ("seed_url_count", str(len(url_counter))),
+            ("seed_dependency_count", str(len(dep_counter))),
         ],
     )
     conn.commit()
@@ -219,6 +265,7 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
     return {
         "urls": len(url_counter),
         "maintainers": len(maint_counter),
+        "dependency_names": len(dep_counter),
         "observations": packages_with_sources,
     }
 

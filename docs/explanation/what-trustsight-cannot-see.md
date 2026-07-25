@@ -35,13 +35,17 @@ Running the PKGBUILD to resolve variables would produce accurate resolution but 
 
 ## Build-dependency blind spot
 
-Dependency changes (`depends`, `makedepends`, `optdepends`) are filtered out of the analysis. This avoids false positives from routine dependency updates, but it also means a compromised build dependency is not detected as a signal. A PKGBUILD that adds a compromised build tool as a dependency will not be flagged for that change.
+Dependency changes (`depends`, `makedepends`, `optdepends`) are filtered out of *pattern* matching: `rules.py` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
 
-### Why dependencies are filtered
+The trade-off used to be that a dependency-based attack was entirely invisible. The [D-series rules](../reference/rules.md#d-series) narrow that gap by asking a different question. Rather than pattern-matching the text, they compare the dependency arrays before and after the diff and check each newly added name against every dependency name ever observed in the AUR. A name nobody has ever depended on is rare and worth attention, where "this line mentions a package" is not.
 
-Dependencies change frequently and legitimately. A package that adds a new feature might add a new `makedepends`. A package that drops support for a library might remove a `depends`. Including dependency changes in the scoring would produce a high false-positive rate: most dependency changes are benign, and the signal-to-noise ratio would be too low to be useful.
+This narrows the gap; it does not close it:
 
-The trade-off is that a dependency-based attack (adding a compromised library as a dependency) is invisible. This risk is partially mitigated by the fact that dependency attacks require compromising either the AUR package or the upstream dependency, both of which are outside TrustSight's scope.
+- A backdoor introduced into an *established* dependency is still invisible. D001 asks whether the **name** is novel, not whether the package behind it is trustworthy. Depending on a popular library that was itself compromised upstream produces no signal at all, and that is the same upstream-payload gap described above.
+- Removing a dependency is not scored. Dropping a hardening library is a real weakening, but it is indistinguishable from ordinary cleanup.
+- The rules are only as good as the seeded corpus. Against an unseeded database, D001 stays silent by design rather than flagging every dependency it sees.
+
+The D-series is off by default while its fire rates are measured; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
 
 ## Deliberately-unremarkable PKGBUILDs
 

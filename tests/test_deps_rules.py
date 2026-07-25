@@ -23,7 +23,7 @@ from trustsight.rules import load_rules
 
 HEADER = "--- a/PKGBUILD\n+++ b/PKGBUILD\n"
 
-KNOWN = ["glibc", "curl", "openssl", "cmake", "python-requests", "ffmpeg"]
+KNOWN = ["glibc", "curl", "openssl", "cmake", "python-requests", "ffmpeg", "sudo"]
 
 
 @pytest.fixture(scope="module")
@@ -182,7 +182,7 @@ def test_source_array_urls_exclude_build_downloads():
 def seeded_db(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
     init_db()
-    record_dependency_names(KNOWN * 3)
+    record_dependency_names(KNOWN * 10)
     yield
 
 
@@ -291,11 +291,11 @@ def all_enabled(enabled):
     return enabled
 
 
-def test_d004_fires_on_unrelated_established_package(all_enabled, rules):
+def test_d004_fires_on_unrelated_established_package(seeded_db, all_enabled, rules):
     assert "D004" in fired(HEADER + "+provides=('openssl')\n", all_enabled, rules)
 
 
-def test_d004_fires_on_replaces(all_enabled, rules):
+def test_d004_fires_on_replaces(seeded_db, all_enabled, rules):
     assert "D004" in fired(HEADER + "+replaces=('sudo')\n", all_enabled, rules)
 
 

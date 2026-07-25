@@ -7,6 +7,11 @@ Categories:
   SUBTLE  - Hard-to-spot compromise (typo-squat, maintainer swap, etc.).
 """
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
+
 from trustsight.buckets import classify_urls
 from trustsight.differ import extract_urls_from_diff
 from trustsight.llm import fallback_verdict

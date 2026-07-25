@@ -1,3 +1,8 @@
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
+
 from trustsight.scoring import calculate_score, risk_level
 from trustsight.schema import NoveltyContext
 

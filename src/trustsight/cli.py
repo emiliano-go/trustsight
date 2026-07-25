@@ -617,7 +617,7 @@ def cmd_override(args):
 
 def cmd_lint_rules(args):
     if args.file:
-        import tomllib
+        from ._toml import tomllib
         from pathlib import Path
 
         path = Path(args.file)

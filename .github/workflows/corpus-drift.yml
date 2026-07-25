@@ -16,8 +16,24 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
+      # Unlike mirror-check, this job caches the fetched AUR objects: it is
+      # measuring rule drift, not mirror availability, so re-fetching the
+      # same commits every month buys nothing. Keyed on the lock, so a
+      # corpus change forces a cold rebuild.
+      - name: Cache AUR objects
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trustsight/aur.git
+          key: aur-objects-${{ hashFiles('tests/fixtures/corpus.lock') }}
+          restore-keys: aur-objects-
+
+      - name: Reconstruct corpus from lock
+        run: |
+          python scripts/build_corpus.py --from-manifest \
+            --manifest tests/fixtures/corpus.lock \
+            --out tests/fixtures/benign-corpus
+
       - name: Compute current baseline
-        id: rebaseline
         run: |
           python scripts/rebaseline.py \
             --corpus tests/fixtures/benign-corpus \
@@ -26,31 +42,73 @@ jobs:
 
       - name: Compare with stored baseline
         id: diff
+        shell: python
         run: |
-          mismatch=$(diff <(python -c "import json; d=json.load(open('tests/fixtures/baseline.json')); print(json.dumps(d, sort_keys=True))") \
-                          <(python -c "import json; d=json.load(open('/tmp/baseline-current.json')); print(json.dumps(d, sort_keys=True))") || true)
-          if [ -n "$mismatch" ]; then
-            echo "DRIFT_DETECTED=yes" >> "$GITHUB_OUTPUT"
-            {
-              echo 'CHANGES<<EOF'
-              echo "$mismatch"
-              echo 'EOF'
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "DRIFT_DETECTED=no" >> "$GITHUB_OUTPUT"
-          fi
+          import json, os, subprocess
+          from pathlib import Path
+
+          def norm(p):
+              return json.dumps(json.loads(Path(p).read_text()),
+                                sort_keys=True, indent=2).splitlines(keepends=True)
+
+          import difflib
+          delta = "".join(difflib.unified_diff(
+              norm("tests/fixtures/baseline.json"),
+              norm("/tmp/baseline-current.json"),
+              fromfile="baseline.json", tofile="rebuilt",
+          ))
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"drift={'yes' if delta else 'no'}\n")
+
+          # Written to a file, not to an output: a heredoc delimiter can be
+          # forged by diff content, and the payload can exceed the 1 MB
+          # output limit on a wide rule change.
+          Path("/tmp/drift.txt").write_text(delta)
+          print(delta[:20000] or "No drift detected.")
 
       - name: Raise issue on drift
-        if: steps.diff.outputs.DRIFT_DETECTED == 'yes'
+        if: steps.diff.outputs.drift == 'yes'
         uses: actions/github-script@v7
         with:
           script: |
-            const changes = process.env.CHANGES;
+            const fs = require('fs');
+            let changes = fs.readFileSync('/tmp/drift.txt', 'utf8');
+            const LIMIT = 50000;
+            if (changes.length > LIMIT) {
+              changes = changes.slice(0, LIMIT) + '\n... truncated, see run log ...';
+            }
+            const body = [
+              'Monthly re-baseline detected changes in FP rates.',
+              '',
+              '```diff',
+              changes,
+              '```',
+              '',
+              'If the change is expected, refresh the baseline:',
+              '',
+              '```',
+              'python scripts/rebaseline.py',
+              '```',
+              '',
+              `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+
+            const title = 'Corpus baseline drift detected';
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'corpus-drift',
+            });
+            if (existing.data.some(i => i.title === title)) {
+              core.info('Issue already open, not filing a duplicate.');
+              return;
+            }
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: 'Corpus baseline drift detected',
-              body: `Monthly re-baseline detected changes in FP rates.\n\n\`\`\`\n${changes}\n\`\`\`\n\nRun \`scripts/rebaseline.py\` to update \`baseline.json\`.`
+              title,
+              body,
+              labels: ['corpus-drift'],
             });
-        env:
-          CHANGES: ${{ steps.diff.outputs.CHANGES }}

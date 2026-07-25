@@ -12,7 +12,7 @@ Corpora:
     Selection: convenience sample, hand-typed by maintainer.
                83% -bin. Not representative.
     Purpose: preserve reproducibility of the v0.1.0 FP baseline.
-    Status: EXISTING — shipped with v0.1.0 findings.
+    Status: EXISTING; shipped with v0.1.0 findings.
 
   benign-corpus/
     Source: https://github.com/archlinux/aur.git
@@ -20,13 +20,17 @@ Corpora:
     Selection: stratified by package shape (see scripts/strata.toml,
                tests/fixtures/corpus.lock). 8 strata, ~190 packages total.
     Purpose: PR-blocking calibration gates.
-    Status: PLACEHOLDER — generate with scripts/build_corpus.py.
+    Status: NOT COMMITTED; *.diff is gitignored. Rebuild the exact
+            pinned corpus from the lock with:
+              python scripts/build_corpus.py --from-manifest \
+                --manifest tests/fixtures/corpus.lock \
+                --out tests/fixtures/benign-corpus
 
   malicious/
     Source: generated + reconstructed + holdout
     Purpose: synthetic (100% recall gate), historical (report-only),
              holdout (generalization measurement).
-    Status: PLACEHOLDER — generate with scripts/gen_injection_fixtures.py
+    Status: PLACEHOLDER; generate with scripts/gen_injection_fixtures.py
             (already present for R012/R013).
 
 License: Each diff file is derived from the Arch Linux AUR git mirror

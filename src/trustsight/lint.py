@@ -122,10 +122,11 @@ def _pattern_matches_empty(compiled: re.Pattern) -> bool:
 # Probe inputs are deliberately short.  Detecting catastrophic
 # backtracking by running the pattern means the linter pays the very cost
 # it is looking for, so the input must be small enough that an
-# exponential pattern is merely slow rather than hanging.  At 18
-# repetitions a classic ``(a+)+$`` takes ~110ms while a linear pattern
-# takes ~0.03ms; three orders of magnitude of separation, bounded.
-_BACKTRACK_REPS = 18
+# exponential pattern is merely slow rather than hanging.  At 22
+# repetitions a classic ``(a+)+$`` takes ~110ms on Python 3.10 while
+# a linear pattern takes ~0.03ms; on 3.12+ the optimised re engine
+# runs it in ~15ms at 18 reps, so 22 restores the margin.
+_BACKTRACK_REPS = 22
 _BACKTRACK_BUDGET_S = 0.02
 
 _BACKTRACK_PROBES = (

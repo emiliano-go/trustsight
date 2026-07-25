@@ -16,7 +16,8 @@ jobs:
           chown -R builder:builder "$GITHUB_WORKSPACE"
           cd "$GITHUB_WORKSPACE/packaging/aur"
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          tar -C "$GITHUB_WORKSPACE" -czf "trustsight-${pkgver}.tar.gz" --transform "s|^\.|trustsight-${pkgver}|" .
+          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/trustsight-${pkgver}.tar.gz" --transform "s|^\.|trustsight-${pkgver}|" .
+          cp "/tmp/trustsight-${pkgver}.tar.gz" .
           su builder -c "cd '$PWD' && makepkg -si --noconfirm --skipchecksums --nocheck"
       - name: Verify installation
         run: trustsight --version

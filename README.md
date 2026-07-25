@@ -124,7 +124,7 @@ TrustSight is evidence-producing, not proof-of-safety. It audits and does not in
 
 ## License
 
-MIT. Deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security communities.
+MIT
 
 ---
 

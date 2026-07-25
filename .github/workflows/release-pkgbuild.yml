@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-pkgbuild
+  cancel-in-progress: false
+
 # The checksum is written to the PKGBUILD on the default branch, never back
 # onto the tag.  GitHub generates the source tarball from whatever tree the
 # tag points at, so amending the tag would change the tarball and invalidate
@@ -21,35 +25,46 @@ permissions:
 # The PKGBUILD inside the tagged tarball still carries the previous release's
 # checksum. That is harmless: nobody builds from the copy inside the tarball.
 # Users clone the default branch, and the AUR gets its own copy.
+#
+# The work is split across two jobs on purpose.  Only makepkg needs Arch, and
+# doing git work inside the container failed with "fatal: not in a git
+# directory" even though actions/checkout had initialised the repository
+# normally.  Generating metadata in the container and committing from the
+# host runner keeps each tool where it is known to work.
 jobs:
-  update-pkgbuild:
+  build-metadata:
+    name: Compute checksum and metadata
     runs-on: ubuntu-latest
     container: archlinux:latest
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
+      sha256: ${{ steps.checksum.outputs.sha256 }}
     steps:
       - name: Install tooling
-        run: pacman -Syu --noconfirm --needed base-devel git
+        run: pacman -Syu --noconfirm --needed base-devel
 
       - name: Resolve tag
         id: tag
         run: |
-          set -euo pipefail
+          set -eu
           tag="${{ github.event.inputs.tag || github.ref_name }}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
+      # Only the PKGBUILD is read here, so this checkout never needs to be a
+      # usable git repository.
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.repository.default_branch }}
-          fetch-depth: 0
 
       - name: Compute checksum of the release tarball
         id: checksum
         run: |
-          set -euo pipefail
+          set -eu
           tag='${{ steps.tag.outputs.tag }}'
           url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${tag}.tar.gz"
-          # The archive is usually ready the moment the tag lands, but it is
-          # generated on demand, so a fresh tag can 404 briefly.
+          # The archive is generated on demand, so a fresh tag can 404 briefly.
           for attempt in 1 2 3 4 5; do
             if curl -fsSL "$url" -o /tmp/source.tar.gz; then
               break
@@ -67,7 +82,7 @@ jobs:
       - name: Update PKGBUILD
         working-directory: packaging/aur
         run: |
-          set -euo pipefail
+          set -eu
           version='${{ steps.tag.outputs.version }}'
           sha256='${{ steps.checksum.outputs.sha256 }}'
 
@@ -83,7 +98,7 @@ jobs:
       - name: Verify the recorded checksum actually validates
         working-directory: packaging/aur
         run: |
-          set -euo pipefail
+          set -eu
           # makepkg refuses to run as root, and this is the step that would
           # catch a wrong checksum before it reaches a user.
           useradd -m builder
@@ -93,11 +108,36 @@ jobs:
       - name: Regenerate .SRCINFO
         working-directory: packaging/aur
         run: |
-          set -euo pipefail
+          set -eu
           su builder -c "makepkg --printsrcinfo" > .SRCINFO
           grep -q "pkgver = ${{ steps.tag.outputs.version }}" .SRCINFO
 
-      - name: Commit to the default branch
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkgbuild-metadata
+          path: |
+            packaging/aur/PKGBUILD
+            packaging/aur/.SRCINFO
+          # .SRCINFO is a dotfile, and upload-artifact skips hidden files
+          # unless told otherwise.
+          include-hidden-files: true
+          if-no-files-found: error
+
+  commit:
+    name: Commit to the default branch
+    needs: build-metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: pkgbuild-metadata
+          path: packaging/aur
+
+      - name: Commit
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -107,8 +147,8 @@ jobs:
             echo "PKGBUILD already up to date; nothing to commit."
             exit 0
           fi
-          git commit -m "packaging: set checksum for ${{ steps.tag.outputs.tag }}
+          git commit -m "packaging: set checksum for ${{ needs.build-metadata.outputs.tag }}
 
-          Generated from the ${{ steps.tag.outputs.tag }} source tarball by
-          .github/workflows/release-pkgbuild.yml."
+          Generated from the ${{ needs.build-metadata.outputs.tag }} source
+          tarball by .github/workflows/release-pkgbuild.yml."
           git push origin HEAD:${{ github.event.repository.default_branch }}

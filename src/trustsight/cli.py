@@ -437,8 +437,9 @@ def _inspect_rich(fact):
     meta.add_row("Version", f"{fact.old_version or '?'} -> {fact.new_version or '?'}")
     if fact.diff_summary.files_changed:
         meta.add_row("Files", ", ".join(fact.diff_summary.files_changed))
-    meta.add_row("Lines", f"[green]+{fact.diff_summary.lines_added}[/] "
-                          f"[red]-{fact.diff_summary.lines_removed}[/]")
+    if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
+        meta.add_row("Lines", f"[green]+{fact.diff_summary.lines_added}[/] "
+                              f"[red]-{fact.diff_summary.lines_removed}[/]")
     if fact.maintainer_changed:
         meta.add_row("Maintainer",
                      f"[yellow]{fact.previous_maintainer or '?'} -> "

@@ -404,10 +404,28 @@ def _build_findings(diff_text, config, add) -> None:
                 break
 
 
+def _get_installed_version(pkg_name: str) -> str:
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["pacman", "-Q", pkg_name],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0 and result.stdout:
+            parts = result.stdout.strip().split()
+            if len(parts) >= 2:
+                return parts[1]
+    except (subprocess.SubprocessError, FileNotFoundError):
+        pass
+    return ""
+
+
 def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") -> PackageFact:
     ensure_default_configs()
     init_db()
     config = load_config()
+
+    installed_version = _get_installed_version(pkg_name)
 
     repo = clone_or_fetch(pkg_name)
     head_commit = get_head_commit(repo)
@@ -419,14 +437,15 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     package_id = upsert_package(pkg_name, head_version)
 
     if not head_commit:
-        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config)
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
 
     if not old_commit:
         last = get_last_analysis(package_id)
-        if last and last.get("new_commit"):
-            old_commit = last["new_commit"]
+        if last is not None:
+            if last.get("new_commit"):
+                old_commit = last["new_commit"]
         else:
-            return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config)
+            return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
 
     diff_text, diff_summary = generate_diff(repo, old_commit, head_commit, config.get("diff", {}).get("max_context_lines", 3))
 
@@ -491,7 +510,7 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
 
     fact = PackageFact(
         package_name=pkg_name,
-        old_version="",
+        old_version=installed_version,
         new_version=head_version,
         old_commit=old_commit,
         new_commit=head_commit,
@@ -514,7 +533,7 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
 
     insert_analysis(
         package_id=package_id,
-        old_version="",
+        old_version=installed_version,
         new_version=head_version,
         old_commit=old_commit,
         new_commit=head_commit,
@@ -641,11 +660,13 @@ def scan_diff(
 
 
 def _make_fresh_analysis(
-    pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict
+    pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
+    installed_version: str = "",
 ) -> PackageFact:
     novelty = build_novelty_context([], package_id)
     fact = PackageFact(
         package_name=pkg_name,
+        old_version=installed_version,
         new_version=version,
         new_commit=commit,
         diff_summary=DiffSummary(),
@@ -655,7 +676,7 @@ def _make_fresh_analysis(
     )
     insert_analysis(
         package_id=package_id,
-        old_version="",
+        old_version=installed_version,
         new_version=version,
         old_commit="",
         new_commit=commit,

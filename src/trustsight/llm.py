@@ -243,6 +243,12 @@ def fallback_verdict(fact: PackageFact) -> str:
     suspicious patterns detected", including on packages scoring 100/100
     with a CRITICAL rule fired.
     """
+    if fact.first_seen:
+        seen = "No prior history for this package"
+        if not fact.old_version and not fact.new_version:
+            return f"{seen}. Insufficient data for a verdict."
+        return f"First analysis. {seen}. No version bump confirmed yet."
+
     reasons = []
     if fact.diff_summary.files_changed:
         reasons.append(f"modified {', '.join(fact.diff_summary.files_changed)}")

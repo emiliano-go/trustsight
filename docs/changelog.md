@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Temporal context rules (R065–R067).** Three new code-emitted rules that
+  inspect git commit timestamps on the AUR repository rather than diff content.
+  All are on by default with no config toggle.
+
+  | Rule | Name | Severity | Condition |
+  |------|------|----------|-----------|
+  | R065 | Very Recent Update | INFO (w 0) | HEAD commit < 72 h old |
+  | R066 | Brand New Package | INFO (w 0) | First AUR commit < 30 days old |
+  | R067 | Stale Package Revived | MEDIUM (w 15) | Gap to last analyzed commit > 365 days |
+
 ## [0.6.1] - 2026-07-25
 
 ### Changed

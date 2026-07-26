@@ -100,6 +100,18 @@ Measured against the 3246-diff benign corpus. All enabled by default since v0.7.
 | R063 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3246 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
 | R064 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3246 | `transset-df`: a genuine https to http downgrade |
 
+## Temporal context rules (R065–R067)
+
+These rules inspect git commit timestamps rather than diff content, so they
+are inherently time-of-run dependent and cannot be calibrated against the
+static corpus. Fire rates vary per database and per run.
+
+| Rule | Name | Sev | Condition | Notes |
+|------|------|-----|-----------|-------|
+| R065 | Very Recent Update | INFO | HEAD commit < 72 h old | Depends on when you run the tool. |
+| R066 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
+| R067 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
+
 ## Structural rules (C001–C007)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from urllib.parse import urlparse
 
 import pygit2
@@ -179,6 +180,71 @@ def _experimental_enabled(config: dict, rule_id: str) -> bool:
     if section is None:
         return _EXPERIMENTAL_DEFAULTS.get(rule_id, False)
     return bool(section.get(rule_id, _EXPERIMENTAL_DEFAULTS.get(rule_id, False)))
+
+
+def _recent_update(repo, head_commit):
+    if not head_commit:
+        return None
+    try:
+        commit = repo.get(head_commit)
+        if commit is None:
+            return None
+        hours_ago = (time.time() - commit.commit_time) / 3600
+        if hours_ago < 72:
+            return {
+                "rule_id": "R065",
+                "name": "Very Recent Update",
+                "severity": "INFO",
+                "category": "temporal",
+                "match": f"updated {int(hours_ago)}h ago (< 72h)",
+            }
+    except (AttributeError, pygit2.GitError):
+        pass
+    return None
+
+
+def _package_is_new(repo, head_commit):
+    if not head_commit:
+        return None
+    try:
+        root_age = None
+        for c in repo.walk(head_commit):
+            if not c.parents:
+                root_age = (time.time() - c.commit_time) / 86400
+                break
+        if root_age is not None and root_age < 30:
+            return {
+                "rule_id": "R066",
+                "name": "Brand New Package",
+                "severity": "INFO",
+                "category": "temporal",
+                "match": f"first AUR commit {int(root_age)} days ago (< 30)",
+            }
+    except (AttributeError, pygit2.GitError):
+        pass
+    return None
+
+
+def _stale_revival(repo, old_commit, head_commit):
+    if not old_commit or not head_commit:
+        return None
+    try:
+        old = repo.get(old_commit)
+        head = repo.get(head_commit)
+        if old is None or head is None:
+            return None
+        gap_days = (head.commit_time - old.commit_time) / 86400
+        if gap_days > 365:
+            return {
+                "rule_id": "R067",
+                "name": "Stale Package Revived",
+                "severity": "MEDIUM",
+                "category": "temporal",
+                "match": f"dormant {int(gap_days)} days, now has a new update (> 1 year)",
+            }
+    except (AttributeError, pygit2.GitError):
+        pass
+    return None
 
 
 def _structural_findings(
@@ -509,6 +575,15 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
+    recent = _recent_update(repo, head_commit)
+    if recent:
+        triggered_rules.append(recent)
+    new_pkg = _package_is_new(repo, head_commit)
+    if new_pkg:
+        triggered_rules.append(new_pkg)
+    revived = _stale_revival(repo, old_commit, head_commit)
+    if revived:
+        triggered_rules.append(revived)
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
     aggregate_pinning = _aggregate_pinning(
@@ -680,6 +755,13 @@ def _make_fresh_analysis(
     installed_version: str = "",
 ) -> PackageFact:
     novelty = build_novelty_context([], package_id)
+    triggered_rules: list[dict] = []
+    recent = _recent_update(repo, commit)
+    if recent:
+        triggered_rules.append(recent)
+    new_pkg = _package_is_new(repo, commit)
+    if new_pkg:
+        triggered_rules.append(new_pkg)
     fact = PackageFact(
         package_name=pkg_name,
         old_version=installed_version,
@@ -699,7 +781,7 @@ def _make_fresh_analysis(
         final_score=0,
         raw_diff="",
         fact_json=json.dumps(fact_to_dict(fact)),
-        triggered_rules=[],
+        triggered_rules=triggered_rules,
     )
     update_package_version(pkg_name, version)
     return fact

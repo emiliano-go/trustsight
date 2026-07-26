@@ -70,7 +70,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001 to R013, R039 to R061, C001 to C007, D001 to D003 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001 to R013, R039 to R067, C001 to C007, D001 to D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Cryptographic integrity metadata (subtractive) |
@@ -87,7 +87,7 @@ Each rule supports these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier (`R001`-`R013` core, `R039`+ expanded). |
+| `id` | `string` | Rule identifier (`R001`-`R013` core, `R039`+ expanded, `R060`+ code-emitted). |
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
@@ -510,6 +510,9 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | R062 | HIGH | 3 | 0.09 % | All `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. Real privileged behaviour, which is the point. |
 | R063 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
 | R064 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
+| R065 | INFO | — | — | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
+| R066 | INFO | — | — | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
+| R067 | MEDIUM | — | — | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
 | D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
@@ -559,6 +562,50 @@ This rule deliberately does **not** check membership of `source=()`. Patches rou
 - **Description:** A URL declared in `source=()` as `https://` before the diff appears as `http://` after it, with the same host and path. Plain http was never upgraded; this is a URL that lost its transport security.
 
 Distinguishing a downgrade from a URL that was always http needs both sides of the diff, which is why `extract_source_array_urls()` takes a `side` parameter.
+
+---
+
+## Temporal context rules (R065–R067) {#temporal-rules}
+
+Defined in `src/trustsight/analysis.py`. They inspect git commit timestamps on
+the AUR repository to surface temporal signals. None require a diff, so they
+also fire on first-seen packages in `_make_fresh_analysis()`.
+
+All three are **on by default** with no config toggle.
+
+### R065: Very Recent Update {#r065}
+
+- **Target:** programmatic (commit timestamp)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+- **Condition:** AUR HEAD commit is less than 72 hours old.
+
+Packages updated moments ago have not been visible to the community long enough
+for anyone to vet them. Combined with other signals — maintainer change, new
+source domains — recency escalates suspicion.
+
+### R066: Brand New Package {#r066}
+
+- **Target:** programmatic (root commit timestamp)
+- **Severity:** INFO (weight 0)
+- **Category:** `temporal`
+- **Condition:** The package's first commit on AUR is less than 30 days old.
+
+A package that barely exists has no reputation. An established package with a
+recent update is routine; a package uploaded last week has zero track record.
+
+### R067: Stale Package Revived {#r067}
+
+- **Target:** programmatic (commit timestamp gap)
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `temporal`
+- **Condition:** The previously analyzed commit is more than 365 days older than
+  the new HEAD — an abandoned package that suddenly has activity.
+
+Account takeovers happen on stale packages: a maintainer stops responding,
+someone else adopts the AUR record, and the new maintainer may be malicious.
+A gap of a year or more between the version you already have and the one being
+offered is worth a medium-weight flag, independent of any diff signal.
 
 ---
 

@@ -15,9 +15,17 @@ _OFFICIAL_REPOS = frozenset({
 
 
 def _simple_vercmp(v1: str, v2: str) -> int:
-    if v1 == v2:
-        return 0
-    return -1 if v1 < v2 else 1
+    import re
+    def _split(v: str):
+        return [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", v)]
+    p1, p2 = _split(v1), _split(v2)
+    for a, b in zip(p1, p2):
+        if a != b:
+            if isinstance(a, int) and isinstance(b, int):
+                return -1 if a < b else 1
+            sa, sb = str(a), str(b)
+            return -1 if sa < sb else 1
+    return -1 if len(p1) < len(p2) else (1 if len(p1) > len(p2) else 0)
 
 
 def _vercmp(v1: str, v2: str) -> int:

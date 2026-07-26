@@ -10,6 +10,8 @@ def generate_diff(
 ) -> tuple[str, DiffSummary]:
     old_commit = repo.get(old_oid)
     new_commit = repo.get(new_oid)
+    if old_commit is None or new_commit is None:
+        return "", DiffSummary()
     diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
 
     filtered_patches = []

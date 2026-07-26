@@ -1,9 +1,12 @@
 import json
+import logging
 import sys
 from pathlib import Path
 from typing import Optional
 
 import typer
+
+log = logging.getLogger(__name__)
 
 from . import __version__
 from .analysis import analyze_package
@@ -81,6 +84,8 @@ _console = None
 
 
 def console() -> "Console":
+    if not HAS_RICH:
+        raise RuntimeError("rich is not available")
     global _console
     if _console is None:
         _console = Console()
@@ -199,7 +204,7 @@ def review(
     config = load_config()
     init_db()
     if config.get("seed", {}).get("auto_import", True):
-        maybe_auto_import_seed()
+        maybe_auto_import_seed(quiet=json_output)
     effective_limit = limit or config.get("limits", {}).get("default_review_limit", 20)
 
     user_specified = not (repo is None and not foreign and not all_repos)
@@ -216,6 +221,9 @@ def review(
             include_foreign = True
 
     def _warn(msg: str):
+        if not HAS_RICH:
+            print(f"Warning: {msg}")
+            return
         con = console()
         con.print(f"[yellow]Warning:[/] {msg}")
 
@@ -227,7 +235,10 @@ def review(
             if repos:
                 _warn(str(exc) + "; falling back to explicit repos.")
             else:
-                console().print(f"[red]Error:[/] {exc}")
+                if not HAS_RICH:
+                    print(f"Error: {exc}")
+                else:
+                    console().print(f"[red]Error:[/] {exc}")
                 sys.exit(1)
 
     outdated_pkgs = discover_packages(
@@ -358,7 +369,11 @@ def _analyze_outdated_batch(
         name = entry["name"]
         if progress_callback:
             progress_callback(i, total, name)
-        fact = analyze_package(name)
+        try:
+            fact = analyze_package(name)
+        except Exception:
+            log.warning("analysis of %s failed unexpectedly; skipping", name, exc_info=True)
+            continue
         verdict = (
             generate_verdict(fact) if fact.final_score > 0
             else fallback_verdict(fact)
@@ -399,7 +414,7 @@ def inspect(
     ensure_default_configs()
     init_db()
     if load_config().get("seed", {}).get("auto_import", True):
-        maybe_auto_import_seed()
+        maybe_auto_import_seed(quiet=json_output)
 
     fact = analyze_package(package)
     if json_output:

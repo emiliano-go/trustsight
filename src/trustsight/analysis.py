@@ -3,6 +3,8 @@ import logging
 import re
 from urllib.parse import urlparse
 
+import pygit2
+
 from .buckets import classify_pinning_level, classify_urls
 
 log = logging.getLogger(__name__)
@@ -428,7 +430,10 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     installed_version = _get_installed_version(pkg_name)
 
     repo = clone_or_fetch(pkg_name)
-    head_commit = get_head_commit(repo)
+    try:
+        head_commit = get_head_commit(repo)
+    except pygit2.GitError:
+        head_commit = ""
     head_version = get_pkgver_from_head(repo) or new_version
 
     if not head_version:

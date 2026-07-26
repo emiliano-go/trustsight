@@ -649,7 +649,7 @@ event.
 ### R069: GPG Verification Removed {#r069}
 
 - **Target:** programmatic (diff-aware)
-- **Severity:** HIGH (weight 25) - pending corpus calibration
+- **Severity:** HIGH (weight 25) - corpus rate 0.03 %
 - **Category:** `integrity`
 - **Condition:** `validpgpkeys` was **populated before** the diff and is
   **emptied or removed after** - the package previously verified upstream
@@ -677,8 +677,8 @@ populated to empty/absent, following the same structure as
 
 - **Target:** programmatic (resolved lines, position-scoped)
 - **Severity:** HIGH (weight 25) for `LD_PRELOAD`/`LD_LIBRARY_PATH`;
-  MEDIUM (weight 15) for `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` - pending
-  corpus calibration
+  MEDIUM (weight 15) for `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` -
+  corpus rate 0.25 % (all HIGH; MEDIUM not observed)
 - **Category:** `build`
 - **Condition:** The diff **modifies** `LD_PRELOAD`, `LD_LIBRARY_PATH`,
   `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, or `PATH` **inside a build function**
@@ -715,7 +715,7 @@ equivalent of a `build.rs` that downloads and executes a binary.
 ### R071: Untrusted Maintainer Takeover {#r071}
 
 - **Target:** programmatic (maintainer delta + global novelty)
-- **Severity:** HIGH (weight 25) - pending corpus calibration
+- **Severity:** HIGH (weight 25) - always on; corpus rate TBD (requires live git history)
 - **Category:** `maintainer`
 - **Condition:** `maintainer_changed` is true **AND** the new maintainer is
   **globally novel** (never seen in the database across any package).
@@ -737,9 +737,9 @@ change (pnpm's "trust changed") gated by global novelty (Socket's "never seen
 before"), applied to AUR maintainers instead of npm publishers.
 
 **Cold-start gate:** On a fresh database every maintainer is globally novel,
-so R071 fires on 100 % of maintainer-changed packages on first run. It MUST
-be suppressed until the maintainer table has enough history for "globally
-novel" to mean something - gated identically to the other novelty signals via
+so R071 fires on 100 % of maintainer-changed packages on first run. It is
+suppressed until the maintainer table has enough history for "globally novel"
+to mean something - gated identically to the other novelty signals via
 [`maturity()` and `observation_count`](configuration.md#cold-start-and-maturity).
 
 ### R072: Capability Density Anomaly {#r072}

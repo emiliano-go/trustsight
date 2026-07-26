@@ -27,8 +27,9 @@
   | R072 | Capability Density Anomaly | INFO (w 0) | meta | rule hits span 3+ distinct categories |
   | R073 | Accelerated Release Cadence | metadata (never scored) | temporal-metadata | HEAD has 3+ ancestors in the last 24 h |
 
-  R069, R070, and R071 are experimental (opt-in via `[experimental_rules]`).
   R068, R072, and R073 are always on (INFO weight 0 or metadata).
+  R069, R070, and R071 were promoted from experimental to always-on after
+  measurement (corpus for R069/R070; end-to-end gating tests for R071).
 
 - **Naming and dependency-set rules (R074–R075).** Two new code-emitted rules
   that detect package-name typosquatting and aggregate dependency-set expansion.

@@ -383,3 +383,101 @@ def test_unseeded_domain_is_still_novel(db, tmp_path, monkeypatch):
     pkg_id = dbmod.upsert_package("demo", "1.0")
     ctx = build_novelty_context(["https://unknown-host.invalid/x-1.0.tar.gz"], pkg_id)
     assert ctx.url_first_seen_globally is True
+
+
+def test_is_maintainer_globally_novel_true_for_unknown(db):
+    from trustsight.db import is_maintainer_globally_novel
+    assert is_maintainer_globally_novel("never-seen-maintainer") is True
+
+
+def test_is_maintainer_globally_novel_false_when_in_maintainers_table(db):
+    from trustsight.db import get_connection, is_maintainer_globally_novel
+    with get_connection() as conn:
+        pkg_id = conn.execute("INSERT INTO packages (name) VALUES ('dummy')").lastrowid
+        conn.execute("INSERT INTO maintainers (name, first_seen_package_id) VALUES (?, ?)",
+                     ("known-dev", pkg_id))
+        conn.commit()
+    assert is_maintainer_globally_novel("known-dev") is False
+
+
+def test_is_maintainer_globally_novel_false_when_in_maintainer_counts(db):
+    from trustsight.db import get_connection, is_maintainer_globally_novel
+    with get_connection() as conn:
+        conn.execute("INSERT INTO maintainer_counts (name, count) VALUES (?, ?)",
+                     ("seeded-dev", 5))
+        conn.commit()
+    assert is_maintainer_globally_novel("seeded-dev") is False
+
+
+# --- R071 end-to-end tests (real DB, no monkeypatch) ---
+
+def _warm_the_db():
+    """Insert enough analyses so effective_observation_count() > 0."""
+    from trustsight.db import insert_analysis, upsert_package
+    pkg_id = upsert_package("test-pkg", "1.0")
+    for i in range(5):
+        insert_analysis(
+            package_id=pkg_id,
+            old_version=f"1.{i}", new_version=f"1.{i+1}",
+            old_commit="a" * 40, new_commit="b" * 40,
+            final_score=0, raw_diff="", fact_json="{}",
+            triggered_rules=[],
+        )
+
+
+def test_r071_cold_db_suppressed(db):
+    """Cold database (no analyses, no seed) must not fire even when a
+    maintainer changes to a novel name."""
+    from trustsight.analysis import _check_untrusted_maintainer_takeover
+    result = _check_untrusted_maintainer_takeover(
+        True, "anyone-novel"
+    )
+    assert result is None
+
+
+def test_r071_warm_db_novel_maintainer_fires(db):
+    """Warm database + globally novel maintainer change must fire."""
+    from trustsight.analysis import _check_untrusted_maintainer_takeover
+    from trustsight.db import is_maintainer_globally_novel
+    _warm_the_db()
+    assert is_maintainer_globally_novel("fresh-mntnr") is True
+    result = _check_untrusted_maintainer_takeover(
+        True, "fresh-mntnr"
+    )
+    assert result is not None
+    assert result["rule_id"] == "R071"
+
+
+def test_r071_warm_db_known_maintainer_suppressed(db):
+    """Warm database + maintainer already in the maintainers table must
+    not fire."""
+    from trustsight.analysis import _check_untrusted_maintainer_takeover
+    from trustsight.db import get_connection, is_maintainer_globally_novel
+    _warm_the_db()
+    with get_connection() as conn:
+        pkg_id = conn.execute("INSERT INTO packages (name) VALUES ('other')").lastrowid
+        conn.execute("INSERT INTO maintainers (name, first_seen_package_id) VALUES (?, ?)",
+                     ("known-mntnr", pkg_id))
+        conn.commit()
+    assert is_maintainer_globally_novel("known-mntnr") is False
+    result = _check_untrusted_maintainer_takeover(
+        True, "known-mntnr"
+    )
+    assert result is None
+
+
+def test_r071_warm_db_counts_seed_maintainer(db):
+    """Maintainer present in the seed-only maintainer_counts table is
+    not novel; R071 should not fire."""
+    from trustsight.analysis import _check_untrusted_maintainer_takeover
+    from trustsight.db import get_connection, is_maintainer_globally_novel
+    _warm_the_db()
+    with get_connection() as conn:
+        conn.execute("INSERT INTO maintainer_counts (name, count) VALUES (?, ?)",
+                     ("seed-mntnr", 3))
+        conn.commit()
+    assert is_maintainer_globally_novel("seed-mntnr") is False
+    result = _check_untrusted_maintainer_takeover(
+        True, "seed-mntnr"
+    )
+    assert result is None

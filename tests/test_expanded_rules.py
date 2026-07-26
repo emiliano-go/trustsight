@@ -463,3 +463,64 @@ def test_contextual_codepoints_are_allowed_inside_non_latin_text():
         assert u.CONTEXTUAL.search(ch)
         assert not pattern.search(f"മല{ch}യാ"), f"{hex(cp)} must not fire in Malayalam"
         assert pattern.search(f"evil.com{ch}/x"), f"{hex(cp)} must fire in ASCII"
+
+
+# --- R071: Untrusted Maintainer Takeover ---
+
+def _r071_finding(
+    maintainer_changed: bool,
+    new_maintainer: str,
+    monkeypatch,
+    effective_count: int = 10,
+    is_novel: bool = True,
+) -> dict | None:
+    from trustsight.analysis import _check_untrusted_maintainer_takeover
+    monkeypatch.setattr(
+        "trustsight.analysis.effective_observation_count",
+        lambda: effective_count,
+    )
+    monkeypatch.setattr(
+        "trustsight.analysis.is_maintainer_globally_novel",
+        lambda name: is_novel,
+    )
+    return _check_untrusted_maintainer_takeover(
+        maintainer_changed, new_maintainer
+    )
+
+
+def test_r071_always_on_by_default(monkeypatch):
+    """R071 is always on; no experimental_rules section needed."""
+    result = _r071_finding(True, "newbie", monkeypatch)
+    assert result is not None
+
+
+def test_r071_requires_maintainer_change(monkeypatch):
+    """No maintainer change means no takeover signal."""
+    assert _r071_finding(False, "newbie", monkeypatch) is None
+
+
+def test_r071_requires_new_maintainer_name(monkeypatch):
+    """Empty new_maintainer should not fire."""
+    assert _r071_finding(True, "", monkeypatch) is None
+
+
+def test_r071_cold_start_gate(monkeypatch):
+    """Zero observation count suppresses the rule (all names are novel on
+    a fresh database)."""
+    assert _r071_finding(True, "newbie", monkeypatch, effective_count=0) is None
+
+
+def test_r071_novelty_gate(monkeypatch):
+    """A known maintainer (not globally novel) must not fire."""
+    assert _r071_finding(True, "known-dev", monkeypatch, is_novel=False) is None
+
+
+def test_r071_all_gates_pass(monkeypatch):
+    """When every condition is satisfied the finding has the right shape."""
+    result = _r071_finding(True, "stranger", monkeypatch)
+    assert result is not None
+    assert result["rule_id"] == "R071"
+    assert result["name"] == "Untrusted Maintainer Takeover"
+    assert result["severity"] == "HIGH"
+    assert result["category"] == "maintainer"
+    assert "stranger" in result["match"]

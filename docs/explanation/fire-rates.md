@@ -127,6 +127,11 @@ fall in this category.
 | R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | R074 | Package-Name Typosquat | HIGH | TBD | - | Requires seeded DB for popularity asymmetry; not corpus-measurable. Predicted near-zero with suffix-strip + popularity gate. |
 
+R069, R070, and R071 were promoted from experimental to always-on after
+measurement: R069 and R070 on corpus (0.03 % and 0.25 %), R071 on end-to-end
+testing that confirmed the cold-start, maintainer-change, and global-novelty
+gates all prevent false positives.
+
 ## Temporal metadata rule (R073)
 
 R073 is metadata only; it is never appended to `triggered_rules` and

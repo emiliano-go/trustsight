@@ -201,7 +201,6 @@ _EXPERIMENTAL_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
     "R060": True,   # INFO severity, weight 0: cannot move a score
     "R061": True, "R062": True, "R063": True, "R064": True,
-    "R069": True, "R070": True, "R071": True,
     "R074": True, "R075": True,
 }
 
@@ -449,19 +448,37 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
 
 def _build_findings(diff_text, config, add) -> None:
     """R060-R064, R070: changes to the code that actually executes."""
-    wanted = {r for r in ("R060", "R061", "R062", "R063", "R064", "R070")
-              if _experimental_enabled(config, r)}
-    if not wanted:
-        return
-    wants_060 = "R060" in wanted
-    wants_061 = "R061" in wanted
-
     # Resolved with positions intact, so each line keeps its enclosing
     # function.  The hunk header cannot be used: the corpus is built with
     # `git diff -W` and an xfuncname, so its headers name the function,
     # while the live pygit2 path emits none.
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
+
+    # R070: Build Environment Subversion (always on)
+    high_found = False
+    med_found = False
+    for i, line in enumerate(lines):
+        if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+            continue
+        body = _strip_comment(line)
+        if _ENV_SUBVERSION_HIGH_RE.search(body):
+            high_found = True
+        if _ENV_SUBVERSION_MED_RE.search(body):
+            med_found = True
+    if high_found:
+        add("R070", "Build Environment Subversion", "HIGH", "build",
+            "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
+    elif med_found:
+        add("R070", "Build Environment Subversion", "MEDIUM", "build",
+            "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
+
+    wanted = {r for r in ("R060", "R061", "R062", "R063", "R064")
+              if _experimental_enabled(config, r)}
+    if not wanted:
+        return
+    wants_060 = "R060" in wanted
+    wants_061 = "R061" in wanted
 
     touched = sorted({
         fn for i, line in enumerate(lines)
@@ -528,23 +545,24 @@ def _build_findings(diff_text, config, add) -> None:
                     f"source URL downgraded from https to http: {url[:70]}")
                 break
 
-    if "R070" in wanted:
-        high_found = False
-        med_found = False
-        for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
-                continue
-            body = _strip_comment(line)
-            if _ENV_SUBVERSION_HIGH_RE.search(body):
-                high_found = True
-            if _ENV_SUBVERSION_MED_RE.search(body):
-                med_found = True
-        if high_found:
-            add("R070", "Build Environment Subversion", "HIGH", "build",
-                "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
-        elif med_found:
-            add("R070", "Build Environment Subversion", "MEDIUM", "build",
-                "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
+
+def _check_untrusted_maintainer_takeover(
+    maintainer_changed: bool,
+    new_maintainer: str,
+) -> dict | None:
+    if not (maintainer_changed and new_maintainer):
+        return None
+    if effective_observation_count() <= 0:
+        return None
+    if not is_maintainer_globally_novel(new_maintainer):
+        return None
+    return {
+        "rule_id": "R071",
+        "name": "Untrusted Maintainer Takeover",
+        "severity": "HIGH", "category": "maintainer",
+        "match": f"maintainer changed to '{new_maintainer}', "
+                f"who has never been seen in the AUR",
+    }
 
 
 def _get_installed_version(pkg_name: str) -> str:
@@ -669,27 +687,20 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
                 "match": "PKGBUILD declares an install hook",
             })
 
-    # R069: GPG Verification Removed (HIGH, experimental)
-    if _experimental_enabled(config, "R069"):
-        if detect_gpg_verification_removed(diff_text):
-            triggered_rules.append({
-                "rule_id": "R069", "name": "GPG Verification Removed",
-                "severity": "HIGH", "category": "integrity",
-                "match": "validpgpkeys was populated and is now empty or removed",
-            })
+    # R069: GPG Verification Removed (HIGH)
+    if detect_gpg_verification_removed(diff_text):
+        triggered_rules.append({
+            "rule_id": "R069", "name": "GPG Verification Removed",
+            "severity": "HIGH", "category": "integrity",
+            "match": "validpgpkeys was populated and is now empty or removed",
+        })
 
-    # R071: Untrusted Maintainer Takeover (HIGH, experimental, cold-start gate)
-    if _experimental_enabled(config, "R071"):
-        if maintainer_changed and new_maintainer:
-            if effective_observation_count() > 0:
-                if is_maintainer_globally_novel(new_maintainer):
-                    triggered_rules.append({
-                        "rule_id": "R071",
-                        "name": "Untrusted Maintainer Takeover",
-                        "severity": "HIGH", "category": "maintainer",
-                        "match": f"maintainer changed to '{new_maintainer}', "
-                                f"who has never been seen in the AUR",
-                    })
+    # R071: Untrusted Maintainer Takeover (HIGH, always on, cold-start gate)
+    takeover = _check_untrusted_maintainer_takeover(
+        maintainer_changed, new_maintainer
+    )
+    if takeover:
+        triggered_rules.append(takeover)
 
     # R072: Capability Density Anomaly (INFO, weight 0)
     categories = {r.get("category", "") for r in triggered_rules
@@ -849,14 +860,13 @@ def scan_diff(
                 "match": "PKGBUILD declares an install hook",
             })
 
-    # R069: GPG Verification Removed (experimental)
-    if _experimental_enabled(config, "R069"):
-        if detect_gpg_verification_removed(diff_text):
-            triggered_rules.append({
-                "rule_id": "R069", "name": "GPG Verification Removed",
-                "severity": "HIGH", "category": "integrity",
-                "match": "validpgpkeys was populated and is now empty or removed",
-            })
+    # R069: GPG Verification Removed
+    if detect_gpg_verification_removed(diff_text):
+        triggered_rules.append({
+            "rule_id": "R069", "name": "GPG Verification Removed",
+            "severity": "HIGH", "category": "integrity",
+            "match": "validpgpkeys was populated and is now empty or removed",
+        })
 
     # R072: Capability Density Anomaly (shared with analyze_package)
     categories = {r.get("category", "") for r in triggered_rules

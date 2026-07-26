@@ -12,6 +12,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 
+from tests.conftest import SHARED_CONFIG, SHARED_RULES
 from trustsight.buckets import classify_urls
 from trustsight.differ import extract_urls_from_diff
 from trustsight.llm import fallback_verdict
@@ -19,26 +20,6 @@ from trustsight.rules import apply_rules, get_raw_diff_lines
 from trustsight.schema import DiffSummary, NoveltyContext, PackageFact
 from trustsight.scoring import calculate_score
 from trustsight.tokenizer import tokenize_and_resolve
-
-CONFIG = {
-    "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
-    "source_bucket_weights": {"trusted_forge": -10, "official": 0, "raw_hosting": 15, "unknown": 20, "self_hosted": 10},
-    "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10, "maintainer_first_in_package": 20},
-}
-
-ALL_RULES = [
-    {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R002", "name": "Wget Pipe to Shell", "pattern": r"wget.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R003", "name": "Base64 Decode and Execute", "pattern": r"base64.*\-d.*\|", "severity": "CRITICAL", "category": "obfuscation", "match_target": "resolved"},
-    {"id": "R004", "name": "Checksum Disabled", "pattern": r"sha256sums\s*=\s*\(?\s*['\"]?SKIP['\"]?", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
-    {"id": "R005", "name": "Checksum Emptied", "pattern": r"sha256sums\s*=\s*\(\s*\)", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
-    {"id": "R006", "name": "Insecure Download Protocol", "pattern": r"https?://.*\.tar\.gz.*\|", "severity": "MEDIUM", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
-    {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-]
 
 BENIGN_SCENARIOS = []
 
@@ -52,7 +33,7 @@ def _run_pipeline(diff: str, *, novelty_urls: list[str] | None = None, novelty_m
     buckets = classify_urls(source_changes.added_urls)
     resolved, unresolved = tokenize_and_resolve(diff)
     raw_lines = get_raw_diff_lines(diff)
-    triggered = apply_rules(resolved, raw_lines, ALL_RULES)
+    triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
 
     novelty = NoveltyContext(observation_count=50 if (novelty_urls or novelty_maintainer) else 0)
     if novelty_urls:
@@ -61,7 +42,7 @@ def _run_pipeline(diff: str, *, novelty_urls: list[str] | None = None, novelty_m
     if novelty_maintainer:
         novelty.maintainer_first_seen_for_this_package = True
 
-    score, breakdown, level = calculate_score(triggered, buckets, novelty, CONFIG)
+    score, breakdown, level = calculate_score(triggered, buckets, novelty, SHARED_CONFIG)
 
     return {
         "diff": diff,

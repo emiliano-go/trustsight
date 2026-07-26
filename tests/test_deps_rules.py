@@ -280,7 +280,7 @@ def test_r060_defaults_on_for_a_config_without_the_section(rules):
     assert "R060" in {e.rule_id for e in fact.score_breakdown}
 
 
-def test_scoring_rules_fire_for_a_config_without_the_section(rules):
+def test_scoring_rules_fire_for_a_config_without_the_section(seeded_db, rules):
     """With empty config the code fallback enables all D-series and R061."""
     diff = HEADER + "+depends=('glibc' 'totally-unknown-backdoor')\n"
     fact = scan_diff(diff, rules=rules, config={}, package_name="mypkg")
@@ -389,7 +389,7 @@ def test_r064_silent_on_an_upgrade_to_https(all_enabled, rules):
     assert "R064" not in fired(diff, all_enabled, rules)
 
 
-def test_experimental_rules_on_by_default_with_load_config(rules):
+def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
     """D004, R062, R063, R064 fire when triggered with default config."""
     ensure_default_configs()
     config = load_config()

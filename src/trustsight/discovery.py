@@ -15,8 +15,10 @@ _OFFICIAL_REPOS = frozenset({
 
 
 def _simple_vercmp(v1: str, v2: str) -> int:
+    """simple numeric/semantic version comparison fallback"""
     import re
     def _split(v: str):
+        """split version string into digit and non-digit parts"""
         return [int(x) if x.isdigit() else x for x in re.split(r"(\d+)", v)]
     p1, p2 = _split(v1), _split(v2)
     for a, b in zip(p1, p2):
@@ -28,8 +30,45 @@ def _simple_vercmp(v1: str, v2: str) -> int:
     return -1 if len(p1) < len(p2) else (1 if len(p1) > len(p2) else 0)
 
 
+# pyalpm exposes the same comparison pacman itself uses, in-process.  It is
+# not a hard dependency, so its absence just means falling back to forking
+# the vercmp binary.  Resolved once: probing per call would cost more than
+# it saves.
+_pyalpm_vercmp = None
+_pyalpm_checked = False
+
+
+def _get_pyalpm_vercmp():
+    """Return pyalpm's vercmp if it is installed, else None."""
+    global _pyalpm_vercmp, _pyalpm_checked
+    if not _pyalpm_checked:
+        _pyalpm_checked = True
+        try:
+            import pyalpm
+
+            _pyalpm_vercmp = pyalpm.vercmp
+        except ImportError:
+            _pyalpm_vercmp = None
+    return _pyalpm_vercmp
+
+
 def _vercmp(v1: str, v2: str) -> int:
+    """compare version strings using pacman's vercmp, falling back to simple"""
     import logging
+
+    # Discovery compares every installed foreign package against the AUR,
+    # and the overwhelming majority are identical.  Answering those here
+    # avoids a fork each, which on a normal system is most of them.
+    if v1 == v2:
+        return 0
+
+    native = _get_pyalpm_vercmp()
+    if native is not None:
+        try:
+            return native(v1, v2)
+        except (TypeError, ValueError):
+            return 0
+
     try:
         result = subprocess.run(
             ["vercmp", v1, v2], capture_output=True, text=True, check=False
@@ -43,6 +82,7 @@ def _vercmp(v1: str, v2: str) -> int:
 
 
 def get_installed_aur_packages() -> dict[str, str]:
+    """Return a dict of installed AUR package names to versions."""
     result = subprocess.run(
         ["pacman", "-Qm"], capture_output=True, text=True, check=False
     )
@@ -57,23 +97,39 @@ def get_installed_aur_packages() -> dict[str, str]:
     return packages
 
 
-def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:
+def _aur_info_url(names: list[str]) -> str:
+    """Build an AUR RPC v5 info URL for one or more package names."""
+    params = [("v", "5"), ("type", "info")]
+    params.extend(("arg[]", n) for n in names)
+    return f"{AUR_RPC_BASE}?{urllib.parse.urlencode(params)}"
+
+
+def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
+    """Return the full AUR RPC record for each of *pkg_names*, keyed by name."""
     if not pkg_names:
         return {}
-    params = [("v", "5"), ("type", "info")]
-    params.extend(("arg[]", name) for name in pkg_names)
-    url = f"{AUR_RPC_BASE}?{urllib.parse.urlencode(params)}"
+    url = _aur_info_url(pkg_names)
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
             data = json.load(resp)
-            return {r["Name"]: r["Version"] for r in data.get("results", [])}
+            return {r["Name"]: r for r in data.get("results", [])}
     except (urllib.error.URLError, json.JSONDecodeError):
         return {}
+
+
+def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:
+    """Return the latest available versions from the AUR for *pkg_names*."""
+    return {
+        name: record["Version"]
+        for name, record in get_aur_package_info(pkg_names).items()
+        if "Version" in record
+    }
 
 
 def find_outdated_packages(
     installed: dict[str, str], latest: dict[str, str]
 ) -> dict[str, tuple[str, str]]:
+    """Compare installed vs latest, returning outdated name->(installed, latest)."""
     outdated = {}
     for name, installed_ver in installed.items():
         latest_ver = latest.get(name)
@@ -83,10 +139,10 @@ def find_outdated_packages(
 
 
 def fetch_package_info(name: str) -> Optional[dict]:
+    """Fetch full package info from the AUR RPC for *name*."""
     # Encoded, not interpolated: an unescaped "&" or "#" in the name would
     # otherwise inject or truncate RPC query parameters.
-    query = urllib.parse.urlencode([("v", "5"), ("type", "info"), ("arg[]", name)])
-    url = f"{AUR_RPC_BASE}?{query}"
+    url = _aur_info_url([name])
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
             data = json.load(resp)
@@ -98,6 +154,7 @@ def fetch_package_info(name: str) -> Optional[dict]:
 
 
 def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
+    """Return (name, version) pairs installed from *repo*."""
     result = subprocess.run(
         ["pacman", "-Q", "--repo", repo],
         capture_output=True, text=True, check=False,
@@ -115,6 +172,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
 
 
 def get_installed_foreign() -> list[tuple[str, str]]:
+    """Return (name, version) pairs installed from foreign sources (AUR)."""
     result = subprocess.run(
         ["pacman", "-Qm"], capture_output=True, text=True, check=False
     )
@@ -129,6 +187,7 @@ def get_installed_foreign() -> list[tuple[str, str]]:
 
 
 def get_local_repos_from_pacman_conf() -> list[str]:
+    """Return local repos from pacman.conf, excluding official ones."""
     result = subprocess.run(
         ["pacman-conf", "--repo-list"],
         capture_output=True, text=True, check=False,
@@ -146,19 +205,27 @@ def get_local_repos_from_pacman_conf() -> list[str]:
 
 
 def find_outdated_from_list(pkgs: list[tuple[str, str]]) -> list[dict]:
+    """Return outdated packages from a (name, version) list by querying the AUR."""
     if not pkgs:
         return []
     names = [name for name, _ in pkgs]
-    latest = get_aur_latest_versions(names)
+    info = get_aur_package_info(names)
     outdated = []
     for name, current_version in pkgs:
-        latest_version = latest.get(name)
+        record = info.get(name) or {}
+        latest_version = record.get("Version")
         if latest_version and _vercmp(current_version, latest_version) < 0:
-            outdated.append({
+            entry = {
                 "name": name,
                 "current_version": current_version,
                 "latest_version": latest_version,
-            })
+            }
+            # Carried through so the fetcher can tell whether the cached
+            # clone is already up to date and skip the network entirely.
+            last_modified = record.get("LastModified")
+            if isinstance(last_modified, int):
+                entry["last_modified"] = last_modified
+            outdated.append(entry)
     return outdated
 
 
@@ -168,6 +235,7 @@ def discover_packages(
     all_repos: bool = False,
     _warn_func: Optional[callable] = None,
 ) -> list[dict]:
+    """Discover outdated packages across repos and optionally foreign sources."""
     sources: set[tuple[str, str]] = set()
 
     if all_repos:

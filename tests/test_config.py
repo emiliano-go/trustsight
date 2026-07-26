@@ -264,3 +264,77 @@ def test_sync_without_update_leaves_superseded_pattern(tmp_path, monkeypatch):
     assert updated == []
     r013 = {r["id"]: r for r in cfg.load_rules()}["R013"]
     assert r013["pattern"] == legacy
+
+
+# --- parsed-TOML cache ---
+
+def test_load_toml_picks_up_an_edit_on_disk(tmp_path, monkeypatch):
+    """Caching must not make a config change invisible.
+
+    The parse is cached against the file's stat, so rewriting the file has
+    to invalidate it; otherwise a user editing config.toml would see no
+    effect until the process restarted.
+    """
+    from trustsight.config import load_toml
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
+    path = tmp_path / "config.toml"
+    path.write_text("[limits]\ndefault_review_limit = 5\n")
+    assert load_toml("config.toml")["limits"]["default_review_limit"] == 5
+
+    path.write_text("[limits]\ndefault_review_limit = 99\n")
+    assert load_toml("config.toml")["limits"]["default_review_limit"] == 99
+
+
+def test_load_toml_hands_out_independent_copies(tmp_path, monkeypatch):
+    """A caller that edits the result must not corrupt the next caller's.
+
+    The cached parse is shared, so it is handed out as a copy; mutating
+    one result previously leaked into every later load.
+    """
+    from trustsight.config import load_toml
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
+    (tmp_path / "config.toml").write_text("[llm]\nenabled = true\n")
+
+    first = load_toml("config.toml")
+    first["llm"]["enabled"] = False
+    first["injected"] = True
+
+    second = load_toml("config.toml")
+    assert second["llm"]["enabled"] is True
+    assert "injected" not in second
+
+
+# --- shipped-rule drift ---
+
+def test_drift_reports_a_stale_match_target(tmp_path, monkeypatch):
+    """An install whose rules.toml predates a match_target change is flagged.
+
+    rules.toml is written once and only ever gains rules, so a shipped
+    rule that later moved to match_target = "resolved" keeps its old
+    behaviour forever, silently missing payloads built from shell
+    variables.
+    """
+    from trustsight.config import drifted_shipped_rules
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
+    (tmp_path / "rules.toml").write_text(
+        "[[rules]]\n"
+        'id = "R001"\n'
+        'name = "Remote Script Execution"\n'
+        "pattern = 'curl'\n"
+        'severity = "CRITICAL"\n'
+        'category = "network_execution"\n'
+        'match_target = "raw_line"\n'
+    )
+    drift = drifted_shipped_rules()
+    assert ("R001", "match_target", "raw_line", "resolved") in drift
+
+
+def test_no_drift_reported_for_a_current_rules_file(tmp_path, monkeypatch):
+    from trustsight.config import DEFAULT_RULES, drifted_shipped_rules
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
+    (tmp_path / "rules.toml").write_text(DEFAULT_RULES)
+    assert drifted_shipped_rules() == []

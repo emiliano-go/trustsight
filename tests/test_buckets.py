@@ -210,3 +210,38 @@ def test_confusable_domain_does_not_reach_trusted_forge():
         f"https://github.c{CYRILLIC_O}m/user/repo.tar.gz", DOMAIN_CONFIG
     )
     assert bucket != "trusted_forge"
+
+
+# --- punycode confusables ---
+
+def test_punycode_form_of_a_confusable_is_detected():
+    """The encoded spelling must not evade what the decoded one catches.
+
+    _decode_punycode exists precisely so that writing xn--githb-6rd.com
+    into source=() is no cheaper than writing githuḅ.com, but the
+    combining mark the label decodes to was classified COMMON and skipped
+    by both existing checks.
+    """
+    from trustsight.buckets import has_homograph
+    assert has_homograph("xn--githb-6rd.com") is True
+    # the precomposed spelling was already caught; both must agree
+    assert has_homograph("githuḅ.com") is True
+
+
+def test_scripts_that_legitimately_use_combining_marks_are_not_flagged():
+    """Devanagari, Arabic and Thai need marks; they are not confusables."""
+    from trustsight.buckets import has_homograph
+    for domain in (
+        "उदाहरण.भारत",
+        "xn--p1b6ci4b4b3a.xn--h2brj9c",
+        "قطر.qa",
+        "ไทย.th",
+        "日本.jp",
+    ):
+        assert has_homograph(domain) is False, domain
+
+
+def test_plain_ascii_domains_are_never_flagged():
+    from trustsight.buckets import has_homograph
+    for domain in ("github.com", "cdn-1.example.co.uk", "sourceforge.net"):
+        assert has_homograph(domain) is False, domain

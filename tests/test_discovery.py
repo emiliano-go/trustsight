@@ -115,14 +115,14 @@ def test_get_local_repos_pacman_conf_fails(mock_run):
 
 # --- find_outdated_from_list ---
 
-@patch("trustsight.discovery.get_aur_latest_versions")
-def test_find_outdated_from_list(mock_latest):
+@patch("trustsight.discovery.get_aur_package_info")
+def test_find_outdated_from_list(mock_info):
     from trustsight.discovery import find_outdated_from_list
 
-    mock_latest.return_value = {
-        "pkg-a": "2.0",
-        "pkg-b": "2.0",
-        "pkg-c": "3.0",
+    mock_info.return_value = {
+        "pkg-a": {"Name": "pkg-a", "Version": "2.0"},
+        "pkg-b": {"Name": "pkg-b", "Version": "2.0"},
+        "pkg-c": {"Name": "pkg-c", "Version": "3.0"},
     }
 
     pkgs = [
@@ -138,11 +138,11 @@ def test_find_outdated_from_list(mock_latest):
     ]
 
 
-@patch("trustsight.discovery.get_aur_latest_versions")
-def test_find_outdated_from_list_skips_non_aur(mock_latest):
+@patch("trustsight.discovery.get_aur_package_info")
+def test_find_outdated_from_list_skips_non_aur(mock_info):
     from trustsight.discovery import find_outdated_from_list
 
-    mock_latest.return_value = {"pkg-a": "2.0"}
+    mock_info.return_value = {"pkg-a": {"Name": "pkg-a", "Version": "2.0"}}
 
     pkgs = [("pkg-a", "1.0"), ("not-on-aur", "1.0")]
 

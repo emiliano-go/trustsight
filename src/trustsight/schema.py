@@ -58,6 +58,13 @@ class PackageFact:
     first_seen: bool = False
     suppressed_rules: list[dict] = field(default_factory=list)
 
+    # True when the diff was larger than the configured cap and only its
+    # first max_diff_bytes were examined.  The score then describes a
+    # prefix, not the change, so it must not be read as a clean verdict:
+    # padding a diff past the cap and appending the payload otherwise
+    # turns a High into a Low.
+    diff_truncated: bool = False
+
     recent_commit_burst: bool = False
 
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
@@ -65,6 +72,7 @@ class PackageFact:
 
 
 def fact_to_dict(fact: PackageFact) -> dict:
+    """Serialize a PackageFact to a plain dict."""
     return {
         "package_name": fact.package_name,
         "old_version": fact.old_version,
@@ -98,6 +106,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "first_seen": fact.first_seen,
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
+        "diff_truncated": fact.diff_truncated,
         "score_breakdown": [
             {
                 "rule_id": e.rule_id,

@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "Report Schema - TrustSight",
-    "description": "The PackageFact dataclass defined in src/trustsight/schema.py:42 is the core analysis result. It is serialised to JSON via facttodict...",
+    "description": "The PackageFact dataclass defined in src/trustsight/schema.py is the core analysis result. It is serialised to JSON via facttodict src/trustsight/schema.py for...",
     "url": "https://trustsight.emiliano-go.com/reference/report-schema/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "Report Schema - TrustSight",
-    "description": "The PackageFact dataclass defined in src/trustsight/schema.py:42 is the core analysis result. It is serialised to JSON via facttodict...",
+    "description": "The PackageFact dataclass defined in src/trustsight/schema.py is the core analysis result. It is serialised to JSON via facttodict src/trustsight/schema.py for...",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "The PackageFact dataclass defined in src/trustsight/schema.py:42 is the core analysis result. It is serialised to JSON via facttodict...",
+  "description": "The PackageFact dataclass defined in src/trustsight/schema.py is the core analysis result. It is serialised to JSON via facttodict src/trustsight/schema.py for...",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Report Schema - TrustSight",
     "url": "https://trustsight.emiliano-go.com/reference/report-schema/",
-    "description": "The PackageFact dataclass defined in src/trustsight/schema.py:42 is the core analysis result. It is serialised to JSON via facttodict...",
+    "description": "The PackageFact dataclass defined in src/trustsight/schema.py is the core analysis result. It is serialised to JSON via facttodict src/trustsight/schema.py for...",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

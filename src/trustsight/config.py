@@ -1,3 +1,4 @@
+import copy
 import re
 from pathlib import Path
 
@@ -43,6 +44,12 @@ max_tokens = 1024
 temperature = 0.3
 top_p = 1
 seed = 42
+# Seconds to wait for a verdict before falling back to the offline one.
+# The SDK default is 600s, long enough for one unreachable endpoint to
+# stall an entire review.  Keep this well above the model's normal
+# latency: it is a ceiling on a hung request, not a speed limit.
+timeout = 60
+max_retries = 1
 
 [llm.openai]
 api_key = ""
@@ -513,31 +520,60 @@ domains = [
 
 
 def ensure_dirs():
+    """Create config, data, and cache directories if missing"""
     for d in (CONFIG_DIR, DATA_DIR, CACHE_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
 
 def write_default_file(path: Path, content: str):
+    """Write a default file to disk if it does not exist"""
     if not path.exists():
         path.write_text(content)
 
 
 def ensure_default_configs():
+    """Write default config files if they do not exist"""
     ensure_dirs()
     write_default_file(CONFIG_DIR / "config.toml", DEFAULT_CONFIG)
     write_default_file(CONFIG_DIR / "rules.toml", DEFAULT_RULES)
     write_default_file(CONFIG_DIR / "trusted_domains.toml", DEFAULT_DOMAINS)
 
 
+# Parsed TOML keyed by (path, mtime_ns, size).  load_domains() used to be
+# called once per source URL and load_rules() once per analysis, each one
+# re-reading and re-parsing the file.  Including the stat in the key means
+# an edit on disk is still picked up on the next call.
+_toml_cache: dict[str, tuple[tuple, dict]] = {}
+
+
 def load_toml(name: str) -> dict:
+    """Load and parse a TOML file from the config directory"""
     path = CONFIG_DIR / name
     if not path.exists():
         ensure_default_configs()
+    try:
+        st = path.stat()
+        stamp = (str(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        stamp = None
+    if stamp is not None:
+        cached = _toml_cache.get(name)
+        if cached is not None and cached[0] == stamp:
+            # Callers treat this as their own dict and some of them edit it
+            # (overriding a rule toggle, say), so handing out the cached
+            # object itself would let one caller's edit reach every later
+            # one.  Copying is still an order of magnitude cheaper than
+            # re-reading and re-parsing the file.
+            return copy.deepcopy(cached[1])
     with open(path, "rb") as f:
-        return tomllib.load(f)
+        data = tomllib.load(f)
+    if stamp is not None:
+        _toml_cache[name] = (stamp, copy.deepcopy(data))
+    return data
 
 
 def _toml_value(val: str) -> str:
+    """format a value string for TOML output"""
     if val.lower() in ("true", "false"):
         return val.lower()
     try:
@@ -550,6 +586,7 @@ def _toml_value(val: str) -> str:
 
 
 def set_config(key: str, value: str):
+    """Set a config key to a new value in config.toml"""
     path = CONFIG_DIR / "config.toml"
     if not path.exists():
         ensure_default_configs()
@@ -591,7 +628,6 @@ def set_config(key: str, value: str):
         else:
             text += f"\n{header}\n{key_name} = {_toml_value(value)}\n"
     else:
-        import re
         pattern = re.compile(rf"^{re.escape(key_name)}\s*=\s*.*", re.MULTILINE)
         if pattern.search(text):
             text = pattern.sub(f'{key_name} = {_toml_value(value)}', text)
@@ -641,6 +677,60 @@ def outdated_shipped_rules() -> list[str]:
         if rule.get("pattern") in LEGACY_RULE_PATTERNS[rid]:
             outdated.append(rid)
     return outdated
+
+
+# Fields whose drift from the shipped definition changes what a rule
+# detects rather than merely how it reads.
+_SEMANTIC_FIELDS = ("match_target", "severity", "category")
+
+
+def _shipped_rule_fields() -> dict[str, dict[str, str]]:
+    """Parse the shipped rule blocks into ``{id: {field: value}}``."""
+    parsed: dict[str, dict[str, str]] = {}
+    for rid, block in _rule_blocks(DEFAULT_RULES).items():
+        fields: dict[str, str] = {}
+        for field in _SEMANTIC_FIELDS + ("pattern",):
+            match = re.search(rf"^{field}\s*=\s*(.+)$", block, re.MULTILINE)
+            if match:
+                fields[field] = match.group(1).strip().strip("'\"")
+        parsed[rid] = fields
+    return parsed
+
+
+def drifted_shipped_rules() -> list[tuple[str, str, str, str]]:
+    """Rules on disk whose semantics differ from the shipped definition.
+
+    Returns ``(rule_id, field, on_disk, shipped)`` tuples.
+
+    ``rules.toml`` is written once, at install time, and only ever gains
+    rules afterwards.  A shipped rule that later changes ``match_target``
+    therefore keeps its original behaviour forever on an existing install.
+    That is not cosmetic: R001 and friends moved to ``match_target =
+    "resolved"`` so that a payload assembled from shell variables is
+    caught, and an install still holding ``raw_line`` silently misses it.
+
+    Reporting only.  These are not auto-corrected, because a rule whose
+    pattern the user has broadened would lose that work if the shipped
+    block were written over it.
+    """
+    path = CONFIG_DIR / "rules.toml"
+    if not path.exists():
+        return []
+    shipped = _shipped_rule_fields()
+    drift: list[tuple[str, str, str, str]] = []
+    for rule in load_rules():
+        rid = rule.get("id")
+        expected = shipped.get(rid)
+        if not expected:
+            continue
+        for field in _SEMANTIC_FIELDS:
+            if field not in expected:
+                continue
+            default = "raw_line" if field == "match_target" else ""
+            actual = str(rule.get(field, default))
+            if actual != expected[field]:
+                drift.append((rid, field, actual, expected[field]))
+    return drift
 
 
 def missing_shipped_rules() -> list[str]:
@@ -706,13 +796,16 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
 
 
 def load_config() -> dict:
+    """Load the user config.toml"""
     return load_toml("config.toml")
 
 
 def load_rules() -> list[dict]:
+    """Load rules from rules.toml"""
     data = load_toml("rules.toml")
     return data.get("rules", [])
 
 
 def load_domains() -> dict:
+    """Load trusted domains from trusted_domains.toml"""
     return load_toml("trusted_domains.toml")

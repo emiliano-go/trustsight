@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "Installation - TrustSight",
-    "description": "TrustSight requires Python 3.12 or later and git for cloning AUR repositories during analysis.",
+    "description": "TrustSight requires Python 3.10 or later and git for cloning AUR repositories during analysis.",
     "url": "https://trustsight.emiliano-go.com/getting-started/installation/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "Installation - TrustSight",
-    "description": "TrustSight requires Python 3.12 or later and git for cloning AUR repositories during analysis.",
+    "description": "TrustSight requires Python 3.10 or later and git for cloning AUR repositories during analysis.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "TrustSight requires Python 3.12 or later and git for cloning AUR repositories during analysis.",
+  "description": "TrustSight requires Python 3.10 or later and git for cloning AUR repositories during analysis.",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Installation - TrustSight",
     "url": "https://trustsight.emiliano-go.com/getting-started/installation/",
-    "description": "TrustSight requires Python 3.12 or later and git for cloning AUR repositories during analysis.",
+    "description": "TrustSight requires Python 3.10 or later and git for cloning AUR repositories during analysis.",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

@@ -481,3 +481,92 @@ def test_r071_warm_db_counts_seed_maintainer(db):
         True, "seed-mntnr"
     )
     assert result is None
+
+
+# --- batched dependency lookups ---
+
+def test_dependency_observation_counts_matches_single_lookup(db):
+    """The batched lookup agrees with the per-name one it replaced."""
+    from trustsight.db import (
+        dependency_observation_count,
+        dependency_observation_counts,
+        record_dependency_names,
+    )
+    record_dependency_names(["alpha", "beta", "beta", "gamma"])
+    batched = dependency_observation_counts(["alpha", "beta", "gamma", "absent"])
+    assert batched == {
+        name: dependency_observation_count(name)
+        for name in ("alpha", "beta", "gamma")
+    }
+    # A name that was never recorded is simply absent from the result.
+    assert "absent" not in batched
+
+
+def test_dependency_observation_counts_empty_input(db):
+    from trustsight.db import dependency_observation_counts
+    assert dependency_observation_counts([]) == {}
+
+
+def test_dependency_observation_counts_chunks_past_variable_limit(db):
+    """More names than SQLite's bound-variable limit still resolve."""
+    from trustsight.db import dependency_observation_counts, record_dependency_names
+    names = [f"dep-{i:04d}" for i in range(2500)]
+    record_dependency_names(names)
+    counts = dependency_observation_counts(names)
+    assert len(counts) == 2500
+    assert set(counts.values()) == {1}
+
+
+def test_top_dependency_pairs_ranks_by_observation_count(db):
+    from trustsight.db import record_dependency_names, top_dependency_pairs
+    record_dependency_names(["rare"])
+    record_dependency_names(["common"] * 5)
+    pairs = dict(top_dependency_pairs())
+    assert pairs["common"] > pairs["rare"]
+    # names still arrive most-observed first
+    assert [n for n, _ in top_dependency_pairs()][0] == "common"
+
+
+def test_top_dependency_names_still_returns_names_only(db):
+    from trustsight.db import record_dependency_names, top_dependency_names
+    record_dependency_names(["only"])
+    assert top_dependency_names() == ["only"]
+
+
+# --- schema migration ---
+
+def test_init_db_adds_column_missing_from_an_older_database(tmp_path, monkeypatch):
+    """A database created before current_maintainer existed is upgraded.
+
+    init_db only issues CREATE TABLE IF NOT EXISTS, so without a migration
+    the column never appeared and every write to it raised
+    "no such column", aborting the run.
+    """
+    import sqlite3
+
+    from trustsight.db import close_connections, get_connection, init_db
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    close_connections()
+    legacy = sqlite3.connect(str(tmp_path / "trustsight.db"))
+    legacy.execute(
+        """CREATE TABLE packages (
+               id INTEGER PRIMARY KEY,
+               name TEXT UNIQUE NOT NULL,
+               current_version TEXT,
+               last_checked TEXT
+           )"""
+    )
+    legacy.execute("INSERT INTO packages (name) VALUES ('preexisting')")
+    legacy.commit()
+    legacy.close()
+
+    init_db()
+
+    from trustsight.db import update_package_maintainer
+    update_package_maintainer("preexisting", "someone")
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT current_maintainer FROM packages WHERE name = 'preexisting'"
+        ).fetchone()
+    assert row["current_maintainer"] == "someone"

@@ -5,7 +5,7 @@
   "og": {
     "type": "website",
     "title": "Running the Sandbox - TrustSight",
-    "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
+    "description": "!!! warning \"Not implemented\"",
     "url": "https://trustsight.emiliano-go.com/guides/running-the-sandbox/",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site_name": "trustsight",
@@ -14,17 +14,17 @@
   "twitter": {
     "card": "summary_large_image",
     "title": "Running the Sandbox - TrustSight",
-    "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
+    "description": "!!! warning \"Not implemented\"",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "site": "@emiliano_go_"
   },
-  "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
+  "description": "!!! warning \"Not implemented\"",
   "schema_jsonld": {
     "@context": "https://schema.org",
     "@type": "WebPage",
     "name": "Running the Sandbox - TrustSight",
     "url": "https://trustsight.emiliano-go.com/guides/running-the-sandbox/",
-    "description": "--- description: Aspirational : running a PKGBUILD in an isolated sandbox before approving it. ---",
+    "description": "!!! warning \"Not implemented\"",
     "image": "https://trustsight.emiliano-go.com/assets/images/og-image.png",
     "publisher": {
       "@type": "Organization",

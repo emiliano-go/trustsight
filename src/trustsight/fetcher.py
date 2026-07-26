@@ -2,6 +2,8 @@ import os
 import re
 import shutil
 import signal
+import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -25,11 +27,18 @@ class _TimeoutError(Exception):
 
 @contextmanager
 def _timeout(seconds: int):
-    if not hasattr(signal, "SIGALRM"):
+    """context manager that sets a SIGALRM timeout"""
+    # signal.alarm is only legal on the main thread, and packages are
+    # fetched from a worker pool.  Off the main thread the deadline is
+    # enforced by _DeadlineCallbacks instead, which works anywhere.
+    if not hasattr(signal, "SIGALRM") or (
+        threading.current_thread() is not threading.main_thread()
+    ):
         yield
         return
 
     def _handler(_sig, _frame):
+        """signal handler that raises _TimeoutError"""
         raise _TimeoutError(f"operation timed out after {seconds}s")
 
     old = signal.signal(signal.SIGALRM, _handler)
@@ -39,6 +48,32 @@ def _timeout(seconds: int):
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, old)
+
+
+class _DeadlineCallbacks(pygit2.RemoteCallbacks):
+    """Abort a transfer that runs past *seconds*.
+
+    libgit2 invokes these callbacks as data arrives, so raising from one
+    cancels the operation.  Unlike SIGALRM this works on any thread, which
+    is what the concurrent prefetch needs.
+    """
+
+    def __init__(self, seconds: int):
+        super().__init__()
+        self._deadline = time.monotonic() + seconds
+        self._seconds = seconds
+
+    def _check(self):
+        if time.monotonic() > self._deadline:
+            raise _TimeoutError(
+                f"operation timed out after {self._seconds}s"
+            )
+
+    def transfer_progress(self, stats):
+        self._check()
+
+    def sideband_progress(self, string):
+        self._check()
 
 
 def _head_commit_id(repo: pygit2.Repository) -> str:
@@ -64,11 +99,13 @@ def _head_commit_id(repo: pygit2.Repository) -> str:
 
 
 def _validate_pkg_name(pkg_name: str) -> None:
+    """validate package name format and reject reserved names"""
     if not _VALID_PKG_NAME.match(pkg_name) or pkg_name in _RESERVED_PKG_NAMES:
         raise ValueError(f"Invalid package name: {pkg_name!r}")
 
 
 def repo_path(pkg_name: str) -> Path:
+    """Return the cache directory path for *pkg_name*, validating it."""
     _validate_pkg_name(pkg_name)
     path = (CACHE_DIR / pkg_name).resolve()
     # Belt and braces: the name has already been checked, but this is the
@@ -79,26 +116,91 @@ def repo_path(pkg_name: str) -> Path:
     return path
 
 
-def clone_or_fetch(pkg_name: str) -> pygit2.Repository:
+# When the last successful fetch happened, recorded next to the repository.
+# Deliberately not derived from the HEAD commit's timestamp: a commit's date
+# is chosen by whoever authored it, so a maintainer who dates a commit in the
+# future would make the clone look permanently current and trustsight would
+# never fetch that package again -- silently blinding it to every later
+# update, which is precisely what it exists to inspect.  A local record of
+# our own fetch cannot be influenced from the other end.
+_FETCH_MARKER = "trustsight-last-fetch"
+
+
+def _marker_path(repo: pygit2.Repository) -> Path:
+    """Location of the last-fetch marker for *repo*."""
+    return Path(repo.path) / _FETCH_MARKER
+
+
+def _record_fetch(repo: pygit2.Repository) -> Optional[int]:
+    """Note that *repo* has just been brought up to date."""
+    stamp = int(time.time())
+    try:
+        _marker_path(repo).write_text(str(stamp))
+    except OSError:
+        return None
+    return stamp
+
+
+def last_fetch_time(repo: pygit2.Repository) -> Optional[int]:
+    """When this clone was last fetched, or None if that is unknown."""
+    try:
+        return int(_marker_path(repo).read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _is_current(repo: pygit2.Repository, upstream_mtime: int) -> bool:
+    """True when this clone was fetched after the upstream last changed.
+
+    A clone with no marker -- one made by an earlier version, say -- reads
+    as not current, so the safe path is the default.
+    """
+    fetched = last_fetch_time(repo)
+    if fetched is None:
+        return False
+    try:
+        return fetched >= int(upstream_mtime)
+    except (TypeError, ValueError):
+        return False
+
+
+def clone_or_fetch(
+    pkg_name: str, upstream_mtime: Optional[int] = None
+) -> pygit2.Repository:
+    """Clone or update the AUR git repo for *pkg_name*, returning the repo.
+
+    *upstream_mtime* is the AUR's ``LastModified`` for the package.  When
+    the cached clone already holds a commit that recent the fetch is
+    skipped, which on a repeat run removes the slowest single step of the
+    analysis for every package that has not actually changed.
+    """
     path = repo_path(pkg_name)
     if path.exists():
         try:
             repo = pygit2.Repository(str(path))
             _head_commit_id(repo)
+            if upstream_mtime is not None and _is_current(repo, upstream_mtime):
+                return repo
             with _timeout(120):
-                repo.remotes["origin"].fetch()
+                repo.remotes["origin"].fetch(callbacks=_DeadlineCallbacks(120))
+            _record_fetch(repo)
             return repo
         except (_TimeoutError, pygit2.GitError):
             shutil.rmtree(path)
     os.makedirs(path.parent, exist_ok=True)
     url = f"https://aur.archlinux.org/{pkg_name}.git"
     with _timeout(120):
-        return pygit2.clone_repository(url, str(path))
+        repo = pygit2.clone_repository(
+            url, str(path), callbacks=_DeadlineCallbacks(120)
+        )
+    _record_fetch(repo)
+    return repo
 
 
 def get_commit_for_version(
     repo: pygit2.Repository, version: str
 ) -> Optional[str]:
+    """Find the commit whose PKGBUILD has the given *version*, or None."""
     head = _head_commit_id(repo)
     if not head:
         return None
@@ -117,10 +219,12 @@ def get_commit_for_version(
 
 
 def get_head_commit(repo: pygit2.Repository) -> str:
+    """Return the OID of HEAD for *repo*."""
     return _head_commit_id(repo)
 
 
 def get_pkgver_from_head(repo: pygit2.Repository) -> Optional[str]:
+    """Extract pkgver from the HEAD PKGBUILD, or None."""
     try:
         blob = repo[_head_commit_id(repo)].tree["PKGBUILD"]
         pkgbuild = blob.data.decode()
@@ -164,6 +268,7 @@ def extract_maintainer(pkgbuild: str = "", srcinfo: str = "") -> Optional[str]:
 
 
 def _read_blob(tree, name: str) -> str:
+    """read and decode a named blob from a git tree, returning empty string on failure"""
     try:
         return tree[name].data.decode("utf-8", errors="replace")
     except (KeyError, AttributeError, ValueError, TypeError):
@@ -171,6 +276,7 @@ def _read_blob(tree, name: str) -> str:
 
 
 def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
+    """Return the maintainer from *repo*'s HEAD PKGBUILD or .SRCINFO."""
     try:
         tree = repo[_head_commit_id(repo)].tree
     except (KeyError, AttributeError, ValueError, TypeError):
@@ -179,6 +285,7 @@ def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
 
 
 def get_maintainer_from_commit(repo: pygit2.Repository, commit_oid: str) -> Optional[str]:
+    """Return the maintainer from *repo* at a specific *commit_oid*."""
     try:
         commit = repo.get(commit_oid)
         tree = commit.tree

@@ -6,9 +6,6 @@ from typing import Optional
 
 import typer
 
-log = logging.getLogger(__name__)
-
-from . import __version__
 from .analysis import analyze_package
 from .discovery import discover_packages
 from .config import (
@@ -16,6 +13,7 @@ from .config import (
     ensure_default_configs,
     load_config,
     load_rules,
+    drifted_shipped_rules,
     missing_shipped_rules,
     outdated_shipped_rules,
     set_config,
@@ -42,6 +40,9 @@ RISK_COLORS = {
     "High": "red",
     "Critical": "bold red",
     "Inconclusive": "dim",
+    # Not a risk level: a package whose analysis failed outright.  It must
+    # not be mistaken for a clean result.
+    "Error": "bold white on red",
 }
 
 SEVERITY_COLORS = {
@@ -80,10 +81,12 @@ try:
 except ImportError:
     HAS_RICH = False
 
+log = logging.getLogger(__name__)
 _console = None
 
 
 def console() -> "Console":
+    """Return the global rich Console instance."""
     if not HAS_RICH:
         raise RuntimeError("rich is not available")
     global _console
@@ -93,14 +96,17 @@ def console() -> "Console":
 
 
 def _tier_of(entry) -> str:
+    """tier label for a score entry"""
     return TIER_OF.get(entry.rule_id, ("A", ""))[0]
 
 
 def _severity_text(severity: str) -> "Text":
+    """colored text for a severity label"""
     return Text(severity, style=SEVERITY_COLORS.get(severity, "white"))
 
 
 def _weight_text(weight: int) -> "Text":
+    """colored text for a numeric weight"""
     if weight > 0:
         return Text(f"+{weight}", style="red")
     if weight < 0:
@@ -109,11 +115,13 @@ def _weight_text(weight: int) -> "Text":
 
 
 def _score_text(score: int, risk: str | None = None) -> "Text":
+    """colored text for a score with risk color"""
     risk = risk or risk_level(score)
     return Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
 
 
 def _fact_to_dict(fact):
+    """analysis fact as a json-serializable dict"""
     data = {
         "package": fact.package_name,
         "old_version": fact.old_version,
@@ -168,7 +176,12 @@ app.add_typer(override_app, name="override")
 
 
 def _version_callback(value: bool):
+    """print version and exit when --version is passed"""
     if value:
+        # Imported here so that resolving the version, which costs an
+        # importlib.metadata import, only happens when it is asked for.
+        from . import __version__
+
         typer.echo(f"trustsight {__version__}")
         raise typer.Exit()
 
@@ -181,6 +194,7 @@ def _main(
         help="Show program's version number and exit",
     ),
 ):
+    """trustsight cli entry point"""
     pass
 
 
@@ -200,6 +214,7 @@ def review(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Review outdated AUR packages for suspicious updates."""
     ensure_default_configs()
     config = load_config()
     init_db()
@@ -221,6 +236,7 @@ def review(
             include_foreign = True
 
     def _warn(msg: str):
+        """print a warning message"""
         if not HAS_RICH:
             print(f"Warning: {msg}")
             return
@@ -249,7 +265,7 @@ def review(
     )
 
     if not outdated_pkgs:
-        _print_green("No outdated packages found.")
+        _print_colored("No outdated packages found.", "green")
         return
 
     _run_analysis_loop(outdated_pkgs, effective_limit, verbose, json_output)
@@ -258,8 +274,7 @@ def review(
 def _run_analysis_loop(
     outdated_pkgs: list[dict], limit: int, verbose: bool, json_output: bool
 ) -> None:
-    from .llm import fallback_verdict, generate_verdict
-
+    """run the full analysis loop with optional progress display"""
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
 
     if HAS_RICH and not json_output:
@@ -274,14 +289,18 @@ def _run_analysis_loop(
         with Progress(*progress_columns, console=con, transient=False) as progress:
             task = progress.add_task("Fetching AUR packages...", total=None)
 
-            def on_progress(_current, total, name):
+            def on_progress(_current, total, description):
+                """update the progress bar with the current task"""
+                # The description arrives ready to display: a batch moves
+                # through fetch, analysis and verdict phases, so it names
+                # its own phase rather than having one assumed here.
                 if total:
                     progress.update(
                         task, total=total, completed=_current,
-                        description=f"Analyzing {name}"
+                        description=description,
                     )
                 else:
-                    progress.update(task, description=name)
+                    progress.update(task, description=description)
 
             results = _analyze_outdated_batch(limited, on_progress, verbose)
             progress.update(task, visible=False)
@@ -294,11 +313,17 @@ def _run_analysis_loop(
             con.print("[yellow]No outdated AUR packages found.[/]")
             return
 
-        flagged = sum(1 for r in results if r["score"] > 20)
+        flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+        failed = sum(1 for r in results if r.get("failed"))
+        caption = (
+            f"{len(results) - failed} package(s) reviewed, {flagged} above the "
+            f"20-point CLEAN threshold"
+        )
+        if failed:
+            caption += f", {failed} could NOT be vetted"
         table = Table(
             title="TrustSight Review",
-            caption=f"{len(results)} package(s) reviewed, {flagged} above the "
-                    f"20-point CLEAN threshold",
+            caption=caption,
             caption_justify="right",
         )
         table.add_column("Package", style="cyan", no_wrap=True)
@@ -312,9 +337,15 @@ def _run_analysis_loop(
             verdict = Text(strip_ansi(r["verdict"]))
             if r.get("first_seen"):
                 verdict = Text.assemble(("first analysis: ", "yellow"), verdict)
+            # A package that could not be analysed has no score; showing it
+            # as 0/100 Low would read as "clean".
+            score_cell = (
+                Text("n/a", style="bold red") if r.get("failed")
+                else _score_text(r["score"], r["risk"])
+            )
             row = [
                 r["package"],
-                _score_text(r["score"], r["risk"]),
+                score_cell,
                 Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
                 verdict,
             ]
@@ -348,7 +379,8 @@ def _run_analysis_loop(
             verdict = r["verdict"]
             if r.get("first_seen"):
                 verdict = f"[First analysis] {verdict}"
-            line = f"{r['package']:<20} {r['score']:<10} {verdict}"
+            score = "n/a" if r.get("failed") else r["score"]
+            line = f"{r['package']:<20} {score:<10} {verdict}"
             if verbose:
                 rules_str = (
                     ", ".join(rule["rule_id"] for rule in r.get("triggered_rules", []))
@@ -358,39 +390,159 @@ def _run_analysis_loop(
             print(line)
 
 
+def _default_workers() -> int:
+    """How many packages to fetch or ask about concurrently."""
+    try:
+        configured = int(load_config().get("limits", {}).get("workers", 0))
+    except (TypeError, ValueError):
+        configured = 0
+    return configured if configured > 0 else 8
+
+
+def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
+    """Clone or update every package's repo concurrently.
+
+    Fetching is the slowest step of an analysis and is pure network wait,
+    so running the batch serially left the link idle most of the time.
+    Each package has its own directory and no database is touched here, so
+    the work is independent.
+
+    Returns ``{name: upstream_mtime}`` for the packages that succeeded.
+    That is handed back to :func:`analyze_package`, whose own
+    ``clone_or_fetch`` compares it against the clone's last-fetch marker,
+    finds the clone current, and skips fetching the same repository twice.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from .fetcher import clone_or_fetch, last_fetch_time
+
+    def fetch(entry: dict) -> tuple[str, int | None]:
+        name = entry["name"]
+        repo = clone_or_fetch(name, entry.get("last_modified"))
+        # Prefer the AUR's own timestamp; when the RPC did not supply one,
+        # fall back to when this clone was fetched, which by definition is
+        # not older than the clone.  Never the HEAD commit's date: that is
+        # chosen upstream and must not decide whether we fetch.
+        hint = entry.get("last_modified")
+        if hint is None:
+            hint = last_fetch_time(repo)
+        return name, hint
+
+    hints: dict[str, int] = {}
+    total = len(pkgs)
+    workers = max(1, min(_default_workers(), total))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fetch, entry): entry["name"] for entry in pkgs}
+        for done, future in enumerate(as_completed(futures), start=1):
+            name = futures[future]
+            if progress_callback:
+                progress_callback(done, total, f"Fetching {name}")
+            try:
+                fetched, commit_time = future.result()
+            except Exception:  # noqa: BLE001 — analysis retries and reports
+                log.warning("fetch of %s failed; will retry during analysis",
+                            name, exc_info=True)
+                continue
+            if commit_time is not None:
+                hints[fetched] = commit_time
+    return hints
+
+
+def _verdicts_for(facts: list, progress_callback=None) -> list[str]:
+    """Produce a verdict per fact, asking the LLM concurrently.
+
+    Each verdict is an independent HTTP request, so they overlap instead of
+    queueing behind one another.  Falls back to the offline verdict for any
+    package the model cannot be asked about.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .llm import fallback_verdict, generate_verdict
+
+    def verdict_for(fact) -> str:
+        if fact.final_score <= 0:
+            return fallback_verdict(fact)
+        try:
+            return generate_verdict(fact)
+        except Exception:  # noqa: BLE001 — a verdict must never fail a run
+            log.warning("verdict for %s failed; using fallback",
+                        fact.package_name, exc_info=True)
+            return fallback_verdict(fact)
+
+    if not facts:
+        return []
+    total = len(facts)
+    workers = max(1, min(_default_workers(), total))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        # map preserves input order, which the result table depends on.
+        verdicts = []
+        for done, verdict in enumerate(pool.map(verdict_for, facts), start=1):
+            if progress_callback:
+                progress_callback(done, total, "Writing verdicts")
+            verdicts.append(verdict)
+    return verdicts
+
+
 def _analyze_outdated_batch(
     pkgs: list[dict], progress_callback=None, verbose: bool = False
 ) -> list[dict]:
-    from .llm import fallback_verdict, generate_verdict
+    """analyze a batch of outdated package entries"""
+    hints = _prefetch(pkgs, progress_callback)
 
-    results = []
+    analysed = []
+    failures: list[dict] = []
     total = len(pkgs)
     for i, entry in enumerate(pkgs):
         name = entry["name"]
         if progress_callback:
-            progress_callback(i, total, name)
+            progress_callback(i, total, f"Analyzing {name}")
         try:
-            fact = analyze_package(name)
-        except Exception:
-            log.warning("analysis of %s failed unexpectedly; skipping", name, exc_info=True)
+            fact = analyze_package(
+                name,
+                installed_version=entry.get("current_version"),
+                upstream_mtime=hints.get(name),
+            )
+        except Exception as exc:  # noqa: BLE001 — one package must not end the run
+            # Reported rather than dropped.  A package that was silently
+            # removed from the table looked identical to one that came back
+            # clean, so a package able to provoke a crash could keep itself
+            # out of the review entirely.
+            log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
+            failures.append({
+                "package": name,
+                "old_version": entry.get("current_version", ""),
+                "new_version": entry.get("latest_version", ""),
+                "score": None,
+                "verdict": f"Analysis failed ({type(exc).__name__}): "
+                           f"this package was NOT vetted.",
+                "risk": "Error",
+                "first_seen": False,
+                "failed": True,
+            })
             continue
-        verdict = (
-            generate_verdict(fact) if fact.final_score > 0
-            else fallback_verdict(fact)
-        )
+        analysed.append((entry, fact))
+
+    verdicts = _verdicts_for([fact for _, fact in analysed], progress_callback)
+
+    results = []
+    for (entry, fact), verdict in zip(analysed, verdicts):
+        if fact.diff_truncated:
+            # Only a prefix of the change was examined, so the score
+            # describes that prefix.  Padding a diff past the cap and
+            # appending the payload would otherwise report as clean.
+            verdict = (
+                "Diff exceeded the size cap and was truncated; only part of "
+                f"this change was vetted. {verdict}"
+            )
         res = {
-            "package": name,
+            "package": entry["name"],
             "old_version": entry.get("current_version", ""),
             "new_version": entry.get("latest_version", ""),
             "score": fact.final_score,
             "verdict": verdict,
-            "risk": (
-                "Low" if fact.final_score <= 20
-                else "Medium" if fact.final_score <= 50
-                else "High" if fact.final_score <= 80
-                else "Critical"
-            ),
+            "risk": risk_level(fact.final_score),
             "first_seen": fact.first_seen,
+            "diff_truncated": fact.diff_truncated,
         }
         if verbose:
             fired = [
@@ -401,6 +553,8 @@ def _analyze_outdated_batch(
             res["triggered_rules"] = fired
             res["suppressed_rules"] = fact.suppressed_rules
         results.append(res)
+    # Failures last, so an unvetted package is the final thing read.
+    results.extend(failures)
     return results
 
 
@@ -411,6 +565,7 @@ def inspect(
     package: str = typer.Argument(..., help="Package name"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Show a detailed analysis of a single package."""
     ensure_default_configs()
     init_db()
     if load_config().get("seed", {}).get("auto_import", True):
@@ -428,6 +583,7 @@ def inspect(
 
 
 def _inspect_rich(fact):
+    """rich-formatted inspection output"""
     con = console()
     risk = risk_level(fact.final_score)
 
@@ -545,6 +701,7 @@ def _inspect_rich(fact):
 
 
 def _inspect_plain(fact):
+    """plain-text inspection output"""
     if fact.first_seen:
         print("[First analysis] No prior history; novelty carries no weight yet.")
     print(f"TrustSight Inspect: {fact.package_name}")
@@ -582,6 +739,7 @@ def history(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Show analysis history for a package."""
     ensure_default_configs()
     init_db()
 
@@ -665,6 +823,7 @@ def history(
 def config_show(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Display current configuration."""
     ensure_default_configs()
     cfg = load_config()
     llm = cfg.get("llm", {})
@@ -723,19 +882,20 @@ def config_set(
     value: str = typer.Argument(..., help="Config value"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Set a configuration value."""
     if key not in ("api_key", "base_url"):
         msg = f"Unknown key: {key}. Use api_key or base_url."
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
-            _print_red(msg)
+            _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=1)
     set_config(f"llm.openai.{key}", value)
     msg = f"Set llm.openai.{key} in {CONFIG_DIR / 'config.toml'}"
     if json_output:
         typer.echo(json.dumps({"status": "ok", "key": f"llm.openai.{key}"}))
     else:
-        _print_green(msg)
+        _print_colored(msg, "green")
 
 
 @config_app.command("sync-rules")
@@ -747,15 +907,22 @@ def config_sync_rules(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Sync shipped rules to the user config."""
     ensure_default_configs()
     added, updated = sync_rules(update_outdated=update)
     target = CONFIG_DIR / "rules.toml"
+
+    drift = drifted_shipped_rules()
 
     if json_output:
         typer.echo(json.dumps({
             "target": str(target),
             "added": added,
             "updated": updated,
+            "drift": [
+                {"rule_id": r, "field": f, "on_disk": a, "shipped": s}
+                for r, f, a, s in drift
+            ],
         }, indent=2))
         return
 
@@ -772,8 +939,19 @@ def config_sync_rules(
                 f"{', '.join(pending)}. Re-run with --update to replace them "
                 f"(only rules you have not edited are touched)."
             )
-        else:
+        elif not drift:
             lines.append("rules.toml is already up to date.")
+    if drift:
+        # Not auto-corrected: a rule whose pattern the user has broadened
+        # would lose that work if the shipped block replaced it.
+        lines.append(
+            f"\n{len(drift)} rule field(s) differ from the shipped definition. "
+            f"A 'match_target' still set to raw_line means that rule does not "
+            f"see payloads assembled from shell variables:"
+        )
+        for rid, field, actual, shipped_value in drift:
+            lines.append(f"  {rid}.{field}: {actual!r} on disk, {shipped_value!r} shipped")
+        lines.append("Edit rules.toml to adopt these, keeping any pattern you rely on.")
     body = "\n".join(lines)
     if HAS_RICH:
         console().print(Panel(body, title=str(target), border_style="cyan"))
@@ -787,6 +965,7 @@ def config_sync_rules(
 def override_list(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """List all rule overrides."""
     ensure_default_configs()
     overrides = list_overrides()
     if not overrides:
@@ -834,6 +1013,7 @@ def override_add(
     package: Optional[str] = typer.Option(None, "--package", help="Limit to one package"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Add a rule override to suppress a finding."""
     ensure_default_configs()
     try:
         ov = add_override(rule_id, reason, package)
@@ -842,7 +1022,7 @@ def override_add(
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
-            _print_red(msg)
+            _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=1)
     scope = ov.package or "all packages"
     msg = f"Override added: {ov.rule_id} for {scope}"
@@ -854,7 +1034,7 @@ def override_add(
             "reason": ov.reason,
         }))
     else:
-        _print_green(msg)
+        _print_colored(msg, "green")
 
 
 @override_app.command("rm")
@@ -863,19 +1043,20 @@ def override_rm(
     package: Optional[str] = typer.Option(None, "--package", help="Scope the removal to one package"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Remove a rule override."""
     ensure_default_configs()
     if remove_override(rule_id.upper(), package):
         msg = f"Override removed: {rule_id.upper()}"
         if json_output:
             typer.echo(json.dumps({"status": "ok", "rule_id": rule_id.upper()}))
         else:
-            _print_green(msg)
+            _print_colored(msg, "green")
     else:
         msg = f"No matching override for {rule_id.upper()}"
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
-            _print_yellow(msg)
+            _print_colored(msg, "yellow")
         raise typer.Exit(code=1)
 
 
@@ -892,6 +1073,7 @@ def seed_db(
     force: bool = typer.Option(False, "--force", help="Re-import even if already seeded"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Import or inspect the novelty seed database."""
     ensure_default_configs()
     init_db()
 
@@ -908,7 +1090,7 @@ def seed_db(
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
-                _print_red(msg)
+                _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
         seed = bundled
 
@@ -937,7 +1119,7 @@ def seed_db(
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
-            _print_red(msg)
+            _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=2)
 
     if json_output:
@@ -975,12 +1157,13 @@ def lint_rules_cmd(
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
+    """Lint rules for common mistakes."""
     if file:
         from ._toml import tomllib
 
         path = Path(file)
         if not path.exists():
-            _print_red(f"Rules file not found: {path}")
+            _print_colored(f"Rules file not found: {path}", "red", stderr=True)
             raise typer.Exit(code=2)
         with open(path, "rb") as fh:
             rules = tomllib.load(fh).get("rules", [])
@@ -1068,25 +1251,15 @@ def lint_rules_cmd(
 
 # --- helpers ---
 
-def _print_green(msg: str):
+
+def _print_colored(msg: str, color: str = "", stderr: bool = False):
+    """print a message with optional rich color"""
     if HAS_RICH:
-        console().print(f"[green]{msg}[/]")
+        style = f"[{color}]" if color else ""
+        console().print(f"{style}{msg}[/]")
     else:
-        print(msg)
-
-
-def _print_red(msg: str):
-    if HAS_RICH:
-        console().print(f"[red]{msg}[/]")
-    else:
-        print(msg, file=sys.stderr)
-
-
-def _print_yellow(msg: str):
-    if HAS_RICH:
-        console().print(f"[yellow]{msg}[/]")
-    else:
-        print(msg)
+        kwargs = {"file": sys.stderr} if stderr else {}
+        print(msg, **kwargs)
 
 
 # --- entry point ---

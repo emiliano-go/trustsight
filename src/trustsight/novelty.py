@@ -6,6 +6,7 @@ from .db import (
     effective_observation_count,
     get_connection,
     top_dependency_names,
+    top_dependency_pairs,
 )
 from .deps import normalize_dependency
 from .schema import NoveltyContext
@@ -105,6 +106,7 @@ _KNOWN_SUFFIXES = (
 
 
 def _strip_variant_suffix(name: str) -> str:
+    """strip known variant suffixes like -git or -bin from a package name"""
     for s in _KNOWN_SUFFIXES:
         if name.endswith(s):
             return name[: -len(s)]
@@ -123,13 +125,20 @@ def package_typosquat_target(pkg_name: str) -> str | None:
     base = _strip_variant_suffix(pkg_name)
     pkg_pop = dependency_observation_count(pkg_name)
 
-    candidates = top_dependency_names()
+    # The popularity of every candidate arrives with the candidate list.
+    # Asking per name meant one database round-trip each, which for the
+    # default 5000-name list dominated the entire analysis.
+    threshold = pkg_pop * 10
+    limit = 1 if len(pkg_name) < 8 else 2
     filtered: list[str] = []
-    for cand in candidates:
-        if cand == pkg_name or _strip_variant_suffix(cand) == base:
+    for cand, cand_pop in top_dependency_pairs():
+        # Edit distance cannot bridge a length gap wider than the limit, so
+        # discarding those here keeps the comparison loop small.
+        if abs(len(cand) - len(pkg_name)) > limit:
             continue
-        cand_pop = dependency_observation_count(cand)
-        if cand_pop < pkg_pop * 10:
+        if cand_pop < threshold:
+            continue
+        if cand == pkg_name or _strip_variant_suffix(cand) == base:
             continue
         filtered.append(cand)
 
@@ -140,6 +149,7 @@ def package_typosquat_target(pkg_name: str) -> str | None:
 
 
 def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
+    """Record a URL in the novelty database and return whether it is novel for the package and globally"""
     nurl = normalize_url(url)
     with get_connection() as conn:
         cur = conn.cursor()
@@ -174,6 +184,7 @@ def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
 
 
 def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
+    """Record a maintainer in the novelty database and return whether it is novel for the package"""
     with get_connection() as conn:
         cur = conn.cursor()
 
@@ -199,6 +210,7 @@ def build_novelty_context(
     package_id: int,
     maintainer: str = "",
 ) -> NoveltyContext:
+    """Build a NoveltyContext by checking URL and maintainer novelty"""
     ctx = NoveltyContext()
 
     # Read maturity before this analysis is recorded, so a package is

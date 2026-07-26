@@ -1,6 +1,8 @@
+import atexit
 import os
 import sqlite3
 import subprocess
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -9,23 +11,69 @@ from .config import DATA_DIR
 
 
 def get_db_path() -> Path:
+    """Return the path to the SQLite database file."""
     return DATA_DIR / "trustsight.db"
+
+
+# Connections are cached per (thread, database path) rather than opened per
+# query.  Opening one costs ~0.35ms once the two PRAGMAs are counted, and the
+# hot paths issue thousands of small reads: R074 alone used to open 5001
+# connections for a single package.  Keying on the path keeps the tests
+# honest, since they monkeypatch DATA_DIR to a tmpdir between cases.
+_local = threading.local()
+
+
+def _new_connection(db_path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    # journal_mode is a persistent property of the file, so this only does
+    # real work the first time a database is created; foreign_keys is
+    # per-connection and has to be set on every one.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+def close_connections() -> None:
+    """Close the cached connection held by the current thread."""
+    cached = getattr(_local, "cached", None)
+    if cached is None:
+        return
+    _local.cached = None
+    try:
+        cached[1].close()
+    except sqlite3.Error:
+        pass
+
+
+atexit.register(close_connections)
 
 
 @contextmanager
 def get_connection():
+    """Yield the cached connection for the current database path.
+
+    The connection is reused rather than closed on exit, so callers must
+    still ``commit()`` their writes exactly as before.  Exactly one is kept
+    per thread: a process only ever works against one database, and closing
+    the previous one when the path changes keeps the tests, which point
+    DATA_DIR at a fresh tmpdir per case, from accumulating handles.
+    """
     db_path = get_db_path()
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    try:
-        yield conn
-    finally:
-        conn.close()
+    key = str(db_path)
+    cached = getattr(_local, "cached", None)
+    if cached is None or cached[0] != key:
+        if cached is not None:
+            try:
+                cached[1].close()
+            except sqlite3.Error:
+                pass
+        _local.cached = (key, _new_connection(db_path))
+    yield _local.cached[1]
 
 
 def init_db():
+    """Create all tables and indexes if they do not exist."""
     with get_connection() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS packages (
@@ -101,11 +149,44 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_source_urls_url ON source_urls(url);
             CREATE INDEX IF NOT EXISTS idx_packages_name ON packages(name);
             CREATE INDEX IF NOT EXISTS idx_history_package ON analysis_history(package_id);
+
+            /* top_dependency_names() asks for the most-observed names on
+               every analysis; without this it is a full scan plus a sort. */
+            CREATE INDEX IF NOT EXISTS idx_dependency_names_count
+                ON dependency_names(observation_count DESC);
         """)
+        _migrate(conn)
         conn.commit()
 
 
+# Columns added after the initial schema shipped.  CREATE TABLE IF NOT
+# EXISTS silently does nothing on a database that already has the table,
+# so an install predating one of these keeps the old layout and every
+# write to the new column fails with "no such column".
+_ADDED_COLUMNS = {
+    "packages": {"current_maintainer": "TEXT DEFAULT ''"},
+}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns missing from a database created by an older version."""
+    for table, columns in _ADDED_COLUMNS.items():
+        try:
+            existing = {
+                row["name"]
+                for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+            }
+        except sqlite3.OperationalError:
+            continue
+        if not existing:
+            continue
+        for name, decl in columns.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+
 def upsert_package(name: str, version: str) -> int:
+    """Insert or update a package record, returning its id."""
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO packages (name, current_version, last_checked)
@@ -121,18 +202,21 @@ def upsert_package(name: str, version: str) -> int:
 
 
 def get_package_id(name: str) -> Optional[int]:
+    """Return the database id for *name*, or None."""
     with get_connection() as conn:
         row = conn.execute("SELECT id FROM packages WHERE name = ?", (name,)).fetchone()
         return row["id"] if row else None
 
 
 def get_package(name: str) -> Optional[dict]:
+    """Return the full package row as a dict, or None."""
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM packages WHERE name = ?", (name,)).fetchone()
         return dict(row) if row else None
 
 
 def get_last_analysis(package_id: int) -> Optional[dict]:
+    """Return the most recent analysis for *package_id*, or None."""
     with get_connection() as conn:
         row = conn.execute(
             """SELECT * FROM analysis_history
@@ -144,6 +228,7 @@ def get_last_analysis(package_id: int) -> Optional[dict]:
 
 
 def get_triggered_rules(history_id: int) -> list[dict]:
+    """Return all triggered rules for *history_id*."""
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT * FROM triggered_rules WHERE history_id = ?", (history_id,)
@@ -162,6 +247,7 @@ def insert_analysis(
     fact_json: str,
     triggered_rules: list[dict],
 ) -> int:
+    """Record a new analysis and its triggered rules, returning the history id."""
     with get_connection() as conn:
         cur = conn.execute(
             """INSERT INTO analysis_history
@@ -180,6 +266,7 @@ def insert_analysis(
 
 
 def update_package_version(name: str, version: str):
+    """Update the current version and check time for *name*."""
     with get_connection() as conn:
         conn.execute(
             "UPDATE packages SET current_version = ?, last_checked = datetime('now') WHERE name = ?",
@@ -189,6 +276,7 @@ def update_package_version(name: str, version: str):
 
 
 def update_package_maintainer(name: str, maintainer: str):
+    """Update the stored maintainer for *name*."""
     with get_connection() as conn:
         conn.execute(
             "UPDATE packages SET current_maintainer = ? WHERE name = ?",
@@ -216,6 +304,7 @@ SEED_VERSION_KEY = "seed_version"
 
 
 def get_metadata(key: str) -> Optional[str]:
+    """Return a metadata value by key, or None."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT value FROM metadata WHERE key = ?", (key,)
@@ -224,6 +313,7 @@ def get_metadata(key: str) -> Optional[str]:
 
 
 def set_metadata(key: str, value: str) -> None:
+    """Set or overwrite a metadata key-value pair."""
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO metadata (key, value) VALUES (?, ?)
@@ -249,22 +339,60 @@ def dependency_observation_count(name: str) -> int:
         return int(row["observation_count"] or 0) if row else 0
 
 
+def dependency_observation_counts(names: list[str]) -> dict[str, int]:
+    """Observation counts for many names in one round-trip.
+
+    The per-name helper is fine for a handful of lookups but ruinous in a
+    loop: the typosquat check ran it once per candidate.  Names absent
+    from the table are absent from the result.
+    """
+    if not names:
+        return {}
+    unique = list({n for n in names if n})
+    counts: dict[str, int] = {}
+    with get_connection() as conn:
+        # SQLITE_MAX_VARIABLE_NUMBER is 999 on older builds, so chunk.
+        for start in range(0, len(unique), 900):
+            chunk = unique[start:start + 900]
+            placeholders = ",".join("?" * len(chunk))
+            try:
+                rows = conn.execute(
+                    f"""SELECT name, observation_count FROM dependency_names
+                        WHERE name IN ({placeholders})""",
+                    chunk,
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return {}
+            for row in rows:
+                counts[row["name"]] = int(row["observation_count"] or 0)
+    return counts
+
+
 def top_dependency_names(limit: int = 5000) -> list[str]:
     """The most-depended-on names, as a popularity proxy for typosquatting.
 
     Observation count already ranks names by how many packages rely on
     them, so no separate "top packages" list needs shipping.
     """
+    return [name for name, _ in top_dependency_pairs(limit)]
+
+
+def top_dependency_pairs(limit: int = 5000) -> list[tuple[str, int]]:
+    """``(name, observation_count)`` for the most-depended-on names.
+
+    Callers that rank candidates by popularity need the count alongside
+    the name; fetching it here saves them one query per candidate.
+    """
     with get_connection() as conn:
         try:
             rows = conn.execute(
-                """SELECT name FROM dependency_names
+                """SELECT name, observation_count FROM dependency_names
                    ORDER BY observation_count DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
         except sqlite3.OperationalError:
             return []
-        return [r["name"] for r in rows]
+        return [(r["name"], int(r["observation_count"] or 0)) for r in rows]
 
 
 # A name this many packages depend on is established enough to be worth
@@ -375,6 +503,7 @@ def effective_observation_count() -> int:
 
 
 def is_maintainer_globally_novel(name: str) -> bool:
+    """Return True if *name* has never been seen as a maintainer."""
     with get_connection() as conn:
         row = conn.execute(
             "SELECT 1 FROM maintainers WHERE name = ?", (name,)
@@ -424,7 +553,12 @@ def import_seed(seed_path: Path) -> dict:
         path = temp
 
     try:
-        with get_connection() as conn:
+        # A dedicated connection rather than the pooled one: this ATTACHes a
+        # second database, and an exception between ATTACH and DETACH would
+        # otherwise leave the cached connection holding the seed forever, so
+        # every later import in the same process would fail to re-attach.
+        conn = _new_connection(get_db_path())
+        try:
             # source_urls.first_seen_package_id references packages(id),
             # and foreign_keys is ON, so the sentinel row must exist.
             conn.execute(
@@ -474,7 +608,12 @@ def import_seed(seed_path: Path) -> dict:
                    SELECT key, value FROM seed.metadata"""
             )
             conn.commit()
-            conn.execute("DETACH DATABASE seed")
+        finally:
+            try:
+                conn.execute("DETACH DATABASE seed")
+            except sqlite3.Error:
+                pass
+            conn.close()
         return {
             "urls_added": after - before,
             "urls_total": after,
@@ -488,6 +627,7 @@ def import_seed(seed_path: Path) -> dict:
 
 
 def bundled_seed_path() -> Path:
+    """Return the path to the bundled seed database."""
     return Path(__file__).parent / "data" / "seed.db.gz"
 
 
@@ -523,6 +663,7 @@ def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
 
 
 def get_history(package_id: int, limit: int = 20) -> list[dict]:
+    """Return recent analysis history for *package_id*, newest first."""
     with get_connection() as conn:
         rows = conn.execute(
             """SELECT * FROM analysis_history
@@ -534,6 +675,7 @@ def get_history(package_id: int, limit: int = 20) -> list[dict]:
 
 
 def get_all_packages() -> list[dict]:
+    """Return every package row, ordered by name."""
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM packages ORDER BY name").fetchall()
         return [dict(r) for r in rows]

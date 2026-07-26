@@ -236,3 +236,54 @@ def test_observation_count_excludes_the_current_analysis(db):
     pkg_id = get_package_id("testpkg")
     ctx = build_novelty_context(["https://x.example.com/a.tar.gz"], pkg_id)
     assert ctx.observation_count == 0
+
+
+# --- typosquat detection over the batched candidate query ---
+
+def test_package_typosquat_target_finds_a_one_edit_squat(db):
+    """A near-miss on a far more popular name is still caught.
+
+    The candidate popularity lookup moved from one query per candidate to
+    a single query, so this guards the detection itself rather than the
+    plumbing underneath it.
+    """
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    record_dependency_names(["openssl"] * 100)
+    record_dependency_names(["openss1"])
+    assert package_typosquat_target("openss1") == "openssl"
+
+
+def test_package_typosquat_target_ignores_a_comparably_popular_name(db):
+    """Popularity must be asymmetric before the rule fires."""
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    record_dependency_names(["openssl"] * 10)
+    record_dependency_names(["openss1"] * 10)
+    assert package_typosquat_target("openss1") is None
+
+
+def test_package_typosquat_target_ignores_known_variant_suffixes(db):
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    record_dependency_names(["firefox"] * 100)
+    assert package_typosquat_target("firefox-bin") is None
+
+
+def test_package_typosquat_target_catches_a_transposition(db):
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    record_dependency_names(["systemd"] * 100)
+    assert package_typosquat_target("sytsemd") == "systemd"
+
+
+def test_package_typosquat_target_ignores_short_names(db):
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    record_dependency_names(["yay"] * 100)
+    assert package_typosquat_target("yak") is None

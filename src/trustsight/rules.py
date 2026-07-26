@@ -38,7 +38,29 @@ _FUNCTION_CLOSE_RE = re.compile(r"^\s*\}")
 _FUNCTION_NAME_RE = re.compile(r"^(\w+)\s*\(\s*\)\s*\{")
 
 
+# Compiled rule patterns, keyed by pattern text.  re's own cache is bounded
+# at 512 entries and is shared with every other pattern the process compiles,
+# so a corpus scan can evict rule patterns and recompile them per diff.  An
+# invalid pattern is remembered as None so it is only reported once.
+_pattern_cache: dict[str, "re.Pattern | None"] = {}
+
+
+def _compiled(pattern: str):
+    """Return the compiled form of *pattern*, or None if it is invalid."""
+    try:
+        return _pattern_cache[pattern]
+    except KeyError:
+        pass
+    try:
+        compiled = re.compile(pattern, re.IGNORECASE)
+    except re.error:
+        compiled = None
+    _pattern_cache[pattern] = compiled
+    return compiled
+
+
 def _to_pairs(lines: list[str]) -> list[tuple[int, str]]:
+    """pair each line with its original index"""
     return [(i, line) for i, line in enumerate(lines)]
 
 
@@ -148,6 +170,7 @@ def apply_rules(
     rules: list[dict] | None = None,
     include_experimental: bool = False,
 ) -> list[dict]:
+    """Match rules against diff lines and return triggered findings."""
     if rules is None:
         rules = load_rules()
 
@@ -155,21 +178,27 @@ def apply_rules(
     ctx_map = _classify_line_context(raw_diff_lines)
     fn_map = _classify_enclosing_function(raw_diff_lines)
 
+    # These three candidate lists do not vary per rule, but used to be
+    # rebuilt inside the loop: with ~75 rules that was 75 filtering passes
+    # over every line of the diff.  Built once and shared, read-only.
+    raw_candidates = filter_raw_lines(raw_diff_lines)
+    added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
+    resolved_candidates = _to_pairs(resolved_strings)
+
     for rule in rules:
         if rule.get("experimental") and not include_experimental:
             continue
 
         match_target = rule.get("match_target", "raw_line")
         if match_target == "raw_line":
-            candidates = filter_raw_lines(raw_diff_lines)
-            if rule.get("added_only"):
-                candidates = [(i, ln) for i, ln in candidates if ln.startswith("+")]
+            candidates = (
+                added_candidates if rule.get("added_only") else raw_candidates
+            )
         else:
-            candidates = _to_pairs(resolved_strings)
+            candidates = resolved_candidates
 
-        try:
-            compiled = re.compile(rule["pattern"], re.IGNORECASE)
-        except re.error:
+        compiled = _compiled(rule["pattern"])
+        if compiled is None:
             continue
 
         rule_scope = rule.get("scope") if match_target == "raw_line" else None
@@ -193,6 +222,7 @@ def apply_rules(
 
 
 def get_raw_diff_lines(diff_text: str) -> list[str]:
+    """Return non-empty diff lines with continuations joined."""
     lines = []
     for line in join_line_continuations(diff_text.splitlines()):
         stripped = line.strip()

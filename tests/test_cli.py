@@ -291,3 +291,176 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
         result = CliRunner().invoke(app, ["inspect", "testpkg"])
         assert result.exit_code == 0, result.stdout
         mock_analyze.assert_called_once_with("testpkg")
+
+
+# --- batch orchestration ---
+
+def _fact(name, score=0):
+    from trustsight.schema import DiffSummary, PackageFact
+    return PackageFact(
+        package_name=name,
+        new_version="1.1",
+        diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+        final_score=score,
+    )
+
+
+def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
+    """Every package is fetched once, up front, and not again per analysis.
+
+    The fetch is the slow step, so the batch warms all the clones
+    concurrently and hands each analysis the commit time it just saw;
+    analyze_package then finds the clone current and skips the network.
+    """
+    from trustsight import cli
+
+    fetched = []
+
+    class FakeRepo:
+        def __getitem__(self, _oid):
+            return type("C", (), {"commit_time": 1700000000})()
+
+    monkeypatch.setattr(
+        "trustsight.fetcher.clone_or_fetch",
+        lambda name, mtime=None: fetched.append((name, mtime)) or FakeRepo(),
+    )
+    monkeypatch.setattr("trustsight.fetcher.last_fetch_time", lambda repo: 1700000000)
+
+    seen = {}
+
+    def fake_analyze(name, **kwargs):
+        seen[name] = kwargs
+        return _fact(name)
+
+    monkeypatch.setattr(cli, "analyze_package", fake_analyze)
+    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+
+    pkgs = [
+        {"name": "alpha", "current_version": "1.0", "latest_version": "1.1",
+         "last_modified": 1699999999},
+        {"name": "beta", "current_version": "2.0", "latest_version": "2.1"},
+    ]
+    results = cli._analyze_outdated_batch(pkgs)
+
+    assert [r["package"] for r in results] == ["alpha", "beta"]
+    assert sorted(name for name, _ in fetched) == ["alpha", "beta"]
+    # the RPC's LastModified is passed through to the fetcher
+    assert dict(fetched)["alpha"] == 1699999999
+    # and each analysis receives the freshness hint plus the known version,
+    # so it neither refetches nor forks pacman.  The hint is the AUR's own
+    # timestamp, never a value derived from the upstream commit.
+    assert seen["alpha"]["upstream_mtime"] == 1699999999
+    assert seen["alpha"]["installed_version"] == "1.0"
+    # beta had no LastModified, so it falls back to our own fetch time
+    assert seen["beta"]["upstream_mtime"] == 1700000000
+
+
+def test_one_bad_package_does_not_end_the_run(monkeypatch):
+    """A failure is contained: other packages are still analysed."""
+    from trustsight import cli
+
+    monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
+    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+
+    def fake_analyze(name, **kwargs):
+        if name == "broken":
+            raise RuntimeError("boom")
+        return _fact(name)
+
+    monkeypatch.setattr(cli, "analyze_package", fake_analyze)
+
+    results = cli._analyze_outdated_batch([
+        {"name": "broken", "current_version": "1.0"},
+        {"name": "fine", "current_version": "1.0"},
+    ])
+    scored = [r for r in results if not r.get("failed")]
+    assert [r["package"] for r in scored] == ["fine"]
+    # the failure is surfaced, not swallowed
+    assert [r["package"] for r in results if r.get("failed")] == ["broken"]
+
+
+def test_verdicts_keep_input_order(monkeypatch):
+    """Verdicts are produced concurrently but must line up with their facts."""
+    from trustsight import cli
+
+    facts = [_fact(f"pkg{i}", score=10) for i in range(8)]
+    monkeypatch.setattr(
+        "trustsight.llm.generate_verdict", lambda fact: f"verdict-{fact.package_name}"
+    )
+    verdicts = cli._verdicts_for(facts)
+    assert verdicts == [f"verdict-pkg{i}" for i in range(8)]
+
+
+def test_verdict_failure_falls_back_instead_of_raising(monkeypatch):
+    from trustsight import cli
+
+    def explode(fact):
+        raise RuntimeError("model unreachable")
+
+    monkeypatch.setattr("trustsight.llm.generate_verdict", explode)
+    monkeypatch.setattr("trustsight.llm.fallback_verdict", lambda fact: "offline")
+    assert cli._verdicts_for([_fact("pkg", score=10)]) == ["offline"]
+
+
+def test_unscored_packages_never_reach_the_model(monkeypatch):
+    """A zero score uses the offline verdict, as before."""
+    from trustsight import cli
+
+    def explode(fact):
+        raise AssertionError("model asked about a zero-score package")
+
+    monkeypatch.setattr("trustsight.llm.generate_verdict", explode)
+    monkeypatch.setattr("trustsight.llm.fallback_verdict", lambda fact: "offline")
+    assert cli._verdicts_for([_fact("pkg", score=0)]) == ["offline"]
+
+
+def test_a_failed_package_is_reported_not_dropped(monkeypatch):
+    """A package that cannot be analysed must still appear in the review.
+
+    Dropping it made an unvetted package indistinguishable from a clean
+    one, so anything able to provoke a crash could keep itself out of the
+    report entirely.
+    """
+    from trustsight import cli
+
+    monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
+    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+
+    def fake_analyze(name, **kwargs):
+        if name == "evil":
+            raise RuntimeError("crafted crash")
+        return _fact(name)
+
+    monkeypatch.setattr(cli, "analyze_package", fake_analyze)
+
+    results = cli._analyze_outdated_batch([
+        {"name": "evil", "current_version": "1.0", "latest_version": "1.1"},
+        {"name": "good", "current_version": "1.0", "latest_version": "1.1"},
+    ])
+
+    by_name = {r["package"]: r for r in results}
+    assert set(by_name) == {"evil", "good"}
+    evil = by_name["evil"]
+    assert evil["failed"] is True
+    assert evil["score"] is None, "a failed analysis must not carry a clean score"
+    assert evil["risk"] == "Error"
+    assert "NOT vetted" in evil["verdict"]
+
+
+def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
+    """The table must cope with the absent score of a failed package."""
+    from trustsight import cli
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(
+        cli, "_analyze_outdated_batch",
+        lambda pkgs, cb=None, verbose=False: [
+            {"package": "ok", "score": 5, "risk": "Low", "verdict": "fine",
+             "first_seen": False},
+            {"package": "bad", "score": None, "risk": "Error", "failed": True,
+             "verdict": "Analysis failed (RuntimeError): this package was NOT vetted.",
+             "first_seen": False},
+        ],
+    )
+    # exercises the rich renderer, which formats the score cell
+    cli._run_analysis_loop([{"name": "ok"}, {"name": "bad"}], 10, False, False)

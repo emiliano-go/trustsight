@@ -139,7 +139,7 @@ The LLM is entirely optional. The score, evidence breakdown, and verdict classif
 
 ## Key numbers
 
-- **456 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
+- **689 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
 - **CRITICAL p5 = 40**, **benign p95 = 25**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 16 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire; primary defence is verdict assertions).

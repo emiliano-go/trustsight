@@ -50,11 +50,12 @@ The three gates together enforce three distinct properties: detection (no missed
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 81.5% | >= 80% |
+| Benign zero-rate | 82.0% | >= 80% |
+| Ruleset trigger rate | 18.0% | benign diffs that fire at least one non-INFO rule |
 | CRITICAL recall | 100% (12/12) | 100% |
 | CRITICAL p5 | 40 | > benign p95 |
 | Benign p95 | 20 | < CRITICAL p5 |
-| Tests | 267 | n/a |
+| Tests | 689 (19 files) | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model. A change that moves any metric past its gate is rejected in CI.
 
@@ -78,6 +79,8 @@ The test set is divided into 8 strata. Each stratum has a per-stratum 70% recall
 The per-stratum requirement prevents the benchmark from optimizing for easy classes while ignoring hard ones. A benchmark that measures only aggregate recall can achieve high numbers by detecting all easy samples while missing every sample in a difficult stratum. Per-stratum evaluation catches this: a stratum that cannot reach 70% recall indicates a blind spot in that class of attack.
 
 Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
+
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 82.0% zero-rate means 18.0% of benign diffs fire at least one non-INFO rule — the majority of those are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

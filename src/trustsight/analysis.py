@@ -160,14 +160,14 @@ _NETWORK_FETCH_RE = re.compile(
 # in, so an existing install would otherwise never see a new key and R060
 # would be dead for every user who already has a config.toml.
 _EXPERIMENTAL_DEFAULTS = {
-    "D001": False, "D002": False, "D003": False, "D004": False,
+    "D001": True, "D002": True, "D003": True, "D004": True,
     "R060": True,   # INFO severity, weight 0: cannot move a score
-    "R061": False, "R062": False, "R063": False, "R064": False,
+    "R061": True, "R062": True, "R063": True, "R064": True,
 }
 
 
 def _experimental_enabled(config: dict, rule_id: str) -> bool:
-    """D-series and the new build rules are opt-in until calibrated.
+    """Check whether a code-emitted rule is enabled.
 
     They are emitted from code rather than ``rules.toml``, so the
     ``experimental`` flag that :func:`~trustsight.rules.apply_rules`

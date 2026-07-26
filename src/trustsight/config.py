@@ -86,9 +86,9 @@ experimental = false
 
 [experimental_rules]
 # Rules emitted from code rather than rules.toml, so the [rules]
-# experimental flag above cannot reach them.  All default to false until
-# their fire rates have been measured against the benign corpus and
-# folded into baseline.json.
+# experimental flag above cannot reach them.  All default to true since
+# v0.7.0 after each was measured against the 3246-diff benign corpus
+# (see docs/explanation/fire-rates.md).
 #
 # D001  novel dependency: a name never seen anywhere in the AUR
 # D002  typosquatted dependency: a novel name one or two edits from a
@@ -102,14 +102,14 @@ experimental = false
 # R063  a patch applied from outside the build tree (a URL, an absolute
 #       path, or process substitution)
 # R064  a source= URL downgraded from https to http
-D001 = false
-D002 = false
-D003 = false
-D004 = false
-R061 = false
-R062 = false
-R063 = false
-R064 = false
+D001 = true
+D002 = true
+D003 = true
+D004 = true
+R061 = true
+R062 = true
+R063 = true
+R064 = true
 
 # R060 reports that a critical build function was modified.  It is INFO
 # severity, so it carries weight 0 and cannot move a score: it fires on

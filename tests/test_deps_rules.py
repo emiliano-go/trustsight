@@ -45,7 +45,12 @@ def enabled():
 @pytest.fixture
 def disabled():
     ensure_default_configs()
-    return load_config()
+    config = load_config()
+    config["experimental_rules"] = {
+        r: False for r in ("D001", "D002", "D003", "D004",
+                           "R061", "R062", "R063", "R064")
+    }
+    return config
 
 
 def fired(diff, config, rules, package="mypkg"):
@@ -275,10 +280,11 @@ def test_r060_defaults_on_for_a_config_without_the_section(rules):
     assert "R060" in {e.rule_id for e in fact.score_breakdown}
 
 
-def test_scoring_rules_stay_off_for_a_config_without_the_section(rules):
+def test_scoring_rules_fire_for_a_config_without_the_section(rules):
+    """With empty config the code fallback enables all D-series and R061."""
     diff = HEADER + "+depends=('glibc' 'totally-unknown-backdoor')\n"
     fact = scan_diff(diff, rules=rules, config={}, package_name="mypkg")
-    assert not {"D001", "D002", "D003", "R061"} & {e.rule_id for e in fact.score_breakdown}
+    assert {"D001", "D002", "D003", "R061"} & {e.rule_id for e in fact.score_breakdown}
 
 
 # --- D004: provides/replaces hijack ---
@@ -383,7 +389,8 @@ def test_r064_silent_on_an_upgrade_to_https(all_enabled, rules):
     assert "R064" not in fired(diff, all_enabled, rules)
 
 
-def test_new_rules_are_silent_by_default(rules):
+def test_experimental_rules_on_by_default_with_load_config(rules):
+    """D004, R062, R063, R064 fire when triggered with default config."""
     ensure_default_configs()
     config = load_config()
     for diff in (
@@ -392,7 +399,7 @@ def test_new_rules_are_silent_by_default(rules):
         HEADER + "+prepare() {\n+  patch -p1 -i /tmp/x.patch\n+}\n",
         HEADER + "-source=('https://e.example/a.tar.gz')\n+source=('http://e.example/a.tar.gz')\n",
     ):
-        assert not {"D004", "R062", "R063", "R064"} & fired(diff, config, rules)
+        assert {"D004", "R062", "R063", "R064"} & fired(diff, config, rules), diff
 
 
 @pytest.mark.parametrize("rule_id,diff", [

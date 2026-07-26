@@ -27,9 +27,8 @@
   | R072 | Capability Density Anomaly | INFO (w 0) | meta | rule hits span 3+ distinct categories |
   | R073 | Accelerated Release Cadence | metadata (never scored) | temporal-metadata | HEAD has 3+ ancestors in the last 24 h |
 
-  R068, R072, and R073 are always on (INFO weight 0 or metadata).
-  R069, R070, and R071 were promoted from experimental to always-on after
-  measurement (corpus for R069/R070; end-to-end gating tests for R071).
+  All R068-R073 are always on, gated only by diff content or database
+  maturity rather than an experimental flag.
 
 - **Naming and dependency-set rules (R074–R075).** Two new code-emitted rules
   that detect package-name typosquatting and aggregate dependency-set expansion.
@@ -39,13 +38,14 @@
   | R074 | Package-Name Typosquat | HIGH (w 25) | naming | name within edit-distance 2 of a far-more-popular package, not a variant |
   | R075 | Dependency-Set Expansion | MEDIUM (w 15) | dependency | diff adds 3+ deps whose count x mean-rarity exceeds gate |
 
-  Both are experimental (opt-in via `[experimental_rules]`). R074 uses seed
-  popularity data and requires a warmed database; R075 is fully corpus-calibratable.
+  Both are always on, gated only by a cold-start maturity check.
+  R074 uses seed popularity data and requires a warmed database;
+  R075 is fully corpus-calibratable.
 
-- **Fire rates measured for R068-R073.** Measured against the 3246-diff benign
-  corpus. R068 (20.95 %), R069 (0.03 %), R070 (0.25 %), R072 (15.87 %). All
-  scored rules pass the 30 % gate. R071/R073 require live git history and are
-  marked TBD in fire-rates.md.
+- **Fire rates measured for R068-R075.** Measured against the 3246-diff
+  benign corpus. R068 (20.95 %), R069 (0.03 %), R070 (0.25 %), R072 (15.87 %),
+  R074 (1.12 % package-scan), R075 (0.34 %). All scored rules pass the 30 %
+  gate. R071/R073 require live git history and are marked TBD in fire-rates.md.
 
 ### Fixed
 

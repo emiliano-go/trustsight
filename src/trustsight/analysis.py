@@ -201,7 +201,6 @@ _EXPERIMENTAL_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
     "R060": True,   # INFO severity, weight 0: cannot move a score
     "R061": True, "R062": True, "R063": True, "R064": True,
-    "R074": True, "R075": True,
 }
 
 
@@ -378,23 +377,31 @@ def _structural_findings(
 
 
 def _dependency_findings(diff_text, package_name, config, add) -> None:
-    """D-series: rules over the dependency graph.
+    """D-series and R075: rules over the dependency graph.
 
     ``rules.py`` strips dependency lines before any pattern runs, so these
     read the diff through :mod:`~trustsight.deps` instead.
     """
-    wanted = {r for r in ("D001", "D002", "D003", "D004", "R075")
+    added_deps = extract_dependency_changes(diff_text, package_name)
+
+    # R075: Dependency-Set Expansion (MEDIUM, always on)
+    all_new: list[str] = []
+    for field in ("depends", "makedepends", "optdepends", "checkdepends"):
+        all_new.extend(added_deps.get(field, ()))
+    if len(all_new) >= 3:
+        rarities = [_rarity_of(d) for d in all_new]
+        magnitude = len(all_new) * (sum(rarities) / len(rarities))
+        if magnitude >= _DEP_EXPANSION_GATE:
+            novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
+            add("R075", "Dependency-Set Expansion", "MEDIUM", "dependency",
+                f"diff adds {len(novel)} novel/rare deps: {novel}")
+
+    wanted = {r for r in ("D001", "D002", "D003", "D004")
               if _experimental_enabled(config, r)}
     if not wanted:
         return
 
-    added_deps = extract_dependency_changes(diff_text, package_name)
-
     if wanted & {"D001", "D002"}:
-        # D002 refines D001: only a name already established as globally
-        # unknown is worth an edit-distance comparison.  The candidate list
-        # is loaded lazily because the overwhelming majority of diffs add no
-        # novel dependency at all, and it is thousands of rows.
         candidates: list[str] | None = None
         for field in ("depends", "makedepends", "optdepends", "checkdepends"):
             for name in sorted(added_deps.get(field, ())):
@@ -421,9 +428,6 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
     if "D004" in wanted:
         for field in ("provides", "replaces"):
             for name in sorted(added_deps.get(field, ())):
-                # Declaring a variant of yourself is the ordinary pattern
-                # (htop-vim provides htop); claiming an unrelated package is
-                # how you get installed in front of it.
                 if is_related_package(name, package_name):
                     continue
                 if is_established_package(name):
@@ -431,19 +435,6 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
                         f"{field} '{name}', an established package unrelated to "
                         f"'{package_name}'")
                     return
-
-    # R075: Dependency-Set Expansion (MEDIUM, experimental)
-    if "R075" in wanted:
-        all_new: list[str] = []
-        for field in ("depends", "makedepends", "optdepends", "checkdepends"):
-            all_new.extend(added_deps.get(field, ()))
-        if len(all_new) >= 3:
-            rarities = [_rarity_of(d) for d in all_new]
-            magnitude = len(all_new) * (sum(rarities) / len(rarities))
-            if magnitude >= _DEP_EXPANSION_GATE:
-                novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
-                add("R075", "Dependency-Set Expansion", "MEDIUM", "dependency",
-                    f"diff adds {len(novel)} novel/rare deps: {novel}")
 
 
 def _build_findings(diff_text, config, add) -> None:
@@ -712,16 +703,15 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
             "match": f"rule hits span {len(categories)} distinct capability categories",
         })
 
-    # R074: Package-Name Typosquat (HIGH, experimental, cold-start gate)
-    if _experimental_enabled(config, "R074"):
-        if effective_observation_count() > 0:
-            squatted = package_typosquat_target(pkg_name)
-            if squatted:
-                triggered_rules.append({
-                    "rule_id": "R074", "name": "Package-Name Typosquat",
-                    "severity": "HIGH", "category": "naming",
-                    "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
-                })
+    # R074: Package-Name Typosquat (HIGH, always on, cold-start gate)
+    if effective_observation_count() > 0:
+        squatted = package_typosquat_target(pkg_name)
+        if squatted:
+            triggered_rules.append({
+                "rule_id": "R074", "name": "Package-Name Typosquat",
+                "severity": "HIGH", "category": "naming",
+                "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
+            })
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

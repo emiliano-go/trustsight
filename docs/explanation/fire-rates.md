@@ -87,7 +87,7 @@ Measured against the 3246-diff benign corpus with a 209,909-name dependency seed
 | D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3246 | Refined by D001; bounded by edit-distance threshold |
 | D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3246 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
 | D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
-| R075 | Dependency-Set Expansion | MEDIUM | TBD | - | Experimental (opt-in). Initial gate `≥1.5` (count × mean-rarity). Corpus-measurable; rate pending first calibration pass. |
+| R075 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Post-promotion measurement with seeded DB (209,909-name seed). Well under the 30% gate. |
 
 Measured against the 3246-diff benign corpus. All enabled by default since v0.7.0 (R060 was always on).
 
@@ -115,8 +115,8 @@ static corpus. Fire rates vary per database and per run.
 
 These rules are defined in `src/trustsight/analysis.py` and
 `src/trustsight/differ.py`. Fire rates marked "TBD" require a live git
-repository and cannot be measured against the static corpus; R071 and R074
-fall in this category.
+repository and cannot be measured against the static corpus; R071
+falls in this category.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
@@ -125,12 +125,11 @@ fall in this category.
 | R070 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3246 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
 | R071 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
 | R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
-| R074 | Package-Name Typosquat | HIGH | TBD | - | Requires seeded DB for popularity asymmetry; not corpus-measurable. Predicted near-zero with suffix-strip + popularity gate. |
+| R074 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
 
-R069, R070, and R071 were promoted from experimental to always-on after
-measurement: R069 and R070 on corpus (0.03 % and 0.25 %), R071 on end-to-end
-testing that confirmed the cold-start, maintainer-change, and global-novelty
-gates all prevent false positives.
+R069, R070, R071, R074, and R075 were promoted from experimental to
+always-on after measurement (corpus for R069, R070, R074, R075; end-to-end
+gating tests for R071). All pass the 30 % gate.
 
 ## Temporal metadata rule (R073)
 

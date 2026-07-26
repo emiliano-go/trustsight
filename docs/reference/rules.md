@@ -514,12 +514,12 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | R066 | INFO | - | - | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
 | R067 | MEDIUM | - | - | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
 | R068 | INFO | - | - | Not calibrated: zero-weight metadata; context only. |
-| R069 | HIGH | - | - | TBD on corpus (predicted near-zero; mirror of landed verification-evidence work). |
-| R070 | HIGH/MED | - | - | TBD on corpus (LD_ vars predicted near-zero; FLAGS/MAKEFLAGS/PATH need measurement). |
-| R071 | HIGH | - | - | TBD on corpus (predicted low WARM; 0% COLD via maturity gate). |
-| R072 | INFO | - | - | Not calibrated: zero-weight pattern flag; no scoring impact.
-| R074 | HIGH | - | - | Live-path rule (needs seeded DB for popularity asymmetry). Predicted near-zero with suffix-strip + 10x popularity gate. |
-| R075 | MEDIUM | - | - | Experimental; rate pending first calibration pass on corpus. |
+| R069 | HIGH | 1 | 0.03 % | Near-zero; matches the predicted rate. |
+| R070 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
+| R071 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
+| R072 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
+| R074 | HIGH | 2/179 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
+| R075 | MEDIUM | 11 | 0.34 % | Measured with seeded DB (209,909-name seed). Well under the 30% gate. |
 | D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
@@ -808,7 +808,7 @@ for other signals to use.
 ### R074: Package-Name Typosquat {#r074-rule}
 
 - **Target:** programmatic (package name against seeded candidate list)
-- **Severity:** HIGH (weight 25) - pending calibration
+- **Severity:** HIGH (weight 25) - corpus rate 1.12 % (package-name scan)
 - **Category:** `naming`
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 (or differs only by separator/homoglyph) of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 
@@ -831,7 +831,7 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 ### R075: Dependency-Set Expansion {#r075-rule}
 
 - **Target:** programmatic (delta over dependency arrays × per-dep novelty)
-- **Severity:** MEDIUM (weight 15) - pending calibration
+- **Severity:** MEDIUM (weight 15) - corpus rate 0.34 %
 - **Category:** `dependency`
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 

@@ -110,21 +110,21 @@ Pinning classification via `classify_pinning_level()` in `src/trustsight/buckets
 
 ### `[experimental_rules]`
 
-Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. The scoring ones default to `false` until their fire rates have been folded into `baseline.json`.
+Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true` since v0.7.0 after corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
 
 A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_EXPERIMENTAL_DEFAULTS` in `analysis.py`). Setting a key here always overrides them.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `D001` | bool | `false` | Fire when a dependency name is added that has never been observed anywhere in the AUR. Requires a seeded `dependency_names` table; with no seed the rule stays silent rather than flagging everything. |
-| `D002` | bool | `false` | Fire when a novel dependency name is within one or two edits of a popular one (`openss1` for `openssl`). Refines D001: a name is only compared once D001 has found it globally unknown. |
-| `D003` | bool | `false` | Fire when `makedepends` gains a network-capable tool (`curl`, `git`, `python-requests`, …), meaning the build can now fetch code that no checksum covers. |
+| `D001` | bool | `true` | Fire when a dependency name is added that has never been observed anywhere in the AUR. Requires a seeded `dependency_names` table; with no seed the rule stays silent rather than flagging everything. |
+| `D002` | bool | `true` | Fire when a novel dependency name is within one or two edits of a popular one (`openss1` for `openssl`). Refines D001: a name is only compared once D001 has found it globally unknown. |
+| `D003` | bool | `true` | Fire when `makedepends` gains a network-capable tool (`curl`, `git`, `python-requests`, …), meaning the build can now fetch code that no checksum covers. |
 | `R060` | bool | `true` | Report that the diff modifies `build()`, `prepare()`, `check()`, or `package()`. INFO severity, so it carries weight 0 and cannot move a score: it fires on 21.4% of benign diffs and exists as reviewer context. On by default for that reason. |
-| `D004` | bool | `false` | Fire when `provides`/`replaces` claims an established package unrelated to this one, which installs it in front of the real thing. Variants and siblings (`htop-vim` providing `htop`, `linux-cachyos` providing `linux-headers`) do not fire. |
-| `R061` | bool | `false` | Fire when a download inside a build function targets a URL absent from `source=()`. |
-| `R062` | bool | `false` | Fire when a `.install` hook body fetches over the network or performs a privileged operation (`chmod u+s`, `systemctl enable`, `eval`). Hooks run as root. |
-| `R063` | bool | `false` | Fire when a patch is applied from outside the build tree: a URL, an absolute path, or process substitution. Does *not* check `source=()` membership, since patches legitimately arrive inside the extracted tarball. |
-| `R064` | bool | `false` | Fire when a `source=` URL is downgraded from `https://` to `http://`. |
+| `D004` | bool | `true` | Fire when `provides`/`replaces` claims an established package unrelated to this one, which installs it in front of the real thing. Variants and siblings (`htop-vim` providing `htop`, `linux-cachyos` providing `linux-headers`) do not fire. |
+| `R061` | bool | `true` | Fire when a download inside a build function targets a URL absent from `source=()`. |
+| `R062` | bool | `true` | Fire when a `.install` hook body fetches over the network or performs a privileged operation (`chmod u+s`, `systemctl enable`, `eval`). Hooks run as root. |
+| `R063` | bool | `true` | Fire when a patch is applied from outside the build tree: a URL, an absolute path, or process substitution. Does *not* check `source=()` membership, since patches legitimately arrive inside the extracted tarball. |
+| `R064` | bool | `true` | Fire when a `source=` URL is downgraded from `https://` to `http://`. |
 
 ### `[seed]`
 

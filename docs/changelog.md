@@ -1,6 +1,42 @@
 # Changelog
 
-## [0.6.0] - 2026-07-25
+## [0.7.0] - 2026-07-25
+
+### Changed
+
+- **Eight experimental rules promoted to enabled by default.** D001, D002, D003,
+  D004, R061, R062, R063, and R064 now default to `true` in both the config
+  template and the code fallback.  Users who already have an
+  `[experimental_rules]` section in their `config.toml` are unaffected and keep
+  their existing setting; users without the section pick up the new defaults
+  automatically.
+
+  Fire rates (false-positive rates on the 3246-diff benign corpus) that
+  justified the promotion:
+
+  | Rule | Severity | Rate | Fires |
+  |------|----------|------|-------|
+  | D001 | HIGH | 0.15 % | 5/3246 |
+  | D002 | HIGH | 0.00 % | 0/3246 |
+  | D003 | MEDIUM | 0.46 % | 15/3246 |
+  | D004 | HIGH | 0.00 % | 0/3246 |
+  | R061 | HIGH | 0.22 % | 7/3246 |
+  | R062 | HIGH | 0.09 % | 3/3246 |
+  | R063 | HIGH | 0.00 % | 0/3246 |
+  | R064 | MEDIUM | 0.03 % | 1/3246 |
+
+  See [Fire Rates](explanation/fire-rates.md) for the full reference.
+
+- **Baseline regenerated** with the new defaults.  The eight rules now appear
+  in per-stratum fire-rate records.  Aggregate metrics (`zero_pct`, `p95`)
+  shifted slightly as expected; the baseline is the new reference.
+
+### Added
+
+- **Fire Rates documentation page** (`docs/explanation/fire-rates.md`).
+  Explains how fire rates are measured, the two corpora, the 30 % demotion
+  gate, and per-rule tables for core, expanded, D-series, and build-function
+  rules.
 
 ### Added
 

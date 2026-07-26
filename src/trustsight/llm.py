@@ -65,8 +65,8 @@ def _build_prompt(fact: PackageFact) -> str:
         risk = "Medium"
 
     pkg = _sanitize_prompt_field(fact.package_name)
-    old_ver = _sanitize_prompt_field(fact.old_version)
-    new_ver = _sanitize_prompt_field(fact.new_version)
+    old_ver = _sanitize_prompt_field(fact.old_version or "?")
+    new_ver = _sanitize_prompt_field(fact.new_version or "?")
 
     return f"""Package: {pkg}
 Change: {old_ver} → {new_ver}

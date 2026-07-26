@@ -60,8 +60,21 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Trust Model](explanation/trust-model.md) | Why deterministic core plus LLM-as-translator, verdict integrity assertions. |
 | [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights, rule design decisions. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
+| [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
+| [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
 | [What TrustSight Cannot See](explanation/what-trustsight-cannot-see.md) | The reasoned ceiling of the tool. |
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
+
+## Guides
+
+| Guide | When to use it |
+|-------|----------------|
+| [Auditing Before Update](guides/auditing-before-update.md) | Everyday workflow: scan AUR packages before `yay -Syu`. |
+| [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD with exit codes or policy thresholds. |
+| [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE — next steps. |
+| [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
+| [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages — identify and fix it. |
+| [Running the Sandbox](guides/running-the-sandbox.md) | Sandbox a PKGBUILD's build and install scripts before approving. |
 
 ## Reference
 
@@ -72,6 +85,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Configuration](reference/configuration.md) | config.toml, rules.toml, and trusted_domains.toml schema. |
 | [Report Schema](reference/report-schema.md) | PackageFact JSON structure. |
 | [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D taxonomy with maturity gating. |
+| [Exit Codes](reference/exit-codes.md) | 0 (clean), 1 (flagged), 2 (error). |
 
 ## Contributing
 
@@ -79,4 +93,8 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |------|----------------|
 | [Development Setup](contributing/development-setup.md) | Set up a local dev environment. |
 | [Writing a Rule](contributing/writing-a-rule.md) | R-series and C-series rule guidelines. |
-| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes. |
+| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes.
+
+---
+
+[Changelog](changelog.md) &middot; [Security](security.md) &middot; [License](license.md)

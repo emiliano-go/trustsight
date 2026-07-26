@@ -22,6 +22,10 @@
         transform: translateX(-100%) !important;
         transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
     }
+
+    .md-sidebar--primary .md-sidebar__scrollwrap {
+        overscroll-behavior-y: contain;
+    }
     body.drawer-open .md-sidebar--primary {
         transform: translateX(0) !important;
     }

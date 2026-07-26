@@ -442,8 +442,19 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     if not old_commit:
         last = get_last_analysis(package_id)
         if last is not None:
-            if last.get("new_commit"):
-                old_commit = last["new_commit"]
+            stored_commit = last.get("new_commit")
+            if stored_commit:
+                old_commit = stored_commit
+            elif head_commit:
+                try:
+                    for c in repo.walk(head_commit):
+                        if not c.parents:
+                            old_commit = str(c.id)
+                            break
+                except pygit2.GitError:
+                    pass
+                if not old_commit:
+                    old_commit = head_commit
         else:
             return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
 

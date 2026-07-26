@@ -533,7 +533,7 @@ def _inspect_plain(fact):
     if fact.first_seen:
         print("[First analysis] No prior history; novelty carries no weight yet.")
     print(f"TrustSight Inspect: {fact.package_name}")
-    print(f"  Version: {fact.old_version} -> {fact.new_version}")
+    print(f"  Version: {fact.old_version or '?'} -> {fact.new_version or '?'}")
     print(f"  Score: {fact.final_score}/100 ({risk_level(fact.final_score)})")
     if fact.maintainer_changed:
         print(f"  Maintainer changed: {fact.previous_maintainer} -> {fact.current_maintainer}")

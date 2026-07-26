@@ -153,5 +153,6 @@ The LLM is entirely optional. The score, evidence breakdown, and verdict classif
 | [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |
+| [Fire Rates](fire-rates.md) | Per-rule false-positive rates on the benign corpus and the 30 % gate |
 | [What TrustSight Cannot See](what-trustsight-cannot-see.md) | The reasoned ceiling of the tool |
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/svg+xml" href="{{ base_url }}/assets/images/favicon.svg">
 <link rel="icon" type="image/png" sizes="32x32" href="{{ base_url }}/assets/images/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ base_url }}/assets/images/favicon-16x16.png">
@@ -16,4 +17,25 @@
 {% endif %}
 <link rel="alternate" type="text/plain" title="LLMs TXT" href="/llms.txt">
 <link rel="alternate" type="text/plain" title="LLMs Full" href="/llms-full.txt">
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function() {
+  var drawer = document.getElementById('__drawer');
+  if (drawer) {
+    drawer.addEventListener('change', function() {
+      document.body.classList.toggle('drawer-open', this.checked);
+    });
+    document.addEventListener('click', function(e) {
+      var link = e.target.closest('.md-sidebar--primary .md-nav__link');
+      if (link && drawer.checked) {
+        drawer.checked = false;
+        document.body.classList.remove('drawer-open');
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

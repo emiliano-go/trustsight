@@ -108,6 +108,7 @@ name = "trustsight on PyPI"
 "Scoring Philosophy" = "explanation/scoring-philosophy.md"
 "Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"
 "Corpus and Priors" = "explanation/corpus-and-priors.md"
+"Fire Rates" = "explanation/fire-rates.md"
 "What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
 "Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
 

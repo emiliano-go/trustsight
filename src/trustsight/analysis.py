@@ -6,9 +6,7 @@ from urllib.parse import urlparse
 
 import pygit2
 
-from .buckets import classify_pinning_level, classify_urls
-
-log = logging.getLogger(__name__)
+from .buckets import PINNING_ORDER, classify_pinning_level, classify_urls
 from .config import ensure_default_configs, load_config
 from .db import (
     effective_observation_count,
@@ -23,7 +21,7 @@ from .db import (
 )
 from .deps import _strip_comment, extract_dependency_changes, is_related_package
 from .db import (
-    dependency_observation_count,
+    dependency_observation_counts,
     is_established_package,
     record_dependency_names,
     top_dependency_names,
@@ -60,10 +58,13 @@ from .schema import (
 )
 from .tokenizer import resolve_added_lines, tokenize_and_resolve
 
+log = logging.getLogger(__name__)
 
-def _rarity_of(dep: str) -> float:
-    obs = dependency_observation_count(dep)
-    return 1.0 / (1.0 + obs)
+
+def _rarities_of(deps: list[str]) -> list[float]:
+    """Rarity for each of *deps*, using a single database round-trip."""
+    counts = dependency_observation_counts(deps)
+    return [1.0 / (1.0 + counts.get(d, 0)) for d in deps]
 
 
 def _pkgver_changed_in_diff(diff_text: str) -> bool:
@@ -77,8 +78,6 @@ def _pkgver_changed_in_diff(diff_text: str) -> bool:
             new_val = line.removeprefix("+pkgver=").strip().strip("'\"")
     return old_val is not None and new_val is not None and old_val != new_val
 
-
-_PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
 
 # Key for the cross-package URL set inside the caller-supplied seen_urls
 # map.  NUL cannot appear in a package name, so it cannot collide.
@@ -102,6 +101,7 @@ _DEP_EXPANSION_GATE = 1.5
 
 
 def _url_domain(url: str) -> str:
+    """lowercase netloc portion of a url"""
     parsed = urlparse(url)
     return parsed.netloc.lower()
 
@@ -128,7 +128,7 @@ def _aggregate_pinning(
     ]
     if not levels:
         return "unpinned"
-    return _PINNING_ORDER[max(_PINNING_ORDER.index(p) for p in levels)]
+    return PINNING_ORDER[max(PINNING_ORDER.index(p) for p in levels)]
 
 
 _CRITICAL_FUNCTIONS = ("build", "prepare", "check", "package")
@@ -218,6 +218,7 @@ def _experimental_enabled(config: dict, rule_id: str) -> bool:
 
 
 def _recent_update(repo, head_commit):
+    """findings for a commit less than 72 hours old"""
     if not head_commit:
         return None
     try:
@@ -239,6 +240,7 @@ def _recent_update(repo, head_commit):
 
 
 def _package_is_new(repo, head_commit):
+    """findings for a package whose first commit is under 30 days old"""
     if not head_commit:
         return None
     try:
@@ -261,6 +263,7 @@ def _package_is_new(repo, head_commit):
 
 
 def _stale_revival(repo, old_commit, head_commit):
+    """findings for a package revived after more than a year of dormancy"""
     if not old_commit or not head_commit:
         return None
     try:
@@ -283,6 +286,7 @@ def _stale_revival(repo, old_commit, head_commit):
 
 
 def _has_install_hook(diff_text: str) -> bool:
+    """whether the diff references an install hook"""
     if _INSTALL_FILE_IN_DIFF_RE.search(diff_text):
         return True
     post = "\n".join(_post_diff_lines(diff_text))
@@ -312,6 +316,7 @@ def _structural_findings(
     findings: list[dict] = []
 
     def add(rule_id: str, name: str, severity: str, category: str, match: str) -> None:
+        """append a finding to the accumulator"""
         findings.append({
             "rule_id": rule_id, "name": name, "severity": severity,
             "category": category, "match": match,
@@ -389,7 +394,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
     for field in ("depends", "makedepends", "optdepends", "checkdepends"):
         all_new.extend(added_deps.get(field, ()))
     if len(all_new) >= 3:
-        rarities = [_rarity_of(d) for d in all_new]
+        rarities = _rarities_of(all_new)
         magnitude = len(all_new) * (sum(rarities) / len(rarities))
         if magnitude >= _DEP_EXPANSION_GATE:
             novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
@@ -541,6 +546,7 @@ def _check_untrusted_maintainer_takeover(
     maintainer_changed: bool,
     new_maintainer: str,
 ) -> dict | None:
+    """R071 finding when a globally novel maintainer takes over"""
     if not (maintainer_changed and new_maintainer):
         return None
     if effective_observation_count() <= 0:
@@ -557,6 +563,7 @@ def _check_untrusted_maintainer_takeover(
 
 
 def _get_installed_version(pkg_name: str) -> str:
+    """currently installed version from pacman"""
     try:
         import subprocess
         result = subprocess.run(
@@ -572,14 +579,31 @@ def _get_installed_version(pkg_name: str) -> str:
     return ""
 
 
-def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") -> PackageFact:
+def analyze_package(
+    pkg_name: str,
+    old_commit: str = "",
+    new_version: str = "",
+    installed_version: str | None = None,
+    upstream_mtime: int | None = None,
+) -> PackageFact:
+    """Run the full analysis pipeline for a live AUR package.
+
+    *installed_version* lets a caller that already knows it skip the
+    ``pacman -Q`` fork.  A batch review has the version in hand from the
+    single ``pacman -Qm`` that discovery already ran, so paying for one
+    subprocess per package is pure waste.
+
+    *upstream_mtime* is the AUR's ``LastModified``; passing it lets the
+    fetcher skip the network when the cached clone is already current.
+    """
     ensure_default_configs()
     init_db()
     config = load_config()
 
-    installed_version = _get_installed_version(pkg_name)
+    if installed_version is None:
+        installed_version = _get_installed_version(pkg_name)
 
-    repo = clone_or_fetch(pkg_name)
+    repo = clone_or_fetch(pkg_name, upstream_mtime)
     try:
         head_commit = get_head_commit(repo)
     except pygit2.GitError:
@@ -617,7 +641,8 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_bytes = diff_text.encode("utf-8", errors="replace")
-    if len(diff_bytes) > max_bytes:
+    diff_truncated = len(diff_bytes) > max_bytes
+    if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
         diff_bytes = diff_bytes[:max_bytes]
         diff_text = diff_bytes.decode("utf-8", errors="replace")
@@ -762,6 +787,7 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
         recent_commit_burst=recent_commit_burst,
+        diff_truncated=diff_truncated,
         score_breakdown=breakdown,
         final_score=score,
     )
@@ -926,6 +952,7 @@ def _make_fresh_analysis(
     pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
     installed_version: str = "",
 ) -> PackageFact:
+    """first-seen analysis for a package with no prior diff to compare"""
     novelty = build_novelty_context([], package_id)
     triggered_rules: list[dict] = []
     recent = _recent_update(repo, commit)

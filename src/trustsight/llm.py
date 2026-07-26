@@ -5,13 +5,13 @@ import re
 import sys
 from typing import Optional
 
-log = logging.getLogger(__name__)
-
 from openai import OpenAI
 
 from .config import load_config
+from .scoring import risk_level
 from .schema import PackageFact, fact_to_dict
 
+log = logging.getLogger(__name__)
 _USE_COLOR = sys.stdout.isatty() and os.getenv("NO_COLOR") is None
 _REASONING_COLOR = "\033[90m" if _USE_COLOR else ""
 _RESET_COLOR = "\033[0m" if _USE_COLOR else ""
@@ -37,6 +37,7 @@ def _sanitize_prompt_field(s: str) -> str:
 
 
 def _build_prompt(fact: PackageFact) -> str:
+    """format a PackageFact into an LLM prompt"""
     fact_dict = fact_to_dict(fact)
     diff_trunc = json.dumps(fact_dict.get("diff_summary", {}), indent=2)
     breakdown = json.dumps(
@@ -56,13 +57,7 @@ def _build_prompt(fact: PackageFact) -> str:
         indent=2,
     )
 
-    risk = "Low"
-    if fact.final_score > 80:
-        risk = "Critical"
-    elif fact.final_score > 50:
-        risk = "High"
-    elif fact.final_score > 20:
-        risk = "Medium"
+    risk = risk_level(fact.final_score)
 
     pkg = _sanitize_prompt_field(fact.package_name)
     old_ver = _sanitize_prompt_field(fact.old_version or "?")
@@ -89,7 +84,23 @@ Write exactly 2 concise sentences for a developer:
 Do not repeat the numeric score. Do not use markdown. Stick to observable facts."""
 
 
+# A run analyses many packages and asks for a verdict on each.  Building a
+# client per verdict threw away the connection pool every time, so every
+# package paid for a fresh TCP and TLS handshake.  Cached on the settings
+# that define it, so a config change still produces a new client.
+_client_cache: dict[tuple, Optional[OpenAI]] = {}
+
+# Without an explicit timeout the OpenAI SDK waits up to 600s, so one
+# unreachable endpoint stalls an entire review instead of falling back to
+# the offline verdict.  This is a ceiling on a hung request, not a race
+# against a slow model: reasoning models legitimately take tens of
+# seconds, and cutting those off would trade a real verdict for a
+# generated one.  Lower it in config if the endpoint is known to be fast.
+_DEFAULT_TIMEOUT = 60.0
+
+
 def _get_client(config: dict) -> Optional[OpenAI]:
+    """build an OpenAI-compatible client from config"""
     llm_cfg = config.get("llm", {})
     provider = llm_cfg.get("provider", "ollama")
 
@@ -109,10 +120,30 @@ def _get_client(config: dict) -> Optional[OpenAI]:
         if not api_key:
             return None
 
-    return OpenAI(base_url=base_url, api_key=api_key)
+    try:
+        timeout = float(llm_cfg.get("timeout", _DEFAULT_TIMEOUT))
+    except (TypeError, ValueError):
+        timeout = _DEFAULT_TIMEOUT
+    try:
+        max_retries = int(llm_cfg.get("max_retries", 1))
+    except (TypeError, ValueError):
+        max_retries = 1
+
+    key = (base_url, api_key, timeout, max_retries)
+    if key in _client_cache:
+        return _client_cache[key]
+    client = OpenAI(
+        base_url=base_url,
+        api_key=api_key,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
+    _client_cache[key] = client
+    return client
 
 
 def _get_model(config: dict) -> str:
+    """return the model name from config"""
     return config.get("llm", {}).get("model", "gpt-4o-mini")
 
 
@@ -157,6 +188,7 @@ def generate_verdict_stream(
     stream: bool = True,
     show_reasoning: bool = False,
 ) -> str:
+    """Generate an LLM verdict for a package fact, optionally streaming the output"""
     config = load_config()
 
     if not config.get("llm", {}).get("enabled", True):
@@ -228,6 +260,7 @@ def generate_verdict_stream(
 
 
 def generate_verdict(fact: PackageFact) -> str:
+    """Generate a non-streaming LLM verdict for a package fact"""
     return generate_verdict_stream(fact, stream=False, show_reasoning=False)
 
 

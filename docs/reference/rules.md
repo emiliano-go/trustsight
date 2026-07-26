@@ -70,7 +70,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001 to R013, R039 to R067, C001 to C007, D001 to D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001 to R013, R039 to R075, C001 to C007, D001 to D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Cryptographic integrity metadata (subtractive) |
@@ -510,9 +510,16 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | R062 | HIGH | 3 | 0.09 % | All `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. Real privileged behaviour, which is the point. |
 | R063 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
 | R064 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
-| R065 | INFO | — | — | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
-| R066 | INFO | — | — | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
-| R067 | MEDIUM | — | — | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
+| R065 | INFO | - | - | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
+| R066 | INFO | - | - | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
+| R067 | MEDIUM | - | - | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
+| R068 | INFO | - | - | Not calibrated: zero-weight metadata; context only. |
+| R069 | HIGH | - | - | TBD on corpus (predicted near-zero; mirror of landed verification-evidence work). |
+| R070 | HIGH/MED | - | - | TBD on corpus (LD_ vars predicted near-zero; FLAGS/MAKEFLAGS/PATH need measurement). |
+| R071 | HIGH | - | - | TBD on corpus (predicted low WARM; 0% COLD via maturity gate). |
+| R072 | INFO | - | - | Not calibrated: zero-weight pattern flag; no scoring impact.
+| R074 | HIGH | - | - | Live-path rule (needs seeded DB for popularity asymmetry). Predicted near-zero with suffix-strip + 10x popularity gate. |
+| R075 | MEDIUM | - | - | Experimental; rate pending first calibration pass on corpus. |
 | D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
@@ -581,8 +588,8 @@ All three are **on by default** with no config toggle.
 - **Condition:** AUR HEAD commit is less than 72 hours old.
 
 Packages updated moments ago have not been visible to the community long enough
-for anyone to vet them. Combined with other signals — maintainer change, new
-source domains — recency escalates suspicion.
+for anyone to vet them. Combined with other signals - maintainer change, new
+source domains - recency escalates suspicion.
 
 ### R066: Brand New Package {#r066}
 
@@ -600,7 +607,7 @@ recent update is routine; a package uploaded last week has zero track record.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
 - **Condition:** The previously analyzed commit is more than 365 days older than
-  the new HEAD — an abandoned package that suddenly has activity.
+  the new HEAD - an abandoned package that suddenly has activity.
 
 Account takeovers happen on stale packages: a maintainer stops responding,
 someone else adopts the AUR record, and the new maintainer may be malicious.
@@ -609,7 +616,234 @@ offered is worth a medium-weight flag, independent of any diff signal.
 
 ---
 
-## D-series (dependency-graph rules) {#d-series}
+## Install and build context rules (R068–R070) {#install-build-rules}
+
+Defined in `src/trustsight/analysis.py` and `src/trustsight/differ.py`. They
+inspect the diff for changes to security-critical build and install
+infrastructure - hooks that run as root, signature verification that gets
+dropped, environment variables that subvert the compiler.
+
+### R068: Install Hook Present {#r068}
+
+- **Target:** programmatic (diff-aware)
+- **Severity:** INFO (weight 0)
+- **Category:** `context`
+- **Condition:** The PKGBUILD declares an `install=` file, or the diff touches
+  a `*.install` file.
+
+An `.install` scriptlet runs code **as root** at install time. R068 is pure
+context - "this package has a root-time hook" - not an accusation. It is the
+metadata a human or the LLM translator wants when weighing other signals.
+
+**Origin:** mirrors pnpm's `allowBuilds`/`strictDepBuilds` - every package
+manager that distinguishes "declares a privileged post-install step" from
+"does not" treats that distinction as primary metadata. pnpm blocks all build
+scripts by default; R068 is the review-side equivalent - flagging `.install`
+hooks so a human (or the LLM translator) can weigh them.
+
+**Overlap guard:** R007 already fires on *install added*. R068 fires on
+*install present* (existing or added). If R007 fires, R068 is redundant for
+that diff; the two must not both surface as separate findings for the same
+event.
+
+### R069: GPG Verification Removed {#r069}
+
+- **Target:** programmatic (diff-aware)
+- **Severity:** HIGH (weight 25) - pending corpus calibration
+- **Category:** `integrity`
+- **Condition:** `validpgpkeys` was **populated before** the diff and is
+  **emptied or removed after** - the package previously verified upstream
+  signatures and now does not.
+
+This is the exact inverse of the verification-evidence you already *subtract*
+for. `detect_verification_evidence` adds a `validpgpkeys_declared` discount
+when signatures are present; R069 adds a positive signal when that protection
+is **removed**. Dropping GPG verification is a strong supply-chain signal with
+near-zero benign rate: maintainers almost never remove working signature
+verification.
+
+**Origin:** npm registry signatures and pnpm's `verifyStoreIntegrity` - both
+tools treat a dropped integrity check as a critical signal. npm's `audit
+signatures` command rejects packages whose registry ECDSA signature is missing
+or mismatched; pnpm's content-addressable store refuses to link corrupted
+files. R069 is the AUR analogue: `validpgpkeys` being removed means the
+package dismantled a verification layer it previously had.
+
+**Scope:** DELTA-scoped - fires on `validpgpkeys` *transitioning* from
+populated to empty/absent, following the same structure as
+`detect_checksum_changes` and `detect_checksum_removed` in `differ.py`.
+
+### R070: Build Environment Subversion {#r070}
+
+- **Target:** programmatic (resolved lines, position-scoped)
+- **Severity:** HIGH (weight 25) for `LD_PRELOAD`/`LD_LIBRARY_PATH`;
+  MEDIUM (weight 15) for `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` - pending
+  corpus calibration
+- **Category:** `build`
+- **Condition:** The diff **modifies** `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+  `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, or `PATH` **inside a build function**
+  (`prepare`/`build`/`package`).
+
+Injecting a malicious object via `LD_PRELOAD`/`LDFLAGS`, or redirecting the
+compiler/linker via `PATH`, is a classic build-time attack - the untrusted
+input silently subverts the build.
+
+**Predicate discipline - the position+delta scope is essential:** `CFLAGS`
+and `MAKEFLAGS` appear in a large fraction of benign PKGBUILDs (`makepkg`
+sets them routinely; many packages tweak them legitimately). Matching their
+*presence* file-wide would be a census - the C001 mistake repeated. The
+signal is: the variable is **modified in the diff** (delta, not presence),
+**inside a build-function body** (position), on **resolved lines** (post
+variable-expansion, so obfuscation cannot hide it).
+
+The split severity reflects the benign rate: `LD_PRELOAD` and
+`LD_LIBRARY_PATH` are almost never legitimate inside a PKGBUILD build
+function; `CFLAGS`/`LDFLAGS`/`MAKEFLAGS`/`PATH` have legitimate uses and may
+need the corpus to set the right severity level.
+
+**Origin:** Nix's build sandbox (denies build processes all network and only
+exposes declared inputs) and cargo-crev's `build.rs` scrutiny (flags crates
+that run arbitrary code at build time). Both recognise that *untrusted inputs
+subverting the build* is the attack surface Nix closes and Cargo leaves open.
+`LD_PRELOAD`/`LD_LIBRARY_PATH` mutation inside a build function is the AUR
+equivalent of a `build.rs` that downloads and executes a binary.
+
+---
+
+## Maintainer and capability rules (R071–R072) {#maintainer-capability-rules}
+
+### R071: Untrusted Maintainer Takeover {#r071}
+
+- **Target:** programmatic (maintainer delta + global novelty)
+- **Severity:** HIGH (weight 25) - pending corpus calibration
+- **Category:** `maintainer`
+- **Condition:** `maintainer_changed` is true **AND** the new maintainer is
+  **globally novel** (never seen in the database across any package).
+
+This is C006 (maintainer change) × global novelty - the "local signal weighted
+by global rarity" composition the accuracy work identified as the missing
+multiplier. A *known* maintainer adopting a package is routine (orphan
+adoptions happen constantly). An *unknown* maintainer taking over is the
+account-compromise / hostile-takeover shape. The novelty gate is what turns a
+noisy signal (all maintainer changes) into a precise one (takeovers by
+strangers).
+
+**Origin:** pnpm's `trustPolicy: no-downgrade` and Socket.dev's maintainer
+behaviour analysis. pnpm refuses to install a package whose trust evidence has
+weakened since the previous version; Socket flags packages where a new,
+never-before-seen maintainer gains publish permissions - the most reliable
+precursor to a malicious release. R071 composes those two ideas: maintainer
+change (pnpm's "trust changed") gated by global novelty (Socket's "never seen
+before"), applied to AUR maintainers instead of npm publishers.
+
+**Cold-start gate:** On a fresh database every maintainer is globally novel,
+so R071 fires on 100 % of maintainer-changed packages on first run. It MUST
+be suppressed until the maintainer table has enough history for "globally
+novel" to mean something - gated identically to the other novelty signals via
+[`maturity()` and `observation_count`](configuration.md#cold-start-and-maturity).
+
+### R072: Capability Density Anomaly {#r072}
+
+- **Target:** programmatic (existing `triggered_rules`, no new detection)
+- **Severity:** INFO (weight 0) - report-only co-occurrence flag
+- **Category:** `meta`
+- **Condition:** A single diff has rule hits in **3+ distinct capability
+  categories** (e.g. `network` + `filesystem` + `execution` + `encoding`).
+
+Most updates change one thing. A diff that *simultaneously* adds a network
+fetch, writes a file, and base64-decodes a payload is disproportionate; the
+co-occurrence is more suspicious than the sum of its parts.
+
+**Why weight 0:** Adding a score for the combination would **double-count**  -- 
+the three categories already scored individually via their own rules. Stacking
+extra points on top would inflate the benign p95, exactly the inflation the
+accuracy work eliminated. R072 therefore carries weight 0: it is a
+**co-occurrence annotation** surfaced to the report and the LLM translator.
+The pattern is the signal; the points are already there.
+
+**Origin:** Socket.dev's capability profiling - every package is annotated
+with a capability profile (network access, filesystem access, shell execution,
+encoded payloads) and Socket's diff view flags *permission creep* when a new
+version acquires capabilities it did not have before. R072 is the same insight
+at the rule-category level: a diff whose rule hits span multiple capability
+domains has a density that is itself a pattern.
+
+---
+
+## Temporal metadata (R073) - not a scored finding {#r073}
+
+### R073: Accelerated Release Cadence {#r073}
+
+- **Target:** programmatic (git commit graph)
+- **Severity:** metadata field, **never a scored finding**
+- **Category:** `temporal-metadata`
+- **Condition:** The HEAD commit has 3+ ancestors within the last 24 hours
+  (rapid-fire pushes).
+
+**Why it does not score:** Bursts of commits are overwhelmingly benign
+activity - a maintainer fixing a bad checksum, then a typo, then a rebuild
+bump. This is precisely the "measuring activity, not risk" failure the
+accuracy work's CI gate (`|pearson(score, diff_lines)| < 0.3`) exists to
+catch. At any non-zero weight it becomes a census on active maintainers.
+
+R073 is therefore **metadata only**: recorded as a boolean on the
+`PackageFact` (`recent_commit_burst: bool`). It is not appended to
+`triggered_rules` and contributes nothing to the score. If future corpus
+analysis shows that burst cadence *pairs with* other signals (burst +
+maintainer takeover + verification removal), the burst multiplier can be
+applied to those signals alone - never as a standalone finding.
+
+**Origin:** pnpm's `minimumReleaseAge` (24-hour cooldown on new versions) and
+uv's `exclude-newer` (reject packages published within a configurable window).
+Both tools impose a *registry-side cooldown*: do not install a version until
+it has existed long enough for the community to vet it. R073 takes the
+opposite perspective - instead of blocking recent versions, it notes that
+multiple commits landed in a short window, recording the cadence as context
+for other signals to use.
+
+---
+
+## Naming rule (R074) - package-name typosquat {#r074}
+
+### R074: Package-Name Typosquat {#r074-rule}
+
+- **Target:** programmatic (package name against seeded candidate list)
+- **Severity:** HIGH (weight 25) - pending calibration
+- **Category:** `naming`
+- **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 (or differs only by separator/homoglyph) of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
+
+This is the AUR equivalent of the `python-sqlite` vs `pysqlite`, `electron` vs `electorn`, and trailing-space/separator-swap attacks that have hit every other registry. The AUR has **zero** typosquat defense; D002 already covers *dependency* names, but nothing covers the package's **own name** impersonating a popular one.
+
+**The asymmetric gate (the make-or-break):**
+
+Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, and every legitimate fork are distance-small from `foo`. This rule fires ONLY when all hold:
+
+1. **Similar** - Damerau-Levenshtein ≤2 to a candidate `C`.
+2. **Asymmetric popularity** - `C` is observed 10x+ more often (via `dependency_observation_count`) than this package. A squat impersonates something bigger.
+3. **Not a variant** - Expected suffixes (`-git`, `-bin`, `-debug`, `-lts`, `-stable`, `-beta`, `-svn`, `-hg`, `-bzr`, `-cvs`, `-wine`, `-appimage`, `-flatpak`, `-nightly`, `-devel`, `-common`) are stripped before comparison.
+
+**Origin:** npm/PyPI/crates typosquat detection - the most exploited supply-chain vector in every other ecosystem. The AUR is defenseless against it.
+
+---
+
+## Dependency-set expansion rule (R075) {#r075}
+
+### R075: Dependency-Set Expansion {#r075-rule}
+
+- **Target:** programmatic (delta over dependency arrays × per-dep novelty)
+- **Severity:** MEDIUM (weight 15) - pending calibration
+- **Category:** `dependency`
+- **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
+
+**Why not count alone:** Adding 5 deps that are all common (`glibc`, `qt6-base`, `cmake`) is a normal heavy build and should not fire. The signal is count **weighted by how rare/novel each added dep is**, reusing D001's `dependency_observation_count` as a rarity proxy. Novel/obscure deps push the magnitude up; common deps contribute near zero.
+
+**No double-count with D001:** R075 fires on the **aggregate pattern** (multiple rare deps appearing together), which is a materially different signal from any single dep being novel. Individual D001 per-dep firings remain untouched. This is not the R072 mistake: the aggregate condition captures a different phenomenon (co-occurrence, not individual presence).
+
+**Origin:** Socket/Snyk dependency-surface profiling - a version bump that expands the dependency graph with obscure entries is the "expand attack surface quietly" shape. D001 already flags each novel dep individually; R075 catches the disproportionate co-occurrence.
+
+---
+
+## D-series dependency rules {#d-series}
 
 Defined in `src/trustsight/analysis.py`, not in `rules.toml`. They compare the
 dependency arrays before and after the diff and consult the local database, so

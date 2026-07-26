@@ -224,6 +224,18 @@ def _has_checksum_in_post_diff(diff_text: str) -> bool:
     return bool(_CHECKSUM_ARRAY_RE.search(post))
 
 
+def detect_gpg_verification_removed(diff_text: str) -> bool:
+    had_content = False
+    for line in diff_text.splitlines():
+        if line.startswith("-") and _VALIDPGPKEYS_WITH_CONTENT_RE.search(line):
+            had_content = True
+            break
+    if not had_content:
+        return False
+    post = "\n".join(_post_diff_lines(diff_text))
+    return not bool(_VALIDPGPKEYS_WITH_CONTENT_RE.search(post))
+
+
 def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") -> list[str]:
     """Return a list of verification evidence strings present in the post-diff end-state.
 

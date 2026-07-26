@@ -11,23 +11,28 @@ from .buckets import classify_pinning_level, classify_urls
 log = logging.getLogger(__name__)
 from .config import ensure_default_configs, load_config
 from .db import (
+    effective_observation_count,
     get_last_analysis,
     get_package,
     init_db,
     insert_analysis,
+    is_maintainer_globally_novel,
     update_package_maintainer,
     update_package_version,
     upsert_package,
 )
 from .deps import _strip_comment, extract_dependency_changes, is_related_package
 from .db import (
+    dependency_observation_count,
     is_established_package,
     record_dependency_names,
     top_dependency_names,
 )
 from .differ import (
     _has_checksum_in_post_diff,
+    _post_diff_lines,
     detect_checksum_removed,
+    detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_source_array_urls,
     extract_urls_from_diff,
@@ -40,6 +45,7 @@ from .novelty import (
     build_novelty_context,
     is_dependency_novel,
     normalize_url,
+    package_typosquat_target,
     typosquat_target,
 )
 from .override import filter_triggered_rules
@@ -53,6 +59,11 @@ from .schema import (
     fact_to_dict,
 )
 from .tokenizer import resolve_added_lines, tokenize_and_resolve
+
+
+def _rarity_of(dep: str) -> float:
+    obs = dependency_observation_count(dep)
+    return 1.0 / (1.0 + obs)
 
 
 def _pkgver_changed_in_diff(diff_text: str) -> bool:
@@ -83,6 +94,11 @@ _BINARY_ARTIFACT_RE = re.compile(
 # Buckets whose provenance is strong enough that a binary artifact from
 # them is ordinary (-bin packages repackaging a GitHub release).
 _TRUSTED_BUCKETS = frozenset({"trusted_forge", "official"})
+
+# R075 gate: a diff must reach this magnitude (count x mean-rarity) before
+# Dependency-Set Expansion fires.  Starting point tuned for "3 obscure deps
+# or 2 very rare deps" while passing "5 common deps."
+_DEP_EXPANSION_GATE = 1.5
 
 
 def _url_domain(url: str) -> str:
@@ -157,6 +173,25 @@ _NETWORK_FETCH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Environment variables whose modification inside a build function is a
+# build subversion signal.  Split into HIGH (near-zero benign rate) and
+# MEDIUM (legitimate uses exist).
+_ENV_SUBVERSION_HIGH_RE = re.compile(
+    r"\b(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*(?:\+?=)",
+)
+_ENV_SUBVERSION_MED_RE = re.compile(
+    r"\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
+)
+
+# Install file referenced in the diff, either as a patched file or via
+# the ``install=`` PKGBUILD declaration.  Pre-compiled so the helper
+# can call it in a tight loop.
+_INSTALL_FILE_IN_DIFF_RE = re.compile(
+    r"(?:^|\n)(?:\+\s*install\s*=|"
+    r"(?:---|^\+\+\+)\s+[ab]/.+\.install)\b",
+    re.MULTILINE,
+)
+
 
 # Fallbacks for a config written before [experimental_rules] existed.
 # load_toml() reads the user's file verbatim and never merges the defaults
@@ -166,6 +201,8 @@ _EXPERIMENTAL_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
     "R060": True,   # INFO severity, weight 0: cannot move a score
     "R061": True, "R062": True, "R063": True, "R064": True,
+    "R069": True, "R070": True, "R071": True,
+    "R074": True, "R075": True,
 }
 
 
@@ -245,6 +282,13 @@ def _stale_revival(repo, old_commit, head_commit):
     except (AttributeError, pygit2.GitError):
         pass
     return None
+
+
+def _has_install_hook(diff_text: str) -> bool:
+    if _INSTALL_FILE_IN_DIFF_RE.search(diff_text):
+        return True
+    post = "\n".join(_post_diff_lines(diff_text))
+    return bool(re.search(r"^\s*install\s*=", post, re.MULTILINE))
 
 
 def _structural_findings(
@@ -340,7 +384,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
     ``rules.py`` strips dependency lines before any pattern runs, so these
     read the diff through :mod:`~trustsight.deps` instead.
     """
-    wanted = {r for r in ("D001", "D002", "D003", "D004")
+    wanted = {r for r in ("D001", "D002", "D003", "D004", "R075")
               if _experimental_enabled(config, r)}
     if not wanted:
         return
@@ -389,10 +433,23 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
                         f"'{package_name}'")
                     return
 
+    # R075: Dependency-Set Expansion (MEDIUM, experimental)
+    if "R075" in wanted:
+        all_new: list[str] = []
+        for field in ("depends", "makedepends", "optdepends", "checkdepends"):
+            all_new.extend(added_deps.get(field, ()))
+        if len(all_new) >= 3:
+            rarities = [_rarity_of(d) for d in all_new]
+            magnitude = len(all_new) * (sum(rarities) / len(rarities))
+            if magnitude >= _DEP_EXPANSION_GATE:
+                novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
+                add("R075", "Dependency-Set Expansion", "MEDIUM", "dependency",
+                    f"diff adds {len(novel)} novel/rare deps: {novel}")
+
 
 def _build_findings(diff_text, config, add) -> None:
-    """R060 to R064: changes to the code that actually executes."""
-    wanted = {r for r in ("R060", "R061", "R062", "R063", "R064")
+    """R060-R064, R070: changes to the code that actually executes."""
+    wanted = {r for r in ("R060", "R061", "R062", "R063", "R064", "R070")
               if _experimental_enabled(config, r)}
     if not wanted:
         return
@@ -470,6 +527,24 @@ def _build_findings(diff_text, config, add) -> None:
                 add("R064", "Source URL Downgraded To HTTP", "MEDIUM", "network",
                     f"source URL downgraded from https to http: {url[:70]}")
                 break
+
+    if "R070" in wanted:
+        high_found = False
+        med_found = False
+        for i, line in enumerate(lines):
+            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+                continue
+            body = _strip_comment(line)
+            if _ENV_SUBVERSION_HIGH_RE.search(body):
+                high_found = True
+            if _ENV_SUBVERSION_MED_RE.search(body):
+                med_found = True
+        if high_found:
+            add("R070", "Build Environment Subversion", "HIGH", "build",
+                "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
+        elif med_found:
+            add("R070", "Build Environment Subversion", "MEDIUM", "build",
+                "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
 
 
 def _get_installed_version(pkg_name: str) -> str:
@@ -584,7 +659,74 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
     revived = _stale_revival(repo, old_commit, head_commit)
     if revived:
         triggered_rules.append(revived)
+
+    # R068: Install Hook Present (INFO, weight 0)
+    if not any(r["rule_id"] == "R007" for r in triggered_rules):
+        if _has_install_hook(diff_text):
+            triggered_rules.append({
+                "rule_id": "R068", "name": "Install Hook Present",
+                "severity": "INFO", "category": "context",
+                "match": "PKGBUILD declares an install hook",
+            })
+
+    # R069: GPG Verification Removed (HIGH, experimental)
+    if _experimental_enabled(config, "R069"):
+        if detect_gpg_verification_removed(diff_text):
+            triggered_rules.append({
+                "rule_id": "R069", "name": "GPG Verification Removed",
+                "severity": "HIGH", "category": "integrity",
+                "match": "validpgpkeys was populated and is now empty or removed",
+            })
+
+    # R071: Untrusted Maintainer Takeover (HIGH, experimental, cold-start gate)
+    if _experimental_enabled(config, "R071"):
+        if maintainer_changed and new_maintainer:
+            if effective_observation_count() > 0:
+                if is_maintainer_globally_novel(new_maintainer):
+                    triggered_rules.append({
+                        "rule_id": "R071",
+                        "name": "Untrusted Maintainer Takeover",
+                        "severity": "HIGH", "category": "maintainer",
+                        "match": f"maintainer changed to '{new_maintainer}', "
+                                f"who has never been seen in the AUR",
+                    })
+
+    # R072: Capability Density Anomaly (INFO, weight 0)
+    categories = {r.get("category", "") for r in triggered_rules
+                  if r.get("category") and r["rule_id"] != "R072"}
+    if len(categories) >= 3:
+        triggered_rules.append({
+            "rule_id": "R072", "name": "Capability Density Anomaly",
+            "severity": "INFO", "category": "meta",
+            "match": f"rule hits span {len(categories)} distinct capability categories",
+        })
+
+    # R074: Package-Name Typosquat (HIGH, experimental, cold-start gate)
+    if _experimental_enabled(config, "R074"):
+        if effective_observation_count() > 0:
+            squatted = package_typosquat_target(pkg_name)
+            if squatted:
+                triggered_rules.append({
+                    "rule_id": "R074", "name": "Package-Name Typosquat",
+                    "severity": "HIGH", "category": "naming",
+                    "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
+                })
+
     rule_ids = [r["rule_id"] for r in triggered_rules]
+
+    # R073: Accelerated Release Cadence (metadata only, never a scored finding)
+    recent_commit_burst = False
+    if head_commit:
+        try:
+            count_24h = 0
+            for c in repo.walk(head_commit):
+                if (time.time() - c.commit_time) / 3600 <= 24:
+                    count_24h += 1
+                if count_24h >= 3:
+                    recent_commit_burst = True
+                    break
+        except (AttributeError, pygit2.GitError):
+            pass
 
     aggregate_pinning = _aggregate_pinning(
         diff_text, source_changes.added_urls, source_changes.checksum_behavior
@@ -618,6 +760,7 @@ def analyze_package(pkg_name: str, old_commit: str = "", new_version: str = "") 
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        recent_commit_burst=recent_commit_burst,
         score_breakdown=breakdown,
         final_score=score,
     )
@@ -696,6 +839,35 @@ def scan_diff(
             package_name=package_name, config=config,
         )
     )
+
+    # R068: Install Hook Present (shared with analyze_package)
+    if not any(r["rule_id"] == "R007" for r in triggered_rules):
+        if _has_install_hook(diff_text):
+            triggered_rules.append({
+                "rule_id": "R068", "name": "Install Hook Present",
+                "severity": "INFO", "category": "context",
+                "match": "PKGBUILD declares an install hook",
+            })
+
+    # R069: GPG Verification Removed (experimental)
+    if _experimental_enabled(config, "R069"):
+        if detect_gpg_verification_removed(diff_text):
+            triggered_rules.append({
+                "rule_id": "R069", "name": "GPG Verification Removed",
+                "severity": "HIGH", "category": "integrity",
+                "match": "validpgpkeys was populated and is now empty or removed",
+            })
+
+    # R072: Capability Density Anomaly (shared with analyze_package)
+    categories = {r.get("category", "") for r in triggered_rules
+                  if r.get("category") and r["rule_id"] != "R072"}
+    if len(categories) >= 3:
+        triggered_rules.append({
+            "rule_id": "R072", "name": "Capability Density Anomaly",
+            "severity": "INFO", "category": "meta",
+            "match": f"rule hits span {len(categories)} distinct capability categories",
+        })
+
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
     aggregate_pinning = _aggregate_pinning(

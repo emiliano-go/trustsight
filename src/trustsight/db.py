@@ -374,6 +374,21 @@ def effective_observation_count() -> int:
     return max(count_observations(), seed_observation_count())
 
 
+def is_maintainer_globally_novel(name: str) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM maintainers WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return False
+        seed_row = conn.execute(
+            "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
+        ).fetchone()
+        if seed_row and seed_row["count"] > 0:
+            return False
+    return True
+
+
 def get_maintainer_global_count(name: str) -> int:
     """How many packages a maintainer is recorded against by the seed."""
     with get_connection() as conn:

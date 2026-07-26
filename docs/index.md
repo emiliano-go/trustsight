@@ -38,7 +38,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships with 42 rules across three namespaces. **R001 to R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **R039 to R059** extend that surface (eval of dynamic content, reverse shells, setuid bits, network access in `pkgver()`, writes outside `$pkgdir`) and were calibrated against the benign corpus before being enabled. **R060 to R064** inspect build-function behaviour (hidden network fetches, install hooks, untrusted patches). **R065 to R067** are temporal rules that inspect git commit timestamps for recency, package age, and stale-package revival. **C001 to C007** catch structural anomalies that a single-line pattern cannot express (checksum changed without source change, source URLs swapped without version bump, checksum removed for an unchanged source, command substitution in the source array). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships with 50 rules across three namespaces. **R001 to R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **R039 to R059** extend that surface (eval of dynamic content, reverse shells, setuid bits, network access in `pkgver()`, writes outside `$pkgdir`) and were calibrated against the benign corpus before being enabled. **R060 to R075** inspect build-function behaviour (hidden network fetches, install hooks, untrusted patches), temporal signals (recency, age, revival), install and maintainer context (install hooks, GPG removal, env subversion, maintainer takeover), naming (package-name typosquatting), dependency-set expansion, and metadata (capability density, release cadence). **C001 to C007** catch structural anomalies that a single-line pattern cannot express (checksum changed without source change, source URLs swapped without version bump, checksum removed for an unchanged source, command substitution in the source array). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules.md)
 
@@ -71,9 +71,9 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |-------|----------------|
 | [Auditing Before Update](guides/auditing-before-update.md) | Everyday workflow: scan AUR packages before `yay -Syu`. |
 | [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD with exit codes or policy thresholds. |
-| [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE — next steps. |
+| [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE - next steps. |
 | [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
-| [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages — identify and fix it. |
+| [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages - identify and fix it. |
 | [Running the Sandbox](guides/running-the-sandbox.md) | Sandbox a PKGBUILD's build and install scripts before approving. |
 
 ## Reference

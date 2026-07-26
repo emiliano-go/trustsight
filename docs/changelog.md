@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.7.0] - 2026-07-26
 
 ### Added
 
@@ -13,6 +13,56 @@
   | R065 | Very Recent Update | INFO (w 0) | HEAD commit < 72 h old |
   | R066 | Brand New Package | INFO (w 0) | First AUR commit < 30 days old |
   | R067 | Stale Package Revived | MEDIUM (w 15) | Gap to last analyzed commit > 365 days |
+
+- **Install, build, and maintainer rules (R068–R073).** Six new code-emitted
+  rules that inspect install hooks, GPG verification removal, build environment
+  subversion, maintainer takeovers, capability density, and release cadence.
+
+  | Rule | Name | Severity | Category | Condition |
+  |------|------|----------|----------|-----------|
+  | R068 | Install Hook Present | INFO (w 0) | context | PKGBUILD declares install= or diff touches *.install |
+  | R069 | GPG Verification Removed | HIGH (w 25) | integrity | validpgpkeys populated before, empty/absent after |
+  | R070 | Build Environment Subversion | HIGH/MEDIUM (w 25/15) | build | LD_PRELOAD/LD_LIBRARY_PATH (HIGH) or CFLAGS/LDFLAGS/MAKEFLAGS/PATH (MED) set inside build fn |
+  | R071 | Untrusted Maintainer Takeover | HIGH (w 25) | maintainer | maintainer changed + new maintainer globally novel |
+  | R072 | Capability Density Anomaly | INFO (w 0) | meta | rule hits span 3+ distinct categories |
+  | R073 | Accelerated Release Cadence | metadata (never scored) | temporal-metadata | HEAD has 3+ ancestors in the last 24 h |
+
+  R069, R070, and R071 are experimental (opt-in via `[experimental_rules]`).
+  R068, R072, and R073 are always on (INFO weight 0 or metadata).
+
+- **Naming and dependency-set rules (R074–R075).** Two new code-emitted rules
+  that detect package-name typosquatting and aggregate dependency-set expansion.
+
+  | Rule | Name | Severity | Category | Condition |
+  |------|------|----------|----------|-----------|
+  | R074 | Package-Name Typosquat | HIGH (w 25) | naming | name within edit-distance 2 of a far-more-popular package, not a variant |
+  | R075 | Dependency-Set Expansion | MEDIUM (w 15) | dependency | diff adds 3+ deps whose count x mean-rarity exceeds gate |
+
+  Both are experimental (opt-in via `[experimental_rules]`). R074 uses seed
+  popularity data and requires a warmed database; R075 is fully corpus-calibratable.
+
+- **Fire rates measured for R068-R073.** Measured against the 3246-diff benign
+  corpus. R068 (20.95 %), R069 (0.03 %), R070 (0.25 %), R072 (15.87 %). All
+  scored rules pass the 30 % gate. R071/R073 require live git history and are
+  marked TBD in fire-rates.md.
+
+### Fixed
+
+- **Crash bugs in the analysis pipeline and CLI.** Seven fixes that prevented
+  the tool from crashing on unusual package states or missing dependencies:
+
+  | ID | Issue | Fix |
+  |----|-------|-----|
+  | B1 | `pygit2.GitError` raised `NameError` at runtime because pygit2 was not imported in `analysis.py` | Added `import pygit2` (not just a type stub) |
+  | B2 | `generate_diff` crashes on stale commit OIDs that produce `None` commits | Guard against `None` before accessing `.tree` |
+  | B3 | `get_head_commit` propagates `GitError` for empty/unborn repos | Wrapped in try/except, returns `""` on failure |
+  | B4 | One bad package in a batch aborts the entire scan | Per-package try/except around `analyze_package` in CLI loop |
+  | B5 | Tool crashes on startup when `rich` is not installed | Guard `console()` and all fallback paths with `HAS_RICH` checks |
+  | B6 | Seed-import message leaks into JSON stdout with `--json` | Pass `quiet=True` to `maybe_auto_import_seed` in JSON mode |
+  | B10 | `_simple_vercmp` compares version parts lexicographically (e.g. `9` > `10`) | Parse as integers before comparison |
+
+- **`python -m trustsight` support.** Added `src/trustsight/__main__.py` so the
+  tool works with `python -m trustsight` in addition to the installed script.
 
 ## [0.6.1] - 2026-07-25
 

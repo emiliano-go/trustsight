@@ -87,8 +87,7 @@ Measured against the 3246-diff benign corpus with a 209,909-name dependency seed
 | D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3246 | Refined by D001; bounded by edit-distance threshold |
 | D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3246 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
 | D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
-
-## Build-function rules (R060–R064)
+| R075 | Dependency-Set Expansion | MEDIUM | TBD | - | Experimental (opt-in). Initial gate `≥1.5` (count × mean-rarity). Corpus-measurable; rate pending first calibration pass. |
 
 Measured against the 3246-diff benign corpus. All enabled by default since v0.7.0 (R060 was always on).
 
@@ -100,7 +99,7 @@ Measured against the 3246-diff benign corpus. All enabled by default since v0.7.
 | R063 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3246 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
 | R064 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3246 | `transset-df`: a genuine https to http downgrade |
 
-## Temporal context rules (R065–R067)
+## Temporal context rules (R065-R067)
 
 These rules inspect git commit timestamps rather than diff content, so they
 are inherently time-of-run dependent and cannot be calibrated against the
@@ -112,7 +111,33 @@ static corpus. Fire rates vary per database and per run.
 | R066 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
 | R067 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
 
-## Structural rules (C001–C007)
+## Install, build, maintainer, and naming rules (R068-R074)
+
+These rules are defined in `src/trustsight/analysis.py` and
+`src/trustsight/differ.py`. Fire rates marked "TBD" require a live git
+repository and cannot be measured against the static corpus; R071 and R074
+fall in this category.
+
+| Rule | Name | Sev | Fire rate | Hits | Notes |
+|------|------|-----|-----------|------|-------|
+| R068 | Install Hook Present | INFO | 20.95 % | 680/3246 | INFO weight 0; 30% gate does not apply. 1 in 5 PKGBUILDs declare an install hook. |
+| R069 | GPG Verification Removed | HIGH | 0.03 % | 1/3246 | Near-zero; matches the predicted rate. Well under the 30% gate. |
+| R070 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3246 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
+| R071 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
+| R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
+| R074 | Package-Name Typosquat | HIGH | TBD | - | Requires seeded DB for popularity asymmetry; not corpus-measurable. Predicted near-zero with suffix-strip + popularity gate. |
+
+## Temporal metadata rule (R073)
+
+R073 is metadata only; it is never appended to `triggered_rules` and
+contributes nothing to the score. It requires live git history and cannot
+be measured against the static corpus.
+
+| Rule | Name | Type | Fire rate | Hits | Notes |
+|------|------|------|-----------|------|-------|
+| R073 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
+
+## Structural rules (C001-C007)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.
 

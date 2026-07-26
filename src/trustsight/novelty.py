@@ -94,6 +94,51 @@ def typosquat_target(name: str, candidates: list[str] | None = None) -> str | No
     return best[1] if best else None
 
 
+# Suffixes that denote expected package variants (fork, build, packaging mode)
+# rather than typosquats.  Stripped before edit-distance comparison so that
+# ``foo-git``, ``foo-bin``, ``foo-lts`` are never confused with the real ``foo``.
+_KNOWN_SUFFIXES = (
+    "-git", "-bin", "-debug", "-lts", "-stable", "-beta",
+    "-svn", "-hg", "-bzr", "-cvs",
+    "-wine", "-appimage", "-flatpak", "-nightly", "-devel", "-common",
+)
+
+
+def _strip_variant_suffix(name: str) -> str:
+    for s in _KNOWN_SUFFIXES:
+        if name.endswith(s):
+            return name[: -len(s)]
+    return name
+
+
+def package_typosquat_target(pkg_name: str) -> str | None:
+    """Return a far-more-popular package *pkg_name* appears to squat, or None.
+
+    Asymmetric: only fires when the candidate is *much* more popular
+    (10x+ observation count), so legitimate variants and forks that have
+    grown their own reputation are never flagged.
+    """
+    if len(pkg_name) < 4:
+        return None
+    base = _strip_variant_suffix(pkg_name)
+    pkg_pop = dependency_observation_count(pkg_name)
+
+    candidates = top_dependency_names()
+    filtered: list[str] = []
+    for cand in candidates:
+        if cand == pkg_name or _strip_variant_suffix(cand) == base:
+            continue
+        cand_pop = dependency_observation_count(cand)
+        if cand_pop < pkg_pop * 10:
+            continue
+        filtered.append(cand)
+
+    if not filtered:
+        return None
+
+    return typosquat_target(pkg_name, filtered)
+
+
 def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
     nurl = normalize_url(url)
     with get_connection() as conn:

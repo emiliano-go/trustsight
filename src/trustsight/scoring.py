@@ -32,6 +32,7 @@ def maturity(n_obs: int) -> float:
 
 
 def risk_level(score: int) -> str:
+    """Return the risk level label for a numeric score."""
     if score <= 20:
         return "Low"
     elif score <= 50:
@@ -42,9 +43,6 @@ def risk_level(score: int) -> str:
         return "Critical"
 
 
-_PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
-
-
 def calculate_score(
     triggered_rules: list[dict],
     source_buckets: dict[str, str],
@@ -53,6 +51,7 @@ def calculate_score(
     verification_evidence: list[str] | None = None,
     pinning_level: str = "unpinned",
 ) -> tuple[int, list[ScoreEntry], str]:
+    """Calculate the final trust score from triggered rules and context."""
     if config is None:
         config = load_config()
 

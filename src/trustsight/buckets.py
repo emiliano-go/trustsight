@@ -2,9 +2,28 @@ import re
 import unicodedata
 from urllib.parse import urlparse
 
-import tldextract
-
 from .config import load_domains
+
+# tldextract is imported lazily.  It pulls in requests and urllib3, which
+# together cost ~98ms of the CLI's startup, and nothing outside URL
+# classification needs it -- `trustsight --help` should not pay for it.
+_extractor = None
+
+
+def _extract(url: str):
+    """Split *url* using a tldextract instance that never hits the network.
+
+    The default instance fetches the public suffix list over HTTP on first
+    use, which turns the first classification on a fresh machine into a
+    network round-trip that can fail.  ``suffix_list_urls=()`` pins it to
+    the snapshot bundled with the package.
+    """
+    global _extractor
+    if _extractor is None:
+        import tldextract
+
+        _extractor = tldextract.TLDExtract(suffix_list_urls=())
+    return _extractor(url)
 
 CONFUSABLES = {
     "g": "ɡ", "a": "а", "e": "е", "o": "о", "c": "с",
@@ -51,6 +70,26 @@ def _script_of(ch: str) -> str:
     return "OTHER"
 
 
+def _latin_with_combining_marks(label: str) -> bool:
+    """True for a Latin label carrying combining marks.
+
+    ``xn--githb-6rd`` decodes to a Latin ``githb`` plus a combining
+    diacritic, which renders as a near-perfect ``github``.  Combining
+    marks are not alphabetic, so :func:`_script_of` calls them COMMON and
+    both the mixed-script and the non-ASCII-Latin test look straight past
+    them -- the punycode bypass the decoder exists to close stayed open,
+    even though the precomposed spelling (``githuḅ``) was caught.
+
+    Scripts that legitimately need combining marks (Devanagari, Arabic,
+    Thai, and the rest) are unaffected, because this only fires when the
+    surrounding letters are Latin.
+    """
+    has_mark = any(unicodedata.category(ch).startswith("M") for ch in label)
+    if not has_mark:
+        return False
+    return any(_script_of(ch) == "LATIN" for ch in label)
+
+
 def _decode_punycode(label: str) -> str:
     """Decode an ``xn--`` label, returning it unchanged if undecodable.
 
@@ -89,35 +128,77 @@ def has_homograph(domain: str) -> bool:
             return True
         if any(not ch.isascii() and _script_of(ch) == "LATIN" for ch in label):
             return True
+        if _latin_with_combining_marks(label):
+            return True
     return False
 
 
+def _prepare(domain_config: dict) -> tuple[frozenset, frozenset, frozenset]:
+    """Return ``(raw_hosting, trusted_forges, official)`` as frozensets.
+
+    Membership tests replace the linear scan the classifier used to run
+    over each of the three lists for every URL.  Building these is cheap
+    enough to do per batch; ``classify_urls`` does it once and passes the
+    result down rather than repeating it per URL.
+    """
+    return (
+        frozenset(domain_config.get("raw_hosting", {}).get("domains", [])),
+        frozenset(domain_config.get("trusted_forges", {}).get("domains", [])),
+        frozenset(domain_config.get("official_projects", {}).get("domains", [])),
+    )
+
+
+def _parent_domains(domain: str):
+    """Yield *domain* and each of its parent domains.
+
+    ``a.b.example.com`` yields itself, ``b.example.com``, ``example.com``
+    and ``com``.  Testing membership of these against a set replaces an
+    ``endswith`` scan over every configured domain.
+    """
+    yield domain
+    rest = domain
+    while "." in rest:
+        rest = rest.split(".", 1)[1]
+        yield rest
+
+
 def classify_url(url: str, domain_config: dict | None = None) -> tuple[str, str]:
+    """Classify a single URL into a provenance bucket"""
     if domain_config is None:
         domain_config = load_domains()
+    return _classify_prepared(url, _prepare(domain_config))
 
+
+def _classify_prepared(
+    url: str, prepared: tuple[frozenset, frozenset, frozenset]
+) -> tuple[str, str]:
+    """Classify *url* against already-prepared domain sets."""
     parsed = urlparse(url)
     domain = parsed.netloc.lower()
 
     if has_homograph(domain):
         return "homograph_attack", domain
 
-    extracted = tldextract.extract(url)
+    raw_hosting, trusted_forges, official = prepared
+
+    if domain in raw_hosting:
+        return "raw_hosting", domain
+
+    # The registered domain is only needed for the forge comparison, and
+    # computing it is the expensive part of this function.
+    extracted = _extract(url)
     registered = f"{extracted.domain}.{extracted.suffix}"
 
-    raw_hosting = domain_config.get("raw_hosting", {}).get("domains", [])
-    for d in raw_hosting:
-        if domain == d:
-            return "raw_hosting", domain
-
-    trusted_forges = domain_config.get("trusted_forges", {}).get("domains", [])
-    for d in trusted_forges:
-        if registered == d or domain.endswith("." + d):
+    if registered in trusted_forges:
+        return "trusted_forge", registered
+    # ``domain.endswith("." + d)`` for a configured d is exactly "one of the
+    # proper parents of domain is d", so skip the domain itself here.
+    for parent in _parent_domains(domain):
+        if parent != domain and parent in trusted_forges:
             return "trusted_forge", registered
 
-    official = domain_config.get("official_projects", {}).get("domains", [])
-    for d in official:
-        if domain == d or domain.endswith("." + d):
+    for parent in _parent_domains(domain):
+        if parent in official:
             return "official", domain
 
     return "unknown", domain
@@ -126,9 +207,14 @@ def classify_url(url: str, domain_config: dict | None = None) -> tuple[str, str]
 def classify_urls(
     urls: list[str], domain_config: dict | None = None
 ) -> dict[str, str]:
+    """Classify each URL in a list into a provenance bucket"""
+    # Loaded and prepared once here rather than once per URL.
+    if domain_config is None:
+        domain_config = load_domains()
+    prepared = _prepare(domain_config)
     result = {}
     for url in urls:
-        bucket, matched_domain = classify_url(url, domain_config)
+        bucket, matched_domain = _classify_prepared(url, prepared)
         result[url] = bucket
     return result
 
@@ -145,6 +231,9 @@ _TAG_PATH_RE = re.compile(
     r"(?:/releases?/|/tags?/|/download/)",
     re.IGNORECASE,
 )
+
+
+PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
 
 
 def classify_pinning_level(url: str, checksum_present: bool = False) -> str:

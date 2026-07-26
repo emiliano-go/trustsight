@@ -8,6 +8,7 @@ from .schema import DiffSummary, SourceChanges
 def generate_diff(
     repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3
 ) -> tuple[str, DiffSummary]:
+    """Generate a unified diff between two commits."""
     old_commit = repo.get(old_oid)
     new_commit = repo.get(new_oid)
     if old_commit is None or new_commit is None:
@@ -65,6 +66,7 @@ def is_skip_justified(diff_text: str) -> str:
 
 
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
+    """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
     removed_urls: set[str] = set()
 
@@ -90,34 +92,24 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     )
 
 
+_CHK_PREFIX = r"^\+.*sha256sums\s*=\s*"
+
+
 def detect_checksum_changes(diff_text: str) -> str:
-    has_skip = re.search(
-        r"^\+.*sha256sums\s*=\s*\(?\s*[\'\"]?(?:SKIP|NONE)[\'\"]?",
-        diff_text,
-        re.MULTILINE,
-    )
-    if has_skip:
+    """Detect checksum-related changes in a diff."""
+    if re.search(_CHK_PREFIX + r"\(?\s*[\'\"]?(?:SKIP|NONE)[\'\"]?", diff_text, re.MULTILINE):
         return "changed_from_sha256_to_skip"
-
-    has_empty = re.search(
-        r"^\+.*sha256sums\s*=\s*\(\s*\)", diff_text, re.MULTILINE
-    )
-    if has_empty:
+    if re.search(_CHK_PREFIX + r"\(\s*\)", diff_text, re.MULTILINE):
         return "checksum_array_emptied"
-
-    has_new = re.search(
-        r"^\+.*sha256sums\s*=\s*\('",
-        diff_text,
-        re.MULTILINE,
-    )
-    if has_new:
+    if re.search(_CHK_PREFIX + r"\('", diff_text, re.MULTILINE):
         return "checksum_added_or_changed"
-
     return "unchanged"
 
 
+_CHECKSUM_VARS = "sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums"
+
 _CHECKSUM_LINE_RE = re.compile(
-    r"(?:sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums)\s*=",
+    r"(?:" + _CHECKSUM_VARS + r")\s*=",
     re.IGNORECASE,
 )
 
@@ -198,7 +190,7 @@ _VALIDPGPKEYS_WITH_CONTENT_RE = re.compile(
     r"validpgpkeys\s*=\s*\(\s*['\"]?[A-Fa-f0-9]{16,}",
 )
 _CHECKSUM_ARRAY_RE = re.compile(
-    r"(?:sha256sums|sha512sums|sha1sums|b2sums|md5sums)\s*=\s*(?:\(|['\"]?[A-Fa-f0-9])",
+    r"(?:" + _CHECKSUM_VARS + r")\s*=\s*(?:\(|['\"]?[A-Fa-f0-9])",
 )
 
 
@@ -225,6 +217,7 @@ def _has_checksum_in_post_diff(diff_text: str) -> bool:
 
 
 def detect_gpg_verification_removed(diff_text: str) -> bool:
+    """Detect whether GPG verification was removed in a diff."""
     had_content = False
     for line in diff_text.splitlines():
         if line.startswith("-") and _VALIDPGPKEYS_WITH_CONTENT_RE.search(line):

@@ -5,6 +5,7 @@ SRCINFO_RE = re.compile(r"^\s*(?:\w+)\s*=\s*(.+)$")
 
 
 def parse_srcinfo(text: str) -> dict[str, list[str]]:
+    """Parse a .SRCINFO text into a key-value mapping."""
     result: dict[str, list[str]] = defaultdict(list)
     for line in text.splitlines():
         stripped = line.strip()
@@ -16,19 +17,6 @@ def parse_srcinfo(text: str) -> dict[str, list[str]]:
             value = m.group(2).strip()
             if value not in result[key]:
                 result[key].append(value)
-    return dict(result)
-
-
-def parse_srcinfo_with_pkgbase(text: str) -> dict[str, list[str]]:
-    raw = parse_srcinfo(text)
-    result: dict[str, list[str]] = defaultdict(list)
-    for key, values in raw.items():
-        if key in ("pkgname",):
-            result[key] = values
-        elif key in ("pkgbase",):
-            result[key] = values
-        else:
-            result[key] = values
     return dict(result)
 
 
@@ -49,6 +37,7 @@ ARRAY_KEYS = frozenset({
 def diff_srcinfo(
     old: dict[str, list[str]], new: dict[str, list[str]]
 ) -> dict[str, dict]:
+    """Compare two parsed .SRCINFO dicts and return the changes."""
     changes: dict[str, dict] = {}
     all_keys = set(old) | set(new)
     for key in sorted(all_keys):
@@ -67,6 +56,7 @@ def diff_srcinfo(
 
 
 def get_srcinfo_from_tree(repo, commit_oid: str) -> dict[str, list[str]]:
+    """Retrieve and parse .SRCINFO from a git commit tree."""
     try:
         commit = repo.get(commit_oid)
         if commit is None:
@@ -74,13 +64,10 @@ def get_srcinfo_from_tree(repo, commit_oid: str) -> dict[str, list[str]]:
         tree = commit.tree
         entry = tree.get(".SRCINFO")
         if entry is None:
-            tree = commit.tree
-            entry = tree.get(".SRCINFO")
-            if entry is None:
-                return {}
+            return {}
         blob = repo.get(entry.oid)
         if blob is None:
             return {}
         return parse_srcinfo(blob.data.decode("utf-8", errors="replace"))
-    except Exception:
+    except (AttributeError, KeyError, TypeError):
         return {}

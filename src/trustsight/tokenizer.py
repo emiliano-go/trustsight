@@ -17,24 +17,33 @@ def join_line_continuations(lines: list[str]) -> list[str]:
     spliced onto a removal.
     """
     out: list[str] = []
-    buf: str | None = None
+    # Accumulated as parts and joined once.  Appending to a string per
+    # continuation line made this quadratic, so a diff of many backslash
+    # continuations -- which an untrusted PKGBUILD controls -- cost time
+    # proportional to the square of its length.
+    parts: list[str] | None = None
     marker = ""
+
+    def flush() -> str:
+        return "".join(parts)
+
     for line in lines:
         this_marker = line[0] if line[:1] in ("+", "-") else ""
         body = line[1:] if this_marker else line
-        if buf is not None and this_marker == marker:
-            buf = f"{buf} {body.strip()}"
+        if parts is not None and this_marker == marker:
+            parts.append(" " + body.strip())
         else:
-            if buf is not None:
-                out.append(marker + buf)
-            buf, marker = body, this_marker
-        if buf.rstrip().endswith("\\"):
-            buf = buf.rstrip()[:-1].rstrip()
+            if parts is not None:
+                out.append(marker + flush())
+            parts, marker = [body], this_marker
+        tail = parts[-1]
+        if tail.rstrip().endswith("\\"):
+            parts[-1] = tail.rstrip()[:-1].rstrip()
         else:
-            out.append(marker + buf)
-            buf, marker = None, ""
-    if buf is not None:
-        out.append(marker + buf)
+            out.append(marker + flush())
+            parts, marker = None, ""
+    if parts is not None:
+        out.append(marker + flush())
     return out
 
 
@@ -51,12 +60,32 @@ _ASSIGNMENT_RE = re.compile(
 _VAR_REF_RE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
 
 
-def _substitute(text: str, var_table: dict[str, str]) -> str:
+# Substitution is iterated, and each round can double a value that refers
+# to itself twice (``b=$a$a``).  A chain of such assignments expands as
+# 2**depth, so a 517-byte PKGBUILD was enough to exhaust a gigabyte and
+# have the process OOM-killed.  Since the input is by definition an
+# untrusted package, expansion is bounded on three axes: how large one
+# value may grow, how large a single resolved line may grow, and how much
+# the table may hold in total.  A value that would exceed its bound is
+# left unexpanded rather than truncated: an unresolved "$payload" is
+# reported as an unresolved pattern, whereas a truncated one would look
+# like a fully resolved string with its tail silently removed.
+_MAX_VALUE_LEN = 8192
+_MAX_LINE_LEN = 65536
+_MAX_TABLE_BYTES = 1 << 20
+
+
+def _substitute(text: str, var_table: dict[str, str], limit: int = _MAX_LINE_LEN) -> str:
+    """resolve variable references in text using a variable table"""
     def replacer(match: re.Match) -> str:
+        """look up the matched variable in the table"""
         var = match.group(1) or match.group(2)
         return var_table.get(var, match.group(0))
 
-    return _VAR_REF_RE.sub(replacer, text)
+    result = _VAR_REF_RE.sub(replacer, text)
+    # Expanding this one reference blew the budget, so report the text as
+    # it stood rather than a partially expanded string.
+    return text if len(result) > limit else result
 
 
 def _variable_table(additions: list[str]) -> dict[str, str]:
@@ -77,10 +106,17 @@ def _variable_table(additions: list[str]) -> dict[str, str]:
             var_table[match.group(1)] = value
 
     for _ in range(10):
-        new_table = {k: _substitute(v, var_table) for k, v in var_table.items()}
+        new_table = {
+            k: _substitute(v, var_table, _MAX_VALUE_LEN)
+            for k, v in var_table.items()
+        }
         if new_table == var_table:
             break
         var_table = new_table
+        if sum(len(v) for v in var_table.values()) > _MAX_TABLE_BYTES:
+            # The table as a whole has grown past its budget, so stop
+            # expanding.  What is already resolved stays usable.
+            break
     return var_table
 
 
@@ -108,6 +144,7 @@ def resolve_added_lines(diff_text: str) -> list[str]:
 
 
 def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
+    """Tokenize a diff and resolve variable references in added lines."""
     additions = []
     for line in join_line_continuations(diff_text.splitlines()):
         if line.startswith("+"):

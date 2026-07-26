@@ -75,10 +75,12 @@ def strip_ansi(text: str) -> str:
 
 
 def has_fatal_codepoints(text: str) -> bool:
+    """Check if text contains any fatal Unicode codepoints."""
     return bool(COMBINED.search(text))
 
 
 def describe_fatal_codepoints(text: str) -> list[tuple[int, str]]:
+    """Return a list of (position, name) pairs for each fatal codepoint."""
     matches = []
     for m in COMBINED.finditer(text):
         cp = ord(m.group())

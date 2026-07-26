@@ -43,6 +43,7 @@ _MAX_ARRAY_SPAN = 60
 
 
 def _is_package_name(token: str) -> bool:
+    """check if a token matches the package name pattern"""
     return bool(_PACKAGE_NAME_RE.match(normalize_dependency(token)))
 
 

@@ -156,6 +156,7 @@ def _backtracking_risk(compiled: re.Pattern) -> float:
 
 
 def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[LintFinding]:
+    """validate required fields, id format, severity, match_target, and scope"""
     rid = rule.get("id", f"<rule #{index}>")
     findings = []
 
@@ -224,6 +225,7 @@ def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[L
 
 
 def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
+    """compile the pattern and check for emptiness, matches-everything, and backtracking risk"""
     rid = rule.get("id", "<unknown>")
     pattern = rule.get("pattern")
     if pattern is None:

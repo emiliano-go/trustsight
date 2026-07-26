@@ -13,7 +13,6 @@ depends=(
   'python-tldextract'
   'python-rich'
   'python-typer'
-  'python-openai'
 )
 makedepends=(
   'python-build'
@@ -23,7 +22,8 @@ makedepends=(
   'python-pytest'
 )
 optdepends=(
-  'ollama: local LLM verdict generation instead of remote API'
+  'python-openai: LLM-powered verdict generation via OpenAI-compatible API'
+  'ollama: local LLM verdict generation via Ollama'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 

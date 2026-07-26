@@ -15,8 +15,8 @@ pkgbase = trustsight
 	depends = python-tldextract
 	depends = python-rich
 	depends = python-typer
-	depends = python-openai
-	optdepends = ollama: local LLM verdict generation instead of remote API
+	optdepends = python-openai: LLM-powered verdict generation via OpenAI-compatible API
+	optdepends = ollama: local LLM verdict generation via Ollama
 	source = trustsight-0.6.1.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.6.1.tar.gz
 	sha256sums = e7eb2a36861c6e62b852440f8b3fdd1026c60f94310ac1c3ffd4e85820db7c7e
 

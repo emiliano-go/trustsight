@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.7.2] - 2026-07-27
+
+### Added
+
+- **New CLI commands.** `trustsight list` lists all packages tracked in the
+  database with their latest score, risk, version, and maintainer.
+  `trustsight status` shows database health statistics (packages tracked,
+  total analyses, effective observations, dependency corpus status).
+
+- **Database maintenance commands.** `trustsight db check` runs `PRAGMA
+  integrity_check`. `trustsight db vacuum` reclaims disk space from deleted
+  rows. `trustsight db backup` creates a safe online backup via
+  `sqlite3.backup()` without stopping the application.
+
+- **AUR RPC response cache.** A new `aur_cache` table stores AUR version
+  lookups so repeated reviews do not re-query the AUR server. Config key
+  `[discovery] cache_ttl_minutes` controls freshness (default: 60 minutes;
+  set to 0 to disable).
+
+- **`inspect --verbose` flag.** Threaded through to both the rich and plain
+  output paths. In JSON mode it includes the score breakdown in the output.
+
+- **`PRAGMA busy_timeout=5000`.** The database connection now retries locked
+  writes for 5 seconds instead of raising `OperationalError: database is locked`
+  immediately.
+
+### Changed
+
+- **Pipelined analysis and LLM verdicts.** The batch-review path replaced its
+  serial analysis loop with a `ThreadPoolExecutor` where each task runs
+  `analyze_package()` followed immediately by `_verdict_for()` in the same
+  thread. Analysis and LLM calls now overlap across workers instead of running
+  strictly sequentially, reducing wall time by roughly
+  `min(total_analysis, total_llm)` seconds.
+
+- **AUR RPC queries are cached.** `get_aur_package_info()` checks the local
+  cache before making HTTP requests; only packages not in cache (or whose
+  cache entry has expired) reach the AUR server.
+
+### Fixed
+
+- **`_run_analysis_loop()` output indentation.** The rich-table and plain-text
+  output branches were nested inside `if json_output:` (after its `return`),
+  making them dead code. Restructured into a clean three-way branch.
+
 ## [0.7.1] - 2026-07-27
 
 ### Added

@@ -60,6 +60,16 @@ from .tokenizer import resolve_added_lines, tokenize_and_resolve
 
 log = logging.getLogger(__name__)
 
+_initialized = False
+
+
+def _ensure_init() -> None:
+    global _initialized
+    if not _initialized:
+        ensure_default_configs()
+        init_db()
+        _initialized = True
+
 
 def _rarities_of(deps: list[str]) -> list[float]:
     """Rarity for each of *deps*, using a single database round-trip."""
@@ -239,13 +249,20 @@ def _recent_update(repo, head_commit):
     return None
 
 
-def _package_is_new(repo, head_commit):
+def _package_is_new(repo, head_commit, pkg_name=None):
     """findings for a package whose first commit is under 30 days old"""
     if not head_commit:
         return None
     try:
+        if pkg_name and get_package(pkg_name):
+            return None
+
         root_age = None
+        count = 0
         for c in repo.walk(head_commit):
+            count += 1
+            if count > 100:
+                return None
             if not c.parents:
                 root_age = (time.time() - c.commit_time) / 86400
                 break
@@ -596,8 +613,7 @@ def analyze_package(
     *upstream_mtime* is the AUR's ``LastModified``; passing it lets the
     fetcher skip the network when the cached clone is already current.
     """
-    ensure_default_configs()
-    init_db()
+    _ensure_init()
     config = load_config()
 
     if installed_version is None:
@@ -687,7 +703,7 @@ def analyze_package(
     recent = _recent_update(repo, head_commit)
     if recent:
         triggered_rules.append(recent)
-    new_pkg = _package_is_new(repo, head_commit)
+    new_pkg = _package_is_new(repo, head_commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
     revived = _stale_revival(repo, old_commit, head_commit)
@@ -958,7 +974,7 @@ def _make_fresh_analysis(
     recent = _recent_update(repo, commit)
     if recent:
         triggered_rules.append(recent)
-    new_pkg = _package_is_new(repo, commit)
+    new_pkg = _package_is_new(repo, commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
     fact = PackageFact(

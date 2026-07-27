@@ -1,4 +1,5 @@
 import atexit
+from datetime import datetime
 import os
 import sqlite3
 import subprocess
@@ -31,6 +32,7 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     # per-connection and has to be set on every one.
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -154,6 +156,13 @@ def init_db():
                every analysis; without this it is a full scan plus a sort. */
             CREATE INDEX IF NOT EXISTS idx_dependency_names_count
                 ON dependency_names(observation_count DESC);
+
+            CREATE TABLE IF NOT EXISTS aur_cache (
+                name TEXT PRIMARY KEY,
+                version TEXT NOT NULL,
+                last_modified INTEGER,
+                cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         """)
         _migrate(conn)
         conn.commit()
@@ -679,3 +688,68 @@ def get_all_packages() -> list[dict]:
     with get_connection() as conn:
         rows = conn.execute("SELECT * FROM packages ORDER BY name").fetchall()
         return [dict(r) for r in rows]
+
+
+def read_aur_cache(names: list[str], ttl_minutes: int = 60) -> dict[str, dict]:
+    """Return cached AUR responses for *names* that are still fresh.
+
+    Returns ``{name: {"version": str, "last_modified": int}}`` for cache
+    hits younger than *ttl_minutes*.  Expired entries are deleted inline.
+    """
+    if not names:
+        return {}
+    with get_connection() as conn:
+        placeholders = ",".join("?" for _ in names)
+        rows = conn.execute(
+            f"""SELECT name, version, last_modified, cached_at
+                FROM aur_cache
+                WHERE name IN ({placeholders})""",
+            names,
+        ).fetchall()
+        hits = {}
+        expired = []
+        for r in rows:
+            age = (datetime.now() - _parse_ts(r["cached_at"])).total_seconds() / 60
+            if age < ttl_minutes:
+                hits[r["name"]] = {
+                    "version": r["version"],
+                    "last_modified": r["last_modified"],
+                }
+            else:
+                expired.append(r["name"])
+        if expired:
+            placeholders = ",".join("?" for _ in expired)
+            conn.execute(
+                f"DELETE FROM aur_cache WHERE name IN ({placeholders})", expired
+            )
+            conn.commit()
+    return hits
+
+
+def write_aur_cache(entries: dict[str, tuple[str, int | None]]) -> None:
+    """Insert or update the AUR cache for *entries*.
+
+    *entries* maps ``name -> (version, last_modified)`` where
+    *last_modified* is an integer Unix timestamp or None.
+    """
+    with get_connection() as conn:
+        conn.executemany(
+            """INSERT INTO aur_cache (name, version, last_modified, cached_at)
+               VALUES (?, ?, ?, datetime('now'))
+               ON CONFLICT(name) DO UPDATE SET
+                   version = excluded.version,
+                   last_modified = excluded.last_modified,
+                   cached_at = excluded.cached_at""",
+            [(name, ver, lm) for name, (ver, lm) in entries.items()],
+        )
+        conn.commit()
+
+
+def _parse_ts(ts: str | None) -> datetime:
+    """Parse a SQLite datetime string, defaulting to epoch on garbage."""
+    if not ts:
+        return datetime.fromtimestamp(0)
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return datetime.fromtimestamp(0)

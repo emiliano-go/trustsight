@@ -88,6 +88,7 @@ def test_cli_review_flag_repo(tmp_path, monkeypatch):
             "repos": ["aur"],
             "include_foreign": False,
             "all_repos": False,
+            "all_packages": False,
             "_warn_func": mock_disc.call_args[1]["_warn_func"],
         }
 
@@ -333,7 +334,7 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
         return _fact(name)
 
     monkeypatch.setattr(cli, "analyze_package", fake_analyze)
-    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     pkgs = [
         {"name": "alpha", "current_version": "1.0", "latest_version": "1.1",
@@ -360,7 +361,7 @@ def test_one_bad_package_does_not_end_the_run(monkeypatch):
     from trustsight import cli
 
     monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "broken":
@@ -424,7 +425,7 @@ def test_a_failed_package_is_reported_not_dropped(monkeypatch):
     from trustsight import cli
 
     monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli, "_verdicts_for", lambda facts, cb=None: ["ok"] * len(facts))
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "evil":
@@ -463,4 +464,4 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
         ],
     )
     # exercises the rich renderer, which formats the score cell
-    cli._run_analysis_loop([{"name": "ok"}, {"name": "bad"}], 10, False, False)
+    cli._run_analysis_loop([{"name": "ok"}, {"name": "bad"}], 10, False, False, False)

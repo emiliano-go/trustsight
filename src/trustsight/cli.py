@@ -1,5 +1,7 @@
 import json
 import logging
+import sqlite3
+import socket
 import sys
 from pathlib import Path
 from typing import Optional
@@ -20,13 +22,19 @@ from .config import (
     sync_rules,
 )
 from .db import (
+    count_observations,
+    dependency_table_populated,
     effective_observation_count,
+    get_all_packages,
     get_history,
+    get_db_path,
+    get_last_analysis,
     get_package_id,
     get_triggered_rules,
     import_seed,
     init_db,
     maybe_auto_import_seed,
+    read_aur_cache,
     seed_observation_count,
 )
 from .lint import SEVERITY_ERROR, lint_rules
@@ -159,7 +167,7 @@ app = typer.Typer(
     name="trustsight",
     help="TrustSight - AUR Package Update Vetting Tool",
     no_args_is_help=True,
-    add_completion=False,
+    add_completion=True,
 )
 config_app = typer.Typer(
     help="Manage configuration (aliases: show, set, sync-rules)",
@@ -171,8 +179,14 @@ override_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+db_app = typer.Typer(
+    help="Database maintenance (check, vacuum, backup)",
+    no_args_is_help=True,
+    add_completion=False,
+)
 app.add_typer(config_app, name="config")
 app.add_typer(override_app, name="override")
+app.add_typer(db_app, name="db")
 
 
 def _version_callback(value: bool):
@@ -202,8 +216,9 @@ def _main(
 
 @app.command()
 def review(
-    limit: int = typer.Option(20, "--limit", help="Max packages to review"),
+    limit: int = typer.Option(0, "--limit", help="Max packages to review (0 = unlimited)"),
     verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules per package"),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress progress output"),
     repo: Optional[list[str]] = typer.Option(
         None, "--repo", help="Scan packages from a specific local repository (can be repeated)"
     ),
@@ -212,27 +227,30 @@ def review(
         False, "--all-repos",
         help="Auto-detect all local repos from pacman.conf (excludes official repos)",
     ),
+    all_packages: bool = typer.Option(
+        False, "--all", help="Review all installed AUR packages, not just outdated ones",
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
-    """Review outdated AUR packages for suspicious updates."""
+    """Review AUR packages for suspicious updates."""
     ensure_default_configs()
     config = load_config()
     init_db()
     if config.get("seed", {}).get("auto_import", True):
         maybe_auto_import_seed(quiet=json_output)
-    effective_limit = limit or config.get("limits", {}).get("default_review_limit", 20)
+    effective_limit = limit if limit > 0 else config.get("limits", {}).get("default_review_limit", 0)
 
     user_specified = not (repo is None and not foreign and not all_repos)
     if user_specified:
         repos = repo or []
         include_foreign = foreign
-        all_flag = all_repos
+        all_repos_flag = all_repos
     else:
         discovery_cfg = config.get("discovery", {})
         repos = discovery_cfg.get("default_repos", [])
         include_foreign = discovery_cfg.get("include_foreign", False)
-        all_flag = discovery_cfg.get("all_repos", False)
-        if not repos and not all_flag and not include_foreign:
+        all_repos_flag = discovery_cfg.get("all_repos", False)
+        if not repos and not all_repos_flag and not include_foreign:
             include_foreign = True
 
     def _warn(msg: str):
@@ -243,7 +261,7 @@ def review(
         con = console()
         con.print(f"[yellow]Warning:[/] {msg}")
 
-    if all_flag:
+    if all_repos_flag:
         from .discovery import get_local_repos_from_pacman_conf
         try:
             get_local_repos_from_pacman_conf()
@@ -260,24 +278,36 @@ def review(
     outdated_pkgs = discover_packages(
         repos=repos,
         include_foreign=include_foreign,
-        all_repos=all_flag,
+        all_repos=all_repos_flag,
+        all_packages=all_packages,
         _warn_func=_warn if repos else None,
     )
 
+    total_installed = 0
+    if include_foreign:
+        from .discovery import get_installed_foreign
+        total_installed = len(get_installed_foreign())
+
     if not outdated_pkgs:
-        _print_colored("No outdated packages found.", "green")
+        if all_packages:
+            _print_colored("No AUR packages found to review.", "green")
+        else:
+            _print_colored("No outdated packages found.", "green")
         return
 
-    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, json_output)
+    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, quiet, json_output, total_installed, all_packages)
 
 
 def _run_analysis_loop(
-    outdated_pkgs: list[dict], limit: int, verbose: bool, json_output: bool
+    outdated_pkgs: list[dict], limit: int, verbose: bool, quiet: bool, json_output: bool,
+    total_installed: int = 0, all_packages: bool = False,
 ) -> None:
     """run the full analysis loop with optional progress display"""
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
 
-    if HAS_RICH and not json_output:
+    has_progress = HAS_RICH and not json_output and not quiet
+
+    if has_progress:
         con = console()
         progress_columns = [
             SpinnerColumn(),
@@ -291,9 +321,8 @@ def _run_analysis_loop(
 
             def on_progress(_current, total, description):
                 """update the progress bar with the current task"""
-                # The description arrives ready to display: a batch moves
-                # through fetch, analysis and verdict phases, so it names
-                # its own phase rather than having one assumed here.
+                if not has_progress:
+                    return
                 if total:
                     progress.update(
                         task, total=total, completed=_current,
@@ -304,23 +333,40 @@ def _run_analysis_loop(
 
             results = _analyze_outdated_batch(limited, on_progress, verbose)
             progress.update(task, visible=False)
+    elif json_output:
+        def on_progress(_current, total, description):
+            """emit progress as JSON-lines to stderr"""
+            import json as _json
+            print(_json.dumps({"event": "progress", "current": _current, "total": total, "phase": description}), file=sys.stderr)
+        results = _analyze_outdated_batch(limited, on_progress, verbose)
+    else:
+        results = _analyze_outdated_batch(limited, None, verbose)
 
-        if json_output:
-            typer.echo(json.dumps(results, indent=2))
-            return
+    if json_output:
+        typer.echo(json.dumps(results, indent=2))
+        return
 
-        if not results:
-            con.print("[yellow]No outdated AUR packages found.[/]")
-            return
+    if not results:
+        if all_packages:
+            _print_colored("No AUR packages found to review.", "green")
+        else:
+            _print_colored("No outdated packages found.", "green")
+        return
 
-        flagged = sum(1 for r in results if (r["score"] or 0) > 20)
-        failed = sum(1 for r in results if r.get("failed"))
-        caption = (
-            f"{len(results) - failed} package(s) reviewed, {flagged} above the "
-            f"20-point CLEAN threshold"
-        )
-        if failed:
-            caption += f", {failed} could NOT be vetted"
+    flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+    failed = sum(1 for r in results if r.get("failed"))
+    reviewed = len(results) - failed
+    if all_packages and total_installed:
+        caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
+    else:
+        caption = f"{reviewed} package(s) needing update and reviewed"
+        if total_installed:
+            caption += f" out of {total_installed} installed"
+    caption += f", {flagged} above the 20-point CLEAN threshold"
+    if failed:
+        caption += f", {failed} could NOT be vetted"
+
+    if has_progress:
         table = Table(
             title="TrustSight Review",
             caption=caption,
@@ -332,13 +378,10 @@ def _run_analysis_loop(
         table.add_column("Verdict", overflow="fold")
         if verbose:
             table.add_column("Triggered Rules", overflow="fold")
-
         for r in results:
             verdict = Text(strip_ansi(r["verdict"]))
             if r.get("first_seen"):
                 verdict = Text.assemble(("first analysis: ", "yellow"), verdict)
-            # A package that could not be analysed has no score; showing it
-            # as 0/100 Low would read as "clean".
             score_cell = (
                 Text("n/a", style="bold red") if r.get("failed")
                 else _score_text(r["score"], r["risk"])
@@ -356,19 +399,8 @@ def _run_analysis_loop(
                 )
                 row.append(Text(strip_ansi(rules_text)))
             table.add_row(*row)
-
         con.print(table)
     else:
-        results = _analyze_outdated_batch(limited, None, verbose)
-
-        if json_output:
-            typer.echo(json.dumps(results, indent=2))
-            return
-
-        if not results:
-            print("No outdated AUR packages found.")
-            return
-
         print(f"{'Package':<20} {'Risk Score':<10} Verdict", end="")
         if verbose:
             print("  Rules")
@@ -388,6 +420,7 @@ def _run_analysis_loop(
                 )
                 line += f"  {rules_str}"
             print(line)
+        print(caption)
 
 
 def _default_workers() -> int:
@@ -413,12 +446,13 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
     finds the clone current, and skips fetching the same repository twice.
     """
     assert len(pkgs) == len({e["name"] for e in pkgs}), "_prefetch requires unique package names"
-    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
 
     from .fetcher import clone_or_fetch, last_fetch_time
 
     def fetch(entry: dict) -> tuple[str, int | None]:
         name = entry["name"]
+        socket.setdefaulttimeout(30)
         repo = clone_or_fetch(name, entry.get("last_modified"))
         # Prefer the AUR's own timestamp; when the RPC did not supply one,
         # fall back to when this clone was fetched, which by definition is
@@ -434,19 +468,38 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
     workers = max(1, min(_default_workers(), total))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(fetch, entry): entry["name"] for entry in pkgs}
-        for done, future in enumerate(as_completed(futures), start=1):
-            name = futures[future]
-            if progress_callback:
-                progress_callback(done, total, f"Fetching {name}")
-            try:
-                fetched, commit_time = future.result()
-            except Exception:  # noqa: BLE001 — analysis retries and reports
-                log.warning("fetch of %s failed; will retry during analysis",
-                            name, exc_info=True)
-                continue
-            if commit_time is not None:
-                hints[fetched] = commit_time
+        try:
+            for done, future in enumerate(as_completed(futures, timeout=120), start=1):
+                name = futures[future]
+                if progress_callback:
+                    progress_callback(done, total, f"Fetching {name}")
+                try:
+                    fetched, commit_time = future.result()
+                except Exception:  # noqa: BLE001 — analysis retries and reports
+                    log.warning("fetch of %s failed; will retry during analysis",
+                                name, exc_info=True)
+                    continue
+                if commit_time is not None:
+                    hints[fetched] = commit_time
+        except _FutureTimeout:
+            log.warning("prefetch timed out after 120s; remaining packages will fetch during analysis")
+            for f in futures:
+                f.cancel()
     return hints
+
+
+def _verdict_for(fact) -> str:
+    """LLM verdict for a single fact with offline fallback."""
+    from .llm import fallback_verdict, generate_verdict
+
+    if fact.final_score <= 0:
+        return fallback_verdict(fact)
+    try:
+        return generate_verdict(fact)
+    except Exception:  # noqa: BLE001 — a verdict must never fail a run
+        log.warning("verdict for %s failed; using fallback",
+                    fact.package_name, exc_info=True)
+        return fallback_verdict(fact)
 
 
 def _verdicts_for(facts: list, progress_callback=None) -> list[str]:
@@ -458,26 +511,13 @@ def _verdicts_for(facts: list, progress_callback=None) -> list[str]:
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    from .llm import fallback_verdict, generate_verdict
-
-    def verdict_for(fact) -> str:
-        if fact.final_score <= 0:
-            return fallback_verdict(fact)
-        try:
-            return generate_verdict(fact)
-        except Exception:  # noqa: BLE001 — a verdict must never fail a run
-            log.warning("verdict for %s failed; using fallback",
-                        fact.package_name, exc_info=True)
-            return fallback_verdict(fact)
-
     if not facts:
         return []
     total = len(facts)
     workers = max(1, min(_default_workers(), total))
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        # map preserves input order, which the result table depends on.
         verdicts = []
-        for done, verdict in enumerate(pool.map(verdict_for, facts), start=1):
+        for done, verdict in enumerate(pool.map(_verdict_for, facts), start=1):
             if progress_callback:
                 progress_callback(done, total, "Writing verdicts")
             verdicts.append(verdict)
@@ -488,15 +528,13 @@ def _analyze_outdated_batch(
     pkgs: list[dict], progress_callback=None, verbose: bool = False
 ) -> list[dict]:
     """analyze a batch of outdated package entries"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     hints = _prefetch(pkgs, progress_callback)
 
-    analysed = []
-    failures: list[dict] = []
-    total = len(pkgs)
-    for i, entry in enumerate(pkgs):
+    def _pipeline_one(entry):
+        """analyze one package then immediately produce its LLM verdict"""
         name = entry["name"]
-        if progress_callback:
-            progress_callback(i, total, f"Analyzing {name}")
         try:
             fact = analyze_package(
                 name,
@@ -504,33 +542,50 @@ def _analyze_outdated_batch(
                 upstream_mtime=hints.get(name),
             )
         except Exception as exc:  # noqa: BLE001 — one package must not end the run
-            # Reported rather than dropped.  A package that was silently
-            # removed from the table looked identical to one that came back
-            # clean, so a package able to provoke a crash could keep itself
-            # out of the review entirely.
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
-            failures.append({
-                "package": name,
-                "old_version": entry.get("current_version", ""),
-                "new_version": entry.get("latest_version", ""),
-                "score": None,
-                "verdict": f"Analysis failed ({type(exc).__name__}): "
-                           f"this package was NOT vetted.",
-                "risk": "Error",
-                "first_seen": False,
-                "failed": True,
-            })
-            continue
-        analysed.append((entry, fact))
+            return ("fail", entry, None, None, exc)
 
-    verdicts = _verdicts_for([fact for _, fact in analysed], progress_callback)
+        verdict = _verdict_for(fact)
+        return ("ok", entry, fact, verdict, None)
 
+    total = len(pkgs)
+    analysed_by_idx: dict[int, tuple] = {}
+    failures: list[dict] = []
+
+    with ThreadPoolExecutor(max_workers=_default_workers()) as pool:
+        futures = {pool.submit(_pipeline_one, entry): i for i, entry in enumerate(pkgs)}
+        done_count = 0
+        for future in as_completed(futures):
+            idx = futures[future]
+            status, entry, fact, verdict, exc = future.result()
+            done_count += 1
+            if progress_callback:
+                phase = "Reviewing" if status == "ok" else "Failed"
+                progress_callback(done_count, total, f"{phase} {entry['name']}")
+
+            if status == "fail":
+                failures.append({
+                    "package": entry["name"],
+                    "old_version": entry.get("current_version", ""),
+                    "new_version": entry.get("latest_version", ""),
+                    "score": None,
+                    "verdict": f"Analysis failed ({type(exc).__name__}): "
+                               f"this package was NOT vetted.",
+                    "risk": "Error",
+                    "first_seen": False,
+                    "failed": True,
+                })
+            else:
+                analysed_by_idx[idx] = (entry, fact, verdict)
+
+    # Rebuild results in original order
     results = []
-    for (entry, fact), verdict in zip(analysed, verdicts):
+    for idx in range(total):
+        item = analysed_by_idx.get(idx)
+        if item is None:
+            continue
+        entry, fact, verdict = item
         if fact.diff_truncated:
-            # Only a prefix of the change was examined, so the score
-            # describes that prefix.  Padding a diff past the cap and
-            # appending the payload would otherwise report as clean.
             verdict = (
                 "Diff exceeded the size cap and was truncated; only part of "
                 f"this change was vetted. {verdict}"
@@ -554,7 +609,6 @@ def _analyze_outdated_batch(
             res["triggered_rules"] = fired
             res["suppressed_rules"] = fact.suppressed_rules
         results.append(res)
-    # Failures last, so an unvetted package is the final thing read.
     results.extend(failures)
     return results
 
@@ -564,6 +618,7 @@ def _analyze_outdated_batch(
 @app.command()
 def inspect(
     package: str = typer.Argument(..., help="Package name"),
+    verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules and score breakdown"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Show a detailed analysis of a single package."""
@@ -574,16 +629,22 @@ def inspect(
 
     fact = analyze_package(package)
     if json_output:
-        typer.echo(json.dumps(_fact_to_dict(fact), indent=2))
+        data = _fact_to_dict(fact)
+        if verbose:
+            data["score_breakdown"] = [
+                {"rule_id": e.rule_id, "severity": e.severity, "weight": e.weight}
+                for e in fact.score_breakdown
+            ]
+        typer.echo(json.dumps(data, indent=2))
         return
 
     if HAS_RICH:
-        _inspect_rich(fact)
+        _inspect_rich(fact, verbose)
     else:
-        _inspect_plain(fact)
+        _inspect_plain(fact, verbose)
 
 
-def _inspect_rich(fact):
+def _inspect_rich(fact, verbose=False):
     """rich-formatted inspection output"""
     con = console()
     risk = risk_level(fact.final_score)
@@ -701,7 +762,7 @@ def _inspect_rich(fact):
                     border_style=RISK_COLORS.get(risk, "white")))
 
 
-def _inspect_plain(fact):
+def _inspect_plain(fact, verbose=False):
     """plain-text inspection output"""
     if fact.first_seen:
         print("[First analysis] No prior history; novelty carries no weight yet.")
@@ -1248,6 +1309,237 @@ def lint_rules_cmd(
 
     if errors:
         raise typer.Exit(code=1)
+
+
+# --- db subcommands ---
+
+
+@db_app.command("check")
+def db_check(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Run integrity check on the database."""
+    ensure_default_configs()
+    init_db()
+    from .db import get_connection
+
+    errors = []
+    with get_connection() as conn:
+        rows = conn.execute("PRAGMA integrity_check").fetchall()
+        for r in rows:
+            if r[0] != "ok":
+                errors.append(r[0])
+
+    if json_output:
+        typer.echo(json.dumps({
+            "status": "ok" if not errors else "corrupt",
+            "errors": errors,
+        }, indent=2))
+        return
+
+    if not errors:
+        _print_colored("Database integrity check passed.", "green")
+    else:
+        for err in errors:
+            _print_colored(err, "red", stderr=True)
+        raise typer.Exit(code=1)
+
+
+@db_app.command("vacuum")
+def db_vacuum(
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Reclaim disk space by rebuilding the database file."""
+    ensure_default_configs()
+    init_db()
+    from .db import get_connection
+
+    if not force and not json_output:
+        typer.confirm("Vacuum the database? This may take a while.", abort=True)
+
+    with get_connection() as conn:
+        before = get_db_path().stat().st_size
+        conn.execute("VACUUM")
+        after = get_db_path().stat().st_size
+
+    if json_output:
+        typer.echo(json.dumps({
+            "status": "ok",
+            "bytes_before": before,
+            "bytes_after": after,
+            "bytes_reclaimed": before - after,
+        }, indent=2))
+        return
+
+    reclaimed = before - after
+    _print_colored(
+        f"Database vacuumed: {_fmt_bytes(before)} -> {_fmt_bytes(after)} "
+        f"({_fmt_bytes(reclaimed)} reclaimed)", "green",
+    )
+
+
+@db_app.command("backup")
+def db_backup(
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output path (default: auto-named)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Create a safe online backup of the database."""
+    ensure_default_configs()
+    init_db()
+    from datetime import datetime
+    from .db import get_connection
+
+    db_path = get_db_path()
+    if not output:
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        output = str(db_path) + f".{ts}.bak"
+
+    with get_connection() as conn:
+        backup_conn = sqlite3.connect(output)
+        try:
+            conn.backup(backup_conn, pages=0)
+        finally:
+            backup_conn.close()
+
+    size = Path(output).stat().st_size
+
+    if json_output:
+        typer.echo(json.dumps({
+            "status": "ok",
+            "path": output,
+            "bytes": size,
+        }, indent=2))
+        return
+
+    _print_colored(f"Database backed up to {output} ({_fmt_bytes(size)})", "green")
+
+
+def _fmt_bytes(n: int) -> str:
+    """Format a byte count as a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024:
+            return f"{n:.1f}{unit}"
+        n /= 1024
+    return f"{n:.1f}TB"
+
+
+# --- list ---
+
+
+@app.command("list")
+def list_cmd(
+    limit: int = typer.Option(0, "--limit", help="Max packages to show (0 = unlimited)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """List all packages tracked in the database with their latest score."""
+    ensure_default_configs()
+    init_db()
+
+    all_pkgs = get_all_packages()
+    if limit:
+        all_pkgs = all_pkgs[:limit]
+
+    if not all_pkgs:
+        if json_output:
+            typer.echo(json.dumps([]))
+        else:
+            _print_colored("No packages tracked yet. Run 'trustsight review' first.", "yellow")
+        return
+
+    rows = []
+    for pkg in all_pkgs:
+        last = get_last_analysis(pkg["id"])
+        rows.append({
+            "name": pkg["name"],
+            "version": pkg["current_version"] or "?",
+            "last_checked": pkg["last_checked"] or "",
+            "score": last["final_score"] if last else None,
+            "risk": risk_level(last["final_score"]) if last else "—",
+            "maintainer": pkg["current_maintainer"] or "",
+        })
+
+    if json_output:
+        typer.echo(json.dumps(rows, indent=2))
+        return
+
+    if HAS_RICH:
+        con = console()
+        table = Table(title=f"Tracked packages ({len(rows)} total)")
+        table.add_column("Package", style="cyan", no_wrap=True)
+        table.add_column("Version")
+        table.add_column("Maintainer", overflow="fold")
+        table.add_column("Last Checked")
+        table.add_column("Score", justify="right")
+        table.add_column("Risk")
+        for r in rows:
+            score = r["score"]
+            score_cell = Text("n/a", style="dim") if score is None else _score_text(score, r["risk"])
+            table.add_row(
+                r["name"],
+                r["version"],
+                r["maintainer"] or "[dim]—[/]",
+                r["last_checked"][:10] if r["last_checked"] else "[dim]—[/]",
+                score_cell,
+                Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
+            )
+        con.print(table)
+    else:
+        print(f"{'Package':<20} {'Version':<15} {'Score':<8} {'Risk':<12} Last Checked")
+        print("-" * 75)
+        for r in rows:
+            score = "n/a" if r["score"] is None else str(r["score"])
+            checked = r["last_checked"][:10] if r["last_checked"] else "—"
+            print(f"{r['name']:<20} {r['version']:<15} {score:<8} {r['risk']:<12} {checked}")
+
+
+# --- status ---
+
+
+@app.command("status")
+def status_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Show database and system health statistics."""
+    ensure_default_configs()
+    init_db()
+
+    all_pkgs = get_all_packages()
+    total_analyses = count_observations()
+    effective_obs = effective_observation_count()
+    seed_obs = seed_observation_count()
+    deps_loaded = dependency_table_populated()
+
+    if json_output:
+        typer.echo(json.dumps({
+            "packages_tracked": len(all_pkgs),
+            "total_analyses": total_analyses,
+            "effective_observations": effective_obs,
+            "seed_observations": seed_obs,
+            "dependency_corpus_loaded": deps_loaded,
+        }, indent=2))
+        return
+
+    if HAS_RICH:
+        con = console()
+        table = Table(title="TrustSight Status")
+        table.add_column("Metric", style="dim")
+        table.add_column("Value", justify="right")
+        table.add_row("Packages tracked", str(len(all_pkgs)))
+        table.add_row("Total analyses", f"{total_analyses:,}")
+        table.add_row("Effective observations", f"{effective_obs:,}")
+        table.add_row("Seed observations", f"{seed_obs:,}")
+        table.add_row(
+            "Dependency corpus",
+            Text("Loaded", style="green") if deps_loaded else Text("Not loaded", style="yellow"),
+        )
+        con.print(table)
+    else:
+        print(f"Packages tracked      : {len(all_pkgs)}")
+        print(f"Total analyses        : {total_analyses}")
+        print(f"Effective observations: {effective_obs}")
+        print(f"Seed observations     : {seed_obs}")
+        print(f"Dependency corpus     : {'Loaded' if deps_loaded else 'Not loaded'}")
 
 
 # --- helpers ---

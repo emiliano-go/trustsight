@@ -1,5 +1,115 @@
 # Changelog
 
+## [0.7.1] - 2026-07-27
+
+### Added
+
+- **Database schema migration for `current_maintainer`.** A migration step
+  (`_migrate` + `_ADDED_COLUMNS`) now safely adds columns that were introduced
+  after the initial schema shipped. Existing databases created before
+  `current_maintainer` existed will have it added on the first run, fixing a
+  crash on upgrade.
+
+- **Concurrent prefetch of AUR repositories.** The batch-review path clones or
+  fetches all package repos in parallel before beginning analysis, so the
+  network latency of 20 sequential fetches no longer dominates the runtime.
+
+- **AUR RPC helpers.** `get_aur_package_info` and `get_aur_latest_versions`
+  batch-query the AUR RPC interface, replacing individual per-package lookups
+  and reducing network round-trips.
+
+- **Drift detection for shipped rules.** `drifted_shipped_rules()` compares the
+  on-disk `rules.toml` against the shipped template, flagging when a rule
+  definition has drifted from the canonical copy.
+
+- **`diff_truncated` field on `PackageFact`.** Marks analyses where the diff
+  was truncated, so the report can indicate the change was only partially
+  examined.
+
+- **`_prefetch` uniqueness invariant.** An assertion guarantees that
+  `_prefetch` receives unique package names, preventing redundant parallel
+  clones.
+
+- **Test fixtures shared via `conftest.py`.** `SHARED_RULES` (R001-R013) and
+  `SHARED_CONFIG` (five top-level keys) are now defined once and imported by
+  `test_analysis.py`, `test_rules.py`, `test_scenarios.py`, and
+  `test_scoring.py`, removing 173 lines of duplication across four test files.
+
+### Fixed
+
+- **IDN homograph false positive.** `has_homograph()` no longer flags
+  single-script labels containing non-ASCII Latin letters or combining marks.
+  Only mixed-script labels are confusables per UTS #39 Highly Restrictive.
+  Legitimate IDNs like `münchen.de` and `café.fr` are no longer reported.
+  The `_latin_with_combining_marks()` helper was removed entirely.
+
+- **PKGBUILD `check()` function.** Now builds a venv with
+  `--system-site-packages`, installs the built wheel, and runs pytest
+  (excluding `test_fetcher.py` and `test_rebaseline.py`). The previous bare
+  `python -m pytest` call failed against an uninstalled source tree.
+
+### Changed
+
+- **Thread-local connection caching.** Database connections are cached per
+  thread and per database path rather than opened per query. The hot paths
+  issue thousands of small reads; opening a connection once instead of per
+  query reduces overhead from ~0.35ms to effectively zero on repeat use.
+
+- **`_is_current` uses HEAD commit time as fallback.** When no marker file
+  exists (clones from earlier versions), the local HEAD commit time is compared
+  against `upstream_mtime`. This eliminates a redundant `git fetch` for every
+  package whose clone is already up to date, cutting the batch-review wall
+  clock from ~2min to ~3s for a 19-package run.
+
+- **`_ensure_init` runs init once per process.** `ensure_default_configs()` and
+  `init_db()` are now called at most once per process via a module-level guard.
+  Previously they ran on every `analyze_package()` call, adding ~100-200ms per
+  package.
+
+- **R066 (`_package_is_new`) capped at 100 commits.** The brand-new-package
+  check previously walked the entire DAG to find the root commit. Packages with
+  more than 100 commits are now skipped (they are definitionally not new),
+  eliminating full-history walks that cost ~30-50s for packages with thousands
+  of commits.
+
+- **Lazy `__version__` loading.** The version string is now loaded via PEP 562
+  `__getattr__` instead of `importlib.metadata.version()` at import time,
+  avoiding a 46ms penalty on every `import trustsight`.
+
+- **Pattern cache in `rules.py`.** Compiled regex patterns are cached across
+  diffs, avoiding repeated `re.compile` calls that dominated the diff-analysis
+  hot path.
+
+- **Typosquat detection uses `top_dependency_pairs()`.** The rank-and-compare
+  loop now fetches name–count pairs in a single query instead of running one
+  query per candidate, fixing a performance regression on large databases.
+
+### Removed
+
+- **Dead code and duplicate patterns.** `parse_srcinfo_with_pkgbase` (uncalled)
+  and several unreachable lines in `srcinfo.py` were removed.
+  `_PINNING_ORDER` was unified in `buckets.py`; `risk_level()` is now the
+  single source of truth across all callers.
+
+- **`.seo-debug/` tracked artifacts.** Documentation JSON files committed by a
+  prior zensical run are removed from the index and gitignored.
+
+### Style
+
+- **Ruff E402 violations resolved.** `log = logging.getLogger(__name__)` was
+  moved below all imports in `analysis.py` and `llm.py`. Exception handlers in
+  `override.py` were narrowed from `except BaseException` to `except Exception`.
+
+### Documentation
+
+- **Docstrings added to all 124 functions** across 19 source files, covering
+  every public and private function including inner closures.
+
+### Build
+
+- **`.gitignore` updated for makepkg artifacts.** `packaging/aur/pkg/`,
+  `packaging/aur/src/`, `*.tar.gz`, and `*.pkg.tar.*` are now ignored.
+
 ## [0.7.0] - 2026-07-26
 
 ### Added

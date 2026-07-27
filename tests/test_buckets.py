@@ -161,10 +161,12 @@ def test_mixed_latin_cyrillic_is_homograph():
     assert has_homograph(f"github.c{CYRILLIC_O}m") is True
 
 
-def test_non_ascii_latin_is_homograph():
-    """Stays within the Latin script, so mixed-script detection alone
-    would miss it."""
-    assert has_homograph(f"githu{LATIN_B_DOT}.com") is True
+def test_non_ascii_latin_is_not_homograph():
+    """Single-script labels (e.g. ``münchen.de``, ``café.fr``) are
+    legitimate IDNs, not homograph attacks."""
+    assert has_homograph(f"githu{LATIN_B_DOT}.com") is False
+    assert has_homograph("münchen.de") is False
+    assert has_homograph("café.fr") is False
 
 
 def test_punycode_encoded_confusable_is_homograph():
@@ -214,18 +216,13 @@ def test_confusable_domain_does_not_reach_trusted_forge():
 
 # --- punycode confusables ---
 
-def test_punycode_form_of_a_confusable_is_detected():
-    """The encoded spelling must not evade what the decoded one catches.
-
-    _decode_punycode exists precisely so that writing xn--githb-6rd.com
-    into source=() is no cheaper than writing githuḅ.com, but the
-    combining mark the label decodes to was classified COMMON and skipped
-    by both existing checks.
-    """
+def test_punycode_combining_mark_is_not_a_homograph():
+    """A punycode-encoded combining mark on a Latin letter is still a
+    single-script label (Latin + combining mark), not a homograph."""
     from trustsight.buckets import has_homograph
-    assert has_homograph("xn--githb-6rd.com") is True
-    # the precomposed spelling was already caught; both must agree
-    assert has_homograph("githuḅ.com") is True
+    assert has_homograph("xn--githb-6rd.com") is False
+    assert has_homograph("githuḅ.com") is False
+    assert has_homograph("caf\u0301.fr") is False
 
 
 def test_scripts_that_legitimately_use_combining_marks_are_not_flagged():

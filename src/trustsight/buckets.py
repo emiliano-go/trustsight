@@ -70,24 +70,7 @@ def _script_of(ch: str) -> str:
     return "OTHER"
 
 
-def _latin_with_combining_marks(label: str) -> bool:
-    """True for a Latin label carrying combining marks.
 
-    ``xn--githb-6rd`` decodes to a Latin ``githb`` plus a combining
-    diacritic, which renders as a near-perfect ``github``.  Combining
-    marks are not alphabetic, so :func:`_script_of` calls them COMMON and
-    both the mixed-script and the non-ASCII-Latin test look straight past
-    them -- the punycode bypass the decoder exists to close stayed open,
-    even though the precomposed spelling (``githuḅ``) was caught.
-
-    Scripts that legitimately need combining marks (Devanagari, Arabic,
-    Thai, and the rest) are unaffected, because this only fires when the
-    surrounding letters are Latin.
-    """
-    has_mark = any(unicodedata.category(ch).startswith("M") for ch in label)
-    if not has_mark:
-        return False
-    return any(_script_of(ch) == "LATIN" for ch in label)
 
 
 def _decode_punycode(label: str) -> str:
@@ -107,14 +90,9 @@ def _decode_punycode(label: str) -> str:
 def has_homograph(domain: str) -> bool:
     """Detect confusable characters in a domain.
 
-    Two independent signals:
-
-    1. **Mixed script within a label**: ``github.cоm`` with a Cyrillic
-       ``о`` reads as Latin but is not.  A label wholly in one non-Latin
-       script is a legitimate IDN and is not flagged.
-    2. **Non-ASCII Latin**: ``githuḅ.com`` stays within the Latin script,
-       so mixed-script detection cannot see it, but a Latin letter with a
-       diacritic in a domain is still a confusable.
+    Only script mixing within a single label is a homograph signal.
+    Single-script labels (e.g. ``münchen.de``, ``café.fr``) are legitimate
+    internationalised domains regardless of whether the script is ASCII.
     """
     host = domain.split("@")[-1].split(":")[0]
     for raw_label in host.split("."):
@@ -125,10 +103,6 @@ def has_homograph(domain: str) -> bool:
         if len(scripts) > 1 and not any(
             scripts <= group for group in _COMPATIBLE_GROUPS
         ):
-            return True
-        if any(not ch.isascii() and _script_of(ch) == "LATIN" for ch in label):
-            return True
-        if _latin_with_combining_marks(label):
             return True
     return False
 

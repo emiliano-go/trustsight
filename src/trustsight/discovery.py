@@ -1,10 +1,12 @@
 import json
+import logging
 import subprocess
 import urllib.parse
 import urllib.request
 from typing import Optional
 
 AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
+log = logging.getLogger(__name__)
 
 _OFFICIAL_REPOS = frozenset({
     "core", "extra", "community", "multilib",
@@ -105,16 +107,59 @@ def _aur_info_url(names: list[str]) -> str:
 
 
 def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
-    """Return the full AUR RPC record for each of *pkg_names*, keyed by name."""
+    """Return the full AUR RPC record for each of *pkg_names*, keyed by name.
+
+    Results are cached in the local database.  Cache TTL is controlled by
+    ``[discovery] cache_ttl_minutes`` in the config (default: 60).
+    """
     if not pkg_names:
         return {}
-    url = _aur_info_url(pkg_names)
+
+    # Check cache for fresh entries
+    from .db import get_db_path, read_aur_cache, write_aur_cache
+    from .config import load_config
+
+    cfg = load_config().get("discovery", {})
+    ttl = cfg.get("cache_ttl_minutes", 60)
+
+    try:
+        cached = read_aur_cache(pkg_names, ttl_minutes=ttl)
+    except Exception:
+        cached = {}
+
+    missed = [n for n in pkg_names if n not in cached]
+    if not missed:
+        return {
+            n: {"Version": v["version"], "LastModified": v.get("last_modified")}
+            for n, v in cached.items()
+        }
+
+    # Query the AUR for packages not in cache
+    url = _aur_info_url(missed)
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
             data = json.load(resp)
-            return {r["Name"]: r for r in data.get("results", [])}
+            results = {r["Name"]: r for r in data.get("results", [])}
     except (urllib.error.URLError, json.JSONDecodeError):
-        return {}
+        log.warning("AUR RPC query failed for %d package(s)", len(missed))
+        results = {}
+
+    # Write fresh results to cache (non-fatal on failure)
+    if results:
+        try:
+            write_aur_cache({
+                name: (r.get("Version", ""), r.get("LastModified"))
+                for name, r in results.items()
+            })
+        except Exception:
+            log.debug("failed to write AUR cache", exc_info=True)
+
+    # Merge cached + fresh results
+    out = {}
+    for name, v in cached.items():
+        out[name] = {"Version": v["version"], "LastModified": v.get("last_modified")}
+    out.update(results)
+    return out
 
 
 def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:
@@ -204,8 +249,14 @@ def get_local_repos_from_pacman_conf() -> list[str]:
     return [repo for repo in all_repos if repo not in _OFFICIAL_REPOS]
 
 
-def find_outdated_from_list(pkgs: list[tuple[str, str]]) -> list[dict]:
-    """Return outdated packages from a (name, version) list by querying the AUR."""
+def find_outdated_from_list(
+    pkgs: list[tuple[str, str]], all_packages: bool = False,
+) -> list[dict]:
+    """Return outdated packages from a (name, version) list by querying the AUR.
+
+    When *all_packages* is true, every package found on the AUR is returned
+    regardless of whether a newer version exists.
+    """
     if not pkgs:
         return []
     names = [name for name, _ in pkgs]
@@ -214,7 +265,9 @@ def find_outdated_from_list(pkgs: list[tuple[str, str]]) -> list[dict]:
     for name, current_version in pkgs:
         record = info.get(name) or {}
         latest_version = record.get("Version")
-        if latest_version and _vercmp(current_version, latest_version) < 0:
+        if not latest_version:
+            continue
+        if all_packages or _vercmp(current_version, latest_version) < 0:
             entry = {
                 "name": name,
                 "current_version": current_version,
@@ -233,9 +286,14 @@ def discover_packages(
     repos: Optional[list[str]] = None,
     include_foreign: bool = False,
     all_repos: bool = False,
+    all_packages: bool = False,
     _warn_func: Optional[callable] = None,
 ) -> list[dict]:
-    """Discover outdated packages across repos and optionally foreign sources."""
+    """Discover packages across repos and optionally foreign sources.
+
+    Returns only outdated packages by default.  When *all_packages* is true,
+    every AUR-resolvable package is included regardless of update status.
+    """
     sources: set[tuple[str, str]] = set()
 
     if all_repos:
@@ -254,4 +312,4 @@ def discover_packages(
         sources.update(get_installed_foreign())
 
     unique_pkgs = list(sources)
-    return find_outdated_from_list(unique_pkgs)
+    return find_outdated_from_list(unique_pkgs, all_packages=all_packages)

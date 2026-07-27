@@ -84,6 +84,10 @@ auto_import = true
 default_repos = []
 include_foreign = false
 all_repos = false
+# Minutes before the AUR RPC response cache expires.  A repeat review
+# within this window reuses cached version data instead of re-querying
+# the AUR server.  Set to 0 to disable caching entirely.
+cache_ttl_minutes = 60
 
 [rules]
 # Run rules marked experimental in rules.toml.  The R039+ set is now

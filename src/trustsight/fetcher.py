@@ -152,15 +152,25 @@ def last_fetch_time(repo: pygit2.Repository) -> Optional[int]:
 def _is_current(repo: pygit2.Repository, upstream_mtime: int) -> bool:
     """True when this clone was fetched after the upstream last changed.
 
-    A clone with no marker -- one made by an earlier version, say -- reads
-    as not current, so the safe path is the default.
+    Falls back to checking the local HEAD commit time so that clones
+    created by an earlier version (which have no marker file) avoid an
+    unnecessary network fetch.
     """
     fetched = last_fetch_time(repo)
-    if fetched is None:
-        return False
+    if fetched is not None:
+        try:
+            if fetched >= int(upstream_mtime):
+                return True
+        except (TypeError, ValueError):
+            pass
+
     try:
-        return fetched >= int(upstream_mtime)
-    except (TypeError, ValueError):
+        head = repo.head
+        if head.is_remote:
+            return False
+        commit = head.peel()
+        return int(commit.commit_time) >= int(upstream_mtime)
+    except (AttributeError, pygit2.GitError, KeyError, TypeError, ValueError):
         return False
 
 

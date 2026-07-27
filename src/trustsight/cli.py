@@ -412,6 +412,7 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
     ``clone_or_fetch`` compares it against the clone's last-fetch marker,
     finds the clone current, and skips fetching the same repository twice.
     """
+    assert len(pkgs) == len({e["name"] for e in pkgs}), "_prefetch requires unique package names"
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from .fetcher import clone_or_fetch, last_fetch_time

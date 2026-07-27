@@ -36,8 +36,10 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--limit` | `int` | `20` | Maximum number of outdated packages to review. Falls back to `limits.default_review_limit` from config if omitted (default: 20). |
+| `--limit` | `int` | `0` | Maximum number of outdated packages to review. `0` means unlimited. |
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
+| `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
+| `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
@@ -93,9 +95,11 @@ trustsight inspect <package>
 |----------|----------|-------------|
 | `package` | Yes | AUR package name to analyse. |
 
-### No flags
+### Flags
 
-This command takes no additional flags.
+| Flag | Description |
+|------|-------------|
+| `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
 
 ### Output
 
@@ -159,6 +163,48 @@ trustsight history <package> [--limit N] [--score-breakdown]
 Table with columns: **Date**, **Old**, **→ New**, **Score**, **Risk**.
 
 If `--score-breakdown` is set, the triggered rules for the latest entry are printed below the table.
+
+---
+
+## trustsight list
+
+List all packages tracked in the database with their latest score.
+
+```
+trustsight list [--limit N]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--limit` | `int` | `0` | Maximum number of packages to show. `0` means unlimited. |
+
+### Output
+
+Table with columns: **Package**, **Version**, **Maintainer**, **Last Checked**, **Score**, **Risk**.
+
+Packages that have never been analysed show `n/a` for score.
+
+---
+
+## trustsight status
+
+Show database and system health statistics.
+
+```
+trustsight status
+```
+
+### Output
+
+| Metric | Description |
+|--------|-------------|
+| Packages tracked | Number of distinct packages in the local database. |
+| Total analyses | Analysis runs recorded across all packages. |
+| Effective observations | Max of real analyses and seed bootstrap (what maturity() actually sees). |
+| Seed observations | Bootstrap count from the novelty seed, or 0 if not imported. |
+| Dependency corpus | Whether the dependency observation table has been populated. |
 
 ---
 
@@ -297,6 +343,32 @@ Import takes a few seconds for the full seed and is additive: existing rows win,
 ### Trust
 
 The seed is derived entirely from public AUR data and is reproducible: re-running the generator against the same mirror produces the same database. It only ever makes novelty signals *quieter*; it cannot lower a rule score, change a severity, or suppress a finding. A tampered seed could at most hide a novelty signal, never fabricate a clean verdict.
+
+---
+
+## trustsight db
+
+Database maintenance commands: integrity check, vacuum, and backup.
+
+```
+trustsight db check
+trustsight db vacuum [--force]
+trustsight db backup [--output PATH]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `check` | Run `PRAGMA integrity_check` on the database. Exits 0 on success, 1 if corruption is detected. |
+| `vacuum` | Reclaim disk space by rebuilding the database file. Prompts for confirmation unless `--force` is passed. |
+| `backup` | Create a safe online backup via `sqlite3.backup()` — no need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. |
+
+### Common flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output JSON. |
 
 ---
 

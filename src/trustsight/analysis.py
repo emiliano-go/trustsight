@@ -804,6 +804,7 @@ def analyze_package(
         suppressed_rules=suppressed_rules,
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
+        temporal_source="git_commit",
         score_breakdown=breakdown,
         final_score=score,
     )
@@ -985,6 +986,7 @@ def _make_fresh_analysis(
         diff_summary=DiffSummary(),
         novelty_context=novelty,
         first_seen=True,
+        temporal_source="git_commit",
         final_score=0,
     )
     insert_analysis(

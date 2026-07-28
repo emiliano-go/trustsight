@@ -13,7 +13,7 @@ def test_analysis_imports():
     from trustsight.tokenizer import tokenize_and_resolve
     from trustsight.rules import apply_rules
     from trustsight.buckets import classify_urls
-    from trustsight.llm import fallback_verdict
+    from trustsight.verdict import fallback_verdict
 
     assert callable(calculate_score)
     assert callable(extract_urls_from_diff)

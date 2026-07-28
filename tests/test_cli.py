@@ -334,7 +334,7 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
         return _fact(name)
 
     monkeypatch.setattr(cli, "analyze_package", fake_analyze)
-    monkeypatch.setattr(cli, "_verdict_for", lambda fact, simple=False: "ok")
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     pkgs = [
         {"name": "alpha", "current_version": "1.0", "latest_version": "1.1",
@@ -361,7 +361,7 @@ def test_one_bad_package_does_not_end_the_run(monkeypatch):
     from trustsight import cli
 
     monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli, "_verdict_for", lambda fact, simple=False: "ok")
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "broken":
@@ -380,41 +380,6 @@ def test_one_bad_package_does_not_end_the_run(monkeypatch):
     assert [r["package"] for r in results if r.get("failed")] == ["broken"]
 
 
-def test_verdicts_keep_input_order(monkeypatch):
-    """Verdicts are produced concurrently but must line up with their facts."""
-    from trustsight import cli
-
-    facts = [_fact(f"pkg{i}", score=10) for i in range(8)]
-    monkeypatch.setattr(
-        "trustsight.llm.generate_verdict", lambda fact: f"verdict-{fact.package_name}"
-    )
-    verdicts = cli._verdicts_for(facts)
-    assert verdicts == [f"verdict-pkg{i}" for i in range(8)]
-
-
-def test_verdict_failure_falls_back_instead_of_raising(monkeypatch):
-    from trustsight import cli
-
-    def explode(fact):
-        raise RuntimeError("model unreachable")
-
-    monkeypatch.setattr("trustsight.llm.generate_verdict", explode)
-    monkeypatch.setattr("trustsight.llm.fallback_verdict", lambda fact: "offline")
-    assert cli._verdicts_for([_fact("pkg", score=10)]) == ["offline"]
-
-
-def test_llm_failure_on_zero_score_falls_back_gracefully(monkeypatch):
-    """A zero score still tries the LLM; on failure it falls back."""
-    from trustsight import cli
-
-    def explode(fact):
-        raise RuntimeError("model unreachable")
-
-    monkeypatch.setattr("trustsight.llm.generate_verdict", explode)
-    monkeypatch.setattr("trustsight.llm.fallback_verdict", lambda fact: "offline")
-    assert cli._verdicts_for([_fact("pkg", score=0)]) == ["offline"]
-
-
 def test_a_failed_package_is_reported_not_dropped(monkeypatch):
     """A package that cannot be analysed must still appear in the review.
 
@@ -425,7 +390,7 @@ def test_a_failed_package_is_reported_not_dropped(monkeypatch):
     from trustsight import cli
 
     monkeypatch.setattr(cli, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli, "_verdict_for", lambda fact, simple=False: "ok")
+    monkeypatch.setattr(cli, "_verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "evil":
@@ -455,7 +420,7 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
     monkeypatch.setattr(
         cli, "_analyze_outdated_batch",
-        lambda pkgs, cb=None, verbose=False, simple=False: [
+        lambda pkgs, cb=None, verbose=False: [
             {"package": "ok", "score": 5, "risk": "Low", "verdict": "fine",
              "first_seen": False},
             {"package": "bad", "score": None, "risk": "Error", "failed": True,

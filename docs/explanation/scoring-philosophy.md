@@ -90,7 +90,7 @@ FATAL rules (R012 prompt injection, R013 unicode bidi) are fundamentally differe
 
 Prompt injection and unicode bidi overrides are attacks on the reviewer, not on the build process. They attempt to hide what the PKGBUILD does. When these fire, the score hard-stops at 100 because a package that tries to deceive the reviewer cannot be trusted regardless of other signals. The 0 weight means they contribute nothing to the additive score; the hard stop is their entire effect.
 
-Low recall is acceptable for these rules. R012 has 17% recall on the benchmark corpus. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded. The primary defence against prompt injection is the verdict-integrity assertions in the LLM translation stage, not the rule itself.
+Low recall is acceptable for these rules. R012 has 17% recall on the benchmark corpus. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded.
 
 ### R004 and R005: why checksum rules are hard-coded
 

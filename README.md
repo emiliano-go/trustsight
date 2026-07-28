@@ -32,17 +32,13 @@ git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight/packaging/aur
 makepkg -si
 
-# 2. (Optional) Configure an LLM for plain-English verdicts
-# Run the interactive wizard — it tests the connection before saving:
-trustsight config setup
-
-# 3. Scan your outdated AUR packages
+# 2. Scan your outdated AUR packages
 trustsight review
 ```
 
 Requires **Python 3.10+** and **Arch Linux** (the tool reads `pacman -Qm` to discover AUR packages).
 
-The LLM is optional. The score is always deterministic and calculated locally; the LLM only translates the breakdown into a sentence. Without one, you get template verdicts like `"Version bump. Checksum disabled. Signals: R004 (HIGH)."`
+The score is always deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English — for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
 
 > **Not published to the AUR yet.** Build from the PKGBUILD in this repository.
 > Also installable via `pip install trustsight`.
@@ -120,11 +116,10 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 | Command | What it does |
 |---|---|
-| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos` flags. |
+| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos`, `--verbose` flags. |
 | [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
 | [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package. |
-| [`trustsight config setup`](docs/reference/cli.md) | Interactive wizard to configure an LLM provider. |
-| [`trustsight config set`](docs/reference/cli.md) | Set individual config keys (`api_key`, `base_url`, `model`, `timeout`, `provider`). |
+| [`trustsight config set`](docs/reference/cli.md) | Set individual config keys. |
 | [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled URL database for novelty detection. Runs automatically on first review. |
 | [`trustsight list`](docs/reference/cli.md) | List all packages tracked in the database. |
 | [`trustsight status`](docs/reference/cli.md) | Show database and system health statistics. |
@@ -146,7 +141,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 
 Signals come from 13 detection rules (R001-R013), 21 expanded rules (R039-R059) calibrated against a 3,322-diff corpus of benign AUR updates, and 7 code-structure rules (C001-C007).
 
-The LLM is entirely optional. It receives the final score and breakdown and translates them into English. It cannot change the score, and its output is checked against integrity assertions before being displayed.
+Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 
 See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 

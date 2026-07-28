@@ -41,7 +41,7 @@ The inspect command shows the raw diff summary, every rule that fired, and the r
 
 ## The scoring model in brief
 
-TrustSight scores are deterministic; the same inputs always produce the same score. The LLM is optional and only affects the verdict text, never the score. See the [scoring philosophy](../explanation/scoring-philosophy.md) for details.
+TrustSight scores are deterministic; the same inputs always produce the same score. See the [scoring philosophy](../explanation/scoring-philosophy.md) for details.
 
 The final score is the weighted sum of all triggered rules across four [evidence tiers](../reference/evidence-tiers.md):
 

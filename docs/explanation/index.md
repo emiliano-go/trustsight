@@ -116,39 +116,20 @@ The INCONCLUSIVE logic checks whether all contributing signals are Tier C (novel
 
 ### 5. Translate
 
-The LLM receives the score, evidence breakdown, and PKGBUILD context and produces a two-sentence English explanation. The key architectural property: **the LLM receives the score; it does not compute it, and it cannot change it.**
-
-The separation of scoring from explanation is load-bearing:
-
-- **Reproducibility and falsifiability**: two reviewers running the same package get the same score. Policy can gate on it. A CI pipeline can reject a PR based on the numeric score without ever calling an LLM.
-- **No prompt-injection surface for the score**: an injected instruction in the PKGBUILD or verdict prompt cannot reach the scoring step. The score is already calculated before the LLM is called.
-- **Deterministic auditing**: the numeric score is auditable, falsifiable, and permanent. Verdict text is ephemeral explanation.
-
-Before the LLM verdict is displayed, it passes through verdict-integrity assertions:
-
-| Check | What it catches |
-|-------|-----------------|
-| Minimum length | Empty or truncated responses |
-| No score leakage | The numeric score must not appear in the verdict text. Prevents naive score extraction and embedding |
-| FATAL content requirement | If FATAL rules fired, the verdict must mention them. Prevents downplaying a critical finding |
-| Alarmist word suppression | Low-score packages (10 or below) must not be called "malicious" or "dangerous" |
-
-If any assertion fails, the LLM output is discarded and a fallback template is used. The score and evidence record are preserved regardless.
-
-The LLM is entirely optional. The score, evidence breakdown, and verdict classification are all computed before the LLM is called. A user who runs with `llm.enabled = false` or without a configured provider sees the same score and the same evidence record; only the English translation is missing.
+The score, evidence breakdown, and verification metadata are rendered into a structured report. All output is deterministic and generated locally from the computed data.
 
 ## Key numbers
 
 - **689 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
 - **CRITICAL p5 = 40**, **benign p95 = 25**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 16 of 21 fire on zero benign diffs.
-- **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire; primary defence is verdict assertions).
+- **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).
 
 ## Start here
 
 | Page | What it covers |
 |------|----------------|
-| [Trust Model](trust-model.md) | Why deterministic core + LLM-as-translator, not LLM-as-judge; verdict integrity |
+| [Trust Model](trust-model.md) | Why the score is deterministic and reproducible; the trust model |
 | [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights |
 | [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |

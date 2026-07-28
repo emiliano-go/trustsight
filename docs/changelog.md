@@ -1,13 +1,33 @@
 # Changelog
 
-## Unreleased
+## [0.9.0] - 2026-07-28
 
 ### Removed
 
-- **`watch` command.** Removed in favour of running `trustsight baseline
-  build` via cron. The `baseline build` command already handles incremental
-  updates (diff + process changed) when a prior metadata snapshot exists.
-  Use `--json` for machine-parseable cron output.
+- **LLM integration.** `src/trustsight/llm.py` deleted; verdicts are now
+  entirely deterministic using rule-specific templates in `verdict.py`.
+  `openai>=1.0` and `[project.optional-dependencies] ollama` removed from
+  `pyproject.toml`. The `--simple` flag on `review`/`inspect`, the `config
+  setup` command, the `[llm]` config section, and the `TRUSTSIGHT_API_KEY` /
+  `TRUSTSIGHT_BASE_URL` environment variables are all removed.
+
+### Changed
+
+- **Verdicts now deterministic.** Each rule description includes its rule ID
+  in brackets — e.g. `"maintainer changed to 'bob' [R071]"`. The
+  `fallback_verdict()` function renders from a `_TEMPLATES` registry keyed by
+  `rule_id`, falling back to `entry.reason` if no template exists.
+
+- **FATAL verdict punctuation.** The second sentence now begins with a capital
+  letter for readability.
+
+- **Packaging.** LLM optdepends (`python-openai`, `ollama`) removed from
+  `packaging/aur/PKGBUILD` and `.SRCINFO`.
+
+### Fixed
+
+- **All 12+ documentation files** swept of LLM references. `--verbose` added
+  to the commands table in `README.md`.
 
 ## [0.8.0] - 2026-07-27
 

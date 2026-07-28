@@ -48,8 +48,8 @@ not about the tool.
 
 ## Dependency notes
 
-`python-pygit2` and `python-rich` are in `extra`. `python-tldextract` and
-`python-openai` come from the AUR, so this package pulls AUR dependencies:
+`python-pygit2` and `python-rich` are in `extra`. `python-tldextract`
+comes from the AUR, so this package pulls an AUR dependency:
 acceptable for an AUR package, but worth stating since it affects install with
 plain `makepkg`.
 

@@ -33,21 +33,6 @@ def test_load_config_creates_default(tmp_path, monkeypatch):
     assert config["novelty_weights"]["maintainer_first_in_package"] == 15
 
 
-def test_load_config_llm_defaults(tmp_path, monkeypatch):
-    cfg_dir = tmp_path / ".config" / "trustsight"
-    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
-    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path / ".local" / "share" / "trustsight")
-    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache" / "trustsight")
-
-    config = load_config()
-    assert config["llm"]["provider"] == "openai"
-    assert config["llm"]["enabled"] is True
-    assert config["llm"]["max_tokens"] == 1024
-    assert "openai" in config["llm"]
-    assert "api_key" in config["llm"]["openai"]
-    assert "base_url" in config["llm"]["openai"]
-
-
 def test_load_config_bucket_weights(tmp_path, monkeypatch):
     cfg_dir = tmp_path / ".config" / "trustsight"
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
@@ -295,14 +280,14 @@ def test_load_toml_hands_out_independent_copies(tmp_path, monkeypatch):
     from trustsight.config import load_toml
 
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
-    (tmp_path / "config.toml").write_text("[llm]\nenabled = true\n")
+    (tmp_path / "config.toml").write_text("[seed]\nauto_import = true\n")
 
     first = load_toml("config.toml")
-    first["llm"]["enabled"] = False
+    first["seed"]["auto_import"] = False
     first["injected"] = True
 
     second = load_toml("config.toml")
-    assert second["llm"]["enabled"] is True
+    assert second["seed"]["auto_import"] is True
     assert "injected" not in second
 
 

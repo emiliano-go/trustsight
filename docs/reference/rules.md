@@ -190,14 +190,13 @@ Each rule supports these fields:
 - **Scope:** `["function_body"]` only
 - **Description:** Same rationale as R010 but for `wget`. Separate rule per tool.
 
-### R012: LLM Prompt Injection {#r012}
+### R012: Prompt Injection Detection {#r012}
 
 - **Target:** `resolved`
 - **Severity:** FATAL (hard-stop at 100, weight 0)
 - **Category:** `injection`
 - **Pattern:** `ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)`
-- **Description:** Detects prompt-injection phrases in resolved strings. This is a **tripwire rule**: recall is 17% on the benchmark corpus. When it fires, the package is almost certainly malicious. When it does not, nothing can be concluded. Score hard-stops at 100 regardless of other signals.
-- **Note:** The primary defense against prompt injection is the verdict-integrity assertions in the LLM translation stage, not this rule. Low recall is intentional and acceptable.
+- **Description:** Detects "ignore previous instructions" injection phrases in resolved strings. This is a **tripwire rule**: recall is 17% on the benchmark corpus. When it fires, the package is almost certainly malicious. When it does not, nothing can be concluded. Score hard-stops at 100 regardless of other signals.
 
 ### R013: Unicode Bidi Override {#r013}
 
@@ -633,13 +632,13 @@ dropped, environment variables that subvert the compiler.
 
 An `.install` scriptlet runs code **as root** at install time. R068 is pure
 context - "this package has a root-time hook" - not an accusation. It is the
-metadata a human or the LLM translator wants when weighing other signals.
+metadata a human wants when weighing other signals.
 
 **Origin:** mirrors pnpm's `allowBuilds`/`strictDepBuilds` - every package
 manager that distinguishes "declares a privileged post-install step" from
 "does not" treats that distinction as primary metadata. pnpm blocks all build
 scripts by default; R068 is the review-side equivalent - flagging `.install`
-hooks so a human (or the LLM translator) can weigh them.
+hooks so a human can weigh them.
 
 **Overlap guard:** R007 already fires on *install added*. R068 fires on
 *install present* (existing or added). If R007 fires, R068 is redundant for
@@ -758,7 +757,7 @@ co-occurrence is more suspicious than the sum of its parts.
 the three categories already scored individually via their own rules. Stacking
 extra points on top would inflate the benign p95, exactly the inflation the
 accuracy work eliminated. R072 therefore carries weight 0: it is a
-**co-occurrence annotation** surfaced to the report and the LLM translator.
+**co-occurrence annotation** surfaced to the report.
 The pattern is the signal; the points are already there.
 
 **Origin:** Socket.dev's capability profiling - every package is annotated

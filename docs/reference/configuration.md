@@ -4,7 +4,7 @@
 
 | Path | Purpose |
 |------|---------|
-| `~/.config/trustsight/config.toml` | Main configuration (weights, LLM, limits). |
+| `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
 | `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013). |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
@@ -77,31 +77,6 @@ Subtractions for source pinning levels. Only the weakest (worst) pinning level a
 
 Pinning classification via `classify_pinning_level()` in `src/trustsight/buckets.py`.
 
-### `[llm]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `provider` | string | `"openai"` | LLM provider: `"openai"` or `"ollama"`. |
-| `model` | string | `"gpt-4o-mini"` | Model name passed to the OpenAI-compatible API. |
-| `enabled` | bool | `true` | Set to `false` to skip LLM verdict generation entirely (always uses fallback template). |
-| `max_tokens` | int | `1024` | Maximum tokens in the LLM response. |
-| `temperature` | float | `0.3` | Sampling temperature. |
-| `top_p` | float | `1` | Nucleus sampling parameter. |
-| `seed` | int | `42` | Random seed for deterministic LLM output (provider-dependent). |
-
-#### `[llm.openai]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `api_key` | string | `""` | OpenAI API key. Can also be set via `TRUSTSIGHT_API_KEY` environment variable (takes precedence). |
-| `base_url` | string | `"https://api.openai.com/v1"` | Base URL for the OpenAI-compatible API. Can also be set via `TRUSTSIGHT_BASE_URL` environment variable (takes precedence). |
-
-#### `[llm.ollama]`
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `url` | string | `"http://localhost:11434/v1"` | Ollama server URL. |
-
 ### `[rules]`
 
 | Key | Type | Default | Description |
@@ -139,7 +114,7 @@ A config written before this section existed still gets these defaults: `load_co
     These keys are written to the default config but no code reads them.
     Setting them has no effect.
 
-Deep analysis mode : gates LLM-assisted analysis for scores above threshold.
+Deep analysis mode: reserved.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -151,7 +126,6 @@ Deep analysis mode : gates LLM-assisted analysis for scores above threshold.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_context_lines` | int | `3` | Number of context lines in git diffs passed to `pygit2.Diff`. |
-| `max_diff_chars_for_llm` | int | `2000` | Maximum characters of the prompt sent to the LLM. Truncated from the start. |
 
 ### `[discovery]`
 
@@ -170,17 +144,6 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `default_review_limit` | int | `20` | Default `--limit` for `trustsight review` when not explicitly provided. |
-
----
-
-## Environment variables
-
-| Variable | Overrides | Description |
-|----------|-----------|-------------|
-| `TRUSTSIGHT_API_KEY` | `llm.openai.api_key` | API key for OpenAI-compatible LLM provider. Takes precedence over the config file value. |
-| `TRUSTSIGHT_BASE_URL` | `llm.openai.base_url` / `llm.ollama.url` | Base URL for the LLM API. Takes precedence over the config file value. |
-
-Read at `src/trustsight/llm.py` and `src/trustsight/llm.py`.
 
 ---
 

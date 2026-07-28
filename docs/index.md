@@ -19,7 +19,7 @@ Ready to get started? Head over to the [Getting Started](getting-started/) guide
 
 ## How scoring works
 
-TrustSight computes a deterministic score from 0 to 100 for every AUR package update. The score is calculated entirely in Python from structured data: rule firings, URL classification, novelty tracking, and verification metadata. The LLM is optional and only translates the already-computed score into English; it cannot change it.
+TrustSight computes a deterministic score from 0 to 100 for every AUR package update. The score is calculated entirely in Python from structured data: rule firings, URL classification, novelty tracking, and verification metadata.
 
 The scoring system is organized into four evidence tiers:
 
@@ -48,7 +48,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 | Page | What it covers |
 |------|----------------|
-| [Installation](getting-started/installation.md) | Install via pip, AUR, or from source. Configure an LLM provider for English verdicts. |
+| [Installation](getting-started/installation.md) | Install via pip, AUR, or from source. |
 | [Quickstart](getting-started/quickstart.md) | Run your first review, read the output table, understand the verdicts. |
 | [Reading a Report](getting-started/reading-a-report.md) | Deep dive into score breakdown, evidence tiers, rule firings, and novelty context. |
 
@@ -57,7 +57,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | Page | What it covers |
 |------|----------------|
 | [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyze, score, classify, translate. |
-| [Trust Model](explanation/trust-model.md) | Why deterministic core plus LLM-as-translator, verdict integrity assertions. |
+| [Trust Model](explanation/trust-model.md) | Why the score is deterministic and reproducible. |
 | [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights, rule design decisions. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |

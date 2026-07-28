@@ -15,7 +15,7 @@ except ModuleNotFoundError:
 from tests.conftest import SHARED_CONFIG, SHARED_RULES
 from trustsight.buckets import classify_urls
 from trustsight.differ import extract_urls_from_diff
-from trustsight.llm import fallback_verdict
+from trustsight.verdict import fallback_verdict
 from trustsight.rules import apply_rules, get_raw_diff_lines
 from trustsight.schema import DiffSummary, NoveltyContext, PackageFact
 from trustsight.scoring import calculate_score
@@ -400,7 +400,7 @@ def test_fallback_verdict_does_not_claim_a_flagged_package_is_clean():
     """The fallback is shown whenever the LLM is off or suppressed, so it
     must never end 'No suspicious patterns detected' on a package that
     fired a CRITICAL rule."""
-    from trustsight.llm import fallback_verdict
+    from trustsight.verdict import fallback_verdict
     from trustsight.schema import PackageFact, ScoreEntry
 
     fact = PackageFact(package_name="p", final_score=100)
@@ -410,11 +410,11 @@ def test_fallback_verdict_does_not_claim_a_flagged_package_is_clean():
     ]
     verdict = fallback_verdict(fact)
     assert "No suspicious patterns detected" not in verdict
-    assert "R001" in verdict and "CRITICAL" in verdict
+    assert "curl | bash" in verdict
 
 
 def test_fallback_verdict_reports_fatal_distinctly():
-    from trustsight.llm import fallback_verdict
+    from trustsight.verdict import fallback_verdict
     from trustsight.schema import PackageFact, ScoreEntry
 
     fact = PackageFact(package_name="p", final_score=100)
@@ -422,11 +422,11 @@ def test_fallback_verdict_reports_fatal_distinctly():
         ScoreEntry(rule_id="R013", severity="FATAL", weight=0, reason="bidi override"),
     ]
     verdict = fallback_verdict(fact)
-    assert "R013" in verdict and "deceive" in verdict.lower()
+    assert "bidi override" in verdict and "deceive" in verdict.lower()
 
 
 def test_fallback_verdict_on_a_clean_package():
-    from trustsight.llm import fallback_verdict
+    from trustsight.verdict import fallback_verdict
     from trustsight.schema import PackageFact, ScoreEntry
 
     fact = PackageFact(package_name="p", final_score=0)

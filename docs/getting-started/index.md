@@ -8,7 +8,7 @@ The fastest path from zero to your first `trustsight review`. Follow these pages
 
 -   [**Installation**](installation.md)
 
-    Install TrustSight via pip, AUR, or from source. Configure an LLM provider if you want English verdict translations.
+    Install TrustSight via pip, AUR, or from source.
 
 -   [**Quickstart**](quickstart.md)
 

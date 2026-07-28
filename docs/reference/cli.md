@@ -29,7 +29,7 @@ The help output also documents `trustsight config show`, `trustsight config setu
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose]
 ```
 
 ### Flags
@@ -40,7 +40,6 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos]
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
 | `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
-| `--simple` | flag | `false` | Skip the LLM verdict; use the deterministic fallback instead. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
@@ -101,7 +100,6 @@ trustsight inspect <package>
 | Flag | Description |
 |------|-------------|
 | `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
-| `--simple` | Skip the LLM verdict; use the deterministic fallback instead. |
 
 ### Output
 
@@ -226,8 +224,7 @@ trustsight config sync-rules [--update]
 | Subcommand | Description |
 |------------|-------------|
 | `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays LLM provider, model, API key (masked), base URL, seed auto-import status, and scoring weights. |
-| `setup` | Interactive wizard to configure the LLM provider. Walks through provider choice, endpoint, credentials, model selection, and optionally tests the connection. |
-| `set <key> <value>` | Set a configuration value. Supported keys: `api_key`, `base_url`, `model`, `timeout`, `provider`. Example: `trustsight config set model gpt-4o-mini`. |
+| `set <key> <value>` | Set a configuration value. Example: `trustsight config set seed.auto_import false`. |
 | `sync-rules` | Add rules that ship with this version but are absent from your `rules.toml`. |
 
 ### `sync-rules`
@@ -248,13 +245,6 @@ has the file.
 Adding is always safe and happens by default. Replacing is not, which is why it
 is opt-in and limited to rules you demonstrably have not customised.
 `trustsight lint-rules` reports both conditions.
-
-### Supported keys for `set`
-
-| Key | Target config path |
-|-----|-------------------|
-| `api_key` | `llm.openai.api_key` |
-| `base_url` | `llm.openai.base_url` |
 
 ### Config file location
 

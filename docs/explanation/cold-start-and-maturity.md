@@ -91,7 +91,7 @@ Maintainer tracking is per-package: a maintainer who maintains 100 packages will
 
 ## What the user sees
 
-On first run, the verdict includes the notice: *"novelty inactive"*. First-run scores are computed from structural signals (A) and priors (B) only. History signals (C) contribute nothing until the corpus matures.
+On first run, the report includes the notice: *"novelty inactive"*. First-run scores are computed from structural signals (A) and priors (B) only. History signals (C) contribute nothing until the corpus matures.
 
 This means first-run scores are conservative; they catch structural threats (curl|bash, homograph domains) but will not flag a package solely because it has never been seen before. As the corpus accumulates observations, novelty signals phase in automatically.
 

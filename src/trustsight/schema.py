@@ -51,6 +51,7 @@ class ScoreEntry:
     severity: str = ""
     weight: int = 0
     reason: str = ""
+    params: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -131,6 +132,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "severity": e.severity,
                 "weight": e.weight,
                 "reason": e.reason,
+                "params": e.params,
             }
             for e in fact.score_breakdown
         ],

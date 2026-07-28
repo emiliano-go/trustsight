@@ -1,7 +1,7 @@
 # Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
 
 pkgname=trustsight
-pkgver=0.8.0
+pkgver=0.9.0
 pkgrel=1
 pkgdesc='A CLI tool to vet AUR package updates before install'
 arch=('any')
@@ -21,13 +21,10 @@ makedepends=(
   'python-hatchling'
   'python-pytest'
 )
-optdepends=(
-  'python-openai: LLM-powered verdict generation via OpenAI-compatible API'
-  'ollama: local LLM verdict generation via Ollama'
-)
+optdepends=()
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 
-sha256sums=('3a9b9c75a538290ed206eb77c15a1f7381f6c15b636c2d9df0fd089b46eddae1')
+sha256sums=('0000000000000000000000000000000000000000000000000000000000000000')
 
 build() {
   cd "$pkgname-$pkgver"

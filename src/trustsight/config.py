@@ -36,35 +36,12 @@ url_first_in_package = 5
 url_first_globally = 10
 maintainer_first_in_package = 15
 
-[llm]
-provider = "openai"
-model = "gpt-4o-mini"
-enabled = true
-max_tokens = 1024
-temperature = 0.3
-top_p = 1
-seed = 42
-# Seconds to wait for a verdict before falling back to the offline one.
-# The SDK default is 600s, long enough for one unreachable endpoint to
-# stall an entire review.  Keep this well above the model's normal
-# latency: it is a ceiling on a hung request, not a speed limit.
-timeout = 60
-max_retries = 1
-
-[llm.openai]
-api_key = ""
-base_url = "https://api.openai.com/v1"
-
-[llm.ollama]
-url = "http://localhost:11434/v1"
-
 [deep]
 enabled = false
 threshold = 80
 
 [diff]
 max_context_lines = 3
-max_diff_chars_for_llm = 2000
 max_diff_bytes = 5242880
 
 [limits]

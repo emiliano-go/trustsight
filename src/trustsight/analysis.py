@@ -243,6 +243,7 @@ def _recent_update(repo, head_commit):
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"updated {int(hours_ago)}h ago (< 72h)",
+                "params": {"detail": f"updated {int(hours_ago)}h ago (< 72h)"},
             }
     except (AttributeError, pygit2.GitError):
         pass
@@ -273,6 +274,7 @@ def _package_is_new(repo, head_commit, pkg_name=None):
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"first AUR commit {int(root_age)} days ago (< 30)",
+                "params": {"detail": f"first AUR commit {int(root_age)} days ago (< 30)"},
             }
     except (AttributeError, pygit2.GitError):
         pass
@@ -296,6 +298,7 @@ def _stale_revival(repo, old_commit, head_commit):
                 "severity": "MEDIUM",
                 "category": "temporal",
                 "match": f"dormant {int(gap_days)} days, now has a new update (> 1 year)",
+                "params": {"detail": f"dormant {int(gap_days)} days, now has a new update (> 1 year)"},
             }
     except (AttributeError, pygit2.GitError):
         pass
@@ -332,12 +335,15 @@ def _structural_findings(
     source_buckets = source_buckets or {}
     findings: list[dict] = []
 
-    def add(rule_id: str, name: str, severity: str, category: str, match: str) -> None:
+    def add(rule_id: str, name: str, severity: str, category: str, match: str, **extra) -> None:
         """append a finding to the accumulator"""
-        findings.append({
+        finding = {
             "rule_id": rule_id, "name": name, "severity": severity,
             "category": category, "match": match,
-        })
+        }
+        if extra:
+            finding["params"] = extra
+        findings.append(finding)
 
     cs_behavior = source_changes.checksum_behavior
     added = source_changes.added_urls
@@ -346,8 +352,10 @@ def _structural_findings(
 
     if cs_behavior == "changed_from_sha256_to_skip":
         skip_reason = is_skip_justified(diff_text)
+        suffix = f" ({skip_reason})" if skip_reason else ""
         add("R004", "Checksum Disabled", "INFO" if skip_reason else "HIGH", "integrity",
-            f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP")
+            f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP",
+            skip_suffix=suffix)
     elif cs_behavior == "checksum_array_emptied":
         add("R005", "Checksum Emptied", "HIGH", "integrity", cs_behavior)
 
@@ -362,7 +370,8 @@ def _structural_findings(
 
     if removed and added and not pkgver_changed and set(removed) != set(added):
         add("C003", "Source URL Changed Without Version Bump", "INFO", "integrity",
-            f"URLs changed: {removed} -> {added}")
+            f"URLs changed: {removed} -> {added}",
+            added=str(added), removed=str(removed))
 
     # C004: the declaration is gone entirely, leaving nothing to verify.
     if detect_checksum_removed(diff_text) and set(removed) == set(added):
@@ -374,8 +383,10 @@ def _structural_findings(
     # GitHub release do not fire on every update.
     for url in added:
         if _BINARY_ARTIFACT_RE.search(url) and source_buckets.get(url) not in _TRUSTED_BUCKETS:
+            bucket = source_buckets.get(url, "unknown")
             add("C005", "Binary Artifact From Untrusted Source", "MEDIUM", "source",
-                f"binary artifact from {source_buckets.get(url, 'unknown')} bucket: {url}")
+                f"binary artifact from {bucket} bucket: {url}",
+                url=url, bucket=bucket)
             break
 
     # C006: a new maintainer bringing new domains with them.  Either alone
@@ -385,7 +396,8 @@ def _structural_findings(
         new_domains = {_url_domain(u) for u in added} - old_domains
         if new_domains:
             add("C006", "Maintainer Change With New Source Domain", "HIGH", "source",
-                f"maintainer changed and new domain(s) appeared: {sorted(new_domains)}")
+                f"maintainer changed and new domain(s) appeared: {sorted(new_domains)}",
+                new_domains=", ".join(sorted(new_domains)))
 
     # C007: command substitution in the source array runs at parse time.
     if source_array_has_command_substitution(diff_text):
@@ -416,7 +428,8 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
         if magnitude >= _DEP_EXPANSION_GATE:
             novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
             add("R075", "Dependency-Set Expansion", "MEDIUM", "dependency",
-                f"diff adds {len(novel)} novel/rare deps: {novel}")
+                f"diff adds {len(novel)} novel/rare deps: {novel}",
+                n_novel=len(novel), novel_names=", ".join(novel))
 
     wanted = {r for r in ("D001", "D002", "D003", "D004")
               if _experimental_enabled(config, r)}
@@ -436,16 +449,19 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
                     impersonated = typosquat_target(name, candidates)
                 if impersonated:
                     add("D002", "Typosquatted Dependency", "HIGH", "dependency",
-                        f"{field} '{name}' resembles '{impersonated}'")
+                        f"{field} '{name}' resembles '{impersonated}'",
+                        field=field, dep_name=name, impersonated=impersonated)
                 elif "D001" in wanted:
                     add("D001", "Novel Dependency Added", "HIGH", "dependency",
-                        f"{field} '{name}' has never been seen in the AUR")
+                        f"{field} '{name}' has never been seen in the AUR",
+                        field=field, dep_name=name)
 
     if "D003" in wanted:
         new_network = sorted(added_deps.get("makedepends", set()) & _NETWORK_TOOLS)
         if new_network:
             add("D003", "New Network-Using Makedepends", "MEDIUM", "dependency",
-                f"build can now reach the network via {new_network}")
+                f"build can now reach the network via {new_network}",
+                new_network=", ".join(new_network))
 
     if "D004" in wanted:
         for field in ("provides", "replaces"):
@@ -455,7 +471,8 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
                 if is_established_package(name):
                     add("D004", "Dependency Hijack Via Provides", "HIGH", "dependency",
                         f"{field} '{name}', an established package unrelated to "
-                        f"'{package_name}'")
+                        f"'{package_name}'",
+                        field=field, dep_name=name)
                     return
 
 
@@ -481,10 +498,12 @@ def _build_findings(diff_text, config, add) -> None:
             med_found = True
     if high_found:
         add("R070", "Build Environment Subversion", "HIGH", "build",
-            "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
+            "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function",
+            detail="LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
     elif med_found:
         add("R070", "Build Environment Subversion", "MEDIUM", "build",
-            "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
+            "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function",
+            detail="CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
 
     wanted = {r for r in ("R060", "R061", "R062", "R063", "R064")
               if _experimental_enabled(config, r)}
@@ -505,7 +524,8 @@ def _build_findings(diff_text, config, add) -> None:
         # leaves 11.6%), so it carries weight 0 and serves as context in
         # the report rather than as a scoring signal.
         add("R060", "Critical Build Function Modified", "INFO", "build",
-            f"diff modifies {', '.join(f'{f}()' for f in touched)}")
+            f"diff modifies {', '.join(f'{f}()' for f in touched)}",
+            touched=", ".join(touched))
 
     if wants_061:
         declared = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
@@ -516,7 +536,8 @@ def _build_findings(diff_text, config, add) -> None:
                 url = match.group(1)
                 if normalize_url(url) not in declared:
                     add("R061", "Hidden Network Fetch In Build", "HIGH", "network",
-                        f"{enclosing[i]}() downloads {url}, which is not in source=()")
+                        f"{enclosing[i]}() downloads {url}, which is not in source=()",
+                        position=enclosing[i], url=url)
                     break
             else:
                 continue
@@ -534,7 +555,8 @@ def _build_findings(diff_text, config, add) -> None:
             body = _strip_comment(line)
             if _NETWORK_FETCH_RE.search(body) or _HOOK_EXEC_RE.search(body):
                 add("R062", "Install Hook Fetches Or Executes", "HIGH", "installer",
-                    f"{enclosing[i]}() runs as root and contains: {body.strip()[:80]}")
+                    f"{enclosing[i]}() runs as root and contains: {body.strip()[:80]}",
+                    position=enclosing[i], body=body.strip()[:80])
                 break
 
     if "R063" in wanted:
@@ -543,8 +565,10 @@ def _build_findings(diff_text, config, add) -> None:
                 continue
             match = _UNTRUSTED_PATCH_RE.search(_strip_comment(line))
             if match:
+                patch_src = match.group(1).strip()[:70]
                 add("R063", "Patch Applied From Outside The Build Tree", "HIGH", "integrity",
-                    f"{enclosing[i]}() applies a patch from {match.group(1).strip()[:70]}")
+                    f"{enclosing[i]}() applies a patch from {patch_src}",
+                    position=enclosing[i], patch_src=patch_src)
                 break
 
     if "R064" in wanted:
@@ -555,7 +579,8 @@ def _build_findings(diff_text, config, add) -> None:
                 continue
             if url.replace("https://", "http://", 1) in after:
                 add("R064", "Source URL Downgraded To HTTP", "MEDIUM", "network",
-                    f"source URL downgraded from https to http: {url[:70]}")
+                    f"source URL downgraded from https to http: {url[:70]}",
+                    url=url[:70])
                 break
 
 
@@ -576,6 +601,7 @@ def _check_untrusted_maintainer_takeover(
         "severity": "HIGH", "category": "maintainer",
         "match": f"maintainer changed to '{new_maintainer}', "
                 f"who has never been seen in the AUR",
+        "params": {"new": new_maintainer},
     }
 
 
@@ -742,6 +768,7 @@ def analyze_package(
             "rule_id": "R072", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
+            "params": {"n_categories": len(categories)},
         })
 
     # R074: Package-Name Typosquat (HIGH, always on, cold-start gate)
@@ -752,6 +779,7 @@ def analyze_package(
                 "rule_id": "R074", "name": "Package-Name Typosquat",
                 "severity": "HIGH", "category": "naming",
                 "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
+                "params": {"pkg_name": pkg_name, "squatted": squatted},
             })
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
@@ -909,6 +937,7 @@ def scan_diff(
             "rule_id": "R072", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
+            "params": {"n_categories": len(categories)},
         })
 
     rule_ids = [r["rule_id"] for r in triggered_rules]

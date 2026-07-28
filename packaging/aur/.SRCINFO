@@ -16,6 +16,6 @@ pkgbase = trustsight
 	depends = python-rich
 	depends = python-typer
 	source = trustsight-0.9.0.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.9.0.tar.gz
-	sha256sums = 6e1909d7887f6e4c9f3c03a8cbd52e730dd6427618007c9315177e83e343fa17
+	sha256sums = 49fe519a56f0821789ab1571907101a9acad86284bef22fa895fbf31e43c4e5e
 
 pkgname = trustsight

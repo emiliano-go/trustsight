@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- **`watch` command.** Removed in favour of running `trustsight baseline
+  build` via cron. The `baseline build` command already handles incremental
+  updates (diff + process changed) when a prior metadata snapshot exists.
+  Use `--json` for machine-parseable cron output.
+
 ## [0.8.0] - 2026-07-27
 
 ### Added

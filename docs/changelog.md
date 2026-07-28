@@ -8,9 +8,9 @@
   metadata archive, downloads PKGBUILDs via cgit with snapshot tarball
   fallback, runs the full analysis pipeline, and persists results. Progress
   is saved every 1000 packages for `--resume`. `trustsight baseline import`
-  merges a signed corpus artifact into the local database. `baseline build`
-  doubles as a cron target: the first run processes all packages, subsequent
-  runs only process changed ones. Use `--json` for machine-parseable output.
+  merges a signed corpus artifact into the local database. `trustsight watch`
+  polls the AUR metadata on a configurable interval and analyses only the
+  changed packages, optionally firing alert hooks.
 
 - **Property stability tracking.** Eleven per-package, per-key property
   dimensions are recorded on every analysis with a SHA-256 value hash and

@@ -1809,9 +1809,7 @@ def baseline_build(
 
     Fetches the AUR metadata snapshot, downloads PKGBUILDs for every
     package, analyses them, and optionally emits a signed baseline artifact.
-    Suitable for both an initial bootstrap and incremental cron runs
-    (the first run processes all packages; subsequent runs only process
-    changed ones).  Use --json for machine-parseable output.
+    Run once to build the corpus; everyone else imports the artifact.
     """
     from .full_aur.pipeline import run_baseline_build
     ensure_default_configs()
@@ -1841,6 +1839,32 @@ def baseline_import(
     init_db()
     import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
 
+
+# --- watch ---
+
+
+@app.command("watch")
+def watch(
+    interval: str = typer.Option("6h", "--interval", help="Poll interval (e.g. 6h, 30m, 1d)"),
+    threshold: int = typer.Option(30, "--threshold", "--alert-threshold", help="Minimum score to trigger an alert"),
+    alert_hook: Optional[str] = typer.Option(None, "--alert-hook", help="Command to run on alert (receives JSON on stdin)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Daemon mode: poll the AUR metadata and analyse new updates.
+
+    Repeatedly fetches the AUR metadata snapshot, diffs it against the
+    stored copy, downloads PKGBUILDs for changed packages, analyses them,
+    and optionally fires alert hooks for findings above threshold.
+    """
+    from .full_aur.pipeline import run_watch
+    ensure_default_configs()
+    init_db()
+    run_watch(
+        interval=interval,
+        threshold=threshold,
+        alert_hook=alert_hook,
+        json_output=json_output,
+    )
 
 if __name__ == "__main__":
     try:

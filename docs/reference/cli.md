@@ -461,5 +461,28 @@ trustsight baseline import FILE
 |------|-------------|
 | `--allow-unsigned` | Import even if the artifact is unsigned. Use only for self-built local artifacts. |
 | `--json` | Output JSON. |
+| `--json` | Output JSON. |
+
+---
+
+## trustsight watch
+
+Daemon mode: poll the AUR metadata snapshot and analyse new updates as they
+appear.  Repeatedly fetches the metadata, diffs it against the stored copy,
+downloads PKGBUILDs for changed packages, analyses them, and optionally fires
+alert hooks for findings above a threshold.
+
+```
+trustsight watch [--interval 6h] [--threshold 30] [--alert-hook CMD]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--interval` | `6h` | Poll interval (`6h`, `30m`, `1d`). |
+| `--threshold`, `--alert-threshold` | `30` | Minimum score to trigger an alert. |
+| `--alert-hook` | - | Shell command to run on alert. Receives a JSON payload on stdin. |
+| `--json` | `false` | Output JSON. |
 
 ---

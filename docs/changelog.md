@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.8.0] - 2026-07-27
+
+### Added
+
+- **Full-AUR corpus builder.** `trustsight baseline build` fetches the AUR
+  metadata archive, downloads PKGBUILDs via cgit with snapshot tarball
+  fallback, runs the full analysis pipeline, and persists results. Progress
+  is saved every 1000 packages for `--resume`. `trustsight baseline import`
+  merges a signed corpus artifact into the local database. `trustsight watch`
+  polls the AUR metadata on a configurable interval and analyses only the
+  changed packages, optionally firing alert hooks.
+
+- **Property stability tracking.** Eleven per-package, per-key property
+  dimensions are recorded on every analysis with a SHA-256 value hash and
+  a `stable_for_n` counter (accumulates on identical observations, resets on
+  change). Feeds longitudinal rules R094-R102.
+
+- **Canonical reproducible serialisation.** `canonical_artifact_bytes()`
+  produces byte-identical output from the same corpus inputs. The signed
+  payload records the ruleset version, scorer version, and corpus cutoff
+  in a deterministic manifest.
+
+- **ed25519 artifact signing.** `build_artifact` accepts `--sign KEY`.
+  `import_baseline()` verifies against the shipped public key and refuses
+  unsigned artifacts by default (`--allow-unsigned` for local builds).
+
+- **`config setup` interactive wizard.** Walks through provider choice
+  (openai, ollama), endpoint, API key (masked), model name, and connection
+  test.
+
+- **`--simple` flag** on `review` and `inspect` to skip the LLM verdict.
+
+- **First-run welcome banner.** Shown on first `review` when the novelty
+  seed is imported, printing config path, database path, and next-step
+  suggestions.
+
+- **`config set` extended.** `model`, `timeout`, and `provider` keys now
+  accepted alongside `api_key` and `base_url`.
+
+### Changed
+
+- **TemporalContext unifies both analysis paths.** The git-based and
+  corpus-based paths share a single `TemporalContext` parameter that declares
+  the clock source (`git_commit`, `aur_metadata`, `observation_history`)
+  rather than deriving timestamps internally. The clock source is recorded on
+  every `PackageFact` as `temporal_source`.
+
+- **`history` suggests `inspect` for unanalysed packages.** Instead of
+  `"not found in history"`, now says `"Run 'trustsight inspect X' first."`
+
+### Fixed
+
+- **LLM verdict always used in `inspect`.** Previously called
+  `fallback_verdict()` unconditionally instead of `generate_verdict()`.
+- **API exceptions and suppressed verdicts now logged at `warning` level.**
+  Previously `debug` made them invisible.
+
 ## [0.7.2] - 2026-07-27
 
 ### Added

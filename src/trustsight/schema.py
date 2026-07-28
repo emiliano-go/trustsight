@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -20,6 +21,20 @@ class ExecutionChanges:
     resolved_commands: list[str] = field(default_factory=list)
     suspicious_patterns_detected: list[str] = field(default_factory=list)
     unresolved_patterns: list[str] = field(default_factory=list)
+
+
+@dataclass
+class TemporalContext:
+    """Explicit temporal context for R065–R067 (and R083).
+
+    Both analysis paths declare their clock source rather than
+    deriving one internally, ensuring the same package gets the
+    same temporal verdict regardless of how it was analysed.
+    """
+    last_modified: Optional[int] = None   # Unix timestamp
+    first_seen: Optional[int] = None      # Unix timestamp
+    previous_modified: Optional[int] = None
+    source: str = "unknown"          # "git_commit" | "aur_metadata" | "observation_history"
 
 
 @dataclass
@@ -66,6 +81,9 @@ class PackageFact:
     diff_truncated: bool = False
 
     recent_commit_burst: bool = False
+
+    # Which clock produced the temporal findings.
+    temporal_source: str = "unknown"
 
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0

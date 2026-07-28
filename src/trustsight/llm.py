@@ -36,10 +36,14 @@ def _sanitize_prompt_field(s: str) -> str:
     return _CONTROL_CHAR_RE.sub(" ", s)
 
 
-def _build_prompt(fact: PackageFact) -> str:
+def _build_prompt(fact: PackageFact, max_diff_chars: int = 0) -> str:
     """format a PackageFact into an LLM prompt"""
     fact_dict = fact_to_dict(fact)
-    diff_trunc = json.dumps(fact_dict.get("diff_summary", {}), indent=2)
+    diff_raw = json.dumps(fact_dict.get("diff_summary", {}), indent=2)
+    if max_diff_chars and len(diff_raw) > max_diff_chars:
+        diff_trunc = diff_raw[:max_diff_chars] + "\n... (truncated)"
+    else:
+        diff_trunc = diff_raw
     breakdown = json.dumps(
         [
             {"rule_id": e.rule_id, "severity": e.severity, "weight": e.weight, "reason": e.reason}
@@ -175,6 +179,8 @@ def _checked_verdict(verdict: str, fact: PackageFact, was_streamed: bool) -> str
     if _assert_verdict(verdict, fact):
         return verdict
     result = fallback_verdict(fact)
+    log.warning("LLM verdict suppressed for %s (score=%s): assertion failed on %r",
+                fact.package_name, fact.final_score, verdict[:80])
     msg = f"\n[{_REASONING_COLOR}LLM verdict suppressed; using fallback{_RESET_COLOR}]"
     if was_streamed:
         print(msg)
@@ -197,8 +203,8 @@ def generate_verdict_stream(
             print(result)
         return result
 
-    max_chars = config.get("diff", {}).get("max_diff_chars_for_llm", 2000)
-    prompt = _build_prompt(fact)[:max_chars]
+    max_diff = config.get("diff", {}).get("max_diff_chars_for_llm", 2000)
+    prompt = _build_prompt(fact, max_diff_chars=max_diff)
     model = _get_model(config)
     client = _get_client(config)
 
@@ -251,10 +257,10 @@ def generate_verdict_stream(
         return _checked_verdict(raw, fact, stream)
 
     except Exception as e:
-        log.debug("LLM request failed: %s", e)
+        log.warning("LLM request failed for %s: %s", fact.package_name, e)
         result = fallback_verdict(fact)
         if stream:
-            print("\nLLM request failed. Using fallback verdict.")
+            print(f"\n[LLM request failed: {e}; using fallback verdict.]")
             print(result)
         return result
 

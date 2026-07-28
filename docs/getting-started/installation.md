@@ -28,7 +28,17 @@ For a development checkout with the test dependencies, use a virtualenv instead 
 
 TrustSight scores every package **without** an LLM. The scoring pipeline is fully deterministic : the LLM never calculates, modifies, or influences a score. It only translates the existing score and breakdown into a plain-English sentence. See [how the trust model works](../explanation/trust-model.md) for a deeper explanation.
 
-If you want English verdicts instead of template strings, set an API key:
+If you want English verdicts instead of template strings, run the interactive setup wizard:
+
+```bash
+trustsight config setup
+```
+
+It walks you through provider choice (OpenAI-compatible or Ollama), endpoint URL, API key, and model selection, then optionally tests the connection.
+
+### Quick manual setup
+
+For scripting or environment variables:
 
 ```bash
 # Environment variable (recommended : never checked into repos)
@@ -38,10 +48,11 @@ export TRUSTSIGHT_API_KEY=sk-...
 trustsight config set api_key sk-...
 ```
 
-The provider defaults to `openai` (compatible with OpenAI, NVIDIA, Together, and any OpenAI-compatible endpoint). To change the model or provider:
+The provider defaults to `openai` (compatible with OpenAI, NVIDIA, Together, and any OpenAI-compatible endpoint). To change the endpoint or model:
 
 ```bash
 trustsight config set base_url https://integrate.api.nvidia.com/v1
+trustsight config set model meta/llama-3.1-8b-instruct
 ```
 
 If no API key is configured, template verdicts are used. The tool works identically in either mode : only the prose changes.

@@ -163,6 +163,43 @@ def init_db():
                 last_modified INTEGER,
                 cached_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS package_profiles (
+                package_name TEXT PRIMARY KEY,
+                observation_count INTEGER DEFAULT 0,
+                last_score INTEGER,
+                last_risk TEXT DEFAULT '',
+                last_seen TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS package_properties (
+                package_name TEXT NOT NULL,
+                property_key TEXT NOT NULL,
+                value_hash TEXT NOT NULL,
+                value TEXT,
+                stable_for_n INTEGER DEFAULT 0,
+                first_seen TEXT NOT NULL,
+                last_changed TEXT NOT NULL,
+                PRIMARY KEY (package_name, property_key)
+            );
+
+            CREATE TABLE IF NOT EXISTS pkgbuild_snapshots (
+                package_name TEXT PRIMARY KEY,
+                pkgbuild_text TEXT NOT NULL,
+                srcinfo_text TEXT,
+                version TEXT NOT NULL,
+                last_modified INTEGER DEFAULT 0,
+                captured_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS alert_state (
+                package_name TEXT NOT NULL,
+                rule_id TEXT NOT NULL,
+                first_seen TEXT NOT NULL,
+                last_sent TEXT,
+                count INTEGER DEFAULT 1,
+                PRIMARY KEY (package_name, rule_id)
+            );
         """)
         _migrate(conn)
         conn.commit()
@@ -663,10 +700,10 @@ def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
     except (FileNotFoundError, sqlite3.Error):
         return None
     if not quiet:
+        total = stats['urls_total']
         print(
-            f"Imported novelty seed: {stats['urls_total']} source URLs, "
-            f"{stats['maintainers']} maintainers "
-            f"({stats['observations']} observations)."
+            f"Imported {total:,} known source URLs and {stats['maintainers']} maintainers "
+            f"for novelty detection."
         )
     return stats
 
@@ -753,3 +790,68 @@ def _parse_ts(ts: str | None) -> datetime:
         return datetime.fromisoformat(ts)
     except (ValueError, TypeError):
         return datetime.fromtimestamp(0)
+
+
+def get_pkgbuild_snapshot(package_name: str) -> Optional[dict]:
+    """Return the PKGBUILD snapshot for *package_name*, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM pkgbuild_snapshots WHERE package_name = ?",
+            (package_name,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_pkgbuild_snapshot(
+    package_name: str,
+    pkgbuild_text: str,
+    version: str,
+    last_modified: int = 0,
+    srcinfo_text: Optional[str] = None,
+) -> None:
+    """Insert or update the PKGBUILD snapshot for *package_name*."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO pkgbuild_snapshots
+               (package_name, pkgbuild_text, srcinfo_text, version, last_modified, captured_at)
+               VALUES (?, ?, ?, ?, ?, datetime('now'))
+               ON CONFLICT(package_name) DO UPDATE SET
+                   pkgbuild_text = excluded.pkgbuild_text,
+                   srcinfo_text = excluded.srcinfo_text,
+                   version = excluded.version,
+                   last_modified = excluded.last_modified,
+                   captured_at = excluded.captured_at""",
+            (package_name, pkgbuild_text, srcinfo_text, version, last_modified),
+        )
+        conn.commit()
+
+
+def get_package_profile(package_name: str) -> Optional[dict]:
+    """Return the package profile for *package_name*, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM package_profiles WHERE package_name = ?",
+            (package_name,),
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_package_profile(
+    package_name: str,
+    last_score: int,
+    last_risk: str = "",
+) -> None:
+    """Insert or update the package profile."""
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT INTO package_profiles
+               (package_name, observation_count, last_score, last_risk, last_seen)
+               VALUES (?, 1, ?, ?, datetime('now'))
+               ON CONFLICT(package_name) DO UPDATE SET
+                   observation_count = observation_count + 1,
+                   last_score = excluded.last_score,
+                   last_risk = excluded.last_risk,
+                   last_seen = excluded.last_seen""",
+            (package_name, last_score, last_risk),
+        )
+        conn.commit()

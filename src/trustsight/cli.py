@@ -3,6 +3,7 @@ import logging
 import sqlite3
 import socket
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -168,6 +169,7 @@ app = typer.Typer(
     help="TrustSight - AUR Package Update Vetting Tool",
     no_args_is_help=True,
     add_completion=True,
+    epilog="New? Start with 'trustsight config setup', then 'trustsight review'.",
 )
 config_app = typer.Typer(
     help="Manage configuration (aliases: show, set, sync-rules)",
@@ -184,9 +186,15 @@ db_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+baseline_app = typer.Typer(
+    help="Build or import a full-AUR baseline corpus",
+    no_args_is_help=True,
+    add_completion=False,
+)
 app.add_typer(config_app, name="config")
 app.add_typer(override_app, name="override")
 app.add_typer(db_app, name="db")
+app.add_typer(baseline_app, name="baseline")
 
 
 def _version_callback(value: bool):
@@ -231,13 +239,30 @@ def review(
         False, "--all", help="Review all installed AUR packages, not just outdated ones",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    simple: bool = typer.Option(False, "--simple", help="Skip LLM verdict, use fallback"),
 ):
     """Review AUR packages for suspicious updates."""
     ensure_default_configs()
     config = load_config()
     init_db()
+    seed_imported = False
     if config.get("seed", {}).get("auto_import", True):
-        maybe_auto_import_seed(quiet=json_output)
+        seed_stats = maybe_auto_import_seed(quiet=json_output or quiet)
+        if seed_stats is not None:
+            seed_imported = True
+
+    if not json_output and not quiet and seed_imported:
+        print()
+        _print_colored("Welcome to TrustSight!", "bold cyan")
+        print(f"  Config:    {CONFIG_DIR}")
+        print(f"  Database:  {get_db_path()}")
+        print()
+        print("  Next steps:")
+        print("    1. Run 'trustsight config setup'  Configure an LLM for verdicts (optional)")
+        print("    2. Run 'trustsight review'         Scan your AUR packages")
+        print("    3. Run 'trustsight inspect <pkg>'  Deep-dive on a specific package")
+        print()
+
     effective_limit = limit if limit > 0 else config.get("limits", {}).get("default_review_limit", 0)
 
     user_specified = not (repo is None and not foreign and not all_repos)
@@ -295,12 +320,12 @@ def review(
             _print_colored("No outdated packages found.", "green")
         return
 
-    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, quiet, json_output, total_installed, all_packages)
+    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, quiet, json_output, total_installed, all_packages, simple)
 
 
 def _run_analysis_loop(
     outdated_pkgs: list[dict], limit: int, verbose: bool, quiet: bool, json_output: bool,
-    total_installed: int = 0, all_packages: bool = False,
+    total_installed: int = 0, all_packages: bool = False, simple: bool = False,
 ) -> None:
     """run the full analysis loop with optional progress display"""
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
@@ -317,13 +342,16 @@ def _run_analysis_loop(
             TimeElapsedColumn(),
         ]
         with Progress(*progress_columns, console=con, transient=False) as progress:
-            task = progress.add_task("Fetching AUR packages...", total=None)
+            task = progress.add_task("Connecting to AUR...", total=len(limited))
 
             def on_progress(_current, total, description):
                 """update the progress bar with the current task"""
                 if not has_progress:
                     return
-                if total:
+                if _current < 0:
+                    # Phase transition: set indeterminate without resetting elapsed time
+                    progress.update(task, total=None, description=description)
+                elif total:
                     progress.update(
                         task, total=total, completed=_current,
                         description=description,
@@ -331,16 +359,16 @@ def _run_analysis_loop(
                 else:
                     progress.update(task, description=description)
 
-            results = _analyze_outdated_batch(limited, on_progress, verbose)
+            results = _analyze_outdated_batch(limited, on_progress, verbose, simple)
             progress.update(task, visible=False)
     elif json_output:
         def on_progress(_current, total, description):
             """emit progress as JSON-lines to stderr"""
             import json as _json
             print(_json.dumps({"event": "progress", "current": _current, "total": total, "phase": description}), file=sys.stderr)
-        results = _analyze_outdated_batch(limited, on_progress, verbose)
+        results = _analyze_outdated_batch(limited, on_progress, verbose, simple)
     else:
-        results = _analyze_outdated_batch(limited, None, verbose)
+        results = _analyze_outdated_batch(limited, None, verbose, simple)
 
     if json_output:
         typer.echo(json.dumps(results, indent=2))
@@ -377,6 +405,8 @@ def _run_analysis_loop(
         table.add_column("Risk")
         table.add_column("Verdict", overflow="fold")
         if verbose:
+            table.add_column("Analysis", justify="right")
+            table.add_column("LLM", justify="right")
             table.add_column("Triggered Rules", overflow="fold")
         for r in results:
             verdict = Text(strip_ansi(r["verdict"]))
@@ -393,6 +423,14 @@ def _run_analysis_loop(
                 verdict,
             ]
             if verbose:
+                analysis_t = r.get("analysis_time", 0)
+                llm_t = r.get("llm_time", 0)
+                if r.get("failed"):
+                    row.append(Text("n/a", style="dim"))
+                    row.append(Text("n/a", style="dim"))
+                else:
+                    row.append(Text(f"{analysis_t:.1f}s", style="dim" if analysis_t < 1 else "white"))
+                    row.append(Text(f"{llm_t:.1f}s", style="dim" if llm_t < 1 else "white"))
                 rules_text = (
                     ", ".join(f"{rule['rule_id']}" for rule in r.get("triggered_rules", []))
                     if r.get("triggered_rules") else "[dim]none[/]"
@@ -401,18 +439,25 @@ def _run_analysis_loop(
             table.add_row(*row)
         con.print(table)
     else:
-        print(f"{'Package':<20} {'Risk Score':<10} Verdict", end="")
         if verbose:
-            print("  Rules")
+            print(f"{'Package':<20} {'Score':<7} {'Anal':>5} {'LLM':>5} Verdict  Rules")
         else:
-            print()
-        print("-" * (80 if not verbose else 120))
+            print(f"{'Package':<20} {'Score':<7} Verdict")
+        print("-" * (100 if verbose else 80))
         for r in results:
             verdict = r["verdict"]
             if r.get("first_seen"):
                 verdict = f"[First analysis] {verdict}"
-            score = "n/a" if r.get("failed") else r["score"]
-            line = f"{r['package']:<20} {score:<10} {verdict}"
+            score = "n/a" if r.get("failed") else str(r["score"])
+            if verbose and not r.get("failed"):
+                analysis_t = r.get("analysis_time", 0)
+                llm_t = r.get("llm_time", 0)
+                timing = f"{analysis_t:>4.1f}s {llm_t:>4.1f}s"
+                line = f"{r['package']:<20} {score:<7} {timing} {verdict}"
+            elif verbose:
+                line = f"{r['package']:<20} {score:<7}  n/a   n/a  {verdict}"
+            else:
+                line = f"{r['package']:<20} {score:<7} {verdict}"
             if verbose:
                 rules_str = (
                     ", ".join(rule["rule_id"] for rule in r.get("triggered_rules", []))
@@ -488,11 +533,16 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
     return hints
 
 
-def _verdict_for(fact) -> str:
-    """LLM verdict for a single fact with offline fallback."""
+def _verdict_for(fact, simple: bool = False) -> str:
+    """LLM verdict for a single fact with offline fallback.
+
+    Only packages scoring above 0 trigger an LLM call -- a zero score means
+    nothing suspicious was found and the deterministic verdict is sufficient.
+    Pass ``simple=True`` to skip the LLM entirely and always use the fallback.
+    """
     from .llm import fallback_verdict, generate_verdict
 
-    if fact.final_score <= 0:
+    if simple or fact.final_score <= 0:
         return fallback_verdict(fact)
     try:
         return generate_verdict(fact)
@@ -525,16 +575,21 @@ def _verdicts_for(facts: list, progress_callback=None) -> list[str]:
 
 
 def _analyze_outdated_batch(
-    pkgs: list[dict], progress_callback=None, verbose: bool = False
+    pkgs: list[dict], progress_callback=None, verbose: bool = False, simple: bool = False
 ) -> list[dict]:
     """analyze a batch of outdated package entries"""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     hints = _prefetch(pkgs, progress_callback)
 
+    # Phase transition: signal the progress bar to reset
+    if progress_callback:
+        progress_callback(-1, 0, "Reviewing packages...")
+
     def _pipeline_one(entry):
         """analyze one package then immediately produce its LLM verdict"""
         name = entry["name"]
+        t0 = time.perf_counter()
         try:
             fact = analyze_package(
                 name,
@@ -543,10 +598,11 @@ def _analyze_outdated_batch(
             )
         except Exception as exc:  # noqa: BLE001 — one package must not end the run
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
-            return ("fail", entry, None, None, exc)
-
-        verdict = _verdict_for(fact)
-        return ("ok", entry, fact, verdict, None)
+            return ("fail", entry, None, None, exc, 0, 0)
+        t1 = time.perf_counter()
+        verdict = _verdict_for(fact, simple)
+        t2 = time.perf_counter()
+        return ("ok", entry, fact, verdict, None, t1 - t0, t2 - t1)
 
     total = len(pkgs)
     analysed_by_idx: dict[int, tuple] = {}
@@ -557,13 +613,19 @@ def _analyze_outdated_batch(
         done_count = 0
         for future in as_completed(futures):
             idx = futures[future]
-            status, entry, fact, verdict, exc = future.result()
+            result = future.result()
+            status = result[0]
+            entry = result[1]
             done_count += 1
             if progress_callback:
-                phase = "Reviewing" if status == "ok" else "Failed"
-                progress_callback(done_count, total, f"{phase} {entry['name']}")
+                phase = f"Reviewing {entry['name']}" if status == "ok" else f"Failed {entry['name']}"
+                if verbose and status == "ok":
+                    _, _, fact, _, _, analysis_t, llm_t = result
+                    phase += f"  [dim](analysis {analysis_t:.1f}s + LLM {llm_t:.1f}s)[/]"
+                progress_callback(done_count, total, phase)
 
             if status == "fail":
+                _, _, _, _, exc, _, _ = result
                 failures.append({
                     "package": entry["name"],
                     "old_version": entry.get("current_version", ""),
@@ -576,6 +638,9 @@ def _analyze_outdated_batch(
                     "failed": True,
                 })
             else:
+                _, _, fact, verdict, _, analysis_t, llm_t = result
+                entry["_analysis_time"] = analysis_t
+                entry["_llm_time"] = llm_t
                 analysed_by_idx[idx] = (entry, fact, verdict)
 
     # Rebuild results in original order
@@ -608,6 +673,10 @@ def _analyze_outdated_batch(
             ]
             res["triggered_rules"] = fired
             res["suppressed_rules"] = fact.suppressed_rules
+            analysis_t = entry.get("_analysis_time", 0)
+            llm_t = entry.get("_llm_time", 0)
+            res["analysis_time"] = round(analysis_t, 1)
+            res["llm_time"] = round(llm_t, 1)
         results.append(res)
     results.extend(failures)
     return results
@@ -620,6 +689,7 @@ def inspect(
     package: str = typer.Argument(..., help="Package name"),
     verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules and score breakdown"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    simple: bool = typer.Option(False, "--simple", help="Skip LLM verdict, use fallback"),
 ):
     """Show a detailed analysis of a single package."""
     ensure_default_configs()
@@ -639,12 +709,12 @@ def inspect(
         return
 
     if HAS_RICH:
-        _inspect_rich(fact, verbose)
+        _inspect_rich(fact, verbose, simple)
     else:
-        _inspect_plain(fact, verbose)
+        _inspect_plain(fact, verbose, simple)
 
 
-def _inspect_rich(fact, verbose=False):
+def _inspect_rich(fact, verbose=False, simple=False):
     """rich-formatted inspection output"""
     con = console()
     risk = risk_level(fact.final_score)
@@ -756,13 +826,18 @@ def _inspect_rich(fact, verbose=False):
         con.print(sup)
         con.print("  [yellow]These findings did not contribute to the score.[/]")
 
-    from .llm import fallback_verdict
+    from .llm import fallback_verdict, generate_verdict
+    if simple or fact.final_score <= 0:
+        verdict = fallback_verdict(fact)
+    else:
+        with con.status("Querying LLM for verdict..."):
+            verdict = generate_verdict(fact)
     con.print(Rule("Verdict", style="dim"))
-    con.print(Panel(Text(fallback_verdict(fact)),
+    con.print(Panel(Text(verdict),
                     border_style=RISK_COLORS.get(risk, "white")))
 
 
-def _inspect_plain(fact, verbose=False):
+def _inspect_plain(fact, verbose=False, simple=False):
     """plain-text inspection output"""
     if fact.first_seen:
         print("[First analysis] No prior history; novelty carries no weight yet.")
@@ -786,8 +861,15 @@ def _inspect_plain(fact, verbose=False):
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
             print(f"    {r['rule_id']} {r.get('override_reason', '')}")
-    from .llm import fallback_verdict
-    print(f"  Verdict: {fallback_verdict(fact)}")
+    from .llm import fallback_verdict, generate_verdict
+    if simple or fact.final_score <= 0:
+        verdict = fallback_verdict(fact)
+    else:
+        sys.stdout.write("  Querying LLM for verdict... ")
+        sys.stdout.flush()
+        verdict = generate_verdict(fact)
+        print("done")
+    print(f"  Verdict: {verdict}")
 
 
 # --- history ---
@@ -807,7 +889,8 @@ def history(
 
     pkg_id = get_package_id(package)
     if pkg_id is None:
-        print(f"Package '{package}' not found in history.")
+        print(f"Package '{package}' has not been analysed yet. "
+              f"Run 'trustsight inspect {package}' first.")
         return
 
     history_records = get_history(pkg_id, limit=limit)
@@ -940,24 +1023,179 @@ def config_show(
 
 @config_app.command("set")
 def config_set(
-    key: str = typer.Argument(..., help="Config key (api_key or base_url)"),
+    key: str = typer.Argument(..., help="Config key (api_key, base_url, model, timeout, provider)"),
     value: str = typer.Argument(..., help="Config value"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Set a configuration value."""
-    if key not in ("api_key", "base_url"):
-        msg = f"Unknown key: {key}. Use api_key or base_url."
+    if key in ("api_key", "base_url"):
+        set_config(f"llm.openai.{key}", value)
+        msg = f"Set llm.openai.{key} in {CONFIG_DIR / 'config.toml'}"
+    elif key == "model":
+        set_config("llm.model", value)
+        msg = f"Set llm.model in {CONFIG_DIR / 'config.toml'}"
+    elif key == "timeout":
+        set_config("llm.timeout", value)
+        msg = f"Set llm.timeout in {CONFIG_DIR / 'config.toml'}"
+    elif key == "provider":
+        set_config("llm.provider", value)
+        msg = f"Set llm.provider in {CONFIG_DIR / 'config.toml'}"
+    else:
+        msg = f"Unknown key: {key}. Use api_key, base_url, model, timeout, or provider."
         if json_output:
             typer.echo(json.dumps({"error": msg}))
         else:
             _print_colored(msg, "red", stderr=True)
         raise typer.Exit(code=1)
-    set_config(f"llm.openai.{key}", value)
-    msg = f"Set llm.openai.{key} in {CONFIG_DIR / 'config.toml'}"
     if json_output:
         typer.echo(json.dumps({"status": "ok", "key": f"llm.openai.{key}"}))
     else:
         _print_colored(msg, "green")
+
+
+@config_app.command("setup")
+def config_setup(
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Interactively configure the LLM provider."""
+    ensure_default_configs()
+    cfg = load_config()
+    llm_cfg = cfg.get("llm", {})
+    openai_cfg = llm_cfg.get("openai", {})
+
+    print()
+    _print_colored("LLM Setup", "bold cyan")
+    print("TrustSight uses an LLM to write human-readable verdicts for each")
+    print("analysed package. This step configures which provider to use.")
+    print()
+
+    # --- provider ---
+    current_provider = llm_cfg.get("provider", "openai")
+    print(f"Current provider: {current_provider}")
+    choice = _prompt_choice("Which provider?", ["openai", "ollama"])
+    provider = "openai" if choice == "1" else "ollama"
+
+    # --- provider-specific prompts ---
+    if provider == "ollama":
+        default_url = llm_cfg.get("ollama_url") or "http://localhost:11434/v1"
+        url = typer.prompt("Ollama URL", default=default_url, show_default=True)
+        model = typer.prompt(
+            "Model (e.g. llama3.2, mistral)",
+            default=llm_cfg.get("model") or "llama3.2",
+            show_default=True,
+        )
+        set_config("llm.provider", "ollama")
+        set_config("llm.ollama_url", url)
+        set_config("llm.model", model)
+    else:
+        default_url = openai_cfg.get("base_url") or "https://api.openai.com/v1"
+        url = typer.prompt("API base URL", default=default_url, show_default=True)
+        current_key = openai_cfg.get("api_key", "")
+        key_hint = f"{current_key[:4]}..." if len(current_key) > 8 else "(not set)"
+        api_key = typer.prompt(
+            "API key (or set TRUSTSIGHT_API_KEY env var)", hide_input=True,
+            default=key_hint if current_key else "",
+        )
+        if api_key == key_hint and current_key:
+            api_key = current_key
+        model = typer.prompt(
+            "Model (e.g. gpt-4o-mini, meta/llama-3.1-8b-instruct)",
+            default=llm_cfg.get("model") or "gpt-4o-mini",
+            show_default=True,
+        )
+        set_config("llm.provider", "openai")
+        set_config("llm.openai.base_url", url)
+        set_config("llm.openai.api_key", api_key)
+        set_config("llm.model", model)
+
+    # --- optional test ---
+    print()
+    test_choice = _prompt_choice("Test the connection?", ["yes", "skip"])
+    if test_choice == "1":
+        _test_llm_connection(json_output)
+
+    msg = "LLM configuration saved."
+    if json_output:
+        typer.echo(json.dumps({"status": "ok", "message": msg}))
+    else:
+        print()
+        _print_colored(msg, "green")
+
+
+def _prompt_choice(question: str, options: list[str]) -> str:
+    """Print a numbered list and return the user's choice number as a string."""
+    for i, opt in enumerate(options, 1):
+        print(f"  {i}. {opt}")
+    while True:
+        idx = typer.prompt(question, default="1", show_default=False)
+        if idx in {str(i) for i in range(1, len(options) + 1)}:
+            return idx
+        print(f"  Enter a number 1-{len(options)}.")
+
+
+def _test_llm_connection(json_output: bool = False) -> None:
+    """Try a small LLM call to verify the current config works."""
+    from .llm import _get_client, _get_model
+    from openai import APITimeoutError, APIConnectionError, APIStatusError
+
+    config = load_config()
+    client = _get_client(config)
+    if client is None:
+        msg = "Could not build a client. Check your API key and base URL."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red")
+        return
+    model = _get_model(config)
+    llm_cfg = config.get("llm", {})
+    base_url = llm_cfg.get("openai", {}).get("base_url", "https://api.openai.com/v1")
+    if json_output:
+        typer.echo(json.dumps({"event": "testing", "model": model}))
+    else:
+        print(f"  Testing {model}... ", end="", flush=True)
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": "Reply OK"}],
+            max_tokens=10,
+            temperature=0,
+            timeout=30,
+        )
+        reply = resp.choices[0].message.content or ""
+        if json_output:
+            typer.echo(json.dumps({"status": "ok", "reply": reply}))
+        else:
+            print("connected")
+            _print_colored(f"  Reply: {reply.strip()}", "green")
+    except APITimeoutError:
+        msg = f"Request timed out after 30s. The model at {base_url} may be slow or unavailable."
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "error": msg}))
+        else:
+            print("timed out")
+            _print_colored(msg, "red")
+    except APIConnectionError:
+        msg = f"Could not reach {base_url}. Check the URL and your network."
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "error": msg}))
+        else:
+            print("connection failed")
+            _print_colored(msg, "red")
+    except APIStatusError as e:
+        msg = f"API returned {e.status_code}. Your API key may be invalid or the model is not available."
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "error": msg, "detail": str(e)}))
+        else:
+            print("api error")
+            _print_colored(msg, "red")
+    except Exception as e:
+        msg = f"Connection failed: {e}"
+        if json_output:
+            typer.echo(json.dumps({"status": "error", "error": str(e)}))
+        else:
+            print("failed")
+            _print_colored(msg, "red")
 
 
 @config_app.command("sync-rules")
@@ -1556,6 +1794,77 @@ def _print_colored(msg: str, color: str = "", stderr: bool = False):
 
 
 # --- entry point ---
+
+# --- baseline subcommands ---
+
+
+@baseline_app.command("build")
+def baseline_build(
+    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+    export: Optional[str] = typer.Option(None, "--export", help="Path to write the baseline artifact"),
+    sign: Optional[str] = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Bootstrap or update the full-AUR baseline corpus.
+
+    Fetches the AUR metadata snapshot, downloads PKGBUILDs for every
+    package, analyses them, and optionally emits a signed baseline artifact.
+    Run once to build the corpus; everyone else imports the artifact.
+    """
+    from .full_aur.pipeline import run_baseline_build
+    ensure_default_configs()
+    init_db()
+    run_baseline_build(
+        resume=resume,
+        export_path=export,
+        sign_key=sign,
+        json_output=json_output,
+    )
+
+
+@baseline_app.command("import")
+def baseline_import(
+    path: str = typer.Argument(..., help="Path to the baseline artifact (.tar.zst)"),
+    allow_unsigned: bool = typer.Option(False, "--allow-unsigned", help="Allow unsigned artifacts (local builds only)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Import a signed baseline corpus artifact.
+
+    Verifies the signature, then merges profiles, priors, and the metadata
+    snapshot into the local database. After import the database is warm:
+    no cold-start floor, real stable_for_n values, populated priors.
+    """
+    from .full_aur.export import import_baseline
+    ensure_default_configs()
+    init_db()
+    import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
+
+
+# --- watch ---
+
+
+@app.command("watch")
+def watch(
+    interval: str = typer.Option("6h", "--interval", help="Poll interval (e.g. 6h, 30m, 1d)"),
+    threshold: int = typer.Option(30, "--threshold", "--alert-threshold", help="Minimum score to trigger an alert"),
+    alert_hook: Optional[str] = typer.Option(None, "--alert-hook", help="Command to run on alert (receives JSON on stdin)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Daemon mode: poll the AUR metadata and analyse new updates.
+
+    Repeatedly fetches the AUR metadata snapshot, diffs it against the
+    stored copy, downloads PKGBUILDs for changed packages, analyses them,
+    and optionally fires alert hooks for findings above threshold.
+    """
+    from .full_aur.pipeline import run_watch
+    ensure_default_configs()
+    init_db()
+    run_watch(
+        interval=interval,
+        threshold=threshold,
+        alert_hook=alert_hook,
+        json_output=json_output,
+    )
 
 if __name__ == "__main__":
     try:

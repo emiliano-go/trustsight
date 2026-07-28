@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/emiliano-go/trustsight/refs/heads/master/docs/assets/images/trustsight-banner.png" alt="TrustSight" width="700"/>
 
-Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify.
+Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals, then produces a deterministic risk score with a plain-English explanation.
 
 <p align="center">
   <a href="https://www.python.org/downloads/">
@@ -21,6 +21,63 @@ Audits AUR PKGBUILDs before you update: catches careless malice and structural r
     <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge" alt="PyPI">
   </a>
 </p>
+
+---
+
+## Setup
+
+```bash
+# 1. Install
+git clone https://github.com/emiliano-go/trustsight.git
+cd trustsight/packaging/aur
+makepkg -si
+
+# 2. (Optional) Configure an LLM for plain-English verdicts
+# Run the interactive wizard — it tests the connection before saving:
+trustsight config setup
+
+# 3. Scan your outdated AUR packages
+trustsight review
+```
+
+Requires **Python 3.10+** and **Arch Linux** (the tool reads `pacman -Qm` to discover AUR packages).
+
+The LLM is optional. The score is always deterministic and calculated locally; the LLM only translates the breakdown into a sentence. Without one, you get template verdicts like `"Version bump. Checksum disabled. Signals: R004 (HIGH)."`
+
+> **Not published to the AUR yet.** Build from the PKGBUILD in this repository.
+> Also installable via `pip install trustsight`.
+
+---
+
+## What it detects
+
+| Attack / Risk | How TrustSight catches it |
+|---|---|
+| **Piped shell scripts** (`curl \| bash`, `base64 \| sh`) | Scans every new or changed line for command-subprocess pipelines (R001, ~100% recall on known cases) |
+| **Obfuscated commands** (encoded strings, environment subversion like `LD_PRELOAD`) | Resolves variables and decodes known obfuscation patterns; flags build-environment tampering (R007, R070) |
+| **Checksum disabled or removed** | Compares old vs new `sha256sums` / `md5sums` arrays (R004, R005) |
+| **Source URL typosquatting** (`githab.com` instead of `github.com`) | Character-level edit distance against known forge domains (R008) |
+| **Package-name typosquatting** (e.g. `libuvc` resembling `libuv`) | Edit-distance comparison against more popular packages in the seed database (R074) |
+| **URL swapped without a version bump** | Tracks source URL changes that are not accompanied by a new version (C003) |
+| **Novel / never-before-seen URLs or maintainers** | Compares against a bundled seed of 178,491 known AUR source URLs; flags first-seen domains and maintainers (novelty tier) |
+| **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
+| **LLM prompt injection** in package metadata | Pattern-matches common injection templates; primary defense is structural (the LLM cannot change the score) (R012) |
+| **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (R069) |
+| **Untrusted maintainer takeover** | A maintainer change to someone never seen before (R071) |
+| **Stale package revived** | A package with no updates for over a year suddenly gets one (R067) |
+| **Accelerated release cadence** | 3+ commits in the last 24 hours (R073, informational) |
+
+## What it cannot detect
+
+| Limitation | Why |
+|---|---|
+| **Malicious upstream release tarballs** | TrustSight audits the PKGBUILD, not the binaries it downloads. A clean build file can point to a compromised tarball. |
+| **Deliberately unremarkable attacks** | If no commands are added, no URLs change, and no checksums are disabled, there is no diff signal. The update is invisible to this kind of analysis. |
+| **Build-dependency attacks** | A malicious `makedepends` or `depends` entry is outside TrustSight's scope. It audits the recipe, not the second-order supply chain. |
+| **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
+| **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
+
+The output is a **risk assessment**, not a proof of safety. A clean score means no known risk signals fired, not that the package is safe. See the [trust model](docs/explanation/trust-model.md) for details.
 
 ---
 
@@ -59,55 +116,45 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 ---
 
-## What it catches / what it can't
-
-| Detected by TrustSight | Outside TrustSight's scope |
-|---|---|
-| **Careless malice**: `curl \| bash`, `base64 \| sh`, wget pipe sh (R001 recall ~100%). Obfuscated casing, embedded URLs in function bodies. | **Signed upstream payload**: the PKGBUILD is not the binary. A benign build file can fetch a tampered release tarball. |
-| **Structural risk**: checksums disabled (R004), checksums emptied (R005), URL typosquatting (`githab.com`), source URLs swapped without a version bump (C003). | **Deliberately-unremarkable PKGBUILDs**: no added commands, no new URLs, no checksum changes; no signal. The update is invisible to diff analysis. |
-| **Anomaly-vs-history**: first-seen URLs (global or per-package), first-seen maintainer, low-observation-count gating with INCONCLUSIVE verdict. | **Build-dependency attacks**: a malicious `makedepends` or `depends` is outside PKGBUILD scope. TrustSight audits the recipe, not the supply chain's second-order dependencies. |
-| **Reviewer manipulation**: Unicode bidi overrides (R013, 88% recall) that make displayed text differ from executed text. Prompt injection in comments/descriptions (R012, 17% recall; kept as tripwire; primary defense is verdict-integrity assertions). | **Unpinned sources** result in INCONCLUSIVE. A `source=($pkgname-$pkgver.tar.gz)` with no checksum, tag, or commit pin is reported as structurally weak, not silently accepted. |
-
----
-
-## Install
-
-```bash
-git clone https://github.com/emiliano-go/trustsight.git
-cd trustsight/packaging/aur
-makepkg -si
-```
-
-> **Not published to the AUR yet.** Build from the PKGBUILD in this repository, as above.
-
-The PKGBUILD runs the full test suite during build and installs the dependencies (`pygit2`, `tldextract`, `rich`, `openai`, `typer`) as `pacman`-tracked system packages.
-
-Requires **Python 3.10+**.
-
----
-
 ## Commands
 
 | Command | What it does |
 |---|---|
-| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos` flags and config-driven multi-repo discovery. |
+| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos` flags. |
 | [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
-| [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package, with optional `--score-breakdown`. |
-| [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled novelty seed (178,491 AUR source URLs) so a fresh install is not cold. Runs automatically on first use. |
-| [`trustsight lint-rules`](docs/reference/cli.md) | Check `rules.toml` for unreachable, over-broad or malformed rules. Exits non-zero on errors, for use in CI. |
-| [`trustsight config`](docs/reference/cli.md) | Show configuration, set LLM keys, and run `sync-rules` to receive newly shipped detection rules. |
+| [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package. |
+| [`trustsight config setup`](docs/reference/cli.md) | Interactive wizard to configure an LLM provider. |
+| [`trustsight config set`](docs/reference/cli.md) | Set individual config keys (`api_key`, `base_url`, `model`, `timeout`, `provider`). |
+| [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled URL database for novelty detection. Runs automatically on first review. |
+| [`trustsight list`](docs/reference/cli.md) | List all packages tracked in the database. |
+| [`trustsight status`](docs/reference/cli.md) | Show database and system health statistics. |
+| [`trustsight db`](docs/reference/cli.md) | Database maintenance (`check`, `vacuum`, `backup`). |
+| [`trustsight override`](docs/reference/cli.md) | Suppress a rule that misfires on your packages. |
+| [`trustsight lint-rules`](docs/reference/cli.md) | Check `rules.toml` for unreachable or malformed rules. |
 
 ---
 
 ## How scoring works
 
-Scoring is deterministic: same input always produces the same score. A core of 13 detection rules (R001 to R013), an expanded set (R039 to R059) calibrated against a 3,322-diff benign corpus, and 7 code-structure rules (C001 to C007) produce signals across four evidence tiers: **A** (structural, rules on PKGBUILD lines), **B** (priors/context, URL classification and forge trust), **C** (history/novelty, first-seen URLs and maintainers gated by observation count), and **D** (verification, checksums, PGP keys, GPG verify, which **subtract** from the score). The LLM is entirely optional and never calculates; it translates the deterministic breakdown into English, and verdict-integrity assertions gate its output. See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
+Scoring is fully deterministic: same input always produces the same score. The pipeline is:
+
+1. **Diff** the old and new PKGBUILD
+2. **Apply rules** to detect structural changes, suspicious commands, typosquatting, etc.
+3. **Classify URLs** into trust buckets (official, self-hosted, unknown, homograph)
+4. **Check novelty** against the local database of known URLs and maintainers
+5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
+
+Signals come from 13 detection rules (R001-R013), 21 expanded rules (R039-R059) calibrated against a 3,322-diff corpus of benign AUR updates, and 7 code-structure rules (C001-C007).
+
+The LLM is entirely optional. It receives the final score and breakdown and translates them into English. It cannot change the score, and its output is checked against integrity assertions before being displayed.
+
+See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 
 ---
 
 ## Security model
 
-TrustSight is evidence-producing, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
+TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
 
 ---
 

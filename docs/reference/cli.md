@@ -16,7 +16,7 @@ Global entry point defined at `src/trustsight/cli.py`.
 | `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
 | `--json` | Output in JSON format instead of the default rich/plain text. Available on all commands. |
 
-The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
+The help output also documents `trustsight config show`, `trustsight config setup`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
 
 ## Interrupt handling
 
@@ -40,6 +40,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos]
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
 | `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
+| `--simple` | flag | `false` | Skip the LLM verdict; use the deterministic fallback instead. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
@@ -100,6 +101,7 @@ trustsight inspect <package>
 | Flag | Description |
 |------|-------------|
 | `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
+| `--simple` | Skip the LLM verdict; use the deterministic fallback instead. |
 
 ### Output
 
@@ -214,6 +216,7 @@ View or modify TrustSight configuration.
 
 ```
 trustsight config show
+trustsight config setup
 trustsight config set <key> <value>
 trustsight config sync-rules [--update]
 ```
@@ -223,7 +226,8 @@ trustsight config sync-rules [--update]
 | Subcommand | Description |
 |------------|-------------|
 | `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays LLM provider, model, API key (masked), base URL, seed auto-import status, and scoring weights. |
-| `set <key> <value>` | Set a configuration value. Only `api_key` and `base_url` are supported. Writes to `llm.openai.<key>` in `config.toml`. Example: `trustsight config set base_url https://api.openai.com/v1`. |
+| `setup` | Interactive wizard to configure the LLM provider. Walks through provider choice, endpoint, credentials, model selection, and optionally tests the connection. |
+| `set <key> <value>` | Set a configuration value. Supported keys: `api_key`, `base_url`, `model`, `timeout`, `provider`. Example: `trustsight config set model gpt-4o-mini`. |
 | `sync-rules` | Add rules that ship with this version but are absent from your `rules.toml`. |
 
 ### `sync-rules`
@@ -421,5 +425,64 @@ Backtracking is measured rather than guessed. Static nested-quantifier heuristic
 | `0` | No errors (warnings may be present). |
 | `1` | At least one error. |
 | `2` | `--file` path does not exist. |
+
+---
+
+## trustsight baseline
+
+Build or import a full-AUR baseline corpus.  The baseline is a signed artifact
+containing analysis profiles for every AUR package, priors for novelty
+detection, and a metadata snapshot for delta computation.
+
+```
+trustsight baseline build [--resume] [--export FILE]
+trustsight baseline import FILE
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `build` | Bootstrap the corpus: fetch the AUR metadata snapshot, download PKGBUILDs for every package, analyse each one, store results, and optionally emit a signed baseline artifact. |
+| `import` | Import a signed baseline artifact. Verifies the signature, then merges profiles, priors, and the metadata snapshot into the local database. After import the database is warm. |
+
+### Flags (`build`)
+
+| Flag | Description |
+|------|-------------|
+| `--resume` | Resume an interrupted bootstrap. The bootstrap saves progress after each package. |
+| `--export PATH` | Write the signed baseline artifact to this path. |
+| `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
+| `--json` | Output JSON. |
+
+### Flags (`import`)
+
+| Flag | Description |
+|------|-------------|
+| `--allow-unsigned` | Import even if the artifact is unsigned. Use only for self-built local artifacts. |
+| `--json` | Output JSON. |
+| `--json` | Output JSON. |
+
+---
+
+## trustsight watch
+
+Daemon mode: poll the AUR metadata snapshot and analyse new updates as they
+appear.  Repeatedly fetches the metadata, diffs it against the stored copy,
+downloads PKGBUILDs for changed packages, analyses them, and optionally fires
+alert hooks for findings above a threshold.
+
+```
+trustsight watch [--interval 6h] [--threshold 30] [--alert-hook CMD]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--interval` | `6h` | Poll interval (`6h`, `30m`, `1d`). |
+| `--threshold`, `--alert-threshold` | `30` | Minimum score to trigger an alert. |
+| `--alert-hook` | - | Shell command to run on alert. Receives a JSON payload on stdin. |
+| `--json` | `false` | Output JSON. |
 
 ---

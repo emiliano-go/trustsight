@@ -169,7 +169,7 @@ app = typer.Typer(
     help="TrustSight - AUR Package Update Vetting Tool",
     no_args_is_help=True,
     add_completion=True,
-    epilog="New? Start with 'trustsight config setup', then 'trustsight review'.",
+    epilog="New? Start with 'trustsight review', then 'trustsight inspect <pkg>'.",
 )
 config_app = typer.Typer(
     help="Manage configuration (aliases: show, set, sync-rules)",

@@ -1,3 +1,10 @@
+import sys
+from pathlib import Path
+
+_SRC = str(Path(__file__).resolve().parent.parent / "src")
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
 SHARED_RULES = [
     {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
     {"id": "R002", "name": "Wget Pipe to Shell", "pattern": r"wget.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},

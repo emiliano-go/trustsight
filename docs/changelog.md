@@ -62,6 +62,43 @@
 - **`src/trustsight/_toml.py`** removed along with the `tomli` fallback for
   Python 3.10.
 
+## [0.10.1] - 2026-07-29
+
+### Added
+
+- **`forget` command.** `trustsight forget <package>...` removes packages from
+  the local database. Supports `--prune` (remove packages not in the AUR),
+  `--dry-run` (preview without deleting), and `--yes` (skip confirmation).
+  Cascading deletes across 7 database tables. Documented in
+  `docs/reference/cli.md`.
+- **AUR verification on `inspect`.** The `inspect` command now verifies a
+  package exists in the AUR before analysis, with graceful fallback to cached
+  local data when the AUR RPC is unreachable.
+
+### Fixed
+
+- **Nested parameter expansion in PKGBUILD variables.** The resolver now
+  handles constructs like `${srcdir}/${pkgname}-${pkgver}` by recursively
+  expanding nested variable references. `resolve_expansions()` and supporting
+  helpers (`_expand_one()`, `_glob_to_regex()`, `_strip_affix()`) added to
+  `tokenizer.py`. 20 regression tests.
+- **`__seed__` sentinel leaking into listings.** The synthetic `__seed__`
+  package (used for first-run detection) no longer appears in `list` output
+  or other user-facing queries. `get_package_id()` and `get_package()`
+  return `None` for reserved names; `upsert_package()` raises `ValueError`.
+- **Unanalyzed packages showing `0/100 Low`.** The `inspect` and `review`
+  commands now display `—` (em-dash) for score and risk when a package has
+  not yet been analyzed, instead of misleading `0/100 Low`.
+- **Empty version strings shown as `unresolved`.** Version strings that do
+  not match the plausible-version regex (e.g. unresolved PKGBUILD variables)
+  display as `unresolved` in all output paths.
+
+### Changed
+
+- **Test fixture import resolution.** `tests/conftest.py` inserts `src/` into
+  `sys.path` so that pytest can resolve `trustsight` imports without relying
+  on the installed package.
+
 ## [0.9.0] - 2026-07-28
 
 ### Removed

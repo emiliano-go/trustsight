@@ -866,3 +866,77 @@ def save_package_profile(
             (package_name, last_score, last_risk),
         )
         conn.commit()
+
+
+def forget_package(name: str) -> dict[str, int]:
+    """Delete all rows for *name* across every table that references it.
+
+    Returns counts of deleted rows keyed by table name.  Raises ValueError
+    for reserved names.
+    """
+    if name in _RESERVED_NAMES or name.startswith("__"):
+        raise ValueError(f"reserved name cannot be removed: {name}")
+    counts: dict[str, int] = {}
+    with get_connection() as conn:
+        pkg = conn.execute("SELECT id FROM packages WHERE name = ?", (name,)).fetchone()
+        if pkg is None:
+            return {}
+        pkg_id = pkg["id"]
+
+        # alert_state, pkgbuild_snapshots, package_profiles, package_properties
+        # are keyed by package_name directly.
+        for table in ("alert_state", "pkgbuild_snapshots", "package_profiles", "package_properties"):
+            cur = conn.execute(f"DELETE FROM {table} WHERE package_name = ?", (name,))
+            counts[table] = cur.rowcount
+
+        # triggered_rules joins through analysis_history.
+        cur = conn.execute(
+            "DELETE FROM triggered_rules WHERE history_id IN "
+            "(SELECT id FROM analysis_history WHERE package_id = ?)",
+            (pkg_id,),
+        )
+        counts["triggered_rules"] = cur.rowcount
+
+        cur = conn.execute("DELETE FROM analysis_history WHERE package_id = ?", (pkg_id,))
+        counts["analysis_history"] = cur.rowcount
+
+        # source_urls and maintainers have FK to packages(id).  Reassign to
+        # the sentinel row (id 0) rather than deleting — the seed may have
+        # contributed data the user wants to keep.
+        conn.execute(
+            "UPDATE source_urls SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",
+            (pkg_id,),
+        )
+        conn.execute(
+            "UPDATE maintainers SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",
+            (pkg_id,),
+        )
+
+        cur = conn.execute("DELETE FROM packages WHERE id = ?", (pkg_id,))
+        counts["packages"] = cur.rowcount
+        conn.commit()
+    return counts
+
+
+def forget_prune(
+    aur_names: set[str],
+    dry_run: bool = False,
+) -> dict[str, dict[str, int]]:
+    """Remove all tracked packages not present in *aur_names*.
+
+    Returns ``{name: {table: count, ...}}`` for every package that would
+    be or was removed.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, name FROM packages WHERE name NOT IN ('__seed__')"
+        ).fetchall()
+    removed: dict[str, dict[str, int]] = {}
+    for r in rows:
+        if r["name"] in aur_names:
+            continue
+        if dry_run:
+            removed[r["name"]] = {}
+        else:
+            removed[r["name"]] = forget_package(r["name"])
+    return removed

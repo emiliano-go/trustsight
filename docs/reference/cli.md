@@ -188,7 +188,53 @@ trustsight list [--limit N]
 
 Table with columns: **Package**, **Version**, **Maintainer**, **Last Checked**, **Score**, **Risk**.
 
-Packages that have never been analysed show `n/a` for score.
+Packages that have never been analysed show `—` for score.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
+
+---
+
+## trustsight forget
+
+Remove a tracked package and all associated history (analysis history, triggered rules, snapshots, profiles, alert state).  Package data is removed permanently; source URL and maintainer records are reassigned to the internal sentinel rather than deleted.
+
+```
+trustsight forget <package>...
+trustsight forget --prune [--dry-run]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package` | One or more | Package name(s) to remove from tracking. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--prune` | Remove every tracked package that no longer exists in the AUR.  Re-verifies each name against the AUR RPC and removes absent ones.  Useful for cleaning up packages that were deleted from the AUR or that were never in it. |
+| `--dry-run` | Show what would be removed without actually deleting anything.  Only meaningful with `--prune`. |
+| `--yes` | Skip the confirmation prompt when removing named packages (always skips for `--prune`). |
+
+### Behaviour
+
+When removing named packages:
+
+1. Deletes `alert_state`, `pkgbuild_snapshots`, `package_profiles`, and `package_properties` rows keyed by the package name.
+2. Deletes `triggered_rules` rows (via `analysis_history`).
+3. Deletes `analysis_history` rows.
+4. Reassigns `source_urls.first_seen_package_id` and `maintainers.first_seen_package_id` to the internal sentinel (id 0).
+5. Deletes the `packages` row.
+
+Reserved names (`__seed__`, or any name starting with `__`) cannot be forgotten and raise an error.
+
+### Examples
+
+```
+trustsight forget aurch                    # Remove a single non-AUR helper
+trustsight forget aurch openssl-1.1        # Remove multiple packages
+trustsight forget --prune --dry-run        # Show what would be pruned
+trustsight forget --prune                  # Remove all non-AUR packages
+```
 
 ---
 

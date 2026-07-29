@@ -585,6 +585,63 @@ def test_top_dependency_names_still_returns_names_only(db):
 
 # --- schema migration ---
 
+def test_forget_package_deletes_everything(db):
+    """forget_package removes a package and all its related rows."""
+    from trustsight.db import forget_package, get_connection
+    pid = upsert_package("goner", "1.0")
+    hid = insert_analysis(
+        pid, "1.0", "2.0", "aaa", "bbb", 50, "+diff", "{}",
+        [{"rule_id": "R001", "severity": "CRITICAL"}],
+    )
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO pkgbuild_snapshots (package_name, pkgbuild_text, version, captured_at) "
+            "VALUES (?, 'text', '1.0', datetime('now'))", ("goner",))
+        conn.execute(
+            "INSERT INTO package_profiles (package_name, observation_count, last_seen) "
+            "VALUES (?, 1, datetime('now'))", ("goner",))
+        conn.execute(
+            "INSERT INTO alert_state (package_name, rule_id, first_seen) "
+            "VALUES (?, 'R001', datetime('now'))", ("goner",))
+        conn.commit()
+    counts = forget_package("goner")
+    assert counts.get("packages") == 1
+    assert counts.get("analysis_history") == 1
+    assert counts.get("triggered_rules") == 1
+    assert get_package_id("goner") is None
+
+
+def test_forget_package_unknown_returns_empty(db):
+    from trustsight.db import forget_package
+    assert forget_package("nonexistent") == {}
+
+
+def test_forget_package_rejects_reserved_names(db):
+    from trustsight.db import forget_package
+    with pytest.raises(ValueError, match="reserved name"):
+        forget_package("__seed__")
+
+
+def test_forget_prune_dry_run_does_not_delete(db):
+    """--dry-run returns names but does not remove anything."""
+    from trustsight.db import forget_prune, get_all_packages
+    upsert_package("keep", "1.0")
+    upsert_package("gone", "2.0")
+    removed = forget_prune(aur_names={"keep"}, dry_run=True)
+    assert "gone" in removed
+    assert get_all_packages() != []  # nothing was removed
+
+
+def test_forget_prune_removes_non_aur_packages(db):
+    from trustsight.db import forget_prune, get_all_packages
+    upsert_package("keep", "1.0")
+    upsert_package("gone", "2.0")
+    forget_prune(aur_names={"keep"}, dry_run=False)
+    names = [p["name"] for p in get_all_packages()]
+    assert "keep" in names
+    assert "gone" not in names
+
+
 def test_init_db_adds_column_missing_from_an_older_database(tmp_path, monkeypatch):
     """A database created before current_maintainer existed is upgraded.
 

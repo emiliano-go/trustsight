@@ -167,7 +167,7 @@ def analyze_package_text(
 
     package_id = upsert_package(pkg_name, new_version)
 
-    # Property stability tracking — record now, consumed later by R094–R102
+    # Property stability tracking: record now, consumed later by R094-R102
     observed_at: str = ""
     if temporal.last_modified is not None:
         from datetime import datetime, timezone

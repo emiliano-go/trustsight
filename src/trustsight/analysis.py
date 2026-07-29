@@ -36,6 +36,7 @@ from .differ import (
     extract_urls_from_diff,
     generate_diff,
     is_skip_justified,
+    map_diff_lines,
     source_array_has_command_substitution,
 )
 from .fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
@@ -335,11 +336,12 @@ def _structural_findings(
     source_buckets = source_buckets or {}
     findings: list[dict] = []
 
-    def add(rule_id: str, name: str, severity: str, category: str, match: str, **extra) -> None:
+    def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, **extra) -> None:
         """append a finding to the accumulator"""
         finding = {
             "rule_id": rule_id, "name": name, "severity": severity,
             "category": category, "match": match,
+            "file": file, "line": line,
         }
         if extra:
             finding["params"] = extra
@@ -711,10 +713,12 @@ def analyze_package(
 
     resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
     raw_lines = get_raw_diff_lines(diff_text)
+    line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
         resolved_strings, raw_lines,
         include_experimental=config.get("rules", {}).get("experimental", False),
+        line_map=line_map,
     )
     triggered_rules.extend(
         _structural_findings(
@@ -900,10 +904,12 @@ def scan_diff(
 
     resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
     raw_lines = get_raw_diff_lines(diff_text)
+    line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
         resolved_strings, raw_lines, rules,
         include_experimental=config.get("rules", {}).get("experimental", False),
+        line_map=line_map,
     )
     triggered_rules.extend(
         _structural_findings(
@@ -992,6 +998,44 @@ def scan_diff(
         score_breakdown=breakdown,
         final_score=score,
     )
+
+
+def analyze_package_text(
+    pkg_name: str,
+    old_text: str,
+    new_text: str,
+    config: dict | None = None,
+    rules: list[dict] | None = None,
+    adapter: str = "corpus",
+) -> PackageFact:
+    """Analyze a package using raw old/new PKGBUILD text (no git repo).
+
+    Used by the corpus adapter (``--full-aur``) where only codeload-fetched
+    text snapshots are available.  Generates a unified diff via
+    :func:`difflib.unified_diff` and passes it through the same analysis
+    pipeline as :func:`analyze_package`.
+    """
+    import difflib
+
+    if config is None:
+        config = load_config()
+
+    diff_text = "\n".join(difflib.unified_diff(
+        old_text.splitlines() if old_text else [],
+        new_text.splitlines() if new_text else [],
+        fromfile="PKGBUILD", tofile="PKGBUILD",
+        n=config.get("diff", {}).get("max_context_lines", 3),
+    ))
+
+    fact = scan_diff(
+        diff_text,
+        rules=rules,
+        config=config,
+        package_name=pkg_name,
+    )
+    fact.adapter = adapter
+    fact.temporal_source = "aur_metadata"
+    return fact
 
 
 def _make_fresh_analysis(

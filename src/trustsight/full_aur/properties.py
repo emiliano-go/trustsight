@@ -129,7 +129,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     tokens = _tokenize_desc(pkgdesc)
     props["pkgdesc_tokens"] = frozenset(tokens)
 
-    # depends — prefer .SRCINFO (structured), fall back to PKGBUILD regex
+    # depends: prefer .SRCINFO (structured), fall back to PKGBUILD regex
     depends: set[str] = set()
     if srcinfo:
         for line in srcinfo.splitlines():
@@ -157,7 +157,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                     depends.add(d.group(1))
     props["depends"] = frozenset(depends)
 
-    # source_hosts / source_orgs — extracted from source=() entries
+    # source_hosts / source_orgs: extracted from source=() entries
     hosts: set[str] = set()
     orgs: set[str] = set()
     in_source = False
@@ -206,7 +206,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     install_match = _INSTALL_RE.search(new_pkgbuild)
     props["install_hook_present"] = install_match is not None
 
-    # license — from .SRCINFO if available
+    # license: from .SRCINFO if available
     if srcinfo:
         licenses: set[str] = set()
         for line in srcinfo.splitlines():

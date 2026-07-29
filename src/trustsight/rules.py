@@ -169,6 +169,7 @@ def apply_rules(
     raw_diff_lines: list[str],
     rules: list[dict] | None = None,
     include_experimental: bool = False,
+    line_map: dict[int, tuple[str, int]] | None = None,
 ) -> list[dict]:
     """Match rules against diff lines and return triggered findings."""
     if rules is None:
@@ -207,15 +208,16 @@ def apply_rules(
             if compiled.search(item):
                 if rule_scope and not _scope_matches(rule_scope, idx, ctx_map, fn_map):
                     continue
-                triggered.append(
-                    {
-                        "rule_id": rule["id"],
-                        "name": rule["name"],
-                        "severity": rule["severity"],
-                        "category": rule["category"],
-                        "match": item[:100],
-                    }
-                )
+                finding = {
+                    "rule_id": rule["id"],
+                    "name": rule["name"],
+                    "severity": rule["severity"],
+                    "category": rule["category"],
+                    "match": item[:100],
+                }
+                if line_map and idx in line_map:
+                    finding["file"], finding["line"] = line_map[idx]
+                triggered.append(finding)
                 break
 
     return triggered

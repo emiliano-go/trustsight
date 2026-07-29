@@ -1,8 +1,51 @@
 import re
 
 import pygit2
+from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
 from .schema import DiffSummary, SourceChanges
+
+_HUNK_HEADER_RE = re.compile(
+    r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@"
+)
+
+
+def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
+    """Map diff-line index → (file_name, new_file_line_number).
+
+    Returns a dict keyed by the 0-based line index into *diff_text*'s
+    lines, with each value being ``(file_name, line_number)``.
+    Only content lines (`` `` context, ``+`` addition, ``-`` removal)
+    produce entries; header lines are not mapped.
+    """
+    mapping: dict[int, tuple[str, int]] = {}
+    lines = diff_text.splitlines()
+    current_file = "PKGBUILD"
+    new_lineno = 0
+
+    for i, line in enumerate(lines):
+        if line.startswith("+++ "):
+            current_file = line[4:].lstrip("b/")
+            continue
+        if line.startswith("--- "):
+            continue
+        m = _HUNK_HEADER_RE.match(line)
+        if m:
+            new_lineno = int(m.group(1))
+            continue
+        if line.startswith(("+", " ", "-")):
+            mapping[i] = (current_file, new_lineno)
+            if line.startswith(("+", " ")):
+                new_lineno += 1
+
+    return mapping
+
+_DELTA_STATUS_MAP = {
+    GIT_DELTA_ADDED: "added",
+    GIT_DELTA_DELETED: "removed",
+    GIT_DELTA_MODIFIED: "modified",
+    GIT_DELTA_RENAMED: "renamed",
+}
 
 
 def generate_diff(
@@ -29,10 +72,18 @@ def generate_diff(
     lines_removed = diff.stats.deletions
     files_changed = list({delta.new_file.path for delta in diff.deltas})
 
+    file_changes = []
+    for delta in diff.deltas:
+        status = _DELTA_STATUS_MAP.get(delta.status, "modified")
+        path = delta.new_file.path if delta.status != GIT_DELTA_DELETED else delta.old_file.path
+        if path not in (".SRCINFO", ".gitignore"):
+            file_changes.append({"path": path, "status": status})
+
     summary = DiffSummary(
         lines_added=lines_added,
         lines_removed=lines_removed,
         files_changed=files_changed,
+        file_changes=file_changes,
     )
 
     return unified, summary

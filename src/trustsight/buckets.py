@@ -6,7 +6,7 @@ from .config import load_domains
 
 # tldextract is imported lazily.  It pulls in requests and urllib3, which
 # together cost ~98ms of the CLI's startup, and nothing outside URL
-# classification needs it -- `trustsight --help` should not pay for it.
+# classification needs it; `trustsight --help` should not pay for it.
 _extractor = None
 
 

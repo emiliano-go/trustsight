@@ -7,6 +7,8 @@ class DiffSummary:
     lines_added: int = 0
     lines_removed: int = 0
     files_changed: list[str] = field(default_factory=list)
+    file_changes: list[dict] = field(default_factory=list)
+    """Each entry: {"path": str, "status": "added"|"removed"|"modified"}"""
 
 
 @dataclass
@@ -52,6 +54,8 @@ class ScoreEntry:
     weight: int = 0
     reason: str = ""
     params: dict = field(default_factory=dict)
+    file: str = ""
+    line: int | None = None
 
 
 @dataclass
@@ -86,6 +90,9 @@ class PackageFact:
     # Which clock produced the temporal findings.
     temporal_source: str = "unknown"
 
+    # Which fetch/adapter produced the analysis: "git" | "corpus"
+    adapter: str = "git"
+
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0
 
@@ -105,6 +112,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
             "lines_added": fact.diff_summary.lines_added,
             "lines_removed": fact.diff_summary.lines_removed,
             "files_changed": fact.diff_summary.files_changed,
+            "file_changes": fact.diff_summary.file_changes,
         },
         "source_changes": {
             "added_urls": fact.source_changes.added_urls,
@@ -133,8 +141,11 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "weight": e.weight,
                 "reason": e.reason,
                 "params": e.params,
+                "file": e.file,
+                "line": e.line,
             }
             for e in fact.score_breakdown
         ],
         "final_score": fact.final_score,
+        "adapter": fact.adapter,
     }

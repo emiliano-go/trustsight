@@ -5,29 +5,29 @@ _SEVERITY_ORDER = ["FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 _TEMPLATES: dict[str, str] = {
     # --- Dependency rules ---
     "D001": "novel dependency '{dep_name}' added in {field}",
-    "D002": "typosquatted dependency: {field} '{dep_name}' resembles '{impersonated}'",
-    "D003": "build can now reach the network via {new_network}",
-    "D004": "{field} '{dep_name}', an established package unrelated to this one",
+    "D002": "typosquatted dependency: {field} '{dep_name}' impersonates '{impersonated}'",
+    "D003": "build target can reach the network via {new_network}",
+    "D004": "{field} '{dep_name}' declares an established unrelated package",
 
     # --- Build / install rules ---
-    "R060": "critical build function(s) modified: {touched}",
-    "R061": "{position}() downloads {url}, which is not in source=()",
-    "R062": "{position}() runs as root and contains: {body}",
-    "R063": "{position}() applies patch from {patch_src}",
+    "R060": "critical build function modified: {touched}",
+    "R061": "{position}() fetches {url} from outside the declared source array",
+    "R062": "{position}() runs as root: {body}",
+    "R063": "{position}() applies external patch from {patch_src}",
     "R064": "source URL downgraded from https to http: {url}",
     "R070": "{detail}",
 
     # --- Structural rules ---
-    "C001": "checksum changed without source change (stable version)",
+    "C001": "checksum changed without corresponding source change",
     "C002": "checksum updated alongside version bump",
-    "C003": "source URL(s) changed without version bump",
-    "C004": "checksum array deleted while source URLs stayed the same",
-    "C005": "binary artifact from {bucket} bucket: {url}",
-    "C006": "maintainer changed; new domain(s) appeared: {new_domains}",
-    "C007": "source=() contains $( ) or backtick substitution",
+    "C003": "source URLs changed without version bump",
+    "C004": "checksum array deleted while source URLs remain the same",
+    "C005": "binary artifact from {bucket} source: {url}",
+    "C006": "maintainer changed; new domains appeared: {new_domains}",
+    "C007": "source array contains command substitution $( ) or backticks",
 
     # --- Checksum rules ---
-    "R004": "checksum disabled{skip_suffix}",
+    "R004": "checksum set to SKIP{skip_suffix}",
     "R005": "checksum array emptied",
 
     # --- Temporal rules ---
@@ -37,11 +37,11 @@ _TEMPLATES: dict[str, str] = {
 
     # --- Context rules ---
     "R068": "PKGBUILD declares an install hook",
-    "R069": "validpgpkeys was populated and is now empty or removed",
-    "R071": "maintainer changed to '{new}', who has never been seen in the AUR",
-    "R072": "rule hits span {n_categories} distinct capability categories",
+    "R069": "validpgpkeys removed after being populated",
+    "R071": "maintainer changed: {previous_maintainer} → {current_maintainer} (new maintainer never seen in the AUR)",
+    "R072": "findings span {n_categories} distinct capability categories",
     "R074": "package name '{pkg_name}' resembles the far more popular '{squatted}'",
-    "R075": "diff adds {n_novel} novel/rare dep(s): {novel_names}",
+    "R075": "diff adds {n_novel} novel or rare dependencies: {novel_names}",
 }
 
 

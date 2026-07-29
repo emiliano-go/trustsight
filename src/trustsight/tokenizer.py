@@ -19,7 +19,7 @@ def join_line_continuations(lines: list[str]) -> list[str]:
     out: list[str] = []
     # Accumulated as parts and joined once.  Appending to a string per
     # continuation line made this quadratic, so a diff of many backslash
-    # continuations -- which an untrusted PKGBUILD controls -- cost time
+    # continuations (which an untrusted PKGBUILD controls) cost time
     # proportional to the square of its length.
     parts: list[str] | None = None
     marker = ""

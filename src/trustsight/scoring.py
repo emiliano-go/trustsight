@@ -62,6 +62,8 @@ def calculate_score(
     severity_weights = config.get("severity_weights", {})
     for rule in triggered_rules:
         params = rule.get("params", {})
+        file = rule.get("file", "")
+        line = rule.get("line")
         if rule["severity"] == "FATAL":
             has_fatal = True
             breakdown.append(
@@ -71,6 +73,8 @@ def calculate_score(
                     weight=0,
                     reason=f"{rule['name']}: {rule.get('match', '')}",
                     params=params,
+                    file=file,
+                    line=line,
                 )
             )
             continue
@@ -83,6 +87,8 @@ def calculate_score(
                 weight=weight,
                 reason=f"{rule['name']}: {rule.get('match', '')}",
                 params=params,
+                file=file,
+                line=line,
             )
         )
 

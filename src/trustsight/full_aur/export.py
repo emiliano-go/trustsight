@@ -263,7 +263,7 @@ def import_baseline(
                 "cannot be distinguished from a tampered one.  Use --allow-unsigned "
                 "for a baseline you built yourself on this machine."
             )
-        log.warning("importing UNSIGNED baseline — local builds only, never distribute")
+        log.warning("importing UNSIGNED baseline; local builds only, never distribute")
     else:
         pubkey_path = _TRUSTED_PUBKEY_FILE
         if not pubkey_path.exists():

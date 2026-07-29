@@ -120,7 +120,7 @@ def repo_path(pkg_name: str) -> Path:
 # Deliberately not derived from the HEAD commit's timestamp: a commit's date
 # is chosen by whoever authored it, so a maintainer who dates a commit in the
 # future would make the clone look permanently current and trustsight would
-# never fetch that package again -- silently blinding it to every later
+# never fetch that package again; silently blinding it to every later
 # update, which is precisely what it exists to inspect.  A local record of
 # our own fetch cannot be influenced from the other end.
 _FETCH_MARKER = "trustsight-last-fetch"

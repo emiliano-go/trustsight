@@ -220,6 +220,64 @@ def _main(
     pass
 
 
+def _discover_packages(
+    repos, include_foreign, all_repos_flag, all_packages, _warn
+):
+    """Discover outdated packages using AUR metadata-dump, falling back to AUR RPC.
+
+    Returns (outdated_pkgs, total_installed) or (None, 0) on first run
+    (no baseline yet).
+    """
+    try:
+        from .full_aur.metadata import fetch_metadata, load_metadata, save_metadata
+        from .discovery import _vercmp
+
+        meta = load_metadata()
+        if meta is None:
+            meta = fetch_metadata()
+            save_metadata(meta)
+            _print_colored("Downloaded AUR metadata snapshot. Run again to review changes.", "green")
+            return None, 0
+
+        installed = _get_installed_packages(
+            repos, include_foreign, all_repos_flag, all_packages, _warn_func=_warn
+        )
+        total_installed = len(installed)
+
+        outdated = []
+        for pkg in installed:
+            name = pkg["name"]
+            aur = meta.get(name)
+            if aur is None:
+                continue
+            latest_ver = aur.get("Version", "")
+            if not latest_ver:
+                continue
+            if all_packages or _vercmp(pkg["current_version"], latest_ver) < 0:
+                pkg["latest_version"] = latest_ver
+                last_mod = aur.get("LastModified")
+                if isinstance(last_mod, int):
+                    pkg["last_modified"] = last_mod
+                outdated.append(pkg)
+
+        return outdated, total_installed
+    except Exception:
+        log.warning("metadata-dump discovery failed, falling back to AUR RPC", exc_info=True)
+        from .discovery import discover_packages as dp
+        pkgs = dp(
+            repos=repos,
+            include_foreign=include_foreign,
+            all_repos=all_repos_flag,
+            all_packages=all_packages,
+            _warn_func=_warn if repos else None,
+        )
+        total = 0
+        if include_foreign:
+            from .discovery import get_installed_foreign
+            total = len(get_installed_foreign())
+        return pkgs, total
+
+
 # --- review ---
 
 @app.command()
@@ -227,6 +285,7 @@ def review(
     limit: int = typer.Option(0, "--limit", help="Max packages to review (0 = unlimited)"),
     verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules per package"),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress progress output"),
+    score: bool = typer.Option(False, "--score", help="Show aggregate trust score"),
     repo: Optional[list[str]] = typer.Option(
         None, "--repo", help="Scan packages from a specific local repository (can be repeated)"
     ),
@@ -298,32 +357,30 @@ def review(
                     console().print(f"[red]Error:[/] {exc}")
                 sys.exit(1)
 
-    outdated_pkgs = discover_packages(
+    changed_installed, total_installed = _discover_packages(
         repos=repos,
         include_foreign=include_foreign,
-        all_repos=all_repos_flag,
+        all_repos_flag=all_repos_flag,
         all_packages=all_packages,
-        _warn_func=_warn if repos else None,
+        _warn=_warn,
     )
 
-    total_installed = 0
-    if include_foreign:
-        from .discovery import get_installed_foreign
-        total_installed = len(get_installed_foreign())
-
-    if not outdated_pkgs:
+    if changed_installed is None:
+        # First metadata fetch: the message was already printed in _discover_packages.
+        return
+    if not changed_installed:
         if all_packages:
             _print_colored("No AUR packages found to review.", "green")
         else:
             _print_colored("No outdated packages found.", "green")
         return
 
-    _run_analysis_loop(outdated_pkgs, effective_limit, verbose, quiet, json_output, total_installed, all_packages)
+    _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score)
 
 
 def _run_analysis_loop(
     outdated_pkgs: list[dict], limit: int, verbose: bool, quiet: bool, json_output: bool,
-    total_installed: int = 0, all_packages: bool = False,
+    total_installed: int = 0, all_packages: bool = False, show_score: bool = False,
 ) -> None:
     """run the full analysis loop with optional progress display"""
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
@@ -369,7 +426,31 @@ def _run_analysis_loop(
         results = _analyze_outdated_batch(limited, None, verbose)
 
     if json_output:
-        typer.echo(json.dumps(results, indent=2))
+        # Policy-neutral JSON: no score/risk unless --score is passed
+        json_results = []
+        for r in results:
+            jr = {
+                "package": r["package"],
+                "old_version": r["old_version"],
+                "new_version": r["new_version"],
+                "findings": [
+                    {"rule_id": f["rule_id"], "file": f["file"],
+                     "line": f["line"], "description": f["description"]}
+                    for f in r.get("findings", [])
+                ],
+                "file_changes": r.get("file_changes", []),
+                "verdict": r["verdict"],
+                "first_seen": r.get("first_seen", False),
+                "is_trivial": r.get("is_trivial", False),
+            }
+            if show_score:
+                jr["score"] = r.get("score")
+                jr["risk"] = r.get("risk")
+            if verbose:
+                jr["triggered_rules"] = r.get("triggered_rules", [])
+                jr["suppressed_rules"] = r.get("suppressed_rules", [])
+            json_results.append(jr)
+        typer.echo(json.dumps(json_results, indent=2))
         return
 
     if not results:
@@ -378,6 +459,51 @@ def _run_analysis_loop(
         else:
             _print_colored("No outdated packages found.", "green")
         return
+
+    for r in results:
+        if r.get("failed"):
+            typer.echo(f"{r['package']} {r.get('old_version', '?')} → {r.get('new_version', '?')}")
+            typer.echo(f"  {r['verdict']}")
+            typer.echo()
+            continue
+
+        typer.echo(f"{r['package']} {r.get('old_version', '?')} → {r.get('new_version', '?')}")
+
+        findings = r.get("findings", [])
+        file_changes = r.get("file_changes", [])
+        is_trivial = r.get("is_trivial", False)
+
+        if r.get("first_seen"):
+            typer.echo(f"  First analysis. No prior history for this package.")
+        elif is_trivial:
+            typer.echo(f"  Only pkgver and sha256sums changed. Review the diff before building.")
+        else:
+            typer.echo(f"  The update is not trivial. Review it.")
+            for f in findings:
+                file_part = f.get("file", "")
+                line = f.get("line")
+                desc = f.get("description", "")
+                if line is not None:
+                    typer.echo(f"  {file_part} line {line}   {desc}")
+                else:
+                    typer.echo(f"  {file_part}           {desc}")
+            for fc in file_changes:
+                status = fc.get("status", "")
+                path = fc.get("path", "")
+                if status == "added":
+                    typer.echo(f"  new file           {path}")
+                elif status == "removed":
+                    typer.echo(f"  removed file       {path}")
+
+        if show_score and not r.get("failed"):
+            risk = r.get("risk", "")
+            score_val = r.get("score", 0)
+            typer.echo(f"  Score: {score_val}/100 ({risk})")
+
+        if r.get("diff_truncated"):
+            typer.echo(f"  [Diff was truncated; only part of the change was vetted.]")
+
+        typer.echo()
 
     flagged = sum(1 for r in results if (r["score"] or 0) > 20)
     failed = sum(1 for r in results if r.get("failed"))
@@ -388,80 +514,11 @@ def _run_analysis_loop(
         caption = f"{reviewed} package(s) needing update and reviewed"
         if total_installed:
             caption += f" out of {total_installed} installed"
-    caption += f", {flagged} above the 20-point CLEAN threshold"
+    if show_score and flagged:
+        caption += f", {flagged} above the 20-point CLEAN threshold"
     if failed:
         caption += f", {failed} could NOT be vetted"
-
-    if has_progress:
-        table = Table(
-            title="TrustSight Review",
-            caption=caption,
-            caption_justify="right",
-        )
-        table.add_column("Package", style="cyan", no_wrap=True)
-        table.add_column("Score", justify="right")
-        table.add_column("Risk")
-        table.add_column("Verdict", overflow="fold")
-        if verbose:
-            table.add_column("Triggered Rules", overflow="fold")
-        for r in results:
-            verdict = Text(strip_ansi(r["verdict"]))
-            if r.get("first_seen"):
-                verdict = Text.assemble(("first analysis: ", "yellow"), verdict)
-            score_cell = (
-                Text("n/a", style="bold red") if r.get("failed")
-                else _score_text(r["score"], r["risk"])
-            )
-            row = [
-                r["package"],
-                score_cell,
-                Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
-                verdict,
-            ]
-            if verbose:
-                analysis_t = r.get("analysis_time", 0)
-                llm_t = r.get("llm_time", 0)
-                if r.get("failed"):
-                    row.append(Text("n/a", style="dim"))
-                    row.append(Text("n/a", style="dim"))
-                else:
-                    row.append(Text(f"{analysis_t:.1f}s", style="dim" if analysis_t < 1 else "white"))
-                    row.append(Text(f"{llm_t:.1f}s", style="dim" if llm_t < 1 else "white"))
-                rules_text = (
-                    ", ".join(f"{rule['rule_id']}" for rule in r.get("triggered_rules", []))
-                    if r.get("triggered_rules") else "[dim]none[/]"
-                )
-                row.append(Text(strip_ansi(rules_text)))
-            table.add_row(*row)
-        con.print(table)
-    else:
-        if verbose:
-            print(f"{'Package':<20} {'Score':<7} {'Anal':>5} {'LLM':>5} Verdict  Rules")
-        else:
-            print(f"{'Package':<20} {'Score':<7} Verdict")
-        print("-" * (100 if verbose else 80))
-        for r in results:
-            verdict = r["verdict"]
-            if r.get("first_seen"):
-                verdict = f"[First analysis] {verdict}"
-            score = "n/a" if r.get("failed") else str(r["score"])
-            if verbose and not r.get("failed"):
-                analysis_t = r.get("analysis_time", 0)
-                llm_t = r.get("llm_time", 0)
-                timing = f"{analysis_t:>4.1f}s {llm_t:>4.1f}s"
-                line = f"{r['package']:<20} {score:<7} {timing} {verdict}"
-            elif verbose:
-                line = f"{r['package']:<20} {score:<7}  n/a   n/a  {verdict}"
-            else:
-                line = f"{r['package']:<20} {score:<7} {verdict}"
-            if verbose:
-                rules_str = (
-                    ", ".join(rule["rule_id"] for rule in r.get("triggered_rules", []))
-                    if r.get("triggered_rules") else "none"
-                )
-                line += f"  {rules_str}"
-            print(line)
-        print(caption)
+    typer.echo(caption)
 
 
 def _default_workers() -> int:
@@ -516,7 +573,7 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
                     progress_callback(done, total, f"Fetching {name}")
                 try:
                     fetched, commit_time = future.result()
-                except Exception:  # noqa: BLE001 — analysis retries and reports
+                except Exception:  # noqa: BLE001; analysis retries and reports
                     log.warning("fetch of %s failed; will retry during analysis",
                                 name, exc_info=True)
                     continue
@@ -543,6 +600,54 @@ def _verdicts_for(facts: list, progress_callback=None) -> list[str]:
     return verdicts
 
 
+def _get_installed_packages(
+    repos: list[str], include_foreign: bool, all_repos: bool, all_packages: bool,
+    _warn_func=None,
+) -> list[dict]:
+    """Return list of installed packages with name, current_version.
+
+    Uses ``pacman -Sl`` for repo contents and ``pacman -Q`` for installed
+    versions; no per-package AUR RPC calls.
+    """
+    from .discovery import get_installed_foreign, get_installed_from_repo
+    from .discovery import get_local_repos_from_pacman_conf, _repo_exists
+
+    sources: set[tuple[str, str]] = set()
+
+    if all_repos:
+        for repo in get_local_repos_from_pacman_conf():
+            sources.update(get_installed_from_repo(repo))
+
+    if repos:
+        for repo in repos:
+            pkgs = get_installed_from_repo(repo)
+            if not pkgs and _warn_func:
+                if _repo_exists(repo):
+                    _warn_func(f"repo '{repo}' exists but no packages from it are installed.")
+                else:
+                    _warn_func(f"repo '{repo}' does not exist.")
+            sources.update(pkgs)
+
+    if include_foreign or (not repos and not all_repos):
+        sources.update(get_installed_foreign())
+
+    return [{"name": name, "current_version": ver} for name, ver in sources]
+
+
+def _is_trivial_update(fact, findings: list[dict]) -> bool:
+    """True if the only change is a version bump + checksum update.
+
+    Trivial updates have no severity-bearing findings (only INFO/weight 0
+    rules may fire, like C002 for checksum-with-bump).
+    """
+    if not fact.diff_summary.files_changed:
+        return True
+    for f in findings:
+        if f.get("rule_id") not in ("C002",):
+            return False
+    return True
+
+
 def _analyze_outdated_batch(
     pkgs: list[dict], progress_callback=None, verbose: bool = False
 ) -> list[dict]:
@@ -563,7 +668,7 @@ def _analyze_outdated_batch(
                 installed_version=entry.get("current_version"),
                 upstream_mtime=hints.get(name),
             )
-        except Exception as exc:  # noqa: BLE001 — one package must not end the run
+        except Exception as exc:  # noqa: BLE001; one package must not end the run
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
             return ("fail", entry, None, None, exc)
         verdict = _verdict_for(fact)
@@ -605,6 +710,8 @@ def _analyze_outdated_batch(
                 _, _, fact, verdict, _ = result
                 analysed_by_idx[idx] = (entry, fact, verdict)
 
+    from .verdict import _render as _render_verdict
+
     # Rebuild results in original order
     results = []
     for idx in range(total):
@@ -612,6 +719,26 @@ def _analyze_outdated_batch(
         if item is None:
             continue
         entry, fact, verdict = item
+
+        # Render findings for the new output format
+        findings = []
+        for e in fact.score_breakdown:
+            if e.weight > 0 or e.severity in ("FATAL", "CRITICAL"):
+                desc = _render_verdict(e, fact)
+                findings.append({
+                    "rule_id": e.rule_id,
+                    "file": e.file,
+                    "line": e.line,
+                    "description": desc,
+                    "severity": e.severity,
+                    "weight": e.weight,
+                })
+
+        file_changes = fact.diff_summary.file_changes
+
+        # Determine if the update is trivial (only pkgver + checksums)
+        is_trivial = _is_trivial_update(fact, findings)
+
         if fact.diff_truncated:
             verdict = (
                 "Diff exceeded the size cap and was truncated; only part of "
@@ -626,6 +753,9 @@ def _analyze_outdated_batch(
             "risk": risk_level(fact.final_score),
             "first_seen": fact.first_seen,
             "diff_truncated": fact.diff_truncated,
+            "findings": findings,
+            "file_changes": file_changes,
+            "is_trivial": is_trivial,
         }
         if verbose:
             fired = [
@@ -646,6 +776,7 @@ def _analyze_outdated_batch(
 def inspect(
     package: str = typer.Argument(..., help="Package name"),
     verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules and score breakdown"),
+    score: bool = typer.Option(False, "--score", help="Show aggregate trust score"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Show a detailed analysis of a single package."""
@@ -1238,7 +1369,7 @@ def lint_rules_cmd(
 ):
     """Lint rules for common mistakes."""
     if file:
-        from ._toml import tomllib
+        import tomllib
 
         path = Path(file)
         if not path.exists():
@@ -1472,7 +1603,7 @@ def list_cmd(
             "version": pkg["current_version"] or "?",
             "last_checked": pkg["last_checked"] or "",
             "score": last["final_score"] if last else None,
-            "risk": risk_level(last["final_score"]) if last else "—",
+            "risk": risk_level(last["final_score"]) if last else "-",
             "maintainer": pkg["current_maintainer"] or "",
         })
 
@@ -1495,8 +1626,8 @@ def list_cmd(
             table.add_row(
                 r["name"],
                 r["version"],
-                r["maintainer"] or "[dim]—[/]",
-                r["last_checked"][:10] if r["last_checked"] else "[dim]—[/]",
+                r["maintainer"] or "[dim]-[/]",
+                r["last_checked"][:10] if r["last_checked"] else "[dim]-[/]",
                 score_cell,
                 Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
             )
@@ -1506,7 +1637,7 @@ def list_cmd(
         print("-" * 75)
         for r in rows:
             score = "n/a" if r["score"] is None else str(r["score"])
-            checked = r["last_checked"][:10] if r["last_checked"] else "—"
+            checked = r["last_checked"][:10] if r["last_checked"] else "-"
             print(f"{r['name']:<20} {r['version']:<15} {score:<8} {r['risk']:<12} {checked}")
 
 
@@ -1557,6 +1688,54 @@ def status_cmd(
         print(f"Effective observations: {effective_obs}")
         print(f"Seed observations     : {seed_obs}")
         print(f"Dependency corpus     : {'Loaded' if deps_loaded else 'Not loaded'}")
+
+
+# --- full-aur ---
+
+
+@app.command("full-aur")
+def full_aur_cmd(
+    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+    export: Optional[str] = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
+    sign: Optional[str] = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Bootstrap or update the full-AUR baseline corpus.
+
+    Fetches the AUR metadata snapshot, downloads PKGBUILDs for every
+    package via codeload (no git repos), analyses stateless rules,
+    and optionally emits a signed baseline artifact.
+
+    Use --export to produce a shareable baseline that other TrustSight
+    instances can consume via ``trustsight import-baseline``.
+    """
+    from .full_aur.pipeline import run_baseline_build
+    ensure_default_configs()
+    init_db()
+    run_baseline_build(
+        resume=resume,
+        export_path=export,
+        sign_key=sign,
+        json_output=json_output,
+    )
+
+
+@app.command("import-baseline")
+def import_baseline_cmd(
+    path: str = typer.Argument(..., help="Path to the baseline artifact (.tar.zst)"),
+    allow_unsigned: bool = typer.Option(False, "--allow-unsigned", help="Allow unsigned artifacts (local builds only)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Import a signed baseline corpus artifact.
+
+    Verifies the signature, then merges profiles, priors, and the metadata
+    snapshot into the local database. After import the database is warm:
+    no cold-start floor, real stable_for_n values, populated priors.
+    """
+    from .full_aur.export import import_baseline
+    ensure_default_configs()
+    init_db()
+    import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
 
 
 # --- helpers ---

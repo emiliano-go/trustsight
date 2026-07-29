@@ -1,5 +1,5 @@
 import shutil
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
@@ -56,7 +56,7 @@ def test_cli_review_runs(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.discovery.discover_packages", return_value=[]):
+    with patch("trustsight.cli._discover_packages", return_value=([], 0)):
         result = CliRunner().invoke(app, ["review", "--limit", "5"])
         assert result.exit_code == 0
 
@@ -70,6 +70,18 @@ def test_cli_review_help_shows_flags():
     assert "--all-repos" in result.stdout
 
 
+@pytest.fixture
+def review_env(tmp_path, monkeypatch):
+    """Shared setup for discovery-flag tests: isolate config + mock discovery."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+    return tmp_path
+
+
 def test_cli_review_flag_repo(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
@@ -78,18 +90,18 @@ def test_cli_review_flag_repo(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--repo", "aur"])
         assert result.exit_code == 0, result.stdout
         mock_disc.assert_called_once()
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs == {
             "repos": ["aur"],
             "include_foreign": False,
-            "all_repos": False,
+            "all_repos_flag": False,
             "all_packages": False,
-            "_warn_func": mock_disc.call_args[1]["_warn_func"],
+            "_warn": mock_disc.call_args[1]["_warn"],
         }
 
 
@@ -101,15 +113,15 @@ def test_cli_review_flag_foreign(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--foreign"])
         assert result.exit_code == 0, result.stdout
         mock_disc.assert_called_once()
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["include_foreign"] is True
         assert kwargs["repos"] == []
-        assert kwargs["all_repos"] is False
+        assert kwargs["all_repos_flag"] is False
 
 
 def test_cli_review_flag_all_repos(tmp_path, monkeypatch):
@@ -120,13 +132,13 @@ def test_cli_review_flag_all_repos(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--all-repos"])
         assert result.exit_code == 0, result.stdout
         mock_disc.assert_called_once()
-        kwargs = mock_disc.call_args[1]
-        assert kwargs["all_repos"] is True
+        _, kwargs = mock_disc.call_args
+        assert kwargs["all_repos_flag"] is True
         assert kwargs["repos"] == []
         assert kwargs["include_foreign"] is False
 
@@ -139,11 +151,11 @@ def test_cli_review_flag_repo_twice(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--repo", "aur", "--repo", "testing"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["repos"] == ["aur", "testing"]
 
 
@@ -155,11 +167,11 @@ def test_cli_review_flag_repo_plus_foreign(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--repo", "aur", "--foreign"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["repos"] == ["aur"]
         assert kwargs["include_foreign"] is True
 
@@ -172,12 +184,12 @@ def test_cli_review_flag_all_repos_plus_foreign(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--all-repos", "--foreign"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
-        assert kwargs["all_repos"] is True
+        _, kwargs = mock_disc.call_args
+        assert kwargs["all_repos_flag"] is True
         assert kwargs["include_foreign"] is True
 
 
@@ -217,11 +229,11 @@ def test_cli_review_config_default_repos(tmp_path, monkeypatch):
         include_foreign=True,
     )
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["repos"] == ["aur"]
         assert kwargs["include_foreign"] is True
 
@@ -233,11 +245,11 @@ def test_cli_review_config_cli_overrides(tmp_path, monkeypatch):
         include_foreign=True,
     )
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review", "--repo", "cli-repo"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["repos"] == ["cli-repo"]
         assert kwargs["include_foreign"] is False
 
@@ -250,14 +262,14 @@ def test_cli_review_config_no_flags_fallback_foreign(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.discover_packages") as mock_disc:
-        mock_disc.return_value = []
+    with patch("trustsight.cli._discover_packages") as mock_disc:
+        mock_disc.return_value = ([], 0)
         result = CliRunner().invoke(app, ["review"])
         assert result.exit_code == 0, result.stdout
-        kwargs = mock_disc.call_args[1]
+        _, kwargs = mock_disc.call_args
         assert kwargs["include_foreign"] is True
         assert kwargs["repos"] == []
-        assert kwargs["all_repos"] is False
+        assert kwargs["all_repos_flag"] is False
 
 
 def test_cli_history_no_history(tmp_path, monkeypatch):
@@ -430,3 +442,179 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
     )
     # exercises the rich renderer, which formats the score cell
     cli._run_analysis_loop([{"name": "ok"}, {"name": "bad"}], 10, False, False, False)
+
+
+# --- Regression tests for metadata-dispatch bugs ---
+
+
+@patch("trustsight.full_aur.metadata.load_metadata")
+@patch("trustsight.full_aur.metadata.fetch_metadata")
+@patch("trustsight.full_aur.metadata.save_metadata")
+def test_discover_packages_first_run_returns_none(
+    mock_save, mock_fetch, mock_load
+):
+    """First metadata fetch returns (None, 0) — ``_discover_packages``
+    must not emit "No outdated" when there is no baseline yet."""
+    from trustsight.cli import _discover_packages
+
+    mock_load.return_value = None
+    mock_fetch.return_value = {"some-pkg": {"Version": "2.0"}}
+
+    result, total = _discover_packages(
+        repos=[], include_foreign=True, all_repos_flag=False,
+        all_packages=False, _warn=lambda msg: None,
+    )
+    assert result is None
+    assert total == 0
+    mock_fetch.assert_called_once()
+    mock_save.assert_called_once()
+
+
+@patch("trustsight.cli._discover_packages")
+@patch("trustsight.cli.console")
+def test_review_first_run_skips_no_outdated_message(
+    mock_console, mock_disc, tmp_path, monkeypatch
+):
+    """review() must not print 'No outdated packages found' on first metadata fetch."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    mock_disc.return_value = (None, 0)
+
+    result = CliRunner().invoke(app, ["review", "--limit", "5"])
+    assert result.exit_code == 0
+    assert "No outdated" not in result.stdout
+
+
+# --- _get_installed_packages ---
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_warns_repo_not_exist(mock_exists, mock_repo):
+    """Warning emitted when a named repo does not exist at all."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_exists.return_value = False
+
+    warnings = []
+    result = _get_installed_packages(
+        repos=["nonexistent"], include_foreign=False,
+        all_repos=False, all_packages=False,
+        _warn_func=lambda msg: warnings.append(msg),
+    )
+    assert len(warnings) == 1
+    assert "does not exist" in warnings[0]
+    assert result == []
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_warns_repo_empty(mock_exists, mock_repo):
+    """Warning emitted when a repo exists but nothing is installed from it."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_exists.return_value = True
+
+    warnings = []
+    result = _get_installed_packages(
+        repos=["empty-repo"], include_foreign=False,
+        all_repos=False, all_packages=False,
+        _warn_func=lambda msg: warnings.append(msg),
+    )
+    assert len(warnings) == 1
+    assert "exists but no packages" in warnings[0]
+    assert result == []
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_foreign_only(mock_exists, mock_foreign, mock_repo):
+    """When no repos are specified, foreign packages are included by default."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_repo.return_value = []
+    mock_foreign.return_value = [("foreign-a", "1.0"), ("foreign-b", "2.0")]
+
+    result = _get_installed_packages(
+        repos=[], include_foreign=True,
+        all_repos=False, all_packages=False,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"foreign-a", "foreign-b"}
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_repo_plus_foreign(mock_exists, mock_foreign, mock_repo):
+    """Repo packages and foreign packages both included when both flags are set."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_repo.return_value = [("repo-pkg", "1.0")]
+    mock_foreign.return_value = [("foreign-pkg", "2.0")]
+    mock_exists.return_value = True
+
+    result = _get_installed_packages(
+        repos=["myrepo"], include_foreign=True,
+        all_repos=False, all_packages=False,
+        _warn_func=lambda msg: None,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"repo-pkg", "foreign-pkg"}
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+@patch("trustsight.discovery.get_local_repos_from_pacman_conf")
+@patch("trustsight.discovery._repo_exists")
+def test_get_installed_packages_all_repos(
+    mock_exists, mock_conf, mock_foreign, mock_installed_repo
+):
+    """all_repos=True scans every custom repo found in pacman.conf."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_conf.return_value = ["custom-a", "custom-b"]
+    mock_installed_repo.side_effect = [
+        [("pkg-a", "1.0")],
+        [("pkg-b", "2.0")],
+    ]
+
+    result = _get_installed_packages(
+        repos=[], include_foreign=False,
+        all_repos=True, all_packages=False,
+    )
+    assert len(result) == 2
+    names = {p["name"] for p in result}
+    assert names == {"pkg-a", "pkg-b"}
+    assert mock_installed_repo.call_count == 2
+    mock_installed_repo.assert_any_call("custom-a")
+    mock_installed_repo.assert_any_call("custom-b")
+    mock_foreign.assert_not_called()
+
+
+@patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_installed_foreign")
+def test_get_installed_packages_deduplicates(mock_foreign, mock_repo):
+    """Same package in repo and foreign lists appears only once."""
+    from trustsight.cli import _get_installed_packages
+
+    mock_repo.return_value = [("shared-pkg", "1.0")]
+    mock_foreign.return_value = [("shared-pkg", "1.0")]
+
+    result = _get_installed_packages(
+        repos=["repo-x"], include_foreign=True,
+        all_repos=False, all_packages=False,
+        _warn_func=lambda msg: None,
+    )
+    assert len(result) == 1
+    assert result[0]["name"] == "shared-pkg"

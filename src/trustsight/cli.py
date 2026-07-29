@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import sqlite3
 import socket
 import sys
@@ -26,6 +27,8 @@ from .db import (
     count_observations,
     dependency_table_populated,
     effective_observation_count,
+    forget_package,
+    forget_prune,
     get_all_packages,
     get_history,
     get_db_path,
@@ -81,7 +84,7 @@ try:
     from rich.box import SIMPLE_HEAD
     from rich.console import Console
     from rich.panel import Panel
-    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+    from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TransferSpeedColumn
     from rich.rule import Rule
     from rich.table import Table
     from rich.text import Text
@@ -92,6 +95,16 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 _console = None
+_PLAUSIBLE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+~:-]+$")
+
+
+def display_version(v: str | None) -> str:
+    """Return a display-safe version string, never raw bash."""
+    if not v:
+        return "—"
+    if not _PLAUSIBLE_VERSION_RE.fullmatch(v):
+        return "unresolved"
+    return v
 
 
 def console() -> "Console":
@@ -100,7 +113,7 @@ def console() -> "Console":
         raise RuntimeError("rich is not available")
     global _console
     if _console is None:
-        _console = Console()
+        _console = Console(force_terminal=True)
     return _console
 
 
@@ -232,10 +245,27 @@ def _discover_packages(
         from .full_aur.metadata import fetch_metadata, load_metadata, save_metadata
         from .discovery import _vercmp
 
-        meta = load_metadata()
+        meta_path = CONFIG_DIR / "full-aur-meta.json"
+        meta = load_metadata(path=meta_path)
         if meta is None:
-            meta = fetch_metadata()
-            save_metadata(meta)
+            if HAS_RICH:
+                con = console()
+                columns = [
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    DownloadColumn(),
+                    TransferSpeedColumn(),
+                    TimeElapsedColumn(),
+                ]
+                with Progress(*columns, console=con, transient=False) as progress:
+                    task = progress.add_task("Downloading AUR metadata...", total=None)
+                    progress.refresh()
+                    def _on_progress(pos, total):
+                        progress.update(task, total=total, completed=pos, refresh=True)
+                    meta = fetch_metadata(on_progress=_on_progress)
+            else:
+                meta = fetch_metadata()
+            save_metadata(meta, path=meta_path)
             _print_colored("Downloaded AUR metadata snapshot. Run again to review changes.", "green")
             return None, 0
 
@@ -398,21 +428,21 @@ def _run_analysis_loop(
         ]
         with Progress(*progress_columns, console=con, transient=False) as progress:
             task = progress.add_task("Connecting to AUR...", total=len(limited))
+            progress.refresh()
 
             def on_progress(_current, total, description):
                 """update the progress bar with the current task"""
                 if not has_progress:
                     return
                 if _current < 0:
-                    # Phase transition: set indeterminate without resetting elapsed time
-                    progress.update(task, total=None, description=description)
+                    progress.update(task, total=None, description=description, refresh=True)
                 elif total:
                     progress.update(
                         task, total=total, completed=_current,
-                        description=description,
+                        description=description, refresh=True,
                     )
                 else:
-                    progress.update(task, description=description)
+                    progress.update(task, description=description, refresh=True)
 
             results = _analyze_outdated_batch(limited, on_progress, verbose)
             progress.update(task, visible=False)
@@ -460,50 +490,129 @@ def _run_analysis_loop(
             _print_colored("No outdated packages found.", "green")
         return
 
-    for r in results:
-        if r.get("failed"):
-            typer.echo(f"{r['package']} {r.get('old_version', '?')} → {r.get('new_version', '?')}")
-            typer.echo(f"  {r['verdict']}")
+    if HAS_RICH and not json_output:
+        _render_results_rich(results, total_installed, all_packages, show_score, verbose)
+    else:
+        for r in results:
+            if r.get("failed"):
+                typer.echo(f"{r['package']} {display_version(r.get('old_version'))} → {display_version(r.get('new_version'))}")
+                typer.echo(f"  {r['verdict']}")
+                typer.echo()
+                continue
+
+            typer.echo(f"{r['package']} {display_version(r.get('old_version'))} → {display_version(r.get('new_version'))}")
+
+            findings = r.get("findings", [])
+            file_changes = r.get("file_changes", [])
+            is_trivial = r.get("is_trivial", False)
+
+            if r.get("first_seen"):
+                typer.echo(f"  First analysis. No prior history for this package.")
+            elif is_trivial:
+                typer.echo(f"  Only pkgver and sha256sums changed. Review the diff before building.")
+            else:
+                typer.echo(f"  The update is not trivial. Review it.")
+                for f in findings:
+                    file_part = f.get("file", "")
+                    line = f.get("line")
+                    desc = f.get("description", "")
+                    if line is not None:
+                        typer.echo(f"  {file_part} line {line}   {desc}")
+                    else:
+                        typer.echo(f"  {file_part}           {desc}")
+                for fc in file_changes:
+                    status = fc.get("status", "")
+                    path = fc.get("path", "")
+                    if status == "added":
+                        typer.echo(f"  new file           {path}")
+                    elif status == "removed":
+                        typer.echo(f"  removed file       {path}")
+
+            if show_score and not r.get("failed"):
+                risk = r.get("risk", "")
+                score_val = r.get("score", 0)
+                typer.echo(f"  Score: {score_val}/100 ({risk})")
+
+            if r.get("diff_truncated"):
+                typer.echo(f"  [Diff was truncated; only part of the change was vetted.]")
+
             typer.echo()
+
+        flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+        failed = sum(1 for r in results if r.get("failed"))
+        reviewed = len(results) - failed
+        if all_packages and total_installed:
+            caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
+        else:
+            caption = f"{reviewed} package(s) needing update and reviewed"
+            if total_installed:
+                caption += f" out of {total_installed} installed"
+        if show_score and flagged:
+            caption += f", {flagged} above the 20-point CLEAN threshold"
+        if failed:
+            caption += f", {failed} could NOT be vetted"
+        typer.echo(caption)
+
+
+def _render_results_rich(results, total_installed, all_packages, show_score, verbose):
+    """Render review results as rich per-package Panels with inner Tables."""
+    con = console()
+    for r in results:
+        table = Table(show_header=False, box=None, padding=(0, 1))
+        table.add_column(style="bold", width=8, no_wrap=True)
+        table.add_column()
+
+        old = display_version(r.get("old_version"))
+        new = display_version(r.get("new_version"))
+        table.add_row("Version", f"{old}  \u2192  {new}")
+
+        if r.get("failed"):
+            table.add_row("Status", r["verdict"])
+            panel = Panel(table, title=r["package"], border_style="red")
+            con.print(panel)
             continue
 
-        typer.echo(f"{r['package']} {r.get('old_version', '?')} → {r.get('new_version', '?')}")
-
-        findings = r.get("findings", [])
-        file_changes = r.get("file_changes", [])
-        is_trivial = r.get("is_trivial", False)
-
         if r.get("first_seen"):
-            typer.echo(f"  First analysis. No prior history for this package.")
-        elif is_trivial:
-            typer.echo(f"  Only pkgver and sha256sums changed. Review the diff before building.")
+            table.add_row("Status", "First analysis. No prior history for this package.")
+        elif r.get("is_trivial"):
+            table.add_row("Status", "Only pkgver and sha256sums changed. Review the diff before building.")
         else:
-            typer.echo(f"  The update is not trivial. Review it.")
-            for f in findings:
+            table.add_row("Status", "The update is not trivial. Review it.")
+            for f in r.get("findings", []):
                 file_part = f.get("file", "")
                 line = f.get("line")
+                rule_id = f.get("rule_id", "")
                 desc = f.get("description", "")
+                suffix = f" [{rule_id}]" if rule_id else ""
                 if line is not None:
-                    typer.echo(f"  {file_part} line {line}   {desc}")
+                    table.add_row("", f"{file_part} line {line}{suffix}  {desc}")
                 else:
-                    typer.echo(f"  {file_part}           {desc}")
-            for fc in file_changes:
-                status = fc.get("status", "")
-                path = fc.get("path", "")
-                if status == "added":
-                    typer.echo(f"  new file           {path}")
-                elif status == "removed":
-                    typer.echo(f"  removed file       {path}")
+                    table.add_row("", f"{file_part}{suffix}  {desc}")
+
+        file_changes = r.get("file_changes", [])
+        if file_changes:
+            n_added = sum(1 for fc in file_changes if fc.get("status") == "added")
+            n_removed = sum(1 for fc in file_changes if fc.get("status") == "removed")
+            n_modified = sum(1 for fc in file_changes if fc.get("status") == "modified")
+            parts = []
+            if n_modified:
+                parts.append(f"{n_modified} changed")
+            if n_added:
+                parts.append(f"{n_added} added")
+            if n_removed:
+                parts.append(f"{n_removed} removed")
+            table.add_row("Files", ", ".join(parts))
+
+        if r.get("diff_truncated"):
+            table.add_row("Warning", "Diff was truncated; only part of the change was vetted.")
 
         if show_score and not r.get("failed"):
             risk = r.get("risk", "")
             score_val = r.get("score", 0)
-            typer.echo(f"  Score: {score_val}/100 ({risk})")
+            table.add_row("Score", f"{score_val}/100 ({risk})")
 
-        if r.get("diff_truncated"):
-            typer.echo(f"  [Diff was truncated; only part of the change was vetted.]")
-
-        typer.echo()
+        panel = Panel(table, title=r["package"], border_style="blue")
+        con.print(panel)
 
     flagged = sum(1 for r in results if (r["score"] or 0) > 20)
     failed = sum(1 for r in results if r.get("failed"))
@@ -518,7 +627,7 @@ def _run_analysis_loop(
         caption += f", {flagged} above the 20-point CLEAN threshold"
     if failed:
         caption += f", {failed} could NOT be vetted"
-    typer.echo(caption)
+    con.print(caption)
 
 
 def _default_workers() -> int:
@@ -785,6 +894,22 @@ def inspect(
     if load_config().get("seed", {}).get("auto_import", True):
         maybe_auto_import_seed(quiet=json_output)
 
+    from .discovery import get_aur_package_info
+    info = get_aur_package_info([package])
+    if package not in info:
+        # AUR RPC may have failed (network glitch) or the package truly
+        # does not exist.  If already tracked locally, still attempt
+        # analysis as a graceful fallback.
+        from .db import get_package as _get_pkg
+        local = _get_pkg(package)
+        if local is None:
+            msg = f"Package '{package}' not found in the AUR."
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red")
+            raise typer.Exit(code=1)
+
     fact = analyze_package(package)
     if json_output:
         data = _fact_to_dict(fact)
@@ -825,7 +950,7 @@ def _inspect_rich(fact, verbose=False):
     meta = Table.grid(padding=(0, 2))
     meta.add_column(style="dim", justify="right")
     meta.add_column()
-    meta.add_row("Version", f"{fact.old_version or '?'} -> {fact.new_version or '?'}")
+    meta.add_row("Version", f"{display_version(fact.old_version)} -> {display_version(fact.new_version)}")
     if fact.diff_summary.files_changed:
         meta.add_row("Files", ", ".join(fact.diff_summary.files_changed))
     if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
@@ -926,7 +1051,7 @@ def _inspect_plain(fact, verbose=False):
     if fact.first_seen:
         print("[First analysis] No prior history; novelty carries no weight yet.")
     print(f"TrustSight Inspect: {fact.package_name}")
-    print(f"  Version: {fact.old_version or '?'} -> {fact.new_version or '?'}")
+    print(f"  Version: {display_version(fact.old_version)} -> {display_version(fact.new_version)}")
     print(f"  Score: {fact.final_score}/100 ({risk_level(fact.final_score)})")
     if fact.maintainer_changed:
         print(f"  Maintainer changed: {fact.previous_maintainer} -> {fact.current_maintainer}")
@@ -982,8 +1107,8 @@ def history(
         for h in history_records:
             item = {
                 "timestamp": h.get("timestamp", ""),
-                "old_version": h.get("old_version", ""),
-                "new_version": h.get("new_version", ""),
+                "old_version": display_version(h.get("old_version")),
+                "new_version": display_version(h.get("new_version")),
                 "score": h.get("final_score", 0),
                 "risk": risk_level(h.get("final_score", 0)),
             }
@@ -1011,8 +1136,8 @@ def history(
             score_text = Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
             table.add_row(
                 ts,
-                h.get("old_version", "") or "",
-                h.get("new_version", "") or "",
+                display_version(h.get("old_version")),
+                display_version(h.get("new_version")),
                 score_text,
                 risk,
             )
@@ -1034,8 +1159,8 @@ def history(
         for h in history_records:
             print(
                 f"{h.get('timestamp','')[:10]:<12} "
-                f"{str(h.get('old_version','')):<12} -> "
-                f"{str(h.get('new_version','')):<12} "
+                f"{display_version(h.get('old_version')):<12} -> "
+                f"{display_version(h.get('new_version')):<12} "
                 f"Score: {h.get('final_score',0)}"
             )
 
@@ -1598,12 +1723,13 @@ def list_cmd(
     rows = []
     for pkg in all_pkgs:
         last = get_last_analysis(pkg["id"])
+        score = last["final_score"] if last else None
         rows.append({
             "name": pkg["name"],
-            "version": pkg["current_version"] or "?",
+            "version": display_version(pkg.get("current_version")),
             "last_checked": pkg["last_checked"] or "",
-            "score": last["final_score"] if last else None,
-            "risk": risk_level(last["final_score"]) if last else "-",
+            "score": score,
+            "risk": risk_level(score) if last else "—",
             "maintainer": pkg["current_maintainer"] or "",
         })
 
@@ -1622,23 +1748,124 @@ def list_cmd(
         table.add_column("Risk")
         for r in rows:
             score = r["score"]
-            score_cell = Text("n/a", style="dim") if score is None else _score_text(score, r["risk"])
+            version = r["version"]
+            risk = r["risk"]
+            if score is not None:
+                score_cell = _score_text(score, risk)
+            elif version == "unresolved" or version == "—":
+                score_cell = Text("—", style="dim")
+            else:
+                score_cell = Text("—", style="dim")
+            if risk == "—" or risk == "Inconclusive":
+                risk_obj = Text(risk, style="yellow")
+            else:
+                risk_obj = Text(risk, style=RISK_COLORS.get(risk, "white"))
             table.add_row(
                 r["name"],
-                r["version"],
+                version,
                 r["maintainer"] or "[dim]-[/]",
                 r["last_checked"][:10] if r["last_checked"] else "[dim]-[/]",
                 score_cell,
-                Text(r["risk"], style=RISK_COLORS.get(r["risk"], "white")),
+                risk_obj,
             )
         con.print(table)
     else:
         print(f"{'Package':<20} {'Version':<15} {'Score':<8} {'Risk':<12} Last Checked")
         print("-" * 75)
         for r in rows:
-            score = "n/a" if r["score"] is None else str(r["score"])
+            score = "—" if r["score"] is None else str(r["score"])
             checked = r["last_checked"][:10] if r["last_checked"] else "-"
             print(f"{r['name']:<20} {r['version']:<15} {score:<8} {r['risk']:<12} {checked}")
+
+
+# --- forget ---
+
+
+@app.command()
+def forget(
+    packages: list[str] = typer.Argument(None, help="Package name(s) to forget"),
+    prune: bool = typer.Option(False, "--prune", help="Remove packages not in the AUR"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be removed without deleting"),
+    yes: bool = typer.Option(False, "--yes", help="Skip confirmation prompt"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Remove a tracked package and all its history.
+
+    Provide one or more package names, or use --prune to remove every
+    tracked package that no longer exists in the AUR.
+    """
+    ensure_default_configs()
+    init_db()
+
+    if not packages and not prune:
+        typer.echo("Usage: trustsight forget <package>...  or  trustsight forget --prune")
+        raise typer.Exit(code=2)
+
+    if prune:
+        from .discovery import get_aur_package_info
+        all_pkgs = get_all_packages()
+        names = [p["name"] for p in all_pkgs]
+        if not names:
+            if json_output:
+                typer.echo(json.dumps({"prune": "nothing_to_do"}))
+            else:
+                typer.echo("No packages tracked.")
+            return
+        info = get_aur_package_info(names)
+        aur_names = set(info.keys())
+        if not aur_names and names:
+            # RPC returned nothing for every tracked package — almost certainly
+            # a network failure, not "every package was deleted from AUR".
+            msg = ("AUR RPC returned no data; cannot determine which packages "
+                   "still exist. Check your network connection and try again.")
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red")
+            raise typer.Exit(code=1)
+        removed = forget_prune(aur_names, dry_run=dry_run)
+        if json_output:
+            typer.echo(json.dumps({"prune": {n: c for n, c in removed.items()}}, indent=2))
+        else:
+            if not removed:
+                typer.echo("All tracked packages are still in the AUR. Nothing to prune.")
+            else:
+                if dry_run:
+                    typer.echo(f"Would remove {len(removed)} package(s) not in the AUR:")
+                else:
+                    typer.echo(f"Removed {len(removed)} package(s) not in the AUR:")
+                for name in sorted(removed):
+                    typer.echo(f"  {name}")
+        return
+
+    if not yes and not json_output:
+        typer.echo(f"About to permanently remove {len(packages)} package(s):")
+        for p in packages:
+            typer.echo(f"  {p}")
+        confirm = input("Are you sure? [y/N] ")
+        if confirm.lower() not in ("y", "yes"):
+            typer.echo("Aborted.")
+            raise typer.Exit(code=1)
+
+    results = {}
+    for name in packages:
+        try:
+            counts = forget_package(name)
+            results[name] = counts
+        except ValueError as exc:
+            results[name] = {"error": str(exc)}
+
+    if json_output:
+        typer.echo(json.dumps({"forget": results}, indent=2))
+    else:
+        for name, counts in results.items():
+            if "error" in counts:
+                typer.echo(f"  {name}: {counts['error']}")
+            elif not counts:
+                typer.echo(f"  {name}: not found")
+            else:
+                tables = ", ".join(f"{k}={v}" for k, v in counts.items() if v)
+                typer.echo(f"  {name}: removed ({tables})")
 
 
 # --- status ---

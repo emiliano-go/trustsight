@@ -294,8 +294,12 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
 
-    with patch("trustsight.cli.analyze_package") as mock_analyze:
+    with (
+        patch("trustsight.cli.analyze_package") as mock_analyze,
+        patch("trustsight.discovery.get_aur_package_info") as mock_aur,
+    ):
         from trustsight.schema import PackageFact, DiffSummary
+        mock_aur.return_value = {"testpkg": {"Version": "1.1"}}
         mock_analyze.return_value = PackageFact(
             package_name="testpkg",
             new_version="1.1",
@@ -618,3 +622,31 @@ def test_get_installed_packages_deduplicates(mock_foreign, mock_repo):
     )
     assert len(result) == 1
     assert result[0]["name"] == "shared-pkg"
+
+
+# --- display_version contract ---
+
+def test_display_version_plausible():
+    from trustsight.cli import display_version
+    assert display_version("1.2.3") == "1.2.3"
+    assert display_version("2:1.0-1") == "2:1.0-1"
+    assert display_version("20240101") == "20240101"
+
+
+def test_display_version_raw_bash_is_unresolved():
+    """Raw bash like ${_ver//...} must never be shown as a version."""
+    from trustsight.cli import display_version
+    assert display_version("${_ver//.${_ver//[0-9.]/}}") == "unresolved"
+
+
+def test_display_version_none_is_em_dash():
+    """None or empty string renders as an em-dash, never 'None' or '?'."""
+    from trustsight.cli import display_version
+    assert display_version(None) == "—"
+    assert display_version("") == "—"
+
+
+def test_display_version_spaces_are_unresolved():
+    """A version string containing spaces is almost certainly unresolved."""
+    from trustsight.cli import display_version
+    assert display_version("1.0 beta") == "unresolved"

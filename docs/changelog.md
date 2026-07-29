@@ -9,6 +9,15 @@
   7 new tests in `tests/test_cli.py`.
 - **`optdepends`** for `python-cryptography` and `pyalpm` in
   `packaging/aur/PKGBUILD`.
+- **Line mapping for findings.** `map_diff_lines()` maps diff line indices to
+  file names and line numbers.  Findings from `apply_rules()` now carry
+  `file`/`line` context propagated through `ScoreEntry` and `PackageFact`.
+- **Per-file change tracking.** `DiffSummary.file_changes` lists every changed
+  file with its status (`added`/`removed`/`modified`), excluding `.SRCINFO`
+  and `.gitignore`.
+- **Corpus analysis adapter.** `analyze_package_text()` analyzes raw old/new
+  PKGBUILD text via `difflib.unified_diff`, enabling the full-AUR corpus
+  pipeline (no git repository required).
 
 ### Changed
 
@@ -37,7 +46,7 @@
   conditional dependency in `pyproject.toml` are removed. All imports use
   stdlib `tomllib`.
 - **CI matrix** drops Python 3.10.
-- **Documentation** cleaned of em dashes; replaced with `; : , () -`.
+
 
 ### Fixed
 

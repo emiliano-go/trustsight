@@ -1,5 +1,171 @@
 import re
 
+_MAX_EXPANSION_DEPTH = 8
+_MAX_EXPANSION_PASSES = 16
+
+# Innermost ${...} = one containing no further "${"
+_INNERMOST_RE = re.compile(r"\$\{([^{}]*)\}")
+
+
+def _glob_to_regex(pat: str) -> re.Pattern:
+    """Translate a bash glob pattern to a regex.  Bash character classes
+    and metacharacters are translated; everything else is escaped so that
+    dots, hyphens, etc. are literals rather than regex operators."""
+    out: list[str] = []
+    i = 0
+    while i < len(pat):
+        c = pat[i]
+        if c == "*":
+            out.append(".*")
+        elif c == "?":
+            out.append(".")
+        elif c == "[":
+            j = pat.find("]", i + 1)
+            if j == -1:
+                out.append(re.escape(c))
+            else:
+                cls = pat[i + 1 : j]
+                if cls.startswith("!"):
+                    cls = "^" + cls[1:]
+                out.append("[" + cls + "]")
+                i = j
+        else:
+            out.append(re.escape(c))
+        i += 1
+    return re.compile("".join(out))
+
+
+def _strip_affix(val: str, op: str, pat: str) -> str:
+    """Apply bash ## / # / %% / % stripping using glob patterns."""
+    regex = _glob_to_regex(pat)
+    if op == "##":
+        m = regex.search(val)
+        return val[m.end() :] if m else val
+    if op == "#":
+        m = regex.match(val)
+        return val[m.end() :] if m else val
+    if op == "%%":
+        # find the LAST match of the glob
+        matches = list(regex.finditer(val))
+        if not matches:
+            return val
+        return val[: matches[-1].start()]
+    if op == "%":
+        m = regex.search(val)
+        if not m:
+            return val
+        return val[: m.start()]
+    return val
+
+
+def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
+    """Resolve a single innermost ${...} body.
+
+    *body* is the content between ${ and } — all nested expansions have
+    already been resolved at this point, so no further ${...} remains.
+
+    Returns None (unresolved) for forms we refuse to evaluate.
+    """
+    # Indirect expansion and length: never resolve.
+    if body.startswith("!") or body.startswith("#"):
+        return None
+
+    # //pat/rep  |  //pat  (delete)  |  /pat/rep
+    m = re.match(r"^(\w+)(//|/)([^/]*)(?:/(.*))?$", body)
+    if m:
+        name, mode, pat, rep = m.group(1), m.group(2), m.group(3), m.group(4) or ""
+        val = vars_.get(name)
+        if val is None:
+            return None
+        regex = _glob_to_regex(pat)
+        if mode == "//":
+            return regex.sub(rep, val)
+        return regex.sub(rep, val, count=1)
+
+    # ##pat  #pat  %%pat  %pat
+    m = re.match(r"^(\w+)(##|#|%%|%)(.*)$", body)
+    if m:
+        name, op, pat = m.group(1), m.group(2), m.group(3)
+        val = vars_.get(name)
+        if val is None:
+            return None
+        return _strip_affix(val, op, pat)
+
+    # :-default  /  :=default
+    m = re.match(r"^(\w+):([-=])(.*)$", body)
+    if m:
+        name, _, default = m.group(1), m.group(2), m.group(3)
+        return vars_.get(name) or default
+
+    # :offset:length  /  :offset
+    m = re.match(r"^(\w+):(\d+)(?::(\d+))?$", body)
+    if m:
+        name, off, length = m.group(1), m.group(2), m.group(3)
+        val = vars_.get(name)
+        if val is None:
+            return None
+        return val[int(off) : int(off) + int(length)] if length else val[int(off) :]
+
+    # plain variable reference
+    if re.fullmatch(r"\w+", body):
+        return vars_.get(body)
+
+    return None
+
+
+def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
+    """Resolve nested ${...} parameter expansions innermost-first.
+
+    Returns (resolved_text, fully_resolved).
+    fully_resolved is False if any ${...} remains after the cap — the caller
+    MUST treat that as unresolved, never as a literal value.
+    """
+    sub_calls = 0
+
+    def _resolve_once(t: str) -> str:
+        nonlocal sub_calls
+        m = _INNERMOST_RE.search(t)
+        if m is None:
+            return t
+        replacement = _expand_one(m.group(1), vars_)
+        if replacement is None:
+            return t
+        sub_calls += 1
+        return t[: m.start()] + replacement + t[m.end() :]
+
+    all_resolved = True
+    for _ in range(_MAX_EXPANSION_PASSES):
+        before = text
+        m = _INNERMOST_RE.search(text)
+        if m is None:
+            return text, all_resolved and "${" not in text
+        replacement = _expand_one(m.group(1), vars_)
+        if replacement is None:
+            all_resolved = False
+        else:
+            text = text[: m.start()] + replacement + text[m.end() :]
+        if text == before:
+            return text, all_resolved and "${" not in text
+    return text, False
+
+
+def _substitute_with_resolve(text: str, var_table: dict[str, str]) -> tuple[str, bool]:
+    """Resolve $var and ${var...} references in *text*, returning
+    (resolved, fully_resolved)."""
+    # First resolve simple ${var} and $var.
+    resolved = _VAR_REF_RE.sub(
+        lambda m: var_table.get(m.group(1) or m.group(2), m.group(0)),
+        text,
+    )
+    if len(resolved) > _MAX_LINE_LEN:
+        return text, False
+    # Then resolve parameter expansions (${var//pat/rep}, etc.).
+    if "${" in resolved:
+        resolved, ok = resolve_expansions(resolved, var_table)
+        if not ok or len(resolved) > _MAX_LINE_LEN:
+            return text, False
+    return resolved, True
+
 
 def join_line_continuations(lines: list[str]) -> list[str]:
     """Join shell line continuations into single logical lines.
@@ -83,9 +249,13 @@ def _substitute(text: str, var_table: dict[str, str], limit: int = _MAX_LINE_LEN
         return var_table.get(var, match.group(0))
 
     result = _VAR_REF_RE.sub(replacer, text)
-    # Expanding this one reference blew the budget, so report the text as
-    # it stood rather than a partially expanded string.
-    return text if len(result) > limit else result
+    if len(result) > limit:
+        return text
+    if "${" in result:
+        result, _ok = resolve_expansions(result, var_table)
+        if len(result) > limit:
+            return text
+    return result
 
 
 def _variable_table(additions: list[str]) -> dict[str, str]:
@@ -106,16 +276,14 @@ def _variable_table(additions: list[str]) -> dict[str, str]:
             var_table[match.group(1)] = value
 
     for _ in range(10):
-        new_table = {
-            k: _substitute(v, var_table, _MAX_VALUE_LEN)
-            for k, v in var_table.items()
-        }
+        new_table: dict[str, str] = {}
+        for k, v in var_table.items():
+            substituted, _ = _substitute_with_resolve(v, var_table)
+            new_table[k] = substituted if len(substituted) <= _MAX_VALUE_LEN else v
         if new_table == var_table:
             break
         var_table = new_table
         if sum(len(v) for v in var_table.values()) > _MAX_TABLE_BYTES:
-            # The table as a whole has grown past its budget, so stop
-            # expanding.  What is already resolved stays usable.
             break
     return var_table
 
@@ -137,10 +305,14 @@ def resolve_added_lines(diff_text: str) -> list[str]:
     var_table = _variable_table(
         [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
     )
-    return [
-        "+" + _substitute(line[1:], var_table) if line.startswith("+") else line
-        for line in lines
-    ]
+    resolved_lines = []
+    for line in lines:
+        if line.startswith("+"):
+            r, _ok = _substitute_with_resolve(line[1:], var_table)
+            resolved_lines.append("+" + r)
+        else:
+            resolved_lines.append(line)
+    return resolved_lines
 
 
 def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
@@ -166,5 +338,11 @@ def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
         )
     ]
 
-    resolved = [_substitute(line, var_table) for line in unresolved_candidates]
-    return resolved, [u for u in unresolved_candidates if u not in resolved]
+    resolved = []
+    unresolved_out = []
+    for line in unresolved_candidates:
+        r, ok = _substitute_with_resolve(line, var_table)
+        resolved.append(r)
+        if not ok or r == line:
+            unresolved_out.append(line)
+    return resolved, unresolved_out

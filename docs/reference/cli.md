@@ -433,7 +433,7 @@ trustsight baseline import FILE
 
 | Subcommand | Description |
 |------------|-------------|
-| `build` | Bootstrap the corpus: fetch the AUR metadata snapshot, download PKGBUILDs for every package, analyse each one, store results, and optionally emit a signed baseline artifact. |
+| `build` | Bootstrap or incrementally update the corpus. Fetches the AUR metadata snapshot, diffs against the stored copy, processes changed packages, and stores results. The first run processes all packages; subsequent runs only process changed ones. Suitable for cron. |
 | `import` | Import a signed baseline artifact. Verifies the signature, then merges profiles, priors, and the metadata snapshot into the local database. After import the database is warm. |
 
 ### Flags (`build`)
@@ -451,28 +451,5 @@ trustsight baseline import FILE
 |------|-------------|
 | `--allow-unsigned` | Import even if the artifact is unsigned. Use only for self-built local artifacts. |
 | `--json` | Output JSON. |
-| `--json` | Output JSON. |
-
----
-
-## trustsight watch
-
-Daemon mode: poll the AUR metadata snapshot and analyse new updates as they
-appear.  Repeatedly fetches the metadata, diffs it against the stored copy,
-downloads PKGBUILDs for changed packages, analyses them, and optionally fires
-alert hooks for findings above a threshold.
-
-```
-trustsight watch [--interval 6h] [--threshold 30] [--alert-hook CMD]
-```
-
-### Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--interval` | `6h` | Poll interval (`6h`, `30m`, `1d`). |
-| `--threshold`, `--alert-threshold` | `30` | Minimum score to trigger an alert. |
-| `--alert-hook` | - | Shell command to run on alert. Receives a JSON payload on stdin. |
-| `--json` | `false` | Output JSON. |
 
 ---

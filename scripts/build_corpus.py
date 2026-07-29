@@ -19,10 +19,7 @@ import shutil
 import subprocess
 import sys
 import time
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 import urllib.request
 from pathlib import Path
 

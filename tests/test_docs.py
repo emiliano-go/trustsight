@@ -9,10 +9,7 @@ entry, and nothing fails until a user is misled.
 import re
 from pathlib import Path
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 
 import pytest
 

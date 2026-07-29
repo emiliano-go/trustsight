@@ -1,7 +1,4 @@
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 
 from tests.conftest import SHARED_CONFIG
 from trustsight.scoring import calculate_score, risk_level

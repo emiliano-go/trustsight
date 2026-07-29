@@ -2,7 +2,7 @@ import copy
 import re
 from pathlib import Path
 
-from ._toml import tomllib
+import tomllib
 
 CONFIG_DIR = Path.home() / ".config" / "trustsight"
 DATA_DIR = Path.home() / ".local" / "share" / "trustsight"

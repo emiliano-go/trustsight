@@ -5,10 +5,7 @@ its attack case is half-tested: the false-positive direction is what
 determines whether it can be enabled by default.
 """
 
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 
 import pytest
 

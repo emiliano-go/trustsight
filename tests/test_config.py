@@ -1,7 +1,4 @@
-try:
-    import tomllib
-except ModuleNotFoundError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import tomllib
 
 from trustsight.config import (
     ensure_default_configs,

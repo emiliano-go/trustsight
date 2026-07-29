@@ -21,7 +21,10 @@ makedepends=(
   'python-hatchling'
   'python-pytest'
 )
-optdepends=()
+optdepends=(
+  'python-cryptography: baseline artifact signing'
+  'pyalpm: native version comparison (faster discovery)'
+)
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 
 sha256sums=('49fe519a56f0821789ab1571907101a9acad86284bef22fa895fbf31e43c4e5e')

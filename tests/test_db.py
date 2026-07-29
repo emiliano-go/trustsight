@@ -139,6 +139,56 @@ def test_get_all_packages(db):
     assert "beta" in names
 
 
+def test_get_all_packages_excludes_seed_sentinel(db):
+    """The internal __seed__ sentinel must never appear in package output."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+        conn.commit()
+    upsert_package("realpkg", "1.0")
+    pkgs = get_all_packages()
+    names = [p["name"] for p in pkgs]
+    assert "__seed__" not in names
+    assert "realpkg" in names
+
+
+def test_upsert_package_rejects_reserved_names(db):
+    """Reserved names like __seed__ or any name starting with __ must be
+    rejected by upsert_package to prevent internal rows from leaking."""
+    with pytest.raises(ValueError, match="reserved name"):
+        upsert_package("__seed__", "1.0")
+    with pytest.raises(ValueError, match="reserved name"):
+        upsert_package("__internal_thing", "1.0")
+
+
+def test_get_package_id_rejects_seed_sentinel(db):
+    """get_package_id must return None for __seed__, not its internal id."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+        conn.commit()
+    assert get_package_id("__seed__") is None
+    assert get_package_id("__anything") is None
+    # Real packages still resolve
+    upsert_package("realpkg", "1.0")
+    assert get_package_id("realpkg") is not None
+
+
+def test_get_package_rejects_seed_sentinel(db):
+    """get_package must return None for __seed__."""
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+        conn.commit()
+    assert get_package("__seed__") is None
+    assert get_package("__anything") is None
+    upsert_package("realpkg", "1.0")
+    assert get_package("realpkg") is not None
+
+
 def test_source_url_unique_constraint(db):
     upsert_package("testpkg", "1.0")
     pid = get_package_id("testpkg")

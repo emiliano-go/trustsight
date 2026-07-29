@@ -233,6 +233,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 def upsert_package(name: str, version: str) -> int:
     """Insert or update a package record, returning its id."""
+    if name in _RESERVED_NAMES or name.startswith("__"):
+        raise ValueError(f"reserved name cannot be tracked as a package: {name}")
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO packages (name, current_version, last_checked)
@@ -248,14 +250,20 @@ def upsert_package(name: str, version: str) -> int:
 
 
 def get_package_id(name: str) -> Optional[int]:
-    """Return the database id for *name*, or None."""
+    """Return the internal id for *name*, or None.
+    Internal sentinel rows (e.g. __seed__) are excluded."""
+    if name in _RESERVED_NAMES or name.startswith("__"):
+        return None
     with get_connection() as conn:
         row = conn.execute("SELECT id FROM packages WHERE name = ?", (name,)).fetchone()
         return row["id"] if row else None
 
 
 def get_package(name: str) -> Optional[dict]:
-    """Return the full package row as a dict, or None."""
+    """Return the full package row for *name*, or None.
+    Internal sentinel rows (e.g. __seed__) are excluded."""
+    if name in _RESERVED_NAMES or name.startswith("__"):
+        return None
     with get_connection() as conn:
         row = conn.execute("SELECT * FROM packages WHERE name = ?", (name,)).fetchone()
         return dict(row) if row else None
@@ -720,12 +728,15 @@ def get_history(package_id: int, limit: int = 20) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-def get_all_packages() -> list[dict]:
-    """Return every package row, ordered by name."""
-    with get_connection() as conn:
-        rows = conn.execute("SELECT * FROM packages ORDER BY name").fetchall()
-        return [dict(r) for r in rows]
+_RESERVED_NAMES = frozenset({"__seed__"})
 
+def get_all_packages() -> list[dict]:
+    """Return every package row excluding internal sentinels, ordered by name."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM packages WHERE name NOT IN ('__seed__') ORDER BY name",
+        ).fetchall()
+        return [dict(r) for r in rows]
 
 def read_aur_cache(names: list[str], ttl_minutes: int = 60) -> dict[str, dict]:
     """Return cached AUR responses for *names* that are still fresh.

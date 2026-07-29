@@ -31,25 +31,37 @@ def test_vercmp(v1, v2, expected):
 def test_get_installed_from_repo(mock_run):
     from trustsight.discovery import get_installed_from_repo
 
-    mock_run.return_value = MagicMock(
-        returncode=0,
-        stdout="pkg-a 1.0\npkg-b 2.0-1\n",
-    )
+    mock_run.side_effect = [
+        MagicMock(returncode=0, stdout="myrepo  pkg-a 1.0\nmyrepo  pkg-b 2.0-1\n"),
+        MagicMock(returncode=0, stdout="pkg-a 1.0\npkg-b 2.0-1\nsome-other 3.0\n"),
+    ]
 
     result = get_installed_from_repo("myrepo")
     assert result == [("pkg-a", "1.0"), ("pkg-b", "2.0-1")]
-    mock_run.assert_called_once()
-    args = mock_run.call_args[0][0]
-    assert args == ["pacman", "-Q", "--repo", "myrepo"]
+    # first call: pacman -Sl
+    assert mock_run.call_args_list[0][0][0][:3] == ["pacman", "-Sl", "myrepo"]
+    # second call: pacman -Q
+    assert mock_run.call_args_list[1][0][0] == ["pacman", "-Q"]
 
 
 @patch("trustsight.discovery.subprocess.run")
 def test_get_installed_from_repo_nonzero_exit(mock_run):
     from trustsight.discovery import get_installed_from_repo
 
+    # pacman -Sl fails → repo does not exist
     mock_run.return_value = MagicMock(returncode=1, stdout="")
 
     result = get_installed_from_repo("nonexistent")
+    assert result == []
+
+
+@patch("trustsight.discovery.subprocess.run")
+def test_get_installed_from_repo_repo_empty(mock_run):
+    from trustsight.discovery import get_installed_from_repo
+
+    mock_run.return_value = MagicMock(returncode=0, stdout="")
+
+    result = get_installed_from_repo("emptyrepo")
     assert result == []
 
 
@@ -295,8 +307,9 @@ def test_discover_packages_all_repos_plus_foreign(
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
 @patch("trustsight.discovery.find_outdated_from_list")
+@patch("trustsight.discovery._repo_exists")
 def test_discover_packages_empty_repo_warns(
-    mock_outdated, mock_repo, mock_foreign
+    mock_exists, mock_outdated, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
@@ -306,6 +319,9 @@ def test_discover_packages_empty_repo_warns(
         {"name": "foreign-pkg", "current_version": "1.0", "latest_version": "2.0"},
     ]
 
+    # repo does not exist
+    mock_exists.return_value = False
+
     warnings = []
     result = discover_packages(
         repos=["empty-repo"],
@@ -314,8 +330,21 @@ def test_discover_packages_empty_repo_warns(
     )
 
     assert len(warnings) == 1
+    assert "does not exist" in warnings[0]
     assert "empty-repo" in warnings[0]
     assert len(result) == 1
+
+    # repo exists but no packages installed from it
+    mock_exists.return_value = True
+    warnings.clear()
+    result = discover_packages(
+        repos=["empty-repo"],
+        include_foreign=True,
+        _warn_func=lambda msg: warnings.append(msg),
+    )
+    assert len(warnings) == 1
+    assert "exists but no packages" in warnings[0]
+    assert "empty-repo" in warnings[0]
 
 
 @patch("trustsight.discovery.subprocess.run")
@@ -332,16 +361,15 @@ def test_vercmp_fallback_on_missing_binary(mock_run):
 def test_get_installed_from_repo_special_chars(mock_run):
     from trustsight.discovery import get_installed_from_repo
 
-    mock_run.return_value = MagicMock(
-        returncode=0,
-        stdout="pkg-foo 1.0\n",
-    )
+    mock_run.side_effect = [
+        MagicMock(returncode=0, stdout="my-custom_repo+  pkg-foo 1.0\n"),
+        MagicMock(returncode=0, stdout="pkg-foo 1.0\nother-pkg 2.0\n"),
+    ]
 
     result = get_installed_from_repo("my-custom_repo+")
     assert result == [("pkg-foo", "1.0")]
-    mock_run.assert_called_once()
-    args = mock_run.call_args[0][0]
-    assert args == ["pacman", "-Q", "--repo", "my-custom_repo+"]
+    # first call uses pacman -Sl with the special-char repo name
+    assert mock_run.call_args_list[0][0][0][:3] == ["pacman", "-Sl", "my-custom_repo+"]
 
 
 def test_discover_packages_empty_repos_list():

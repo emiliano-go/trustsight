@@ -198,22 +198,55 @@ def fetch_package_info(name: str) -> Optional[dict]:
     return None
 
 
-def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
-    """Return (name, version) pairs installed from *repo*."""
+def get_all_installed() -> dict[str, str]:
+    """Return all installed packages as {name: version}."""
     result = subprocess.run(
-        ["pacman", "-Q", "--repo", repo],
-        capture_output=True, text=True, check=False,
+        ["pacman", "-Q"], capture_output=True, text=True, check=False,
     )
-    if result.returncode != 0:
-        return []
-    packages = []
+    packages = {}
     for line in result.stdout.strip().splitlines():
         if not line:
             continue
         parts = line.split()
         if len(parts) >= 2:
-            packages.append((parts[0], parts[1]))
+            packages[parts[0]] = parts[1]
     return packages
+
+
+def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
+    """Return (name, version) pairs installed from *repo*.
+
+    Uses ``pacman -Sl`` for the repo package listing and cross-references
+    against ``pacman -Q`` (all installed, not just foreign) so that
+    packages installed from a local repo are found regardless of how
+    pacman tracks their origin.
+    """
+    # First check the repo listing exists and has packages.
+    sl = subprocess.run(
+        ["pacman", "-Sl", repo],
+        capture_output=True, text=True, check=False,
+    )
+    if sl.returncode != 0:
+        # repo does not exist; caller should handle the message.
+        return []  # sentinel: caller can re-check with _repo_exists
+
+    repo_pkgs = set()
+    for line in sl.stdout.strip().splitlines():
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            repo_pkgs.add(parts[1])
+
+    if not repo_pkgs:
+        return []
+
+    all_installed = get_all_installed()
+    return [
+        (name, ver)
+        for name, ver in all_installed.items()
+        if name in repo_pkgs
+    ]
 
 
 def get_installed_foreign() -> list[tuple[str, str]]:
@@ -282,6 +315,15 @@ def find_outdated_from_list(
     return outdated
 
 
+def _repo_exists(repo: str) -> bool:
+    """Return True if *repo* is known to pacman."""
+    result = subprocess.run(
+        ["pacman", "-Sl", repo],
+        capture_output=True, text=True, check=False,
+    )
+    return result.returncode == 0
+
+
 def discover_packages(
     repos: Optional[list[str]] = None,
     include_foreign: bool = False,
@@ -305,7 +347,12 @@ def discover_packages(
         for repo in repos:
             pkg_list = get_installed_from_repo(repo)
             if not pkg_list and _warn_func:
-                _warn_func(f"repo '{repo}' has no packages or does not exist.")
+                if _repo_exists(repo):
+                    _warn_func(
+                        f"repo '{repo}' exists but no packages from it are installed."
+                    )
+                else:
+                    _warn_func(f"repo '{repo}' does not exist.")
             sources.update(pkg_list)
 
     if include_foreign or (not all_repos and repos is None):

@@ -1,6 +1,48 @@
 # Changelog
 
-## Unreleased
+## [0.10.0] - 2026-07-29
+
+### Added
+
+- **Regression tests** for metadata-dispatch bugs (first-run sentinel, repo
+  warnings in metadata path, cross-referencing repos, deduplication).
+  7 new tests in `tests/test_cli.py`.
+- **`optdepends`** for `python-cryptography` and `pyalpm` in
+  `packaging/aur/PKGBUILD`.
+
+### Changed
+
+- **`get_installed_from_repo()`** rewired from `pacman -Q --repo` (which
+  missed packages not tracked as repo-origin) to `pacman -Sl <repo>` +
+  `pacman -Q`.  The old approach only found packages whose `pacman -Q` shows
+  an explicit repository name; the new one lists the repo's contents via
+  `-Sl` and cross-references with `-Q`.
+- **Discovery for `review`** replaced AUR RPC calls with the local
+  metadata-dump snapshot (`full-aur-meta.json`, from `full_aur/metadata.py`).
+  Installed versions are compared against snapshot versions via `vercmp`
+  instead of per-package AUR RPC `info` queries. Falls back to the RPC on
+  failure.
+- **Repo warnings** split into two distinct messages: `repo 'X' does not
+  exist` (when `pacman -Sl` fails) and `repo 'X' exists but no packages from
+  it are installed` (when the repo exists but `-Q` finds nothing).
+- **`_get_installed_packages()`** now correctly cross-references repo
+  packages and foreign packages, respecting `--repo`, `--foreign`, and
+  `--all-repos` flags.  Previous implementation only collected foreign
+  packages when a repo was specified.
+- **First-run sentinel.** `_discover_packages()` returns `(None, 0)` on the
+  first metadata fetch so that `review()` does not emit a duplicate
+  "No outdated packages found" message.
+- **Python >=3.11 required.** `requires-python` bumped from `>=3.10` to
+  `>=3.11`. The `tomli` compat shim (`src/trustsight/_toml.py`) and its
+  conditional dependency in `pyproject.toml` are removed. All imports use
+  stdlib `tomllib`.
+- **CI matrix** drops Python 3.10.
+- **Documentation** cleaned of em dashes; replaced with `; : , () -`.
+
+### Fixed
+
+- **All 3 namcap warnings** resolved by removing the `tomli` dependency and
+  adding `optdepends`.
 
 ### Removed
 
@@ -8,6 +50,8 @@
   build` via cron. The `baseline build` command already handles incremental
   updates (diff + process changed) when a prior metadata snapshot exists.
   Use `--json` for machine-parseable cron output.
+- **`src/trustsight/_toml.py`** removed along with the `tomli` fallback for
+  Python 3.10.
 
 ## [0.9.0] - 2026-07-28
 
@@ -23,7 +67,7 @@
 ### Changed
 
 - **Verdicts now deterministic.** Each rule description includes its rule ID
-  in brackets — e.g. `"maintainer changed to 'bob' [R071]"`. The
+  in brackets, e.g. `"maintainer changed to 'bob' [R071]"`. The
   `fallback_verdict()` function renders from a `_TEMPLATES` registry keyed by
   `rule_id`, falling back to `entry.reason` if no template exists.
 

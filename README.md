@@ -6,7 +6,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 <p align="center">
   <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
+    <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
@@ -36,9 +36,9 @@ makepkg -si
 trustsight review
 ```
 
-Requires **Python 3.10+** and **Arch Linux** (the tool reads `pacman -Qm` to discover AUR packages).
+Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `pacman -Qm`, `pacman -Sl` for local repos, or `--repo`/`--all-repos` flags).
 
-The score is always deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English — for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
+The score is always deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
 
 > **Not published to the AUR yet.** Build from the PKGBUILD in this repository.
 > Also installable via `pip install trustsight`.

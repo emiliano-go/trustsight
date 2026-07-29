@@ -34,7 +34,7 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 pytest
 ```
 
-Expect **267 tests passing** across **14 test files**.
+Expect **734 tests passing** across **19 test files**.
 
 ### Run a single test
 

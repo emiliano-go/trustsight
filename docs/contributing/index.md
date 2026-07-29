@@ -11,7 +11,7 @@ TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. I
 | Metric                | Value                |
 |-----------------------|----------------------|
 | Tests                 | 689 (19 files)       |
-| Python                | 3.10+                |
+| Python                | 3.11+                |
 | Test runner           | pytest               |
 | Linter                | ruff                 |
 | Rules                 | R001-R075, C001-C007, D001-D004 |

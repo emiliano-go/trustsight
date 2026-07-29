@@ -1,6 +1,6 @@
 # Installation
 
-TrustSight requires **Python 3.10 or later** and **git** (for cloning AUR repositories during analysis).
+TrustSight requires **Python 3.11 or later** and **git** (for cloning AUR repositories during analysis).
 
 ---
 
@@ -36,7 +36,7 @@ Verdicts are template-based descriptions of each triggered finding. The score is
 trustsight --help
 ```
 
-You should see a list of available commands: `review`, `inspect`, `history`, `config`.
+You should see a list of available commands: `review`, `inspect`, `history`, `list`, `status`, `seed-db`, `baseline`, `full-aur`, `import-baseline`, `config`, `db`, `override`, `lint-rules`.
 
 Check your configuration:
 

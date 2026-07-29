@@ -22,11 +22,11 @@ trustsight review
 
 This command:
 
-1. Lists every installed AUR package on your system,
-2. Checks the AUR for newer versions,
+1. Collects installed package names and versions from your system (foreign via `pacman -Qm`, or from local repos via `--repo`/`--all-repos`),
+2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run; subsequent runs reuse it),
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
-5. Applies detection rules (R001-R013) and context rules (C001-C003),
+5. Applies detection rules (R001-R013, R039-R059) and context rules (C001-C007),
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
 8. Calculates a deterministic score from 0-100,

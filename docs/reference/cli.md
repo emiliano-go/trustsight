@@ -62,11 +62,15 @@ trustsight review --all-repos --foreign
 
 ### Behaviour
 
-1. Collects package names and versions from the requested sources (repos via `pacman -Q --repo`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
-2. Sends the combined set to `https://aur.archlinux.org/rpc?v=5&type=info&arg[]=<names>` in a single batched request.
-3. Filters to packages whose installed version is older than the latest AUR version (using `vercmp`).
+Discovery uses a local AUR metadata snapshot by default:
+
+1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
+2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded; subsequent runs reuse it.
+3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
 4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001-R013, R039-R059) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
+
+If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.
 
 ### Output
 
@@ -356,7 +360,7 @@ trustsight db backup [--output PATH]
 |------------|-------------|
 | `check` | Run `PRAGMA integrity_check` on the database. Exits 0 on success, 1 if corruption is detected. |
 | `vacuum` | Reclaim disk space by rebuilding the database file. Prompts for confirmation unless `--force` is passed. |
-| `backup` | Create a safe online backup via `sqlite3.backup()` — no need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. |
+| `backup` | Create a safe online backup via `sqlite3.backup()`. No need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. |
 
 ### Common flags
 
@@ -446,6 +450,52 @@ trustsight baseline import FILE
 | `--json` | Output JSON. |
 
 ### Flags (`import`)
+
+| Flag | Description |
+|------|-------------|
+| `--allow-unsigned` | Import even if the artifact is unsigned. Use only for self-built local artifacts. |
+| `--json` | Output JSON. |
+
+---
+
+## trustsight full-aur
+
+Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs via codeload (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
+
+```
+trustsight full-aur [--resume] [--export PATH] [--sign PATH]
+```
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--resume` | Continue an interrupted bootstrap. The bootstrap saves progress after each package. |
+| `--export PATH` | Write the signed baseline artifact to this path. |
+| `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
+| `--json` | Output JSON. |
+
+The first run processes all packages; subsequent runs only process changed ones (using the cached metadata snapshot). Suitable for cron.
+
+Use `--export` to produce a shareable baseline that other TrustSight instances can consume via `trustsight import-baseline`.
+
+---
+
+## trustsight import-baseline
+
+Import a signed baseline corpus artifact. Verifies the signature, then merges profiles, priors, and the metadata snapshot into the local database. After import the database is warm: no cold-start floor, real `stable_for_n` values, populated priors.
+
+```
+trustsight import-baseline <path>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | Yes | Path to the baseline artifact (`.tar.zst`). |
+
+### Flags
 
 | Flag | Description |
 |------|-------------|

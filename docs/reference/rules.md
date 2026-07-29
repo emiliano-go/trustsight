@@ -753,7 +753,7 @@ Most updates change one thing. A diff that *simultaneously* adds a network
 fetch, writes a file, and base64-decodes a payload is disproportionate; the
 co-occurrence is more suspicious than the sum of its parts.
 
-**Why weight 0:** Adding a score for the combination would **double-count**  -- 
+**Why weight 0:** Adding a score for the combination would **double-count**;
 the three categories already scored individually via their own rules. Stacking
 extra points on top would inflate the benign p95, exactly the inflation the
 accuracy work eliminated. R072 therefore carries weight 0: it is a

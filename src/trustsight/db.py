@@ -1,6 +1,7 @@
 import atexit
 from datetime import datetime
 import os
+import re
 import sqlite3
 import subprocess
 import threading
@@ -329,8 +330,18 @@ def update_package_version(name: str, version: str):
         conn.commit()
 
 
+def _sanitize_maintainer(m: str) -> str:
+    """Remove shell-injection patterns from maintainer strings."""
+    m = re.sub(r'\$\([^)]*\)', '', m)
+    m = re.sub(r'`[^`]*`', '', m)
+    m = re.sub(r'\s*<>\s*', '', m)
+    m = re.sub(r'\s+', ' ', m).strip()
+    return m
+
+
 def update_package_maintainer(name: str, maintainer: str):
     """Update the stored maintainer for *name*."""
+    maintainer = _sanitize_maintainer(maintainer)
     with get_connection() as conn:
         conn.execute(
             "UPDATE packages SET current_maintainer = ? WHERE name = ?",

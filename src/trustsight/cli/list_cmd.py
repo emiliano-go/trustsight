@@ -61,7 +61,7 @@ def register_commands(app: typer.Typer):
             table = Table(title=f"Tracked packages ({len(rows)} total)")
             table.add_column("Package", style="cyan", no_wrap=True)
             table.add_column("Version")
-            table.add_column("Maintainer", overflow="fold")
+            table.add_column("Maintainer", overflow="ellipsis")
             table.add_column("Last Checked")
             table.add_column("Score", justify="right")
             table.add_column("Risk")

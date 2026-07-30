@@ -139,7 +139,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 13 detection rules (R001-R013), 21 expanded rules (R039-R059) calibrated against a 3,322-diff corpus of benign AUR updates, and 7 code-structure rules (C001-C007).
+Signals come from 13 detection rules (R001-R013), 44 code-emitted rules (R039-R082), 4 dependency-graph rules (D001-D004), and 7 code-structure rules (C001-C007), all calibrated against a 3,322+ diff corpus of benign AUR updates.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 

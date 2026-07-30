@@ -78,13 +78,6 @@ If the metadata snapshot is unavailable or corrupt, the tool falls back to the A
 
 Uses [rich](https://github.com/Textualize/rich) tables when available; falls back to plain text.
 
-### Exit codes
-
-| Code | Condition |
-|------|-----------|
-| `0` | All packages scored ≤20 (CLEAN). |
-| `1` | One or more packages scored >20 (FLAGGED) or verdict is INCONCLUSIVE. |
-
 ---
 
 ## trustsight inspect
@@ -452,7 +445,7 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 | `compile` | error | The pattern does not compile. `apply_rules()` skips uncompilable rules silently. |
 | `backtracking` | error | The pattern is superlinear on adversarial input; a crafted PKGBUILD line could hang the scan. |
 | `duplicate-id` | error | Two rules share an id, so the later one silently redefines what the id means in baselines and fixtures. |
-| `programmatic-id` | error | The id is one that `analysis.py` emits (`R004`, `R005`, `C001`-`C003`). |
+| `programmatic-id` | error | The id is one emitted by code (`R004`, `R005`, `C001`-`C003`). |
 | `severity` | error | Unknown severity. Unknown severities score 0. |
 | `match-target` / `scope` | error | Unknown `match_target`, or an unknown scope value. |
 | `comment-shadowed` | error | Every line the pattern matches is a comment or `depends` declaration, which `filter_raw_lines()` strips before matching. |

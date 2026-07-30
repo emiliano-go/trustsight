@@ -5,7 +5,9 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|
 | R-series  | R001 - R013  | `rules.toml`     | Yes               | Regex-detectable patterns   |
-| C-series  | C001 - C003  | `analysis.py`    | No                | Structural / multi-condition |
+| R-series  | R039 - R082  | `analysis/*.py`  | No                | Code-emitted detection      |
+| D-series  | D001 - D004  | `analysis/*.py`  | No                | Dependency-graph rules      |
+| C-series  | C001 - C007  | `analysis/*.py`  | No                | Structural / multi-condition |
 
 ## R-series rules (TOML)
 
@@ -18,7 +20,7 @@ R-series rules live in `rules.toml` under `~/.config/trustsight/`. Each rule has
 | `pattern`     | Regex pattern to match                                |
 | `severity`    | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`        |
 | `category`    | Risk category, e.g. `network`, `integrity`            |
-| `match_target`| Where to match: `diff_line` or `resolved_string`      |
+| `match_target`| Where to match: `raw_line` or `resolved`      |
 
 Example:
 
@@ -29,12 +31,12 @@ name = "curl-pipe-bash"
 pattern = "curl .* \\| bash"
 severity = "CRITICAL"
 category = "network"
-match_target = "diff_line"
+match_target = "raw_line"
 ```
 
 ## C-series rules (code)
 
-C-series rules are defined in `analysis.py` as Python classes. They express multi-condition invariants that cannot be captured by a single regex; for example *"checksum changed AND URLs unchanged AND pkgver unchanged"*.
+C-series rules are defined as Python code in the `analysis/` package. They express multi-condition invariants that cannot be captured by a single regex; for example *"checksum changed AND URLs unchanged AND pkgver unchanged"*.
 
 Users cannot disable C-series rules.
 

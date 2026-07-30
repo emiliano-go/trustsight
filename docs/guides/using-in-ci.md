@@ -4,25 +4,25 @@ description: How to integrate TrustSight into CI/CD pipelines.
 
 # Using TrustSight in CI
 
-TrustSight is designed to be scripted. The exit code and the review table give you everything you need to gate a pipeline; no JSON parser required, though one is planned.
+TrustSight is designed to be scripted. The exit code and the review table give you everything you need to gate a pipeline; no JSON parser required.
 
 ## Exit codes
 
 | Code | Meaning |
 |------|---------|
 | **0** | All packages scored CLEAN (≤20) |
-| **1** | One or more packages have a FLAGGED verdict (>20) |
 | **2** | An error occurred |
 
 A minimal CI step:
 
 ```bash
-trustsight review
-if [ $? -eq 1 ]; then
-  echo "One or more AUR packages flagged; investigate before updating."
-  exit 1
-fi
-```
+trustsight review --json | python3 -c "
+import json, sys
+reports = json.load(sys.stdin)
+if any(r.get('final_score', 0) > 20 for r in reports.values() if isinstance(r, dict)):
+    print('One or more AUR packages flagged; investigate before updating.')
+    sys.exit(1)
+"
 
 ## Policy gating
 
@@ -31,23 +31,20 @@ Decouple the score from your pass/fail decision. TrustSight's verdict threshold 
 Use a wrapper script to adjust the pass/fail boundary:
 
 ```bash
-threshold=40
-trustsight review
-# Exit 1 only if at least one package scores above $threshold
-if [ $? -eq 1 ]; then
-  trustsight inspect $(trustsight review --limit 100 2>/dev/null | grep -oP '^\S+' | head -1) 2>/dev/null | grep -q "Score: [4-9][0-9]/100\|Score: 100/100"
-  if [ $? -eq 0 ]; then
-    exit 1
-  fi
-  exit 0
-fi
-```
+export THRESHOLD=40
+trustsight review --json | python3 -c "
+import json, os, sys
+threshold = int(os.environ.get('THRESHOLD', '20'))
+reports = json.load(sys.stdin)
+flagged = [p for p, r in reports.items() if isinstance(r, dict) and r['final_score'] > threshold]
+if flagged:
+    print('Packages above threshold:', ', '.join(flagged))
+    sys.exit(1)
+"
 
-## JSON output (future)
+## JSON output
 
-A `--json` flag is planned for the `review` and `inspect` commands. The output will expose the full `PackageFact` structure (per-package scores, triggered rules, bucket classifications, and evidence breakdown) for consumption by downstream tooling.
-
-Until then, capture the terminal table or parse the exit code.
+The `--json` flag on `review` and `inspect` exposes the full `PackageFact` structure (per-package scores, triggered rules, bucket classifications, and evidence breakdown) for consumption by downstream tooling.
 
 ## Per-class CI regression
 

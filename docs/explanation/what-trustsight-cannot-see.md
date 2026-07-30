@@ -45,7 +45,7 @@ This narrows the gap; it does not close it:
 - Removing a dependency is not scored. Dropping a hardening library is a real weakening, but it is indistinguishable from ordinary cleanup.
 - The rules are only as good as the seeded corpus. Against an unseeded database, D001 stays silent by design rather than flagging every dependency it sees.
 
-The D-series is off by default while its fire rates are measured; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
+The D-series is enabled by default since v0.7.0; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
 
 ## Deliberately-unremarkable PKGBUILDs
 
@@ -59,7 +59,7 @@ TrustSight mitigates this in three ways:
 
 1. **Novelty signals (tier C) catch patterns the rules do not anticipate.** An attacker who carefully avoids every known pattern but adds a URL from an unknown domain is caught by the source bucket classifier. An attacker who reuses a known domain but changes the path may be caught by URL novelty tracking.
 2. **The scoring model is additive, not a pass/fail gate.** A score of 5 or 10 is not a clean bill of health; it means no structural patterns were detected, not that the package is safe. The score is a continuous measure, and low scores still warrant review if the reviewer is concerned.
-3. **Verdict-integrity assertions prevent the LLM from smoothing over concerns.** If novelty or bucket signals fired, the LLM must describe them. A compromised package that triggers no rules but has a novel URL on an unknown domain will still score above 0 and the LLM will still flag the unknown domain.
+3. **Deterministic verdicts ensure full disclosure.** Rule-based templates describe every triggered signal; a compromised package that triggers no rules but has a novel URL on an unknown domain will still score above 0 and the verdict will still flag the unknown domain.
 
 None of these mitigations eliminate the problem. A PKGBUILD that reuses well-known domains, has stable checksums, and contains no detectable command patterns will score 0 regardless of the tarball content at the other end of the checksum.
 

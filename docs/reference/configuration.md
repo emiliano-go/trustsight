@@ -5,7 +5,7 @@
 | Path | Purpose |
 |------|---------|
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
-| `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013). |
+| `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013 core; R039+ are code-emitted). |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
@@ -105,7 +105,7 @@ Pinning classification via `classify_pinning_level()` in `src/trustsight/buckets
 
 Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true` since v0.7.0 after corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
 
-A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_EXPERIMENTAL_DEFAULTS` in `analysis.py`). Setting a key here always overrides them.
+A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_EXPERIMENTAL_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

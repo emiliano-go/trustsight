@@ -14,10 +14,12 @@
 
 - **`src/trustsight/analysis.py` (1080 lines) refactored** into `analysis/` package: `base.py`, `build.py`, `dependencies.py`, `maintainer.py`, `pipeline.py`, `structural.py`, `temporal.py`.
 - **`src/trustsight/cli.py` (2035 lines) refactored** into `cli/` package: `admin.py`, `app.py`, `display.py`, `forget.py`, `history.py`, `inspect.py`, `list_cmd.py`, `review.py`.
-- **`python-cryptography` promoted** from optdepends to hard dependency (required for baseline artifact signing).
+- **`python-cryptography` promoted** from optdepends to hard dependency (resolves namcap warnings about uninstalled `cryptography` module at runtime).
+- **`packaging/aur/README.md`** corrected: `python-tldextract` is in the `extra` repository, not the AUR.
 
 ### Fixed
 
+- **`fetch_metadata(on_progress=...)` signature mismatch.** The `review` command passed an `on_progress` callback to `fetch_metadata()` but the function did not accept it, crashing with `TypeError` when the metadata-dump download path was taken. Added the `on_progress` parameter to `fetch_metadata()`.
 - **Nested parameter expansions** in PKGBUILD variables now resolve correctly via brace-depth tracking.
 - **`__seed__` sentinel** excluded from user-facing database queries. Unanalyzed packages show `-` instead of stale seed-derived scores.
 - **Version display** contract enforced: `None` shows as `-`, unresolvable strings as `"unresolved"`, across all CLI output paths.

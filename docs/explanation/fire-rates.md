@@ -111,10 +111,11 @@ static corpus. Fire rates vary per database and per run.
 | R066 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
 | R067 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
 
-## Install, build, maintainer, and naming rules (R068-R074)
+## Install, build, maintainer, and naming rules (R068-R082)
 
-These rules are defined in `src/trustsight/analysis.py` and
-`src/trustsight/differ.py`. Fire rates marked "TBD" require a live git
+These rules are defined in `src/trustsight/analysis/build.py`,
+`src/trustsight/analysis/temporal.py`, and `src/trustsight/analysis/pipeline.py`.
+Fire rates marked "TBD" require a live git
 repository and cannot be measured against the static corpus; R071
 falls in this category.
 
@@ -126,10 +127,10 @@ falls in this category.
 | R071 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
 | R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | R074 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
+| R081 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives on the graduated corpus. |
+| R082 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives on the graduated corpus. |
 
-R069, R070, R071, R074, and R075 were promoted from experimental to
-always-on after measurement (corpus for R069, R070, R074, R075; end-to-end
-gating tests for R071). All pass the 30 % gate.
+R081 and R082 were promoted from experimental to always-on in v0.11.0.
 
 ## Temporal metadata rule (R073)
 

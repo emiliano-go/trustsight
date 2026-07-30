@@ -12,7 +12,7 @@ cd trustsight/packaging/aur
 makepkg -si
 ```
 
-See [installation](installation.md) for details and LLM setup.
+See [installation](installation.md) for details.
 
 ## 2. Run a review
 
@@ -26,7 +26,7 @@ This command:
 2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run; subsequent runs reuse it),
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
-5. Applies detection rules (R001-R013, R039-R059) and context rules (C001-C007),
+5. Applies detection rules (R001-R013, R039-R082) and context rules (C001-C007, D001-D004),
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
 8. Calculates a deterministic score from 0-100,
@@ -54,7 +54,7 @@ This command:
 |--------|---------|
 | **Package** | Name of the AUR package with a newer version available |
 | **Score** | Deterministic risk score from 0 to 100. Higher = more risk signals fired. |
-| **Verdict** | Plain-English summary. Template-based if no LLM is configured; LLM-generated (deterministic inputs only) if an API key is set. |
+| **Verdict** | Plain-English summary. Template-based, fully deterministic. |
 
 ### What the scores mean in context
 

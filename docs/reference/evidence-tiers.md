@@ -17,9 +17,10 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Sources
 
-- R001-R013 rules firing against resolved command strings or raw diff lines.
+- R001-R013, R039-R082 rules firing against resolved command strings or raw diff lines.
 - R004/R005 checksum integrity rules (hard-coded, not TOML).
-- C001-C003 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C007 structural anomaly rules (checksum/source integrity heuristics).
+- D001-D004 dependency-graph rules.
 
 ### Availability
 
@@ -79,7 +80,7 @@ First-seen tracking for URLs and maintainers, backed by the local SQLite databas
 
 ### Sources
 
-- `build_novelty_context()` in `src/trustsight/novelty.py`.
+- `build_novelty_context()` in `src/trustsight/analysis/novelty.py`.
 - `source_urls` and `maintainers` tables in the local database at `~/.local/share/trustsight/`.
 
 ### Signals

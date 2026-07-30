@@ -109,7 +109,7 @@ Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `resolved_commands` | `list[string]` | Fully resolved command strings after tokenization and variable expansion. Each is a single command extracted from the diff. |
-| `suspicious_patterns_detected` | `list[string]` | Rule IDs (`R001`-`R013`, `R039`-`R059`, `C001`-`C007`) that fired during analysis. |
+| `suspicious_patterns_detected` | `list[string]` | Rule IDs (`R001`-`R013`, `R039`-`R082`, `C001`-`C007`, `D001`-`D004`) that fired during analysis. |
 | `unresolved_patterns` | `list[string]` | Source strings that the tokenizer could not fully resolve (e.g. interpolated variables, computed URLs). These produce INCONCLUSIVE outcomes per-url. |
 
 Resolution performed by `tokenize_and_resolve()` in `src/trustsight/tokenizer.py`.
@@ -132,7 +132,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier: `R001`-`R013`, `R039`-`R059`, `C001`-`C007`, `SOURCE_BUCKET`, `NOVELTY`, `PINNING`, `VERIFICATION`. |
+| `rule_id` | `string` | Rule or category identifier: `R001`-`R013`, `R039`-`R082`, `C001`-`C007`, `D001`-`D004`, `SOURCE_BUCKET`, `NOVELTY`, `PINNING`, `VERIFICATION`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Signed integer contribution. Positive = risk increase. Negative = risk decrease. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. Truncated to 80 characters in CLI display; full string in JSON. |
@@ -143,4 +143,4 @@ The sum of all `weight` values, floored at 0 and capped at 100, equals `final_sc
 
 ## Database storage
 
-The `PackageFact` JSON is stored in the `analyses` table under the `fact_json` column (TEXT, JSON). Triggered rules are stored in a separate `triggered_rules` table keyed by analysis ID. See `insert_analysis()` in `src/trustsight/analysis.py`.
+The `PackageFact` JSON is stored in the `analyses` table under the `fact_json` column (TEXT, JSON). Triggered rules are stored in a separate `triggered_rules` table keyed by analysis ID. See `insert_analysis()` in `src/trustsight/analysis/pipeline.py`.

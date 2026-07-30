@@ -13,8 +13,16 @@ from trustsight.analysis import _structural_findings
 from trustsight.config import DEFAULT_RULES
 from trustsight.differ import extract_urls_from_diff
 from trustsight.rules import apply_rules
+from trustsight.unicode import R013_UNCONDITIONAL_PATTERN
 
 RULES = {r["id"]: r for r in tomllib.loads(DEFAULT_RULES)["rules"]}
+# R013's pattern is dynamically generated from unicodedata.category('Cf')
+# in unicode.py; replace the static placeholder with the full Cf pattern.
+if "R013" in RULES:
+    RULES["R013"]["pattern"] = (
+        R013_UNCONDITIONAL_PATTERN
+        + r"|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])"
+    )
 
 
 def fires(rule_id: str, lines: list[str]) -> bool:
@@ -362,6 +370,59 @@ def test_c007_ignores_variable_expansion():
     assert "C007" not in _findings(diff)
 
 
+# --- R006: Insecure Download Protocol (structural) ---
+
+def test_r006_http_source_without_checksum():
+    """http:// added with no checksum change -> fires."""
+    diff = '+source=("http://example.com/pkg.tar.gz")\n'
+    assert "R006" in _findings(diff)
+
+
+def test_r006_http_source_with_checksum_added():
+    """http:// added alongside checksum -> suppressed."""
+    diff = (
+        '+source=("http://example.com/pkg.tar.gz")\n'
+        "+sha256sums=('abcdef1234567890')\n"
+    )
+    assert "R006" not in _findings(diff)
+
+
+def test_r006_https_source_without_checksum():
+    """https:// without checksum -> no fire (only http:// is insecure)."""
+    diff = '+source=("https://example.com/pkg.tar.gz")\n'
+    assert "R006" not in _findings(diff)
+
+
+def test_r006_http_source_with_skip_checksum():
+    """http:// with sha256sums=SKIP -> fires (no actual checksum coverage)."""
+    diff = (
+        '+source=("http://example.com/pkg.tar.gz")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    assert "R006" in _findings(diff)
+
+
+def test_r006_http_vcs_source_without_checksum():
+    """http:// VCS source without checksum -> fires."""
+    diff = '+source=("http://github.com/user/repo.git")\n'
+    assert "R006" in _findings(diff)
+
+
+def test_r006_no_http_sources():
+    """No http:// added -> no fire."""
+    diff = '+source=("https://example.com/pkg.tar.gz")\n'
+    assert "R006" not in _findings(diff)
+
+
+def test_r006_http_combined_with_https():
+    """Mixed http/https, checksum added -> no fire."""
+    diff = (
+        '+source=("http://cdn.example.com/pkg.tar.gz" "https://backup.example.com/pkg.tar.gz")\n'
+        "+sha256sums=('abcdef1234567890')\n"
+    )
+    assert "R006" not in _findings(diff)
+
+
 # --- Regressions found by measuring against the benign corpus ---
 
 @pytest.mark.parametrize("line", [
@@ -410,29 +471,35 @@ def test_r058_still_fires_on_real_absolute_write_via_sudo():
 # --- rules.toml must not drift from unicode.py ---
 
 def test_r013_covers_every_codepoint_unicode_module_enumerates():
-    """unicode.py is the authoritative list of deceptive codepoints.
-    R013's pattern once omitted U+200E/U+200F, U+2060-U+2064 and the tag
-    block, which is where the documented recall gap came from. This test
-    fails if the two ever diverge again."""
+    """unicode.py uses a category-based test (unicodedata.category('Cf'))
+    rather than a codepoint enumeration, so it covers all ~170 format-
+    control characters including variants nobody wrote a fixture for.
+    This test fails if the pattern and the module ever diverge."""
     import re
+    import unicodedata
 
     from trustsight import unicode as u
 
     pattern = re.compile(RULES["R013"]["pattern"])
-    ranges = [
-        (0x202A, 0x202E), (0x2066, 0x2069), (0x2060, 0x2064),
-        (0xE0000, 0xE007F), (0x200B, 0x200F), (0xFEFF, 0xFEFF),
-    ]
-    missed = [
-        hex(cp)
-        for lo, hi in ranges
-        for cp in range(lo, hi + 1)
-        if not pattern.search(f"evil.com{chr(cp)}/x")
-    ]
-    assert missed == [], f"R013 does not cover: {missed}"
-    # And every one of them is recognised by the module itself.
-    for lo, hi in ranges:
-        assert u.COMBINED.search(chr(lo)), f"unicode.COMBINED missing {hex(lo)}"
+    contextual = frozenset({0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0xFEFF})
+    missed = []
+    for cp in range(0x110000):
+        try:
+            if unicodedata.category(chr(cp)) != 'Cf':
+                continue
+        except ValueError:
+            continue
+        if not pattern.search(f"evil.com{chr(cp)}/x"):
+            missed.append(hex(cp))
+    assert missed == [], f"R013 does not cover {len(missed)} Cf codepoints: {missed[:20]}"
+    # And every unconditional Cf codepoint is recognized by the module itself.
+    for cp in range(0x110000):
+        try:
+            if unicodedata.category(chr(cp)) != 'Cf' or cp in contextual:
+                continue
+        except ValueError:
+            continue
+        assert u.COMBINED.search(chr(cp)), f"unicode.COMBINED missing Cf U+{cp:04X}"
 
 
 def test_unconditional_codepoints_fire_regardless_of_neighbours():
@@ -473,11 +540,11 @@ def _r071_finding(
 ) -> dict | None:
     from trustsight.analysis import _check_untrusted_maintainer_takeover
     monkeypatch.setattr(
-        "trustsight.analysis.effective_observation_count",
+        "trustsight.analysis.maintainer.effective_observation_count",
         lambda: effective_count,
     )
     monkeypatch.setattr(
-        "trustsight.analysis.is_maintainer_globally_novel",
+        "trustsight.analysis.maintainer.is_maintainer_globally_novel",
         lambda name: is_novel,
     )
     return _check_untrusted_maintainer_takeover(

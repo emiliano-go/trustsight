@@ -901,7 +901,7 @@ def forget_package(name: str) -> dict[str, int]:
         counts["analysis_history"] = cur.rowcount
 
         # source_urls and maintainers have FK to packages(id).  Reassign to
-        # the sentinel row (id 0) rather than deleting — the seed may have
+        # the sentinel row (id 0) rather than deleting; the seed may have
         # contributed data the user wants to keep.
         conn.execute(
             "UPDATE source_urls SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",

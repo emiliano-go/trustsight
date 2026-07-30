@@ -1,6 +1,6 @@
 [project]
 name = "trustsight"
-version = "0.10.1"
+version = "0.11.0"
 description = "CLI-based AUR package update vetting tool"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,7 @@ dependencies = [
     "tldextract>=5.0",
     "rich>=13.0",
     "typer>=0.12",
+    "cryptography",
 ]
 license-files = ["LICENSE"]
 

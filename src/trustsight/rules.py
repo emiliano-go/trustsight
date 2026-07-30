@@ -173,7 +173,22 @@ def apply_rules(
 ) -> list[dict]:
     """Match rules against diff lines and return triggered findings."""
     if rules is None:
-        rules = load_rules()
+        rules = list(load_rules())
+    # R013, R047, R048 patterns are dynamically generated from config or
+    # Unicode data rather than hardcoded in the TOML file.
+    for rule in rules:
+        if rule["id"] == "R013":
+            from .unicode import R013_UNCONDITIONAL_PATTERN
+            rule["pattern"] = (
+                R013_UNCONDITIONAL_PATTERN
+                + r"|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])"
+            )
+        elif rule["id"] == "R047":
+            from .config import _standard_port_pattern
+            rule["pattern"] = _standard_port_pattern()
+        elif rule["id"] == "R048":
+            from .config import _free_registrar_tld_pattern
+            rule["pattern"] = _free_registrar_tld_pattern()
 
     triggered = []
     ctx_map = _classify_line_context(raw_diff_lines)

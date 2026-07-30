@@ -1,4 +1,22 @@
 import re
+import unicodedata
+
+# ---- Character-category test for R013 ----
+# Uses unicodedata.category('Cf') to cover all Unicode format-control
+# characters (~170), not just a hardcoded subset.  This automatically
+# catches any format-control codepoints added in future Unicode versions.
+
+# Codepoints that require ASCII context (legitimate inside non-Latin scripts).
+_CONTEXTUAL_CF = frozenset({0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0xFEFF})
+
+# Build unconditional Cf set (all Cf chars minus contextual ones).
+_UNCONDITIONAL_CF: list[int] = []
+for cp in range(0x110000):
+    try:
+        if unicodedata.category(chr(cp)) == 'Cf' and cp not in _CONTEXTUAL_CF:
+            _UNCONDITIONAL_CF.append(cp)
+    except ValueError:
+        pass
 
 # Bidirectional text overrides (U+202A-U+202E)
 BIDI_OVERRIDES = re.compile(
@@ -49,9 +67,9 @@ TAG_CHARS = re.compile(
     '\U000e007e\U000e007f]'
 )
 
+_COMBINED_PATTERN = "[" + "".join(f"\\U{cp:08X}" for cp in _UNCONDITIONAL_CF) + "]"
 COMBINED = re.compile(
-    '[\u202a-\u202e\u2066-\u2069\u200b-\u200f\u2060-\u2064\ufeff'
-    '\U000e0000-\U000e007f]'
+    _COMBINED_PATTERN + r"|[\u200b-\u200f\ufeff]"
 )
 
 ANSI_ESCAPE = re.compile(r'\x1b\[[\d;]*[A-Za-z]|\x1b[\W_]')
@@ -59,14 +77,15 @@ ANSI_ESCAPE = re.compile(r'\x1b\[[\d;]*[A-Za-z]|\x1b[\W_]')
 # Codepoints that are only ever deceptive, whatever their neighbours.
 # Zero-width joiners are deliberately excluded: they are mandatory in
 # Malayalam, Lao and Devanagari, so R013 gates those on ASCII context.
-UNCONDITIONAL = re.compile(
-    '[\u202a-\u202e\u2066-\u2069\u2060-\u2064'
-    '\U000e0000-\U000e007f]'
-)
+UNCONDITIONAL = re.compile(_COMBINED_PATTERN)
 
 # Zero-width and directional marks: deceptive between ASCII, legitimate
 # inside non-Latin script runs.
 CONTEXTUAL = re.compile('[\u200b-\u200f\ufeff]')
+
+# Export the generated unconditional Cf pattern for use by config.py.
+# This replaces the hardcoded codepoint enumeration in the R013 TOML rule.
+R013_UNCONDITIONAL_PATTERN = _COMBINED_PATTERN
 
 
 def strip_ansi(text: str) -> str:

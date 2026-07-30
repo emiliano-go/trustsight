@@ -55,7 +55,6 @@ def test_load_rules_creates_default(tmp_path, monkeypatch):
     assert "R001" in rule_ids
     assert "R002" in rule_ids
     assert "R003" in rule_ids
-    assert "R006" in rule_ids
     assert "R007" in rule_ids
     assert "R009" in rule_ids
     assert "R012" in rule_ids
@@ -155,7 +154,7 @@ def test_missing_shipped_rules_detects_stale_config(tmp_path, monkeypatch):
     never receives newly shipped rules."""
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     missing = cfg.missing_shipped_rules()
-    assert "R039" in missing
+    assert "R040" in missing
     assert "R058" in missing
     assert "R001" not in missing
 

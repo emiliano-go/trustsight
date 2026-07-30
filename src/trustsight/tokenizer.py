@@ -61,7 +61,7 @@ def _strip_affix(val: str, op: str, pat: str) -> str:
 def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
     """Resolve a single innermost ${...} body.
 
-    *body* is the content between ${ and } — all nested expansions have
+    *body* is the content between ${ and }; all nested expansions have
     already been resolved at this point, so no further ${...} remains.
 
     Returns None (unresolved) for forms we refuse to evaluate.
@@ -117,7 +117,7 @@ def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
     """Resolve nested ${...} parameter expansions innermost-first.
 
     Returns (resolved_text, fully_resolved).
-    fully_resolved is False if any ${...} remains after the cap — the caller
+    fully_resolved is False if any ${...} remains after the cap; the caller
     MUST treat that as unresolved, never as a literal value.
     """
     sub_calls = 0

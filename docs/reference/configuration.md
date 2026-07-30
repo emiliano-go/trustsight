@@ -77,6 +77,24 @@ Subtractions for source pinning levels. Only the weakest (worst) pinning level a
 
 Pinning classification via `classify_pinning_level()` in `src/trustsight/buckets.py`.
 
+### `[ports]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `standard` | array of ints | `[80, 443, 8080, 8443]` | Ports excluded from R047 (non-standard port detection). Add custom standard ports to suppress false positives. |
+
+### `[domains]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `free_registrar_tlds` | array of strings | `["tk", "ml", "ga", "cf", "gq", "pw"]` | TLDs flagged by R048 (source URL on free registrar TLD). Update this list as new free TLDs appear. |
+
+### `[tools]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `network_makedepends` | array of strings | `["curl", "wget", "aria2", "git", ...]` | Package names that D003 treats as network-accessible makedepends. |
+
 ### `[rules]`
 
 | Key | Type | Default | Description |

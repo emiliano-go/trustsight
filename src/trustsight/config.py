@@ -61,6 +61,10 @@ auto_import = true
 default_repos = []
 include_foreign = false
 all_repos = false
+# When reviewing with --all, include packages not found in the AUR
+# metadata snapshot (orphaned, very new, removed from AUR, etc.).
+# Set to false to skip unmatched packages entirely.
+show_unmatched = true
 # Minutes before the AUR RPC response cache expires.  A repeat review
 # within this window reuses cached version data instead of re-querying
 # the AUR server.  Set to 0 to disable caching entirely.
@@ -115,6 +119,22 @@ checksum_pinned = -5
 tag_pinned = -3
 branch_pinned = 0
 unpinned = 0
+
+[ports]
+# Standard ports excluded from R047 (source URL uses non-standard port).
+standard = [80, 443, 8080, 8443]
+
+[domains]
+# Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
+free_registrar_tlds = ["tk", "ml", "ga", "cf", "gq", "pw"]
+
+[tools]
+# Package names that grant network access in makedepends (D003).
+network_makedepends = [
+    "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+    "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
+    "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
+]
 """
 
 DEFAULT_RULES = """\
@@ -142,13 +162,8 @@ severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
 
-[[rules]]
-id = "R006"
-name = "Insecure Download Protocol"
-pattern = 'https?://.*\\.tar\\.gz.*\\|'
-severity = "MEDIUM"
-category = "network_execution"
-match_target = "resolved"
+# R006 is now a structural rule (src/trustsight/analysis/structural.py):
+# fires on http:// added sources when no checksum was also added.
 
 [[rules]]
 id = "R007"
@@ -388,6 +403,7 @@ pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+(?!
 severity = "MEDIUM"
 category = "privilege"
 match_target = "raw_line"
+scope = ["function_body", "other"]
 added_only = true
 
 [[rules]]
@@ -400,6 +416,7 @@ pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+["\
 severity = "HIGH"
 category = "privilege"
 match_target = "raw_line"
+scope = ["function_body", "other"]
 added_only = true
 
 [[rules]]
@@ -450,6 +467,7 @@ pattern = '^\\+?\\s*(?:sudo\\s+)?(?:install|cp|mv|dd|tee)\\s+[^;&|]*(?:(?<=\\s)|
 severity = "HIGH"
 category = "system"
 match_target = "raw_line"
+scope = ["function_body", "other"]
 added_only = true
 """
 
@@ -785,6 +803,23 @@ def load_rules() -> list[dict]:
     """Load rules from rules.toml"""
     data = load_toml("rules.toml")
     return data.get("rules", [])
+
+
+def _standard_port_pattern() -> str:
+    """Generate the R047 non-standard-port exclusion pattern from config."""
+    cfg = load_config()
+    ports = cfg.get("ports", {}).get("standard", [80, 443, 8080, 8443])
+    joined = "|".join(str(p) for p in ports)
+    return f'https?://[^/\\s:]+:(?!(?:{joined})(?:[/\\s"\\x27]|$))\\d{{2,5}}'
+
+
+def _free_registrar_tld_pattern() -> str:
+    """Generate the R048 free-registrar-TLD pattern from config."""
+    cfg = load_config()
+    tlds = cfg.get("domains", {}).get("free_registrar_tlds",
+                                       ["tk", "ml", "ga", "cf", "gq", "pw"])
+    joined = "|".join(tlds)
+    return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
 
 
 def load_domains() -> dict:

@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.11.0] - 2026-07-30
+
+### Added
+
+- **`inspect` output redesigned.** Single Panel with "Rules Triggered" header, Score/Risk at bottom, `--score`/`--risk` independent flags.
+- **`review` `--risk` flag.** Coloured border by risk level and Risk row.
+- **Dedicated "Files changed" section** in both review and inspect, showing each file with `+`/`~`/`-` prefix.
+- **`override wizard <package>`** command. Interactive rule suppression per package.
+- **R081 (foreign package manager in install hooks) and R082 (shell obfuscation density ≥3 patterns) graduated from experimental** to enabled by default. Zero false positives on a 3243-diff benign corpus.
+
+### Changed
+
+- **`src/trustsight/analysis.py` (1080 lines) refactored** into `analysis/` package: `base.py`, `build.py`, `dependencies.py`, `maintainer.py`, `pipeline.py`, `structural.py`, `temporal.py`.
+- **`src/trustsight/cli.py` (2035 lines) refactored** into `cli/` package: `admin.py`, `app.py`, `display.py`, `forget.py`, `history.py`, `inspect.py`, `list_cmd.py`, `review.py`.
+- **`python-cryptography` promoted** from optdepends to hard dependency (required for baseline artifact signing).
+
+### Fixed
+
+- **Nested parameter expansions** in PKGBUILD variables now resolve correctly via brace-depth tracking.
+- **`__seed__` sentinel** excluded from user-facing database queries. Unanalyzed packages show `-` instead of stale seed-derived scores.
+- **Version display** contract enforced: `None` shows as `-`, unresolvable strings as `"unresolved"`, across all CLI output paths.
+- **Conftest fixture conflict** resolved.
+
 ## [0.10.0] - 2026-07-29
 
 ### Added
@@ -87,7 +110,7 @@
   or other user-facing queries. `get_package_id()` and `get_package()`
   return `None` for reserved names; `upsert_package()` raises `ValueError`.
 - **Unanalyzed packages showing `0/100 Low`.** The `inspect` and `review`
-  commands now display `—` (em-dash) for score and risk when a package has
+  commands now display `-` for score and risk when a package has
   not yet been analyzed, instead of misleading `0/100 Low`.
 - **Empty version strings shown as `unresolved`.** Version strings that do
   not match the plausible-version regex (e.g. unresolved PKGBUILD variables)

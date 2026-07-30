@@ -9,7 +9,8 @@ The version here must match `pyproject.toml`. Steps that cannot be done ahead
 of the release are marked.
 
 1. Confirm `pkgver` matches `version` in `pyproject.toml`.
-2. **After the release tag is pushed**, fill in the checksum:
+2. **After the release tag is pushed**, download the tarball and replace
+   the placeholder checksum with the real hash:
 
    ```bash
    cd packaging/aur
@@ -48,10 +49,10 @@ not about the tool.
 
 ## Dependency notes
 
-`python-pygit2` and `python-rich` are in `extra`. `python-tldextract`
-comes from the AUR, so this package pulls an AUR dependency:
-acceptable for an AUR package, but worth stating since it affects install with
-plain `makepkg`.
+`python-pygit2`, `python-rich`, `python-tldextract`, and
+`python-cryptography` are all in the `extra` repository.
+`pyalpm` (optional) is in the `community` repository (formerly AUR).
+No AUR dependencies are required.
 
 The bundled novelty seed (`src/trustsight/data/seed.db.gz`, ~12 MB) ships inside
 the wheel, so the installed package includes it and the first run needs no

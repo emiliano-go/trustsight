@@ -19,17 +19,30 @@ _METADATA_URL = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
 _META_SNAPSHOT_PATH = Path("full-aur-meta.json")
 
 
-def fetch_metadata() -> dict:
+def fetch_metadata(on_progress=None) -> dict:
     """Download and decompress the AUR metadata dump.
 
     Returns a dict keyed by package name, where each value contains
     ``Name``, ``Version``, ``Description``, ``Maintainer``, ``Depends``,
     ``MakeDepends``, ``OptDepends``, ``CheckDepends``, ``Provides``,
     ``License``, ``NumVotes``, ``Popularity``, ``LastModified``, etc.
+
+    If *on_progress* is a callable ``(pos, total) -> None`` it is called
+    periodically during the download with the number of bytes received
+    and the expected content length.
     """
     log.info("fetching AUR metadata from %s", _METADATA_URL)
     resp = urlopen(_METADATA_URL)
-    data = json.loads(gzip.decompress(resp.read()))
+    total = int(resp.headers.get("Content-Length", 0))
+    buf = bytearray()
+    while True:
+        chunk = resp.read(65536)
+        if not chunk:
+            break
+        buf.extend(chunk)
+        if on_progress:
+            on_progress(len(buf), total)
+    data = json.loads(gzip.decompress(buf))
     metadata: dict[str, dict] = {}
     for entry in data:
         metadata[entry["Name"]] = entry

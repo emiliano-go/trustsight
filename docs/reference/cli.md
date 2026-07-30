@@ -6,7 +6,7 @@
 trustsight <command> [options]
 ```
 
-Global entry point defined at `src/trustsight/cli.py`.
+Global entry point defined in the `src/trustsight/cli/` package.
 
 ## Global flags
 
@@ -16,7 +16,7 @@ Global entry point defined at `src/trustsight/cli.py`.
 | `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
 | `--json` | Output in JSON format instead of the default rich/plain text. Available on all commands. |
 
-The help output also documents `trustsight config show`, `trustsight config setup`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
+The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
 
 ## Interrupt handling
 
@@ -29,7 +29,7 @@ The help output also documents `trustsight config show`, `trustsight config setu
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk]
 ```
 
 ### Flags
@@ -39,6 +39,8 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verb
 | `--limit` | `int` | `0` | Maximum number of outdated packages to review. `0` means unlimited. |
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
+| `--score` | flag | `false` | Show aggregate trust score for each package. |
+| `--risk` | flag | `false` | Show risk level; colours the panel border by risk. |
 | `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
@@ -67,7 +69,7 @@ Discovery uses a local AUR metadata snapshot by default:
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded; subsequent runs reuse it.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001-R013, R039-R059) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001–R064, R068–R075, R081–R082) and code-structure rules (C001–C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
 
 If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.
@@ -87,7 +89,7 @@ Uses [rich](https://github.com/Textualize/rich) tables when available; falls bac
 
 ## trustsight inspect
 
-Show the full analysis for a single package: version diff, score with risk level, maintainer change, diff summary, checksum behaviour, added source URLs with bucket classification, resolved commands, score breakdown, and verdict.
+Show the full analysis for a single package: version diff, maintainer change, diff summary, checksum behaviour, added source URLs with bucket classification, resolved commands, triggered rules, and status.
 
 ```
 trustsight inspect <package>
@@ -104,6 +106,8 @@ trustsight inspect <package>
 | Flag | Description |
 |------|-------------|
 | `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
+| `--score` | Show aggregate trust score with weight contribution breakdown. |
+| `--risk` | Show risk level with per-rule severity labels. Implies a coloured border in rich mode. |
 
 ### Output
 
@@ -111,27 +115,32 @@ When [rich](https://github.com/Textualize/rich) is available:
 
 ```
 TrustSight Inspect: <package>
-  Version: <old> → <new>
-  Score: <N>/100 (<risk>)
+      Version  <old> → <new>
+       Lines  +<N> / -<N>
+  Maintainer  <current maintainer>
+   Checksum  <behaviour>
+     Status  <verdict text>
 
-  Diff Summary
-  Files changed: PKGBUILD, .SRCINFO
-  Lines: +<N>/-<N>
+  Files changed
+    + PKGBUILD
+    ~ .SRCINFO
 
-  Checksum behavior: <behaviour>
+  Rules Triggered
+  <rule_id>  <reason>
+
+  Suppressed by override
+  <rule_id>  <override_reason>
 
   Source URLs Added
-    <url> (<bucket>)
+    [<bucket>]  <url>
 
   Resolved Commands
     <command>
 
-  Score Breakdown
-  +<weight> <SEVERITY>  <rule_id>  <reason>
-
-  Verdict
-  <verdict text>
+      Status  <verdict text>
 ```
+
+The `--score` flag shows per-rule weights (`+40`) and a `Score: N/100 (risk)` row with weight sum at the bottom. The `--risk` flag shows per-rule severities (`CRITICAL`) and a `Risk: (level)` row. Without either flag, rules are shown by ID and reason only with a blue border. When both are given, Score row takes priority (it already includes the risk level).
 
 Plain-text fallback prints a condensed subset of the same information.
 
@@ -188,7 +197,7 @@ trustsight list [--limit N]
 
 Table with columns: **Package**, **Version**, **Maintainer**, **Last Checked**, **Score**, **Risk**.
 
-Packages that have never been analysed show `—` for score.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
+Packages that have never been analysed show `-` for score.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
 
 ---
 
@@ -264,7 +273,6 @@ View or modify TrustSight configuration.
 
 ```
 trustsight config show
-trustsight config setup
 trustsight config set <key> <value>
 trustsight config sync-rules [--update]
 ```
@@ -273,7 +281,7 @@ trustsight config sync-rules [--update]
 
 | Subcommand | Description |
 |------------|-------------|
-| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays LLM provider, model, API key (masked), base URL, seed auto-import status, and scoring weights. |
+| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays seed auto-import status, experimental rules toggle, and scoring weights. |
 | `set <key> <value>` | Set a configuration value. Example: `trustsight config set seed.auto_import false`. |
 | `sync-rules` | Add rules that ship with this version but are absent from your `rules.toml`. |
 
@@ -310,6 +318,7 @@ Suppress a rule that misfires on your packages, with a recorded reason.
 trustsight override list
 trustsight override add <rule_id> --reason "..." [--package NAME]
 trustsight override rm <rule_id> [--package NAME]
+trustsight override wizard <package>
 ```
 
 Some rules are correct in general and wrong for you. R010 fires on any `curl`
@@ -324,6 +333,7 @@ goes away is worse than no finding at all, because it trains you to skim.
 | `list` | Show configured overrides. This is the default when no subcommand is given. |
 | `add <rule_id>` | Suppress a rule. `--reason` is required. |
 | `rm <rule_id>` | Stop suppressing a rule. Exits non-zero if no override matched. |
+| `wizard <package>` | Interactive wizard: analyses the package, shows triggered non-FATAL rules, and prompts you to suppress each with a reason. |
 
 ### Flags
 

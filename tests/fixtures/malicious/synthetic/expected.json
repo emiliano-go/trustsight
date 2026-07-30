@@ -68,7 +68,7 @@
       "R012",
       "R013"
     ],
-    "min_score": 20
+    "min_score": 25
   },
   "R004-skip-https-named.diff": {
     "must_fire": [
@@ -78,7 +78,7 @@
       "R012",
       "R013"
     ],
-    "min_score": 20
+    "min_score": 25
   },
   "R004-skip-git-justified.diff": {
     "must_not_fire": [
@@ -105,13 +105,13 @@
     "must_fire": [
       "R004"
     ],
-    "min_score": 20
+    "min_score": 25
   },
   "R005-empty-checksum.diff": {
     "must_fire": [
       "R005"
     ],
-    "min_score": 20
+    "min_score": 25
   },
   "R006-http-url.diff": {
     "must_fire": [
@@ -121,7 +121,7 @@
       "R012",
       "R013"
     ],
-    "min_score": 10
+    "min_score": 15
   },
   "R006-https-url.diff": {
     "must_not_fire": [
@@ -178,6 +178,24 @@
     ],
     "min_score": 25
   },
+  "R015-depends-added.diff": {
+    "must_fire": [
+      "R015"
+    ],
+    "min_score": 15
+  },
+  "R016-makedepends-added.diff": {
+    "must_fire": [
+      "R016"
+    ],
+    "min_score": 10
+  },
+  "R016-optdepends-added.diff": {
+    "must_fire": [
+      "R016"
+    ],
+    "min_score": 10
+  },
   "R017-chmod-suid.diff": {
     "must_fire": [
       "R017"
@@ -207,14 +225,26 @@
       "R010",
       "R025"
     ],
-    "min_score": 15
+    "min_score": 30
   },
   "R025-exec.diff": {
     "must_fire": [
       "R011",
       "R025"
     ],
-    "min_score": 15
+    "min_score": 30
+  },
+  "R026-checksum-to-skip.diff": {
+    "must_fire": [
+      "R026"
+    ],
+    "min_score": 25
+  },
+  "R027-checksum-emptied.diff": {
+    "must_fire": [
+      "R027"
+    ],
+    "min_score": 25
   },
   "control-benign-version-bump.diff": {
     "must_not_fire": [

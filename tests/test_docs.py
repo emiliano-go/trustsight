@@ -13,13 +13,14 @@ import tomllib
 
 import pytest
 
+from trustsight.cli import app
 from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES_MD = ROOT / "docs" / "reference" / "rules.md"
 CLI_MD = ROOT / "docs" / "reference" / "cli.md"
 CONFIG_MD = ROOT / "docs" / "reference" / "configuration.md"
-CLI_PY = ROOT / "src" / "trustsight" / "cli.py"
+CLI_SRC = ROOT / "src" / "trustsight" / "cli"
 
 SHIPPED_RULES = tomllib.loads(DEFAULT_RULES)["rules"]
 PROGRAMMATIC_RULES = ["R004", "R005", "C001", "C002", "C003",
@@ -58,24 +59,21 @@ def test_documented_severity_matches_shipped_severity(rule):
 
 
 def _cli_names() -> set[str]:
-    text = CLI_PY.read_text()
     names: set[str] = set()
-    # Typer sub-app registration: app.add_typer(X, name="name")
-    names.update(re.findall(r'add_typer\(\w+,\s*name="([a-z-]+)"', text))
-    # Explicit name: @X.command("name")
-    names.update(re.findall(r'@\w+\.command\("([a-z-]+)"', text))
-    # Implicit name from def: @app.command() / @X.command()  above def func_name()
-    for func_name in re.findall(r'@\w+\.command\(\)\s*\n\s*def (\w+)', text):
-        names.add(func_name.replace("_", "-"))
+    for cmd in app.registered_commands:
+        name = cmd.name or cmd.callback.__name__.replace("_", "-")
+        names.add(name)
+    for group in app.registered_groups:
+        if group.name:
+            names.add(group.name)
     return names
 
 
 def _cli_flags() -> set[str]:
-    text = CLI_PY.read_text()
     flags: set[str] = set()
-    # typer.Option("...", "--flag-name")
-    flags.update(re.findall(r'typer\.Option\([^)]*"(--[a-z-]+)"', text))
-    # typer.Argument(..., help="..."): only positional args, no flag prefix
+    for py in sorted(CLI_SRC.glob("*.py")):
+        text = py.read_text()
+        flags.update(re.findall(r'typer\.Option\([^)]*"(--[a-z-]+)"', text))
     return flags
 
 

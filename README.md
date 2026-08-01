@@ -26,6 +26,8 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ## Setup
 
+> This package is not yet in the AUR, so installation is git clones + build untill 1.0.0
+
 ```bash
 # 1. Install
 git clone https://github.com/emiliano-go/trustsight.git

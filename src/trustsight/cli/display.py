@@ -109,6 +109,10 @@ def _fact_to_dict(fact):
                 "severity": e.severity,
                 "weight": e.weight,
                 "reason": e.reason,
+                "template": e.template,
+                "evidence": e.evidence,
+                "file": e.file,
+                "line": e.line,
             }
             for e in fact.score_breakdown
         ],

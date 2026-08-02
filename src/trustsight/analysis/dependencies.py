@@ -1,3 +1,4 @@
+from ..config import DEFAULT_NETWORK_TOOLS, load_patterns
 from ..db import is_established_package, top_dependency_names
 from ..deps import extract_dependency_changes, is_related_package
 from ..novelty import is_dependency_novel, typosquat_target
@@ -5,17 +6,15 @@ from .base import _experimental_enabled, _rarities_of
 
 _DEP_EXPANSION_GATE = 1.5
 
-_DEFAULT_NETWORK_TOOLS = frozenset({
-    "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
-    "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
-    "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
-})
-
 
 def _network_tools(config: dict) -> frozenset:
-    """Return network tool names from config, falling back to defaults."""
+    """Return network tool names from patterns.toml, then config.toml, then
+    the code default."""
+    tools = load_patterns().get("patterns", {}).get("network_tools")
+    if tools:
+        return frozenset(tools)
     tools = config.get("tools", {}).get("network_makedepends")
-    return frozenset(tools) if tools else _DEFAULT_NETWORK_TOOLS
+    return frozenset(tools) if tools else frozenset(DEFAULT_NETWORK_TOOLS)
 
 
 def _dependency_findings(diff_text, package_name, config, add) -> None:

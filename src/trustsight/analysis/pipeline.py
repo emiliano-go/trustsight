@@ -25,6 +25,7 @@ from ..differ import (
     map_diff_lines,
 )
 from ..fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
+from ..findings import stamp
 from ..novelty import (
     build_novelty_context,
     normalize_url,
@@ -164,18 +165,18 @@ def analyze_package(
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
-            triggered_rules.append({
+            triggered_rules.append(stamp({
                 "rule_id": "R068", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
-            })
+            }))
 
     if detect_gpg_verification_removed(diff_text):
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R069", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
-        })
+        }))
 
     takeover = _check_untrusted_maintainer_takeover(
         maintainer_changed, new_maintainer
@@ -186,22 +187,22 @@ def analyze_package(
     categories = {r.get("category", "") for r in triggered_rules
                   if r.get("category") and r["rule_id"] != "R072"}
     if len(categories) >= 3:
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R072", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
             "params": {"n_categories": len(categories)},
-        })
+        }))
 
     if effective_observation_count() > 0:
         squatted = package_typosquat_target(pkg_name)
         if squatted:
-            triggered_rules.append({
+            triggered_rules.append(stamp({
                 "rule_id": "R074", "name": "Package-Name Typosquat",
                 "severity": "HIGH", "category": "naming",
                 "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
                 "params": {"pkg_name": pkg_name, "squatted": squatted},
-            })
+            }))
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
@@ -314,28 +315,28 @@ def scan_diff(
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
-            triggered_rules.append({
+            triggered_rules.append(stamp({
                 "rule_id": "R068", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
-            })
+            }))
 
     if detect_gpg_verification_removed(diff_text):
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R069", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
-        })
+        }))
 
     categories = {r.get("category", "") for r in triggered_rules
                   if r.get("category") and r["rule_id"] != "R072"}
     if len(categories) >= 3:
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R072", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
             "params": {"n_categories": len(categories)},
-        })
+        }))
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

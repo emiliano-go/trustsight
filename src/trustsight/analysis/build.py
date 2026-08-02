@@ -1,5 +1,11 @@
 import re
 
+from ..config import (
+    DEFAULT_FOREIGN_PKG_MANAGERS,
+    DEFAULT_OBFUSCATION_INDICATORS,
+    load_patterns,
+    load_thresholds,
+)
 from ..deps import _strip_comment
 from ..differ import extract_source_array_urls
 from ..novelty import normalize_url
@@ -36,65 +42,52 @@ _NETWORK_FETCH_RE = re.compile(
     re.IGNORECASE,
 )
 
-_FOREIGN_PKG_RE = re.compile(
-    r"\b(?:pip|pip3)\s+install\b|"
-    r"\bnpm\s+(?:install|add)\b|"
-    r"\bbun\s+(?:install|add)\b|"
-    r"\bpnpm\s+(?:install|add)\b|"
-    r"\byarn\s+(?:install|add)\b|"
-    r"\bcargo\s+install\b|"
-    r"\bgem\s+install\b|"
-    r"\bgo\s+install\b|"
-    r"\bdnf\s+install\b|"
-    r"\byum\s+install\b|"
-    r"\bpacman\s+-[SU]\b|"
-    r"\bapt(?:-get)?\s+install\b|"
-    r"\bmake\s+install\b(?!\s+DESTDIR)",
-    re.IGNORECASE,
-)
+def _foreign_pkg_re(config=None) -> re.Pattern:
+    """Compile the R081 foreign-package-manager regex from patterns.toml."""
+    patterns = load_patterns().get("patterns", {})
+    frags = patterns.get("foreign_pkg_managers") or DEFAULT_FOREIGN_PKG_MANAGERS
+    return re.compile("|".join(frags), re.IGNORECASE)
 
-_OBFUSCATION_PATTERNS_RE = [
-    re.compile(p) for p in (
-        r"base64.*(?:-d|--decode)",
-        r"printf\s+['\"]\\x",
-        r"\$\(|`",
-        r"\beval\b",
-        r"\|.*(?:bash|sh|zsh)\b",
-        r"(?:bit\.ly|t\.co|tinyurl|shorturl|ow\.ly|is\.gd)",
-        r"wget\s+-q\s+-O\s*-\s*\|",
-        r"\$\{[a-zA-Z_][a-zA-Z0-9_]*\}.*(?:curl|wget|bash|sh)",
-        # June-W3 campaign markers (confirmed campaign indicators):
-        # ANSI-C quoting, variable indirection, empty-quote concatenation.
-        r"\$'",
-        r"\$\{!",
-        r"(?<=\w)''(?=\w)",
-    )
-]
+
+def _obfuscation_indicators(config=None) -> list[re.Pattern]:
+    """Compile the R082 obfuscation indicators from patterns.toml."""
+    patterns = load_patterns().get("patterns", {})
+    frags = patterns.get("obfuscation_indicators") or DEFAULT_OBFUSCATION_INDICATORS
+    return [re.compile(p) for p in frags]
+
 
 # R082 composition: a dense obfuscated line that reconstructs to an
 # executable action is HIGH, not MEDIUM.  The action shapes mirror what
 # R081 (foreign package manager), R003/R043 (decode-and-pipe) and R039
 # (eval of dynamic content) detect on reconstructed text.
-_RECONSTRUCTS_TO_ACTION_RE = re.compile(
-    _FOREIGN_PKG_RE.pattern
-    + r"|"
-    r"(?:base64|xxd|uudecode)\b[^|]*\|[^|]*(?:bash|sh|zsh|dash)\b"
-    + r"|"
-    r"\beval\b"
-    + r"|"
-    r"(?:curl|wget)\b[^|;]*\|(?:bash|sh|zsh|dash)\b",
-    re.IGNORECASE,
-)
+def _reconstructs_to_action_re(config=None) -> re.Pattern:
+    foreign = _foreign_pkg_re(config)
+    return re.compile(
+        foreign.pattern
+        + r"|"
+        r"(?:base64|xxd|uudecode)\b[^|]*\|[^|]*(?:bash|sh|zsh|dash)\b"
+        + r"|"
+        r"\beval\b"
+        + r"|"
+        r"(?:curl|wget)\b[^|;]*\|(?:bash|sh|zsh|dash)\b",
+        re.IGNORECASE,
+    )
 
 
-def _reconstructs_to_action(body: str) -> bool:
+def _obfuscation_density_threshold(config) -> int:
+    """Return the R082 density threshold from thresholds.toml."""
+    thresholds = load_thresholds().get("r082", {})
+    return thresholds.get("obfuscation_density", 3)
+
+
+def _reconstructs_to_action(body: str, config=None) -> bool:
     """True when *body* (already resolved and reconstructed) reveals an
     executable action rather than inert obfuscation."""
-    return bool(_RECONSTRUCTS_TO_ACTION_RE.search(body))
+    return bool(_reconstructs_to_action_re(config).search(body))
 
 
 def reconstructs_to_js_pm_install(text: str) -> bool:
-    return bool(_FOREIGN_PKG_RE.search(text))
+    return bool(_foreign_pkg_re().search(text))
 
 
 def reconstructs_to_decode_pipe_sh(text: str) -> bool:
@@ -214,11 +207,12 @@ def _build_findings(diff_text, config, add) -> None:
                 break
 
     if "R081" in wanted:
+        foreign_re = _foreign_pkg_re(config)
         for i, line in enumerate(lines):
             if not line.startswith("+") or enclosing.get(i) not in _INSTALL_HOOKS:
                 continue
             body = _strip_comment(line)
-            if _FOREIGN_PKG_RE.search(body):
+            if foreign_re.search(body):
                 add("R081", "Foreign Package Manager In Install Hook", "HIGH", "installer",
                     f"{enclosing[i]}() invokes foreign package manager: {body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
@@ -230,14 +224,17 @@ def _build_findings(diff_text, config, add) -> None:
         # The composed HIGH requires the reconstructed line to reveal an
         # executable action (R117 composition).
         raw_lines = join_line_continuations(diff_text.splitlines())
+        indicators = _obfuscation_indicators(config)
+        density = _obfuscation_density_threshold(config)
+        action_re = _reconstructs_to_action_re(config)
         for i, line in enumerate(lines):
             if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
                 continue
             raw_body = _strip_comment(raw_lines[i])
             body = _strip_comment(line)
-            count = sum(1 for p in _OBFUSCATION_PATTERNS_RE if p.search(raw_body))
-            if count >= 3:
-                severity = "HIGH" if _reconstructs_to_action(body) else "MEDIUM"
+            count = sum(1 for p in indicators if p.search(raw_body))
+            if count >= density:
+                severity = "HIGH" if action_re.search(body) else "MEDIUM"
                 add("R082", "Shell Obfuscation Density", severity, "obfuscation",
                     f"{enclosing[i]}() line has {count} obfuscation indicators: {body.strip()[:80]}",
                     position=enclosing[i], count=count, body=body.strip()[:80])

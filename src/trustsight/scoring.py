@@ -64,6 +64,8 @@ def calculate_score(
         params = rule.get("params", {})
         file = rule.get("file", "")
         line = rule.get("line")
+        template = rule.get("template", "")
+        evidence = rule.get("evidence", params)
         if rule["severity"] == "FATAL":
             has_fatal = True
             breakdown.append(
@@ -73,6 +75,8 @@ def calculate_score(
                     weight=0,
                     reason=f"{rule['name']}: {rule.get('match', '')}",
                     params=params,
+                    template=template,
+                    evidence=evidence,
                     file=file,
                     line=line,
                 )
@@ -87,6 +91,8 @@ def calculate_score(
                 weight=weight,
                 reason=f"{rule['name']}: {rule.get('match', '')}",
                 params=params,
+                template=template,
+                evidence=evidence,
                 file=file,
                 line=line,
             )

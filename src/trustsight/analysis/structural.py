@@ -11,6 +11,7 @@ from .base import (
 )
 from .build import _build_findings
 from .dependencies import _dependency_findings
+from ..findings import stamp
 
 _BINARY_ARTIFACT_RE = re.compile(
     r"\.(?:bin|exe|elf|so|dll|dylib|appimage|deb|rpm|apk|msi|jar|run)"
@@ -65,7 +66,7 @@ def _structural_findings(
         }
         if extra:
             finding["params"] = extra
-        findings.append(finding)
+        findings.append(stamp(finding))
 
     cs_behavior = source_changes.checksum_behavior
     added = source_changes.added_urls

@@ -63,6 +63,12 @@ TrustSight mitigates this in three ways:
 
 None of these mitigations eliminate the problem. A PKGBUILD that reuses well-known domains, has stable checksums, and contains no detectable command patterns will score 0 regardless of the tarball content at the other end of the checksum.
 
+## The novelty ceiling (R103/R109)
+
+The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 tier codifies. R126 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.
+
+The composition rules that narrow this ceiling are grounded in real events. R089 (attack-chain composition) exists because both the 2018 acroread supply-chain attack and the 2026 Atomic Arch campaign progressed through multiple distinct kill-chain stages, and requiring several stages to co-occur is how the rule separates a genuine chain from single-stage noise.
+
 ## The limits of corpus-based detection
 
 The corpus prior is only as good as the corpus. Three failure modes exist:

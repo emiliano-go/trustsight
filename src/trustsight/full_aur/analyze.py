@@ -37,6 +37,7 @@ from ..differ import (
     detect_verification_evidence,
     extract_urls_from_diff,
 )
+from ..findings import stamp
 from ..novelty import build_novelty_context
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, get_raw_diff_lines
@@ -98,24 +99,26 @@ def _temporal_findings(
     if temporal.last_modified is not None and temporal.last_modified > 0:
         hours_ago = (now - temporal.last_modified) / 3600
         if 0 <= hours_ago < 72:
-            findings.append({
+            findings.append(stamp({
                 "rule_id": "R065",
                 "name": "Very Recent Update",
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"updated {int(hours_ago)}h ago (< 72h)",
-            })
+                "params": {"detail": f"updated {int(hours_ago)}h ago (< 72h)"},
+            }))
 
     if temporal.first_seen is not None and is_new_package:
         days_ago = (now - temporal.first_seen) / 86400
         if 0 <= days_ago < 30:
-            findings.append({
+            findings.append(stamp({
                 "rule_id": "R066",
                 "name": "Brand New Package",
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"first AUR submission {int(days_ago)} days ago (< 30)",
-            })
+                "params": {"detail": f"first AUR submission {int(days_ago)} days ago (< 30)"},
+            }))
 
     if (temporal.last_modified is not None
             and temporal.previous_modified is not None
@@ -123,13 +126,14 @@ def _temporal_findings(
             and temporal.previous_modified > 0):
         gap_days = (temporal.last_modified - temporal.previous_modified) / 86400
         if gap_days > 365:
-            findings.append({
+            findings.append(stamp({
                 "rule_id": "R067",
                 "name": "Stale Package Revived",
                 "severity": "MEDIUM",
                 "category": "temporal",
                 "match": f"dormant {int(gap_days)} days, now has a new update (> 1 year)",
-            })
+                "params": {"detail": f"dormant {int(gap_days)} days, now has a new update (> 1 year)"},
+            }))
 
     return findings
 
@@ -195,11 +199,12 @@ def analyze_package_text(
         if effective_observation_count() > 0:
             squatted = package_typosquat_target(pkg_name)
             if squatted:
-                triggered_rules.append({
+                triggered_rules.append(stamp({
                     "rule_id": "R074", "name": "Package-Name Typosquat",
                     "severity": "HIGH", "category": "naming",
                     "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
-                })
+                    "params": {"pkg_name": pkg_name, "squatted": squatted},
+                }))
 
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config
@@ -283,18 +288,18 @@ def analyze_package_text(
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
-            triggered_rules.append({
+            triggered_rules.append(stamp({
                 "rule_id": "R068", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
-            })
+            }))
 
     if detect_gpg_verification_removed(diff_text):
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R069", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
-        })
+        }))
 
     takeover = _check_untrusted_maintainer_takeover(
         maintainer_changed, maintainer
@@ -305,20 +310,22 @@ def analyze_package_text(
     categories = {r.get("category", "") for r in triggered_rules
                   if r.get("category") and r["rule_id"] != "R072"}
     if len(categories) >= 3:
-        triggered_rules.append({
+        triggered_rules.append(stamp({
             "rule_id": "R072", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
-        })
+            "params": {"n_categories": len(categories)},
+        }))
 
     if effective_observation_count() > 0:
         squatted = package_typosquat_target(pkg_name)
         if squatted:
-            triggered_rules.append({
+            triggered_rules.append(stamp({
                 "rule_id": "R074", "name": "Package-Name Typosquat",
                 "severity": "HIGH", "category": "naming",
                 "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
-            })
+                "params": {"pkg_name": pkg_name, "squatted": squatted},
+            }))
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

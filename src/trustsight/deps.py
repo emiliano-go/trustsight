@@ -9,6 +9,7 @@ instead of going through :func:`~trustsight.rules.apply_rules`.
 
 import re
 
+from .config import DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_VARIANT_SUFFIXES, load_naming
 from .tokenizer import resolve_added_lines
 
 DEP_FIELDS = (
@@ -95,9 +96,11 @@ def _closes_array(body: str) -> bool:
     return False
 
 # Suffixes that mark a variant of the same upstream project rather than a
-# different project.
-_VARIANT_SUFFIXES = ("-git", "-bin", "-svn", "-hg", "-bzr", "-cvs", "-nightly",
-                     "-beta", "-stable", "-lts", "-devel")
+# different project.  Lived in code as ``_VARIANT_SUFFIXES``; the list now
+# ships in naming.toml with the code default as the fallback.
+def _variant_suffixes() -> tuple[str, ...]:
+    suffixes = load_naming().get("naming", {}).get("variant_suffixes")
+    return tuple(suffixes) if suffixes else DEFAULT_VARIANT_SUFFIXES
 
 
 def normalize_dependency(raw: str) -> str:
@@ -115,10 +118,11 @@ def normalize_dependency(raw: str) -> str:
 def _package_stem(pkgbase: str) -> str:
     """Strip variant suffixes so companion packages can be recognised."""
     stem = pkgbase.lower()
+    suffixes = _variant_suffixes()
     changed = True
     while changed:
         changed = False
-        for suffix in _VARIANT_SUFFIXES:
+        for suffix in suffixes:
             if stem.endswith(suffix) and len(stem) > len(suffix):
                 stem = stem[: -len(suffix)]
                 changed = True
@@ -129,12 +133,9 @@ def _package_stem(pkgbase: str) -> str:
 # starting with "python-" say nothing about a common project, so these must
 # not be treated as evidence of relatedness or `python-evil` claiming
 # `python-requests` would be suppressed.
-_ECOSYSTEM_PREFIXES = frozenset({
-    "python", "python2", "python3", "perl", "ruby", "rust", "golang", "go",
-    "php", "lua", "nodejs", "node", "js", "haskell", "ocaml", "texlive",
-    "r", "vim", "emacs", "ttf", "otf", "font", "fonts", "lib", "lib32",
-    "mingw", "aur", "sh",
-})
+def _ecosystem_prefixes() -> frozenset:
+    prefixes = load_naming().get("naming", {}).get("ecosystem_prefixes")
+    return frozenset(prefixes) if prefixes else frozenset(DEFAULT_ECOSYSTEM_PREFIXES)
 
 
 def is_related_package(name: str, pkgbase: str) -> bool:
@@ -161,7 +162,7 @@ def is_related_package(name: str, pkgbase: str) -> bool:
     head = stem.split("-")[0]
     return (
         head == other.split("-")[0]
-        and head not in _ECOSYSTEM_PREFIXES
+        and head not in _ecosystem_prefixes()
         and len(head) >= 3
     )
 

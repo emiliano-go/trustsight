@@ -8,6 +8,100 @@ CONFIG_DIR = Path.home() / ".config" / "trustsight"
 DATA_DIR = Path.home() / ".local" / "share" / "trustsight"
 CACHE_DIR = Path.home() / ".cache" / "trustsight" / "repos"
 
+# ---------------------------------------------------------------------------
+# Default data for the pattern/naming tables.  These live in code so the
+# shipped .toml can be regenerated from them; an edit on disk overrides the
+# code default for a running install.  The accessors in this module and the
+# consumers in build.py/deps.py/novelty.py/dependencies.py always fall back
+# to these when a config value is absent.
+# ---------------------------------------------------------------------------
+
+# R081 — foreign package managers invoked from an install hook.  Each entry
+# is a case-insensitive regex fragment matched against reconstructed text.
+DEFAULT_FOREIGN_PKG_MANAGERS = [
+    r"\b(?:pip|pip3)\s+install\b",
+    r"\bnpm\s+(?:install|add)\b",
+    r"\bbun\s+(?:install|add)\b",
+    r"\bpnpm\s+(?:install|add)\b",
+    r"\byarn\s+(?:install|add)\b",
+    r"\bcargo\s+install\b",
+    r"\bgem\s+install\b",
+    r"\bgo\s+install\b",
+    r"\bdnf\s+install\b",
+    r"\byum\s+install\b",
+    r"\bpacman\s+-[SU]\b",
+    r"\bapt(?:-get)?\s+install\b",
+    r"\bmake\s+install\b(?!\s+DESTDIR)",
+]
+
+# R082 — obfuscation indicators counted on a single raw line.  A line
+# carrying at least ``[thresholds] r082_obfuscation_density`` distinct
+# forms fires; the reconstruction rules (R117) decide whether the line is
+# inert or reveals an executable action.
+DEFAULT_OBFUSCATION_INDICATORS = [
+    r"base64.*(?:-d|--decode)",
+    r"printf\s+['\"]\\x",
+    r"\$\(|`",
+    r"\beval\b",
+    r"\|.*(?:bash|sh|zsh)\b",
+    r"(?:bit\.ly|t\.co|tinyurl|shorturl|ow\.ly|is\.gd)",
+    r"wget\s+-q\s+-O\s*-\s*\|",
+    r"\$\{[a-zA-Z_][a-zA-Z0-9_]*\}.*(?:curl|wget|bash|sh)",
+    # June-W3 campaign markers (confirmed campaign indicators): ANSI-C
+    # quoting, variable indirection, empty-quote concatenation.
+    r"\$'",
+    r"\$\{!",
+    r"(?<=\w)''(?=\w)",
+]
+
+# D003 — package names that grant network access from makedepends.
+DEFAULT_NETWORK_TOOLS = [
+    "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+    "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
+    "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
+]
+
+# Suffixes that mark a variant of the same upstream project rather than a
+# different project (D002/D004 relatedness).
+DEFAULT_VARIANT_SUFFIXES = (
+    "-git", "-bin", "-svn", "-hg", "-bzr", "-cvs", "-nightly",
+    "-beta", "-stable", "-lts", "-devel",
+)
+
+# Prefixes shared by thousands of unrelated packages.  Two names both
+# starting with "python-" say nothing about a common project, so these must
+# never be treated as evidence of relatedness (D004).
+DEFAULT_ECOSYSTEM_PREFIXES = [
+    "python", "python2", "python3", "perl", "ruby", "rust", "golang", "go",
+    "php", "lua", "nodejs", "node", "js", "haskell", "ocaml", "texlive",
+    "r", "vim", "emacs", "ttf", "otf", "font", "fonts", "lib", "lib32",
+    "mingw", "aur", "sh",
+]
+
+# Suffixes denoting expected package variants (fork, build, packaging mode)
+# rather than typosquats.  Stripped before edit-distance comparison so that
+# ``foo-git``, ``foo-bin``, ``foo-lts`` are never confused with the real
+# ``foo`` (R074).
+DEFAULT_KNOWN_SUFFIXES = (
+    "-git", "-bin", "-debug", "-lts", "-stable", "-beta",
+    "-svn", "-hg", "-bzr", "-cvs",
+    "-wine", "-appimage", "-flatpak", "-nightly", "-devel", "-common",
+)
+
+# Paste and ephemeral file-drop hosts (R087).  Bucket classification in
+# trusted_domains.toml [raw_hosting] already weights these.
+DEFAULT_PASTE_HOSTS = [
+    "pastebin.com", "gist.github.com", "paste.ee", "0x0.st", "termbin.com",
+    "hastebin.com", "ix.io", "transfer.sh", "file.io", "bashupload.com",
+    "temp.sh", "anonfiles.com", "dpaste.com", "sprunge.us",
+]
+
+# Standard ports excluded from R047 (source URL uses non-standard port).
+DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
+
+# Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
+DEFAULT_FREE_REGISTRAR_TLDS = ["tk", "ml", "ga", "cf", "gq", "pw"]
+
 DEFAULT_CONFIG = """\
 [severity_weights]
 FATAL = 0
@@ -536,6 +630,11 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "config.toml", DEFAULT_CONFIG)
     write_default_file(CONFIG_DIR / "rules.toml", DEFAULT_RULES)
     write_default_file(CONFIG_DIR / "trusted_domains.toml", DEFAULT_DOMAINS)
+    write_default_file(CONFIG_DIR / "hosts.toml", DEFAULT_HOSTS)
+    write_default_file(CONFIG_DIR / "patterns.toml", DEFAULT_PATTERNS)
+    write_default_file(CONFIG_DIR / "naming.toml", DEFAULT_NAMING)
+    write_default_file(CONFIG_DIR / "thresholds.toml", DEFAULT_THRESHOLDS)
+    write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
 
 
 # Parsed TOML keyed by (path, mtime_ns, size).  load_domains() used to be
@@ -571,17 +670,100 @@ def load_toml(name: str) -> dict:
     return data
 
 
-def _toml_value(val: str) -> str:
-    """format a value string for TOML output"""
-    if val.lower() in ("true", "false"):
-        return val.lower()
-    try:
-        int(val)
-        return val
-    except ValueError:
-        pass
+def _toml_escape_str(val: str) -> str:
+    """Escape a string for use as a TOML basic string value."""
     escaped = val.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
     return f'"{escaped}"'
+
+
+def _toml_str_list(values) -> str:
+    """Render a list of values as a multi-line TOML array."""
+    return "[\n" + "".join(f"    {_toml_value(v)},\n" for v in values) + "]"
+
+
+def _toml_value(val) -> str:
+    """format a value for TOML output"""
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if isinstance(val, int):
+        return str(val)
+    if isinstance(val, str):
+        if val.lower() in ("true", "false"):
+            return val.lower()
+        try:
+            int(val)
+            return val
+        except ValueError:
+            pass
+        return _toml_escape_str(val)
+    return str(val)
+
+
+DEFAULT_PATTERNS = (
+    "[patterns]\n"
+    "# R081 — foreign package managers invoked from an install hook.  A\n"
+    "# PKGBUILD that hands installation to another package manager installs\n"
+    "# that payload outside pacman's control and its checksums.  Each entry\n"
+    "# is a case-insensitive regex fragment matched against reconstructed\n"
+    "# text.\n"
+    "foreign_pkg_managers = " + _toml_str_list(DEFAULT_FOREIGN_PKG_MANAGERS) + "\n"
+    "\n"
+    "# R082 — obfuscation indicators counted on a single raw line.  A line\n"
+    "# carrying at least [thresholds] r082_obfuscation_density distinct\n"
+    "# forms fires; the reconstruction rules (R117) decide whether the\n"
+    "# resolved line reveals an executable action.\n"
+    "obfuscation_indicators = " + _toml_str_list(DEFAULT_OBFUSCATION_INDICATORS) + "\n"
+    "\n"
+    "# D003 — package names that grant network access from makedepends.  A\n"
+    "# new network-capable build dependency is code the checksum array does\n"
+    "# not cover.\n"
+    "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS) + "\n"
+)
+
+DEFAULT_NAMING = (
+    "[naming]\n"
+    "# Suffixes that mark a variant of the same upstream project rather than\n"
+    "# a different project (D002/D004 relatedness).\n"
+    "variant_suffixes = " + _toml_str_list(DEFAULT_VARIANT_SUFFIXES) + "\n"
+    "\n"
+    "# Prefixes shared by thousands of unrelated packages; never evidence of\n"
+    "# a common project (D004).\n"
+    "ecosystem_prefixes = " + _toml_str_list(DEFAULT_ECOSYSTEM_PREFIXES) + "\n"
+    "\n"
+    "# Suffixes denoting expected package variants, stripped before\n"
+    "# edit-distance comparison so foo-git is never confused with foo\n"
+    "# (R074).\n"
+    "known_suffixes = " + _toml_str_list(DEFAULT_KNOWN_SUFFIXES) + "\n"
+)
+
+DEFAULT_HOSTS = (
+    "[hosts]\n"
+    "# Paste and ephemeral file-drop hosts (R087).  Bucket classification\n"
+    "# in trusted_domains.toml [raw_hosting] already weights these; this\n"
+    "# list backs the dedicated detection rule shipped with R087.\n"
+    "paste_hosts = " + _toml_str_list(DEFAULT_PASTE_HOSTS) + "\n"
+    "\n"
+    "# Standard ports excluded from R047 (source URL uses non-standard port).\n"
+    "standard_ports = " + _toml_str_list(DEFAULT_STANDARD_PORTS) + "\n"
+    "\n"
+    "# Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).\n"
+    "free_registrar_tlds = " + _toml_str_list(DEFAULT_FREE_REGISTRAR_TLDS) + "\n"
+)
+
+DEFAULT_THRESHOLDS = (
+    "[r082]\n"
+    "# R082 fires when a single line carries at least this many distinct\n"
+    "# obfuscation indicators from [patterns] obfuscation_indicators.\n"
+    "obfuscation_density = 3\n"
+)
+
+DEFAULT_IOCS = (
+    "[iocs]\n"
+    "# R106 — exact-match indicators, each with provenance and a confidence\n"
+    "# tier.  Populated by the phase that ships R106.\n"
+    "version = 1\n"
+    "entries = []\n"
+)
 
 
 def set_config(key: str, value: str):
@@ -807,17 +989,26 @@ def load_rules() -> list[dict]:
 
 def _standard_port_pattern() -> str:
     """Generate the R047 non-standard-port exclusion pattern from config."""
+    hosts = load_hosts().get("hosts", {})
     cfg = load_config()
-    ports = cfg.get("ports", {}).get("standard", [80, 443, 8080, 8443])
+    ports = (
+        hosts.get("standard_ports")
+        or cfg.get("ports", {}).get("standard")
+        or DEFAULT_STANDARD_PORTS
+    )
     joined = "|".join(str(p) for p in ports)
     return f'https?://[^/\\s:]+:(?!(?:{joined})(?:[/\\s"\\x27]|$))\\d{{2,5}}'
 
 
 def _free_registrar_tld_pattern() -> str:
     """Generate the R048 free-registrar-TLD pattern from config."""
+    hosts = load_hosts().get("hosts", {})
     cfg = load_config()
-    tlds = cfg.get("domains", {}).get("free_registrar_tlds",
-                                       ["tk", "ml", "ga", "cf", "gq", "pw"])
+    tlds = (
+        hosts.get("free_registrar_tlds")
+        or cfg.get("domains", {}).get("free_registrar_tlds")
+        or DEFAULT_FREE_REGISTRAR_TLDS
+    )
     joined = "|".join(tlds)
     return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
 
@@ -825,3 +1016,28 @@ def _free_registrar_tld_pattern() -> str:
 def load_domains() -> dict:
     """Load trusted domains from trusted_domains.toml"""
     return load_toml("trusted_domains.toml")
+
+
+def load_patterns() -> dict:
+    """Load pattern tables from patterns.toml (R081/R082/D003)."""
+    return load_toml("patterns.toml")
+
+
+def load_naming() -> dict:
+    """Load naming tables from naming.toml (D002/D004/R074)."""
+    return load_toml("naming.toml")
+
+
+def load_hosts() -> dict:
+    """Load host tables from hosts.toml (R047/R048/R087)."""
+    return load_toml("hosts.toml")
+
+
+def load_thresholds() -> dict:
+    """Load thresholds from thresholds.toml (R082/R125/R126)."""
+    return load_toml("thresholds.toml")
+
+
+def load_iocs() -> dict:
+    """Load the versioned indicator list from iocs.toml (R106)."""
+    return load_toml("iocs.toml")

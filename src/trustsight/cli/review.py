@@ -263,6 +263,8 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
                     "file": e.file,
                     "line": e.line,
                     "description": desc,
+                    "template": e.template,
+                    "evidence": e.evidence,
                     "severity": e.severity,
                     "weight": e.weight,
                 })

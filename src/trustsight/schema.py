@@ -54,6 +54,8 @@ class ScoreEntry:
     weight: int = 0
     reason: str = ""
     params: dict = field(default_factory=dict)
+    template: str = ""
+    evidence: dict = field(default_factory=dict)
     file: str = ""
     line: int | None = None
 
@@ -141,6 +143,8 @@ def fact_to_dict(fact: PackageFact) -> dict:
                 "weight": e.weight,
                 "reason": e.reason,
                 "params": e.params,
+                "template": e.template,
+                "evidence": e.evidence,
                 "file": e.file,
                 "line": e.line,
             }

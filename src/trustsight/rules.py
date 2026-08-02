@@ -1,6 +1,7 @@
 import re
 
 from .config import load_rules
+from .findings import stamp
 from .tokenizer import join_line_continuations
 
 # Lines starting with # after stripping + prefix are comments.
@@ -232,7 +233,7 @@ def apply_rules(
                 }
                 if line_map and idx in line_map:
                     finding["file"], finding["line"] = line_map[idx]
-                triggered.append(finding)
+                triggered.append(stamp(finding, f"{rule['name']}: {{match}}"))
                 break
 
     return triggered

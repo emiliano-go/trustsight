@@ -213,7 +213,13 @@ def register_commands(app: typer.Typer):
             data = _fact_to_dict(fact)
             if verbose:
                 data["score_breakdown"] = [
-                    {"rule_id": e.rule_id, "severity": e.severity, "weight": e.weight}
+                    {
+                        "rule_id": e.rule_id,
+                        "severity": e.severity,
+                        "weight": e.weight,
+                        "template": e.template,
+                        "evidence": e.evidence,
+                    }
                     for e in fact.score_breakdown
                 ]
             typer.echo(json.dumps(data, indent=2))

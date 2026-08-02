@@ -3,6 +3,7 @@ import time
 import pygit2
 
 from ..db import get_package
+from ..findings import stamp
 
 
 def _recent_update(repo, head_commit):
@@ -14,14 +15,14 @@ def _recent_update(repo, head_commit):
             return None
         hours_ago = (time.time() - commit.commit_time) / 3600
         if hours_ago < 72:
-            return {
+            return stamp({
                 "rule_id": "R065",
                 "name": "Very Recent Update",
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"updated {int(hours_ago)}h ago (< 72h)",
                 "params": {"detail": f"updated {int(hours_ago)}h ago (< 72h)"},
-            }
+            })
     except (AttributeError, pygit2.GitError):
         pass
     return None
@@ -44,14 +45,14 @@ def _package_is_new(repo, head_commit, pkg_name=None):
                 root_age = (time.time() - c.commit_time) / 86400
                 break
         if root_age is not None and root_age < 30:
-            return {
+            return stamp({
                 "rule_id": "R066",
                 "name": "Brand New Package",
                 "severity": "INFO",
                 "category": "temporal",
                 "match": f"first AUR commit {int(root_age)} days ago (< 30)",
                 "params": {"detail": f"first AUR commit {int(root_age)} days ago (< 30)"},
-            }
+            })
     except (AttributeError, pygit2.GitError):
         pass
     return None
@@ -67,14 +68,14 @@ def _stale_revival(repo, old_commit, head_commit):
             return None
         gap_days = (head.commit_time - old.commit_time) / 86400
         if gap_days > 365:
-            return {
+            return stamp({
                 "rule_id": "R067",
                 "name": "Stale Package Revived",
                 "severity": "MEDIUM",
                 "category": "temporal",
                 "match": f"dormant {int(gap_days)} days, now has a new update (> 1 year)",
                 "params": {"detail": f"dormant {int(gap_days)} days, now has a new update (> 1 year)"},
-            }
+            })
     except (AttributeError, pygit2.GitError):
         pass
     return None

@@ -117,6 +117,52 @@ def test_ensure_default_configs_creates_all_files(tmp_path, monkeypatch):
     assert (cfg_dir / "config.toml").exists()
     assert (cfg_dir / "rules.toml").exists()
     assert (cfg_dir / "trusted_domains.toml").exists()
+    assert (cfg_dir / "hosts.toml").exists()
+    assert (cfg_dir / "patterns.toml").exists()
+    assert (cfg_dir / "naming.toml").exists()
+    assert (cfg_dir / "thresholds.toml").exists()
+    assert (cfg_dir / "iocs.toml").exists()
+
+
+def test_load_pattern_tables_round_trip(tmp_path, monkeypatch):
+    """The shipped pattern/naming/host/threshold tables must parse and match
+    the code defaults exactly, so rules built from them keep their behaviour."""
+    from trustsight.config import (
+        DEFAULT_ECOSYSTEM_PREFIXES,
+        DEFAULT_FOREIGN_PKG_MANAGERS,
+        DEFAULT_FREE_REGISTRAR_TLDS,
+        DEFAULT_KNOWN_SUFFIXES,
+        DEFAULT_NETWORK_TOOLS,
+        DEFAULT_OBFUSCATION_INDICATORS,
+        DEFAULT_PASTE_HOSTS,
+        DEFAULT_STANDARD_PORTS,
+        DEFAULT_VARIANT_SUFFIXES,
+        load_hosts,
+        load_naming,
+        load_patterns,
+        load_thresholds,
+    )
+
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path / ".local" / "share" / "trustsight")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache" / "trustsight")
+
+    patterns = load_patterns()["patterns"]
+    assert patterns["foreign_pkg_managers"] == DEFAULT_FOREIGN_PKG_MANAGERS
+    assert patterns["obfuscation_indicators"] == DEFAULT_OBFUSCATION_INDICATORS
+    assert patterns["network_tools"] == DEFAULT_NETWORK_TOOLS
+
+    naming = load_naming()["naming"]
+    assert naming["variant_suffixes"] == list(DEFAULT_VARIANT_SUFFIXES)
+    assert naming["ecosystem_prefixes"] == DEFAULT_ECOSYSTEM_PREFIXES
+    assert naming["known_suffixes"] == list(DEFAULT_KNOWN_SUFFIXES)
+
+    hosts = load_hosts()["hosts"]
+    assert hosts["paste_hosts"] == DEFAULT_PASTE_HOSTS
+    assert hosts["standard_ports"] == DEFAULT_STANDARD_PORTS
+    assert hosts["free_registrar_tlds"] == DEFAULT_FREE_REGISTRAR_TLDS
+
+    assert load_thresholds()["r082"]["obfuscation_density"] == 3
 
 
 def test_ensure_default_configs_idempotent(tmp_path, monkeypatch):

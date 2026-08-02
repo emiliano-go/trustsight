@@ -1,5 +1,6 @@
 import re
 
+from .config import DEFAULT_KNOWN_SUFFIXES, load_naming
 from .db import (
     dependency_observation_count,
     dependency_table_populated,
@@ -98,16 +99,15 @@ def typosquat_target(name: str, candidates: list[str] | None = None) -> str | No
 # Suffixes that denote expected package variants (fork, build, packaging mode)
 # rather than typosquats.  Stripped before edit-distance comparison so that
 # ``foo-git``, ``foo-bin``, ``foo-lts`` are never confused with the real ``foo``.
-_KNOWN_SUFFIXES = (
-    "-git", "-bin", "-debug", "-lts", "-stable", "-beta",
-    "-svn", "-hg", "-bzr", "-cvs",
-    "-wine", "-appimage", "-flatpak", "-nightly", "-devel", "-common",
-)
+# Lived in code as ``_KNOWN_SUFFIXES``; now ships in naming.toml.
+def _known_suffixes() -> tuple[str, ...]:
+    suffixes = load_naming().get("naming", {}).get("known_suffixes")
+    return tuple(suffixes) if suffixes else DEFAULT_KNOWN_SUFFIXES
 
 
 def _strip_variant_suffix(name: str) -> str:
     """strip known variant suffixes like -git or -bin from a package name"""
-    for s in _KNOWN_SUFFIXES:
+    for s in _known_suffixes():
         if name.endswith(s):
             return name[: -len(s)]
     return name

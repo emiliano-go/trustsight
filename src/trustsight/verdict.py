@@ -1,55 +1,14 @@
+from .findings import TEMPLATES
 from .schema import PackageFact, ScoreEntry
 
 _SEVERITY_ORDER = ["FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
-_TEMPLATES: dict[str, str] = {
-    # --- Dependency rules ---
-    "D001": "novel dependency '{dep_name}' added in {field}",
-    "D002": "typosquatted dependency: {field} '{dep_name}' impersonates '{impersonated}'",
-    "D003": "build target can reach the network via {new_network}",
-    "D004": "{field} '{dep_name}' declares an established unrelated package",
-
-    # --- Build / install rules ---
-    "R060": "critical build function modified: {touched}",
-    "R061": "{position}() fetches {url} from outside the declared source array",
-    "R062": "{position}() runs as root: {body}",
-    "R063": "{position}() applies external patch from {patch_src}",
-    "R064": "source URL downgraded from https to http: {url}",
-    "R070": "{detail}",
-
-    # --- Structural rules ---
-    "C001": "checksum changed without corresponding source change",
-    "C002": "checksum updated alongside version bump",
-    "C003": "source URLs changed without version bump",
-    "C004": "checksum array deleted while source URLs remain the same",
-    "C005": "binary artifact from {bucket} source: {url}",
-    "C006": "maintainer changed; new domains appeared: {new_domains}",
-    "C007": "source array contains command substitution $( ) or backticks",
-
-    # --- Checksum rules ---
-    "R004": "checksum set to SKIP{skip_suffix}",
-    "R005": "checksum array emptied",
-
-    # --- Temporal rules ---
-    "R065": "{detail}",
-    "R066": "{detail}",
-    "R067": "{detail}",
-
-    # --- Context rules ---
-    "R068": "PKGBUILD declares an install hook",
-    "R069": "validpgpkeys removed after being populated",
-    "R071": "maintainer changed: {previous_maintainer} → {current_maintainer} (new maintainer never seen in the AUR)",
-    "R072": "findings span {n_categories} distinct capability categories",
-    "R074": "package name '{pkg_name}' resembles the far more popular '{squatted}'",
-    "R075": "diff adds {n_novel} novel or rare dependencies: {novel_names}",
-}
-
 
 def _render(entry: ScoreEntry, fact: PackageFact) -> str:
-    template = _TEMPLATES.get(entry.rule_id)
+    template = entry.template or TEMPLATES.get(entry.rule_id)
     if template is None:
         return f"{entry.reason} [{entry.rule_id}]"
-    params = dict(entry.params) if entry.params else {}
+    params = dict(entry.evidence) if entry.evidence else dict(entry.params) if entry.params else {}
     if fact:
         for field in ("package_name", "previous_maintainer", "current_maintainer"):
             val = getattr(fact, field, None)

@@ -361,3 +361,76 @@ def test_resolve_added_lines_glob_delete():
     diff = "+v=1.2.3a\n+echo ${v//[0-9.]/}\n"
     lines = resolve_added_lines(diff)
     assert any("echo a" in l for l in lines)
+
+
+# --- R117: obfuscated literal reconstruction ---
+
+def test_reconstruct_ansi_c_hex():
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals(r"b$'\x75\x6e' add nextfile-js")
+    assert r == "bun add nextfile-js"
+    assert fully
+
+
+def test_reconstruct_ansi_c_octal():
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals(r"$'\142\165\156' install")
+    assert r == "bun install"
+    assert fully
+
+
+def test_reconstruct_empty_quote_concat_single():
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals("b''u''n install")
+    assert r == "bun install"
+    assert fully
+
+
+def test_reconstruct_empty_quote_concat_double():
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals('b""u""n add')
+    assert r == "bun add"
+    assert fully
+
+
+def test_reconstruct_printf_format():
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals(r"$(printf '\x62\x75\x6e') add")
+    assert r == "bun add"
+    assert fully
+
+
+def test_reconstruct_printf_with_conversion_left_as_is():
+    """A $(printf '%s' "$arg") is dynamic, not obfuscation; it is left
+    untouched and does not force the line to be inconclusive."""
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals(r"$(printf '%s' \"$x\")")
+    assert "$(printf" in r
+    assert fully
+
+
+def test_reconstruct_malformed_ansi_c_is_not_fully_reconstructed():
+    """An unterminated $' must mark the line inconclusive, never clean."""
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals(r"eval $'\x62\x75\x6e")
+    assert not fully
+
+
+def test_reconstruct_standalone_empty_quote_argument_kept():
+    """'' as a standalone argument (whitespace both sides) is data, not
+    concatenation, and must survive reconstruction."""
+    from trustsight.tokenizer import reconstruct_literals
+    r, fully = reconstruct_literals("curl '' https://e/x")
+    assert "''" in r
+    assert fully
+
+
+def test_reconstruct_then_resolve_via_tokenize():
+    """Reconstruction composes with variable resolution so rules see the
+    reconstructed shape in resolved strings."""
+    diff = "+_pm=b''u''n\n+  $_pm add nextfile-js\n"
+    resolved, unresolved = tokenize_and_resolve(diff)
+    combined = " ".join(resolved)
+    assert "bun add nextfile-js" in combined
+    assert not unresolved
+

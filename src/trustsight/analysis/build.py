@@ -4,7 +4,7 @@ from ..deps import _strip_comment
 from ..differ import extract_source_array_urls
 from ..novelty import normalize_url
 from ..rules import _classify_enclosing_function
-from ..tokenizer import resolve_added_lines
+from ..tokenizer import join_line_continuations, resolve_added_lines
 from .base import _experimental_enabled
 
 
@@ -38,7 +38,10 @@ _NETWORK_FETCH_RE = re.compile(
 
 _FOREIGN_PKG_RE = re.compile(
     r"\b(?:pip|pip3)\s+install\b|"
-    r"\bnpm\s+install\b|"
+    r"\bnpm\s+(?:install|add)\b|"
+    r"\bbun\s+(?:install|add)\b|"
+    r"\bpnpm\s+(?:install|add)\b|"
+    r"\byarn\s+(?:install|add)\b|"
     r"\bcargo\s+install\b|"
     r"\bgem\s+install\b|"
     r"\bgo\s+install\b|"
@@ -60,8 +63,51 @@ _OBFUSCATION_PATTERNS_RE = [
         r"(?:bit\.ly|t\.co|tinyurl|shorturl|ow\.ly|is\.gd)",
         r"wget\s+-q\s+-O\s*-\s*\|",
         r"\$\{[a-zA-Z_][a-zA-Z0-9_]*\}.*(?:curl|wget|bash|sh)",
+        # June-W3 campaign markers (confirmed campaign indicators):
+        # ANSI-C quoting, variable indirection, empty-quote concatenation.
+        r"\$'",
+        r"\$\{!",
+        r"(?<=\w)''(?=\w)",
     )
 ]
+
+# R082 composition: a dense obfuscated line that reconstructs to an
+# executable action is HIGH, not MEDIUM.  The action shapes mirror what
+# R081 (foreign package manager), R003/R043 (decode-and-pipe) and R039
+# (eval of dynamic content) detect on reconstructed text.
+_RECONSTRUCTS_TO_ACTION_RE = re.compile(
+    _FOREIGN_PKG_RE.pattern
+    + r"|"
+    r"(?:base64|xxd|uudecode)\b[^|]*\|[^|]*(?:bash|sh|zsh|dash)\b"
+    + r"|"
+    r"\beval\b"
+    + r"|"
+    r"(?:curl|wget)\b[^|;]*\|(?:bash|sh|zsh|dash)\b",
+    re.IGNORECASE,
+)
+
+
+def _reconstructs_to_action(body: str) -> bool:
+    """True when *body* (already resolved and reconstructed) reveals an
+    executable action rather than inert obfuscation."""
+    return bool(_RECONSTRUCTS_TO_ACTION_RE.search(body))
+
+
+def reconstructs_to_js_pm_install(text: str) -> bool:
+    return bool(_FOREIGN_PKG_RE.search(text))
+
+
+def reconstructs_to_decode_pipe_sh(text: str) -> bool:
+    return bool(
+        re.search(
+            r"(?:base64|xxd|uudecode)\b[^|]*\|[^|]*(?:bash|sh|zsh|dash)\b",
+            text, re.IGNORECASE,
+        )
+    )
+
+
+def reconstructs_to_eval_of_decoded(text: str) -> bool:
+    return bool(re.search(r"\beval\b", text, re.IGNORECASE))
 
 _ENV_SUBVERSION_HIGH_RE = re.compile(
     r"\b(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*(?:\+?=)",
@@ -179,13 +225,20 @@ def _build_findings(diff_text, config, add) -> None:
                 break
 
     if "R082" in wanted:
+        # Density is measured on the raw line: reconstruction removes the
+        # markers, so counting on resolved text would miss the campaign.
+        # The composed HIGH requires the reconstructed line to reveal an
+        # executable action (R117 composition).
+        raw_lines = join_line_continuations(diff_text.splitlines())
         for i, line in enumerate(lines):
             if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
                 continue
+            raw_body = _strip_comment(raw_lines[i])
             body = _strip_comment(line)
-            count = sum(1 for p in _OBFUSCATION_PATTERNS_RE if p.search(body))
+            count = sum(1 for p in _OBFUSCATION_PATTERNS_RE if p.search(raw_body))
             if count >= 3:
-                add("R082", "Shell Obfuscation Density", "MEDIUM", "obfuscation",
+                severity = "HIGH" if _reconstructs_to_action(body) else "MEDIUM"
+                add("R082", "Shell Obfuscation Density", severity, "obfuscation",
                     f"{enclosing[i]}() line has {count} obfuscation indicators: {body.strip()[:80]}",
                     position=enclosing[i], count=count, body=body.strip()[:80])
                 break

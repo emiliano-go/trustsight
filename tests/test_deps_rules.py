@@ -539,3 +539,52 @@ def test_d004_still_fires_across_an_ecosystem_prefix(rules, pkg, provided):
     sibling rule must not suppress a hijack inside an ecosystem."""
     from trustsight.deps import is_related_package
     assert not is_related_package(provided, pkg)
+
+
+# --- R117: obfuscated reconstruction + composition (June-W3 campaign) ---
+
+@pytest.mark.parametrize("body", [
+    # June-W3: foreign package manager hidden behind ANSI-C quoting.
+    r"b$'\x75\x6e' add nextfile-js",
+    r"b$'\x75\x6e'$'\x20'$'\x61\x64\x64' nextfile-js",
+    r"b$'\165\156' add nextfile-js",
+    r"b''u''n add nextfile-js",
+    r"$(printf '\x62\x75\x6e') add nextfile-js",
+])
+def test_r081_fires_on_reconstructed_foreign_pm_in_hook(all_enabled, rules, body):
+    """R081 is position-scoped to install hooks and must fire on the
+    *reconstructed* shape: the literal bytes never appear in the diff."""
+    diff = HEADER + f"+post_install() {{\n+  {body}\n+}}\n"
+    assert "R081" in fired(diff, all_enabled, rules)
+
+
+def _ansi(word):
+    """Encode *word* the June-W3 way: $'\\x68\\x69' -> 'hi'."""
+    return "$'" + "".join("\\x%02x" % b for b in word.encode()) + "'"
+
+
+def test_r081_silent_on_reconstructed_foreign_pm_in_build(all_enabled, rules):
+    """Same reconstruction in build() is not an install concern."""
+    diff = HEADER + "+build() {\n" + f"+  {_ansi('bun')} add nextfile-js" + "\n}\n"
+    assert "R081" not in fired(diff, all_enabled, rules)
+
+
+def test_r082_composes_high_when_reconstruction_reveals_action(all_enabled, rules):
+    """R082 is MEDIUM alone; R082 + reconstruction to an executable action
+    (decode-and-pipe) is HIGH."""
+    line = f"{_ansi('eval')} $({_ansi('base64')} -d <<< \"$x\" | bash)"
+    diff = HEADER + "+build() {\n" + f"+  {line}" + "\n}\n"
+    facts = scan_diff(diff, rules=rules, config=all_enabled, package_name="mypkg")
+    r082 = [e for e in facts.score_breakdown if e.rule_id == "R082"]
+    assert r082 and r082[0].severity == "HIGH"
+
+
+def test_r082_remains_medium_when_reconstruction_is_inert(all_enabled, rules):
+    """Dense obfuscation that reconstructs to nothing executable stays
+    MEDIUM, not HIGH."""
+    line = f"{_ansi('echo')} hi \"$(printf '\\x62\\x61\\x73\\x65\\x36\\x34' -d <<< 'aGk=')\""
+    diff = HEADER + "+build() {\n" + f"+  {line}" + "\n}\n"
+    facts = scan_diff(diff, rules=rules, config=all_enabled, package_name="mypkg")
+    r082 = [e for e in facts.score_breakdown if e.rule_id == "R082"]
+    assert r082 and r082[0].severity == "MEDIUM"
+

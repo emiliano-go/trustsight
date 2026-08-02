@@ -6,6 +6,105 @@ _MAX_EXPANSION_PASSES = 16
 # Innermost ${...} = one containing no further "${"
 _INNERMOST_RE = re.compile(r"\$\{([^{}]*)\}")
 
+# R117: obfuscated literal reconstruction forms.
+#
+# ANSI-C quoting: $'...' with \xHH hex or \NNN octal escapes.  The whole
+# construction is reconstructed to its decoded bytes *as data*; nothing is
+# ever executed.
+_ANSI_C_QUOTE_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
+
+# $(printf '...') with a single quoted literal format.  Only reconstructed
+# when the format contains no %-conversion (which would need runtime
+# arguments); anything dynamic stays as-is so the line is not silently
+# treated as clean.
+_PRINTF_LITERAL_RE = re.compile(
+    r"\$\(\s*printf\s+(['\"])((?:\\.|[^'\"\\])*)\1\s*\)"
+)
+
+# Empty-quote concatenation: b''u''n / b""u""n -> bun.  An empty quote
+# between two identifier characters is pure concatenation in shell and is
+# dropped; a standalone '' argument (whitespace on both sides) is kept.
+_EMPTY_QUOTE_CONCAT_RE = re.compile(r"(?<=\w)(?:''|\"\")(?=\w)")
+
+_ANSI_C_ESCAPES = {
+    "n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b",
+    "f": "\f", "v": "\v", "e": "\x1b", "\\": "\\", "'": "'",
+    '"': '"',
+}
+
+
+def _decode_ansi_c(body: str) -> str:
+    """Decode the escapes in an ANSI-C quoted string, data only."""
+    out: list[str] = []
+    i = 0
+    while i < len(body):
+        c = body[i]
+        if c != "\\":
+            out.append(c)
+            i += 1
+            continue
+        i += 1
+        if i >= len(body):
+            break
+        e = body[i]
+        if e == "x":
+            j = i + 1
+            hexs = ""
+            while j < len(body) and j < i + 3 and body[j] in "0123456789abcdefABCDEF":
+                hexs += body[j]
+                j += 1
+            if hexs:
+                out.append(chr(int(hexs, 16)))
+                i = j
+            else:
+                out.append("\\x")
+                i += 1
+        elif e in "01234567":
+            j = i
+            octs = ""
+            while j < len(body) and j < i + 3 and body[j] in "01234567":
+                octs += body[j]
+                j += 1
+            out.append(chr(int(octs, 8)))
+            i = j
+        elif e in _ANSI_C_ESCAPES:
+            out.append(_ANSI_C_ESCAPES[e])
+            i += 1
+        else:
+            out.append(e)
+            i += 1
+    return "".join(out)
+
+
+def reconstruct_literals(text: str) -> tuple[str, bool]:
+    """Reconstruct obfuscated shell literals back to plain text.
+
+    Handles the four R117 forms, all *as data* (nothing is executed):
+
+    - ANSI-C quoting:      ``$'\\x62\\x75\\x6e'`` -> ``bun``
+    - ANSI-C octal:        ``$'\\142\\165\\156'`` -> ``bun``
+    - Empty-quote concat:  ``b''u''n`` / ``b""u""n`` -> ``bun``
+    - printf literal:      ``$(printf '\\x62\\x75\\x6e')`` -> ``bun``
+
+    Returns ``(reconstructed, fully_reconstructed)``.  ``fully_reconstructed``
+    is False when an ANSI-C quote could not be decoded (a malformed ``$'``
+    remains), so the caller marks the line inconclusive rather than silently
+    clean.  A ``$(printf '%s' "$arg")``-style call is left untouched but does
+    not by itself force the line to be inconclusive: it is dynamic content,
+    not an obfuscation marker.
+    """
+    result = _ANSI_C_QUOTE_RE.sub(lambda m: _decode_ansi_c(m.group(1)), text)
+
+    def _printf_sub(match: re.Match) -> str:
+        fmt = match.group(2)
+        if "%" in fmt or fmt == "":
+            return match.group(0)
+        return _decode_ansi_c(fmt)
+
+    result = _PRINTF_LITERAL_RE.sub(_printf_sub, result)
+    result = _EMPTY_QUOTE_CONCAT_RE.sub("", result)
+    return result, "$'" not in result
+
 
 def _glob_to_regex(pat: str) -> re.Pattern:
     """Translate a bash glob pattern to a regex.  Bash character classes
@@ -151,7 +250,9 @@ def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
 
 def _substitute_with_resolve(text: str, var_table: dict[str, str]) -> tuple[str, bool]:
     """Resolve $var and ${var...} references in *text*, returning
-    (resolved, fully_resolved)."""
+    (resolved, fully_resolved).  R117 literal reconstruction runs on the
+    resolved line, so obfuscated forms reach rules in their plain-text
+    shape while the line is marked unresolved when reconstruction fails."""
     # First resolve simple ${var} and $var.
     resolved = _VAR_REF_RE.sub(
         lambda m: var_table.get(m.group(1) or m.group(2), m.group(0)),
@@ -160,11 +261,16 @@ def _substitute_with_resolve(text: str, var_table: dict[str, str]) -> tuple[str,
     if len(resolved) > _MAX_LINE_LEN:
         return text, False
     # Then resolve parameter expansions (${var//pat/rep}, etc.).
+    ok = True
     if "${" in resolved:
         resolved, ok = resolve_expansions(resolved, var_table)
         if not ok or len(resolved) > _MAX_LINE_LEN:
             return text, False
-    return resolved, True
+    # R117: reconstruct obfuscated literals as data, never executed.
+    reconstructed, fully = reconstruct_literals(resolved)
+    if len(reconstructed) > _MAX_LINE_LEN:
+        return text, False
+    return reconstructed, ok and fully
 
 
 def join_line_continuations(lines: list[str]) -> list[str]:
@@ -255,7 +361,8 @@ def _substitute(text: str, var_table: dict[str, str], limit: int = _MAX_LINE_LEN
         result, _ok = resolve_expansions(result, var_table)
         if len(result) > limit:
             return text
-    return result
+    reconstructed, _fully = reconstruct_literals(result)
+    return reconstructed if len(reconstructed) <= limit else text
 
 
 def _variable_table(additions: list[str]) -> dict[str, str]:

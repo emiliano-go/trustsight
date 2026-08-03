@@ -109,6 +109,52 @@ _ENV_SUBVERSION_MED_RE = re.compile(
     r"\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
 )
 
+# R009 — sudo at a command position.  `sudo` is executed, not mentioned,
+# only when it starts a command: line start, after `;`/`&&`/`||`/`|`, or
+# inside `$(...)`.  That single test excludes the plan's declared
+# must-not-fire surface — optdepends names ('sudo'), path segments
+# (/usr/bin/sudo) and echo strings (echo run sudo) — all of which place
+# `sudo` at an argument position.
+_SUDO_CMD_START_RE = re.compile(
+    r"(?:\A\s*|[;&|]|\$\()\s*sudo(?:\s|$)",
+    re.IGNORECASE,
+)
+
+_SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
+
+
+def _added_line_number(diff_text: str, fragment: str) -> int | None:
+    """Return the 1-based number of the first added line containing
+    *fragment* (a tiny local analogue of delivery's ``_find_line``, kept
+    here because ``delivery`` imports this module)."""
+    pattern = re.compile(r"\+.*" + re.escape(fragment[:60]), re.IGNORECASE)
+    for i, line in enumerate(diff_text.splitlines()):
+        if pattern.search(line):
+            return i + 1
+    return None
+
+
+def _sudo_findings(diff_text, config, add) -> None:
+    """A build/install function executes ``sudo`` (R009, CRITICAL).
+
+    Replaces the old ``\\bsudo\\b`` regex rule: that fired on any mention
+    inside a function body, including optdepends names, path segments and
+    unquoted echo strings.  The command-position test fires only when sudo
+    is actually invoked, and only inside build/install functions.
+    """
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    for i, line in enumerate(lines):
+        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+            continue
+        body = _strip_comment(line[1:])
+        if _SUDO_CMD_START_RE.search(body):
+            add("R009", "Privilege Escalation", "CRITICAL", "privilege",
+                f"{enclosing[i]}() runs sudo: {body.strip()[:80]}",
+                line=_added_line_number(diff_text, body.strip()[:30]),
+                position=enclosing[i], body=body.strip()[:80])
+            return
+
 
 def _build_findings(diff_text, config, add) -> None:
     lines = resolve_added_lines(diff_text)

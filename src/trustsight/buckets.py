@@ -2,7 +2,7 @@ import re
 import unicodedata
 from urllib.parse import urlparse
 
-from .config import load_domains
+from .config import load_domains, load_hosts
 
 # tldextract is imported lazily.  It pulls in requests and urllib3, which
 # together cost ~98ms of the CLI's startup, and nothing outside URL
@@ -29,6 +29,14 @@ CONFUSABLES = {
     "g": "ɡ", "a": "а", "e": "е", "o": "о", "c": "с",
     "p": "р", "x": "х", "y": "у", "i": "і", "l": "ӏ",
 }
+
+# Reverse map: confusable character → the ASCII it reads as.  R013b uses it
+# to check whether a script-mixed label is confusable with a configured
+# popular domain, not merely script-mixed.
+_CONFUSABLE_TO_LATIN = {conf: latin for latin, conf in CONFUSABLES.items()}
+
+# Memoized confusable-target set (config rarely changes mid-process).
+_confusable_targets_cache: frozenset[str] | None = None
 
 # Scripts whose letters are commonly used to build confusable domains.
 # A label mixing two of these is a homograph attack; a label written
@@ -87,14 +95,37 @@ def _decode_punycode(label: str) -> str:
         return label
 
 
-def has_homograph(domain: str) -> bool:
-    """Detect confusable characters in a domain.
+def _confusable_targets(confusable_domains=None) -> frozenset[str]:
+    """Return the configured homoglyph target domains, lowercased."""
+    global _confusable_targets_cache
+    if confusable_domains is not None:
+        return frozenset(d.lower() for d in confusable_domains)
+    if _confusable_targets_cache is None:
+        from .config import DEFAULT_CONFUSABLE_DOMAINS
+        hosts = load_hosts().get("hosts", {})
+        _confusable_targets_cache = frozenset(
+            d.lower() for d in
+            (hosts.get("confusable_domains") or DEFAULT_CONFUSABLE_DOMAINS)
+        )
+    return _confusable_targets_cache
 
-    Only script mixing within a single label is a homograph signal.
-    Single-script labels (e.g. ``münchen.de``, ``café.fr``) are legitimate
-    internationalised domains regardless of whether the script is ASCII.
+
+def has_homograph(domain: str, confusable_domains=None) -> bool:
+    """Detect confusable characters in a domain (R013b).
+
+    Two conditions must both hold for a label to be a homoglyph:
+
+    - the label mixes scripts within itself (e.g. Cyrillic ``о`` inside a
+      Latin label), and
+    - normalizing its confusable characters to ASCII yields a configured
+      popular target domain (``[hosts] confusable_domains``).
+
+    Single-script labels (``münchen.de``, ``café.fr``) and script mixes
+    that read as nothing configured are legitimate internationalised
+    domains and never fire.
     """
     host = domain.split("@")[-1].split(":")[0]
+    mixed = False
     for raw_label in host.split("."):
         if not raw_label:
             continue
@@ -103,6 +134,18 @@ def has_homograph(domain: str) -> bool:
         if len(scripts) > 1 and not any(
             scripts <= group for group in _COMPATIBLE_GROUPS
         ):
+            mixed = True
+            break
+    if not mixed:
+        return False
+
+    decoded = [_decode_punycode(label) for label in host.split(".")]
+    normalized = ".".join(
+        "".join(_CONFUSABLE_TO_LATIN.get(ch, ch) for ch in label)
+        for label in decoded
+    )
+    for target in _confusable_targets(confusable_domains):
+        if normalized == target or normalized.endswith("." + target):
             return True
     return False
 

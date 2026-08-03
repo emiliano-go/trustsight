@@ -15,7 +15,7 @@ SHARED_RULES = [
     # fires on http:// added sources when no checksum was also added.
     {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
     {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
-    {"id": "R009", "name": "Privilege Escalation", "pattern": r"\bsudo\b", "severity": "CRITICAL", "category": "privilege", "match_target": "raw_line", "scope": ["function_body"]},
+    # R009 is now a code rule (src/trustsight/analysis/build.py).
     {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
     {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
     {"id": "R012", "name": "LLM Prompt Injection", "pattern": r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)", "severity": "FATAL", "category": "injection", "match_target": "resolved"},

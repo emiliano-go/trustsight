@@ -56,7 +56,6 @@ def test_load_rules_creates_default(tmp_path, monkeypatch):
     assert "R002" in rule_ids
     assert "R003" in rule_ids
     assert "R007" in rule_ids
-    assert "R009" in rule_ids
     assert "R012" in rule_ids
     assert "R013" in rule_ids
 
@@ -202,7 +201,7 @@ def test_missing_shipped_rules_detects_stale_config(tmp_path, monkeypatch):
     never receives newly shipped rules."""
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     missing = cfg.missing_shipped_rules()
-    assert "R040" in missing
+    assert "R041" in missing
     assert "R058" in missing
     assert "R001" not in missing
 
@@ -220,7 +219,7 @@ def test_sync_rules_preserves_user_edits(tmp_path, monkeypatch):
     cfg = _install_partial_rules(tmp_path, monkeypatch)
     cfg.sync_rules()
     by_id = {r["id"]: r for r in cfg.load_rules()}
-    assert by_id["R009"]["severity"] == "HIGH"
+    assert by_id["R008"]["severity"] == "HIGH"
 
 
 def test_sync_rules_is_idempotent(tmp_path, monkeypatch):

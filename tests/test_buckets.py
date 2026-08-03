@@ -176,6 +176,34 @@ def test_punycode_encoded_confusable_is_homograph():
     assert has_homograph(encoded) is True
 
 
+def test_mixed_script_that_reads_as_no_target_is_not_homograph():
+    """R013b requires confusability with a configured target domain: a
+    mixed-script label that decodes to something outside the allowlist
+    (even one carrying a confusable codepoint) must not fire."""
+    assert has_homograph("банk.com") is False
+    assert has_homograph(f"githu{CYRILLIC_O}b.com") is False
+
+
+def test_mixed_script_that_reads_as_configured_target_is_homograph():
+    """Cyrillic 'а' decodes to 'a', so pаypal reads as paypal.com (a
+    configured target) and must fire; попay (single-script Cyrillic,
+    no confusable against any target) stays quiet."""
+    assert has_homograph(f"google.c{CYRILLIC_O}m") is True
+    assert has_homograph("pаypal.com") is True
+
+
+def test_confusable_targets_are_taken_from_config():
+    """confusable_domains=() turns off the whole bucket; adding a new
+    target makes its lookalikes fire."""
+    assert has_homograph(f"github.c{CYRILLIC_O}m", confusable_domains=()) is False
+    assert has_homograph(
+        "cоdeberg.com", confusable_domains={"codeberg.org"}
+    ) is False
+    assert has_homograph(
+        f"githu{CYRILLIC_O}b.com", confusable_domains={"githuob.com"}
+    ) is True
+
+
 def test_legitimate_cyrillic_idn_is_not_homograph():
     """A domain written wholly in one non-Latin script is a real IDN."""
     assert has_homograph("xn--e1afmkfd.xn--p1ai") is False

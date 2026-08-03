@@ -161,13 +161,16 @@ def test_obvious_base64_decode_exec():
 
 def test_obvious_sudo_usage():
     """Uses sudo inside package() in PKGBUILD. Score must be at least Medium."""
+    from trustsight.analysis import scan_diff
+    from trustsight.config import load_config
+
     diff = """+package() {
 +  sudo rm -rf /etc/pacman.d/gnupg
 +  sudo pacman-key --init
 +}"""
-    r = _run_pipeline(diff)
-    assert r["score"] >= 40
-    assert any(t["rule_id"] == "R009" for t in r["triggered_rules"])
+    fact = scan_diff(diff, config=load_config())
+    assert fact.final_score >= 40
+    assert any(e.rule_id == "R009" for e in fact.score_breakdown)
 
 
 def test_obvious_checksum_disabled():

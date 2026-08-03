@@ -205,6 +205,10 @@ def apply_rules(
     for rule in rules:
         if rule.get("experimental") and not include_experimental:
             continue
+        # R009 is a code rule (analysis/build.py).  A stale rules.toml from
+        # before the migration would otherwise double-fire the regex form.
+        if rule["id"] == "R009":
+            continue
 
         match_target = rule.get("match_target", "raw_line")
         if match_target == "raw_line":

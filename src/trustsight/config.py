@@ -147,6 +147,46 @@ DEFAULT_PASTE_HOSTS = [
     "temp.sh", "anonfiles.com", "dpaste.com", "sprunge.us",
 ]
 
+# Source schemes allowed by R080 (source URL uses an exotic protocol).  A
+# ``transport+base`` token like ``git+https`` is judged by its base scheme;
+# only the base matters here.  Anything outside this allowlist is exotic.
+DEFAULT_SOURCE_SCHEMES = [
+    "https", "http", "ftp", "ftps", "ssh", "git", "hg", "svn", "bzr",
+    "cvs", "file", "dav", "davs",
+]
+
+# Covert-egress / tunneling clients flagged by R123 when invoked from a
+# build/install function.  These tools exist to move data over channels
+# that bypass the normal network surface and have no packaging purpose.
+# Kept out: `nc`/`telnet`/`ssh`/`tor` alone are too ambiguous for a static
+# rule to call a covert channel with confidence.
+DEFAULT_COVERT_EGRESS_CLIENTS = [
+    r"(?:torsocks|torify|proxychains4?)\b",
+    r"(?:ncat|socat|openvpn|wireguard)\b",
+    r"(?:ngrok|frpc|frps|chisel|revsocks)\b",
+    r"(?:iodine|dnscat2?)\b",
+]
+
+# DoH endpoints flagged by R123 (covert egress).  Encrypted DNS-over-HTTPS
+# in a build/install function is a covert channel: it moves DNS queries, the
+# one channel a build is not supposed to touch, out of the resolver's sight.
+DEFAULT_COVERT_EGRESS_ENDPOINTS = [
+    "dns.google", "cloudflare-dns.com", "dns.quad9.net",
+    "doh.opendns.com", "dns.hostux.net", "mozilla.cloudflare-dns.com",
+]
+
+# Popular domains that R013b treats as homoglyph targets.  A script-mixed
+# label is only a homoglyph when it is confusable with a configured target;
+# a script-mixed label that reads as nothing configured is a real IDN, not
+# an attack.
+DEFAULT_CONFUSABLE_DOMAINS = [
+    "github.com", "gitlab.com", "bitbucket.org", "google.com", "gmail.com",
+    "youtube.com", "facebook.com", "twitter.com", "paypal.com", "amazon.com",
+    "microsoft.com", "sourceforge.net", "archlinux.org", "aur.archlinux.org",
+    "python.org", "npmjs.com", "crates.io", "mozilla.org", "debian.org",
+    "gnu.org", "kernel.org", "stackoverflow.com", "wikipedia.org",
+]
+
 # Standard ports excluded from R047 (source URL uses non-standard port).
 DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
 
@@ -326,14 +366,10 @@ severity = "HIGH"
 category = "network_execution"
 match_target = "resolved"
 
-[[rules]]
-id = "R009"
-name = "Privilege Escalation"
-pattern = '\\bsudo\\b'
-severity = "CRITICAL"
-category = "privilege"
-match_target = "raw_line"
-scope = ["function_body"]
+# R009 is now a code rule (src/trustsight/analysis/build.py): sudo at a
+# command position inside a build/install function.  The regex form fired on
+# any `sudo` mention in a function body — optdepends names, path segments
+# and echo strings — which the code rule's position scoping eliminates.
 
 [[rules]]
 id = "R010"
@@ -810,6 +846,18 @@ DEFAULT_HOSTS = (
     "# in trusted_domains.toml [raw_hosting] already weights these; this\n"
     "# list backs the dedicated detection rule shipped with R087.\n"
     "paste_hosts = " + _toml_str_list(DEFAULT_PASTE_HOSTS) + "\n"
+    "\n"
+    "# Source schemes allowed by R080 (source URL uses exotic protocol).\n"
+    "source_schemes = " + _toml_str_list(DEFAULT_SOURCE_SCHEMES) + "\n"
+    "\n"
+    "# Covert-egress / tunneling clients invoked in build/install (R123).\n"
+    "covert_egress_clients = " + _toml_str_list(DEFAULT_COVERT_EGRESS_CLIENTS) + "\n"
+    "\n"
+    "# DoH endpoints flagged by R123 (covert egress).\n"
+    "covert_egress_endpoints = " + _toml_str_list(DEFAULT_COVERT_EGRESS_ENDPOINTS) + "\n"
+    "\n"
+    "# Popular domains that R013b treats as homoglyph targets.\n"
+    "confusable_domains = " + _toml_str_list(DEFAULT_CONFUSABLE_DOMAINS) + "\n"
     "\n"
     "# Standard ports excluded from R047 (source URL uses non-standard port).\n"
     "standard_ports = " + _toml_str_list(DEFAULT_STANDARD_PORTS) + "\n"

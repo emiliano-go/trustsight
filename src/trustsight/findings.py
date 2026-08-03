@@ -78,6 +78,12 @@ TEMPLATES: dict[str, str] = {
     # --- Phase 3: kill-chain composition ---
     "R086": "{position}() profiles the host: {probe}",
     "R089": "rule hits span {n_stages} distinct kill-chain stages: {stages}",
+
+    # --- Phase 3: network surface ---
+    "R009": "{position}() runs sudo: {body}",
+    "R076": "{variable}={value!r} carries injection chars interpolated into a source URL: {url}",
+    "R080": "source URL uses non-allowlisted scheme {scheme}: {url}",
+    "R123": "{detail}",
 }
 
 

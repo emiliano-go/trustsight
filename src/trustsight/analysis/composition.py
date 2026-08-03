@@ -99,6 +99,7 @@ _STAGE_OF = {
     "R085": "persistence", "R114": "persistence",
     "R087": "exfil", "R123": "exfil",
     "R088": "hidden_drop",
+    "R080": "foreign_fetch",
 }
 
 # Rules that fire on the *same* evidence as a heavier rule and must never be

@@ -10,7 +10,7 @@ import hashlib
 import json
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Optional
 
 log = logging.getLogger(__name__)
@@ -38,18 +38,24 @@ def value_hash(value: Any) -> str:
 # Weighting  (how significant a break is)
 # ---------------------------------------------------------------------------
 
-def stability_weight(stable_for_n: int) -> float:
+# A property must hold this many consecutive observations before a change is
+# even reported.  Below the floor the weight is 0 and no PropertyBreak is
+# emitted; overridden by ``[longitudinal] stability_floor`` in thresholds.toml.
+STABILITY_FLOOR_DEFAULT = 10
+
+
+def stability_weight(stable_for_n: int, floor: int = STABILITY_FLOOR_DEFAULT) -> float:
     """Weight a property break by how long the value held.
 
-    Ranges 0.0–1.0.  The weight rises steeply through the first ~10
-    observations and flattens near 1.0 by ~20, so an attacker who
-    waits out a long stable period pays no more weight than the
-    analyst who catches the break early.
+    Ranges 0.0–1.0.  Nothing is reported below *floor* observations — a
+    value that never stabilised carries no longitudinal signal.  From the
+    floor the weight ramps steeply through the first ~30 observations and
+    flattens near 1.0 by ~40, so an attacker who waits out a long stable
+    period pays no more weight than the analyst who catches the break early.
     """
-    if stable_for_n <= 0:
+    if stable_for_n <= 0 or stable_for_n < floor:
         return 0.0
-    # logistic-ish: 1 - 1/(1 + n^0.7)
-    return min(1.0, 1.0 - 1.0 / (1.0 + stable_for_n ** 0.7))
+    return min(1.0, _logistic_ish(stable_for_n - floor + 1))
 
 
 def _logistic_ish(n: int) -> float:
@@ -290,6 +296,7 @@ def update_properties(
     package: str,
     extracted: dict[str, Any],
     observed_at: str,
+    floor: int = STABILITY_FLOOR_DEFAULT,
 ) -> list[PropertyBreak]:
     """Record property state; return the breaks that just occurred.
 
@@ -322,7 +329,7 @@ def update_properties(
             )
             continue
 
-        w = stability_weight(stable_n)
+        w = stability_weight(stable_n, floor)
         if w > 0.0:
             breaks.append(PropertyBreak(key, old_ser, ser, stable_n, w))
         conn.execute(

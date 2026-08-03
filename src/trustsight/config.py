@@ -193,6 +193,35 @@ DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
 # Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
 DEFAULT_FREE_REGISTRAR_TLDS = ["tk", "ml", "ga", "cf", "gq", "pw"]
 
+# R094 — security-relevant build flags, matched against the tokenized
+# ``configure_flags`` property (full_aur/properties.py).  A hardening flag
+# appearing or disappearing after a long-stable build is an attack-surface
+# change the diff alone would not surface.
+DEFAULT_SECURITY_RELEVANT_FLAGS = [
+    "-fno-stack-protector",
+    "-fstack-protector-strong",
+    "-fstack-protector-all",
+    "-fno-pie",
+    "-no-pie",
+    "-fno-pic",
+    "-fno-PIC",
+    "-fcf-protection",
+    "-fstack-clash-protection",
+    "-D_FORTIFY_SOURCE",
+]
+
+# R095 — security-relevant libraries.  Vendoring one of these (dropping the
+# system dependency and pulling a source copy whose name matches) bypasses
+# the distribution's security updates.
+DEFAULT_SECURITY_RELEVANT_LIBRARIES = [
+    "openssl", "libssl", "libcrypto", "openssl-1.1", "libressl",
+    "gnutls", "nss", "nspr", "libgcrypt", "libsodium", "libcurl",
+    "curl", "zlib", "libpng", "libjpeg", "libjpeg-turbo", "libtiff",
+    "libxml2", "expat", "pcre", "pcre2", "sqlite", "libsqlite3",
+    "icu", "libicu", "dbus", "libdbus", "pam", "libpam", "libsystemd",
+    "libudev", "liblzma", "zstd", "libzstd",
+]
+
 DEFAULT_CONFIG = """\
 [severity_weights]
 FATAL = 0
@@ -822,6 +851,16 @@ DEFAULT_PATTERNS = (
     "# new network-capable build dependency is code the checksum array does\n"
     "# not cover.\n"
     "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS) + "\n"
+    "\n"
+    "# R094 — security-relevant build flags.  A hardening flag dropping out of\n"
+    "# (or appearing in) a long-stable configure_flags set is an attack-surface\n"
+    "# change that the diff alone would not surface.\n"
+    "security_relevant_flags = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_FLAGS) + "\n"
+    "\n"
+    "# R095 — security-relevant libraries.  When a package stops depending on\n"
+    "# one of these and starts vendoring a matching source copy, it bypasses\n"
+    "# the distribution's security updates.\n"
+    "security_relevant_libraries = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_LIBRARIES) + "\n"
 )
 
 DEFAULT_NAMING = (
@@ -884,6 +923,13 @@ DEFAULT_THRESHOLDS = (
     "# package the corpus shows this many packages depend on (established,\n"
     "# official-repo membership fires regardless).\n"
     "widely_provided_observations = 25\n"
+    "\n"
+    "[longitudinal]\n"
+    "# R094-R098/R102/R083 gate on a property holding at least this many\n"
+    "# consecutive observations before its break is reported.  Below it the\n"
+    "# stability_weight is 0 and no PropertyBreak is emitted, so a cold or\n"
+    "# immature database never fires the longitudinal rules.\n"
+    "stability_floor = 10\n"
 )
 
 DEFAULT_IOCS = (

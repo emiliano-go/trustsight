@@ -88,6 +88,15 @@ TEMPLATES: dict[str, str] = {
     # --- Phase 4: Class B ---
     "R115": "epoch={epoch} newly introduced",
     "R116": "{field} claims '{dep_name}', {kind} but unrelated to '{package_name}'",
+
+    # --- Phase 5: Class C longitudinal ---
+    "R083": "{key} changed after {stable_for_n} stable observations",
+    "R094": "configure_flags changed security flags after {stable_for_n} stable observations: {flags}",
+    "R095": "removed dependency {vendored} now vendored in-tree after {stable_for_n} stable observations",
+    "R096": "source {key} changed after {stable_for_n} stable observations",
+    "R097": "version scheme changed {old_scheme} -> {new_scheme}",
+    "R098": "pkgdesc changed after {stable_for_n} stable observations",
+    "R102": "build {key} changed after {stable_for_n} stable observations: {old_value} -> {new_value}",
 }
 
 

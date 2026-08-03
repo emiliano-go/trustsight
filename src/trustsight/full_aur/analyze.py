@@ -20,8 +20,9 @@ from ..analysis import (
     effective_observation_count,
     package_typosquat_target,
 )
+from ..analysis.longitudinal import longitudinal_findings
 from ..buckets import classify_urls
-from ..config import load_config
+from ..config import load_config, load_thresholds
 from ..db import (
     get_connection,
     get_package,
@@ -175,7 +176,8 @@ def analyze_package_text(
 
     package_id = upsert_package(pkg_name, new_version)
 
-    # Property stability tracking: record now, consumed later by R094-R102
+    # Property stability tracking: record now, consumed in the same analysis
+    # by the longitudinal rules (R094-R098/R102/R083).
     observed_at: str = ""
     if temporal.last_modified is not None:
         from datetime import datetime, timezone
@@ -183,10 +185,14 @@ def analyze_package_text(
     else:
         from datetime import datetime, timezone
         observed_at = datetime.now(timezone.utc).isoformat()
+    breaks: list = []
     try:
         props = extract_properties(new_pkgbuild, srcinfo)
+        floor = int(
+            load_thresholds().get("longitudinal", {}).get("stability_floor", 10)
+        )
         with get_connection() as conn:
-            update_properties(conn, pkg_name, props, observed_at)
+            breaks = update_properties(conn, pkg_name, props, observed_at, floor=floor)
     except Exception:
         log.warning("property tracking failed for %s", pkg_name, exc_info=True)
 
@@ -297,6 +303,10 @@ def analyze_package_text(
 
     triggered_rules.extend(
         _temporal_findings(temporal, pkg_name, False)
+    )
+
+    triggered_rules.extend(
+        longitudinal_findings(diff_text, pkg_name, breaks, config)
     )
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):

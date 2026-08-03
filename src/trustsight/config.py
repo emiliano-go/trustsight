@@ -878,6 +878,12 @@ DEFAULT_THRESHOLDS = (
     "# foreign_fetch, payload, install_hook, write_then_exec, obfuscation,\n"
     "# anti_analysis, hidden_drop, exfil, takeover, mass_adoption).\n"
     "attack_chain_stages = 3\n"
+    "\n"
+    "[r116]\n"
+    "# R116 fires when a diff newly claims a provides/replaces entry naming a\n"
+    "# package the corpus shows this many packages depend on (established,\n"
+    "# official-repo membership fires regardless).\n"
+    "widely_provided_observations = 25\n"
 )
 
 DEFAULT_IOCS = (

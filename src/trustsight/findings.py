@@ -84,6 +84,10 @@ TEMPLATES: dict[str, str] = {
     "R076": "{variable}={value!r} carries injection chars interpolated into a source URL: {url}",
     "R080": "source URL uses non-allowlisted scheme {scheme}: {url}",
     "R123": "{detail}",
+
+    # --- Phase 4: Class B ---
+    "R115": "epoch={epoch} newly introduced",
+    "R116": "{field} claims '{dep_name}', {kind} but unrelated to '{package_name}'",
 }
 
 

@@ -19,6 +19,7 @@ from .network import (
     _version_in_url_findings,
 )
 from .persistence import _persistence_findings
+from .version import _epoch_findings
 from ..findings import stamp
 
 _BINARY_ARTIFACT_RE = re.compile(
@@ -158,5 +159,6 @@ def _structural_findings(
     _exotic_protocol_findings(diff_text, config or {}, add)
     _version_in_url_findings(diff_text, config or {}, add)
     _covert_egress_findings(diff_text, config or {}, add)
+    _epoch_findings(diff_text, config or {}, add)
 
     return findings

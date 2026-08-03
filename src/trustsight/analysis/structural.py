@@ -12,6 +12,7 @@ from .base import (
 from .build import _build_findings
 from .delivery import _delivery_findings
 from .dependencies import _dependency_findings
+from .persistence import _persistence_findings
 from ..findings import stamp
 
 _BINARY_ARTIFACT_RE = re.compile(
@@ -145,5 +146,6 @@ def _structural_findings(
     _dependency_findings(diff_text, package_name, config or {}, add)
     _build_findings(diff_text, config or {}, add)
     _delivery_findings(diff_text, config or {}, add)
+    _persistence_findings(diff_text, config or {}, add)
 
     return findings

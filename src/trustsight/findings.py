@@ -67,6 +67,13 @@ TEMPLATES: dict[str, str] = {
     "R121": "{position}() generates {path} and then executes it",
     "R122": "{match}",
     "R124": "{position}() writes {path} and then executes it",
+
+    # --- Phase 3: install-path persistence ---
+    "R077": "{position}() writes into the user's home/rc: {path}",
+    "R084": "{position}() stages work in a world-writable path: {path}",
+    "R085": "systemd unit ExecStart points at runtime-writable path: {exec_target}",
+    "R088": "{position}() drops a hidden file outside the build trees: {path}",
+    "R114": "{position}() installs a pacman hook: {path}",
 }
 
 

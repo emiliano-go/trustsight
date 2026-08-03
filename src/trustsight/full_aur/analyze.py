@@ -24,7 +24,6 @@ from ..buckets import classify_urls
 from ..config import load_config
 from ..db import (
     get_connection,
-    get_last_analysis,
     get_package,
     insert_analysis,
     record_dependency_names,
@@ -145,6 +144,7 @@ def analyze_package_text(
     maintainer: str,
     temporal: TemporalContext,
     srcinfo: Optional[str] = None,
+    tree_manifest: Optional[list[tuple[str, bytes]]] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -159,6 +159,10 @@ def analyze_package_text(
         maintainer:  Current maintainer string.
         temporal:  TemporalContext with clock timestamps and source.
         srcinfo:  .SRCINFO text (for richer property extraction).
+        tree_manifest:  ``(path, head_bytes)`` pairs from the AUR snapshot
+            tarball, when it was fetched.  Runs the R118-tree scan; when
+            absent the result reports ``tree_analyzed=false`` rather than
+            silently reading as full coverage.
 
     Returns:
         A fully-scored PackageFact.
@@ -192,6 +196,9 @@ def analyze_package_text(
         triggered_rules.extend(
             _temporal_findings(temporal, pkg_name, True)
         )
+        if tree_manifest:
+            from ..analysis.delivery import scan_tree_manifest
+            triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
         triggered_rules, suppressed_rules = filter_triggered_rules(
             triggered_rules, package=pkg_name
         )
@@ -218,6 +225,7 @@ def analyze_package_text(
             suppressed_rules=suppressed_rules,
             first_seen=True,
             temporal_source=temporal.source,
+            tree_analyzed=bool(tree_manifest),
             score_breakdown=breakdown,
             final_score=score,
         )
@@ -278,6 +286,11 @@ def analyze_package_text(
             package_name=pkg_name, config=config,
         )
     )
+    if tree_manifest:
+        from ..analysis.delivery import scan_tree_manifest
+        triggered_rules.extend(
+            scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
+        )
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
@@ -360,6 +373,7 @@ def analyze_package_text(
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
         diff_truncated=diff_truncated,
+        tree_analyzed=bool(tree_manifest),
         temporal_source=temporal.source,
         score_breakdown=breakdown,
         final_score=score,

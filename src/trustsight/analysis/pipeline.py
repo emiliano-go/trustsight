@@ -57,6 +57,41 @@ from .temporal import _package_is_new, _recent_update, _stale_revival
 log = logging.getLogger(__name__)
 
 
+def _collect_tree_files(repo, commit_oid: str, max_file_bytes: int = 512 * 1024, head_bytes: int = 64) -> list[tuple[str, bytes]]:
+    """Walk a commit tree, returning ``(path, first_bytes)`` for each blob.
+
+    Blobs larger than *max_file_bytes* are skipped: a committed payload is
+    small, and an untrusted repository must not be able to force the
+    reviewer to read a giant file.  AUR repos are small, so this is cheap.
+    """
+    files: list[tuple[str, bytes]] = []
+
+    def walk(tree, prefix: str) -> None:
+        for entry in tree:
+            if entry.type_str == "tree":
+                walk(repo[entry.id], prefix + entry.name + "/")
+            elif entry.type_str == "blob":
+                try:
+                    blob = repo[entry.id]
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if blob.size > max_file_bytes:
+                    continue
+                try:
+                    data = blob.data
+                except (KeyError, TypeError, ValueError):
+                    continue
+                files.append((prefix + entry.name, data[:head_bytes]))
+
+    try:
+        commit = repo.get(commit_oid)
+        if commit is not None:
+            walk(commit.tree, "")
+    except (KeyError, AttributeError, TypeError, ValueError):
+        pass
+    return files
+
+
 def analyze_package(
     pkg_name: str,
     old_commit: str = "",
@@ -150,6 +185,12 @@ def analyze_package(
             package_name=pkg_name, config=config,
         )
     )
+    tree_manifest = _collect_tree_files(repo, head_commit)
+    if tree_manifest:
+        from .delivery import scan_tree_manifest
+        triggered_rules.extend(
+            scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
+        )
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
@@ -253,6 +294,7 @@ def analyze_package(
         suppressed_rules=suppressed_rules,
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
+        tree_analyzed=True,
         temporal_source="git_commit",
         score_breakdown=breakdown,
         final_score=score,
@@ -289,6 +331,7 @@ def scan_diff(
     package_name: str = "",
     seen_urls: dict[str, set[str]] | None = None,
     observation_count: int = 0,
+    tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> PackageFact:
     if config is None:
         config = load_config()
@@ -312,6 +355,11 @@ def scan_diff(
             package_name=package_name, config=config,
         )
     )
+    if tree_manifest:
+        from .delivery import scan_tree_manifest
+        triggered_rules.extend(
+            scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
+        )
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
@@ -382,6 +430,7 @@ def scan_diff(
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        tree_analyzed=bool(tree_manifest),
         score_breakdown=breakdown,
         final_score=score,
     )
@@ -394,6 +443,7 @@ def analyze_package_text(
     config: dict | None = None,
     rules: list[dict] | None = None,
     adapter: str = "corpus",
+    tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> PackageFact:
     if config is None:
         config = load_config()
@@ -410,6 +460,7 @@ def analyze_package_text(
         rules=rules,
         config=config,
         package_name=pkg_name,
+        tree_manifest=tree_manifest,
     )
     fact.adapter = adapter
     fact.temporal_source = "aur_metadata"
@@ -428,6 +479,11 @@ def _make_fresh_analysis(
     new_pkg = _package_is_new(repo, commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
+    if commit:
+        from .delivery import scan_tree_manifest
+        tree_manifest = _collect_tree_files(repo, commit)
+        if tree_manifest:
+            triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
     fact = PackageFact(
         package_name=pkg_name,
         old_version=installed_version,
@@ -437,6 +493,7 @@ def _make_fresh_analysis(
         novelty_context=novelty,
         first_seen=True,
         temporal_source="git_commit",
+        tree_analyzed=True,
         final_score=0,
     )
     insert_analysis(

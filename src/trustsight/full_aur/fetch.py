@@ -3,7 +3,6 @@
 import json
 import logging
 import tarfile
-import time
 import urllib.request
 import urllib.error
 from io import BytesIO
@@ -72,6 +71,26 @@ def fetch_srcinfo(name: str) -> Optional[str]:
     return None
 
 
+def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
+    """Extract the PKGBUILD text from an open snapshot tarball."""
+    pkgbuild_path = f"{name}/PKGBUILD"
+    try:
+        member = tf.getmember(pkgbuild_path)
+    except KeyError:
+        # some packages use a different internal directory name
+        for m in tf.getmembers():
+            if m.name.endswith("/PKGBUILD"):
+                member = m
+                break
+        else:
+            log.warning("no PKGBUILD found in snapshot for %s", name)
+            return None
+    content = tf.extractfile(member)
+    if content is None:
+        return None
+    return content.read().decode("utf-8", errors="replace")
+
+
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
     """Download the snapshot tarball and extract PKGBUILD."""
     url = f"{_SNAPSHOT_URL}/{name}.tar.gz"
@@ -81,25 +100,58 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
 
     try:
         tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
-        pkgbuild_path = f"{name}/PKGBUILD"
-        try:
-            member = tf.getmember(pkgbuild_path)
-        except KeyError:
-            # some packages use a different internal directory name
-            for m in tf.getmembers():
-                if m.name.endswith("/PKGBUILD"):
-                    member = m
-                    break
-            else:
-                log.warning("no PKGBUILD found in snapshot for %s", name)
-                return None
-        content = tf.extractfile(member)
-        if content is None:
-            return None
-        return content.read().decode("utf-8", errors="replace")
+        return _pkgbuild_from_tarfile(tf, name)
     except Exception as e:
         log.warning("error extracting snapshot for %s: %s", name, e)
         return None
+
+
+def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[tuple[str, bytes]]:
+    """``(member_path, first_bytes)`` for each regular file in the tarball.
+
+    The AUR snapshot tarball comes from the AUR mirror, never from a
+    PKGBUILD-declared ``source=`` URL, so reading it keeps the review path's
+    "no network, no execution" claim intact.  Only the head of each member
+    is read: R118 needs the magic bytes, not the whole file.
+    """
+    manifest: list[tuple[str, bytes]] = []
+    for member in tf.getmembers():
+        if len(manifest) >= max_members:
+            break
+        if not member.isfile():
+            continue
+        try:
+            f = tf.extractfile(member)
+        except (tarfile.TarError, OSError):
+            continue
+        if f is None:
+            continue
+        head = f.read(64)
+        manifest.append((member.name, head))
+    return manifest
+
+
+def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]]]:
+    """PKGBUILD text plus the snapshot tree manifest when available.
+
+    Downloads the AUR snapshot tarball directly so the corpus path sees the
+    same committed file tree the git path does (R118-tree).  The tarball is
+    fetched from the AUR mirror — never from a PKGBUILD-declared URL — so
+    this is consistent with the "static, offline" review claim.  Falls back
+    to the cgit text-only fetch when the tarball cannot be read.
+    """
+    url = f"{_SNAPSHOT_URL}/{name}.tar.gz"
+    body = _http_get(url)
+    if body is not None:
+        try:
+            tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
+            pkgbuild = _pkgbuild_from_tarfile(tf, name)
+            manifest = _snapshot_manifest(tf)
+            if pkgbuild is not None:
+                return pkgbuild, manifest
+        except Exception as e:
+            log.warning("snapshot tarball for %s unusable: %s", name, e)
+    return fetch_pkgbuild(name), None
 
 
 def save_resume_state(state: dict, path: Path = Path(_RESUME_FILE)) -> None:

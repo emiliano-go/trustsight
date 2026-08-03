@@ -128,6 +128,7 @@ def test_load_pattern_tables_round_trip(tmp_path, monkeypatch):
     """The shipped pattern/naming/host/threshold tables must parse and match
     the code defaults exactly, so rules built from them keep their behaviour."""
     from trustsight.config import (
+        DEFAULT_ANTI_ANALYSIS_PROBES,
         DEFAULT_ECOSYSTEM_PREFIXES,
         DEFAULT_FOREIGN_PKG_MANAGERS,
         DEFAULT_FREE_REGISTRAR_TLDS,
@@ -150,6 +151,7 @@ def test_load_pattern_tables_round_trip(tmp_path, monkeypatch):
     patterns = load_patterns()["patterns"]
     assert patterns["foreign_pkg_managers"] == DEFAULT_FOREIGN_PKG_MANAGERS
     assert patterns["obfuscation_indicators"] == DEFAULT_OBFUSCATION_INDICATORS
+    assert patterns["anti_analysis_probes"] == DEFAULT_ANTI_ANALYSIS_PROBES
     assert patterns["network_tools"] == DEFAULT_NETWORK_TOOLS
 
     naming = load_naming()["naming"]

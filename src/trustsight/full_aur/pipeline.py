@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional
 
 from ..analysis import _ensure_init
-from ..config import load_config
 from ..db import (
     get_pkgbuild_snapshot,
     save_package_profile,
@@ -16,7 +15,7 @@ from ..schema import TemporalContext
 from .analyze import analyze_package_text
 from .fetch import (
     clear_resume_state,
-    fetch_pkgbuild,
+    fetch_pkgbuild_with_tree,
     load_resume_state,
     save_resume_state,
 )
@@ -55,13 +54,15 @@ def run_baseline_build(
     exports a signed baseline artifact.
     """
     _ensure_init()
-    config = load_config()
 
     if json_output:
         import json as _json
-        _log = lambda msg: print(_json.dumps({"msg": msg}))
+
+        def _log(msg):
+            print(_json.dumps({"msg": msg}))
     else:
-        _log = lambda msg: log.info(msg)
+        def _log(msg):
+            log.info(msg)
 
     _log("Fetching AUR metadata snapshot …")
     new_meta = fetch_metadata()
@@ -108,7 +109,7 @@ def run_baseline_build(
             old_snapshot["last_modified"] if old_snapshot else None
         )
 
-        new_pkgbuild = fetch_pkgbuild(pkgbase)
+        new_pkgbuild, tree_manifest = fetch_pkgbuild_with_tree(pkgbase)
         if new_pkgbuild is None:
             log.warning("could not fetch PKGBUILD for %s (base: %s)", name, pkgbase)
             save_resume_state({"processed": sorted(processed | {name})})
@@ -125,6 +126,7 @@ def run_baseline_build(
                 previous_modified=prev_last_modified,
                 source="aur_metadata",
             ),
+            tree_manifest=tree_manifest,
         )
 
         save_pkgbuild_snapshot(

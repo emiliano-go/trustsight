@@ -10,6 +10,7 @@ from .base import (
     _url_domain,
 )
 from .build import _build_findings
+from .delivery import _delivery_findings
 from .dependencies import _dependency_findings
 from ..findings import stamp
 
@@ -40,7 +41,10 @@ _CHECKSUM_REMOVED_LINE_RE = re.compile(
 
 def _find_line_in_diff(diff_text: str, pattern: str, prefix: str = r"\+") -> int | None:
     """Return the 1-based line number of the first ``+``/``-`` line matching *pattern*."""
-    full = re.compile(r"^" + prefix + r".*" + pattern, re.IGNORECASE)
+    try:
+        full = re.compile(r"^" + prefix + r".*" + pattern, re.IGNORECASE)
+    except re.error:
+        full = re.compile(r"^" + prefix + r".*" + re.escape(pattern), re.IGNORECASE)
     for i, line in enumerate(diff_text.splitlines()):
         if full.search(line):
             return i + 1
@@ -140,5 +144,6 @@ def _structural_findings(
 
     _dependency_findings(diff_text, package_name, config or {}, add)
     _build_findings(diff_text, config or {}, add)
+    _delivery_findings(diff_text, config or {}, add)
 
     return findings

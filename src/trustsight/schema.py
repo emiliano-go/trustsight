@@ -89,6 +89,11 @@ class PackageFact:
 
     recent_commit_burst: bool = False
 
+    # True when the repository file manifest (git tree / snapshot tarball)
+    # was inspected for R118-tree.  A corpus-path result analysed without
+    # the snapshot must not read the same as one that saw the whole tree.
+    tree_analyzed: bool = False
+
     # Which clock produced the temporal findings.
     temporal_source: str = "unknown"
 
@@ -136,6 +141,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
         "diff_truncated": fact.diff_truncated,
+        "tree_analyzed": fact.tree_analyzed,
         "score_breakdown": [
             {
                 "rule_id": e.rule_id,

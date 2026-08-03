@@ -59,6 +59,14 @@ TEMPLATES: dict[str, str] = {
     "R075": "diff adds {n_novel} novel or rare dependencies: {novel_names}",
     "R081": "{position}() invokes foreign package manager: {body}",
     "R082": "{position}() line carries {count} obfuscation indicators: {body}",
+
+    # --- Phase 2: July delivery stack ---
+    "R118": "ELF file committed to the repository: {path}",
+    "R119": "{position}() probes its environment: {probe}",
+    "R120": "{encoding} blob on the line decodes to {magic}",
+    "R121": "{position}() generates {path} and then executes it",
+    "R122": "{match}",
+    "R124": "{position}() writes {path} and then executes it",
 }
 
 

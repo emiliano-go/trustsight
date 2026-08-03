@@ -54,6 +54,23 @@ DEFAULT_OBFUSCATION_INDICATORS = [
     r"(?<=\w)''(?=\w)",
 ]
 
+# R119 — anti-analysis probes run from a build/install function.  A build
+# recipe that checks whether it is being debugged, virtualized, sandboxed, or
+# running on CI has no packaging purpose: it is probing its environment to
+# decide whether to deploy a payload.  Each entry is a case-insensitive regex
+# fragment matched against reconstructed text.  Legitimate arch/feature checks
+# (`uname -m`, `getconf`) never match these fragments.
+DEFAULT_ANTI_ANALYSIS_PROBES = [
+    r"TracerPid",                                   # /proc/self/status debugger marker
+    r"\b(?:gdb|strace|lldb|ptrace)\b",              # debugger clients / probe interfaces
+    r"systemd-detect-virt",
+    r"virt-what",
+    r"\bdmidecode\b",
+    r"hypervisor",                                  # DMI / /proc/cpuinfo virtualization marker
+    r"/\.dockerenv|/run/\.containerenv",            # container sandbox markers
+    r"\$\{?(?:CI|GITHUB_ACTIONS|GITLAB_CI|TRAVIS|JENKINS_URL|BUILD_ID|BUILD_NUMBER|CIRCLECI|TF_BUILD|CONTAINER)\}?",
+]
+
 # D003 — package names that grant network access from makedepends.
 DEFAULT_NETWORK_TOOLS = [
     "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
@@ -713,6 +730,13 @@ DEFAULT_PATTERNS = (
     "# forms fires; the reconstruction rules (R117) decide whether the\n"
     "# resolved line reveals an executable action.\n"
     "obfuscation_indicators = " + _toml_str_list(DEFAULT_OBFUSCATION_INDICATORS) + "\n"
+    "\n"
+    "# R119 — anti-analysis probes run from a build/install function.  A build\n"
+    "# recipe checking whether it is being debugged, virtualized, sandboxed, or\n"
+    "# running on CI has no packaging purpose.  Each entry is a regex fragment\n"
+    "# matched against reconstructed text; legitimate arch/feature checks\n"
+    "# (uname -m, getconf) never match these.\n"
+    "anti_analysis_probes = " + _toml_str_list(DEFAULT_ANTI_ANALYSIS_PROBES) + "\n"
     "\n"
     "# D003 — package names that grant network access from makedepends.  A\n"
     "# new network-capable build dependency is code the checksum array does\n"

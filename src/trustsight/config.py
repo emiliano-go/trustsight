@@ -71,6 +71,40 @@ DEFAULT_ANTI_ANALYSIS_PROBES = [
     r"\$\{?(?:CI|GITHUB_ACTIONS|GITLAB_CI|TRAVIS|JENKINS_URL|BUILD_ID|BUILD_NUMBER|CIRCLECI|TF_BUILD|CONTAINER)\}?",
 ]
 
+# R086 — host-profiling commands run from a build/install function.  Host
+# reconnaissance (who am I / what machine am I on) has no packaging purpose;
+# it is the recon stage of the kill-chain R089 composes.  Each entry is a
+# case-insensitive regex fragment matched against reconstructed text.  The
+# leading command-position anchor means only a command invoked at the start
+# of a line or after ; / && / || / | fires — bare mentions in strings, sed
+# expressions and variable values never do.  `env`, `dmidecode` and
+# `systemd-detect-virt` are excluded: `env VAR=val` is overwhelmingly benign,
+# and the latter two already belong to R119.  Calibrated to zero benign
+# fires across the 3,246-diff corpus.  A lone `uname -m` (arch check) fires
+# R086 at INFO by design.
+DEFAULT_RECON_COMMANDS = [
+    r"(?:\A\s*|[;&|]\s*)uname\b",
+    r"(?:\A\s*|[;&|]\s*)whoami\b",
+    r"(?:\A\s*|[;&|]\s*)id\b",
+    r"(?:\A\s*|[;&|]\s*)logname\b",
+    r"(?:\A\s*|[;&|]\s*)getent\b",
+    r"(?:\A\s*|[;&|]\s*)hostname\b",
+    r"(?:\A\s*|[;&|]\s*)hostnamectl\b",
+    r"/etc/machine-id",
+    r"(?:\A\s*|[;&|]\s*)lscpu\b",
+    r"(?:\A\s*|[;&|]\s*)lsblk\b",
+    r"(?:\A\s*|[;&|]\s*)lspci\b",
+    r"(?:\A\s*|[;&|]\s*)lsusb\b",
+    r"(?:\A\s*|[;&|]\s*)inxi\b",
+    r"(?:\A\s*|[;&|]\s*)neofetch\b",
+    r"(?:\A\s*|[;&|]\s*)screenfetch\b",
+    r"(?:\A\s*|[;&|]\s*)ip\s+addr\b",
+    r"(?:\A\s*|[;&|]\s*)ifconfig\b",
+    r"(?:\A\s*|[;&|]\s*)iwconfig\b",
+    r"/proc/(?:cpuinfo|meminfo|version)",
+    r"(?:\A\s*|[;&|]\s*)printenv\b",
+]
+
 # D003 — package names that grant network access from makedepends.
 DEFAULT_NETWORK_TOOLS = [
     "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
@@ -738,6 +772,16 @@ DEFAULT_PATTERNS = (
     "# (uname -m, getconf) never match these.\n"
     "anti_analysis_probes = " + _toml_str_list(DEFAULT_ANTI_ANALYSIS_PROBES) + "\n"
     "\n"
+    "# R086 — host-profiling commands run from a build/install function.  Host\n"
+    "# reconnaissance (who am I / what machine am I on) has no packaging\n"
+    "# purpose; it is the recon stage of the kill-chain R089 composes.  Each\n"
+    "# entry is a regex fragment matched against reconstructed text.  Fragments\n"
+    "# carry a command-position anchor so bare mentions in strings, sed\n"
+    "# expressions or variable values never fire; `env`, `dmidecode` and\n"
+    "# systemd-detect-virt are deliberately absent (they belong to R119 or\n"
+    "# produce benign false positives).  A lone `uname -m` fires R086 at INFO.\n"
+    "recon_commands = " + _toml_str_list(DEFAULT_RECON_COMMANDS) + "\n"
+    "\n"
     "# D003 — package names that grant network access from makedepends.  A\n"
     "# new network-capable build dependency is code the checksum array does\n"
     "# not cover.\n"
@@ -779,6 +823,13 @@ DEFAULT_THRESHOLDS = (
     "# R082 fires when a single line carries at least this many distinct\n"
     "# obfuscation indicators from [patterns] obfuscation_indicators.\n"
     "obfuscation_density = 3\n"
+    "\n"
+    "[r089]\n"
+    "# R089 annotates a diff whose rule hits span at least this many distinct\n"
+    "# kill-chain stages from the R089 stage map (recon, staging, persistence,\n"
+    "# foreign_fetch, payload, install_hook, write_then_exec, obfuscation,\n"
+    "# anti_analysis, hidden_drop, exfil, takeover, mass_adoption).\n"
+    "attack_chain_stages = 3\n"
 )
 
 DEFAULT_IOCS = (

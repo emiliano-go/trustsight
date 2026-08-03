@@ -1,14 +1,22 @@
 """Behavioural tests for the Phase 3 install-path persistence cluster
-(R077/R084/R085/R088/R114).
+(R077/R084/R085/R088/R114) and the kill-chain composition capstone
+(R086 host reconnaissance, R089 attack-chain annotation).
 
 Each rule is asserted in both directions: the attack case fires, and the
 plan's declared must-not-fire surface stays silent.  R088 is the quietest
 rule: a hidden write that is executed belongs to R121/R124, one in a
 world-writable dir to R084, one in the user's home to R077 — so no single
 piece of evidence ever triple-fires.
+
+R086 and R089 are weight-0 annotations.  R086 only fires on commands at a
+command position (a mention inside a string, comment or heredoc body never
+fires); R089 only fires once the aggregated rule hits of one diff span
+``[thresholds] r089 attack_chain_stages`` distinct kill-chain stages.
 """
 
-from trustsight.analysis import _structural_findings
+from trustsight.analysis import _structural_findings, scan_diff
+from trustsight.analysis.composition import _meta_annotations
+from trustsight.config import load_config
 from trustsight.differ import extract_urls_from_diff
 
 
@@ -200,3 +208,134 @@ def test_r114_ignores_non_hook_install():
         "package() {\n  install -Dm644 x.desktop \"$pkgdir/usr/share/applications/x.desktop\"\n}\n"
     )))
     assert "R114" not in ids
+
+
+# --- R086: host reconnaissance ---
+
+
+def test_r086_fires_on_uname_at_info():
+    findings = structural(_diff("build() {\n  uname -m\n}\n"))
+    r086 = [f for f in findings if f["rule_id"] == "R086"]
+    assert r086 and r086[0]["severity"] == "INFO"
+
+
+def test_r086_fires_on_whoami_and_id():
+    ids = rule_ids(structural(_diff("build() {\n  whoami\n  id\n  hostname\n}\n")))
+    assert "R086" in ids
+
+
+def test_r086_fires_after_command_separator():
+    ids = rule_ids(structural(_diff("build() {\n  make && uname -m\n}\n")))
+    assert "R086" in ids
+
+
+def test_r086_fires_in_install_hook():
+    ids = rule_ids(structural(_diff(
+        "post_install() {\n  lscpu\n  lsblk\n}\n"
+    )))
+    assert "R086" in ids
+
+
+def test_r086_ignores_mention_in_string():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  echo \"see uname -m in the docs\"\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_ignores_mention_in_comment():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  # whoami is handy for debugging\n  make\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_ignores_mention_in_heredoc_body():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  cat > helper.sh <<'EOF'\n  hostname\n  uname -m\n  EOF\n  make\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_ignores_env_assignment_vesktop_fp():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  sed -i 's|@options@|env ELECTRON_OZONE_PLATFORM_HINT=auto|g' launcher\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_ignores_non_command_position():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  X=id\n  echo ${X}\n  grep -q uname README\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_ignores_benign_build_commands():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  cd \"$srcdir/x\"\n  make\n  install -Dm755 x \"$pkgdir/usr/bin/x\"\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+def test_r086_one_finding_per_line():
+    findings = structural(_diff("build() {\n  uname -a; whoami; id\n}\n"))
+    assert sum(1 for f in findings if f["rule_id"] == "R086") <= 1
+
+
+def test_r086_does_not_claim_anti_analysis_domain():
+    ids = rule_ids(structural(_diff(
+        "build() {\n  systemd-detect-virt\n  dmidecode\n}\n"
+    )))
+    assert "R086" not in ids
+
+
+# --- R089: attack-chain composition ---
+
+
+def _stage_stub(rule_id: str) -> dict:
+    return {"rule_id": rule_id, "name": rule_id, "severity": "INFO", "category": "ctx"}
+
+
+def test_r089_fires_at_three_stages():
+    rules = [_stage_stub(r) for r in ("R086", "R084", "R124")]
+    meta = _meta_annotations(rules)
+    assert any(r["rule_id"] == "R089" for r in meta)
+
+
+def test_r089_silent_below_threshold():
+    rules = [_stage_stub(r) for r in ("R086", "R084")]
+    meta = _meta_annotations(rules)
+    assert not any(r["rule_id"] == "R089" for r in meta)
+
+
+def test_r089_never_counts_meta_rules_as_stages():
+    rules = [_stage_stub(r) for r in ("R086", "R072", "R089", "R069")]
+    meta = _meta_annotations(rules)
+    assert not any(r["rule_id"] == "R089" for r in meta)
+
+
+def test_r089_counts_distinct_stages_not_hits():
+    rules = [_stage_stub(r) for r in ("R085", "R114", "R086")]
+    assert not any(r["rule_id"] == "R089" for r in _meta_annotations(rules))
+    rules.append(_stage_stub("R087"))
+    assert any(r["rule_id"] == "R089" for r in _meta_annotations(rules))
+
+
+def test_r089_reports_stage_names():
+    rules = [_stage_stub(r) for r in ("R086", "R084", "R124")]
+    meta = [r for r in _meta_annotations(rules) if r["rule_id"] == "R089"]
+    assert meta[0]["params"]["stages"] == "recon, staging, write_then_exec"
+
+
+def test_r089_fires_end_to_end_on_staged_diff():
+    fact = scan_diff(_diff(
+        "build() {\n  uname -m\n  cd /tmp\n  echo payload > .x && chmod +x .x && ./.x\n}\n"
+    ), config=load_config())
+    r089 = [e for e in fact.score_breakdown if e.rule_id == "R089"]
+    assert r089 and r089[0].severity == "INFO"
+
+
+def test_r089_silent_on_benign_diff():
+    fact = scan_diff(_diff("build() {\n  make\n}\n"), config=load_config())
+    assert not any(e.rule_id == "R089" for e in fact.score_breakdown)

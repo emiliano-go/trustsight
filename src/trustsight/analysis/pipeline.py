@@ -50,6 +50,7 @@ from .base import (
     _GLOBAL_URL_KEY,
     _has_install_hook,
 )
+from .composition import _meta_annotations
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import _structural_findings
 from .temporal import _package_is_new, _recent_update, _stale_revival
@@ -225,15 +226,7 @@ def analyze_package(
     if takeover:
         triggered_rules.append(takeover)
 
-    categories = {r.get("category", "") for r in triggered_rules
-                  if r.get("category") and r["rule_id"] != "R072"}
-    if len(categories) >= 3:
-        triggered_rules.append(stamp({
-            "rule_id": "R072", "name": "Capability Density Anomaly",
-            "severity": "INFO", "category": "meta",
-            "match": f"rule hits span {len(categories)} distinct capability categories",
-            "params": {"n_categories": len(categories)},
-        }))
+    triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
     if effective_observation_count() > 0:
         squatted = package_typosquat_target(pkg_name)
@@ -376,15 +369,7 @@ def scan_diff(
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
 
-    categories = {r.get("category", "") for r in triggered_rules
-                  if r.get("category") and r["rule_id"] != "R072"}
-    if len(categories) >= 3:
-        triggered_rules.append(stamp({
-            "rule_id": "R072", "name": "Capability Density Anomaly",
-            "severity": "INFO", "category": "meta",
-            "match": f"rule hits span {len(categories)} distinct capability categories",
-            "params": {"n_categories": len(categories)},
-        }))
+    triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

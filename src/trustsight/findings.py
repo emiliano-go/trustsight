@@ -74,6 +74,10 @@ TEMPLATES: dict[str, str] = {
     "R085": "systemd unit ExecStart points at runtime-writable path: {exec_target}",
     "R088": "{position}() drops a hidden file outside the build trees: {path}",
     "R114": "{position}() installs a pacman hook: {path}",
+
+    # --- Phase 3: kill-chain composition ---
+    "R086": "{position}() profiles the host: {probe}",
+    "R089": "rule hits span {n_stages} distinct kill-chain stages: {stages}",
 }
 
 

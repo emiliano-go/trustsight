@@ -10,6 +10,7 @@ from .base import (
     _url_domain,
 )
 from .build import _build_findings
+from .composition import _recon_findings
 from .delivery import _delivery_findings
 from .dependencies import _dependency_findings
 from .persistence import _persistence_findings
@@ -147,5 +148,6 @@ def _structural_findings(
     _build_findings(diff_text, config or {}, add)
     _delivery_findings(diff_text, config or {}, add)
     _persistence_findings(diff_text, config or {}, add)
+    _recon_findings(diff_text, config or {}, add)
 
     return findings

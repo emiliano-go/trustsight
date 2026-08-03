@@ -1,4 +1,4 @@
-"""Phase 3 — network-surface rules (plan §5).
+"""Phase 3 - network-surface rules (plan §5).
 
 R076/R080/R123 share one question: does the PKGBUILD's declared or
 executed network surface carry an injection or a covert channel?  All three
@@ -69,7 +69,7 @@ def _hosts(config) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# R080 — exotic source protocol
+# R080 - exotic source protocol
 # ---------------------------------------------------------------------------
 
 
@@ -91,7 +91,7 @@ def _exotic_protocol_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R076 — version-in-URL injection
+# R076 - version-in-URL injection
 # ---------------------------------------------------------------------------
 
 _PKGVER_ASSIGN_RE = re.compile(
@@ -138,7 +138,7 @@ def _version_in_url_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R123 — covert egress
+# R123 - covert egress
 # ---------------------------------------------------------------------------
 
 _ONION_HOST_RE = re.compile(r"\b[a-z0-9-]+\.(?:onion|i2p)\b", re.IGNORECASE)

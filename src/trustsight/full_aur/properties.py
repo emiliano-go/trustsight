@@ -47,7 +47,7 @@ STABILITY_FLOOR_DEFAULT = 10
 def stability_weight(stable_for_n: int, floor: int = STABILITY_FLOOR_DEFAULT) -> float:
     """Weight a property break by how long the value held.
 
-    Ranges 0.0–1.0.  Nothing is reported below *floor* observations — a
+    Ranges 0.0–1.0.  Nothing is reported below *floor* observations - a
     value that never stabilised carries no longitudinal signal.  From the
     floor the weight ramps steeply through the first ~30 observations and
     flattens near 1.0 by ~40, so an attacker who waits out a long stable

@@ -263,3 +263,49 @@ def test_a_truncated_diff_is_marked_as_such():
     from trustsight.schema import fact_to_dict
     fact = PackageFact(package_name="p", diff_truncated=True)
     assert fact_to_dict(fact)["diff_truncated"] is True
+
+
+# --- Hardening regression: multiline checksum arrays + URL cleaning ---
+
+def test_checksum_multiline_hash_detected():
+    """sha256sums=( ) split across lines must read as a checksum addition,
+    not 'unchanged' (previously every multiline checksum escaped C001/R004)."""
+    diff = "+sha256sums=(\n+  'ab12cd34ef5678'\n+)\n"
+    sc = extract_urls_from_diff(diff)
+    assert sc.checksum_behavior == "checksum_added_or_changed"
+
+
+def test_checksum_multiline_skip_detected():
+    diff = "+sha256sums=(\n+  'SKIP'\n+)\n"
+    sc = extract_urls_from_diff(diff)
+    assert sc.checksum_behavior == "changed_from_sha256_to_skip"
+
+
+def test_checksum_multiline_emptied_detected():
+    diff = "+sha256sums=(\n+)\n"
+    sc = extract_urls_from_diff(diff)
+    assert sc.checksum_behavior == "checksum_array_emptied"
+
+
+def test_checksum_double_quoted_hash_detected():
+    diff = '+sha256sums=("ab12cd34ef5678")\n'
+    sc = extract_urls_from_diff(diff)
+    assert sc.checksum_behavior == "checksum_added_or_changed"
+
+
+def test_checksum_other_algorithm_ignored():
+    """detect_checksum_changes reports only on sha256sums (the PKGBUILD
+    default); a lone sha512sums change stays 'unchanged'."""
+    diff = "+sha512sums=(\n+  'ab12cd34ef5678'\n+)\n"
+    sc = extract_urls_from_diff(diff)
+    assert sc.checksum_behavior == "unchanged"
+
+
+def test_url_trailing_comma_stripped():
+    sc = extract_urls_from_diff("+source=('https://x/y.tar.gz',)\n")
+    assert set(sc.added_urls) == {"https://x/y.tar.gz"}
+
+
+def test_url_trailing_comma_in_removed_line():
+    sc = extract_urls_from_diff("-source=('https://old.example/a.tar.gz',)\n")
+    assert set(sc.removed_urls) == {"https://old.example/a.tar.gz"}

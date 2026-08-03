@@ -1,4 +1,4 @@
-"""Behavioural tests for Phase 4 — Class B rules (plan §6).
+"""Behavioural tests for Phase 4 - Class B rules (plan §6).
 
 R115 fires only when ``epoch=`` is newly introduced by a diff (an unchanged
 or pre-existing epoch is never a hunk here); R116 fires when a diff newly

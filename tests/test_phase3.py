@@ -5,7 +5,7 @@
 Each rule is asserted in both directions: the attack case fires, and the
 plan's declared must-not-fire surface stays silent.  R088 is the quietest
 rule: a hidden write that is executed belongs to R121/R124, one in a
-world-writable dir to R084, one in the user's home to R077 — so no single
+world-writable dir to R084, one in the user's home to R077 - so no single
 piece of evidence ever triple-fires.
 
 R086 and R089 are weight-0 annotations.  R086 only fires on commands at a

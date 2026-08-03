@@ -1,4 +1,4 @@
-"""Phase 4 — Class B version rules (plan §6).
+"""Phase 4 - Class B version rules (plan §6).
 
 R115 is the only rule here for now: an ``epoch=`` that is newly present in
 a diff.  The version parser shared with the VCS-local-rebuild work (plan

@@ -109,16 +109,34 @@ _ENV_SUBVERSION_MED_RE = re.compile(
     r"\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
 )
 
-# R009 — sudo at a command position.  `sudo` is executed, not mentioned,
+# R009 - sudo at a command position.  `sudo` is executed, not mentioned,
 # only when it starts a command: line start, after `;`/`&&`/`||`/`|`, or
-# inside `$(...)`.  That single test excludes the plan's declared
-# must-not-fire surface — optdepends names ('sudo'), path segments
-# (/usr/bin/sudo) and echo strings (echo run sudo) — all of which place
-# `sudo` at an argument position.
+# inside `$(...)`.  The suffix allows the closing `)` so ``$(sudo)`` (an
+# invocation form an earlier test missed) is caught too.  Backtick
+# substitution (`` `sudo` ``) is handled separately because a backtick
+# inside single quotes is literal, not executed.  That single test excludes
+# the plan's must-not-fire surface - optdepends names, path segments and
+# echo strings - all of which place `sudo` at an argument position.
 _SUDO_CMD_START_RE = re.compile(
-    r"(?:\A\s*|[;&|]|\$\()\s*sudo(?:\s|$)",
+    r"(?:\A\s*|[;&|]|\$\()\s*sudo(?=[\s)&|`;]|$)",
     re.IGNORECASE,
 )
+
+# `` `sudo` `` - backtick command substitution (`` `sudo -n true` ``).
+_SUDO_BACKTICK_RE = re.compile(r"`\s*sudo\b", re.IGNORECASE)
+
+
+def _backtick_sudo_executes(body: str) -> bool:
+    """True when *body* runs ``sudo`` through a backtick substitution.
+
+    A backtick inside a single-quoted string is literal (``echo '`sudo`'``
+    prints, it does not run), so the quote parity before the backtick tells
+    execution from mention.
+    """
+    for m in _SUDO_BACKTICK_RE.finditer(body):
+        if body[:m.start()].count("'") % 2 == 0:
+            return True
+    return False
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
@@ -148,11 +166,58 @@ def _sudo_findings(diff_text, config, add) -> None:
         if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
             continue
         body = _strip_comment(line[1:])
-        if _SUDO_CMD_START_RE.search(body):
+        if _SUDO_CMD_START_RE.search(body) or _backtick_sudo_executes(body):
             add("R009", "Privilege Escalation", "CRITICAL", "privilege",
                 f"{enclosing[i]}() runs sudo: {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 position=enclosing[i], body=body.strip()[:80])
+            return
+
+
+# R127 - a fetched script reaches a shell through an indirect path the
+# pipe-to-shell regexes (R001/R002) and the R039/R040 eval / sh -c rules do
+# not see: process substitution (``bash <(curl ...)``), xargs (``curl ... |
+# xargs bash``), and a here-string fed by command substitution
+# (``bash <<< "$(curl ...)"``).  Each still executes remote code at build
+# time, so it must not be left at R010/R011's "uses curl/wget" LOW.
+_REMOTE_PROC_SUBST_RE = re.compile(
+    r"(?:\b(?:bash|sh|zsh|dash|source)\b|\.)\s*<\s*\(\s*(?:curl|wget)\b",
+    re.IGNORECASE,
+)
+_REMOTE_XARGS_SHELL_RE = re.compile(
+    r"\b(?:curl|wget)\b[^|;]*\|\s*xargs\s+(?:\S+\s+)*(?:bash|sh|zsh|dash)\b",
+    re.IGNORECASE,
+)
+_REMOTE_HERESTRING_RE = re.compile(
+    r"\b(?:bash|sh|zsh|dash)\s+(?:<<<|<<)\s*[^\n]*(?:\$\{?\(|`|\$\{)",
+    re.IGNORECASE,
+)
+
+
+def _indirect_remote_execution_findings(diff_text, config, add) -> None:
+    """A fetched script is executed through an indirect shell path (R127)."""
+    for line in resolve_added_lines(diff_text):
+        if not line.startswith("+"):
+            continue
+        body = _strip_comment(line[1:])
+        if _REMOTE_PROC_SUBST_RE.search(body):
+            add("R127", "Remote Script Via Process Substitution", "CRITICAL",
+                "execution",
+                f"process substitution feeds a fetched script to a shell: {body.strip()[:80]}",
+                line=_added_line_number(diff_text, body.strip()[:30]),
+                body=body.strip()[:80])
+            return
+        if _REMOTE_XARGS_SHELL_RE.search(body):
+            add("R127", "Remote Script Via xargs", "CRITICAL", "execution",
+                f"fetched script piped to a shell through xargs: {body.strip()[:80]}",
+                line=_added_line_number(diff_text, body.strip()[:30]),
+                body=body.strip()[:80])
+            return
+        if _REMOTE_HERESTRING_RE.search(body):
+            add("R127", "Remote Script Via Here-String", "CRITICAL", "execution",
+                f"shell fed a here-string carrying command substitution: {body.strip()[:80]}",
+                line=_added_line_number(diff_text, body.strip()[:30]),
+                body=body.strip()[:80])
             return
 
 

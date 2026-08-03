@@ -1,4 +1,4 @@
-"""Phase 3 — kill-chain composition rules (plan §5).
+"""Phase 3 - kill-chain composition rules (plan §5).
 
 R086 and R089 share one threat model: a PKGBUILD diff that carries a *staged
 attack* rather than a single suspicious act.  Both are weight-0 annotations;
@@ -36,7 +36,7 @@ from .delivery import (
 )
 
 # ---------------------------------------------------------------------------
-# R086 — host reconnaissance
+# R086 - host reconnaissance
 # ---------------------------------------------------------------------------
 
 
@@ -79,11 +79,11 @@ def _recon_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R089 — attack-chain composition
+# R089 - attack-chain composition
 # ---------------------------------------------------------------------------
 
 # Stage map (plan §5): each rule id belongs to exactly one kill-chain stage.
-# Meta rules (R072, R089, R069) are absent — they annotate, they do not
+# Meta rules (R072, R089, R069) are absent - they annotate, they do not
 # stage.
 _STAGE_OF = {
     "R071": "takeover", "R090": "takeover", "R126": "takeover",

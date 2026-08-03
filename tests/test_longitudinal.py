@@ -1,4 +1,4 @@
-"""Tests for Phase 5 — Class C longitudinal rules (plan §7).
+"""Tests for Phase 5 - Class C longitudinal rules (plan §7).
 
 Covers the STABILITY_FLOOR gating in ``stability_weight`` / the property
 update step, and the ``longitudinal_findings`` consumer (R094-R098/R102/R083).

@@ -136,7 +136,7 @@ def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tu
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
     same committed file tree the git path does (R118-tree).  The tarball is
-    fetched from the AUR mirror — never from a PKGBUILD-declared URL — so
+    fetched from the AUR mirror - never from a PKGBUILD-declared URL - so
     this is consistent with the "static, offline" review claim.  Falls back
     to the cgit text-only fetch when the tarball cannot be read.
     """

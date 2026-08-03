@@ -1,4 +1,4 @@
-"""Phase 3 — install-path persistence rules (plan §5).
+"""Phase 3 - install-path persistence rules (plan §5).
 
 R077/R084/R085/R088/R114 share one question: where does a build/install
 function put a file?  They are code rules because each needs write-target

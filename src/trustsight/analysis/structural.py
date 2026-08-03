@@ -9,7 +9,11 @@ from .base import (
     _pkgver_changed_in_diff,
     _url_domain,
 )
-from .build import _build_findings, _sudo_findings
+from .build import (
+    _build_findings,
+    _indirect_remote_execution_findings,
+    _sudo_findings,
+)
 from .composition import _recon_findings
 from .delivery import _delivery_findings
 from .dependencies import _dependency_findings
@@ -153,6 +157,7 @@ def _structural_findings(
     _dependency_findings(diff_text, package_name, config or {}, add)
     _build_findings(diff_text, config or {}, add)
     _sudo_findings(diff_text, config or {}, add)
+    _indirect_remote_execution_findings(diff_text, config or {}, add)
     _delivery_findings(diff_text, config or {}, add)
     _persistence_findings(diff_text, config or {}, add)
     _recon_findings(diff_text, config or {}, add)

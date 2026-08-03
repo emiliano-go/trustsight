@@ -1,11 +1,11 @@
-"""R122 — archive trailer anomaly (pure function).
+"""R122 - archive trailer anomaly (pure function).
 
 ``check_archive_trailer(data)`` decides whether *data* carries bytes past
 the end of the archive it contains, returning a stamped finding when it
 does.  The function is deliberately pure: it takes bytes, returns a finding
 or None, and knows nothing about where the bytes came from.  That keeps it
 offline-testable with fixtures and lets it compose with any future byte
-source — a corpus-side fetch on your own infrastructure, a user-supplied
+source - a corpus-side fetch on your own infrastructure, a user-supplied
 local file, or a cached tarball.
 
 Threat-model note (see the plan spec §4): fetching attacker-declared
@@ -13,7 +13,7 @@ Threat-model note (see the plan spec §4): fetching attacker-declared
 arbitrary URLs at analysis time turns the reviewer into an SSRF probe, tells
 the attacker who scanned them, and is a DoS vector.  If R122 ever runs live,
 the bytes belong to a corpus-side fetch where downloads are centralised,
-rate-limited, and distributed as facts — never to a user's review.
+rate-limited, and distributed as facts - never to a user's review.
 """
 
 import gzip
@@ -46,7 +46,7 @@ def _gzip_member_end(data: bytes, start: int) -> int | None:
         header_end = start + 12 + xlen
     else:
         header_end = start + 10
-    for extra in (0x08, 0x10):  # FNAME, FCOMMENT — null-terminated
+    for extra in (0x08, 0x10):  # FNAME, FCOMMENT - null-terminated
         if flag & extra:
             if header_end >= len(data):
                 return None
@@ -122,7 +122,7 @@ def check_archive_trailer(data: bytes) -> dict | None:
 
     Recognised containers: gzip (including concatenated members), plain
     tar, and zip.  A clean archive returns None.  Malformed input returns
-    None rather than a guess — a truncated or corrupt archive is reported
+    None rather than a guess - a truncated or corrupt archive is reported
     by the extraction step, not by this rule.
     """
     if not isinstance(data, (bytes, bytearray)):

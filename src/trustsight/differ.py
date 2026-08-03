@@ -116,6 +116,16 @@ def is_skip_justified(diff_text: str) -> str:
     return ""
 
 
+_URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
+
+
+def _clean_url(token: str) -> str:
+    token = re.sub(r"[\)]+$", "", token)
+    token = re.sub(r"[\)]+", ")", token)
+    token = re.sub(r"[,;\s]+$", "", token)
+    return token
+
+
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
@@ -123,16 +133,11 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
 
     for line in diff_text.splitlines():
         if line.startswith("+") and "http" in line:
-            urls = re.findall(r"https?://[^\s\'\"\)]+", line)
-            for u in urls:
-                u = re.sub(r"[\)]+$", "", u)
-                u = re.sub(r"[\)]+", ")", u)
-                added_urls.add(u)
+            for u in _URL_TOKEN_RE.findall(line):
+                added_urls.add(_clean_url(u))
         elif line.startswith("-") and "http" in line:
-            urls = re.findall(r"https?://[^\s\'\"\)]+", line)
-            for u in urls:
-                u = re.sub(r"[\)]+$", "", u)
-                removed_urls.add(u)
+            for u in _URL_TOKEN_RE.findall(line):
+                removed_urls.add(_clean_url(u))
 
     checksum_behavior = detect_checksum_changes(diff_text)
 
@@ -143,21 +148,76 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     )
 
 
-_CHK_PREFIX = r"^\+.*sha256sums\s*=\s*"
+_CHECKSUM_VARS = "sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums"
+
+_CHK_DECL_RE = re.compile(
+    r"^\s*(?:" + _CHECKSUM_VARS + r")\s*=\s*", re.IGNORECASE,
+)
+
+
+def _added_checksum_arrays(diff_text: str) -> list[tuple[str, str]]:
+    """``(var, contents)`` for each added checksum declaration.
+
+    A declaration's array may span several lines (the usual PKGBUILD
+    formatting splits ``sha256sums=(``, one quoted hash per ``+`` line, and
+    a closing ``)``), so *contents* accumulates continuation lines until the
+    array's closing ``)``.  Only added (``+``) lines contribute.
+    """
+    arrays: list[tuple[str, str]] = []
+    cur_var: str | None = None
+    cur_content: list[str] = []
+
+    def flush() -> None:
+        nonlocal cur_var, cur_content
+        if cur_var is not None:
+            arrays.append((cur_var, "\n".join(cur_content)))
+        cur_var = None
+        cur_content = []
+
+    for line in diff_text.splitlines():
+        if line.startswith(("-", "+++", "---", "@@")):
+            continue
+        if not line.startswith("+"):
+            continue
+        body = line[1:]
+        m = _CHK_DECL_RE.match(body)
+        if m:
+            flush()
+            cur_var = m.group(0).split("=", 1)[0].strip()
+            rest = body[m.end():]
+            cur_content.append(rest)
+            if ")" in rest:
+                flush()
+            continue
+        if cur_var is not None:
+            cur_content.append(body)
+            if ")" in body:
+                flush()
+    flush()
+    return arrays
+
+
+_CHK_HASH_CHAR_RE = re.compile(r"[0-9A-Za-z+/=]")
+_CHK_SKIP_WORD_RE = re.compile(r"[\'\"]?(?:SKIP|NONE)[\'\"]?")
 
 
 def detect_checksum_changes(diff_text: str) -> str:
-    """Detect checksum-related changes in a diff."""
-    if re.search(_CHK_PREFIX + r"\(?\s*[\'\"]?(?:SKIP|NONE)[\'\"]?", diff_text, re.MULTILINE):
-        return "changed_from_sha256_to_skip"
-    if re.search(_CHK_PREFIX + r"\(\s*\)", diff_text, re.MULTILINE):
-        return "checksum_array_emptied"
-    if re.search(_CHK_PREFIX + r"\('", diff_text, re.MULTILINE):
+    """Detect checksum-related changes in a diff.
+
+    Deliberately reports only on the ``sha256sums`` array (PKU's default
+    checksum), and correctly handles the multiline form: a diff that adds
+    ``sha256sums=(\n  'SKIP'\n)`` must read as *skip*, not ``unchanged``.
+    """
+    for var, contents in _added_checksum_arrays(diff_text):
+        if var != "sha256sums":
+            continue
+        if _CHK_SKIP_WORD_RE.search(contents):
+            return "changed_from_sha256_to_skip"
+        if "(" in contents and not _CHK_HASH_CHAR_RE.search(contents):
+            return "checksum_array_emptied"
         return "checksum_added_or_changed"
     return "unchanged"
 
-
-_CHECKSUM_VARS = "sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums"
 
 _CHECKSUM_LINE_RE = re.compile(
     r"(?:" + _CHECKSUM_VARS + r")\s*=",
@@ -220,7 +280,7 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
                 continue
             in_array = True
         for candidate in re.findall(r"https?://[^\s'\"\)]+", body):
-            urls.add(re.sub(r"[\)]+$", "", candidate))
+            urls.add(_clean_url(candidate))
         if ")" in body:
             in_array = False
     return urls

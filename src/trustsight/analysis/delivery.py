@@ -1,4 +1,4 @@
-"""Phase 2 — July delivery stack (Class A) rules.
+"""Phase 2 - July delivery stack (Class A) rules.
 
 R119-R124 share a threat: the PKGBUILD carries or creates the payload it
 later executes.  The rules are code rather than rules.toml entries because
@@ -60,7 +60,7 @@ def _find_line_in_diff(diff_text: str, pattern: str, prefix: str = r"\+") -> int
 
 
 # ---------------------------------------------------------------------------
-# R119 — anti-analysis check
+# R119 - anti-analysis check
 # ---------------------------------------------------------------------------
 
 
@@ -95,7 +95,7 @@ def _anti_analysis_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R120 — reconstructed-executable payload
+# R120 - reconstructed-executable payload
 # ---------------------------------------------------------------------------
 
 _ELF_MAGIC = b"\x7fELF"
@@ -224,7 +224,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R121 / R124 — generate-then-execute and write-then-execute
+# R121 / R124 - generate-then-execute and write-then-execute
 # ---------------------------------------------------------------------------
 
 # Generation writes: a heredoc or ``>`` redirect that creates the file's
@@ -232,7 +232,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 # between the producer and the redirect (`echo x | base64 -d > file`).
 _GENERATION_WRITE_RE = re.compile(
     r"\b(?:cat|tee)\b[^;&\n]*?<<[^;&|\n]*?"
-    r"(?:>\s*(\S+))?"                       # `cat <<EOF > path` — path after >,
+    r"(?:>\s*(\S+))?"                       # `cat <<EOF > path` - path after >,
     r"|\b(?:cat|printf|echo)\b[^;&\n]*?>\s*(\S+)",  # ... or `> path`
     re.IGNORECASE,
 )
@@ -457,7 +457,7 @@ def _write_execute_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R118-tree — embedded binary in the repository manifest
+# R118-tree - embedded binary in the repository manifest
 # ---------------------------------------------------------------------------
 
 _TEST_DIR_RE = re.compile(r"(?:^|/)(?:tests?|testdata|fixtures?|specs?|examples?)/")

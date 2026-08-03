@@ -1,4 +1,4 @@
-"""Phase 5 — Class C longitudinal rules (plan §7).
+"""Phase 5 - Class C longitudinal rules (plan §7).
 
 These rules consume ``PropertyBreak`` objects from
 ``full_aur/properties.py`` plus the diff.  The property layer runs on every
@@ -6,16 +6,16 @@ cycle and records even when no consumer exists; this module is the consumer.
 
 Rules are keyed by tracked property (see the deferred-spec tracking table):
 
-- R094 — ``configure_flags`` changed, dropping or adding a security-relevant
+- R094 - ``configure_flags`` changed, dropping or adding a security-relevant
   hardening flag.
-- R095 — ``depends`` changed such that a dependency was removed *and* the diff
+- R095 - ``depends`` changed such that a dependency was removed *and* the diff
   vendors a new source whose name matches the removed dependency (the narrowed,
   mechanical case).
-- R096 — ``source_hosts`` / ``source_orgs`` changed after a long-stable run.
-- R097 — ``version_scheme`` changed (semver -> hash, ...). Context only, weight 0.
-- R098 — ``pkgdesc_tokens`` changed.
-- R102 — ``build_system_markers`` / ``build_line_count`` changed.
-- R083 — a tracked-but-otherwise-unowned property (``license``,
+- R096 - ``source_hosts`` / ``source_orgs`` changed after a long-stable run.
+- R097 - ``version_scheme`` changed (semver -> hash, ...). Context only, weight 0.
+- R098 - ``pkgdesc_tokens`` changed.
+- R102 - ``build_system_markers`` / ``build_line_count`` changed.
+- R083 - a tracked-but-otherwise-unowned property (``license``,
   ``install_hook_present``) changed after stability.
 
 All of them require the break to clear STABILITY_FLOOR: ``PropertyBreak``

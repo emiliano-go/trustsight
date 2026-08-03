@@ -51,7 +51,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
     The default-path counterpart of the experimental D004: a package that
     inserts itself in front of a name the ecosystem relies on has a
     packaging purpose only when that name is its own project (a variant,
-    companion or sibling — ``is_related_package``), which is suppressed
+    companion or sibling - ``is_related_package``), which is suppressed
     here.  No corpus and no pacman data means neither signal can fire, so
     cold start never trips it.
     """

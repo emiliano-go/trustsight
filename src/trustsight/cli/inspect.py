@@ -19,7 +19,8 @@ from .display import (
     _severity_text,
     _weight_text,
     console,
-    display_version,
+    no_aur_change_note,
+    version_transition,
 )
 
 
@@ -33,7 +34,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     border = RISK_COLORS.get(risk, "white") if (show_score or show_risk) else "blue"
 
     rows: list[tuple[str, str]] = []
-    rows.append(("Version", f"{display_version(fact.old_version)} -> {display_version(fact.new_version)}"))
+    rows.append(("Version", version_transition(fact)))
 
     if fact.first_seen:
         rows.append(("Status", "[yellow]First analysis.[] No prior history for this package."))
@@ -125,6 +126,9 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
 
 
 def _status_text(fact) -> str:
+    note = no_aur_change_note(fact)
+    if note:
+        return note
     if fact.first_seen:
         return "First analysis. No prior history for this package."
     if not fact.diff_summary.files_changed:
@@ -138,7 +142,7 @@ def _status_text(fact) -> str:
 
 def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     print(f"TrustSight Inspect: {fact.package_name}")
-    print(f"  Version: {display_version(fact.old_version)} -> {display_version(fact.new_version)}")
+    print(f"  Version: {version_transition(fact)}")
     print(f"  Status: {_status_text(fact)}")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")

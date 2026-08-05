@@ -63,6 +63,51 @@ def display_version(v: str | None) -> str:
     return v
 
 
+def version_transition(fact) -> str:
+    """Render the version line for *fact* without implying a false update.
+
+    An ``old -> new`` arrow is a claim that the two are comparable and that
+    the right-hand side is newer.  For a VCS package that claim is wrong in
+    both halves: the installed value is a full version built from whatever
+    the upstream repository held at build time, and the AUR side is the
+    placeholder ``pkgver=`` line, which is routinely *behind*.  Rendering
+    that as an arrow reported a downgrade as an update.
+    """
+    from ..analysis.version import COMPARISON_INCONCLUSIVE, COMPARISON_SAME
+
+    old = display_version(fact.old_version)
+    new = display_version(fact.new_version)
+    comparison = getattr(fact, "version_comparison", "")
+    if comparison == COMPARISON_INCONCLUSIVE and fact.old_version and fact.new_version:
+        return f"{old} installed / AUR pkgver {new} (not comparable)"
+    if comparison == COMPARISON_SAME:
+        return old
+    return f"{old} -> {new}"
+
+
+def no_aur_change_note(fact) -> str | None:
+    """The plan §13.3 line, when the AUR holds nothing new for this package.
+
+    The user asked what changed; the honest answer when the commit has not
+    moved is that nothing did, plus why the installed version still looks
+    different.
+    """
+    from ..analysis.version import COMPARISON_INCONCLUSIVE
+
+    if not fact.old_commit or fact.old_commit != fact.new_commit:
+        return None
+    note = (
+        "No changes in the AUR since last review "
+        f"(commit {fact.new_commit[:8]})."
+    )
+    if getattr(fact, "version_comparison", "") == COMPARISON_INCONCLUSIVE:
+        note += (
+            "  Your installed version differs because this is a VCS package "
+            "rebuilt locally."
+        )
+    return note
+
+
 def console() -> "Console":
     if not HAS_RICH:
         raise RuntimeError("rich is not available")
@@ -98,6 +143,9 @@ def _fact_to_dict(fact):
         "package": fact.package_name,
         "old_version": fact.old_version,
         "new_version": fact.new_version,
+        # Machine consumers need the same caveat the table shows: the two
+        # versions above are not always comparable (plan §13).
+        "version_comparison": getattr(fact, "version_comparison", ""),
         "score": fact.final_score,
         "risk": risk_level(fact.final_score),
         "first_seen": fact.first_seen,

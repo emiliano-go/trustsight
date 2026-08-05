@@ -96,6 +96,7 @@ Each rule supports these fields:
 | `scope` | `list[string]` | (Optional, `raw_line` only) Restrict matching to line contexts (`["function_body"]`, `["message"]`, `["other"]`) or to a named PKGBUILD function (`["pkgver"]`, `["package"]`, `["package_foo"]`). When absent, matches all lines. |
 | `added_only` | `bool` | (Optional, `raw_line` only) Match only added (`+`) lines. Raw diff lines include removals, so without this a maintainer *deleting* a suspicious line raises the score. All `R039`+ rules set it. |
 | `experimental` | `bool` | (Optional) Skip the rule unless `[rules] experimental = true` in `config.toml`. Used for rules whose false-positive rate has not been measured against the benign corpus. |
+| `include_comments` | `bool` | (Optional) Also match comment lines, which are filtered out for every other rule. Only for rules whose target is the *reader* rather than the shell (R012, R013): a commented-out command does not run, but a comment is exactly where an injection or a hidden character lives. |
 
 ### R001: Remote Script Execution {#r001}
 
@@ -195,8 +196,9 @@ Each rule supports these fields:
 - **Target:** `resolved`
 - **Severity:** FATAL (hard-stop at 100, weight 0)
 - **Category:** `injection`
-- **Pattern:** `ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)`
-- **Description:** Detects "ignore previous instructions" injection phrases in resolved strings. This is a **tripwire rule**: recall is 17% on the benchmark corpus. When it fires, the package is almost certainly malicious. When it does not, nothing can be concluded. Score hard-stops at 100 regardless of other signals.
+- **Pattern:** `` \b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\s+(?:\w+\s+){0,2}(?:instructions?|commands?|input|context|rules?|prompts?|guidelines?|checks?)|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b ``
+- **Comments:** scanned (`include_comments`)
+- **Description:** Detects text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes — the payload is always a comment. Calibrated at 22/22 injection fixtures with 0 fires across the 3,246-diff benign corpus. This is still a **tripwire rule**: when it fires the package is almost certainly malicious; when it does not, nothing can be concluded. Score hard-stops at 100 regardless of other signals.
 
 ### R013: Unicode Bidi Override {#r013}
 

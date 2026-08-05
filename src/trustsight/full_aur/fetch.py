@@ -5,6 +5,7 @@ import logging
 import tarfile
 import urllib.request
 import urllib.error
+from urllib.parse import quote
 from io import BytesIO
 from pathlib import Path
 from typing import Optional
@@ -19,13 +20,40 @@ _RESUME_FILE = "full-aur-resume.json"
 _HTTP_TIMEOUT = 60
 _REQUEST_DELAY = 0.05  # 50ms between requests to stay polite
 
+# An AUR snapshot tarball is a few kilobytes and a PKGBUILD smaller still.
+# The ceiling is not about the AUR behaving badly - it is that a response
+# read with no bound is the remote end choosing how much of this machine's
+# memory to use.
+MAX_RESPONSE_BYTES = 32 * 1024 * 1024
+
+# A snapshot tarball holds a handful of files.  ``getmembers()`` parses the
+# whole archive into memory before returning, so a crafted tar declaring
+# millions of members is a memory bomb even when only 64 bytes of each are
+# read; the members are walked lazily instead, and the walk stops here.
+MAX_TAR_MEMBERS = 10_000
+
 
 def _http_get(url: str) -> Optional[bytes]:
-    """Perform a GET request with a polite User-Agent."""
+    """Perform a GET request with a polite User-Agent.
+
+    The body is read in chunks and abandoned past ``MAX_RESPONSE_BYTES``.
+    """
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
         resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
-        return resp.read()
+        buf = bytearray()
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            buf.extend(chunk)
+            if len(buf) > MAX_RESPONSE_BYTES:
+                log.warning(
+                    "response from %s exceeds %d bytes; abandoning",
+                    url, MAX_RESPONSE_BYTES,
+                )
+                return None
+        return bytes(buf)
     except urllib.error.HTTPError as e:
         log.warning("HTTP %d fetching %s", e.code, url)
         return None
@@ -50,7 +78,7 @@ def fetch_pkgbuild(name: str) -> Optional[str]:
     challenge, falls back to the snapshot tarball.
     Returns the PKGBUILD text, or None on failure.
     """
-    url = f"{_CGIT_URL}?h={name}"
+    url = f"{_CGIT_URL}?h={quote(name, safe='')}"
     body = _http_get(url)
     if body is not None and not _is_anubis_challenge(body):
         return body.decode("utf-8", errors="replace")
@@ -64,7 +92,7 @@ def fetch_pkgbuild(name: str) -> Optional[str]:
 
 def fetch_srcinfo(name: str) -> Optional[str]:
     """Download .SRCINFO for the given package via cgit."""
-    url = f"{_CGIT_SRCINFO_URL}?h={name}"
+    url = f"{_CGIT_SRCINFO_URL}?h={quote(name, safe='')}"
     body = _http_get(url)
     if body is not None and not _is_anubis_challenge(body):
         return body.decode("utf-8", errors="replace")
@@ -74,17 +102,20 @@ def fetch_srcinfo(name: str) -> Optional[str]:
 def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     """Extract the PKGBUILD text from an open snapshot tarball."""
     pkgbuild_path = f"{name}/PKGBUILD"
-    try:
-        member = tf.getmember(pkgbuild_path)
-    except KeyError:
-        # some packages use a different internal directory name
-        for m in tf.getmembers():
-            if m.name.endswith("/PKGBUILD"):
-                member = m
-                break
-        else:
-            log.warning("no PKGBUILD found in snapshot for %s", name)
-            return None
+    member = None
+    # Walked lazily and bounded: a snapshot holds a handful of files, and a
+    # tar that says otherwise is not one worth reading to the end.
+    for seen, m in enumerate(tf):
+        if seen >= MAX_TAR_MEMBERS:
+            break
+        if m.name == pkgbuild_path:
+            member = m
+            break
+        if member is None and m.name.endswith("/PKGBUILD"):
+            member = m  # different internal directory name; keep looking
+    if member is None:
+        log.warning("no PKGBUILD found in snapshot for %s", name)
+        return None
     content = tf.extractfile(member)
     if content is None:
         return None
@@ -93,7 +124,7 @@ def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
 
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
     """Download the snapshot tarball and extract PKGBUILD."""
-    url = f"{_SNAPSHOT_URL}/{name}.tar.gz"
+    url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
     body = _http_get(url)
     if body is None:
         return None
@@ -115,7 +146,7 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     is read: R118 needs the magic bytes, not the whole file.
     """
     manifest: list[tuple[str, bytes]] = []
-    for member in tf.getmembers():
+    for member in tf:  # lazy: getmembers() would parse the whole archive
         if len(manifest) >= max_members:
             break
         if not member.isfile():
@@ -140,7 +171,7 @@ def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tu
     this is consistent with the "static, offline" review claim.  Falls back
     to the cgit text-only fetch when the tarball cannot be read.
     """
-    url = f"{_SNAPSHOT_URL}/{name}.tar.gz"
+    url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
     body = _http_get(url)
     if body is not None:
         try:
@@ -154,13 +185,28 @@ def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tu
     return fetch_pkgbuild(name), None
 
 
-def save_resume_state(state: dict, path: Path = Path(_RESUME_FILE)) -> None:
+def default_resume_path() -> Path:
+    """Where bootstrap progress lives.
+
+    Under the config directory, not the working directory: a bootstrap
+    started in one shell and resumed from another used to silently begin
+    again from zero.
+    """
+    from ..config import CONFIG_DIR
+
+    return CONFIG_DIR / _RESUME_FILE
+
+
+def save_resume_state(state: dict, path: Path | None = None) -> None:
     """Persist bootstrap progress so it can be resumed."""
+    path = path or default_resume_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, separators=(",", ":")))
 
 
-def load_resume_state(path: Path = Path(_RESUME_FILE)) -> Optional[dict]:
+def load_resume_state(path: Path | None = None) -> Optional[dict]:
     """Load saved bootstrap progress."""
+    path = path or default_resume_path()
     if not path.exists():
         return None
     try:
@@ -169,7 +215,8 @@ def load_resume_state(path: Path = Path(_RESUME_FILE)) -> Optional[dict]:
         return None
 
 
-def clear_resume_state(path: Path = Path(_RESUME_FILE)) -> None:
+def clear_resume_state(path: Path | None = None) -> None:
     """Remove the resume file after successful completion."""
+    path = path or default_resume_path()
     if path.exists():
         path.unlink()

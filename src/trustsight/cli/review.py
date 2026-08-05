@@ -1,6 +1,5 @@
 import json
 import logging
-import socket
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
@@ -22,6 +21,7 @@ from .display import (
     _print_colored,
     console,
     display_version,
+    no_aur_change_note,
     _score_text,
 )
 
@@ -133,12 +133,19 @@ def _default_workers() -> int:
     return configured if configured > 0 else 8
 
 
+def _prefetch_deadline() -> int:
+    try:
+        configured = int(load_config().get("limits", {}).get("prefetch_timeout", 0))
+    except (TypeError, ValueError):
+        configured = 0
+    return configured if configured > 0 else 120
+
+
 def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
     from ..fetcher import clone_or_fetch, last_fetch_time
 
     def fetch(entry: dict) -> tuple[str, int | None]:
         name = entry["name"]
-        socket.setdefaulttimeout(30)
         repo = clone_or_fetch(name, entry.get("last_modified"))
         hint = entry.get("last_modified")
         if hint is None:
@@ -147,11 +154,18 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
 
     hints: dict[str, int] = {}
     total = len(pkgs)
+    deadline = _prefetch_deadline()
     workers = max(1, min(_default_workers(), total))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    # Not a `with` block: the context manager exit calls shutdown(wait=True),
+    # which blocks on the fetches still running when the deadline fires - the
+    # progress bar then sits frozen on the last package it painted for as long
+    # as those fetches take.  Abandon them instead; analysis re-fetches what
+    # the deadline cut off.
+    pool = ThreadPoolExecutor(max_workers=workers)
+    try:
         futures = {pool.submit(fetch, entry): entry["name"] for entry in pkgs}
         try:
-            for done, future in enumerate(as_completed(futures, timeout=120), start=1):
+            for done, future in enumerate(as_completed(futures, timeout=deadline), start=1):
                 name = futures[future]
                 if progress_callback:
                     progress_callback(done, total, f"Fetching {name}")
@@ -163,10 +177,26 @@ def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
                 if commit_time is not None:
                     hints[fetched] = commit_time
         except _FutureTimeout:
-            log.warning("prefetch timed out after 120s; remaining packages will fetch during analysis")
-            for f in futures:
-                f.cancel()
+            log.warning(
+                "prefetch timed out after %ss; remaining packages will fetch during analysis",
+                deadline,
+            )
+            if progress_callback:
+                progress_callback(-1, 0, "Prefetch timed out; continuing...")
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return hints
+
+
+def _version_cell(result: dict) -> str:
+    """Version text for one review row, honest about comparability."""
+    from ..analysis.version import COMPARISON_INCONCLUSIVE
+
+    old = display_version(result.get("old_version"))
+    new = display_version(result.get("new_version"))
+    if result.get("version_comparison") == COMPARISON_INCONCLUSIVE:
+        return f"{old} installed / AUR pkgver {new} (not comparable)"
+    return f"{old}  \u2192  {new}"
 
 
 def _verdict_for(fact) -> str:
@@ -286,6 +316,11 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
             "risk": risk_level(fact.final_score),
             "first_seen": fact.first_seen,
             "diff_truncated": fact.diff_truncated,
+            # A VCS package's AUR pkgver is a placeholder its build replaces,
+            # so the two versions are not comparable and must not render as
+            # an update arrow (plan §13).
+            "version_comparison": fact.version_comparison,
+            "aur_note": no_aur_change_note(fact),
             "findings": findings,
             "file_changes": file_changes,
             "is_trivial": is_trivial,
@@ -298,6 +333,7 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
             ]
             res["triggered_rules"] = fired
             res["suppressed_rules"] = fact.suppressed_rules
+            res["_verbose_fact"] = fact
         results.append(res)
     results.extend(failures)
     return results
@@ -380,12 +416,14 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     else:
         for r in results:
             if r.get("failed"):
-                typer.echo(f"{r['package']} {display_version(r.get('old_version'))} \u2192 {display_version(r.get('new_version'))}")
+                typer.echo(f"{r['package']} {_version_cell(r)}")
+                if r.get("aur_note"):
+                    typer.echo(f"  {r['aur_note']}")
                 typer.echo(f"  {r['verdict']}")
                 typer.echo()
                 continue
 
-            typer.echo(f"{r['package']} {display_version(r.get('old_version'))} \u2192 {display_version(r.get('new_version'))}")
+            typer.echo(f"{r['package']} {_version_cell(r)}")
 
             findings = r.get("findings", [])
             file_changes = r.get("file_changes", [])
@@ -442,17 +480,20 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
 
 def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose):
     from rich.panel import Panel
-    from rich.table import Table
 
     con = console()
     for r in results:
+        if verbose and not r.get("failed") and r.get("_verbose_fact"):
+            from .inspect import _inspect_rich as _render_inspect
+            _render_inspect(r["_verbose_fact"], show_score=show_score, show_risk=show_risk)
+            continue
+
+        from rich.table import Table
         table = Table(show_header=False, box=None, padding=(0, 1))
         table.add_column(no_wrap=True)
         table.add_column()
 
-        old = display_version(r.get("old_version"))
-        new = display_version(r.get("new_version"))
-        table.add_row("Version", f"{old}  \u2192  {new}")
+        table.add_row("Version", _version_cell(r))
 
         if r.get("failed"):
             table.add_row("Status", r["verdict"])
@@ -460,7 +501,9 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             con.print(panel)
             continue
 
-        if r.get("first_seen"):
+        if r.get("aur_note"):
+            table.add_row("Status", r["aur_note"])
+        elif r.get("first_seen"):
             table.add_row("Status", "First analysis. No prior history for this package.")
         elif r.get("is_trivial"):
             table.add_row("Status", "Only pkgver and sha256sums changed. Review the diff before building.")

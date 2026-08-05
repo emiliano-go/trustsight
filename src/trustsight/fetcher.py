@@ -50,6 +50,56 @@ def _timeout(seconds: int):
         signal.signal(signal.SIGALRM, old)
 
 
+_NETWORK_TIMEOUTS_LOCK = threading.Lock()
+_NETWORK_TIMEOUTS_APPLIED = False
+
+# Fallbacks used when config.toml carries no [limits] entry.
+DEFAULT_CONNECT_TIMEOUT = 10
+DEFAULT_TRANSFER_TIMEOUT = 30
+
+
+def _apply_network_timeouts() -> None:
+    """Bound libgit2's own socket timeouts, once per process.
+
+    _DeadlineCallbacks below can only fire while libgit2 is handing us
+    progress, so a connection that stalls *before* any byte arrives is never
+    cancelled by it and the fetch blocks forever.  These two settings are
+    enforced inside libgit2's transport, which is the only layer that sees a
+    silent socket.  Python's socket.setdefaulttimeout() has no effect here:
+    libgit2 does its own networking in C.
+    """
+    global _NETWORK_TIMEOUTS_APPLIED
+    if _NETWORK_TIMEOUTS_APPLIED:
+        return
+    with _NETWORK_TIMEOUTS_LOCK:
+        if _NETWORK_TIMEOUTS_APPLIED:
+            return
+        try:
+            from .config import load_config
+
+            limits = load_config().get("limits", {})
+        except Exception:
+            limits = {}
+
+        def _seconds(key: str, default: int) -> int:
+            try:
+                value = int(limits.get(key, default))
+            except (TypeError, ValueError):
+                return default
+            return value if value > 0 else default
+
+        connect = _seconds("network_connect_timeout", DEFAULT_CONNECT_TIMEOUT)
+        transfer = _seconds("network_transfer_timeout", DEFAULT_TRANSFER_TIMEOUT)
+        try:
+            pygit2.settings.server_connect_timeout = connect * 1000
+            pygit2.settings.server_timeout = transfer * 1000
+        except (AttributeError, pygit2.GitError, ValueError):
+            # pygit2 < 1.14 / libgit2 < 1.7 has no server timeout options.
+            # The deadline callbacks remain as the only guard there.
+            pass
+        _NETWORK_TIMEOUTS_APPLIED = True
+
+
 class _DeadlineCallbacks(pygit2.RemoteCallbacks):
     """Abort a transfer that runs past *seconds*.
 
@@ -185,18 +235,26 @@ def clone_or_fetch(
     analysis for every package that has not actually changed.
     """
     path = repo_path(pkg_name)
+    _apply_network_timeouts()
     if path.exists():
+        cached = None
         try:
-            repo = pygit2.Repository(str(path))
-            _head_commit_id(repo)
-            if upstream_mtime is not None and _is_current(repo, upstream_mtime):
-                return repo
-            with _timeout(120):
-                repo.remotes["origin"].fetch(callbacks=_DeadlineCallbacks(120))
-            _record_fetch(repo)
-            return repo
+            cached = pygit2.Repository(str(path))
+            _head_commit_id(cached)
         except (_TimeoutError, pygit2.GitError):
+            # The clone itself is unreadable, so rebuild it below.  A failing
+            # *fetch* is not grounds for deleting a good clone: under the
+            # network stall that makes fetches fail, the re-clone fails too,
+            # and the cache is gone for the next run as well.
             shutil.rmtree(path)
+            cached = None
+        if cached is not None:
+            if upstream_mtime is not None and _is_current(cached, upstream_mtime):
+                return cached
+            with _timeout(120):
+                cached.remotes["origin"].fetch(callbacks=_DeadlineCallbacks(120))
+            _record_fetch(cached)
+            return cached
     os.makedirs(path.parent, exist_ok=True)
     url = f"https://aur.archlinux.org/{pkg_name}.git"
     with _timeout(120):
@@ -283,6 +341,22 @@ def _read_blob(tree, name: str) -> str:
         return tree[name].data.decode("utf-8", errors="replace")
     except (KeyError, AttributeError, ValueError, TypeError):
         return ""
+
+
+def get_pkgbuild_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
+    """Return the PKGBUILD text at *commit_oid*, or "" when unavailable.
+
+    Rules that describe the package's *current* state (R106) need the file
+    as it now stands, not only the lines this revision touched.
+    """
+    try:
+        commit = repo.get(commit_oid)
+        tree = commit.tree
+    except (KeyError, AttributeError, TypeError, ValueError):
+        return ""
+    if tree is None:
+        return ""
+    return _read_blob(tree, "PKGBUILD")
 
 
 def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:

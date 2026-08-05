@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import subprocess
 import urllib.parse
 import urllib.request
@@ -39,6 +40,11 @@ def _simple_vercmp(v1: str, v2: str) -> int:
 _pyalpm_vercmp = None
 _pyalpm_checked = False
 
+# A pacman version: epoch, pkgver and pkgrel characters only, and never a
+# leading "-".  Used to keep anything else off a command line - vercmp has
+# no "--" separator, so shape is the only guard available.
+_VERSION_ARG_RE = re.compile(r"^[A-Za-z0-9._+~:][A-Za-z0-9._+~:-]*$")
+
 
 def _get_pyalpm_vercmp():
     """Return pyalpm's vercmp if it is installed, else None."""
@@ -70,6 +76,13 @@ def _vercmp(v1: str, v2: str) -> int:
             return native(v1, v2)
         except (TypeError, ValueError):
             return 0
+
+    # vercmp takes no "--" separator, so a version that looks like a flag
+    # cannot be passed safely.  Versions come from the AUR, so they are
+    # attacker-influenced; anything that is not version-shaped is compared
+    # in-process instead of on a command line.
+    if not (_VERSION_ARG_RE.match(v1) and _VERSION_ARG_RE.match(v2)):
+        return _simple_vercmp(v1, v2)
 
     try:
         result = subprocess.run(

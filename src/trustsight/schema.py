@@ -94,6 +94,13 @@ class PackageFact:
     # the snapshot must not read the same as one that saw the whole tree.
     tree_analyzed: bool = False
 
+    # How ``old_version`` (what pacman reports as installed) relates to
+    # ``new_version`` (the pkgver the AUR PKGBUILD declares).  The two are
+    # not always comparable - a VCS package computes its pkgver at build
+    # time - so the outcome is stated rather than implied by an arrow.
+    # One of analysis.version.COMPARISON_*; "" when nothing compared them.
+    version_comparison: str = ""
+
     # Which clock produced the temporal findings.
     temporal_source: str = "unknown"
 

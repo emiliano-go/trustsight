@@ -6,12 +6,15 @@ trip.  Equally, a stale clone must still fetch: skipping when the cache
 is behind would silently analyse the wrong diff.
 """
 
+import shutil
 import time
 
 import pygit2
 import pytest
 
+from trustsight import fetcher
 from trustsight.fetcher import (
+    _apply_network_timeouts,
     _is_current,
     _record_fetch,
     clone_or_fetch,
@@ -131,3 +134,88 @@ def test_clone_or_fetch_fetches_when_no_hint_is_given(repo, monkeypatch):
     )
     clone_or_fetch("demo")
     assert calls, "expected a fetch when the caller supplied no hint"
+
+
+def test_a_failed_fetch_keeps_the_cached_clone(repo, monkeypatch):
+    """A network failure must not cost us the clone.
+
+    Deleting the cache on a failed fetch means the next attempt pays for a
+    full clone over the same connection that just failed - and when the
+    stall is on the AUR's side, that clone fails too and the cache is gone
+    for every later run as well.
+    """
+    path = fetcher.repo_path("demo")
+
+    def explode(self, *args, **kwargs):
+        raise pygit2.GitError("connection reset")
+
+    monkeypatch.setattr(pygit2.Remote, "fetch", explode)
+    with pytest.raises(pygit2.GitError):
+        clone_or_fetch("demo")
+    assert path.exists(), "a failed fetch deleted a usable clone"
+    assert get_head_commit(pygit2.Repository(str(path)))
+
+
+def test_an_unreadable_clone_is_rebuilt(repo, monkeypatch):
+    """Corruption, unlike a failed fetch, is grounds for a re-clone."""
+    path = fetcher.repo_path("demo")
+    cloned = []
+
+    def fake_clone(url, dest, **kwargs):
+        cloned.append(url)
+        return pygit2.init_repository(dest)
+
+    shutil.rmtree(path / ".git")  # a directory that is no longer a repository
+    monkeypatch.setattr(pygit2, "clone_repository", fake_clone)
+    clone_or_fetch("demo")
+    assert cloned == ["https://aur.archlinux.org/demo.git"]
+    assert path.exists()
+
+
+@pytest.fixture
+def unapplied_timeouts(monkeypatch):
+    """Reset the once-per-process guard and restore libgit2's settings."""
+    before = (
+        pygit2.settings.server_connect_timeout,
+        pygit2.settings.server_timeout,
+    )
+    monkeypatch.setattr(fetcher, "_NETWORK_TIMEOUTS_APPLIED", False)
+    yield
+    pygit2.settings.server_connect_timeout = before[0]
+    pygit2.settings.server_timeout = before[1]
+    fetcher._NETWORK_TIMEOUTS_APPLIED = False
+
+
+def test_network_timeouts_reach_libgit2(unapplied_timeouts, monkeypatch):
+    """The deadline callbacks cannot see a socket that never delivers.
+
+    A connection that stalls before the first byte never invokes
+    transfer_progress, so only libgit2's own timeouts can end it.
+    """
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"limits": {"network_connect_timeout": 4, "network_transfer_timeout": 9}},
+    )
+    _apply_network_timeouts()
+    assert pygit2.settings.server_connect_timeout == 4000
+    assert pygit2.settings.server_timeout == 9000
+
+
+def test_network_timeouts_fall_back_when_unconfigured(unapplied_timeouts, monkeypatch):
+    """An absent or nonsensical value must still leave a finite deadline."""
+    monkeypatch.setattr(
+        "trustsight.config.load_config",
+        lambda: {"limits": {"network_connect_timeout": 0}},
+    )
+    _apply_network_timeouts()
+    assert pygit2.settings.server_connect_timeout == fetcher.DEFAULT_CONNECT_TIMEOUT * 1000
+    assert pygit2.settings.server_timeout == fetcher.DEFAULT_TRANSFER_TIMEOUT * 1000
+
+
+def test_clone_or_fetch_applies_the_timeouts_before_the_network(
+    repo, unapplied_timeouts, monkeypatch
+):
+    """The settings are worthless if a fetch can start before they are set."""
+    monkeypatch.setattr(pygit2.Remote, "fetch", lambda self, *a, **k: None)
+    clone_or_fetch("demo")
+    assert fetcher._NETWORK_TIMEOUTS_APPLIED is True

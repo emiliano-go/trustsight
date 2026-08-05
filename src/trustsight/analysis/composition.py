@@ -96,7 +96,7 @@ _STAGE_OF = {
     "R124": "write_then_exec",
     "R084": "staging",
     "R086": "recon",
-    "R085": "persistence", "R114": "persistence",
+    "R085": "persistence", "R114": "persistence", "R128": "persistence",
     "R087": "exfil", "R123": "exfil",
     "R088": "hidden_drop",
     "R080": "foreign_fetch",

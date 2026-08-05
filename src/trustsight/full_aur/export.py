@@ -55,6 +55,13 @@ class InvalidSignatureError(Exception):
 # Reproducible serialization
 # ---------------------------------------------------------------------------
 
+def _row_sort_key(row) -> str:
+    """Sort key for a profile/snapshot row, tolerating a malformed one."""
+    if isinstance(row, dict):
+        return str(row.get("package_name", ""))
+    return ""
+
+
 def canonical_artifact_bytes(
     profiles: list[dict],
     snapshots: list[dict],
@@ -76,8 +83,12 @@ def canonical_artifact_bytes(
             "scorer_version": manifest.get("scorer_version", ""),
             "corpus_cutoff": manifest.get("corpus_cutoff", ""),
         },
-        "profiles": sorted(profiles, key=lambda p: p["package_name"]),
-        "snapshots": sorted(snapshots, key=lambda s: s["package_name"]),
+        # Sorted defensively: this function is also called on rows read from
+        # an untrusted artifact, where a row may be missing its name or not
+        # be a mapping at all.  That is a malformed artifact to be reported
+        # by the import, not a KeyError raised from inside the hasher.
+        "profiles": sorted(profiles, key=_row_sort_key),
+        "snapshots": sorted(snapshots, key=_row_sort_key),
         "metadata_snapshot_hash": metadata_snapshot_hash,
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"),
@@ -130,21 +141,38 @@ def verify_artifact(canonical_bytes: bytes, signature: bytes, pubkey: bytes) -> 
         return False
 
 
+class MalformedBaselineError(Exception):
+    """Raised when an artifact cannot be parsed as one."""
+
+
 def _read_artifact(path: Path) -> tuple[dict, Optional[bytes]]:
     """Read a gzipped artifact, returning (payload_dict, signature_bytes).
 
-    If no signature is present, *signature* is None.
+    If no signature is present, *signature* is None.  Decompression is
+    capped: an artifact arrives from wherever the user got it, and a gzip
+    member that claims to be terabytes costs nothing to write and the whole
+    machine to expand.
     """
+    from .metadata import gunzip_capped
+
     raw = path.read_bytes()
     try:
-        data = json.loads(gzip.decompress(raw).decode("utf-8"))
-    except Exception:
-        data = json.loads(raw.decode("utf-8"))
+        text = gunzip_capped(raw).decode("utf-8")
+    except OSError:  # not gzip - a plain JSON artifact
+        text = raw.decode("utf-8", errors="strict")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise MalformedBaselineError("artifact is not a JSON object")
 
     sig_hex = data.pop("signature", None)
     sig: Optional[bytes] = None
     if sig_hex is not None:
-        sig = bytes.fromhex(sig_hex)
+        if not isinstance(sig_hex, str):
+            raise MalformedBaselineError("signature field is not a hex string")
+        try:
+            sig = bytes.fromhex(sig_hex)
+        except ValueError as exc:
+            raise MalformedBaselineError(f"signature is not hex: {exc}") from exc
     return data, sig
 
 
@@ -178,11 +206,12 @@ def build_artifact(
             conn.execute("SELECT * FROM pkgbuild_snapshots ORDER BY package_name").fetchall()
         ]
 
-    meta_path = Path("full-aur-meta.json.gz")
+    from .metadata import default_metadata_path
+    meta_path = default_metadata_path()
     metadata_list: list[dict] = []
     if meta_path.exists():
-        from .metadata import load_metadata_snapshot
-        loaded = load_metadata_snapshot(meta_path)
+        from .metadata import load_metadata
+        loaded = load_metadata(meta_path)
         if loaded:
             metadata_list = list(loaded.values())
 
@@ -276,7 +305,15 @@ def import_baseline(
 
     imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0}
 
+    # A row without a name is not a row.  Skipping is right where raising
+    # would be wrong: the artifact is signed, so a malformed entry is a
+    # builder bug, and losing one profile must not lose the import.
     for profile in profiles_in:
+        if not isinstance(profile, dict) or not isinstance(
+            profile.get("package_name"), str
+        ):
+            log.warning("skipping baseline profile without a package name")
+            continue
         save_package_profile(
             package_name=profile["package_name"],
             last_score=profile.get("last_score", 0),
@@ -285,6 +322,11 @@ def import_baseline(
         imported["profiles"] += 1
 
     for snap in snapshots_in:
+        if not isinstance(snap, dict) or not isinstance(
+            snap.get("package_name"), str
+        ):
+            log.warning("skipping baseline snapshot without a package name")
+            continue
         save_pkgbuild_snapshot(
             package_name=snap["package_name"],
             pkgbuild_text=snap.get("pkgbuild_text", ""),
@@ -296,9 +338,26 @@ def import_baseline(
 
     metadata_list = data.get("metadata_snapshot", [])
     if metadata_list:
-        meta_dict = {pkg["Name"]: pkg for pkg in metadata_list}
-        from .metadata import save_metadata_snapshot
-        save_metadata_snapshot(meta_dict, Path("full-aur-meta.json.gz"))
+        # The metadata rides *outside* the signed payload - only its hash is
+        # signed - so without this check a validly signed artifact could be
+        # re-published with an attacker's entire AUR metadata snapshot
+        # attached: maintainers, versions, dependency edges, everything
+        # discovery, R092/R100/R116 and `corpus pivot` read.  The signature
+        # would still verify.  Recompute and compare, and refuse on
+        # mismatch even for an unsigned import: a hash that does not match
+        # its own payload means the artifact is damaged either way.
+        actual = _metadata_snapshot_hash(metadata_list)
+        if actual != m_hash:
+            raise InvalidSignatureError(
+                "Baseline metadata does not match the signed hash "
+                f"(expected {m_hash[:16]}..., got {actual[:16]}...)."
+            )
+        meta_dict = {
+            pkg["Name"]: pkg for pkg in metadata_list
+            if isinstance(pkg, dict) and isinstance(pkg.get("Name"), str)
+        }
+        from .metadata import default_metadata_path, save_metadata
+        save_metadata(meta_dict, default_metadata_path())
         imported["metadata_items"] = len(meta_dict)
 
     if json_output:

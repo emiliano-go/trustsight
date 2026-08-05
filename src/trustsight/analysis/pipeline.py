@@ -24,7 +24,13 @@ from ..differ import (
     generate_diff,
     map_diff_lines,
 )
-from ..fetcher import clone_or_fetch, get_head_commit, get_maintainer_from_commit, get_pkgver_from_head
+from ..fetcher import (
+    clone_or_fetch,
+    get_head_commit,
+    get_maintainer_from_commit,
+    get_pkgbuild_at_commit,
+    get_pkgver_from_head,
+)
 from ..findings import stamp
 from ..novelty import (
     build_novelty_context,
@@ -53,6 +59,7 @@ from .base import (
 from .composition import _meta_annotations
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import _structural_findings
+from .version import compare_installed_to_aur, is_vcs_package
 from .temporal import _package_is_new, _recent_update, _stale_revival
 
 log = logging.getLogger(__name__)
@@ -179,11 +186,13 @@ def analyze_package(
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
     )
+    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
     triggered_rules.extend(
         _structural_findings(
             diff_text, source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
+            current_text=head_pkgbuild,
         )
     )
     tree_manifest = _collect_tree_files(repo, head_commit)
@@ -266,10 +275,20 @@ def analyze_package(
         pinning_level=aggregate_pinning,
     )
 
+    # The installed version is a full [epoch:]pkgver-pkgrel built locally;
+    # head_version is the bare pkgver the AUR PKGBUILD declares.  For a VCS
+    # package the latter is a placeholder the build replaces, so the two are
+    # not comparable and the result says so rather than drawing an arrow.
+    version_comparison = compare_installed_to_aur(
+        installed_version, head_version,
+        is_vcs=is_vcs_package(pkg_name, head_pkgbuild),
+    )
+
     fact = PackageFact(
         package_name=pkg_name,
         old_version=installed_version,
         new_version=head_version,
+        version_comparison=version_comparison,
         old_commit=old_commit,
         new_commit=head_commit,
         maintainer_changed=maintainer_changed,
@@ -325,6 +344,7 @@ def scan_diff(
     seen_urls: dict[str, set[str]] | None = None,
     observation_count: int = 0,
     tree_manifest: list[tuple[str, bytes]] | None = None,
+    current_text: str | None = None,
 ) -> PackageFact:
     if config is None:
         config = load_config()
@@ -346,6 +366,7 @@ def scan_diff(
         _structural_findings(
             diff_text, source_changes, source_buckets,
             package_name=package_name, config=config,
+            current_text=current_text,
         )
     )
     if tree_manifest:
@@ -446,6 +467,7 @@ def analyze_package_text(
         config=config,
         package_name=pkg_name,
         tree_manifest=tree_manifest,
+        current_text=new_text,
     )
     fact.adapter = adapter
     fact.temporal_source = "aur_metadata"

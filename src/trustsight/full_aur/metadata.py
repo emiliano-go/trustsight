@@ -7,6 +7,7 @@ for every package.
 """
 
 import gzip
+import io
 import json
 import logging
 import time
@@ -16,7 +17,44 @@ from urllib.request import urlopen
 log = logging.getLogger(__name__)
 
 _METADATA_URL = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
-_META_SNAPSHOT_PATH = Path("full-aur-meta.json")
+
+# Ceiling on anything gunzipped from the network or from an imported
+# artifact.  The real dump is ~250 MB of JSON; a gzip member is free to
+# claim far more, and decompressing it to find out is the whole attack.
+MAX_DECOMPRESSED_BYTES = 1024 * 1024 * 1024
+
+
+class DecompressionTooLarge(Exception):
+    """Raised when a gzip stream exceeds MAX_DECOMPRESSED_BYTES."""
+
+
+def default_metadata_path() -> Path:
+    """The one place the metadata snapshot lives.
+
+    It used to be resolved relative to the working directory in the
+    pipeline and the exporter but under the config directory in ``review``,
+    so a bootstrap run from a different shell wrote a snapshot the review
+    path never read.
+    """
+    from ..config import CONFIG_DIR
+
+    return CONFIG_DIR / "full-aur-meta.json"
+
+
+def gunzip_capped(raw: bytes, limit: int = MAX_DECOMPRESSED_BYTES) -> bytes:
+    """Decompress *raw*, refusing to materialise more than *limit* bytes."""
+    out = bytearray()
+    with gzip.GzipFile(fileobj=io.BytesIO(raw)) as fh:
+        while True:
+            chunk = fh.read(1024 * 1024)
+            if not chunk:
+                break
+            out.extend(chunk)
+            if len(out) > limit:
+                raise DecompressionTooLarge(
+                    f"gzip stream exceeds {limit} bytes decompressed"
+                )
+    return bytes(out)
 
 
 def fetch_metadata(on_progress=None) -> dict:
@@ -42,7 +80,7 @@ def fetch_metadata(on_progress=None) -> dict:
         buf.extend(chunk)
         if on_progress:
             on_progress(len(buf), total)
-    data = json.loads(gzip.decompress(buf))
+    data = json.loads(gunzip_capped(bytes(buf)))
     metadata: dict[str, dict] = {}
     for entry in data:
         metadata[entry["Name"]] = entry
@@ -72,7 +110,8 @@ def diff_metadata(old: dict, new: dict) -> dict[str, str]:
 
 def save_metadata(metadata: dict, path: Path | None = None) -> Path:
     """Persist a metadata snapshot to disk."""
-    path = path or _META_SNAPSHOT_PATH
+    path = path or default_metadata_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
         json.dump({"snapshot_time": int(time.time()), "packages": metadata}, f)
     log.info("saved metadata snapshot (%d packages) to %s", len(metadata), path)
@@ -81,7 +120,7 @@ def save_metadata(metadata: dict, path: Path | None = None) -> Path:
 
 def load_metadata(path: Path | None = None) -> dict | None:
     """Load a previously saved metadata snapshot, or return None."""
-    path = path or _META_SNAPSHOT_PATH
+    path = path or default_metadata_path()
     if not path.exists():
         return None
     with open(path) as f:

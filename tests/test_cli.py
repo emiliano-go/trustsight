@@ -372,6 +372,55 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
     assert seen["beta"]["upstream_mtime"] == 1700000000
 
 
+def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
+    """The deadline must return, not wait for the stalled fetch to finish.
+
+    Shutting the pool down with wait=True made the deadline cosmetic: the
+    warning printed, then the run blocked - with a frozen progress bar - for
+    as long as the hung fetch took.  What the deadline drops is re-fetched
+    during analysis.
+    """
+    import threading
+    import time
+
+    from trustsight import cli
+
+    release = threading.Event()
+    started = threading.Event()
+
+    def fake_fetch(name, mtime=None):
+        if name == "stalled":
+            started.set()
+            release.wait(30)
+        return object()
+
+    monkeypatch.setattr("trustsight.fetcher.clone_or_fetch", fake_fetch)
+    monkeypatch.setattr("trustsight.fetcher.last_fetch_time", lambda repo: None)
+    monkeypatch.setattr(
+        cli.review, "load_config", lambda: {"limits": {"prefetch_timeout": 1}}
+    )
+
+    pkgs = [
+        {"name": "stalled", "last_modified": 111},
+        {"name": "quick", "last_modified": 222},
+    ]
+    phases = []
+    began = time.monotonic()
+    try:
+        hints = cli.review._prefetch(
+            pkgs, lambda cur, total, phase: phases.append((cur, phase))
+        )
+        elapsed = time.monotonic() - began
+    finally:
+        release.set()
+
+    assert started.is_set(), "the stalled fetch never started"
+    assert elapsed < 10, f"prefetch waited {elapsed:.1f}s on an abandoned fetch"
+    assert hints == {"quick": 222}
+    # the bar is repainted on the way out, so it never freezes mid-fetch
+    assert phases[-1][0] == -1
+
+
 def test_one_bad_package_does_not_end_the_run(monkeypatch):
     """A failure is contained: other packages are still analysed."""
     from trustsight import cli

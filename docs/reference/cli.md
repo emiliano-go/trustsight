@@ -552,3 +552,34 @@ trustsight import-baseline <path>
 | `--json` | Output JSON. |
 
 ---
+
+## trustsight corpus pivot
+
+Given one indicator, list every corpus package that references it. This inverts R106: instead of asking what a single package carries, it asks who points at a published indicator — the question an advisory creates.
+
+```
+trustsight corpus pivot <indicator> [--json]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `indicator` | Yes | A package name, domain, or artifact hash. The type is inferred from its shape. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--type` | Force the indicator type (`package`, `domain`, or `hash`) when the shape is ambiguous — a package name spelled like a host, or a name that is all hex of digest length. |
+| `--json` | Output JSON. |
+
+### Behaviour
+
+The match is exact — `evil.example` matches neither `notevil.example` nor `cdn.evil.example`, and a truncated digest matches nothing. The query does not have to appear in `iocs.toml`; when it does, the entry's provenance and confidence tier are reported with the result.
+
+Only stored corpus material is searched: the AUR metadata snapshot (names, declared dependencies, upstream `url=`) and the stored PKGBUILD snapshots. Nothing a PKGBUILD points at is ever fetched. Package-name queries read the metadata only, because a name appearing in PKGBUILD text is not a declared fact.
+
+The output names which stores were searched. An empty corpus reports that nothing was searched — never that nothing references the indicator. **A miss is uninformative:** the indicator list records what has already been reported, so it says nothing about a package it does not name.
+
+---

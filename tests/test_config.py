@@ -366,3 +366,70 @@ def test_no_drift_reported_for_a_current_rules_file(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path)
     (tmp_path / "rules.toml").write_text(DEFAULT_RULES)
     assert drifted_shipped_rules() == []
+
+
+def test_a_pre_r106_iocs_stub_is_replaced(tmp_path, monkeypatch):
+    """The schema must reach installs that predate R106.
+
+    Config files are written once, at install time, so a placeholder from
+    before the rule existed would otherwise keep its user forever without
+    the entry schema, the confidence tiers, or the warning that a miss
+    proves nothing.
+    """
+    import trustsight.config as config
+
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "CACHE_DIR", tmp_path / "cache")
+    config._toml_cache.clear()
+
+    stub = next(iter(config.LEGACY_IOCS_STUBS))
+    (tmp_path / "iocs.toml").write_text(stub)
+
+    config.ensure_default_configs()
+
+    refreshed = (tmp_path / "iocs.toml").read_text()
+    assert refreshed == config.DEFAULT_IOCS
+    assert "[[entries]]" in refreshed
+    assert "A MISS IS UNINFORMATIVE" in refreshed
+
+
+def test_an_edited_iocs_file_is_never_overwritten(tmp_path, monkeypatch):
+    """A user's own indicators outrank the shipped schema."""
+    import trustsight.config as config
+
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "CACHE_DIR", tmp_path / "cache")
+    config._toml_cache.clear()
+
+    mine = ('[meta]\nversion = 4\n\n[[entries]]\ntype = "domain"\n'
+            'value = "mine.example"\nconfidence = "confirmed"\n')
+    (tmp_path / "iocs.toml").write_text(mine)
+
+    config.ensure_default_configs()
+    assert (tmp_path / "iocs.toml").read_text() == mine
+
+
+def test_the_legacy_r012_pattern_is_upgradable(tmp_path, monkeypatch):
+    """An install carrying the one-phrasing R012 must be able to catch up."""
+    import trustsight.config as config
+
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    config._toml_cache.clear()
+    legacy = next(iter(config.LEGACY_RULE_PATTERNS["R012"]))
+    (tmp_path / "rules.toml").write_text(
+        '[[rules]]\nid = "R012"\nname = "LLM Prompt Injection"\n'
+        f"pattern = '{legacy}'\n"
+        'severity = "FATAL"\ncategory = "injection"\nmatch_target = "resolved"\n'
+    )
+
+    assert "R012" in config.outdated_shipped_rules()
+    _, updated = config.sync_rules(update_outdated=True)
+    config._toml_cache.clear()
+
+    assert "R012" in updated
+    rule = [r for r in config.load_rules() if r["id"] == "R012"][0]
+    assert rule["include_comments"] is True
+    assert "do not" not in rule["pattern"]  # escaped form, not prose
+    assert "assistant" in rule["pattern"]

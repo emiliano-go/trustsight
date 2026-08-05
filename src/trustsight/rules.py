@@ -15,6 +15,14 @@ _COMMENT_OR_DEP_RE = re.compile(
     r")"
 )
 
+# The dependency-declaration half of _COMMENT_OR_DEP_RE on its own: the
+# rules that opt in via ``include_comments`` want prose - comments,
+# descriptions, messages - not the package lists (a dependency name is not
+# addressed to a reader).
+_DEP_DECLARATION_RE = re.compile(
+    r"^(?:\+|-|)\s*(?:depends|makedepends|optdepends|checkdepends)\s*=\s*\("
+)
+
 # Message strings (echo/printf/note arguments) are not execution contexts.
 # Keywords appearing in them are false positives.
 _MESSAGE_LINE_RE = re.compile(
@@ -202,6 +210,18 @@ def apply_rules(
     added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
     resolved_candidates = _to_pairs(resolved_strings)
 
+    # Comments and plain declarations are filtered out (or never resolved)
+    # for every other rule, because a commented-out command does not run and
+    # a `pkgdesc=` string is not executed.  R012 and R013 are the exceptions:
+    # their payload is aimed at whoever *reads* the file - a reviewer, or the
+    # model summarising it - so what matters is every line the new revision
+    # shows a reader.  Removals are excluded: text this diff deletes is text
+    # the reader will not see.
+    reader_candidates = [
+        (i, ln) for i, ln in _to_pairs(raw_diff_lines)
+        if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
+    ]
+
     for rule in rules:
         if rule.get("experimental") and not include_experimental:
             continue
@@ -217,6 +237,16 @@ def apply_rules(
             )
         else:
             candidates = resolved_candidates
+        if rule.get("include_comments"):
+            # For a raw-line rule the reader set *replaces* the default,
+            # which drops the removed lines with it: a maintainer deleting a
+            # hidden character must not score 100 for the cleanup.  For a
+            # resolved rule it is additive - resolution still carries the
+            # forms a variable hides.
+            candidates = (
+                reader_candidates if match_target == "raw_line"
+                else candidates + reader_candidates
+            )
 
         compiled = _compiled(rule["pattern"])
         if compiled is None:

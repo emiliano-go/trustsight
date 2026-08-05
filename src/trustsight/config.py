@@ -260,6 +260,16 @@ max_diff_bytes = 5242880
 
 [limits]
 default_review_limit = 20
+# Seconds libgit2 may spend connecting to, and waiting for data from, the
+# AUR before it aborts a clone/fetch.  These are enforced inside libgit2's
+# transport; without them a silently stalled connection hangs a worker
+# thread forever, because the progress callbacks that carry TrustSight's
+# own deadline only run while bytes are arriving.
+network_connect_timeout = 10
+network_transfer_timeout = 30
+# Seconds the review prefetch phase waits for the whole batch.  What has
+# not arrived by then is abandoned and fetched again during analysis.
+prefetch_timeout = 120
 
 [seed]
 # Import the bundled novelty seed the first time TrustSight runs against
@@ -421,10 +431,39 @@ scope = ["function_body"]
 [[rules]]
 id = "R012"
 name = "LLM Prompt Injection"
-pattern = 'ignore\\s+(?:all\\s+)?previous\\s+(?:instructions|commands|input)'
+# A PKGBUILD is increasingly read by a model, not only by a person, and
+# text addressed to that reader has no packaging purpose whatsoever.
+#
+# The previous pattern matched one phrasing ("ignore previous
+# instructions") and missed every other form the generator produces:
+# role markers, tag-like injections, personas, suppression orders and
+# pre-declared verdicts.  Eight alternatives now cover the family:
+#
+#   1. override    - ignore/disregard/forget the previous instructions
+#   2. role        - a line that opens with 'system:' / 'assistant:'
+#                    ('user:' is deliberately absent: a comment can
+#                    legitimately open 'user: nobody', and a question
+#                    addressed to a model carries no instruction)
+#   3. tag         - <system>, <instructions>, <admin> markup
+#   4. persona     - 'you are a helpful model that ...'
+#   5. instruction - 'new instruction:'
+#   6. suppress    - 'do not flag/warn/analyze/scan/review', and
+#                    'do not report' only when the object is a finding
+#                    ('do not report bugs to Arch' is ordinary prose)
+#   7. verdict     - 'mark/classify/report ... as safe/benign/clean'
+#   8. addressed   - a named model told to ignore/approve/skip
+#
+# include_comments is essential and not incidental: the payload is
+# always a comment, and comment lines are filtered out for every rule
+# that describes what the shell *executes*.
+#
+# Calibrated: 22/22 injection fixtures, 0 fires across 3,246 benign
+# corpus diffs (every alternative measured separately).
+pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\s+(?:\\w+\\s+){0,2}(?:instructions?|commands?|input|context|rules?|prompts?|guidelines?|checks?)|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\b'''
 severity = "FATAL"
 category = "injection"
 match_target = "resolved"
+include_comments = true
 
 [[rules]]
 id = "R013"
@@ -443,10 +482,16 @@ name = "Unicode Bidi Override"
 #    packages 100/100.  Requiring ASCII on both sides keeps the attack
 #    (a joiner hidden inside an ASCII command or URL) and drops the
 #    false positive.
+#
+# 3. Comments are scanned too (include_comments).  Hiding text from the
+#    reader is the entire attack, and a comment is the one place in a
+#    PKGBUILD whose only audience is a reader - excluding it left the
+#    rule blind to its own threat model.
 pattern = '[\\u202A-\\u202E\\u2066-\\u2069\\u2060-\\u2064\\U000E0000-\\U000E007F]|(?<![^\\x00-\\x7F])[\\u200B-\\u200F\\uFEFF](?![^\\x00-\\x7F])'
 severity = "FATAL"
 category = "unicode"
 match_target = "raw_line"
+include_comments = true
 
 # ---------------------------------------------------------------------
 # Expanded ruleset (R039+).
@@ -740,6 +785,33 @@ def write_default_file(path: Path, content: str):
         path.write_text(content)
 
 
+# The iocs.toml this project shipped before R106 existed: a placeholder with
+# no schema, no tiers and no warning that a miss is uninformative.  An
+# install that still carries it byte-for-byte has never been edited, so
+# replacing it costs the user nothing and is the only way the documented
+# schema reaches anyone who installed earlier.
+LEGACY_IOCS_STUBS = frozenset({
+    "[iocs]\n"
+    "# R106 - exact-match indicators, each with provenance and a confidence\n"
+    "# tier.  Populated by the phase that ships R106.\n"
+    "version = 1\n"
+    "entries = []\n"
+})
+
+
+def _refresh_legacy_iocs() -> bool:
+    """Replace an untouched pre-R106 iocs.toml.  True when rewritten."""
+    path = CONFIG_DIR / "iocs.toml"
+    try:
+        if path.read_text() in LEGACY_IOCS_STUBS:
+            path.write_text(DEFAULT_IOCS)
+            _toml_cache.pop("iocs.toml", None)
+            return True
+    except OSError:
+        pass
+    return False
+
+
 def ensure_default_configs():
     """Write default config files if they do not exist"""
     ensure_dirs()
@@ -751,6 +823,7 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "naming.toml", DEFAULT_NAMING)
     write_default_file(CONFIG_DIR / "thresholds.toml", DEFAULT_THRESHOLDS)
     write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
+    _refresh_legacy_iocs()
 
 
 # Parsed TOML keyed by (path, mtime_ns, size).  load_domains() used to be
@@ -924,6 +997,63 @@ DEFAULT_THRESHOLDS = (
     "# official-repo membership fires regardless).\n"
     "widely_provided_observations = 25\n"
     "\n"
+    "[r092]\n"
+    "# R092 (mass adoption) fires when a single maintainer submits at least\n"
+    "# this many packages with the whole cluster landing within this many days.\n"
+    "# The no-baseline gate keeps it silent on a first bootstrap.\n"
+    "min_packages = 10\n"
+    "window_days = 7\n"
+    "\n"
+    "[r100]\n"
+    "# R100 (shared source repo cluster) fires when at least this many\n"
+    "# unrelated packages (distinct package bases) declare the same normalized\n"
+    "# upstream source URL.\n"
+    "min_packages = 3\n"
+    "\n"
+    "[r105]\n"
+    "# R105 (attribute burst) fires when at least this many packages by one\n"
+    "# maintainer are modified within this many hours.  Added packages are\n"
+    "# excluded: R092 already claims the adoption clusters.\n"
+    "min_packages = 5\n"
+    "window_hours = 24\n"
+    "\n"
+    "[r125]\n"
+    "# R125 (introduction-rate deviation) compares a cycle's new-package count\n"
+    "# to the prior cycles; it only fires once this many prior cycles exist and\n"
+    "# the rate exceeds the mean by at least this many standard deviations.\n"
+    "min_history_cycles = 3\n"
+    "z_score = 3.0\n"
+    "min_introduced = 3\n"
+    "\n"
+    "[r126]\n"
+    "# R126 (adopt-then-modify) fires on a package adopted this cycle whose\n"
+    "# modify time still falls within this many days.\n"
+    "window_days = 14\n"
+    "\n"
+    "[r107]\n"
+    "# R107 (transitive exposure) only reports a package whose transitive\n"
+    "# dependency closure reaches an adopted-from-orphan package at this many\n"
+    "# hops or deeper.  Context only; weight 0.\n"
+    "min_hops = 2\n"
+    "\n"
+    "[r111]\n"
+    "# R111 (transitive orphan risk) only reports a package whose transitive\n"
+    "# dependency closure reaches a currently-orphaned package at this many\n"
+    "# hops or deeper.  Context only; weight 0.\n"
+    "min_hops = 2\n"
+    "\n"
+    "[r112]\n"
+    "# R112 (dependency centrality) flags a package depended on by at least\n"
+    "# this many AUR packages.  Prioritisation only; weight 0.\n"
+    "min_dependents = 50\n"
+    "\n"
+    "[r108]\n"
+    "# R108 (maintainer baseline deviation) is maturity- and z-gated like R125,\n"
+    "# but per maintainer against that maintainer's own prior activity.\n"
+    "min_history_cycles = 3\n"
+    "z_score = 2.0\n"
+    "min_activity = 3\n"
+    "\n"
     "[longitudinal]\n"
     "# R094-R098/R102/R083 gate on a property holding at least this many\n"
     "# consecutive observations before its break is reported.  Below it the\n"
@@ -933,11 +1063,42 @@ DEFAULT_THRESHOLDS = (
 )
 
 DEFAULT_IOCS = (
-    "[iocs]\n"
-    "# R106 - exact-match indicators, each with provenance and a confidence\n"
-    "# tier.  Populated by the phase that ships R106.\n"
+    "# R106 - Class E indicators of compromise.\n"
+    "#\n"
+    "# An entry is a confirmed artefact of a real incident: a package name\n"
+    "# that was published as malware, a host a payload was fetched from, the\n"
+    "# digest of a dropped binary.  R106 matches by exact equality and\n"
+    "# nothing else - 'evil.example' does not match 'notevil.example' or\n"
+    "# 'cdn.evil.example', and a truncated digest matches nothing.\n"
+    "#\n"
+    "# A MISS IS UNINFORMATIVE.  This list records what has already been\n"
+    "# reported; it says nothing about a package it does not name.  An\n"
+    "# attacker with fresh infrastructure is not on it by definition.\n"
+    "#\n"
+    "# The list ships empty: TrustSight does not invent indicators.  Add\n"
+    "# entries from an advisory you can cite, and keep the provenance with\n"
+    "# them - the confidence tier decides the severity, so an unsourced\n"
+    "# entry must not sit at 'confirmed'.\n"
+    "\n"
+    "[meta]\n"
+    "# Bump when the entry list changes; reports name the version they were\n"
+    "# matched against.\n"
     "version = 1\n"
-    "entries = []\n"
+    "\n"
+    "# Each indicator is one [[entries]] table:\n"
+    "#\n"
+    "# [[entries]]\n"
+    "# type = \"domain\"              # domain | package | hash\n"
+    "# value = \"malicious.example\"  # matched exactly, case-insensitively\n"
+    "# confidence = \"confirmed\"     # confirmed -> FATAL, high -> CRITICAL,\n"
+    "#                              # medium -> HIGH (an entry with no known\n"
+    "#                              # tier still matches, at MEDIUM)\n"
+    "#                              # 'confirmed' scores the package 100 on\n"
+    "#                              # its own - use it only for an artefact\n"
+    "#                              # a report you can cite named as malware\n"
+    "# provenance = \"https://security.archlinux.org/ASA-...\"\n"
+    "# campaign = \"2026-06-aur-install-hook\"\n"
+    "# added = \"2026-08-03\"\n"
 )
 
 
@@ -1016,6 +1177,10 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     # Pre-0.2.1: fired FATAL on U+200B-U+200D regardless of context, so a
     # localized desktop entry in a benign package scored 100/100.
     "R013": {r"[\u202A-\u202E\u2066-\u2069\u200B-\u200D\uFEFF]"},
+    # Pre-2026-08-03: one phrasing of one injection family, and comments -
+    # where the payload always lives - were filtered out before matching.
+    # It caught 3 of 22 injection fixtures.
+    "R012": {r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)"},
 }
 
 

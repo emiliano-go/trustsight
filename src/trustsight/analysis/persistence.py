@@ -48,6 +48,29 @@ _COPY_TARGET_RE = re.compile(
 # ``&>``/``2>`` descriptor redirects, ``<( )``/``>( )`` process subs.
 _REDIRECT_TARGET_RE = re.compile(r"(?<![<&0-9])(?:>>|>)\s*([^;&|>\s][^;&|>]*)")
 
+# The other ways a shell names a destination.  Without these the whole
+# write-target family is bypassed by substituting a verb: ``tee /etc/x``,
+# ``dd of=/etc/x`` and ``mkdir -p /opt/x`` do what ``cp`` does.  Each is
+# command-position anchored like _COPY_TARGET_RE, and each names its
+# destination explicitly rather than by position, except rsync (last
+# argument, same shape as cp).
+_TEE_TARGET_RE = re.compile(_WRITE_CMD_START + r"tee\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE)
+_DD_TARGET_RE = re.compile(_WRITE_CMD_START + r"dd\b[^;&|]*?\bof=(\S+)", re.IGNORECASE)
+_MKDIR_TARGET_RE = re.compile(
+    _WRITE_CMD_START + r"(?:mkdir|touch|mkfifo|mknod)\s+(?:-\S+\s+)*(\S+)", re.IGNORECASE
+)
+# sed -i edits its last argument in place.  The expression itself routinely
+# contains ``|`` as the s/// delimiter, so unlike the other verbs this one
+# cannot stop at a pipe: it takes the last token on the line.
+_SED_INPLACE_RE = re.compile(
+    _WRITE_CMD_START + r"sed\s+(?:-\S+\s+)*-i\S*\s.*?(\S+)\s*$", re.IGNORECASE
+)
+_RSYNC_TARGET_RE = re.compile(_WRITE_CMD_START + r"rsync\b([^;&|]*)$", re.IGNORECASE)
+
+_NAMED_TARGET_RES = (
+    _TEE_TARGET_RE, _DD_TARGET_RE, _MKDIR_TARGET_RE, _SED_INPLACE_RE,
+)
+
 
 def _raw_targets(body: str) -> list[str]:
     """Raw write destinations on *body* (quote characters preserved)."""
@@ -59,6 +82,14 @@ def _raw_targets(body: str) -> list[str]:
             args = m.group(2).split()
             if args and not args[-1].startswith("-"):
                 targets.append(args[-1])
+    for m in _RSYNC_TARGET_RE.finditer(body):
+        args = m.group(1).split()
+        if args and not args[-1].startswith("-"):
+            targets.append(args[-1])
+    for regex in _NAMED_TARGET_RES:
+        for m in regex.finditer(body):
+            if m.group(1) and not m.group(1).startswith("-"):
+                targets.append(m.group(1))
     for m in _REDIRECT_TARGET_RE.finditer(body):
         t = m.group(1).strip().strip("\"'")
         if t and not t.startswith("("):
@@ -237,15 +268,70 @@ def _systemd_unit_findings(diff_text, config, add) -> None:
             return
 
 
+# R128 - a build function's only legitimate write destinations.  Devices are
+# not filesystem state ( ``> /dev/null`` is how a build stays quiet), and a
+# target carrying shell metacharacters is a fragment of an awk program or a
+# parameter expansion that the extractor picked up, not a path.
+_DEVICE_TARGET_RE = re.compile(r"^/dev/")
+_PLAIN_ABS_PATH_RE = re.compile(r"^/(?:[\w.+@-]+/)*[\w.+@-]+$")
+_BUILD_TIME_FUNCTIONS = frozenset({"prepare", "build", "check", "package"})
+
+
+def _outside_staging_findings(diff_text, config, add) -> None:
+    """R128 - a build-time function writes outside the staging root.
+
+    ``prepare``/``build``/``check``/``package`` run on the *builder's*
+    machine, and everything they produce belongs under ``$srcdir`` or
+    ``$pkgdir``.  A write to an absolute system path is therefore not a
+    packaging step at all: it changes the machine doing the build, and
+    whatever it leaves behind is outside anything pacman tracks or can
+    remove.  This is the shape rule behind the symlink-into-a-hook-directory
+    and drop-a-suid-binary cases - it does not care which directory was
+    chosen, only that the write escaped the staging tree.
+
+    Top-level lines count too, and are the worse case: they run when makepkg
+    *sources* the PKGBUILD, before any build step, so a write there happens
+    even on `makepkg --nobuild`.
+
+    Install hooks are excluded: ``post_install`` legitimately acts on the
+    target system, and its writes are R077/R084/R085/R114's territory.
+    """
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    heredoc_body = _heredoc_body_indices(lines)
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+"):
+            continue
+        if fn is None:
+            fn = "top level"
+        elif fn not in _BUILD_TIME_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        for target in _raw_targets(_strip_comment(line[1:])):
+            path = target.strip().strip("\"'")
+            if _is_staged(path) or _DEVICE_TARGET_RE.match(path):
+                continue
+            if not _PLAIN_ABS_PATH_RE.match(path):
+                continue
+            add("R128", "Build Writes Outside Staging Root", "HIGH",
+                "persistence",
+                f"{fn}() writes to {path}, outside $pkgdir/$srcdir",
+                line=i + 1, position=fn, path=path)
+            return
+
+
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
 
 def _persistence_findings(diff_text, config, add) -> None:
-    """Run the install-path persistence rules (R077/R084/R085/R088/R114)."""
+    """Run the install-path persistence rules (R077/R084/R085/R114/R088/R128)."""
     _systemd_unit_findings(diff_text, config, add)
     _libalpm_hook_findings(diff_text, config, add)
     _home_rc_findings(diff_text, config, add)
     _worldwritable_staging_findings(diff_text, config, add)
     _hidden_drop_findings(diff_text, config, add)
+    _outside_staging_findings(diff_text, config, add)

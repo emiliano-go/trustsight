@@ -7,6 +7,7 @@
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
 | `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013 core; R039+ are code-emitted). |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
+| `~/.config/trustsight/iocs.toml` | R106 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
 
@@ -162,6 +163,9 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `default_review_limit` | int | `20` | Default `--limit` for `trustsight review` when not explicitly provided. |
+| `network_connect_timeout` | int | `10` | Seconds libgit2 may spend connecting to the AUR before aborting a clone/fetch. |
+| `network_transfer_timeout` | int | `30` | Seconds libgit2 may wait for data on an established connection. Without it a silently stalled connection hangs a fetch indefinitely. |
+| `prefetch_timeout` | int | `120` | Seconds `trustsight review` waits for the whole prefetch batch. Whatever has not arrived is abandoned and fetched again during analysis. |
 
 ---
 

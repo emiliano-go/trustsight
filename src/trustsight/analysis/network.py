@@ -26,6 +26,7 @@ from ..config import (
 from ..deps import _strip_comment
 from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
+from .base import iter_scheme_urls
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from .delivery import _find_line
 
@@ -33,7 +34,9 @@ _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
 _SOURCE_ARRAY_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
 _SOURCE_SCALAR_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S+)")
-_SCHEME_URL_RE = re.compile(r"[a-zA-Z][a-zA-Z0-9+.\-]*://[^\s'\"\)]+")
+# URL tokens are found by scanning for "://" (see base.iter_scheme_urls);
+# the regex form was quadratic on a line with no scheme at all.
+_URL_STOP_CHARS = frozenset(" \t\r\n'\")")
 
 # ---------------------------------------------------------------------------
 # Shared: source-array URL tokens
@@ -55,9 +58,8 @@ def _source_url_tokens(diff_text):
         is_source = bool(_SOURCE_ARRAY_RE.match(body) or _SOURCE_SCALAR_RE.match(body))
         if not in_array and not is_source:
             continue
-        for match in _SCHEME_URL_RE.finditer(body):
-            scheme = match.group(0).split("://", 1)[0]
-            yield scheme, match.group(0)
+        for scheme, url in iter_scheme_urls(body, _URL_STOP_CHARS):
+            yield scheme, url
         if ")" in body:
             in_array = False
 

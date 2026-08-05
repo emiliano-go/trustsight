@@ -17,6 +17,7 @@ from .build import (
 from .composition import _recon_findings
 from .delivery import _delivery_findings
 from .dependencies import _dependency_findings
+from .ioc import _ioc_findings
 from .network import (
     _covert_egress_findings,
     _exotic_protocol_findings,
@@ -70,6 +71,7 @@ def _structural_findings(
     maintainer_changed: bool = False,
     package_name: str = "",
     config: dict | None = None,
+    current_text: str | None = None,
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
@@ -165,5 +167,9 @@ def _structural_findings(
     _version_in_url_findings(diff_text, config or {}, add)
     _covert_egress_findings(diff_text, config or {}, add)
     _epoch_findings(diff_text, config or {}, add)
+    # R106 reads the current file where the caller has it: an indicator that
+    # predates this diff is still a fact about the package being reviewed.
+    _ioc_findings(diff_text, package_name, config or {}, add,
+                  current_text=current_text)
 
     return findings

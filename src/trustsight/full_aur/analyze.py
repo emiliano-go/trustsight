@@ -11,19 +11,14 @@ import re
 import time
 from typing import Optional
 
-from ..analysis import (
-    _aggregate_pinning,
-    _check_untrusted_maintainer_takeover,
-    _has_install_hook,
-    _structural_findings,
-    detect_gpg_verification_removed,
-    effective_observation_count,
-    package_typosquat_target,
-)
+from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.longitudinal import longitudinal_findings
+from ..analysis.maintainer import _check_untrusted_maintainer_takeover
+from ..analysis.structural import _structural_findings
 from ..buckets import classify_urls
 from ..config import load_config, load_thresholds
 from ..db import (
+    effective_observation_count,
     get_connection,
     get_package,
     insert_analysis,
@@ -34,11 +29,12 @@ from ..db import (
 )
 from ..deps import extract_dependency_changes
 from ..differ import (
+    detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_urls_from_diff,
 )
 from ..findings import stamp
-from ..novelty import build_novelty_context
+from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, get_raw_diff_lines
 from ..scoring import calculate_score
@@ -290,6 +286,7 @@ def analyze_package_text(
             diff_text, source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
+            current_text=new_pkgbuild,
         )
     )
     if tree_manifest:

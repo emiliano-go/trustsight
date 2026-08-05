@@ -36,6 +36,38 @@ def _pkgver_changed_in_diff(diff_text: str) -> bool:
 
 _GLOBAL_URL_KEY = "\x00__global__"
 
+# Scheme characters per RFC 3986, and the default delimiters that end a URL
+# token inside a shell line.
+_SCHEME_CHARS = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+.-"
+)
+_DEFAULT_URL_STOP = frozenset(" \t\r\n'\"();|>")
+
+
+def iter_scheme_urls(text: str, stop_chars: frozenset = _DEFAULT_URL_STOP):
+    """Yield ``(scheme, url)`` for every ``scheme://...`` token in *text*.
+
+    This is a scan, not a regex, on purpose.  ``[a-zA-Z][a-zA-Z0-9+.-]*://``
+    is quadratic on a line that has no ``://``: at every start position the
+    character class runs to the end of the line before the match fails, so a
+    single 200 KB word - which a PKGBUILD may legally contain, and which an
+    attacker may choose to contain - took ~30s to *not* match.  Anchoring on
+    the literal ``://`` and expanding outwards is linear and cannot be made
+    to backtrack.
+    """
+    index = text.find("://")
+    while index != -1:
+        start = index
+        while start > 0 and text[start - 1] in _SCHEME_CHARS:
+            start -= 1
+        if start < index and text[start].isalpha():
+            end = index + 3
+            while end < len(text) and text[end] not in stop_chars:
+                end += 1
+            if end > index + 3:
+                yield text[start:index], text[start:end]
+        index = text.find("://", index + 3)
+
 _NO_CHECKSUM_BEHAVIORS = ("changed_from_sha256_to_skip", "checksum_array_emptied")
 
 _EXPERIMENTAL_DEFAULTS = {
@@ -90,8 +122,11 @@ def _experimental_enabled(config: dict, rule_id: str) -> bool:
 
 def _get_installed_version(pkg_name: str) -> str:
     try:
+        # "--" ends option parsing: a package name is attacker-influenced
+        # data (it comes from the AUR metadata dump), and a name beginning
+        # with "-" would otherwise be read by pacman as a flag.
         result = subprocess.run(
-            ["pacman", "-Q", pkg_name],
+            ["pacman", "-Q", "--", pkg_name],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0 and result.stdout:

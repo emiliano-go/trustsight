@@ -37,6 +37,7 @@ from .history import register_commands as _register_history
 from .list_cmd import register_commands as _register_list
 from .forget import register_commands as _register_forget
 from .admin import register_commands as _register_admin
+from .corpus import register_commands as _register_corpus
 
 _register_review(app)
 _register_inspect(app)
@@ -44,3 +45,4 @@ _register_history(app)
 _register_list(app)
 _register_forget(app)
 _register_admin(app)
+_register_corpus(app)

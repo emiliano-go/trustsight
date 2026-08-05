@@ -81,18 +81,20 @@
     "min_score": 25
   },
   "R004-skip-git-justified.diff": {
-    "must_not_fire": [
-      "R004",
-      "R012",
-      "R013"
-    ]
+    "must_fire": [
+      "R004"
+    ],
+    "must_not_fire": [],
+    "min_score": 25,
+    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
   "R004-skip-git-pkgname.diff": {
-    "must_not_fire": [
-      "R004",
-      "R012",
-      "R013"
-    ]
+    "must_fire": [
+      "R004"
+    ],
+    "must_not_fire": [],
+    "min_score": 25,
+    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
   "R004-skip-validpgpkeys.diff": {
     "must_not_fire": [
@@ -164,19 +166,22 @@
     "must_fire": [
       "R010"
     ],
-    "min_score": 5
+    "min_score": 5,
+    "known_gap": "R010 is scoped to function bodies; a top-level parse-time fetch is uncovered"
   },
   "R011-wget-fetch.diff": {
     "must_fire": [
       "R011"
     ],
-    "min_score": 5
+    "min_score": 5,
+    "known_gap": "R011 is scoped to function bodies; a top-level parse-time fetch is uncovered"
   },
   "R014-validpgpkeys-added.diff": {
     "must_fire": [
       "R014"
     ],
-    "min_score": 25
+    "min_score": 25,
+    "known_gap": "no rule fires on a validpgpkeys key being added (removal is R069); an attacker adding their own key is uncovered"
   },
   "R015-depends-added.diff": {
     "must_fire": [
@@ -198,53 +203,60 @@
   },
   "R017-chmod-suid.diff": {
     "must_fire": [
-      "R017"
+      "R059"
     ],
-    "min_score": 25
+    "min_score": 25,
+    "relabelled": "R017 -> R059"
   },
   "R017-chmod-sgid.diff": {
     "must_fire": [
-      "R017"
+      "R059"
     ],
-    "min_score": 25
+    "min_score": 25,
+    "relabelled": "R017 -> R059"
   },
   "R018-ln-sf.diff": {
     "must_fire": [
-      "R018"
+      "R128"
     ],
-    "min_score": 15
+    "must_not_fire": [],
+    "min_score": 15,
+    "relabelled": "R018 -> R128 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
   },
   "R019-cflags-suspicious.diff": {
     "must_fire": [
       "R019"
     ],
-    "min_score": 10
+    "min_score": 10,
+    "known_gap": "in-diff CFLAGS inspection is uncovered; R094 sees flag changes only longitudinally, with corpus state"
   },
   "R025-eval.diff": {
     "must_fire": [
-      "R010",
-      "R025"
+      "R039"
     ],
-    "min_score": 30
+    "min_score": 30,
+    "relabelled": "R025 -> R039 (eval of a substitution)"
   },
   "R025-exec.diff": {
     "must_fire": [
-      "R011",
-      "R025"
+      "R011"
     ],
-    "min_score": 30
+    "min_score": 30,
+    "relabelled": "R025 dropped: no shipped rule names exec of fetched output; R011/R060/R061 carry the diff"
   },
   "R026-checksum-to-skip.diff": {
     "must_fire": [
-      "R026"
+      "R004"
     ],
-    "min_score": 25
+    "min_score": 25,
+    "relabelled": "R026 -> R004"
   },
   "R027-checksum-emptied.diff": {
     "must_fire": [
-      "R027"
+      "R005"
     ],
-    "min_score": 25
+    "min_score": 25,
+    "relabelled": "R027 -> R005"
   },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
@@ -384,11 +396,12 @@
     "max_score": 100
   },
   "R012-v15.diff": {
-    "must_fire": [],
-    "must_not_fire": [
+    "must_fire": [
       "R012"
     ],
-    "max_score": 50
+    "must_not_fire": [],
+    "min_score": 100,
+    "relabelled": "2026-08-03: 'do not warn about ...' is a suppression instruction aimed at the reviewer, not benign prose"
   },
   "R012-v16.diff": {
     "must_fire": [

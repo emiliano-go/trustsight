@@ -5,14 +5,22 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from ..analysis import _ensure_init
+from ..analysis.base import _ensure_init
+from ..config import load_config
 from ..db import (
+    get_connection,
     get_pkgbuild_snapshot,
+    introduction_rate_history,
+    latest_cycle_time,
+    maintainer_activity_history,
+    record_cycle_events,
     save_package_profile,
     save_pkgbuild_snapshot,
 )
 from ..schema import TemporalContext
+from ..scoring import risk_level
 from .analyze import analyze_package_text
+from .corpus import run_corpus_sweep, source_repos_from_pkgbuild
 from .fetch import (
     clear_resume_state,
     fetch_pkgbuild_with_tree,
@@ -22,13 +30,23 @@ from .fetch import (
 from .metadata import (
     diff_metadata,
     fetch_metadata,
-    load_metadata_snapshot,
-    save_metadata_snapshot,
+    load_metadata,
+    save_metadata,
 )
 
 log = logging.getLogger(__name__)
 
-_META_SNAPSHOT_PATH = Path("full-aur-meta.json.gz")
+def _meta_snapshot_path() -> Path:
+    """Where this run reads and writes the metadata snapshot.
+
+    Resolved through metadata.default_metadata_path() so the bootstrap, the
+    exporter and ``review`` all agree; it used to be relative to the working
+    directory here, which meant a snapshot written by one command was
+    invisible to the other.
+    """
+    from .metadata import default_metadata_path
+
+    return default_metadata_path()
 
 
 def _pkg_or_base(meta: dict) -> str:
@@ -38,6 +56,115 @@ def _pkg_or_base(meta: dict) -> str:
     packages the PKGBUILD lives under the PackageBase.
     """
     return meta.get("PackageBase") or meta["Name"]
+
+
+def _record_cycle_feed(
+    new_meta: dict,
+    old_meta: Optional[dict],
+    added: list[str],
+    changed: list[str],
+    removed: list[str],
+) -> None:
+    """Record this cycle's introduction events into the Class D adoption feed.
+
+    The feed is the per-cycle diff stream that R125's introduction-rate
+    baseline is derived from.  A fresh bootstrap records the whole corpus as
+    cycle 1.
+    """
+    cycle_ts = latest_cycle_time() + 1
+    events: list[dict] = []
+    for name in added:
+        meta = new_meta.get(name) or {}
+        events.append(
+            {
+                "package_name": name,
+                "cycle_time": cycle_ts,
+                "status": "added",
+                "maintainer": meta.get("Maintainer") or "",
+                "last_modified": meta.get("LastModified"),
+            }
+        )
+    for name in changed:
+        meta = new_meta.get(name) or {}
+        events.append(
+            {
+                "package_name": name,
+                "cycle_time": cycle_ts,
+                "status": "modified",
+                "maintainer": meta.get("Maintainer") or "",
+                "last_modified": meta.get("LastModified"),
+            }
+        )
+    for name in removed:
+        meta = (old_meta or {}).get(name) or {}
+        events.append(
+            {
+                "package_name": name,
+                "cycle_time": cycle_ts,
+                "status": "removed",
+                "maintainer": meta.get("Maintainer") or "",
+                "last_modified": meta.get("LastModified"),
+            }
+        )
+    if events:
+        record_cycle_events(events)
+
+
+def _profile_score(name: str, scores: dict[str, int]) -> int:
+    """Current profile score for *name* from the in-memory map or the DB."""
+    if name in scores:
+        return scores[name]
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT last_score FROM package_profiles WHERE package_name = ?",
+            (name,),
+        ).fetchone()
+    return row[0] if row and row[0] is not None else 0
+
+
+def _run_corpus_sweep(
+    new_meta: dict,
+    old_meta: Optional[dict],
+    processed: set[str],
+    scores: dict[str, int],
+) -> list[dict]:
+    """Run the Phase 6 Class D detectors and attach their additive weight.
+
+    With no prior snapshot (first bootstrap) the sweep is skipped entirely;
+    the Class D calibration gate is ``fire_rate(no_baseline) == 0``.  Each
+    cluster finding adds its severity weight to every member's profile score
+    (R092/R100/R105/R125 are additive; only R107/R111/R112 are not).
+    """
+    if old_meta is None:
+        return []
+
+    source_repos: dict[str, set[str]] = {}
+    for name in processed:
+        snapshot = get_pkgbuild_snapshot(name)
+        if not snapshot or not snapshot.get("pkgbuild_text"):
+            continue
+        repos = source_repos_from_pkgbuild(snapshot["pkgbuild_text"])
+        if repos:
+            source_repos[name] = repos
+
+    findings = run_corpus_sweep(
+        new_meta,
+        old_meta,
+        source_repos=source_repos,
+        prior_history=introduction_rate_history(),
+        maintainer_history=maintainer_activity_history(),
+        now=int(time.time()),
+    )
+
+    weights = load_config().get("severity_weights", {})
+    for finding in findings:
+        delta = int(weights.get(finding.get("severity", ""), 0))
+        if delta <= 0:
+            continue
+        for member in finding["params"]["members"]:
+            new_score = max(0, min(100, _profile_score(member, scores) + delta))
+            save_package_profile(member, new_score, risk_level(new_score))
+    return findings
 
 
 def run_baseline_build(
@@ -69,25 +196,30 @@ def run_baseline_build(
     meta_count = len(new_meta)
     _log(f"Fetched {meta_count} package entries")
 
-    old_meta = load_metadata_snapshot(_META_SNAPSHOT_PATH)
+    old_meta = load_metadata(_meta_snapshot_path())
 
     if old_meta is None:
         added = sorted(new_meta)
         changed: list[str] = []
+        removed: list[str] = []
         _log("No prior snapshot found; processing all packages")
     else:
-        added, changed, removed = diff_metadata(old_meta, new_meta)
+        changes = diff_metadata(old_meta, new_meta)
+        added = sorted(n for n, s in changes.items() if s == "added")
+        changed = sorted(n for n, s in changes.items() if s == "modified")
+        removed = sorted(n for n, s in changes.items() if s == "removed")
         _log(f"Delta: {len(added)} added, {len(changed)} changed, {len(removed)} removed")
 
     to_process = added + changed
 
     if not to_process:
         _log("Nothing to process")
-        save_metadata_snapshot(new_meta, _META_SNAPSHOT_PATH)
+        save_metadata(new_meta, _meta_snapshot_path())
         return
 
     resume_state = load_resume_state() if resume else None
     processed: set[str] = set(resume_state.get("processed", [])) if resume_state else set()
+    scores: dict[str, int] = {}
 
     _log(f"Processing {len(to_process)} packages ({len(processed)} previously done)")
     batch_start = time.time()
@@ -142,6 +274,7 @@ def run_baseline_build(
             last_risk=fact.score_breakdown.get("risk_label", ""),
         )
 
+        scores[name] = fact.final_score
         processed.add(name)
 
         if (i + 1) % 1000 == 0:
@@ -151,8 +284,20 @@ def run_baseline_build(
             save_resume_state({"processed": sorted(processed)})
 
     save_resume_state({"processed": sorted(processed)})
-    save_metadata_snapshot(new_meta, _META_SNAPSHOT_PATH)
+    save_metadata(new_meta, _meta_snapshot_path())
     clear_resume_state()
+
+    # The sweep reads the adoption feed as its baseline, so it must run
+    # before this cycle's events are recorded.
+    cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores)
+    _record_cycle_feed(new_meta, old_meta, added, changed, removed)
+    if cluster_findings:
+        _log(f"Corpus sweep: {len(cluster_findings)} cluster finding(s)")
+        for finding in cluster_findings:
+            _log(
+                f"  {finding['rule_id']} ({finding['severity']}) "
+                f"{finding['name']}: {finding['match']}"
+            )
 
     total_elapsed = time.time() - batch_start
     _log(

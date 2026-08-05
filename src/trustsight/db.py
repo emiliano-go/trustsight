@@ -11,6 +11,11 @@ from typing import Optional
 
 from .config import DATA_DIR
 
+# Ceiling on a decompressed seed database.  The bundled seed is ~20 MB
+# compressed and a few hundred MB expanded; ``trustsight seed-db`` takes a
+# path, so the ceiling is what stops an arbitrary .gz from filling the disk.
+MAX_SEED_BYTES = 2 * 1024 * 1024 * 1024
+
 
 def get_db_path() -> Path:
     """Return the path to the SQLite database file."""
@@ -201,6 +206,21 @@ def init_db():
                 count INTEGER DEFAULT 1,
                 PRIMARY KEY (package_name, rule_id)
             );
+
+            /* Class D adoption feed: one row per package per corpus cycle.
+               The metadata-dump diff between cycles is the first-class
+               stream the corpus sweep consumes; R092/R105/R100/R125 read
+               introduction events and per-cycle timestamps from it. */
+            CREATE TABLE IF NOT EXISTS cycle_events (
+                package_name TEXT NOT NULL,
+                cycle_time INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                maintainer TEXT NOT NULL DEFAULT '',
+                last_modified INTEGER,
+                PRIMARY KEY (package_name, cycle_time)
+            );
+            CREATE INDEX IF NOT EXISTS idx_cycle_events_cycle
+                ON cycle_events(cycle_time);
         """)
         _migrate(conn)
         conn.commit()
@@ -600,7 +620,6 @@ def import_seed(seed_path: Path) -> dict:
     what was imported.
     """
     import gzip
-    import shutil
     import tempfile
 
     init_db()
@@ -613,8 +632,26 @@ def import_seed(seed_path: Path) -> dict:
         fd, tmp_name = tempfile.mkstemp(suffix=".db")
         os.close(fd)
         temp = Path(tmp_name)
-        with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
-            shutil.copyfileobj(src, dst)
+        # Bounded: the bundled seed is ~20 MB compressed, but `seed-db`
+        # accepts a path, and a gzip file that expands without limit would
+        # otherwise fill the disk before SQLite ever looked at it.
+        written = 0
+        try:
+            with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
+                while True:
+                    chunk = src.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    written += len(chunk)
+                    if written > MAX_SEED_BYTES:
+                        raise ValueError(
+                            f"seed database exceeds {MAX_SEED_BYTES} bytes "
+                            "decompressed; refusing to expand it"
+                        )
+                    dst.write(chunk)
+        except Exception:
+            temp.unlink(missing_ok=True)
+            raise
         path = temp
 
     try:
@@ -877,6 +914,79 @@ def save_package_profile(
             (package_name, last_score, last_risk),
         )
         conn.commit()
+
+
+def record_cycle_events(events: list[dict]) -> None:
+    """Persist one corpus cycle's adoption-feed events (Class D).
+
+    *events* is a list of dicts with ``package_name``, ``cycle_time``,
+    ``status`` (added/modified/removed), ``maintainer`` and ``last_modified``.
+    Rows are upserted so a cycle can be replayed without duplicating history.
+    """
+    if not events:
+        return
+    with get_connection() as conn:
+        conn.executemany(
+            """INSERT INTO cycle_events
+               (package_name, cycle_time, status, maintainer, last_modified)
+               VALUES (:package_name, :cycle_time, :status, :maintainer,
+                       :last_modified)
+               ON CONFLICT(package_name, cycle_time) DO UPDATE SET
+                   status = excluded.status,
+                   maintainer = excluded.maintainer,
+                   last_modified = excluded.last_modified""",
+            events,
+        )
+        conn.commit()
+
+
+def introduction_rate_history(cycles: int | None = None) -> list[dict]:
+    """Per-cycle introduction counts, oldest first (Class D R125).
+
+    Returns ``[{cycle_time, introduced}]`` for every recorded cycle with at
+    least one event; *cycles* limits the number returned (most recent) when
+    given.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT cycle_time,
+                      SUM(CASE WHEN status = 'added' THEN 1 ELSE 0 END) AS introduced
+               FROM cycle_events
+               GROUP BY cycle_time
+               ORDER BY cycle_time ASC"""
+        ).fetchall()
+    out = [{"cycle_time": r["cycle_time"], "introduced": int(r["introduced"] or 0)}
+           for r in rows]
+    if cycles is not None:
+        return out[-cycles:]
+    return out
+
+
+def latest_cycle_time() -> int:
+    """The most recent cycle_time recorded in cycle_events, or 0."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT MAX(cycle_time) AS t FROM cycle_events"
+        ).fetchone()
+    return int(row["t"] or 0)
+
+
+def maintainer_activity_history() -> list[dict]:
+    """Per-maintainer per-cycle event counts, oldest first (Class D R108).
+
+    Returns ``[{maintainer, cycle_time, activity}]`` covering every
+    recorded cycle, so a maintainer's own past activity can serve as the
+    baseline for a deviation check.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT maintainer, cycle_time, COUNT(*) AS activity
+               FROM cycle_events
+               WHERE maintainer != ''
+               GROUP BY maintainer, cycle_time
+               ORDER BY cycle_time ASC, maintainer ASC"""
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 def forget_package(name: str) -> dict[str, int]:

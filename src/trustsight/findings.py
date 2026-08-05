@@ -97,6 +97,24 @@ TEMPLATES: dict[str, str] = {
     "R097": "version scheme changed {old_scheme} -> {new_scheme}",
     "R098": "pkgdesc changed after {stable_for_n} stable observations",
     "R102": "build {key} changed after {stable_for_n} stable observations: {old_value} -> {new_value}",
+    "R092": "maintainer {maintainer} submitted {member_count} packages within the adoption window",
+    "R100": "{member_count} unrelated packages share source repo {repo}",
+    "R105": "{member_count} packages by maintainer {maintainer} modified in a short window",
+    "R125": "introduction rate {introduced} deviates from baseline mean {mean} (z={z_score})",
+    "R090": "ownership transition to {new}",
+    "R126": "maintainer {maintainer} adopted and immediately modified {member_count} package(s)",
+    "R093": "depends on {dep}, which was orphaned/adopted this cycle",
+    "R101": "{prefix} ecosystem sourced from {hosts}",
+    "R107": "transitive dependency reaches adopted-from-orphan {dep}",
+    "R108": "maintainer {maintainer} activity {activity} vs baseline mean {mean} (z={z_score})",
+    "R110": "name/repo divergence",
+    "R111": "transitive dependency reaches orphaned {dep}",
+    "R112": "dependency hub ({dependents} dependents)",
+
+    "R128": "{position}() writes to {path}, outside $pkgdir/$srcdir",
+
+    # --- Class E indicator ---
+    "R106": "{surface} matches known indicator {ioc_value} ({confidence}, {provenance})",
 }
 
 

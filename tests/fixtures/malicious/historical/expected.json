@@ -4,10 +4,10 @@
     "source": "https://archive.archlinux.org/aur-mirror/2021/acpid2-evil-fork",
     "description": "Fork of acpid2 that added curl|bash in post_upgrade()",
     "must_fire": [
-      "R001",
-      "R009"
+      "R001"
     ],
-    "must_not_fire": []
+    "must_not_fire": [],
+    "relabelled": "R009 dropped 2026-08-03: the diff contains no sudo; the label predated R009 becoming a command-position code rule"
   },
   "libjpeg-turbo-skid.diff": {
     "fidelity": "approximate",
@@ -15,10 +15,10 @@
     "description": "Compromised AUR upload that removed validpgpkeys and set SKIP",
     "must_fire": [
       "R004",
-      "R026",
-      "R014"
+      "R069"
     ],
-    "must_not_fire": []
+    "must_not_fire": [],
+    "relabelled": "R026 -> R004 (checksum set to SKIP), R014 -> R069 (validpgpkeys removed)"
   },
   "fake-browser-bin.diff": {
     "fidelity": "approximate",
@@ -34,9 +34,11 @@
     "source": "Hypothetical but representative",
     "description": "DKMS package that writes to /etc/modules-load.d/ and sets SUID",
     "must_fire": [
-      "R017",
-      "R018"
+      "R059",
+      "R060",
+      "R128"
     ],
-    "must_not_fire": []
+    "must_not_fire": [],
+    "relabelled": "R017 -> R059 (setuid bit), R018 -> R128 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)"
   }
 }

@@ -1,0 +1,30 @@
+name: Calibration Gates
+
+# The §10 gates on every push: the test suite runs them on a sample so a
+# full corpus replay stays out of local `pytest`, and this job runs them
+# whole.  A rule drifting into noise, an annotation acquiring weight, or a
+# labelled attack going undetected fails here rather than being noticed a
+# month later in the drift report.
+on: [push, pull_request]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Run the calibration gates over the whole corpus
+        run: python scripts/calibration_gates.py --json gates.json
+
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: calibration-gates
+          path: gates.json

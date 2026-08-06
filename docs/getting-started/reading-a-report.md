@@ -17,11 +17,11 @@ The scoring is **deterministic**: same diff, same config, same database state �
 
 ## The three verdict states
 
-### CLEAN (score ≤ 20)
+### UNFLAGGED (score ≤ 20)
 
 No significant risk signals. Routine version bumps with checksum updates, trusted forge sources, and unchanged build logic land here.
 
-A CLEAN verdict does not mean "safe." It means "no detectable risk signals in this diff."
+An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
 **74.9 % of diffs score 0** (zero-rate). At the 95th percentile, benign packages score **30**; at the 5th percentile, the CRITICAL-class corpus scores **60**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The test suite covers **1,365 tests** across all modules.
 
@@ -46,7 +46,7 @@ One or more risk signals fired. The severity category (Medium / High / Critical)
 
 The score is in the Medium range (21-50), but **every contributing signal came from novelty** and the **observation database is cold** (shallower than 50 prior runs). The tool is telling you it does not have enough data.
 
-INCONCLUSIVE is **not** CLEAN. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
+INCONCLUSIVE is **not** UNFLAGGED. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
 The maturity gate scales novelty weights by `observation_count / 50`. At zero observations, novelty contributes zero weight. At 49, it contributes ~98 %. After 50, all novelty signals are at full weight. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
@@ -149,7 +149,7 @@ Verification evidence lines appear as negative weights:
 
 ## What partial coverage looks like
 
-When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than a clean score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than an UNFLAGGED score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 Unresolved patterns are listed in the inspect output under "Unresolved Patterns." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) for the full list of analysis blind spots.
 

@@ -32,7 +32,7 @@ Each severity level carries a weight that reflects its information value: how of
 | LOW | 5 | High | Weak signal. Demoted from higher severity if corpus fire rate exceeds 30%. |
 | INFO | 0 | Variable | Recorded for audit trail only. No score contribution. |
 
-A CRITICAL rule on its own (weight 40) pushes a package into the FLAGGED range (21+). A single HIGH rule (weight 25) does the same. Two MEDIUM rules (15 + 15 = 30) also reach FLAGGED. The 20-point CLEAN threshold means any single CRITICAL or HIGH rule, or any combination of lower-severity rules summing above 20, will flag the package.
+A CRITICAL rule on its own (weight 40) pushes a package into the FLAGGED range (21+). A single HIGH rule (weight 25) does the same. Two MEDIUM rules (15 + 15 = 30) also reach FLAGGED. The 20-point UNFLAGGED threshold means any single CRITICAL or HIGH rule, or any combination of lower-severity rules summing above 20, will flag the package.
 
 ### How match_target selects what the rule sees
 
@@ -767,7 +767,7 @@ before"), applied to AUR maintainers instead of npm publishers.
 so R071 fires on 100 % of maintainer-changed packages on first run. It is
 suppressed until the maintainer table has enough history for "globally novel"
 to mean something - gated identically to the other novelty signals via
-[`maturity()` and `observation_count`](configuration.md#cold-start-and-maturity).
+[`maturity()` and `observation_count`](../explanation/cold-start-and-maturity.md#maturity-gate).
 
 ### R072: Capability Density Anomaly {#r072}
 
@@ -1014,7 +1014,8 @@ Fire rate: 0 on all 3246 benign-corpus diffs.
 
 A tag is a name upstream can repoint at will, so "the same tag" is not the
 same code twice. TrustSight never resolves a tag against the network (see
-[the threat model](../explanation/threat-model.md)), so the rule works from
+[the security model](../security.md#the-invariants)),
+so the rule works from
 declared facts: the commit a recipe pins, and the version it claims.
 
 - **Ref moved under a stable version.** The `#commit=`/`#revision=` digest
@@ -1204,7 +1205,7 @@ carries no weight, so it cannot move a score; it changes what the reader is
 looking at.
 
 A literal that cannot be rebuilt is reported as the inconclusive case.
-Unreconstructable input is never read as clean.
+Unreconstructable input is never read as UNFLAGGED.
 
 Fire rate: 0 of 3246.
 
@@ -1218,7 +1219,7 @@ R118 has two variants that split by evidence and never double-fire. **R118-tree*
 is this one: it needs the file manifest, so it runs on the git path, where the
 clone is always available, and on the corpus path when the AUR snapshot tarball
 was fetched. When the corpus path has no snapshot, the result reports
-`tree_analyzed = false` rather than reading as a clean full-coverage result.
+`tree_analyzed = false` rather than reading as a full-coverage UNFLAGGED result.
 **R118-blob**, an ELF blob encoded inside the PKGBUILD, is R120 with a magic
 check, so an encoded ELF fires R120.
 
@@ -1304,7 +1305,7 @@ rather than at R010/R011's "uses curl" LOW.
 
 ## Composition (R086, R089) {#composition-rules}
 
-Both are annotations. Neither adds weight, so neither can turn a clean package
+Both are annotations. Neither adds weight, so neither can turn an UNFLAGGED package
 into a flagged one on its own.
 
 ### R086: Host Reconnaissance {#r086}

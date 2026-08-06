@@ -8,6 +8,11 @@ description: "Full documentation for TrustSight: deterministic AUR PKGBUILD audi
 
 Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify.
 
+TrustSight is an **instrument, not a judge**. It reports evidence - and the
+absence of evidence - and never substitutes its report for your decision. Absence
+of alerts is not a promise of safety. The [security model](security.md) states
+the boundaries behind that promise, and how each one is enforced.
+
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)]()
 [![Tests](https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests)]()
@@ -57,14 +62,13 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | Page | What it covers |
 |------|----------------|
 | [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyze, score, classify, translate. |
-| [Trust Model](explanation/trust-model.md) | Why the score is deterministic and reproducible. |
+| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why the score is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
 | [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights, rule design decisions. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
 | [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
 | [What TrustSight Cannot See](explanation/what-trustsight-cannot-see.md) | The reasoned ceiling of the tool. |
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
-| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, what a verdict claims, and how each invariant is enforced. |
 
 ## Guides
 

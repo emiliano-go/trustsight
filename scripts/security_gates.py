@@ -463,7 +463,7 @@ def gate_truncation_is_visible() -> Gate:
         problems.append("truncation was not recorded as a coverage gap")
     if fact.risk not in ("Inconclusive", "High", "Critical"):
         problems.append(f"truncated diff reported {fact.risk!r}")
-    return Gate("a truncated diff cannot read as clean", not problems, problems)
+    return Gate("a truncated diff cannot read as unflagged", not problems, problems)
 
 
 def gate_fatal_rules_cannot_be_removed() -> Gate:

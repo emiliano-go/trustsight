@@ -19,7 +19,7 @@ Resolution is partial by design. PKGBUILDs are not executed, so the parser can o
 - Conditional branches (`if [[ ... ]]`) are noted but not taken.
 - Dynamically constructed strings (command substitution, arithmetic expansion) are marked as unresolvable.
 
-When a `source=` entry is computed at build time (a command substitution, not a variable the tokenizer can expand), the URL the build will actually fetch is not in the analysed text. The pipeline records this as the `unresolved_source` coverage gap, and a coverage gap forbids a clean verdict: the result is reported as `Inconclusive` unless a HIGH or worse finding already stands on its own. The rationale: a package whose source URL cannot be determined statically cannot be audited with confidence. Reporting "could not verify" is more honest than guessing and potentially missing a swapped URL. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete) for the other gaps and how they are enforced.
+When a `source=` entry is computed at build time (a command substitution, not a variable the tokenizer can expand), the URL the build will actually fetch is not in the analysed text. The pipeline records this as the `unresolved_source` coverage gap, and a coverage gap forbids an UNFLAGGED verdict: the result is reported as `Inconclusive` unless a HIGH or worse finding already stands on its own. The rationale: a package whose source URL cannot be determined statically cannot be audited with confidence. Reporting "could not verify" is more honest than guessing and potentially missing a swapped URL. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete) for the other gaps and how they are enforced.
 
 This is the same principle that drives the rest of the scoring system: **when the signal is uncertain, surface the uncertainty; do not hide it with a default.**
 
@@ -106,7 +106,7 @@ The score maps to a verdict class:
 
 | Score range | Verdict | Meaning |
 |-------------|---------|---------|
-| 0 to 20 | CLEAN | No actionable signals detected, and the analysis was complete |
+| 0 to 20 | UNFLAGGED | No actionable signals detected, and the analysis was complete |
 | 21+ | FLAGGED | Signals warrant review before updating |
 | Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change; requires manual review |
 
@@ -134,7 +134,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 | Page | What it covers |
 |------|----------------|
-| [Trust Model](trust-model.md) | Why the score is deterministic and reproducible; the trust model |
+| [Security Model](../security.md) | Why the score is deterministic and reproducible; the security model |
 | [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights |
 | [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |

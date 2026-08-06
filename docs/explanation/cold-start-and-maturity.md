@@ -83,7 +83,7 @@ The logic:
 
 This prevents the tool from flagging packages based on weak signals. INCONCLUSIVE is not a pass or a fail; it is a signal that the tool cannot be confident in its assessment.
 
-A coverage gap produces the same downgrade at any maturity, for a different reason: the run did not see the whole change. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+A coverage gap produces the same downgrade at any maturity, for a different reason: the run did not see the whole change. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Maturity and maintainer tracking
 

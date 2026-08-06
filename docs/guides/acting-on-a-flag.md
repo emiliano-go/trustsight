@@ -16,7 +16,7 @@ This shows:
 
 - The **diff summary**: every line added, removed, or changed between the installed and candidate PKGBUILD.
 - **Resolved commands**: the expanded `source=()`, `sha256sums=()`, `validpgpkeys=()`, etc., as they would execute during the build.
-- **Triggered rules**: which [R-series](../reference/rules.md) and [C-series](../reference/rules.md#c-series-c001c003) rules fired, with the specific lines that matched.
+- **Triggered rules**: which [R-series](../reference/rules.md) and [C-series](../reference/rules.md#c-series) rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 
 ## Step 2: Trace the score to specific PKGBUILD lines
@@ -57,13 +57,13 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read.
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
 
-Here the verdict is telling you something sharper: the part it did read looked ordinary, and there is a part it did not read. Fetch the package yourself and look at what was left out. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+Here the verdict is telling you something sharper: the part it did read looked ordinary, and there is a part it did not read. Fetch the package yourself and look at what was left out. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Step 4: Decide
 
 | Finding | Action |
 |---------|--------|
-| Clean diff, known domain, no rule fires | CLEAN : update normally |
+| Clean diff, known domain, no rule fires | UNFLAGGED : update normally |
 | Medium score from novelty only, warm DB (>50 obs) | Note it : likely benign |
 | High score, multiple rule fires, or cold DB + any novelty | **Skip** this package. Inspect deeper or wait for the next release. |
 | FATAL rule | **Do not install.** |

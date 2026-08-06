@@ -104,7 +104,6 @@ name = "trustsight on PyPI"
 "Explanation" = "explanation/index.md"
 
 [[project.nav.explanation]]
-"Trust Model" = "explanation/trust-model.md"
 "Scoring Philosophy" = "explanation/scoring-philosophy.md"
 "Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"
 "Corpus and Priors" = "explanation/corpus-and-priors.md"
@@ -122,8 +121,9 @@ name = "trustsight on PyPI"
 
 [[project.nav]]
 "Changelog" = "changelog.md"
-"Security" = "security.md"
-"License" = "license.md"
+
+[[project.nav]]
+"Security model" = "security.md"
 
 # ==============================================================================
 # Markdown extensions

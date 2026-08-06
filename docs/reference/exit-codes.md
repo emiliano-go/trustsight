@@ -11,7 +11,7 @@ Findings are reported in the output and in `--json`. To gate a pipeline, read th
 JSON; see [using TrustSight in CI](../guides/using-in-ci.md).
 
 This is a deliberate choice, and it is stated as an invariant in
-[the security model](../security.md#b6-what-a-verdict-does-not-claim): a verdict
+[the security model](../security.md#b6-what-a-result-does-not-claim): a verdict
 is evidence for a human decision, not an authority that halts a build on its own.
 
 ---

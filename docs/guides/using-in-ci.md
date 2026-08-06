@@ -68,7 +68,7 @@ on ignoring it:
   alone sees a plausible verdict computed from a fraction of the change.
 
 Gating on `risk` without `coverage_gaps` closes the first and leaves the second.
-See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
+See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Policy gating
 
@@ -117,7 +117,7 @@ To set up your own gate:
 
 1. **Run a baseline** against your package set after initial configuration. See the [re-baselining guide](../contributing/re-baselining.md).
 2. **Choose a threshold**: typically 30-40, depending on your tolerance for benign novelty signals.
-3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from CLEAN to FLAGGED without a corresponding PKGBUILD change is a regression.
+3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from UNFLAGGED to FLAGGED without a corresponding PKGBUILD change is a regression.
 
 The CRITICAL recall of **100%** means every CRITICAL-class malice sample in the corpus scores ≥40. A gate at 40 catches all known CRITICAL patterns and passes benign bumps that score ≤20 at the 95th percentile.
 

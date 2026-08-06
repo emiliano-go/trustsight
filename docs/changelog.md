@@ -22,8 +22,8 @@
 - **Coverage accounting (`src/trustsight/coverage.py`).** Four gaps are now
   first-class on `PackageFact` and in the JSON: `diff_truncated`,
   `line_truncated`, `tree_not_analyzed`, `unresolved_source`. A gap never adds
-  points, but it constrains presentation two ways: it forbids a clean verdict
-  (the run reports `Inconclusive` unless a HIGH or worse finding already
+  points, but it constrains presentation two ways: it forbids an UNFLAGGED
+  verdict (the run reports `Inconclusive` unless a HIGH or worse finding already
   stands), **and** it travels with the band wherever a person sees one, so an
   incomplete run renders as `High (incomplete analysis)` rather than `High`.
   That second half closes the decoy seam: pad past the cap, put the payload

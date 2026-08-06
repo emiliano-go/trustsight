@@ -389,7 +389,7 @@ Import takes a few seconds for the full seed and is additive: existing rows win,
 
 ### Trust
 
-The seed is derived entirely from public AUR data and is reproducible: re-running the generator against the same mirror produces the same database. It only ever makes novelty signals *quieter*; it cannot lower a rule score, change a severity, or suppress a finding. A tampered seed could at most hide a novelty signal, never fabricate a clean verdict.
+The seed is derived entirely from public AUR data and is reproducible: re-running the generator against the same mirror produces the same database. It only ever makes novelty signals *quieter*; it cannot lower a rule score, change a severity, or suppress a finding. A tampered seed could at most hide a novelty signal, never fabricate an UNFLAGGED verdict.
 
 ---
 

@@ -74,7 +74,7 @@ The ceiling of sandbox analysis is "observed clean in this specific execution." 
 
 | Situation | Use sandbox? |
 |-----------|-------------|
-| Routine version bump, CLEAN verdict | No : static analysis is sufficient |
+| Routine version bump, UNFLAGGED verdict | No : static analysis is sufficient |
 | FLAGGED, MEDIUM score, novelty only | Optional : inspect first, sandbox if uncertain |
 | FLAGGED, HIGH or CRITICAL | Yes : especially if the diff contains new commands or obfuscation |
 | FATAL rule (R012/R013) | Sandbox is not useful : do not install. Prompt injection cannot be safely executed. |

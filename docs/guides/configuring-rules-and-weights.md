@@ -74,7 +74,7 @@ The verification evidence block subtracts from the score when the PKGBUILD inclu
 
 ## Re-baselining after changes
 
-**Any change to weights or rules invalidates the current baseline.** Scores will shift; packages that were CLEAN may become FLAGGED and vice versa.
+**Any change to weights or rules invalidates the current baseline.** Scores will shift; packages that were UNFLAGGED may become FLAGGED and vice versa.
 
 After editing `rules.toml` or `config.toml`:
 

@@ -484,7 +484,7 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
             if total_installed:
                 caption += f" out of {total_installed} installed"
         if show_score and flagged:
-            caption += f", {flagged} above the 20-point CLEAN threshold"
+            caption += f", {flagged} above the 20-point UNFLAGGED threshold"
         if failed:
             caption += f", {failed} could NOT be vetted"
         typer.echo(caption)
@@ -569,7 +569,7 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         if total_installed:
             caption += f" out of {total_installed} installed"
     if show_score and flagged:
-        caption += f", {flagged} above the 20-point CLEAN threshold"
+        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
     if failed:
         caption += f", {failed} could NOT be vetted"
     con.print(caption)

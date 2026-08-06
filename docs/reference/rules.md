@@ -70,7 +70,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001 to R013, R039 to R082, C001 to C007, D001 to D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R131, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Cryptographic integrity metadata (subtractive) |
@@ -87,7 +87,7 @@ Each rule supports these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier (`R001`-`R013` core, `R039`+ expanded, `R060`+ code-emitted). |
+| `id` | `string` | Rule identifier (`R001`-`R013` core, `R014`/`R016`-`R025` additional TOML, `R039`-`R059` expanded TOML, `R060`+ code-emitted). |
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
@@ -215,6 +215,96 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 
 - **Note:** Score hard-stops at 100 regardless of other signals. The previous pattern omitted U+200E/U+200F, U+2060-U+2064 and the tag block, which is where the documented recall gap came from; `unicode.py` already listed them.
 
+### R014: validpgpkeys Added {#r014}
+
+- **Target:** `raw_line`
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Pattern:** `validpgpkeys\s*=`
+- **Description:** Fires when a `validpgpkeys=` declaration appears in the diff. Declaring PGP key fingerprints is normally a *protective* act, so this rule does not score on its own; it exists to keep the declaration filter in `rules.py` honest (an excluded filter entry must never become a scored finding). The positive counterpart is the Tier D `validpgpkeys_declared` verification evidence.
+
+### R016: New Make/Opt/Check Dependency {#r016}
+
+- **Target:** `raw_line`
+- **Severity:** INFO (weight 0) — see Note
+- **Category:** `dependency`
+- **Pattern:** `(?:makedepends|optdepends|checkdepends)\s*=`
+- **Scope:** All lines
+- **Description:** Fires when a `makedepends=`, `optdepends=`, or `checkdepends=` array is added or modified. At INFO it contributes weight 0 and reports context only. Sources a dependency-extraction exclusion: the dependency declaration itself is metadata, not a command, and must not be read for command-position matching.
+
+### R017: Setuid/Setgid Permission {#r017}
+
+- **Target:** `raw_line`
+- **Severity:** HIGH (weight 25)
+- **Category:** `privilege`
+- **Pattern:** `chmod.*\+s`
+- **Description:** Detects `chmod` setting the setuid or setgid bit (`chmod +s`, `chmod 4755`, `chmod 2755`). A setuid binary runs with its owner's privileges, the shape of many local-privilege-escalation backdoors. Complements the dedicated R053 setuid rules in the expanded set, which target the pure permission pattern; this form catches the `chmod` command line itself.
+
+### R018: Symlink Redirect {#r018}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `filesystem`
+- **Pattern:** `ln\s+-sf`
+- **Description:** Detects `ln -sf` (force-symlink) invocations. Re-pointing a symlink to a new target can redirect what a later step writes or reads, including replacing a config file or a cacheable binary path with a copy the attacker controls.
+
+### R019: Suspicious Environment Variable {#r019}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `build`
+- **Pattern:** `(?:CFLAGS|CXXFLAGS|LDFLAGS)\s*=\s*"[^"]`
+- **Description:** Detects a quoted build-flag assignment that does not begin with an empty string, the shape of a fertilizer injected into an existing flags string (e.g. `CFLAGS="$(…)"` carries a substitution). Pairs with the R049/R050 compiler-flag rules in the expanded scope, which match the `+=` form.
+
+### R020: Network connection attempt {#r020}
+
+- **Target:** `runtime` (resolved execution path)
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network`
+- **Pattern:** `(?!)` — never matches
+- **Description:** A network socket opening at execution time. Shipped with a never-matching placeholder pattern because the current model cannot observe post-install behaviour from a static diff; the identifier is reserved so a future runtime probe can emit it without a baseline change.
+
+### R021: Suspicious file write {#r021}
+
+- **Target:** `runtime` (resolved execution path)
+- **Severity:** HIGH (weight 25)
+- **Category:** `filesystem`
+- **Pattern:** `(?!)` — never matches
+- **Description:** A write to a sensitive filesystem location (services, `cron.d`, `$HOME/.config/autostart`). Same treatment as R020: shipped as a reserved `runtime` placeholder, never emitted by the static diff engine.
+
+### R022: Sensitive binary execution {#r022}
+
+- **Target:** `runtime` (resolved execution path)
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+- **Pattern:** `(?!)` — never matches
+- **Description:** Execution of a sensitive binary in an unexpected position. Reserved `never-match` placeholder, as R020/R021.
+
+### R023: Strace detection attempt (TracerPid check) {#r023}
+
+- **Target:** `runtime` (resolved execution path)
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `evasion`
+- **Pattern:** `(?!)` — never matches
+- **Description:** Reading `/proc/self/status` `TracerPid` to detect a debugger or sandbox. Anti-analysis behaviour. Reserved `never-match` runtime placeholder.
+
+### R024: Strace log truncated (possible flood evasion) {#r024}
+
+- **Target:** `runtime` (resolved execution path)
+- **Severity:** HIGH (weight 25)
+- **Category:** `evasion`
+- **Pattern:** `(?!)` — never matches
+- **Description:** A beacon/timestamp flood that forces an audit log to truncate. Reserved `never-match` runtime placeholder; complements the R023 debugger probe.
+
+### R025: Eval or Exec Usage {#r025}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `obfuscation`
+- **Pattern:** `\b(?:eval|exec)\s`
+- **Scope:** `["function_body", "install_script"]`
+- **Description:** Detects `eval` or `exec` at the start of a command inside `build()`, `package()`, or an install script. `eval` re-parses its argument at runtime, so the executed content cannot be guaranteed statically; `exec` replaces the current process. Scoped out of declarations and comments, which routinely spell the same words in messages.
+
 ### Severity weights
 
 Configured in `config.toml` `[severity_weights]`:
@@ -296,7 +386,7 @@ The `experimental` flag remains supported for future additions. A rule carrying 
 experimental = true
 ```
 
-Numbering starts at R039 because `R014`-`R026` are already referenced by `tests/fixtures/baseline.json` and the malicious fixture generators; reusing those identifiers would silently change what they mean in existing baselines.
+Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `R014` and `R016`-`R025` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved** — they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
 
 Every `raw_line` rule below sets `added_only = true`.
 
@@ -501,7 +591,7 @@ On by default since v0.7.0. See [`[experimental_rules]`](configuration.md#experi
 
 ## Measured fire rates {#experimental-fire-rates}
 
-Measured against the 3246-diff benign corpus with a 209,909-name dependency corpus. All D-series, R061-R064, and R081-R082 rules are **on by default**. These are **false-positive rates**: every hit is a benign package.
+Measured against the 3246-diff benign corpus with a 209,909-name dependency corpus. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -1629,6 +1719,16 @@ A `confirmed` indicator cannot be suppressed through `overrides.json`.
   finding. See [R073](#r073).
 - **R103 and R109** describe the ruleset's ceiling rather than a detection.
   See [the novelty ceiling](../explanation/what-trustsight-cannot-see.md).
+
+The R-series identifier space is not contiguous. Reserved ids appear nowhere
+in the shipped config or the code-emitted rule set:
+
+- `R015`, `R026`-`R038` — held apart so the core and expanded ranges stay
+  readable, and reassigning them could clash with user `rules.toml` overrides.
+- `R078`, `R091`, `R099`, `R103`-`R104`, `R109`, `R113` — unassigned in the
+  current shipped configuration. `R103`/`R109` are claimed above as the
+  novelty ceiling; the rest are simply unused and may be returned to service
+  when a detection needs them.
 
 ---
 

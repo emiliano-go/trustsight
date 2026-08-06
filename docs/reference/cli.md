@@ -69,7 +69,7 @@ Discovery uses a local AUR metadata snapshot by default:
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded; subsequent runs reuse it.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001-R064, R068-R075, R081-R082) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the R-series detection rules (R001-R131) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
 
 If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.

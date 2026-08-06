@@ -20,8 +20,8 @@ These pages cover common tasks you'll perform with TrustSight. Each guide is foc
 ## Reference
 
 - [CLI reference](../reference/cli.md)
-- [Rules reference (R001-R013)](../reference/rules.md)
-- [Code rules reference (C001-C003)](../reference/rules.md#c-series)
+- [Rules reference (R001-R131)](../reference/rules.md)
+- [Code rules reference (C001-C007)](../reference/rules.md#c-series)
 - [Config reference](../reference/configuration.md)
 - [Evidence tiers](../reference/evidence-tiers.md)
 - [Exit codes](../reference/exit-codes.md)

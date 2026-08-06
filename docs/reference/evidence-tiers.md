@@ -17,7 +17,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Sources
 
-- R001-R013, R039-R082 rules firing against resolved command strings or raw diff lines.
+- R001-R131 rules firing against resolved command strings or raw diff lines.
 - R004/R005 checksum integrity rules (hard-coded, not TOML).
 - C001-C007 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.

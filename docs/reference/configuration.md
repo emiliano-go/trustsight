@@ -5,7 +5,7 @@
 | Path | Purpose |
 |------|---------|
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
-| `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013 core; R039+ are code-emitted). |
+| `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013 core and R014, R016-R025, R039-R059 shipped by default; R060+ are code-emitted). |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
 | `~/.config/trustsight/iocs.toml` | R106 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |

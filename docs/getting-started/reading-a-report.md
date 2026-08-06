@@ -56,7 +56,7 @@ The maturity gate scales novelty weights by `observation_count / 50`. At zero ob
 
 The score breakdown in `trustsight inspect` groups signals into four evidence tiers. Each tier represents a fundamentally different kind of information:
 
-### Tier A : Structural (rules R001-R013 + R039-R059 + C001-C007)
+### Tier A : Structural (rules R001-R131 + C001-C007)
 
 Pattern-matched from the PKGBUILD diff. These are direct, observable facts about what the build script does:
 
@@ -76,7 +76,7 @@ Tier A signals are the strongest evidence. CRITICAL recall is **100 %**: every C
 
 R012's low recall is intentional. It is a tripwire: when it fires, you know something is almost certainly malicious. When it does not, nothing can be concluded. Attackers have too many ways to rephrase injection payloads.
 
-Rules span **R001-R013** and **R039-R059** (detection rules) and **C001-C007** (context rules for checksum and source-integrity heuristics). C-rules range from INFO to CRITICAL severity depending on the specific finding.
+Rules span **R001-R131** (detection rules) and **C001-C007** (context rules for checksum and source-integrity heuristics). C-rules range from INFO to CRITICAL severity depending on the specific finding.
 
 ### Tier B : Priors / Context (source bucket classification)
 
@@ -135,7 +135,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Positive = risk increase. Negative = risk decrease (verification, trusted forges). |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier. R001-R013 are detection rules; C001-C003 are context rules; SOURCE_BUCKET, NOVELTY, PINNING, VERIFICATION are structural categories. |
+| `R004` | Rule identifier. R001-R131 are detection rules; C001-C007 are context rules; SOURCE_BUCKET, NOVELTY, PINNING, VERIFICATION are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 

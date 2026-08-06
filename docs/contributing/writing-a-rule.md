@@ -4,10 +4,10 @@ TrustSight has two rule namespaces to avoid identifier collision:
 
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|
-| R-series  | R001 - R013  | `rules.toml`     | Yes               | Regex-detectable patterns   |
-| R-series  | R039 - R082  | `analysis/*.py`  | No                | Code-emitted detection      |
-| D-series  | D001 - D004  | `analysis/*.py`  | No                | Dependency-graph rules      |
-| C-series  | C001 - C007  | `analysis/*.py`  | No                | Structural / multi-condition |
+| R-series  | R001-R003, R006-R014, R016-R025, R039-R059 | `rules.toml` | Yes | Regex-detectable patterns   |
+| R-series  | R004-R005, R060-R131 | `analysis/*.py` | No               | Code-emitted detection      |
+| D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
+| C-series  | C001-C007   | `analysis/*.py`  | No                | Structural / multi-condition |
 
 ## R-series rules (TOML)
 

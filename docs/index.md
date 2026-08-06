@@ -43,7 +43,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships with 68 rules across four namespaces. **R001 to R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **R039 to R059** extend that surface (eval of dynamic content, reverse shells, setuid bits, network access in `pkgver()`, writes outside `$pkgdir`). **R060 to R082** inspect build-function behaviour (hidden network fetches, install hooks, untrusted patches, foreign package managers, shell obfuscation density), temporal signals (recency, age, revival), install and maintainer context (GPG removal, env subversion, maintainer takeover), naming (package-name typosquatting), dependency-set expansion, and metadata (capability density, release cadence). **D001 to D004** analyse dependency-graph changes (novel dependencies, typosquatted deps, hijack via provides, network makedepends). **C001 to C007** catch structural anomalies that a single-line pattern cannot express (checksum changed without source change, source URLs swapped without version bump, checksum removed for an unchanged source, command substitution in the source array). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships with detection and context rules spanning **R001-R131**, **C001-C007**, and **D001-D004** (R-series identifiers are non-contiguous by design; see the [catalog](reference/rules.md) for reserved gaps). **R001-R013** detect command patterns (curl pipe bash, base64 decode, sudo in functions, checksum manipulation, unicode bidi overrides, prompt injection). **R039-R059** extend that surface (eval of dynamic content, reverse shells, setuid bits, network access in `pkgver()`, writes outside `$pkgdir`). **R060-R131** inspect build-function behaviour (hidden network fetches, install hooks, untrusted patches, foreign package managers, shell obfuscation density), temporal signals (recency, age, revival), install and maintainer context (GPG removal, env subversion, maintainer takeover), naming (package-name typosquatting), dependencies-set expansion, and metadata (capability density, release cadence). **D001-D004** analyse dependency-graph changes (novel dependencies, typosquatted deps, hijack via provides, network makedepends). **C001-C007** catch structural anomalies that a single-line pattern cannot express (checksum changed without source change, source URLs swapped without version bump, checksum removed for an unchanged source, command substitution in the source array). Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules.md)
 
@@ -85,7 +85,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 | Page | What it covers |
 |------|----------------|
-| [Rules](reference/rules.md) | R001 to R013, R039 to R082, D001 to D004, and C001 to C007 with severity, weight, and description. |
+| [Rules](reference/rules.md) | R001-R131, C001-C007, and D001-D004 with severity, weight, and description. |
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml, rules.toml, and trusted_domains.toml schema. |
 | [Report Schema](reference/report-schema.md) | PackageFact JSON structure. |

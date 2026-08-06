@@ -93,6 +93,8 @@ Measured against the 3246-diff benign corpus with a 209,909-name dependency seed
 | D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
 | R075 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Post-promotion measurement with seeded DB (209,909-name seed). Well under the 30% gate. |
 
+## Code-emitted rules (R060-R064)
+
 Measured against the 3246-diff benign corpus. All enabled by default since v0.7.0 (R060 was always on).
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
@@ -115,13 +117,17 @@ static corpus. Fire rates vary per database and per run.
 | R066 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
 | R067 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
 
-## Install, build, maintainer, and naming rules (R068-R082)
+## Install, maintainer, and naming rules (R068-R072, R074, R081-R082)
 
 These rules are defined in `src/trustsight/analysis/build.py`,
 `src/trustsight/analysis/temporal.py`, and `src/trustsight/analysis/pipeline.py`.
 Fire rates marked "TBD" require a live git
 repository and cannot be measured against the static corpus; R071
 falls in this category.
+
+The measured-fire-rate table in the [rules reference](../reference/rules.md#experimental-fire-rates)
+records the remaining code-emitted rules (R083-R131) that were calibrated after this page was written;
+they are not repeated here.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|

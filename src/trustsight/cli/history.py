@@ -4,6 +4,7 @@ import typer
 
 from ..config import ensure_default_configs
 from ..db import get_history, get_package_id, get_triggered_rules, init_db
+from ..safe_text import clean
 from ..scoring import risk_level
 from .display import (
     HAS_RICH,
@@ -62,7 +63,7 @@ def register_commands(app: typer.Typer):
             from rich.text import Text
 
             con = console()
-            table = Table(title=f"History: {package}")
+            table = Table(title=Text(f"History: {clean(package)}"))
             table.add_column("Date", style="dim")
             table.add_column("Old", justify="right")
             table.add_column("-> New", justify="right")
@@ -85,7 +86,7 @@ def register_commands(app: typer.Typer):
                     bd.add_column("Rule", style="cyan")
                     bd.add_column("Severity")
                     for r in rules:
-                        bd.add_row(r["rule_id"], _severity_text(r["severity"]))
+                        bd.add_row(Text(clean(r["rule_id"])), _severity_text(r["severity"]))
                     con.print(bd)
                 else:
                     con.print("[dim]No rules fired on the latest run.[/]")

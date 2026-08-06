@@ -40,13 +40,24 @@ Every rule in the output references the line(s) that triggered it. Cross-referen
 
 ## When to trust INCONCLUSIVE
 
-**Always inspect manually.** INCONCLUSIVE means the tool could not form a complete picture:
+**Always inspect manually.** INCONCLUSIVE means the tool could not form a complete picture, and it arises two ways.
+
+**A cold database**, when all three hold:
 
 - The score sits in the **25-50** range (Medium).
 - No HIGH, CRITICAL, or FATAL signals fired.
-- The database is **cold**: fewer than 50 observations, so novelty weight is not at full strength.
+- The database is **cold**: fewer than 25 recorded analyses for this package, so maturity is below 0.5 and novelty weight is not at full strength. Novelty reaches full weight at 50.
 
-In this state the tool is being honest about its uncertainty. The verdict is telling you: "I see some novelty but I don't have enough history to judge it. You need to look yourself." See [cold start and maturity](../explanation/cold-start-and-maturity.md).
+The verdict is telling you: "I see some novelty but I don't have enough history to judge it. You need to look yourself." See [cold start and maturity](../explanation/cold-start-and-maturity.md).
+
+**A coverage gap**, at any score and any maturity, when the run could not examine the whole change. The report names which gap:
+
+- `diff_truncated`: the diff was larger than the size cap, so only its prefix was read.
+- `line_truncated`: a single line was longer than the matching limit, so its tail was never matched against any rule.
+- `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read.
+- `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
+
+Here the verdict is telling you something sharper: the part it did read looked ordinary, and there is a part it did not read. Fetch the package yourself and look at what was left out. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Step 4: Decide
 

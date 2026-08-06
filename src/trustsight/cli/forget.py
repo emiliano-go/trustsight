@@ -52,7 +52,7 @@ def register_commands(app: typer.Typer):
                     typer.echo(json.dumps({"error": msg}))
                 else:
                     _print_colored(msg, "red")
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=2)
             removed = forget_prune(aur_names, dry_run=dry_run)
             if json_output:
                 typer.echo(json.dumps({"prune": {n: c for n, c in removed.items()}}, indent=2))
@@ -75,7 +75,7 @@ def register_commands(app: typer.Typer):
             confirm = input("Are you sure? [y/N] ")
             if confirm.lower() not in ("y", "yes"):
                 typer.echo("Aborted.")
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=2)
 
         results = {}
         for name in packages:

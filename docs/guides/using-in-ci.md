@@ -10,41 +10,95 @@ TrustSight is designed to be scripted. The exit code and the review table give y
 
 | Code | Meaning |
 |------|---------|
-| **0** | All packages scored CLEAN (≤20) |
-| **2** | An error occurred |
+| **0** | The analysis completed. Says nothing about what was found. |
+| **2** | The analysis could not run or could not complete. |
+
+**Do not gate on the exit code.** A flagged package still exits 0; see
+[exit codes](../reference/exit-codes.md). Gate on the JSON, which is the
+contract this guide uses throughout.
+
+## The JSON contract
+
+`trustsight review --json` writes a **list**, one object per package, to stdout.
+Progress events go to stderr, so a pipeline only has to read stdout.
+
+Every object carries:
+
+| Field | Meaning |
+|-------|---------|
+| `package` | Package name. |
+| `old_version`, `new_version` | Installed version and the version the AUR declares. |
+| `findings` | Each with `rule_id`, `file`, `line`, `description`. |
+| `verdict` | The rendered sentence. |
+| `first_seen` | `true` when there is no prior history for this package. |
+| `is_trivial` | `true` when only `pkgver` and checksums moved. |
+| `coverage_gaps` | What the run could **not** examine. Always present. |
+
+`score`, `risk` and `risk_label` are added when `--score` or `--risk` is passed.
+`risk` is the bare band; `risk_label` is the same band qualified when the run was
+incomplete, for tools that display it to a person.
 
 A minimal CI step:
 
 ```bash
-trustsight review --json | python3 -c "
+trustsight review --score --json > report.json
+python3 - <<'EOF'
 import json, sys
-reports = json.load(sys.stdin)
-if any(r.get('final_score', 0) > 20 for r in reports.values() if isinstance(r, dict)):
-    print('One or more AUR packages flagged; investigate before updating.')
-    sys.exit(1)
-"
+
+reports = json.load(open("report.json"))
+flagged = [r for r in reports if (r.get("score") or 0) > 20]
+partial = [r for r in reports if r.get("coverage_gaps")]
+
+for r in flagged:
+    print(f"FLAGGED {r['package']}: {r['verdict']}")
+for r in partial:
+    print(f"NOT FULLY VETTED {r['package']}: {', '.join(r['coverage_gaps'])}")
+
+sys.exit(1 if flagged or partial else 0)
+EOF
+```
+
+**Treat `coverage_gaps` as blocking, not informational.** A non-empty list means
+the score describes part of the change, not all of it. Two separate bypasses ride
+on ignoring it:
+
+- Pad a diff past the size cap, append the payload, and the visible score drops.
+- Do the same but include one cheap deliberate HIGH in the visible prefix. The
+  score does *not* drop, `risk` reads `"High"`, and a pipeline gating on `risk`
+  alone sees a plausible verdict computed from a fraction of the change.
+
+Gating on `risk` without `coverage_gaps` closes the first and leaves the second.
+See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Policy gating
 
-Decouple the score from your pass/fail decision. TrustSight's verdict threshold (20) is a sensible default but your team's tolerance may differ.
-
-Use a wrapper script to adjust the pass/fail boundary:
+Decouple the score from your pass/fail decision. TrustSight's verdict threshold
+(20) is a sensible default but your team's tolerance may differ.
 
 ```bash
 export THRESHOLD=40
-trustsight review --json | python3 -c "
+trustsight review --score --json > report.json
+python3 - <<'EOF'
 import json, os, sys
-threshold = int(os.environ.get('THRESHOLD', '20'))
-reports = json.load(sys.stdin)
-flagged = [p for p, r in reports.items() if isinstance(r, dict) and r['final_score'] > threshold]
-if flagged:
-    print('Packages above threshold:', ', '.join(flagged))
+
+threshold = int(os.environ.get("THRESHOLD", "20"))
+reports = json.load(open("report.json"))
+over = [r["package"] for r in reports if (r.get("score") or 0) > threshold]
+if over:
+    print("Packages above threshold:", ", ".join(over))
     sys.exit(1)
-"
+EOF
+```
 
-## JSON output
+Raising the threshold does not raise the coverage bar: `coverage_gaps` is
+independent of the score and should be checked whatever threshold you pick.
 
-The `--json` flag on `review` and `inspect` exposes the full `PackageFact` structure (per-package scores, triggered rules, bucket classifications, and evidence breakdown) for consumption by downstream tooling.
+## Deeper output
+
+`trustsight inspect <pkg> --json` exposes the full `PackageFact` for one package:
+the whole score breakdown, bucket classifications, novelty context and evidence.
+Field by field, it is documented in the
+[report schema](../reference/report-schema.md).
 
 ## Per-class CI regression
 
@@ -69,7 +123,7 @@ The CRITICAL recall of **100%** means every CRITICAL-class malice sample in the 
 
 ## Nightly vs per-commit
 
-- **Per-commit**: run `trustsight review` on every PR that touches a PKGBUILD or a `rules.toml` change. Use exit code gating.
+- **Per-commit**: run `trustsight review` on every PR that touches a PKGBUILD or a `rules.toml` change. Gate on the JSON, as above.
 - **Nightly**: run a full review of all installed AUR packages and diff the output against the previous night. Detects drift over time.
 
 ## Config in CI
@@ -79,3 +133,4 @@ Check in your `config.toml`, `rules.toml`, and the TrustSight database alongside
 See also:
 - [Configuring rules and weights](configuring-rules-and-weights.md)
 - [Exit codes reference](../reference/exit-codes.md)
+- [The security model](../security.md), for what a verdict does and does not claim

@@ -94,6 +94,17 @@ class PackageFact:
     # the snapshot must not read the same as one that saw the whole tree.
     tree_analyzed: bool = False
 
+    # Everything this run could not look at, as coverage.GAPS values, plus
+    # the source entries behind an UNRESOLVED_SOURCE gap.  A non-empty list
+    # forbids a clean verdict: see coverage.fail_closed.
+    coverage_gaps: list[str] = field(default_factory=list)
+    unresolved_sources: list[str] = field(default_factory=list)
+
+    # The verdict band, which is *not* always risk_level(final_score): a
+    # cold database or an incomplete analysis downgrades it to
+    # "Inconclusive".  Readers must use this, never re-derive it.
+    risk: str = ""
+
     # How ``old_version`` (what pacman reports as installed) relates to
     # ``new_version`` (the pkgver the AUR PKGBUILD declares).  The two are
     # not always comparable - a VCS package computes its pkgver at build
@@ -149,6 +160,9 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "suppressed_rules": fact.suppressed_rules,
         "diff_truncated": fact.diff_truncated,
         "tree_analyzed": fact.tree_analyzed,
+        "coverage_gaps": fact.coverage_gaps,
+        "unresolved_sources": fact.unresolved_sources,
+        "risk": fact.risk,
         "score_breakdown": [
             {
                 "rule_id": e.rule_id,

@@ -115,7 +115,9 @@ maturity = min(1.0, observation_count / 50)
 
 ### INCONCLUSIVE verdict
 
-When the final score is in the Medium range (21-50) **and** all contributing signals are Tier C novelty **and** maturity is below 0.5 (fewer than ~25 observations), the verdict is downgraded from "Medium" to "Inconclusive". This signals insufficient data rather than actual risk. Logic at `src/trustsight/scoring.py`.
+When the final score is in the Medium range (21-50) **and** maturity is below 0.5 (fewer than ~25 observations) **and** no entry in the breakdown is HIGH, CRITICAL or FATAL, the verdict is downgraded from "Medium" to "Inconclusive". This signals insufficient data rather than actual risk. Logic at `src/trustsight/scoring.py`.
+
+The same downgrade is applied, at any maturity, when the analysis recorded a coverage gap: see [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete). Logic at `src/trustsight/coverage.py`.
 
 ---
 

@@ -55,7 +55,9 @@ def disabled():
 
 def fired(diff, config, rules, package="mypkg"):
     fact = scan_diff(diff, rules=rules, config=config, package_name=package)
-    return {e.rule_id for e in fact.score_breakdown}
+    # COVERAGE is not a rule and has no enable switch: it records what the
+    # run could not examine, which a disabled ruleset does not change.
+    return {e.rule_id for e in fact.score_breakdown if e.rule_id != "COVERAGE"}
 
 
 # --- normalisation ---

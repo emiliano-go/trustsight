@@ -40,6 +40,7 @@ from ..novelty import (
 from ..deps import extract_dependency_changes
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, get_raw_diff_lines
+from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
 from ..scoring import calculate_score
 from ..schema import (
     DiffSummary,
@@ -269,10 +270,19 @@ def analyze_package(
         diff_text, source_changes.checksum_behavior
     )
 
+    unresolved_sources = unresolved_source_lines(diff_text)
+    gaps = gaps_from(
+        diff_truncated=diff_truncated,
+        tree_analyzed=bool(tree_manifest),
+        unresolved_sources=unresolved_sources,
+        long_lines=oversized_lines(raw_lines),
+    )
+
     score, breakdown, risk = calculate_score(
         triggered_rules, source_buckets, novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
+        coverage_gaps=gaps,
     )
 
     # The installed version is a full [epoch:]pkgver-pkgrel built locally;
@@ -306,7 +316,10 @@ def analyze_package(
         suppressed_rules=suppressed_rules,
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
-        tree_analyzed=True,
+        tree_analyzed=bool(tree_manifest),
+        coverage_gaps=gaps,
+        unresolved_sources=unresolved_sources,
+        risk=risk,
         temporal_source="git_commit",
         score_breakdown=breakdown,
         final_score=score,
@@ -348,6 +361,16 @@ def scan_diff(
 ) -> PackageFact:
     if config is None:
         config = load_config()
+
+    # The same cap the git path applies.  It used to live only there, so a
+    # caller reaching scan_diff directly (the corpus adapter, the fixtures,
+    # the gates) had no ceiling at all and no truncation flag either.
+    max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
+    diff_bytes = diff_text.encode("utf-8", errors="replace")
+    diff_truncated = len(diff_bytes) > max_bytes
+    if diff_truncated:
+        log.warning("diff for %s exceeds %d bytes; truncating", package_name, max_bytes)
+        diff_text = diff_bytes[:max_bytes].decode("utf-8", errors="replace")
 
     source_changes = extract_urls_from_diff(diff_text)
 
@@ -414,10 +437,19 @@ def scan_diff(
             novelty.url_first_seen_globally = True
             global_set.add(nurl)
 
+    unresolved_sources = unresolved_source_lines(diff_text)
+    gaps = gaps_from(
+        diff_truncated=diff_truncated,
+        tree_analyzed=bool(tree_manifest),
+        unresolved_sources=unresolved_sources,
+        long_lines=oversized_lines(raw_lines),
+    )
+
     score, breakdown, risk = calculate_score(
         triggered_rules, source_buckets, novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
+        coverage_gaps=gaps,
     )
 
     exec_changes = ExecutionChanges(
@@ -436,7 +468,11 @@ def scan_diff(
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        diff_truncated=diff_truncated,
         tree_analyzed=bool(tree_manifest),
+        coverage_gaps=gaps,
+        unresolved_sources=unresolved_sources,
+        risk=risk,
         score_breakdown=breakdown,
         final_score=score,
     )

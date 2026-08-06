@@ -348,6 +348,50 @@ def test_r090_same_maintainer_is_quiet(thresholds):
     assert _fire("R090", new, old) == []
 
 
+def test_r071_ships_with_r090_for_an_unseen_maintainer(thresholds):
+    """Plan §8: an ownership transition to an account the previous snapshot
+    never saw carries R071 as well as R090."""
+    thresholds({})
+    old = _snapshot(["pkg", "other"], "alice")
+    new = copy.deepcopy(old)
+    new["pkg"]["Maintainer"] = "mallory"
+    new["pkg"]["LastModified"] = NOW + 1
+    fired = {f["rule_id"] for f in run_corpus_sweep(new, old)}
+    assert {"R090", "R071"} <= fired
+    r071 = _fire("R071", new, old)[0]
+    assert r071["severity"] == "HIGH"
+    assert r071["params"]["members"] == ["pkg"]
+    assert r071["params"]["current_maintainer"] == "mallory"
+
+
+def test_r071_quiet_when_the_new_maintainer_already_maintains_something(thresholds):
+    """A handover between established packagers is R090 alone."""
+    thresholds({})
+    old = _snapshot(["pkg", "other"], "alice")
+    old["other"]["Maintainer"] = "bob"
+    new = copy.deepcopy(old)
+    new["pkg"]["Maintainer"] = "bob"
+    new["pkg"]["LastModified"] = NOW + 1
+    fired = {f["rule_id"] for f in run_corpus_sweep(new, old)}
+    assert "R090" in fired
+    assert "R071" not in fired
+
+
+def test_r071_quiet_on_abandonment(thresholds):
+    """A move to an empty maintainer is orphan state, not a takeover."""
+    thresholds({})
+    old = _snapshot(["pkg"], "alice")
+    new = copy.deepcopy(old)
+    new["pkg"]["Maintainer"] = ""
+    assert _fire("R071", new, old) == []
+
+
+def test_r071_silent_without_a_baseline(thresholds):
+    thresholds({})
+    new = _snapshot(["pkg"], "mallory")
+    assert run_corpus_sweep(new, None) == []
+
+
 # --- R126 adopt-then-modify ---------------------------------------------------
 
 
@@ -381,6 +425,33 @@ def test_r126_stale_modify_outside_window_is_quiet(thresholds):
     new["pkg"]["Version"] = "2.0"
     new["pkg"]["LastModified"] = NOW - 2 * 86400
     assert _fire("R126", new, old, now=NOW) == []
+
+
+def test_r126_fires_on_the_first_package_of_a_replayed_campaign(thresholds):
+    """Plan §10: R126 must fire on package *one* of a campaign timeline.
+
+    A campaign is only recognisable as one by its third or fourth package;
+    the whole point of R126 is that the shape - adopt a package, change it
+    immediately - is already present in the first, before any pattern the
+    later rules key on (mass adoption, a shared host, a known payload)
+    exists to be seen.
+    """
+    thresholds({"r126": {"window_days": 14}, "r092": {"cluster_size": 3}})
+    timeline = ["pkg-one", "pkg-two", "pkg-three", "pkg-four"]
+    state = _snapshot(timeline, "alice", version="1.0")
+    fired_at: list[str] = []
+
+    for step, name in enumerate(timeline):
+        old = copy.deepcopy(state)
+        state[name]["Maintainer"] = "mallory"
+        state[name]["Version"] = "2.0"
+        state[name]["LastModified"] = NOW + step
+        findings = _fire("R126", state, old, now=NOW + step)
+        if findings:
+            fired_at.extend(findings[0]["params"]["members"])
+
+    assert fired_at[0] == "pkg-one"
+    assert fired_at == timeline
 
 
 # --- R093 orphan/adoption dependency ------------------------------------------

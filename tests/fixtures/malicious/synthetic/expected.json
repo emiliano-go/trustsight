@@ -164,24 +164,21 @@
   },
   "R010-curl-fetch.diff": {
     "must_fire": [
-      "R010"
+      "R129"
     ],
-    "min_score": 5,
-    "known_gap": "R010 is scoped to function bodies; a top-level parse-time fetch is uncovered"
+    "relabelled": "R010 -> R129 2026-08-05: R010 is scoped to build functions by design; a top-level fetch runs when makepkg merely sources the recipe, which is R129's claim"
   },
   "R011-wget-fetch.diff": {
     "must_fire": [
-      "R011"
+      "R129"
     ],
-    "min_score": 5,
-    "known_gap": "R011 is scoped to function bodies; a top-level parse-time fetch is uncovered"
+    "relabelled": "R011 -> R129 2026-08-05: same as R010; the parse-time position is the finding, not the downloader's name"
   },
   "R014-validpgpkeys-added.diff": {
     "must_fire": [
-      "R014"
+      "R130"
     ],
-    "min_score": 25,
-    "known_gap": "no rule fires on a validpgpkeys key being added (removal is R069); an attacker adding their own key is uncovered"
+    "relabelled": "R014 -> R130 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
   },
   "R015-depends-added.diff": {
     "must_fire": [
@@ -225,10 +222,9 @@
   },
   "R019-cflags-suspicious.diff": {
     "must_fire": [
-      "R019"
+      "R131"
     ],
-    "min_score": 10,
-    "known_gap": "in-diff CFLAGS inspection is uncovered; R094 sees flag changes only longitudinally, with corpus state"
+    "relabelled": "R019 -> R131 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which R070 cannot see (it is scoped to build functions)"
   },
   "R025-eval.diff": {
     "must_fire": [

@@ -11,7 +11,9 @@ from .base import (
 )
 from .build import (
     _build_findings,
+    _build_flag_findings,
     _indirect_remote_execution_findings,
+    _reconstruction_findings,
     _sudo_findings,
 )
 from .composition import _recon_findings
@@ -20,7 +22,10 @@ from .dependencies import _dependency_findings
 from .ioc import _ioc_findings
 from .network import (
     _covert_egress_findings,
+    _parse_time_fetch_findings,
+    _paste_egress_findings,
     _exotic_protocol_findings,
+    _moved_git_ref_findings,
     _version_in_url_findings,
 )
 from .persistence import _persistence_findings
@@ -62,6 +67,81 @@ def _find_line_in_diff(diff_text: str, pattern: str, prefix: str = r"\+") -> int
         if full.search(line):
             return i + 1
     return None
+
+
+_VALIDPGPKEYS_ENTRY_RE = re.compile(r"[\'\"]([A-Fa-f0-9]{8,40})[\'\"]")
+_VALIDPGPKEYS_LINE_RE = re.compile(r"^\s*validpgpkeys\s*=|^\s*validpgpkeys\s*=?\s*\(", re.IGNORECASE)
+
+
+def _signing_key_findings(diff_text: str, add) -> None:
+    """The set of keys trusted to sign this package's sources changed (R130).
+
+    ``validpgpkeys`` is the list of key fingerprints whose signature makepkg
+    will accept for a signed source.  Whoever holds one of those keys can
+    ship code to every user of the package, so the set changing is a trust
+    change, and the diff states it as a declared fact.
+
+    R069 owns the *removal* case (verification taken away).  R130 owns the
+    other two:
+
+    - a key **replaced** (one fingerprint out, a different one in) means the
+      same sources are now trusted under a different holder: HIGH.
+    - a key **added** to an existing set widens who may sign: MEDIUM.
+
+    Introducing ``validpgpkeys`` where there was none is signature checking
+    being switched on, so it is reported as a neutral fact at INFO rather
+    than as a finding against the package.
+    """
+    added_keys: set[str] = set()
+    removed_keys: set[str] = set()
+    had_keys_before = False
+    in_added = in_removed = False
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        side = line[0] if line[:1] in "+- " else " "
+        body = line[1:] if line[:1] in "+- " else line
+        opens = bool(_VALIDPGPKEYS_LINE_RE.match(body))
+        if side == "-" and (opens or in_removed):
+            had_keys_before = had_keys_before or bool(_VALIDPGPKEYS_ENTRY_RE.search(body))
+            removed_keys |= {m.upper() for m in _VALIDPGPKEYS_ENTRY_RE.findall(body)}
+            in_removed = opens and ")" not in body if opens else (")" not in body)
+            continue
+        if side == "+" and (opens or in_added):
+            added_keys |= {m.upper() for m in _VALIDPGPKEYS_ENTRY_RE.findall(body)}
+            in_added = opens and ")" not in body if opens else (")" not in body)
+            continue
+        if side == " ":
+            if opens or _VALIDPGPKEYS_ENTRY_RE.search(body) and in_added:
+                had_keys_before = had_keys_before or bool(
+                    _VALIDPGPKEYS_ENTRY_RE.search(body)
+                )
+            in_added = in_removed = False
+
+    genuinely_added = added_keys - removed_keys
+    genuinely_removed = removed_keys - added_keys
+    if not genuinely_added:
+        return
+    keys = ", ".join(sorted(k[-8:] for k in genuinely_added))
+    line_no = _find_line_in_diff(diff_text, r"validpgpkeys")
+    if genuinely_removed:
+        add("R130", "Signing Key Replaced", "HIGH", "integrity",
+            f"validpgpkeys now trusts {keys} instead of "
+            f"{', '.join(sorted(k[-8:] for k in genuinely_removed))}",
+            line=line_no, added_keys=keys,
+            removed_keys=", ".join(sorted(k[-8:] for k in genuinely_removed)),
+            detail=f"signing key replaced: now {keys}")
+    elif had_keys_before:
+        add("R130", "Signing Key Added", "MEDIUM", "integrity",
+            f"validpgpkeys gained {keys}; another holder may now sign this "
+            f"package's sources",
+            line=line_no, added_keys=keys,
+            detail=f"signing key {keys} added to an existing set")
+    else:
+        add("R130", "Signature Verification Introduced", "INFO", "integrity",
+            f"validpgpkeys introduced with {keys}",
+            line=line_no, added_keys=keys,
+            detail=f"validpgpkeys introduced with {keys}")
 
 
 def _structural_findings(
@@ -159,12 +239,20 @@ def _structural_findings(
     _dependency_findings(diff_text, package_name, config or {}, add)
     _build_findings(diff_text, config or {}, add)
     _sudo_findings(diff_text, config or {}, add)
+    _build_flag_findings(diff_text, config or {}, add)
+    _reconstruction_findings(diff_text, config or {}, add)
+    _signing_key_findings(diff_text, add)
     _indirect_remote_execution_findings(diff_text, config or {}, add)
     _delivery_findings(diff_text, config or {}, add)
     _persistence_findings(diff_text, config or {}, add)
     _recon_findings(diff_text, config or {}, add)
     _exotic_protocol_findings(diff_text, config or {}, add)
     _version_in_url_findings(diff_text, config or {}, add)
+    _parse_time_fetch_findings(diff_text, config or {}, add)
+    _paste_egress_findings(diff_text, config or {}, add)
+    # R079 asks the current file which variable feeds a git ref; the diff
+    # alone shows only the hunk around the pin.
+    _moved_git_ref_findings(diff_text, config or {}, add, current_text=current_text)
     _covert_egress_findings(diff_text, config or {}, add)
     _epoch_findings(diff_text, config or {}, add)
     # R106 reads the current file where the caller has it: an indicator that

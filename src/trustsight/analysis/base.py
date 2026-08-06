@@ -136,3 +136,35 @@ def _get_installed_version(pkg_name: str) -> str:
     except (subprocess.SubprocessError, FileNotFoundError):
         pass
     return ""
+
+
+# ---------------------------------------------------------------------------
+# File scoping inside a multi-file diff
+# ---------------------------------------------------------------------------
+
+_DIFF_FILE_RE = re.compile(r"^\+\+\+ [ab]/(.+?)\s*$")
+
+
+def mask_to_recipe(lines: list[str]) -> list[str]:
+    """Blank the hunk lines that belong to files other than the recipe.
+
+    An AUR commit carries more than the PKGBUILD: the .SRCINFO, install
+    hooks, and any patch files the package ships.  A rule about what the
+    *recipe* declares must not read a Makefile fragment inside a shipped
+    patch as if the PKGBUILD had written it - ``LDFLAGS = @LDFLAGS@`` in a
+    vendored configure script is not the packager overriding the build
+    flags.
+
+    Lines are blanked rather than dropped so that indices stay aligned with
+    ``resolve_added_lines``/``_classify_enclosing_function`` and with the
+    diff's own line numbers.
+    """
+    out: list[str] = []
+    in_recipe = True
+    for line in lines:
+        match = _DIFF_FILE_RE.match(line)
+        if match:
+            name = match.group(1).rsplit("/", 1)[-1]
+            in_recipe = name == "PKGBUILD" or name.endswith(".install")
+        out.append(line if in_recipe else "")
+    return out

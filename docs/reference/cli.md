@@ -69,7 +69,7 @@ Discovery uses a local AUR metadata snapshot by default:
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded; subsequent runs reuse it.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001–R064, R068–R075, R081–R082) and code-structure rules (C001–C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies detection rules (R001-R064, R068-R075, R081-R082) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
 
 If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.
@@ -513,6 +513,7 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 
 ```
 trustsight full-aur [--resume] [--export PATH] [--sign PATH]
+trustsight full-aur --watch [--interval SECONDS] [--cycles N]
 ```
 
 ### Flags
@@ -522,11 +523,38 @@ trustsight full-aur [--resume] [--export PATH] [--sign PATH]
 | `--resume` | Continue an interrupted bootstrap. The bootstrap saves progress after each package. |
 | `--export PATH` | Write the signed baseline artifact to this path. |
 | `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
+| `--watch` | Keep running cycles on an interval until interrupted. |
+| `--interval SECONDS` | Seconds between `--watch` cycles. Defaults to `[limits] watch_interval` (3600) and is clamped to `[limits] watch_min_interval` (60). |
+| `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
 | `--json` | Output JSON. |
 
 The first run processes all packages; subsequent runs only process changed ones (using the cached metadata snapshot). Suitable for cron.
 
 Use `--export` to produce a shareable baseline that other TrustSight instances can consume via `trustsight import-baseline`.
+
+### What one cycle does
+
+1. Fetch the AUR metadata snapshot and diff it against the stored copy.
+2. Download and analyse the PKGBUILDs of everything added or changed.
+3. Run the Class D corpus sweep over the whole metadata delta, which returns one finding per cluster rather than one per member.
+4. Record the cycle into the adoption feed that R125's introduction-rate baseline reads.
+5. Report the packages that scored 40 or more this cycle, worst first.
+
+The first cycle of a fresh install is a bootstrap: with no prior snapshot there is nothing to deviate from, so the corpus sweep is silent by construction.
+
+### Watch mode
+
+```
+trustsight full-aur --watch --interval 1800
+```
+
+`--watch` repeats that cycle on an interval and adds memory. A cluster is announced the first time it is seen and counted afterwards, so a quiet night prints nothing instead of re-announcing the same forty-package adoption on every cycle. The record lives in the `alert_state` table, keyed by package and rule, with a first-seen timestamp and a count.
+
+The interval floor exists because the AUR regenerates its metadata dump every few minutes: anything shorter re-downloads the same snapshot and re-walks the same diff. A mistyped `--interval 1` is raised to 60 rather than turned into a request loop against someone else's mirror.
+
+Interrupting with Ctrl-C ends the loop, during a cycle or during the wait. Nothing is lost by stopping: each cycle writes its metadata snapshot and resume file before it returns, so the next run picks up from there.
+
+`--watch` cannot be combined with `--export` or `--sign`. Those describe a single artifact, and pairing them with a loop would silently overwrite it every cycle; the command exits with status 2 instead.
 
 ---
 
@@ -555,7 +583,7 @@ trustsight import-baseline <path>
 
 ## trustsight corpus pivot
 
-Given one indicator, list every corpus package that references it. This inverts R106: instead of asking what a single package carries, it asks who points at a published indicator — the question an advisory creates.
+Given one indicator, list every corpus package that references it. This inverts R106: instead of asking what a single package carries, it asks who points at a published indicator, which is the question an advisory creates.
 
 ```
 trustsight corpus pivot <indicator> [--json]
@@ -571,15 +599,15 @@ trustsight corpus pivot <indicator> [--json]
 
 | Flag | Description |
 |------|-------------|
-| `--type` | Force the indicator type (`package`, `domain`, or `hash`) when the shape is ambiguous — a package name spelled like a host, or a name that is all hex of digest length. |
+| `--type` | Force the indicator type (`package`, `domain`, or `hash`) when the shape is ambiguous: a package name spelled like a host, or a name that is all hex of digest length. |
 | `--json` | Output JSON. |
 
 ### Behaviour
 
-The match is exact — `evil.example` matches neither `notevil.example` nor `cdn.evil.example`, and a truncated digest matches nothing. The query does not have to appear in `iocs.toml`; when it does, the entry's provenance and confidence tier are reported with the result.
+The match is exact: `evil.example` matches neither `notevil.example` nor `cdn.evil.example`, and a truncated digest matches nothing. The query does not have to appear in `iocs.toml`; when it does, the entry's provenance and confidence tier are reported with the result.
 
 Only stored corpus material is searched: the AUR metadata snapshot (names, declared dependencies, upstream `url=`) and the stored PKGBUILD snapshots. Nothing a PKGBUILD points at is ever fetched. Package-name queries read the metadata only, because a name appearing in PKGBUILD text is not a declared fact.
 
-The output names which stores were searched. An empty corpus reports that nothing was searched — never that nothing references the indicator. **A miss is uninformative:** the indicator list records what has already been reported, so it says nothing about a package it does not name.
+The output names which stores were searched. An empty corpus reports that nothing was searched, never that nothing references the indicator. **A miss is uninformative:** the indicator list records what has already been reported, so it says nothing about a package it does not name.
 
 ---

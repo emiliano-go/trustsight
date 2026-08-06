@@ -1,0 +1,155 @@
+{
+ "june-w1-install-hook-foreign-fetch.diff": {
+  "description": "Install hook installs a package from a foreign package manager",
+  "campaign": "june-w1-w2",
+  "fidelity": "representative",
+  "must_fire": [
+   "R007",
+   "R081"
+  ],
+  "min_score": 25
+ },
+ "june-w2-install-hook-remote-script.diff": {
+  "description": "Install hook pipes a remote script into a shell",
+  "campaign": "june-w1-w2",
+  "fidelity": "representative",
+  "must_fire": [
+   "R001",
+   "R007"
+  ],
+  "min_score": 40
+ },
+ "june-w3-obfuscated-install-hook.diff": {
+  "description": "June W3 re-release: the package manager name is ANSI-C hex, so the rule has to match the reconstruction",
+  "campaign": "june-w3-obfuscated",
+  "fidelity": "representative",
+  "must_fire": [
+   "R007",
+   "R081",
+   "R117"
+  ],
+  "min_score": 25
+ },
+ "june-w3-empty-quote-concat-hook.diff": {
+  "description": "Same step via empty-quote concatenation",
+  "campaign": "june-w3-obfuscated",
+  "fidelity": "representative",
+  "must_fire": [
+   "R081",
+   "R117"
+  ],
+  "min_score": 25
+ },
+ "july-anti-analysis-guard.diff": {
+  "description": "Build refuses to run under a debugger or a VM - a check with no packaging purpose",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R119"
+  ],
+  "min_score": 25
+ },
+ "july-reconstructed-elf-payload.diff": {
+  "description": "A base64 blob in the PKGBUILD whose bytes carry ELF magic",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R120"
+  ],
+  "min_score": 25
+ },
+ "july-generate-then-execute.diff": {
+  "description": "Build writes a script in the same function that executes it",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R121"
+  ],
+  "min_score": 25
+ },
+ "july-write-then-execute.diff": {
+  "description": "A file the recipe places is then executed from its new path - the dataflow, not the generation (R121 owns that)",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R124"
+  ],
+  "min_score": 25
+ },
+ "july-systemd-persistence.diff": {
+  "description": "Unit whose ExecStart points at a runtime-writable path",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R085"
+  ],
+  "min_score": 25
+ },
+ "july-pacman-hook-persistence.diff": {
+  "description": "Package installs a pacman hook - code that runs on every later transaction",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R114"
+  ],
+  "min_score": 5
+ },
+ "july-build-write-outside-staging.diff": {
+  "description": "A build-time write that lands outside $srcdir/$pkgdir - pacman tracks none of it",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R128"
+  ],
+  "min_score": 25
+ },
+ "july-exfil-to-drop-host.diff": {
+  "description": "Collected data uploaded to an ephemeral file-drop host, the exfil direction no source bucket can see",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R087"
+  ],
+  "must_not_fire": [
+   "R061"
+  ],
+  "min_score": 25
+ },
+ "july-full-kill-chain.diff": {
+  "description": "Anti-analysis, an encoded payload, persistence and an obfuscated install hook in one diff: R089's whole point",
+  "campaign": "july",
+  "fidelity": "representative",
+  "must_fire": [
+   "R081",
+   "R089",
+   "R114",
+   "R119",
+   "R120"
+  ],
+  "min_score": 60
+ },
+ "control-arch-check-and-generated-desktop.diff": {
+  "description": "Architecture detection and a generated .desktop consumed by a declared install step",
+  "campaign": "control",
+  "fidelity": "representative",
+  "must_not_fire": [
+   "R119",
+   "R121",
+   "R124",
+   "R128"
+  ],
+  "max_score": 20
+ },
+ "control-bin-package-declared-source.diff": {
+  "description": "A -bin/-appimage package whose binary arrives through a declared, checksummed source",
+  "campaign": "control",
+  "fidelity": "representative",
+  "must_not_fire": [
+   "R118",
+   "R120",
+   "R124",
+   "R128"
+  ],
+  "max_score": 20
+ }
+}

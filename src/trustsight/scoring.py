@@ -1,17 +1,18 @@
 from .config import load_config
+from .coverage import GAP_REASONS, fail_closed, qualified_band
 from .schema import NoveltyContext, ScoreEntry
 
 _MATURITY_THRESHOLD = 50
 
 _DEFAULT_VERIFICATION_EVIDENCE = {
-    "checksum_present": -5,
-    "validpgpkeys_declared": -15,
-    "gpg_verify_present": -20,
+    "checksum_present": -10,
+    "validpgpkeys_declared": -10,
+    "gpg_verify_present": -5,
 }
 
 _DEFAULT_PINNING_WEIGHTS = {
-    "checksum_pinned": -10,
-    "tag_pinned": -5,
+    "checksum_pinned": -5,
+    "tag_pinned": -3,
     "branch_pinned": 0,
     "unpinned": 0,
 }
@@ -43,6 +44,31 @@ def risk_level(score: int) -> str:
         return "Critical"
 
 
+def verdict_level(fact) -> str:
+    """The band for *fact*, as a bare value.
+
+    ``risk_level(final_score)`` is the band the number alone implies.  It
+    is not always the verdict: a cold database or an incomplete analysis
+    downgrades the result to "Inconclusive", and that decision is made
+    once, in :func:`calculate_score`, and carried on the fact.  Re-deriving
+    it from the score throws the downgrade away, which is how "Inconclusive"
+    used to be computed and then never displayed.
+    """
+    stored = getattr(fact, "risk", "")
+    return stored or risk_level(getattr(fact, "final_score", 0))
+
+
+def verdict_label(fact) -> str:
+    """The band for *fact* as it must be shown to a person.
+
+    Same value as :func:`verdict_level`, qualified when the run did not
+    see the whole change.  Every human-facing render uses this; machine
+    output uses ``verdict_level`` plus ``coverage_gaps``, so a consumer
+    gets the two facts separately instead of parsing a sentence.
+    """
+    return qualified_band(verdict_level(fact), getattr(fact, "coverage_gaps", []))
+
+
 def calculate_score(
     triggered_rules: list[dict],
     source_buckets: dict[str, str],
@@ -50,8 +76,15 @@ def calculate_score(
     config: dict | None = None,
     verification_evidence: list[str] | None = None,
     pinning_level: str = "unpinned",
+    coverage_gaps: list[str] | None = None,
 ) -> tuple[int, list[ScoreEntry], str]:
-    """Calculate the final trust score from triggered rules and context."""
+    """Calculate the final trust score from triggered rules and context.
+
+    *coverage_gaps* names what this run could not examine (see
+    :mod:`trustsight.coverage`).  Gaps never move the score - they are not
+    evidence about the package - but they do prevent the result from being
+    labelled clean.
+    """
     if config is None:
         config = load_config()
 
@@ -95,6 +128,21 @@ def calculate_score(
                 evidence=evidence,
                 file=file,
                 line=line,
+            )
+        )
+
+    # Recorded before the FATAL short-circuit so that "what was examined"
+    # is on the record even for a capped score: a truncated diff that
+    # already scored 100 still has an unexamined tail.
+    for gap in (coverage_gaps or ()):
+        breakdown.append(
+            ScoreEntry(
+                rule_id="COVERAGE",
+                severity="INFO",
+                weight=0,
+                reason=f"Coverage gap: {GAP_REASONS.get(gap, gap)}",
+                params={"gap": gap},
+                evidence={"gap": gap},
             )
         )
 
@@ -209,4 +257,5 @@ def calculate_score(
         )
         if not has_strong_signal:
             level = "Inconclusive"
+    level = fail_closed(level, coverage_gaps or [], breakdown)
     return final, breakdown, level

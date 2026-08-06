@@ -62,7 +62,7 @@ This command:
 - **21-50 (FLAGGED: Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
 - **51-80 (FLAGGED: High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
 - **81-100 (FLAGGED: Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
-- **INCONCLUSIVE**: Score fell in the Medium range, but the only signals came from **novelty** and the database is cold (fewer than 50 prior observations). The tool is telling you it does not have enough data yet; this is **not** the same as CLEAN.
+- **INCONCLUSIVE**: Either the score fell in the Medium range with nothing strong behind it and a cold database (fewer than 25 prior analyses of this package; novelty reaches full weight at 50), or the run could not examine the whole change (a truncated diff, an over-long line, an unavailable repository tree, or a `source=` URL computed at build time). Both mean the tool does not have enough to answer; this is **not** the same as CLEAN.
 
 ### Key teaching moments
 

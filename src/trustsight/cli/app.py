@@ -46,3 +46,19 @@ _register_list(app)
 _register_forget(app)
 _register_admin(app)
 _register_corpus(app)
+
+
+def main() -> None:
+    """Console entry point.
+
+    Uncaught exceptions become exit code 2 (operational failure), matching the
+    contract in docs/reference/exit-codes.md: 0 means the command ran, 2 means
+    it could not run or complete. Deliberate exits (typer.Exit) pass through.
+    """
+    try:
+        app()
+    except typer.Exit:
+        raise
+    except Exception as exc:
+        print(f"trustsight: error: {exc}", file=sys.stderr)
+        raise typer.Exit(code=2)

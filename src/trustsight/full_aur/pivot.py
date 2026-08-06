@@ -70,22 +70,19 @@ def _snapshot_rows() -> list[tuple[str, str]]:
 
 
 def _load_metadata() -> dict:
-    """Read whichever metadata snapshot this install actually has.
+    """Read this install's metadata snapshot.
 
-    ``review`` keeps its snapshot in the config directory; the ``full-aur``
-    pipeline writes one relative to the working directory.  The pivot is a
-    reader, so it takes either rather than declaring one of them wrong.
+    Exactly one location, ``metadata.default_metadata_path()``.  The pivot
+    used to fall back to ``full-aur-meta.json`` in the working directory,
+    left over from when the pipeline wrote one there.  That made the
+    answer depend on where the command was run from, and a file in the
+    current directory is not an input this tool trusts: dropping a
+    snapshot in a shared checkout would decide which packages the pivot
+    reports as related to an indicator.
     """
-    from pathlib import Path
+    from .metadata import default_metadata_path, load_metadata
 
-    from ..config import CONFIG_DIR
-    from .metadata import load_metadata
-
-    for path in (CONFIG_DIR / "full-aur-meta.json", Path("full-aur-meta.json")):
-        data = load_metadata(path=path)
-        if data:
-            return data
-    return {}
+    return load_metadata(path=default_metadata_path()) or {}
 
 
 def _metadata_hits(value: str, type_: str, metadata: dict) -> list[dict]:

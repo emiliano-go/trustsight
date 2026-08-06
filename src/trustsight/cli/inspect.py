@@ -9,8 +9,9 @@ from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
-from ..scoring import risk_level
-from ..unicode import describe_fatal_codepoints, strip_ansi
+from ..scoring import verdict_label, verdict_level
+from ..safe_text import clean, safe_markup
+from ..unicode import describe_fatal_codepoints
 from .display import (
     HAS_RICH,
     RISK_COLORS,
@@ -30,7 +31,8 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     from rich.text import Text
 
     con = console()
-    risk = risk_level(fact.final_score)
+    risk = verdict_level(fact)
+    label = verdict_label(fact)
     border = RISK_COLORS.get(risk, "white") if (show_score or show_risk) else "blue"
 
     rows: list[tuple[str, str]] = []
@@ -41,12 +43,12 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
         rows.append(("Lines", f"[green]+{fact.diff_summary.lines_added}[/] [red]-{fact.diff_summary.lines_removed}[/]"))
     if fact.maintainer_changed:
-        rows.append(("Maintainer", f"[yellow]{fact.previous_maintainer or '?'} -> {fact.current_maintainer or '?'}[/]"))
+        rows.append(("Maintainer", f"[yellow]{safe_markup(fact.previous_maintainer or '?')} -> {safe_markup(fact.current_maintainer or '?')}[/]"))
     elif fact.current_maintainer:
-        rows.append(("Maintainer", str(fact.current_maintainer)))
+        rows.append(("Maintainer", Text(clean(fact.current_maintainer))))
     cs = fact.source_changes.checksum_behavior
     if cs and cs != "unchanged":
-        rows.append(("Checksum", f"[yellow]{cs}[/]"))
+        rows.append(("Checksum", f"[yellow]{safe_markup(cs)}[/]"))
 
     inside = Table.grid(padding=(0, 2))
     inside.add_column(style="dim", justify="right", no_wrap=True)
@@ -61,7 +63,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
             status = fc.get("status", "")
             path = fc.get("path", "")
             prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
-            inside.add_row("", f"  {prefix} {path}")
+            inside.add_row("", f"  {prefix} {safe_markup(path)}")
 
     if fact.source_changes.added_urls:
         inside.add_row("", "")
@@ -69,13 +71,13 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         for url in fact.source_changes.added_urls:
             bucket = fact.source_buckets.get(url, "unknown")
             style = "red" if bucket in ("homograph_attack", "unknown") else "dim"
-            inside.add_row("", Text(f"  [{bucket}] ", style=style) + Text(strip_ansi(url)))
+            inside.add_row("", Text(f"  [{bucket}] ", style=style) + Text(clean(url)))
 
     if fact.execution_changes.resolved_commands:
         inside.add_row("", "")
         inside.add_row("[underline]Resolved commands[/]", "")
         for cmd in fact.execution_changes.resolved_commands[:20]:
-            inside.add_row("", "  " + strip_ansi(cmd.strip()))
+            inside.add_row("", Text("  " + clean(cmd.strip())))
         extra = len(fact.execution_changes.resolved_commands) - 20
         if extra > 0:
             inside.add_row("", f"  [dim]... {extra} more[/]")
@@ -90,7 +92,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
                 segs.append(str(_weight_text(entry.weight)) + " ")
             if show_risk:
                 segs.append(str(_severity_text(entry.severity)) + " ")
-            segs.append(Text(strip_ansi(entry.reason)))
+            segs.append(Text(clean(entry.reason)))
             inside.add_row("", Text.assemble(*segs))
 
         if show_risk:
@@ -107,22 +109,22 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("", "")
         inside.add_row("[yellow]Suppressed by override[/]", "")
         for r in fact.suppressed_rules:
-            inside.add_row("", f"  {r['rule_id']}  {r.get('override_reason', '')}")
+            inside.add_row("", Text(f"  {clean(r['rule_id'])}  {clean(r.get('override_reason', ''))}"))
 
     if show_score:
         inside.add_row("", "")
         total = sum(e.weight for e in fact.score_breakdown) if fact.score_breakdown else 0
-        inside.add_row("[bold]Score[/]", f"{fact.final_score}/100  ({risk})")
+        inside.add_row("[bold]Score[/]", f"{fact.final_score}/100  ({label})")
         inside.add_row("", f"[dim]sum: {total:+d}, clamped to {fact.final_score}/100[/]")
     elif show_risk:
         inside.add_row("", "")
-        inside.add_row("[bold]Risk[/]", f"({risk})")
+        inside.add_row("[bold]Risk[/]", f"({label})")
 
     inside.add_row("", "")
     inside.add_row("[bold]Status[/]", _status_text(fact))
 
     con.print()
-    con.print(Panel(inside, title=f"TrustSight Inspect: {fact.package_name}", border_style=border))
+    con.print(Panel(inside, title=Text(f"TrustSight Inspect: {clean(fact.package_name)}"), border_style=border))
 
 
 def _status_text(fact) -> str:
@@ -141,45 +143,45 @@ def _status_text(fact) -> str:
 
 
 def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
-    print(f"TrustSight Inspect: {fact.package_name}")
+    print(f"TrustSight Inspect: {clean(fact.package_name)}")
     print(f"  Version: {version_transition(fact)}")
     print(f"  Status: {_status_text(fact)}")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.maintainer_changed:
-        print(f"  Maintainer changed: {fact.previous_maintainer} -> {fact.current_maintainer}")
+        print(f"  Maintainer changed: {clean(fact.previous_maintainer)} -> {clean(fact.current_maintainer)}")
     cs = fact.source_changes.checksum_behavior
     if cs and cs != "unchanged":
-        print(f"  Checksum: {cs}")
+        print(f"  Checksum: {clean(cs)}")
     if fact.diff_summary.file_changes:
         print("  Files changed:")
         for fc in fact.diff_summary.file_changes:
             status = fc.get("status", "")
             path = fc.get("path", "")
             prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
-            print(f"    {prefix} {path}")
+            print(f"    {prefix} {clean(path)}")
     if fact.source_changes.added_urls:
         print("  Source URLs added:")
         for url in fact.source_changes.added_urls:
-            print(f"    {strip_ansi(url)} ({fact.source_buckets.get(url, 'unknown')})")
+            print(f"    {clean(url)} ({fact.source_buckets.get(url, 'unknown')})")
     if fact.score_breakdown:
         print("  Rules Triggered:")
         for e in fact.score_breakdown:
-            segs = [f"    [{e.rule_id}]"]
+            segs = [f"    [{clean(e.rule_id)}]"]
             if show_score:
                 segs.append(f"{e.weight:+d}")
             if show_risk:
                 segs.append(f"{e.severity:<8}")
-            segs.append(e.reason)
+            segs.append(clean(e.reason))
             print(" ".join(segs))
     if fact.suppressed_rules:
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
-            print(f"    {r['rule_id']} {r.get('override_reason', '')}")
+            print(f"    {clean(r['rule_id'])} {clean(r.get('override_reason', ''))}")
     if show_score:
-        print(f"  Score: {fact.final_score}/100 ({risk_level(fact.final_score)})")
+        print(f"  Score: {fact.final_score}/100 ({verdict_label(fact)})")
     elif show_risk:
-        print(f"  Risk: {risk_level(fact.final_score)}")
+        print(f"  Risk: {verdict_label(fact)}")
 
 
 def register_commands(app: typer.Typer):
@@ -210,7 +212,7 @@ def register_commands(app: typer.Typer):
                     typer.echo(json.dumps({"error": msg}))
                 else:
                     _print_colored(msg, "red")
-                raise typer.Exit(code=1)
+                raise typer.Exit(code=2)
 
         fact = analyze_package(package)
         if json_output:

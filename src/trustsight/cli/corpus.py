@@ -11,6 +11,7 @@ import typer
 
 from ..config import ensure_default_configs
 from ..db import init_db
+from ..safe_text import clean
 from .display import HAS_RICH, _print_colored, console
 
 corpus_app = typer.Typer(
@@ -80,21 +81,26 @@ def pivot_cmd(
 
     if HAS_RICH:
         from rich.table import Table
+        from rich.text import Text
 
         con = console()
-        con.print(f"[bold cyan]{header}[/]")
+        con.print(Text(clean(header), style="bold cyan"))
         table = Table(show_header=True, header_style="bold")
         table.add_column("Package")
         table.add_column("Surface")
         table.add_column("Reference")
         for match in result["matches"]:
-            table.add_row(match["package"], match["surface"], match["detail"])
+            table.add_row(
+                Text(clean(match["package"])),
+                Text(clean(match["surface"])),
+                Text(clean(match["detail"], limit=200)),
+            )
         con.print(table)
         con.print(f"[dim]searched: {', '.join(result['sources'])}[/]")
     else:
-        print(header)
+        print(clean(header))
         for match in result["matches"]:
-            print(f"{match['package']}\t{match['surface']}\t{match['detail']}")
+            print(f"{clean(match['package'])}\t{clean(match['surface'])}\t{clean(match['detail'], limit=200)}")
         print(f"searched: {', '.join(result['sources'])}")
 
 

@@ -1,5 +1,5 @@
 import atexit
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import re
 import sqlite3
@@ -386,6 +386,15 @@ def count_observations() -> int:
 
 SEED_OBSERVATION_KEY = "seed_observation_count"
 SEED_VERSION_KEY = "seed_version"
+SEED_DIGEST_KEY = "seed_sha256"
+SEED_ORIGIN_KEY = "seed_origin"
+
+# The only metadata keys a seed is allowed to set.  ``import_seed`` used
+# to copy ``seed.metadata`` wholesale with INSERT OR REPLACE, so a seed
+# handed to ``trustsight seed-db`` could rewrite any key in the user's
+# database, including ones it has no business owning.  A seed describes
+# itself and nothing else.
+SEED_OWNED_KEYS = (SEED_OBSERVATION_KEY, SEED_VERSION_KEY)
 
 
 def get_metadata(key: str) -> Optional[str]:
@@ -620,12 +629,18 @@ def import_seed(seed_path: Path) -> dict:
     what was imported.
     """
     import gzip
+    import hashlib
     import tempfile
 
     init_db()
     path = Path(seed_path)
     if not path.exists():
         raise FileNotFoundError(path)
+
+    # Digest the artifact as delivered, before decompression, so the
+    # recorded value identifies the exact file that was trusted.
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    origin = "bundled" if path == bundled_seed_path() else str(path)
 
     temp: Optional[Path] = None
     if path.suffix == ".gz":
@@ -678,7 +693,13 @@ def import_seed(seed_path: Path) -> dict:
             )
             after = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
             conn.execute(
-                """INSERT OR REPLACE INTO maintainer_counts (name, count)
+                # OR IGNORE, not OR REPLACE: a high maintainer count is what
+                # makes a maintainer look established, and an established
+                # maintainer suppresses R071/R090.  A seed may supply that
+                # number on a cold database; it may not overwrite one this
+                # install learned, which would be a suppression primitive
+                # handed to whoever wrote the seed.
+                """INSERT OR IGNORE INTO maintainer_counts (name, count)
                    SELECT name, count FROM seed.maintainer_counts"""
             )
             maint = conn.execute(
@@ -705,9 +726,26 @@ def import_seed(seed_path: Path) -> dict:
                 deps = conn.execute(
                     "SELECT COUNT(*) AS n FROM dependency_names"
                 ).fetchone()["n"]
+            placeholders = ",".join("?" for _ in SEED_OWNED_KEYS)
             conn.execute(
-                """INSERT OR REPLACE INTO metadata (key, value)
-                   SELECT key, value FROM seed.metadata"""
+                f"""INSERT OR REPLACE INTO metadata (key, value)
+                    SELECT key, value FROM seed.metadata
+                    WHERE key IN ({placeholders})""",
+                SEED_OWNED_KEYS,
+            )
+            # Provenance, so "where did these priors come from" is a
+            # question the database can answer.  A seed cannot raise a
+            # score, but it can lower one by making a URL look familiar,
+            # and that is worth being able to attribute.
+            conn.execute(
+                """INSERT INTO metadata (key, value) VALUES (?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+                (SEED_DIGEST_KEY, digest),
+            )
+            conn.execute(
+                """INSERT INTO metadata (key, value) VALUES (?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+                (SEED_ORIGIN_KEY, origin),
             )
             conn.commit()
         finally:
@@ -1061,3 +1099,56 @@ def forget_prune(
         else:
             removed[r["name"]] = forget_package(r["name"])
     return removed
+
+
+def record_alerts(pairs: list[tuple[str, str]], now: str | None = None) -> list[tuple[str, str]]:
+    """Record ``(package, rule)`` alerts and return the ones not seen before.
+
+    ``full-aur --watch`` runs the same corpus cycle repeatedly, and a
+    finding that has already been reported is not news: a maintainer who
+    adopted forty packages last night would otherwise be re-announced on
+    every cycle until the metadata changes again.  The first time a pair
+    arrives it is returned (and stored); afterwards only its counter and
+    ``last_sent`` move, so the operator sees each finding once and the
+    history still records how persistent it was.
+    """
+    if not pairs:
+        return []
+    stamp = now or datetime.now(timezone.utc).isoformat()
+    fresh: list[tuple[str, str]] = []
+    with get_connection() as conn:
+        for package_name, rule_id in pairs:
+            row = conn.execute(
+                "SELECT count FROM alert_state WHERE package_name = ? AND rule_id = ?",
+                (package_name, rule_id),
+            ).fetchone()
+            if row is None:
+                conn.execute(
+                    "INSERT INTO alert_state (package_name, rule_id, first_seen, "
+                    "last_sent, count) VALUES (?, ?, ?, ?, 1)",
+                    (package_name, rule_id, stamp, stamp),
+                )
+                fresh.append((package_name, rule_id))
+            else:
+                conn.execute(
+                    "UPDATE alert_state SET last_sent = ?, count = count + 1 "
+                    "WHERE package_name = ? AND rule_id = ?",
+                    (stamp, package_name, rule_id),
+                )
+        conn.commit()
+    return fresh
+
+
+def alert_history(package_name: str | None = None) -> list[dict]:
+    """Stored alert rows, most recently sent first."""
+    query = (
+        "SELECT package_name, rule_id, first_seen, last_sent, count "
+        "FROM alert_state"
+    )
+    params: tuple = ()
+    if package_name:
+        query += " WHERE package_name = ?"
+        params = (package_name,)
+    query += " ORDER BY last_sent DESC, package_name"
+    with get_connection() as conn:
+        return [dict(row) for row in conn.execute(query, params).fetchall()]

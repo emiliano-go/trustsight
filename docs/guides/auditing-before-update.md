@@ -25,7 +25,7 @@ A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **C
 | **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules.md) matched. |
 | **41-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
 | **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
-| **INCONCLUSIVE** | Score landed in the Medium range but only novelty (tier C) fired, and the database has fewer than 50 observations. The tool cannot form a confident picture; see [cold start](../explanation/cold-start-and-maturity.md). |
+| **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the package has fewer than 25 recorded analyses, which is where maturity crosses 0.5 (see [cold start](../explanation/cold-start-and-maturity.md)), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
 
 > **Practical threshold:** score **25+** warrants attention. **40+** means skip the update and inspect first.
 
@@ -60,7 +60,7 @@ Three verdict states are possible:
 |---------|-------|---------|
 | **CLEAN** | ≤20 | No significant risk signals |
 | **FLAGGED** | >20 | One or more signals fired; investigate |
-| **INCONCLUSIVE** | 25-50 | Medium score, but only novelty signals and a cold database |
+| **INCONCLUSIVE** | 25-50, or any | Medium score with nothing strong behind it and a cold database, or an analysis with a coverage gap at any score |
 
 See the [report schema](../reference/report-schema.md) for the full scoring breakdown.
 

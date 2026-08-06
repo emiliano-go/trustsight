@@ -8,13 +8,15 @@ import typer
 
 from ..analysis import analyze_package
 from ..config import CONFIG_DIR, ensure_default_configs, load_config
+from ..coverage import GAP_REASONS, describe as describe_coverage
+from ..safe_text import clean, safe_markup
 from ..db import (
     get_db_path,
     init_db,
     maybe_auto_import_seed,
 )
 from ..fetcher import clone_or_fetch, last_fetch_time
-from ..scoring import risk_level
+from ..scoring import risk_level, verdict_label, verdict_level
 from .display import (
     HAS_RICH,
     RISK_COLORS,
@@ -302,20 +304,24 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
         file_changes = fact.diff_summary.file_changes
         is_trivial = _is_trivial_update(fact, findings)
 
-        if fact.diff_truncated:
-            verdict = (
-                "Diff exceeded the size cap and was truncated; only part of "
-                f"this change was vetted. {verdict}"
-            )
+        # Coverage first: what the run could not see qualifies everything
+        # the verdict goes on to say about what it did see.
+        coverage_note = describe_coverage(fact.coverage_gaps)
+        if coverage_note:
+            verdict = f"{coverage_note} {verdict}"
         res = {
             "package": entry["name"],
             "old_version": entry.get("current_version", ""),
             "new_version": entry.get("latest_version", ""),
             "score": fact.final_score,
             "verdict": verdict,
-            "risk": risk_level(fact.final_score),
+            "risk": verdict_level(fact),
+            # The label a person sees: same band, qualified when the run
+            # did not read the whole change (coverage.qualified_band).
+            "risk_label": verdict_label(fact),
             "first_seen": fact.first_seen,
             "diff_truncated": fact.diff_truncated,
+            "coverage_gaps": fact.coverage_gaps,
             # A VCS package's AUR pkgver is a placeholder its build replaces,
             # so the two versions are not comparable and must not render as
             # an update arrow (plan §13).
@@ -393,10 +399,15 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 "verdict": r["verdict"],
                 "first_seen": r.get("first_seen", False),
                 "is_trivial": r.get("is_trivial", False),
+                # Always present, with or without --score: a consumer
+                # gating on the score must be able to see that the score
+                # describes an incomplete analysis.
+                "coverage_gaps": r.get("coverage_gaps", []),
             }
             if show_score or show_risk:
                 jr["score"] = r.get("score")
                 jr["risk"] = r.get("risk")
+                jr["risk_label"] = r.get("risk_label")
             if verbose:
                 jr["triggered_rules"] = r.get("triggered_rules", [])
                 jr["suppressed_rules"] = r.get("suppressed_rules", [])
@@ -416,14 +427,14 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     else:
         for r in results:
             if r.get("failed"):
-                typer.echo(f"{r['package']} {_version_cell(r)}")
+                typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
                 if r.get("aur_note"):
-                    typer.echo(f"  {r['aur_note']}")
-                typer.echo(f"  {r['verdict']}")
+                    typer.echo(f"  {clean(r['aur_note'])}")
+                typer.echo(f"  {clean(r['verdict'])}")
                 typer.echo()
                 continue
 
-            typer.echo(f"{r['package']} {_version_cell(r)}")
+            typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
 
             findings = r.get("findings", [])
             file_changes = r.get("file_changes", [])
@@ -440,25 +451,26 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                     line = f.get("line")
                     desc = f.get("description", "")
                     if line is not None:
-                        typer.echo(f"  {file_part} line {line}   {desc}")
+                        typer.echo(f"  {clean(file_part)} line {line}   {clean(desc)}")
                     else:
-                        typer.echo(f"  {file_part}           {desc}")
+                        typer.echo(f"  {clean(file_part)}           {clean(desc)}")
                 if file_changes:
                     for fc in file_changes:
                         status = fc.get("status", "")
                         path = fc.get("path", "")
                         prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
-                        typer.echo(f"  {prefix} {path}")
+                        typer.echo(f"  {prefix} {clean(path)}")
 
             if show_score and not r.get("failed"):
-                risk = r.get("risk", "")
+                risk = r.get("risk_label") or r.get("risk", "")
                 score_val = r.get("score", 0)
                 typer.echo(f"  Score: {score_val}/100 ({risk})")
             elif show_risk and not r.get("failed"):
-                typer.echo(f"  Risk: ({r.get('risk', '')})")
+                label = r.get("risk_label") or r.get("risk", "")
+                typer.echo(f"  Risk: ({label})")
 
-            if r.get("diff_truncated"):
-                typer.echo("  [Diff was truncated; only part of the change was vetted.]")
+            for gap in r.get("coverage_gaps", []):
+                typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
 
             typer.echo()
 
@@ -480,6 +492,7 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
 
 def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose):
     from rich.panel import Panel
+    from rich.text import Text
 
     con = console()
     for r in results:
@@ -493,16 +506,16 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         table.add_column(no_wrap=True)
         table.add_column()
 
-        table.add_row("Version", _version_cell(r))
+        table.add_row("Version", Text(_version_cell(r)))
 
         if r.get("failed"):
-            table.add_row("Status", r["verdict"])
-            panel = Panel(table, title=r["package"], border_style="red")
+            table.add_row("Status", Text(clean(r["verdict"])))
+            panel = Panel(table, title=Text(clean(r["package"])), border_style="red")
             con.print(panel)
             continue
 
         if r.get("aur_note"):
-            table.add_row("Status", r["aur_note"])
+            table.add_row("Status", Text(clean(r["aur_note"])))
         elif r.get("first_seen"):
             table.add_row("Status", "First analysis. No prior history for this package.")
         elif r.get("is_trivial"):
@@ -514,11 +527,11 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
                 line = f.get("line")
                 rule_id = f.get("rule_id", "")
                 desc = f.get("description", "")
-                suffix = f" [{rule_id}]" if rule_id else ""
+                suffix = f" [{clean(rule_id)}]" if rule_id else ""
                 if line is not None:
-                    table.add_row("", f"{file_part} line {line}{suffix}  {desc}")
+                    table.add_row("", Text(f"{clean(file_part)} line {line}{suffix}  {clean(desc)}"))
                 else:
-                    table.add_row("", f"{file_part}{suffix}  {desc}")
+                    table.add_row("", Text(f"{clean(file_part)}{suffix}  {clean(desc)}"))
 
         file_changes = r.get("file_changes", [])
         if file_changes:
@@ -528,21 +541,22 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
                 status = fc.get("status", "")
                 path = fc.get("path", "")
                 prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
-                table.add_row("", f"  {prefix} {path}")
+                table.add_row("", f"  {prefix} {safe_markup(path)}")
 
-        if r.get("diff_truncated"):
-            table.add_row("Warning", "Diff was truncated; only part of the change was vetted.")
+        for gap in r.get("coverage_gaps", []):
+            table.add_row("Not vetted", GAP_REASONS.get(gap, gap))
 
         risk = r.get("risk", "")
+        label = r.get("risk_label") or risk
         score_val = r.get("score", 0)
         border = RISK_COLORS.get(risk, "blue") if (show_score or show_risk) else "blue"
 
         if show_score and not r.get("failed"):
-            table.add_row("Score", f"{score_val}/100 ({risk})")
+            table.add_row("Score", f"{score_val}/100 ({label})")
         elif show_risk and not r.get("failed"):
-            table.add_row("Risk", f"({risk})")
+            table.add_row("Risk", f"({label})")
 
-        panel = Panel(table, title=r["package"], border_style=border)
+        panel = Panel(table, title=Text(clean(r["package"])), border_style=border)
         con.print(panel)
 
     flagged = sum(1 for r in results if (r["score"] or 0) > 20)
@@ -653,7 +667,7 @@ def register_commands(app: typer.Typer):
                             print(f"Error: {exc}")
                         else:
                             console().print(f"[red]Error:[/] {exc}")
-                        sys.exit(1)
+                        raise typer.Exit(code=2)
 
             changed_installed, total_installed = _discover_packages(
                 repos=repos,

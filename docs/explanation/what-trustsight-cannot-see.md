@@ -27,7 +27,7 @@ PKGBUILDs are shell scripts with structure. Not all structure is resolvable with
 - Dynamically constructed command strings: `local cmd="curl $url | $shell"; eval "$cmd"`.
 - Loop-generated sources: `for pkg in "${pkgs[@]}"; do source+=("https://example.com/$pkg.tar.gz"); done`.
 
-In all these cases, the parser marks the relevant fields as unresolvable and the pipeline produces `INCONCLUSIVE`, not score 0. Reporting "could not verify" is more honest than guessing.
+Where this affects a `source=` entry, the pipeline records the `unresolved_source` coverage gap, and the run is reported as `Inconclusive` rather than clean. Reporting "could not verify" is more honest than guessing. The other constructions above are seen as text and matched as text: a conditional branch is not taken, but the command inside it is still read.
 
 ### Why not execute the PKGBUILD
 
@@ -81,12 +81,13 @@ The corpus prior is only as good as the corpus. Three failure modes exist:
 
 ## What INCONCLUSIVE means
 
-`INCONCLUSIVE` exists precisely because of these limits. It means: *"the tool saw enough uncertainty to refuse scoring."* It is not a pass or a fail; it is a signal that the tool's analysis could not complete. Users should treat `INCONCLUSIVE` as requiring manual review.
+`INCONCLUSIVE` exists precisely because of these limits. It means the tool could not form a picture, not that the picture is good. Treat it as requiring manual review.
 
-The INCONCLUSIVE state can be triggered by:
+It is triggered by exactly two things:
 
-- Unresolvable source URL (parser could not determine what the source is).
-- Score in Medium range driven entirely by novelty signals in a cold database.
-- A combination of factors that prevent a confident CLEAN or FLAGGED classification.
+- **A coverage gap**: the diff was truncated, a line was longer than the matching limit, the repository tree was unavailable, or a `source=` entry is computed at build time. Any of these forbids a clean verdict.
+- **A cold database**: a Medium-band score held up entirely by novelty, with fewer than 25 recorded analyses behind it, the point where maturity crosses 0.5.
 
-When INCONCLUSIVE is triggered, the output still shows the partial evidence breakdown, so the reviewer can see what signals were or were not detected. The verdict is "inconclusive", not "clean", because the tool cannot assess confidence.
+A HIGH, CRITICAL or FATAL finding is never downgraded this way; it keeps its band, because hiding a confirmed finding behind "inconclusive" would lose the thing that matters most.
+
+When INCONCLUSIVE is reported, the output still shows the evidence breakdown and names the gap, so the reviewer can see both what fired and what was never examined. The exact rule, and the gate that enforces it, are in [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).

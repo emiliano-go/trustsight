@@ -1,17 +1,19 @@
 """Phase 3 - network-surface rules (plan §5).
 
-R076/R080/R123 share one question: does the PKGBUILD's declared or
-executed network surface carry an injection or a covert channel?  All three
+R076/R079/R080/R123 share one question: does the PKGBUILD's declared or
+executed network surface carry an injection or a covert channel?  All four
 are code rules because each needs more than a regex:
 
 - R076 needs the literal ``pkgver``/``_pkgver`` value and its interpolation
   into a source URL;
+- R079 needs both sides of the diff: which commit a repository ref resolved
+  to before, and which one it resolves to now;
 - R080 needs the raw source array with its scheme tokens (``git+https://``,
   ``svn://``, ...);
 - R123 needs config-driven endpoint and client lists plus command position.
 
 R080 is additive evidence for R089's ``foreign_fetch`` stage and R123 for
-its ``exfil`` stage; all three are deliberately quiet so the benign corpus
+its ``exfil`` stage; all four are deliberately quiet so the benign corpus
 never cries wolf.
 """
 
@@ -20,13 +22,17 @@ import re
 from ..config import (
     DEFAULT_COVERT_EGRESS_CLIENTS,
     DEFAULT_COVERT_EGRESS_ENDPOINTS,
+    DEFAULT_PARSE_TIME_FETCH,
+    DEFAULT_PASTE_HOSTS,
+    DEFAULT_UPLOAD_FLAGS,
     DEFAULT_SOURCE_SCHEMES,
     load_hosts,
+    load_patterns,
 )
 from ..deps import _strip_comment
 from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
-from .base import iter_scheme_urls
+from .base import iter_scheme_urls, mask_to_recipe
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from .delivery import _find_line
 
@@ -140,6 +146,177 @@ def _version_in_url_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
+# R079 - moved git ref
+# ---------------------------------------------------------------------------
+
+# A git source token, with or without a ``name::`` rename in front of it.
+_GIT_URL_RE = re.compile(r"(?:git\+[a-z][a-z0-9+.\-]*://|git://)[^\s\"')]+", re.IGNORECASE)
+_GIT_REF_RE = re.compile(r"#(tag|commit|branch|revision)=([^\s\"')&]+)", re.IGNORECASE)
+_COMMIT_HEX_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
+
+# ``_commit=``/``_gitrev=``/``_sha``... - the idiom for pinning a checkout to
+# one revision.  The name family is what marks it as a pin; the value must be
+# a digest, so ``_revision=3`` (a packaging counter) is not one.
+_PIN_VAR_RE = re.compile(
+    r"^\s*(_[A-Za-z0-9_]*(?:commit|rev|revision|sha|hash)[A-Za-z0-9_]*)"
+    r"\s*=\s*[\"']?([0-9a-fA-F]{7,40})[\"']?\s*(#.*)?$",
+    re.IGNORECASE,
+)
+# The version the package *claims*.  If any of these moved, the maintainer
+# declared a new version and a new commit is what a new version means.
+_VERSION_TOKEN_RE = re.compile(
+    r"^\s*(pkgver|pkgrel|epoch|_pkgver|_tag|_gittag|_version|_gitver)\s*=", re.IGNORECASE
+)
+
+
+def _repo_base(url: str) -> str:
+    return url.split("#", 1)[0].rstrip("/").lower()
+
+
+def _git_refs_by_side(diff_text: str) -> dict[str, dict[str, set[tuple[str, str]]]]:
+    """Map ``side -> repo -> {(ref_kind, ref_value)}`` for every git source
+    token in the diff, where side is ``+``, ``-`` or ``" "`` (context)."""
+    sides: dict[str, dict[str, set[tuple[str, str]]]] = {"+": {}, "-": {}, " ": {}}
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "@@", "diff ", "index ")):
+            continue
+        side = line[0] if line[:1] in "+- " else " "
+        body = line[1:] if line[:1] in "+- " else line
+        for url in _GIT_URL_RE.findall(body):
+            match = _GIT_REF_RE.search(url)
+            if match:
+                sides[side].setdefault(_repo_base(url), set()).add(
+                    (match.group(1).lower(), match.group(2))
+                )
+    return sides
+
+
+def _pin_vars_by_side(diff_text: str) -> dict[str, dict[str, tuple[str, str]]]:
+    """Map ``side -> variable -> (digest, trailing comment)`` for pin
+    assignments on changed lines."""
+    sides: dict[str, dict[str, tuple[str, str]]] = {"+": {}, "-": {}}
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---")) or line[:1] not in "+-":
+            continue
+        match = _PIN_VAR_RE.match(line[1:])
+        if match:
+            sides[line[0]][match.group(1).lower()] = (
+                match.group(2).lower(), (match.group(3) or "").strip()
+            )
+    return sides
+
+
+def _pin_is_a_git_ref(var: str, haystack: str) -> bool:
+    """True when *var* is interpolated into a git ref fragment.
+
+    A digest-shaped variable used anywhere else (a checksum, an upstream
+    release id) is not a checkout pin, and moving it is not this rule's
+    business.
+    """
+    return bool(
+        re.search(
+            r"#(?:tag|commit|branch|revision)=\$\{?" + re.escape(var) + r"\}?",
+            haystack, re.IGNORECASE,
+        )
+    )
+
+
+def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
+    """The commit a package builds moved while the version it declares did
+    not (R079).
+
+    A tag is a name upstream can repoint at will, so "same tag" is not the
+    same code twice.  Two shapes say so from declared facts alone:
+
+    - **the ref moved under a stable version** - the repository's commit
+      pin (in the source fragment or in the ``_commit`` variable feeding it)
+      changed while ``pkgver``/``pkgrel``/``epoch`` and the declared tag did
+      not.  Anyone who already built this version gets different code than
+      anyone who builds it now, under one version string.
+    - **the pin was loosened** - a fixed ``#commit=<digest>`` became a
+      ``#tag=``/``#branch=``, which upstream can move afterwards.  This one
+      is not gated on the version: dropping a pin during a version bump is
+      still dropping the pin.
+
+    HIGH when a tag anchor is provably unchanged (the diff or the current
+    file still declares the same ``#tag=``, or the pin line carries the same
+    trailing annotation): that is literally "this tag now resolves to a
+    different commit".  MEDIUM otherwise.  C003 reports the same edit as a
+    neutral fact at weight 0; this rule is the git-specific reading of it.
+    """
+    refs = _git_refs_by_side(diff_text)
+    pins = _pin_vars_by_side(diff_text)
+    haystack = current_text or diff_text
+
+    # --- pin loosened: a digest ref replaced by a movable one --------------
+    for repo in set(refs["+"]) & set(refs["-"]):
+        old_pinned = {v for k, v in refs["-"][repo] if k in ("commit", "revision")
+                      and _COMMIT_HEX_RE.match(v)}
+        new_pinned = {v for k, v in refs["+"][repo] if k in ("commit", "revision")
+                      and _COMMIT_HEX_RE.match(v)}
+        movable = sorted(
+            f"{k}={v}" for k, v in refs["+"][repo]
+            if k in ("tag", "branch") or not _COMMIT_HEX_RE.match(v)
+        )
+        if old_pinned and not new_pinned and movable:
+            add("R079", "Moved Git Ref", "MEDIUM", "integrity",
+                f"commit pin replaced by a movable ref for {repo}: {movable[0]}",
+                line=_find_line(diff_text, movable[0][:40]),
+                repo=repo[:70], detail=f"commit pin dropped for {movable[0]}")
+            return
+
+    if any(
+        _VERSION_TOKEN_RE.match(line[1:])
+        for line in diff_text.splitlines()
+        if line[:1] in "+-" and not line.startswith(("+++", "---"))
+    ):
+        return
+
+    # --- ref moved under a stable version ---------------------------------
+    for repo in sorted(set(refs["+"]) & set(refs["-"])):
+        old_commits = {v for k, v in refs["-"][repo] if k in ("commit", "revision")
+                       and _COMMIT_HEX_RE.match(v)}
+        new_commits = {v for k, v in refs["+"][repo] if k in ("commit", "revision")
+                       and _COMMIT_HEX_RE.match(v)}
+        if not (old_commits and new_commits) or old_commits == new_commits:
+            continue
+        tags = (
+            {v for k, v in refs["-"][repo] if k == "tag"}
+            & {v for k, v in refs["+"][repo] if k == "tag"}
+        ) or {v for k, v in refs[" "].get(repo, set()) if k == "tag"}
+        moved = sorted(new_commits - old_commits)[0]
+        if tags:
+            tag = sorted(tags)[0]
+            add("R079", "Moved Git Ref", "HIGH", "integrity",
+                f"tag {tag} now resolves to a different commit for {repo}: "
+                f"{sorted(old_commits)[0][:12]} -> {moved[:12]}",
+                line=_find_line(diff_text, moved[:12]), repo=repo[:70], tag=tag[:40],
+                detail=f"tag {tag} now resolves to {moved[:12]}")
+        else:
+            add("R079", "Moved Git Ref", "MEDIUM", "integrity",
+                f"commit pin moved with no version change for {repo}: "
+                f"{sorted(old_commits)[0][:12]} -> {moved[:12]}",
+                line=_find_line(diff_text, moved[:12]), repo=repo[:70],
+                detail=f"commit pin moved to {moved[:12]} with no version change")
+        return
+
+    # --- the same move expressed through a pin variable -------------------
+    for var in sorted(set(pins["+"]) & set(pins["-"])):
+        old_value, old_note = pins["-"][var]
+        new_value, new_note = pins["+"][var]
+        if old_value == new_value or not _pin_is_a_git_ref(var, haystack):
+            continue
+        anchored = bool(old_note) and old_note == new_note
+        add("R079", "Moved Git Ref", "HIGH" if anchored else "MEDIUM", "integrity",
+            (f"{var} moved under an unchanged {old_note.lstrip('#').strip()} annotation: "
+             if anchored else f"{var} moved with no version change: ")
+            + f"{old_value[:12]} -> {new_value[:12]}",
+            line=_find_line(diff_text, new_value[:12]), variable=var,
+            detail=f"{var} moved to {new_value[:12]}")
+        return
+
+
+# ---------------------------------------------------------------------------
 # R123 - covert egress
 # ---------------------------------------------------------------------------
 
@@ -205,3 +382,174 @@ def _covert_egress_findings(diff_text, config, add) -> None:
                     f"{body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 return
+
+# ---------------------------------------------------------------------------
+# R129 - network fetch at parse time
+# ---------------------------------------------------------------------------
+
+
+def _parse_time_fetch_patterns(config=None) -> list[re.Pattern]:
+    patterns = load_patterns().get("patterns", {})
+    frags = patterns.get("parse_time_fetch") or DEFAULT_PARSE_TIME_FETCH
+    return [re.compile(f, re.IGNORECASE) for f in frags]
+
+
+# Assignments whose value happens to name a downloader: `DLAGENTS=(...)`,
+# `_curl=curl`, `DLAGENTS+=('http::/usr/bin/curl ...')`.  makepkg's own
+# download-agent configuration is a declaration, not an invocation, and it
+# is the single largest benign use of these names at the top level.
+_ASSIGNMENT_LINE_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*\+?=")
+_ARRAY_CONTINUATION_RE = re.compile(r"^\s*['\"]")
+
+# A fetch piped straight into a shell is R001/R002's evidence, and theirs is
+# the heavier claim (remote code executes, not merely a download).  R129
+# yields rather than scoring the same line twice.
+_PIPE_TO_SHELL_RE = re.compile(
+    r"\b(?:curl|wget|aria2c|axel)\b[^|;&]*\|\s*(?:\S+\s+)?(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\b",
+    re.IGNORECASE,
+)
+
+
+def _parse_time_fetch_findings(diff_text, config, add) -> None:
+    """A network client runs when the PKGBUILD is merely *sourced* (R129).
+
+    Everything outside a function body executes as soon as makepkg reads the
+    file, which happens on ``makepkg --printsrcinfo``, on an AUR helper's
+    metadata refresh and on any review that sources the recipe - before a
+    single build step, and before the checksum array has covered anything.
+    R010/R011 report a downloader inside a build function at LOW; running
+    one at parse time is a different claim, so it is a different rule.
+
+    Quiet on declarations: ``DLAGENTS=(...)`` and any other assignment whose
+    *value* names a downloader configures makepkg, it does not fetch.  An
+    assignment that *runs* one through a command substitution
+    (``_ver=$(curl ...)``) is not a declaration and is not exempt.
+    """
+    lines = mask_to_recipe(resolve_added_lines(diff_text))
+    enclosing = _classify_enclosing_function(lines)
+    patterns = _parse_time_fetch_patterns(config)
+    in_array = False
+    for i, line in enumerate(lines):
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        body = _strip_comment(line[1:])
+        stripped = body.strip()
+        if not stripped:
+            continue
+        substitutes = "$(" in body or "`" in body
+        opens_array = (
+            _ASSIGNMENT_LINE_RE.match(body) and "(" in body and ")" not in body
+        )
+        if not substitutes and (
+            in_array or opens_array or _ASSIGNMENT_LINE_RE.match(body)
+            or _ARRAY_CONTINUATION_RE.match(body)
+        ):
+            if opens_array:
+                in_array = True
+            elif in_array and ")" in body:
+                in_array = False
+            continue
+        if enclosing.get(i) is not None or _PIPE_TO_SHELL_RE.search(body):
+            continue
+        for pattern in patterns:
+            if pattern.search(body):
+                add("R129", "Parse-time Network Fetch", "HIGH", "network",
+                    f"top-level line fetches over the network when the "
+                    f"PKGBUILD is sourced: {stripped[:80]}",
+                    line=_find_line(diff_text, stripped[:40]),
+                    body=stripped[:80],
+                    detail="network fetch runs at parse time, outside every function")
+                return
+
+
+# ---------------------------------------------------------------------------
+# R087 - upload to a paste or file-drop host
+# ---------------------------------------------------------------------------
+
+# The client, then anything up to the end of the command.  The upload flags
+# are matched inside that span, so `curl -sf -F file=@x https://0x0.st` and
+# `curl https://0x0.st -T x` both read as uploads.
+_HTTP_CLIENT_RE = re.compile(
+    r"(?:\A\s*|[;&|]\s*|\$\(\s*)((?:curl|wget)\b[^;&|]*)", re.IGNORECASE
+)
+
+
+def _upload_flags(config=None) -> list[re.Pattern]:
+    patterns = load_patterns().get("patterns", {})
+    frags = patterns.get("upload_flags") or DEFAULT_UPLOAD_FLAGS
+    return [re.compile(f, re.IGNORECASE) for f in frags]
+
+
+def _paste_hosts(config) -> frozenset[str]:
+    hosts = _hosts(config).get("paste_hosts") or DEFAULT_PASTE_HOSTS
+    return frozenset(h.lower().lstrip(".") for h in hosts)
+
+
+def _host_of(url: str) -> str:
+    rest = url.split("://", 1)[-1]
+    authority = rest.split("/", 1)[0].split("?")[0].split("#")[0]
+    return authority.rsplit("@", 1)[-1].split(":")[0].lower()
+
+
+def _paste_egress_findings(diff_text, config, add) -> None:
+    """A build or install function *uploads* to a paste or file-drop host (R087).
+
+    The paste-host list also feeds the ``raw_hosting`` source bucket, and a
+    rule that fired on a declared `source=` URL would double-count that
+    weight.  This rule reads the other direction, which no bucket can see:
+    a request carrying a body, sent from inside a function, to a host whose
+    entire purpose is to accept an anonymous drop and hand back a link.
+
+    Direction is the distinction that makes it a separate claim.  Fetching
+    from a gist is an undeclared download, which is R061's finding; posting
+    to one is data leaving the machine that is building the package, which is
+    R089's ``exfil`` stage. On a line this rule claims, R061 yields, so one
+    upload is not scored twice.
+    """
+    lines = mask_to_recipe(resolve_added_lines(diff_text))
+    enclosing = _classify_enclosing_function(lines)
+    flags = _upload_flags(config)
+    hosts = _paste_hosts(config)
+
+    for i, line in enumerate(lines):
+        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+            continue
+        body = _strip_comment(line[1:])
+        for match in _HTTP_CLIENT_RE.finditer(body):
+            command = match.group(1)
+            if not any(flag.search(command) for flag in flags):
+                continue
+            for _, url in iter_scheme_urls(command, _URL_STOP_CHARS):
+                host = _host_of(url)
+                if host in hosts or any(
+                    host.endswith("." + h) for h in hosts
+                ):
+                    add("R087", "Upload To Paste Or File-Drop Host", "HIGH",
+                        "exfil",
+                        f"{enclosing[i]}() uploads to {host}: "
+                        f"{command.strip()[:80]}",
+                        line=_find_line(diff_text, command.strip()[:40]),
+                        position=enclosing[i], host=host,
+                        body=command.strip()[:80],
+                        detail=f"{enclosing[i]}() uploads to {host}")
+                    return
+
+
+def claims_upload_line(body: str, config=None) -> bool:
+    """True when R087 owns this line, so R061 can stand down.
+
+    R061 describes an undeclared *download*; when the same invocation is an
+    upload to a drop host, R087's description is the accurate one and two
+    HIGH findings for one command would be a cascade.
+    """
+    flags = _upload_flags(config)
+    hosts = _paste_hosts(config)
+    for match in _HTTP_CLIENT_RE.finditer(body):
+        command = match.group(1)
+        if not any(flag.search(command) for flag in flags):
+            continue
+        for _, url in iter_scheme_urls(command, _URL_STOP_CHARS):
+            host = _host_of(url)
+            if host in hosts or any(host.endswith("." + h) for h in hosts):
+                return True
+    return False

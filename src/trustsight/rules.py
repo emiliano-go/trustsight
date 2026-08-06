@@ -53,6 +53,18 @@ _FUNCTION_NAME_RE = re.compile(r"^(\w+)\s*\(\s*\)\s*\{")
 # invalid pattern is remembered as None so it is only reported once.
 _pattern_cache: dict[str, "re.Pattern | None"] = {}
 
+# Longest line handed to a rule pattern.  Rule patterns are ordinary
+# regexes, some with alternation and optional groups, and the text they
+# run on is written by the package under review; a line has no natural
+# length limit once `join_line_continuations` has stitched a backslash
+# chain together, so the input can reach the whole diff cap.  Matching
+# cost that grows super-linearly in the input then becomes a denial of
+# service that the package author chooses.  Bounding the *input* bounds
+# every pattern at once, which no per-pattern audit can do.  8 KiB is far
+# past any real PKGBUILD line, and a rule that matches only beyond it is
+# matching something no reviewer would read either.
+MAX_RULE_LINE_BYTES = 8192
+
 
 def _compiled(pattern: str):
     """Return the compiled form of *pattern*, or None if it is invalid."""
@@ -68,9 +80,14 @@ def _compiled(pattern: str):
     return compiled
 
 
+def clamp(line: str) -> str:
+    """Truncate *line* to :data:`MAX_RULE_LINE_BYTES` for matching."""
+    return line if len(line) <= MAX_RULE_LINE_BYTES else line[:MAX_RULE_LINE_BYTES]
+
+
 def _to_pairs(lines: list[str]) -> list[tuple[int, str]]:
     """pair each line with its original index"""
-    return [(i, line) for i, line in enumerate(lines)]
+    return [(i, clamp(line)) for i, line in enumerate(lines)]
 
 
 def filter_raw_lines(lines: list[str]) -> list[tuple[int, str]]:
@@ -78,7 +95,10 @@ def filter_raw_lines(lines: list[str]) -> list[tuple[int, str]]:
 
     Returns (original_index, line) pairs so callers can map back to context.
     """
-    return [(i, line) for i, line in enumerate(lines) if not _COMMENT_OR_DEP_RE.match(line)]
+    return [
+        (i, clamp(line)) for i, line in enumerate(lines)
+        if not _COMMENT_OR_DEP_RE.match(line)
+    ]
 
 
 def _is_message_line(line: str) -> bool:
@@ -200,6 +220,9 @@ def apply_rules(
             rule["pattern"] = _free_registrar_tld_pattern()
 
     triggered = []
+    # Both maps are built from the unclamped lines: context classification
+    # is structural (does this line open a function?) and must not shift
+    # because a long line was truncated for matching.
     ctx_map = _classify_line_context(raw_diff_lines)
     fn_map = _classify_enclosing_function(raw_diff_lines)
 

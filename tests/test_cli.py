@@ -757,3 +757,38 @@ def test_display_version_spaces_are_unresolved():
     """A version string containing spaces is almost certainly unresolved."""
     from trustsight.cli.display import display_version
     assert display_version("1.0 beta") == "unresolved"
+
+
+# --- full-aur --watch wiring ---
+
+
+def test_full_aur_help_documents_watch():
+    result = CliRunner().invoke(app, ["full-aur", "--help"])
+    assert result.exit_code == 0
+    assert "--watch" in result.output
+    assert "--interval" in result.output
+
+
+def test_full_aur_watch_invokes_the_loop(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch",
+        lambda **kwargs: seen.update(kwargs) or [],
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--interval", "120", "--cycles", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    assert seen == {"interval": 120, "cycles": 2, "json_output": False}
+
+
+def test_full_aur_watch_rejects_export(monkeypatch):
+    """--export/--sign describe one artifact; pairing them with a loop
+    would silently overwrite it every cycle."""
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch", lambda **kwargs: []
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--export", "/tmp/baseline.tar.zst"]
+    )
+    assert result.exit_code == 2

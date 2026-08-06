@@ -23,6 +23,21 @@ _METADATA_URL = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
 # claim far more, and decompressing it to find out is the whole attack.
 MAX_DECOMPRESSED_BYTES = 1024 * 1024 * 1024
 
+# A stalled connection is a hang with no upper bound, and this fetch sits
+# on the default `review` path, so it is the one that would hang.  The
+# value is generous because the dump is tens of megabytes: it bounds a
+# dead socket, not a slow one.
+HTTP_TIMEOUT = 300
+
+# The compressed dump is ~60 MB.  Reading a response with no ceiling lets
+# the remote end decide how much of this machine's memory to use, which is
+# the same reason full_aur/fetch.py caps its own reads.
+MAX_RESPONSE_BYTES = 512 * 1024 * 1024
+
+
+class ResponseTooLarge(Exception):
+    """Raised when the metadata response exceeds MAX_RESPONSE_BYTES."""
+
 
 class DecompressionTooLarge(Exception):
     """Raised when a gzip stream exceeds MAX_DECOMPRESSED_BYTES."""
@@ -70,7 +85,7 @@ def fetch_metadata(on_progress=None) -> dict:
     and the expected content length.
     """
     log.info("fetching AUR metadata from %s", _METADATA_URL)
-    resp = urlopen(_METADATA_URL)
+    resp = urlopen(_METADATA_URL, timeout=HTTP_TIMEOUT)
     total = int(resp.headers.get("Content-Length", 0))
     buf = bytearray()
     while True:
@@ -78,6 +93,10 @@ def fetch_metadata(on_progress=None) -> dict:
         if not chunk:
             break
         buf.extend(chunk)
+        if len(buf) > MAX_RESPONSE_BYTES:
+            raise ResponseTooLarge(
+                f"metadata response exceeds {MAX_RESPONSE_BYTES} bytes"
+            )
         if on_progress:
             on_progress(len(buf), total)
     data = json.loads(gunzip_capped(bytes(buf)))

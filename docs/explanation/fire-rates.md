@@ -16,7 +16,11 @@ Fire rates are **false-positive rates**: every diff in the benign corpus is a re
 
 Any scored rule (severity other than `INFO`) whose fire rate exceeds **30 %** on the benign corpus must be demoted to `INFO` (weight 0). A rule that fires on one third of all benign updates is not a useful signal; it is census data, not a finding.
 
-This is enforced during development. See [Writing a Rule](../contributing/writing-a-rule.md#fire-rate-gate).
+This is enforced during development, and again in CI: `scripts/calibration_gates.py` replays the benign corpus against the shipped configuration with a cold database and exits nonzero if any scoring rule crosses the gate. See [Writing a Rule](../contributing/writing-a-rule.md#fire-rate-gate).
+
+Calibration is one of two gate suites. The other, `scripts/security_gates.py`, enforces [the security model](../security.md): what the tool guarantees while reading hostile input, and what a verdict is allowed to claim. Neither suite can pass on behalf of the other.
+
+In practice the shipped rules sit far below the gate. The worst scoring rule measures 0.039, and the rules added after the core set are mostly at zero: the working standard for a new rule is no benign fires at all, with any exception named and explained in the [rules reference](../reference/rules.md#experimental-fire-rates).
 
 ## Which corpus
 
@@ -29,7 +33,7 @@ Fire rates are currently measured against two corpora:
 
 Both are pinned by `corpus.lock` and regenerated deterministically from the AUR git mirror. See [Corpus and Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-methodology.md).
 
-## Core rules (R001–R013)
+## Core rules (R001-R013)
 
 Measured against the 3322-diff stratified corpus.
 
@@ -49,7 +53,7 @@ Measured against the 3322-diff stratified corpus.
 | R012 | LLM Prompt Injection | FATAL | ~0 % | Tripwire; 17 % recall on malice corpus |
 | R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs had zero-width joiners in localized text; fixed with ASCII-neighbour guard |
 
-## Expanded rules (R039–R059)
+## Expanded rules (R039-R059)
 
 Calibrated against the 3322-diff stratified corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 

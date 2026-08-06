@@ -26,7 +26,7 @@ from .metadata import diff_metadata
 
 _SEVERITY = {
     "R092": "HIGH", "R100": "HIGH", "R105": "MEDIUM", "R125": "MEDIUM",
-    "R090": "MEDIUM", "R126": "MEDIUM",
+    "R090": "MEDIUM", "R126": "MEDIUM", "R071": "HIGH",
     "R101": "MEDIUM", "R108": "MEDIUM", "R110": "MEDIUM",
 }
 
@@ -287,17 +287,40 @@ def _introduction_deviation(new_meta: dict, changes: dict, prior_history: list[d
     ]
 
 
+def _known_maintainers(old_meta: dict) -> set[str]:
+    """Every maintainer the previous snapshot knew of.
+
+    The corpus sweep's own answer to "has this account been seen before":
+    the per-package R071 asks the observation database, which on the corpus
+    path has only what earlier cycles happened to analyse, while the
+    snapshot names the maintainer of every package in the AUR.
+    """
+    known: set[str] = set()
+    for entry in old_meta.values():
+        maintainer = (entry.get("Maintainer") or "").strip().lower()
+        if maintainer:
+            known.add(maintainer)
+    return known
+
+
 def _ownership_transition_findings(
-    new_meta: dict, transitions: dict
+    new_meta: dict, old_meta: dict, transitions: dict
 ) -> list[dict]:
-    """R090 - a package changed maintainer this cycle.
+    """R090 - a package changed maintainer this cycle, and R071 with it.
 
     Transitions to a non-empty maintainer are the takeover half of R090
     (the commit-identity half needs git metadata the snapshot sweep does
     not carry).  A move to an empty maintainer is abandonment, handled by
     R093/R111 as orphan state rather than a takeover.
+
+    R071 ships with R090 (plan §8): when the incoming account maintained
+    nothing at all in the previous snapshot, the transition is not just a
+    handover between known packagers, and that is a different claim from
+    R090's.  The two are separate findings on separate evidence, so a
+    handover between established maintainers carries R090 alone.
     """
     out: list[dict] = []
+    known = _known_maintainers(old_meta)
     for name, (old_m, new_m) in sorted(transitions.items()):
         if not new_m:
             continue
@@ -311,6 +334,18 @@ def _ownership_transition_findings(
             old=old_m,
             new=new_m,
         ))
+        if new_m not in known:
+            out.append(_cluster(
+                "R071",
+                "Untrusted Maintainer Takeover",
+                f"maintainer of {name} changed to '{new_m}', who maintained "
+                f"no package in the previous snapshot",
+                [name],
+                severity="HIGH",
+                category="maintainer",
+                previous_maintainer=old_m,
+                current_maintainer=new_m,
+            ))
     return out
 
 
@@ -543,7 +578,7 @@ def run_corpus_sweep(
     findings += _attribute_burst(new_meta, changes)
     findings += _shared_repo_cluster(new_meta, changes, repos)
     findings += _introduction_deviation(new_meta, changes, prior_history or [])
-    findings += _ownership_transition_findings(new_meta, transitions)
+    findings += _ownership_transition_findings(new_meta, old_meta, transitions)
     findings += _adopt_then_modify_findings(new_meta, old_meta, transitions, now)
     findings += _name_host_divergence_findings(changes, repos)
     findings += _name_repo_divergence_findings(changes, repos)

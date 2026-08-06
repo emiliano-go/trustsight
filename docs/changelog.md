@@ -1,5 +1,116 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **A security model, stated and enforced.** [`docs/security.md`](security.md)
+  is now the canonical page: TrustSight as a program consuming hostile input
+  (Part A), what a verdict claims and does not claim (Part B), an enforcement
+  map (Part C), and a vulnerability disclosure policy written for a static
+  analyser, with supported versions, severity timelines, and an explicit list
+  of what is not a vulnerability (Part D).
+- **`scripts/security_gates.py` and a CI job.** Twenty gates, one per
+  invariant: no interpreter or shell execution, version arguments
+  shape-checked, network confined to the four fetch modules, one declared host,
+  every request timed out, bounded rule matching, bounded and never-indirect
+  expansion, data-driven rendering, no archive extraction, parameterised SQL,
+  inert terminal output, coverage failing closed, a gap always shown with the
+  band, FATAL integrity, seed and baseline containment. The last gate checks
+  that the doc and the gate list still describe the same set, so a guarantee
+  cannot be added to one without the other.
+- **Coverage accounting (`src/trustsight/coverage.py`).** Four gaps are now
+  first-class on `PackageFact` and in the JSON: `diff_truncated`,
+  `line_truncated`, `tree_not_analyzed`, `unresolved_source`. A gap never adds
+  points, but it constrains presentation two ways: it forbids a clean verdict
+  (the run reports `Inconclusive` unless a HIGH or worse finding already
+  stands), **and** it travels with the band wherever a person sees one, so an
+  incomplete run renders as `High (incomplete analysis)` rather than `High`.
+  That second half closes the decoy seam: pad past the cap, put the payload
+  after the cut, and include one cheap deliberate HIGH in the visible prefix.
+  Reported as a weight-0 `COVERAGE` entry in the breakdown and quoted in
+  `unresolved_sources`. Machine output keeps `risk` bare with `coverage_gaps`
+  beside it, plus `risk_label` for consumers that display a band.
+- **`src/trustsight/safe_text.py`.** `clean()` and `safe_markup()` strip ANSI
+  and OSC sequences, C0/C1 control bytes and DEL, and neutralise Rich markup,
+  applied at every render boundary in `cli/`. Stored evidence and JSON output
+  stay byte-exact.
+- **`PackageFact.risk`.** The verdict band is now carried on the fact and read
+  through `scoring.verdict_level()` (bare band, for machines) or
+  `scoring.verdict_label()` (qualified, for people).
+
+### Fixed
+
+- **The truncation bypass.** Padding a diff past `max_diff_bytes` and appending
+  the payload turned a High into a Low. `diff_truncated` was set, serialised,
+  and consumed by nothing but a sentence prepended to the verdict. It is now a
+  coverage gap, and `scan_diff` applies the same cap the git path always did.
+- **`Inconclusive` was computed and then discarded.** Every CLI path re-derived
+  the band with `risk_level(final_score)`, which cannot express it, so the
+  downgrade never reached the output.
+- **AUR-controlled text reached the terminal raw.** Package names, maintainer
+  names, file paths and quoted evidence could clear the screen, forge a
+  verdict, recolour a row, or abort the render of a whole review batch with an
+  unbalanced Rich tag.
+- **A seed could rewrite the database it was merged into.** `import_seed`
+  copied `seed.metadata` wholesale with `INSERT OR REPLACE` and overwrote
+  `maintainer_counts`. It is now limited to the two keys a seed owns, cannot
+  raise a locally learned maintainer count (which would suppress R071/R090),
+  and records the imported artifact's SHA-256 and origin.
+- **A FATAL rule could be deleted from `rules.toml`.** `override.py` already
+  refused to suppress a FATAL *finding*; deleting or downgrading the *rule* was
+  unguarded. `config.enforce_fatal_rules()` now re-asserts the shipped FATAL
+  set in memory at load, warns, and writes nothing back.
+- **The AUR metadata fetch had no timeout and no response cap**, unlike every
+  other fetch path. It is on the default `review` path, so it was the one that
+  would hang.
+- **Rule patterns ran on unbounded lines.** Input is clamped to 8 KiB per
+  logical line before matching, which bounds every pattern at once. The clamp
+  is itself a truncation seam, so a diff containing an over-length line now
+  records the `line_truncated` coverage gap rather than skipping the tail
+  silently.
+- **`_MAX_EXPANSION_DEPTH` was declared and never applied.** Removed, along
+  with a dead helper in `resolve_expansions`. A bound nothing enforces reads
+  like a guarantee. The bounds that are real (passes, value length, line
+  length, table size, and refusing `${!x}` and `${#x}`) are now stated as
+  invariant A6.
+- **Config lists became regex.** `hosts.toml` ports and TLDs are now escaped
+  before being joined into the R047/R048 patterns.
+- **`corpus pivot` read a snapshot from the working directory**, so the answer
+  depended on where the command was run and a planted file could steer it. One
+  location now, under the config directory.
+- **`differ.map_diff_lines` corrupted filenames.** `lstrip("b/")` strips
+  characters, not a prefix, so `+++ b/build.sh` reported findings against
+  `uild.sh`.
+
+### Changed
+
+- **Rendering has no model in it, and that is now a stated invariant.** Verdict
+  text is a template keyed by rule id filled with named evidence fields;
+  values are substituted, never re-expanded or evaluated, and no template comes
+  from package-controlled text. The output path therefore has no network
+  dependency, no nondeterminism, and no prompt-injection surface. R012 still
+  detects injection aimed at whoever reads the diff.
+- **Maturity numbers made exact across the docs.** `_MATURITY_THRESHOLD` is 50,
+  so the Inconclusive gate at `maturity < 0.5` means fewer than 25 recorded
+  analyses. Pages variously said "50 observations" or "approximately 25"; they
+  now say both numbers and how they relate.
+- **Documented claims corrected to match the code.** The `source_resolution`
+  field named in four pages never existed; "no external API is involved" was
+  false (four AUR endpoints, now stated precisely); the Inconclusive predicate
+  was documented as stricter than it is; R122 is documented as having no call
+  site rather than implying corpus-side coverage it does not have; the exit
+  code table claimed a flag-driven exit that was never implemented, and
+  `docs/guides/using-in-ci.md` gated on a JSON shape `review --json` does not
+  emit.
+- **The exit-code contract is now enforced, not just documented.** An
+  operational failure exits 2 everywhere: `cli/main()` wraps the app so an
+  uncaught failure exits 2 with a message on stderr, and the remaining
+  operational `Exit(1)` sites (review discovery, inspect not-found, forget
+  prune/abort, override add/remove, db check, lint-rules) now exit 2. Exit 1
+  is no longer used by any command; a verdict still never changes the exit
+  code.
+
 ## [0.11.0] - 2026-07-30
 
 ### Added

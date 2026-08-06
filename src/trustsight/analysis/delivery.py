@@ -287,7 +287,10 @@ _EXECUTION_RE = re.compile(
     r"|" + _CMD_START + r"source\s+(\S+)"
     r"|" + _CMD_START + r"\.\s+(\S+)"
     r"|\./(\S+)"
-    r"|^\s*(\/[^\s;&|]+)\s*$"
+    # An absolute path at a command position, with or without arguments:
+    # requiring it to stand alone let `/tmp/.stage2 --install` past the
+    # write-then-execute dataflow while `/tmp/.stage2` was caught.
+    r"|^\s*(\/[^\s;&|]+)(?=\s|$)"
     r"|" + _CMD_START + r"(?:python3?|perl|ruby)\s+(\S+)"
     r"|" + _CMD_START + r"(?:gcc|g\+\+|clang|cc|rustc)\b\s+[^;&|]*?(?:-o\s+\S+\s+)?(\S+\.(?:c|cc|cpp|rs))\b",
     re.IGNORECASE,

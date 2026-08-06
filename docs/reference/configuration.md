@@ -166,6 +166,73 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 | `network_connect_timeout` | int | `10` | Seconds libgit2 may spend connecting to the AUR before aborting a clone/fetch. |
 | `network_transfer_timeout` | int | `30` | Seconds libgit2 may wait for data on an established connection. Without it a silently stalled connection hangs a fetch indefinitely. |
 | `prefetch_timeout` | int | `120` | Seconds `trustsight review` waits for the whole prefetch batch. Whatever has not arrived is abandoned and fetched again during analysis. |
+| `watch_interval` | int | `3600` | Seconds between cycles of `trustsight full-aur --watch`. |
+| `watch_min_interval` | int | `60` | Floor applied to `--interval`. The AUR regenerates its metadata dump every few minutes, so a shorter interval only re-downloads the same snapshot. |
+
+---
+
+## The pattern and threshold files
+
+`config.toml` holds weights and limits. The lists a rule matches against live
+in four sibling files, so a rule can be retuned without touching code. Each is
+written on first run and never rewritten, so an edited file is always kept.
+
+### `hosts.toml`
+
+| Key | Rules | Contents |
+|-----|-------|----------|
+| `paste_hosts` | R087, source buckets | Paste and ephemeral file-drop hosts. As `source=` URLs they are weighted by the `raw_hosting` bucket; as upload destinations inside a function they are R087's. |
+| `standard_ports` | R047 | Ports a build may legitimately contact. |
+| `free_registrar_tlds` | R048 | TLDs available at no cost, where a throwaway domain is cheap. |
+| `source_schemes` | R080 | Allowlisted `source=` schemes. The base of a `transport+base` token is judged, so `git+https` reads as `https`. |
+| `confusable_domains` | R013b | Popular domains a homoglyph label is tested against. A mixed-script label that resembles none of them stays quiet. |
+| `covert_egress_endpoints` | R123 | DNS-over-HTTPS endpoints. |
+| `covert_egress_clients` | R123 | Tunnelling and proxy clients, matched only at a command position. |
+
+### `patterns.toml`
+
+| Key | Rules | Contents |
+|-----|-------|----------|
+| `foreign_pkg_managers` | R081 | Package managers that are not pacman. |
+| `obfuscation_indicators` | R082 | Per-line obfuscation markers, counted against a density threshold. |
+| `anti_analysis_probes` | R119 | Debugger, VM, sandbox and CI probes. |
+| `recon_commands` | R086 | Host-profiling commands, command-position anchored. |
+| `parse_time_fetch` | R129 | Network clients whose invocation outside every function runs when the recipe is sourced. |
+| `upload_flags` | R087 | `curl`/`wget` flags that send a request body, which is what separates an upload from a download. |
+| `network_tools` | D003 | Package names that grant a build network access. |
+| `security_relevant_flags` | R094, R131 | Hardening flags whose appearance or disappearance changes the mitigation set. |
+| `security_relevant_libraries` | R095 | Libraries whose vendoring bypasses distribution security updates. |
+
+### `naming.toml`
+
+Ecosystem prefixes (D004, R116) and variant suffixes (D002, R074, R100, R101).
+These decide when two package names belong to the same project, which is what
+keeps a package claiming its own project's names from firing a scope-expansion
+rule.
+
+### `thresholds.toml`
+
+| Key | Rule | Default | Meaning |
+|-----|------|---------|---------|
+| `r082.obfuscation_density` | R082 | `3` | Distinct obfuscation indicators on one line before it is reported. |
+| `r089.attack_chain_stages` | R089 | `3` | Distinct kill-chain stages that must co-occur. |
+| `r092.min_packages` / `r092.window_days` | R092 | `10` / `7` | Cluster size and window for mass adoption. |
+| `r100.min_packages` | R100 | `3` | Unrelated packages that must share a source repository. |
+| `r105.min_packages` / `r105.window_hours` | R105 | `5` / `24` | Cluster size and window for an attribute burst. |
+| `r107.min_hops` / `r111.min_hops` | R107, R111 | `2` | Hops that make an exposure transitive rather than direct, keeping both out of R093's lane. |
+| `r108.min_history_cycles` / `r108.z_score` / `r108.min_activity` | R108 | `3` / `2.0` / `3` | Baseline length, deviation and floor for maintainer activity. |
+| `r112.min_dependents` | R112 | `50` | Dependents that make a package a hub. |
+| `r125.min_history_cycles` / `r125.z_score` / `r125.min_introduced` | R125 | `3` / `3.0` / `3` | Baseline length, deviation and floor for the corpus introduction rate. |
+| `r116.widely_provided_observations` | R116 | `25` | Observations that make a provided name widely provided. |
+| `r126.window_days` | R126 | `14` | How recent the modification must be after an adoption. |
+| `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
+
+### `iocs.toml`
+
+`[meta] version` plus `[[entries]]` of `type` (`package`, `domain` or `hash`),
+`value`, `confidence`, `provenance`, `campaign` and `added`. The confidence
+tier decides severity: `confirmed` is FATAL, `high` is CRITICAL, `medium` is
+HIGH. The shipped file is empty, and a miss is uninformative.
 
 ---
 

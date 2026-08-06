@@ -1,0 +1,32 @@
+name: Security Gates
+
+# The security model on every push.  `docs/security.md` states what
+# TrustSight guarantees while reading hostile input and what a verdict
+# claims; this job is the other half of that document.  A failure here
+# means a published guarantee has stopped being true, which is a release
+# blocker in a way a failing unit test is not: the doc is the promise and
+# the gates are the proof, and the last gate checks that the two still
+# describe the same set.
+on: [push, pull_request]
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Run the security gates
+        run: python scripts/security_gates.py --json security-gates.json
+
+      - name: Upload gate results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-gates
+          path: security-gates.json

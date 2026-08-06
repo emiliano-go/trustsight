@@ -1,6 +1,11 @@
 import re
 
-_MAX_EXPANSION_DEPTH = 8
+# Expansion is bounded by *passes*, not by nesting depth: each pass
+# rewrites one innermost ``${...}``, so a value that keeps producing new
+# expansions runs out of passes rather than recursing.  There was also a
+# ``_MAX_EXPANSION_DEPTH`` here; nothing referenced it, and a declared
+# bound that is never applied is worse than no bound, because it reads
+# like a guarantee.
 _MAX_EXPANSION_PASSES = 16
 
 # Innermost ${...} = one containing no further "${"
@@ -12,6 +17,13 @@ _INNERMOST_RE = re.compile(r"\$\{([^{}]*)\}")
 # construction is reconstructed to its decoded bytes *as data*; nothing is
 # ever executed.
 _ANSI_C_QUOTE_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
+
+# A ``$'`` that is actually an ANSI-C quote *opener*: it starts a word.  A
+# ``$`` immediately before a quote elsewhere - a regex end-anchor such as
+# ``'/Windows/Fonts/.*\.tt[cf]$'`` or a literal ``QLatin1Char('$')`` - is
+# not shell quoting, and reading one as an unreconstructable literal makes
+# ordinary text look obfuscated.
+_ANSI_C_OPENER_RE = re.compile(r"(?:^|[\s(=|&;{\"`])\$'")
 
 # $(printf '...') with a single quoted literal format.  Only reconstructed
 # when the format contains no %-conversion (which would need runtime
@@ -103,7 +115,7 @@ def reconstruct_literals(text: str) -> tuple[str, bool]:
 
     result = _PRINTF_LITERAL_RE.sub(_printf_sub, result)
     result = _EMPTY_QUOTE_CONCAT_RE.sub("", result)
-    return result, "$'" not in result
+    return result, not _ANSI_C_OPENER_RE.search(result)
 
 
 def _glob_to_regex(pat: str) -> re.Pattern:
@@ -219,19 +231,6 @@ def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
     fully_resolved is False if any ${...} remains after the cap; the caller
     MUST treat that as unresolved, never as a literal value.
     """
-    sub_calls = 0
-
-    def _resolve_once(t: str) -> str:
-        nonlocal sub_calls
-        m = _INNERMOST_RE.search(t)
-        if m is None:
-            return t
-        replacement = _expand_one(m.group(1), vars_)
-        if replacement is None:
-            return t
-        sub_calls += 1
-        return t[: m.start()] + replacement + t[m.end() :]
-
     all_resolved = True
     for _ in range(_MAX_EXPANSION_PASSES):
         before = text

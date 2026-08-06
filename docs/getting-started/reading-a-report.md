@@ -23,7 +23,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A CLEAN verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**81.5 % of diffs score 0** (zero-rate). At the 95th percentile, benign packages score **20**: exactly the CLEAN boundary. At the 5th percentile, CRITICAL-classified packages score **40**. The boundary is calibrated to separate these distributions. The test suite covers **267 tests** across all modules.
+**74.9 % of diffs score 0** (zero-rate). At the 95th percentile, benign packages score **30**; at the 5th percentile, the CRITICAL-class corpus scores **60**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The test suite covers **1,365 tests** across all modules.
 
 ### FLAGGED (score > 20)
 
@@ -149,7 +149,7 @@ Verification evidence lines appear as negative weights:
 
 ## What partial coverage looks like
 
-When the tokenizer cannot resolve a variable : for example, a URL stored in `$_target` and constructed via string interpolation : the unresolved source produces an **INCONCLUSIVE** outcome rather than scoring 0. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence.
+When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than a clean score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 Unresolved patterns are listed in the inspect output under "Unresolved Patterns." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) for the full list of analysis blind spots.
 

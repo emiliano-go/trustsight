@@ -32,7 +32,7 @@ The scoring system is organized into four evidence tiers:
 
 A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 75+. FATAL rules (prompt injection, unicode bidi overrides) hard-stop at 100.
 
-**Key numbers:** 81.5% benign zero-rate and p95 = 20 on a rebuilt 3,322+ diff stratified corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
+**Key numbers:** 74.9% benign zero-rate, benign p95 = 30 against malicious p5 = 60 on a rebuilt 3,246-diff stratified corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
 
 See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules.md) for the complete rule catalog.
 
@@ -64,13 +64,14 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
 | [What TrustSight Cannot See](explanation/what-trustsight-cannot-see.md) | The reasoned ceiling of the tool. |
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
+| [Security Model](security.md) | What TrustSight guarantees while reading hostile input, what a verdict claims, and how each invariant is enforced. |
 
 ## Guides
 
 | Guide | When to use it |
 |-------|----------------|
 | [Auditing Before Update](guides/auditing-before-update.md) | Everyday workflow: scan AUR packages before `yay -Syu`. |
-| [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD with exit codes or policy thresholds. |
+| [Using in CI](guides/using-in-ci.md) | Gate package installs in CI/CD on the JSON report. |
 | [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE - next steps. |
 | [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages - identify and fix it. |
@@ -85,7 +86,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Configuration](reference/configuration.md) | config.toml, rules.toml, and trusted_domains.toml schema. |
 | [Report Schema](reference/report-schema.md) | PackageFact JSON structure. |
 | [Evidence Tiers](reference/evidence-tiers.md) | A/B/C/D taxonomy with maturity gating. |
-| [Exit Codes](reference/exit-codes.md) | 0 (clean), 1 (flagged), 2 (error). |
+| [Exit Codes](reference/exit-codes.md) | 0 (analysis completed), 2 (error), and why a flag is not an exit code. |
 
 ## Contributing
 

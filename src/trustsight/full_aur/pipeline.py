@@ -2,13 +2,15 @@
 
 import logging
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..analysis.base import _ensure_init
 from ..config import load_config
 from ..db import (
     get_connection,
+    record_alerts,
     get_pkgbuild_snapshot,
     introduction_rate_history,
     latest_cycle_time,
@@ -35,6 +37,16 @@ from .metadata import (
 )
 
 log = logging.getLogger(__name__)
+
+# Score 40 sits in the upper half of the Medium band (scoring.risk_level:
+# Low <= 20, Medium 21-50, High 51-80, Critical 81-100); a cycle names the
+# packages that reached it rather than leaving them in the database for
+# someone to notice later.
+_FLAGGED_SCORE = 40
+
+# How many of them one cycle prints.  A bootstrap analyses the whole AUR,
+# and an unbounded list would bury the cluster findings under it.
+_FLAGGED_REPORT_LIMIT = 10
 
 def _meta_snapshot_path() -> Path:
     """Where this run reads and writes the metadata snapshot.
@@ -167,21 +179,22 @@ def _run_corpus_sweep(
     return findings
 
 
-def run_baseline_build(
-    resume: bool = False,
-    export_path: Optional[str] = None,
-    sign_key: Optional[str] = None,
-    json_output: bool = False,
-) -> None:
-    """Bootstrap or update the full-AUR corpus.
+@dataclass
+class CycleResult:
+    """What one corpus cycle did, for a caller that runs more than one."""
 
-    Fetches the metadata snapshot, diffs against the stored copy (or
-    treats every package as new for a fresh bootstrap), downloads
-    PKGBUILDs, analyses each package, stores results, and optionally
-    exports a signed baseline artifact.
-    """
-    _ensure_init()
+    added: int = 0
+    changed: int = 0
+    removed: int = 0
+    processed: int = 0
+    cluster_findings: list[dict] = field(default_factory=list)
+    new_alerts: list[tuple[str, str]] = field(default_factory=list)
+    flagged: list[tuple[str, int]] = field(default_factory=list)
+    elapsed: float = 0.0
+    bootstrap: bool = False
 
+
+def _logger(json_output: bool):
     if json_output:
         import json as _json
 
@@ -190,6 +203,28 @@ def run_baseline_build(
     else:
         def _log(msg):
             log.info(msg)
+    return _log
+
+
+def run_baseline_build(
+    resume: bool = False,
+    export_path: Optional[str] = None,
+    sign_key: Optional[str] = None,
+    json_output: bool = False,
+) -> CycleResult:
+    """Bootstrap or update the full-AUR corpus.
+
+    Fetches the metadata snapshot, diffs against the stored copy (or
+    treats every package as new for a fresh bootstrap), downloads
+    PKGBUILDs, analyses each package, stores results, and optionally
+    exports a signed baseline artifact.
+
+    Returns what the cycle did so ``run_watch`` can report on it; the
+    single-shot CLI path ignores the value.
+    """
+    _ensure_init()
+    result = CycleResult()
+    _log = _logger(json_output)
 
     _log("Fetching AUR metadata snapshot …")
     new_meta = fetch_metadata()
@@ -202,6 +237,7 @@ def run_baseline_build(
         added = sorted(new_meta)
         changed: list[str] = []
         removed: list[str] = []
+        result.bootstrap = True
         _log("No prior snapshot found; processing all packages")
     else:
         changes = diff_metadata(old_meta, new_meta)
@@ -210,12 +246,13 @@ def run_baseline_build(
         removed = sorted(n for n, s in changes.items() if s == "removed")
         _log(f"Delta: {len(added)} added, {len(changed)} changed, {len(removed)} removed")
 
+    result.added, result.changed, result.removed = len(added), len(changed), len(removed)
     to_process = added + changed
 
     if not to_process:
         _log("Nothing to process")
         save_metadata(new_meta, _meta_snapshot_path())
-        return
+        return result
 
     resume_state = load_resume_state() if resume else None
     processed: set[str] = set(resume_state.get("processed", [])) if resume_state else set()
@@ -271,7 +308,10 @@ def run_baseline_build(
         save_package_profile(
             package_name=name,
             last_score=fact.final_score,
-            last_risk=fact.score_breakdown.get("risk_label", ""),
+            # score_breakdown is a list of ScoreEntry, not a dict: asking it
+            # for "risk_label" raised AttributeError on the first package of
+            # every bootstrap.  The label is derived from the score.
+            last_risk=risk_level(fact.final_score),
         )
 
         scores[name] = fact.final_score
@@ -291,6 +331,20 @@ def run_baseline_build(
     # before this cycle's events are recorded.
     cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
+    result.cluster_findings = cluster_findings
+    result.processed = len(processed)
+    # What this cycle analysed, worst first.  Cluster findings describe the
+    # corpus; these are the individual packages a watcher would otherwise
+    # have to go looking for in `trustsight list`.
+    result.flagged = sorted(
+        ((name, score) for name, score in scores.items() if score >= _FLAGGED_SCORE),
+        key=lambda item: (-item[1], item[0]),
+    )
+    result.new_alerts = record_alerts([
+        (member, finding["rule_id"])
+        for finding in cluster_findings
+        for member in finding["params"]["members"]
+    ])
     if cluster_findings:
         _log(f"Corpus sweep: {len(cluster_findings)} cluster finding(s)")
         for finding in cluster_findings:
@@ -300,10 +354,20 @@ def run_baseline_build(
             )
 
     total_elapsed = time.time() - batch_start
+    result.elapsed = total_elapsed
     _log(
         f"Baseline build complete: {len(processed)} packages processed "
         f"in {total_elapsed:.0f}s"
     )
+
+    if result.flagged:
+        shown = result.flagged[:_FLAGGED_REPORT_LIMIT]
+        _log(
+            f"{len(result.flagged)} package(s) scored {_FLAGGED_SCORE}+ this cycle"
+            + (f" (showing {len(shown)})" if len(shown) < len(result.flagged) else "")
+        )
+        for name, score in shown:
+            _log(f"  {score:3d}  {name}")
 
     if export_path:
         from .export import build_artifact
@@ -311,6 +375,65 @@ def run_baseline_build(
             export_path=export_path,
             private_key_path=sign_key,
         )
+    return result
+
+
+def watch_interval_seconds(requested: Optional[int] = None) -> int:
+    """Seconds between watch cycles, clamped to the configured floor.
+
+    The AUR regenerates its metadata dump every few minutes, so a shorter
+    interval only re-downloads the same snapshot and re-walks the same
+    diff; the floor keeps a mistyped ``--interval 1`` from turning into a
+    request loop against someone else's mirror.
+    """
+    limits = load_config().get("limits", {})
+    default = int(limits.get("watch_interval", 3600))
+    floor = int(limits.get("watch_min_interval", 60))
+    return max(floor, int(requested) if requested else default)
+
+
+def run_watch(
+    interval: Optional[int] = None,
+    cycles: int = 0,
+    json_output: bool = False,
+    sleep: Callable[[float], None] = time.sleep,
+) -> list[CycleResult]:
+    """Run corpus cycles on an interval until interrupted (plan §6.4).
+
+    Each cycle is exactly what ``run_baseline_build`` does once: refresh
+    the metadata snapshot, analyse what changed, run the Class D sweep and
+    record the adoption feed.  What ``--watch`` adds is repetition and
+    memory - a cluster is announced the first time it is seen and then
+    counted, not re-announced, so the second cycle of a quiet night prints
+    nothing rather than the same forty-package adoption again.
+
+    *cycles* of 0 means "until interrupted".  Ctrl-C ends the loop between
+    or during a cycle; state is already durable at that point, since every
+    cycle saves the snapshot and the resume file before it returns.
+    """
+    delay = watch_interval_seconds(interval)
+    _log = _logger(json_output)
+    results: list[CycleResult] = []
+    _log(
+        f"Watching the AUR: one cycle every {delay}s"
+        + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
+    )
+    try:
+        while True:
+            result = run_baseline_build(json_output=json_output)
+            results.append(result)
+            if result.new_alerts:
+                _log(f"{len(result.new_alerts)} new alert(s) this cycle")
+                for package, rule_id in result.new_alerts:
+                    _log(f"  {rule_id}  {package}")
+            elif result.cluster_findings:
+                _log("No new alerts; every cluster this cycle was already reported")
+            if cycles and len(results) >= cycles:
+                break
+            sleep(delay)
+    except KeyboardInterrupt:
+        _log(f"Watch stopped after {len(results)} cycle(s)")
+    return results
 
 
 

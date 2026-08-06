@@ -2,7 +2,7 @@ import logging
 import re
 import sys
 
-from ..scoring import risk_level
+from ..scoring import risk_level, verdict_label, verdict_level
 from ..unicode import describe_fatal_codepoints, strip_ansi
 
 try:
@@ -147,7 +147,9 @@ def _fact_to_dict(fact):
         # versions above are not always comparable (plan §13).
         "version_comparison": getattr(fact, "version_comparison", ""),
         "score": fact.final_score,
-        "risk": risk_level(fact.final_score),
+        "risk": verdict_level(fact),
+        "risk_label": verdict_label(fact),
+        "coverage_gaps": list(getattr(fact, "coverage_gaps", [])),
         "first_seen": fact.first_seen,
         "maintainer_changed": fact.maintainer_changed,
         "checksum_behavior": fact.source_changes.checksum_behavior if hasattr(fact.source_changes, "checksum_behavior") else None,

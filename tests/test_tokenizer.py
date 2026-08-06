@@ -416,6 +416,29 @@ def test_reconstruct_malformed_ansi_c_is_not_fully_reconstructed():
     assert not fully
 
 
+def test_reconstruct_regex_end_anchor_is_not_an_ansi_c_quote():
+    """A ``$`` before a closing quote is a regex end-anchor, not shell
+    quoting: reading one as an unreconstructable literal makes ordinary
+    text look obfuscated (four benign-corpus diffs did exactly that)."""
+    from trustsight.tokenizer import reconstruct_literals
+    for line in (
+        r"grep '/Windows/Fonts/.*\.tt[cf]$' | xargs -r wimextract",
+        r"regex = re.compile(r' => (.*) \(0x[0-9a-f]+\)$')",
+        "if(!tmp.contains(QLatin1Char('$')))",
+    ):
+        _, fully = reconstruct_literals(line)
+        assert fully, line
+
+
+def test_reconstruct_unterminated_quote_after_an_operator_is_inconclusive():
+    """The opener check still catches the real thing in every position a
+    word can start."""
+    from trustsight.tokenizer import reconstruct_literals
+    for line in (r"x=$'\x62\x75", r"eval $'\x62", r"a && $'\x62", r"(  $'\x62"):
+        _, fully = reconstruct_literals(line)
+        assert not fully, line
+
+
 def test_reconstruct_standalone_empty_quote_argument_kept():
     """'' as a standalone argument (whitespace both sides) is data, not
     concatenation, and must survive reconstruction."""

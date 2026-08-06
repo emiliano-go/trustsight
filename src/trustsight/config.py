@@ -1,8 +1,11 @@
 import copy
+import logging
 import re
 from pathlib import Path
 
 import tomllib
+
+_log = logging.getLogger(__name__)
 
 CONFIG_DIR = Path.home() / ".config" / "trustsight"
 DATA_DIR = Path.home() / ".local" / "share" / "trustsight"
@@ -105,6 +108,32 @@ DEFAULT_RECON_COMMANDS = [
     r"(?:\A\s*|[;&|]\s*)printenv\b",
 ]
 
+# R129 - network clients invoked at parse time (top level of the PKGBUILD).
+# makepkg sources the recipe before any build step runs, and `makepkg
+# --printsrcinfo`, an AUR helper's metadata refresh and a plain `source
+# PKGBUILD` all reach these lines.  Each entry is a regex fragment carrying a
+# command-position anchor, so a name mentioned in a string, an array element
+# or a comment never fires.
+DEFAULT_PARSE_TIME_FETCH = [
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*curl\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*wget\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*aria2c\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*axel\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*lynx\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*ncat\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*nc\s+-",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*scp\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*sftp\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*git\s+clone\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*git\s+fetch\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*svn\s+(?:co|checkout|export)\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*hg\s+clone\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*pip3?\s+install\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*npm\s+(?:install|i|add)\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*cargo\s+(?:install|fetch)\b",
+    r"(?:\A\s*|[;&|]\s*|\$\()\s*go\s+(?:get|install)\b",
+]
+
 # D003 - package names that grant network access from makedepends.
 DEFAULT_NETWORK_TOOLS = [
     "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
@@ -140,11 +169,34 @@ DEFAULT_KNOWN_SUFFIXES = (
 )
 
 # Paste and ephemeral file-drop hosts (R087).  Bucket classification in
-# trusted_domains.toml [raw_hosting] already weights these.
+# trusted_domains.toml [raw_hosting] already weights these *as source URLs*,
+# which is why R087 does not look at source=(): it reads the other
+# direction, an upload to one of these hosts from inside a build or install
+# function, where no bucket applies and the data is leaving the machine.
 DEFAULT_PASTE_HOSTS = [
     "pastebin.com", "gist.github.com", "paste.ee", "0x0.st", "termbin.com",
     "hastebin.com", "ix.io", "transfer.sh", "file.io", "bashupload.com",
     "temp.sh", "anonfiles.com", "dpaste.com", "sprunge.us",
+]
+
+# R087 - invocation shapes that *send* a request body rather than fetch one.
+# Direction is the whole point of the rule: downloading from a gist is an
+# undeclared fetch (R061), while uploading to one is data leaving the build
+# machine.  Fragments are matched after the client name on a command-position
+# line.
+DEFAULT_UPLOAD_FLAGS = [
+    r"-F\s",
+    r"--form\b",
+    r"-T\s",
+    r"--upload-file\b",
+    r"--data-binary\b",
+    r"--data-raw\b",
+    r"--data\b",
+    r"-d\s",
+    r"--post-file\b",
+    r"--post-data\b",
+    r"--method\s+(?:POST|PUT)\b",
+    r"-X\s*(?:POST|PUT)\b",
 ]
 
 # Source schemes allowed by R080 (source URL uses an exotic protocol).  A
@@ -270,6 +322,11 @@ network_transfer_timeout = 30
 # Seconds the review prefetch phase waits for the whole batch.  What has
 # not arrived by then is abandoned and fetched again during analysis.
 prefetch_timeout = 120
+# Seconds between cycles of `trustsight full-aur --watch`.  The AUR's own
+# metadata dump is regenerated every few minutes, so anything under a
+# minute only re-downloads the same snapshot; the floor is enforced.
+watch_interval = 3600
+watch_min_interval = 60
 
 [seed]
 # Import the bundled novelty seed the first time TrustSight runs against
@@ -920,6 +977,19 @@ DEFAULT_PATTERNS = (
     "# produce benign false positives).  A lone `uname -m` fires R086 at INFO.\n"
     "recon_commands = " + _toml_str_list(DEFAULT_RECON_COMMANDS) + "\n"
     "\n"
+    "\n"
+    "# R087 - curl/wget invocation shapes that send a request body.  An\n"
+    "# upload to a paste or file-drop host from a build or install function\n"
+    "# is the exfil direction; a download from one is R061's undeclared\n"
+    "# fetch.  Matched after the client name on a command-position line.\n"
+    "upload_flags = " + _toml_str_list(DEFAULT_UPLOAD_FLAGS) + "\n"
+    "\n"
+    "# R129 - network clients invoked at parse time (the top level of the\n"
+    "# PKGBUILD, outside every function).  makepkg sources the recipe before\n"
+    "# any build step runs, so these lines execute on a metadata refresh, not\n"
+    "# only on a build.  Fragments carry a command-position anchor.\n"
+    "parse_time_fetch = " + _toml_str_list(DEFAULT_PARSE_TIME_FETCH) + "\n"
+    "\n"
     "# D003 - package names that grant network access from makedepends.  A\n"
     "# new network-capable build dependency is code the checksum array does\n"
     "# not cover.\n"
@@ -1321,10 +1391,77 @@ def load_config() -> dict:
     return load_toml("config.toml")
 
 
+_shipped_rules_cache: list[dict] | None = None
+
+
+def shipped_rules() -> list[dict]:
+    """The rule set this build ships, parsed from ``DEFAULT_RULES``.
+
+    Read-only reference: it is what ``rules.toml`` is written from, and
+    what the FATAL integrity check compares an on-disk file against.
+    """
+    global _shipped_rules_cache
+    if _shipped_rules_cache is None:
+        _shipped_rules_cache = tomllib.loads(DEFAULT_RULES).get("rules", [])
+    return _shipped_rules_cache
+
+
+def shipped_fatal_rule_ids() -> list[str]:
+    """Ids of the shipped rules whose severity is FATAL.
+
+    Derived, never hardcoded: a rule promoted to FATAL is protected the
+    moment it ships, and the docs and the security gates read this list
+    rather than restating it.
+    """
+    return [r["id"] for r in shipped_rules() if r.get("severity") == "FATAL"]
+
+
+def enforce_fatal_rules(rules: list[dict]) -> tuple[list[dict], list[str]]:
+    """Restore any shipped FATAL rule the on-disk file dropped or downgraded.
+
+    ``rules.toml`` is user-editable, which is the point: an operator must
+    be able to tune a noisy pattern.  What they must not be able to do,
+    quietly, is switch off the two rules an attacker would most want gone.
+    Prompt injection and unicode deception target the *reviewer*, not the
+    machine, so a run that skips them is not a tuned run, it is a run whose
+    output cannot be trusted at all - and ``override.py`` already refuses
+    to suppress a FATAL finding for exactly that reason.  Enforcing it at
+    load time closes the other half: deleting the rule instead of
+    overriding its finding.
+
+    The restore is in memory only.  Nothing is written back, so a user who
+    edited the file still has their file; they just do not get an analysis
+    that pretends the rule was never there.  Returns the effective rule
+    list and the ids that had to be restored.
+    """
+    by_id = {r.get("id"): r for r in rules}
+    restored: list[str] = []
+    effective = list(rules)
+    for shipped in shipped_rules():
+        if shipped.get("severity") != "FATAL":
+            continue
+        rid = shipped["id"]
+        on_disk = by_id.get(rid)
+        if on_disk is None:
+            effective.append(dict(shipped))
+            restored.append(rid)
+        elif on_disk.get("severity") != "FATAL":
+            effective[effective.index(on_disk)] = dict(shipped)
+            restored.append(rid)
+    return effective, restored
+
+
 def load_rules() -> list[dict]:
-    """Load rules from rules.toml"""
+    """Load rules from rules.toml, with the shipped FATAL set re-asserted."""
     data = load_toml("rules.toml")
-    return data.get("rules", [])
+    rules, restored = enforce_fatal_rules(data.get("rules", []))
+    if restored:
+        _log.warning(
+            "rules.toml is missing or has downgraded FATAL rule(s) %s; "
+            "the shipped definition is being used instead",
+            ", ".join(restored),
+        )
+    return rules
 
 
 def _standard_port_pattern() -> str:
@@ -1336,7 +1473,10 @@ def _standard_port_pattern() -> str:
         or cfg.get("ports", {}).get("standard")
         or DEFAULT_STANDARD_PORTS
     )
-    joined = "|".join(str(p) for p in ports)
+    # Escaped: these come from hosts.toml, which is a *list*, not a
+    # pattern language.  An unescaped entry silently becomes regex - at
+    # best a broken rule, at worst one that matches everything or nothing.
+    joined = "|".join(re.escape(str(p)) for p in ports)
     return f'https?://[^/\\s:]+:(?!(?:{joined})(?:[/\\s"\\x27]|$))\\d{{2,5}}'
 
 
@@ -1349,7 +1489,7 @@ def _free_registrar_tld_pattern() -> str:
         or cfg.get("domains", {}).get("free_registrar_tlds")
         or DEFAULT_FREE_REGISTRAR_TLDS
     )
-    joined = "|".join(tlds)
+    joined = "|".join(re.escape(str(t)) for t in tlds)
     return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
 
 

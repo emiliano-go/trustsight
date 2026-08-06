@@ -42,7 +42,7 @@ docs = [
 Documentation = "https://github.com/emiliano-go/trustsight"
 
 [project.scripts]
-trustsight = "trustsight.cli:app"
+trustsight = "trustsight.cli:main"
 
 [build-system]
 requires = ["hatchling"]

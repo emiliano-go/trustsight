@@ -25,7 +25,11 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
 
     for i, line in enumerate(lines):
         if line.startswith("+++ "):
-            current_file = line[4:].lstrip("b/")
+            # removeprefix, not lstrip: lstrip("b/") strips *characters*,
+            # so "+++ b/build.sh" reported the file as "uild.sh" and every
+            # finding in it cited a path that does not exist.
+            name = line[4:].strip()
+            current_file = name.removeprefix("b/") if name.startswith("b/") else name
             continue
         if line.startswith("--- "):
             continue

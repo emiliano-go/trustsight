@@ -73,15 +73,17 @@ These weights were calibrated only after tier C became live. They had previously
 
 ## The INCONCLUSIVE downgrade
 
-When the final score is in the Medium range (21 to 50) and all contributing signals are Tier C novelty and maturity is below 0.5 (fewer than approximately 25 observations), the verdict is downgraded from FLAGGED to INCONCLUSIVE.
+When the final score is in the Medium range (21 to 50), maturity is below 0.5 (fewer than 25 recorded analyses, half of the 50 at which novelty reaches full weight), and nothing in the breakdown is HIGH, CRITICAL or FATAL, the verdict is downgraded from FLAGGED to INCONCLUSIVE. A single HIGH finding blocks the downgrade: the score is then held up by evidence, not by novelty.
 
 The logic:
 1. Compute the score normally.
-2. If score > 20 (Medium or higher) and maturity < 0.5, check whether the score is driven entirely by novelty signals.
-3. If no structural rules (tier A) fired and no source bucket penalties (tier B) contributed, the score is from novelty alone.
-4. Downgrade to INCONCLUSIVE: *"Score is Medium but all signals are from novelty, and the database is too cold for novelty to be reliable."*
+2. If the score lands in the Medium band (21 to 50) and maturity is below 0.5, look at the severity of every entry in the breakdown.
+3. If none of them is HIGH, CRITICAL or FATAL, nothing but weak signals is holding the score up.
+4. Downgrade to INCONCLUSIVE: *"Score is Medium but nothing strong fired, and the database is too cold for novelty to be reliable."*
 
 This prevents the tool from flagging packages based on weak signals. INCONCLUSIVE is not a pass or a fail; it is a signal that the tool cannot be confident in its assessment.
+
+A coverage gap produces the same downgrade at any maturity, for a different reason: the run did not see the whole change. See [the security model](../security.md#b2-a-clean-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 ## Maturity and maintainer tracking
 

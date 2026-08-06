@@ -249,7 +249,7 @@ def override_add(
             typer.echo(json.dumps({"error": msg}))
         else:
             _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
     scope = ov.package or "all packages"
     msg = f"Override added: {ov.rule_id} for {scope}"
     if json_output:
@@ -378,7 +378,7 @@ def override_rm(
             typer.echo(json.dumps({"error": msg}))
         else:
             _print_colored(msg, "yellow")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
 
 
 # --- db subcommands ---
@@ -411,7 +411,7 @@ def db_check(
     else:
         for err in errors:
             _print_colored(err, "red", stderr=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=2)
 
 
 @db_app.command("vacuum")
@@ -699,7 +699,7 @@ def register_commands(app: typer.Typer):
                 print(f"\n{msg}")
 
         if errors:
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=2)
 
     @app.command("status")
     def status_cmd(
@@ -754,12 +754,30 @@ def register_commands(app: typer.Typer):
         resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
         export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
         sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
+        watch: bool = typer.Option(False, "--watch", help="Keep running cycles on an interval until interrupted"),
+        interval: int | None = typer.Option(None, "--interval", help="Seconds between --watch cycles (default 3600, floor 60)"),
+        cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
-        """Bootstrap or update the full-AUR baseline corpus."""
-        from ..full_aur.pipeline import run_baseline_build
+        """Bootstrap or update the full-AUR baseline corpus.
+
+        With --watch the same cycle repeats on an interval: refresh the
+        metadata snapshot, analyse what changed, run the corpus sweep, and
+        report each cluster once rather than on every cycle.
+        """
+        from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
         init_db()
+        if watch:
+            if export or sign:
+                typer.secho(
+                    "--export/--sign describe a single artifact; run them "
+                    "without --watch.",
+                    fg=typer.colors.RED,
+                )
+                raise typer.Exit(2)
+            run_watch(interval=interval, cycles=cycles, json_output=json_output)
+            return
         run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output)
 
     @app.command("import-baseline")

@@ -4,6 +4,7 @@ import typer
 
 from ..config import ensure_default_configs
 from ..db import get_all_packages, get_last_analysis, init_db
+from ..safe_text import clean
 from ..scoring import risk_level
 from .display import (
     HAS_RICH,
@@ -80,9 +81,9 @@ def register_commands(app: typer.Typer):
                 else:
                     risk_obj = Text(risk, style=RISK_COLORS.get(risk, "white"))
                 table.add_row(
-                    r["name"],
-                    version,
-                    r["maintainer"] or "[dim]-[/]",
+                    Text(clean(r["name"])),
+                    Text(version),
+                    Text(clean(r["maintainer"])) if r["maintainer"] else "[dim]-[/]",
                     r["last_checked"][:10] if r["last_checked"] else "[dim]-[/]",
                     score_cell,
                     risk_obj,
@@ -94,4 +95,4 @@ def register_commands(app: typer.Typer):
             for r in rows:
                 score = "\u2014" if r["score"] is None else str(r["score"])
                 checked = r["last_checked"][:10] if r["last_checked"] else "-"
-                print(f"{r['name']:<20} {r['version']:<15} {score:<8} {r['risk']:<12} {checked}")
+                print(f"{clean(r['name']):<20} {r['version']:<15} {score:<8} {r['risk']:<12} {checked}")

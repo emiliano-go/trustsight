@@ -37,6 +37,7 @@ from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, get_raw_diff_lines
+from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
 from ..scoring import calculate_score
 from ..schema import (
     DiffSummary,
@@ -215,8 +216,9 @@ def analyze_package_text(
                     "params": {"pkg_name": pkg_name, "squatted": squatted},
                 }))
 
+        gaps = gaps_from(tree_analyzed=bool(tree_manifest))
         score, breakdown, risk = calculate_score(
-            triggered_rules, {}, novelty, config
+            triggered_rules, {}, novelty, config, coverage_gaps=gaps
         )
 
         fact = PackageFact(
@@ -228,6 +230,8 @@ def analyze_package_text(
             first_seen=True,
             temporal_source=temporal.source,
             tree_analyzed=bool(tree_manifest),
+            coverage_gaps=gaps,
+            risk=risk,
             score_breakdown=breakdown,
             final_score=score,
         )
@@ -356,10 +360,19 @@ def analyze_package_text(
         diff_text, source_changes.checksum_behavior
     )
 
+    unresolved_sources = unresolved_source_lines(diff_text)
+    gaps = gaps_from(
+        diff_truncated=diff_truncated,
+        tree_analyzed=bool(tree_manifest),
+        unresolved_sources=unresolved_sources,
+        long_lines=oversized_lines(raw_lines),
+    )
+
     score, breakdown, risk = calculate_score(
         triggered_rules, source_buckets, novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
+        coverage_gaps=gaps,
     )
 
     fact = PackageFact(
@@ -381,6 +394,9 @@ def analyze_package_text(
         suppressed_rules=suppressed_rules,
         diff_truncated=diff_truncated,
         tree_analyzed=bool(tree_manifest),
+        coverage_gaps=gaps,
+        unresolved_sources=unresolved_sources,
+        risk=risk,
         temporal_source=temporal.source,
         score_breakdown=breakdown,
         final_score=score,

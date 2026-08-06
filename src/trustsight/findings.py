@@ -59,6 +59,7 @@ TEMPLATES: dict[str, str] = {
     "R075": "diff adds {n_novel} novel or rare dependencies: {novel_names}",
     "R081": "{position}() invokes foreign package manager: {body}",
     "R082": "{position}() line carries {count} obfuscation indicators: {body}",
+    "R117": "{detail}: {body}",
 
     # --- Phase 2: July delivery stack ---
     "R118": "ELF file committed to the repository: {path}",
@@ -82,8 +83,15 @@ TEMPLATES: dict[str, str] = {
     # --- Phase 3: network surface ---
     "R009": "{position}() runs sudo: {body}",
     "R076": "{variable}={value!r} carries injection chars interpolated into a source URL: {url}",
+    "R079": "{detail}",
     "R080": "source URL uses non-allowlisted scheme {scheme}: {url}",
     "R123": "{detail}",
+    "R087": "{detail}: {body}",
+    "R129": "{detail}: {body}",
+
+    # --- Gap closures: parse-time fetch, signing keys, build flags ---
+    "R130": "{detail}",
+    "R131": "{detail}: {value}",
 
     # --- Phase 4: Class B ---
     "R115": "epoch={epoch} newly introduced",

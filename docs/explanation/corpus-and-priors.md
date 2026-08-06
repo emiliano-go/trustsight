@@ -79,3 +79,35 @@ A package that adds a URL from a never-before-seen domain fires both `url_first_
 The corpus is not exhaustive. New packages added between weekly regenerations might contain domains not in the current snapshot. These domains are classified as `unknown` by default, which is the correct conservative behavior. They will be reclassified in the next weekly regeneration if their frequency crosses a threshold.
 
 This also means that removing a package from the AUR does not immediately change classification. The snapshot is weekly, so a removed package's domains remain in the prior until the next regeneration. This is acceptable: domain rarity is measured over a multi-week window, not a point-in-time snapshot.
+
+## The live corpus: cycles, the adoption feed, and watch mode
+
+The bundled snapshot is the prior. `trustsight full-aur` is how a local
+installation keeps its own corpus current, and it does more than refresh the
+priors.
+
+Each run is one **cycle**: fetch the AUR metadata dump, diff it against the
+stored snapshot, analyse the PKGBUILDs of everything added or changed, then run
+the Class D corpus sweep across the whole delta. The sweep is the part that
+cannot be done per package. It asks who adopted ten packages this week, which
+unrelated packages started sharing a source repository, whether the corpus-wide
+introduction rate jumped, and it reports one finding per cluster with the
+members attached rather than repeating itself once per member.
+
+Every cycle is also written to the **adoption feed**, a row per package per
+cycle in `cycle_events` recording whether it was added, modified or removed and
+who owned it. That feed is the baseline R125 measures a rate deviation against
+and the history R108 compares a maintainer's activity to. It is why the first
+cycle of a fresh install can never produce a Class D finding: there is nothing
+to deviate from, and that silence is enforced by a calibration gate.
+
+`trustsight full-aur --watch` repeats the cycle on an interval. The one thing
+it adds beyond repetition is memory: an announced cluster is recorded in
+`alert_state` by package and rule, so a cluster is reported the first time it
+is seen and counted thereafter. Without that, a maintainer who adopted forty
+packages overnight would be re-announced on every cycle until the metadata
+changed again, and an operator learns to ignore a feed that repeats itself.
+
+See [the CLI reference](../reference/cli.md#trustsight-full-aur) for the flags
+and [the Class D rules](../reference/rules.md#class-d-rules) for what the sweep
+can find.

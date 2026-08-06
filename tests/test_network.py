@@ -116,3 +116,110 @@ def test_r123_ignores_client_outside_build_install():
 
 def test_r123_clean_diff_is_quiet():
     assert "R123" not in ids('+build() {\n+  make\n+  install -Dm755 x "$pkgdir/usr/bin/x"\n+}\n')
+
+
+# --- R079: moved git ref ---
+
+_OLD = "0829cf892b5d7b3a0e8aa76cc7aca02b84f62557"
+_NEW = "6330a45b06d20125de679aae5f63ba14082671ef"
+
+
+def sev(diff_text: str, rule_id: str) -> str | None:
+    for f in structural(diff_text):
+        if f["rule_id"] == rule_id:
+            return f["severity"]
+    return None
+
+
+def test_r079_fires_when_commit_ref_moves_without_a_version_change():
+    d = (
+        f'-source=("git+https://h.example/r.git#commit={_OLD}")\n'
+        f'+source=("git+https://h.example/r.git#commit={_NEW}")\n'
+    )
+    assert sev(d, "R079") == "MEDIUM"
+
+
+def test_r079_is_high_when_an_unchanged_tag_annotation_anchors_the_pin():
+    d = (
+        f'-_commit={_OLD} # tags/v1.2.3\n'
+        f'+_commit={_NEW} # tags/v1.2.3\n'
+        ' source=("git+https://h.example/r.git#commit=$_commit")\n'
+    )
+    assert sev(d, "R079") == "HIGH"
+
+
+def test_r079_is_high_when_the_same_tag_is_still_declared_in_context():
+    d = (
+        ' source=("git+https://h.example/r.git#tag=v1.2.3"\n'
+        f'-        "mirror::git+https://h.example/r.git#commit={_OLD}")\n'
+        f'+        "mirror::git+https://h.example/r.git#commit={_NEW}")\n'
+    )
+    assert sev(d, "R079") == "HIGH"
+
+
+def test_r079_quiet_when_the_declared_version_moved_too():
+    d = (
+        '-pkgver=1.2.3\n+pkgver=1.2.4\n'
+        f'-source=("git+https://h.example/r.git#commit={_OLD}")\n'
+        f'+source=("git+https://h.example/r.git#commit={_NEW}")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_quiet_on_a_pkgrel_bump_that_repins():
+    d = (
+        '-pkgrel=1\n+pkgrel=2\n'
+        f'-_commit={_OLD}\n+_commit={_NEW}\n'
+        ' source=("git+https://h.example/r.git#commit=$_commit")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_quiet_on_an_ordinary_tag_bump():
+    d = (
+        '-pkgver=34.0.2\n+pkgver=34.1.0\n'
+        '-source=("git+https://h.example/electron.git#tag=v34.0.2")\n'
+        '+source=("git+https://h.example/electron.git#tag=v34.1.0")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_fires_when_a_commit_pin_is_loosened_to_a_tag():
+    """Dropping the pin is reported even during a version bump: the ref the
+    build now follows is one upstream can move afterwards."""
+    d = (
+        '-pkgver=1.2.3\n+pkgver=1.3.0\n'
+        f'-source=("git+https://h.example/r.git#commit={_OLD}")\n'
+        '+source=("git+https://h.example/r.git#tag=v1.3.0")\n'
+    )
+    assert sev(d, "R079") == "MEDIUM"
+
+
+def test_r079_quiet_when_a_tag_is_tightened_to_a_commit():
+    d = (
+        '-source=("git+https://h.example/r.git#tag=3.16.2")\n'
+        f'+source=("git+https://h.example/r.git#commit={_NEW}")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_ignores_a_digest_variable_that_is_not_a_checkout_pin():
+    """advcpmv's shape: the digest feeds a patch URL, not a git ref.  The
+    source line's own change is C003's fact to report."""
+    d = (
+        f'-_commit={_OLD}\n+_commit={_NEW}\n'
+        ' source=("https://raw.example/u/p/$_commit/fix.patch")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_ignores_a_non_digest_revision_counter():
+    d = (
+        '-_revision=3\n+_revision=4\n'
+        ' source=("git+https://h.example/r.git#commit=$_commit")\n'
+    )
+    assert "R079" not in ids(d)
+
+
+def test_r079_quiet_on_an_unrelated_diff():
+    assert "R079" not in ids('+build() {\n+  make\n+}\n')

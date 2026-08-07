@@ -321,6 +321,7 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
             "risk_label": verdict_label(fact),
             "first_seen": fact.first_seen,
             "diff_truncated": fact.diff_truncated,
+            "changes": fact.changes,
             "coverage_gaps": fact.coverage_gaps,
             # A VCS package's AUR pkgver is a placeholder its build replaces,
             # so the two versions are not comparable and must not render as
@@ -402,6 +403,9 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 # Always present, with or without --score: a consumer
                 # gating on the score must be able to see that the score
                 # describes an incomplete analysis.
+                # B7: what moved, whether or not a rule matched.  A
+                # consumer reading only `findings` is unaffected.
+                "changes": r.get("changes", []),
                 "coverage_gaps": r.get("coverage_gaps", []),
             }
             if show_score or show_risk:
@@ -469,6 +473,8 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 label = r.get("risk_label") or r.get("risk", "")
                 typer.echo(f"  Risk: ({label})")
 
+            for entry in r.get("changes", []):
+                typer.echo(f"  ~ {clean(entry)}")
             for gap in r.get("coverage_gaps", []):
                 typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
 
@@ -542,6 +548,12 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
                 path = fc.get("path", "")
                 prefix = {"added": "[green]+[/]", "removed": "[red]-[/]", "modified": "[yellow]~[/]"}.get(status, " ")
                 table.add_row("", f"  {prefix} {safe_markup(path)}")
+
+        changes = r.get("changes", [])
+        if changes:
+            table.add_row("Changed", Text(clean(changes[0])))
+            for entry in changes[1:]:
+                table.add_row("", Text(clean(entry)))
 
         for gap in r.get("coverage_gaps", []):
             table.add_row("Not vetted", GAP_REASONS.get(gap, gap))

@@ -40,7 +40,13 @@ def fallback_verdict(fact: PackageFact) -> str:
 
     fired = [e for e in fact.score_breakdown if e.weight > 0 or e.severity == "FATAL"]
     if not fired:
-        return f"Version bump. {change_summary}. No risk signals fired."
+        # B9: a fact, then the standing instruction.  "No risk signals
+        # fired" on its own reads as a clearance, and no output may grant
+        # permission to skip review, least of all when nothing fired.
+        return (
+            f"Version bump. {change_summary}. No published rule matched. "
+            "Review the diff before building."
+        )
 
     fired.sort(key=lambda e: (
         _SEVERITY_ORDER.index(e.severity) if e.severity in _SEVERITY_ORDER else 99,

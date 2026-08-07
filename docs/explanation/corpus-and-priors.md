@@ -39,7 +39,7 @@ The threshold exists because some domains are visually similar to trusted domain
 
 Even on first run (when novelty signals are inactive, see [Cold Start and Maturity](cold-start-and-maturity.md)), URL classification works because the domain list is corpus-derived:
 
-- `trusted_forge`: domains that commonly host AUR sources (GitHub, GitLab, Codeberg, Bitbucket, SourceForge). These carry a negative score modifier because they provide platform-level integrity guarantees: signed commits, tag verification, and content-addressed releases.
+- `trusted_forge`: domains that commonly host AUR sources (GitHub, GitLab, Codeberg, Bitbucket, SourceForge). These are neutral (weight 0) and reported as the declared-practice finding `P007`, never credited because they provide platform-level integrity guarantees: signed commits, tag verification, and content-addressed releases.
 - `official`: known upstream domains (kernel.org, python.org, nginx.org, archlinux.org, gnu.org). Neutral modifier: the domain is established but does not provide platform guarantees.
 - `self_hosted`: custom domains under maintainer control. Slight positive modifier: the maintainer controls the infrastructure, which introduces a compromise vector but is normal for many packages.
 - `raw_hosting`: content-delivery domains (raw.githubusercontent.com, pastebin.com, gist.github.com). Positive modifier: these domains serve content without integrity guarantees.

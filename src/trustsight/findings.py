@@ -152,3 +152,25 @@ def stamp(finding: dict, template: str | None = None) -> dict:
     finding.setdefault("line", None)
     finding.setdefault("file", "")
     return finding
+
+
+# B8.  Rules whose evidence is not a line of the recipe: maintainer state,
+# timing, corpus-wide clustering, dependency-graph shape.  These declare an
+# evidence class instead of a location, because a missing location must not
+# be indistinguishable from a rule that forgot to set one.
+NON_CONTENT_RULES = {
+    "R065": "temporal", "R066": "temporal", "R067": "temporal",
+    "R071": "maintainer", "R072": "maintainer", "R073": "maintainer",
+    "R074": "naming", "R075": "naming", "R083": "longitudinal",
+    "R090": "corpus", "R092": "corpus", "R093": "corpus", "R094": "longitudinal",
+    "R095": "longitudinal", "R096": "longitudinal", "R097": "longitudinal",
+    "R098": "longitudinal", "R100": "corpus", "R101": "corpus",
+    "R102": "longitudinal", "R105": "corpus", "R107": "corpus",
+    "R108": "corpus", "R110": "corpus", "R111": "corpus", "R112": "corpus",
+    "R125": "corpus", "R126": "corpus",
+    "D001": "dependency", "D002": "dependency", "D003": "dependency",
+    "D004": "dependency",
+    "R059": "context", "R060": "context", "R068": "context", "R070": "context",
+    "R076": "context", "R084": "context", "R089": "composite",
+    "R117": "reconstruction", "R131": "context",
+}

@@ -6,7 +6,7 @@ TrustSight groups scoring signals into four evidence tiers. Each tier represents
 Tier A : Structural            (strongest, always available)
 Tier B : Priors / Context      (domain reputation, always available)
 Tier C : History / Novelty     (first-seen tracking, maturity-gated)
-Tier D : Verification          (subtractions, end-state only)
+Tier D : Verification          (declared, weight 0, end-state only)
 ```
 
 ---
@@ -55,14 +55,16 @@ Domain reputation classification for every new source URL in the diff.
 
 | Bucket | Modifier | Examples |
 |--------|----------|----------|
-| `trusted_forge` | -10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
+| `trusted_forge` | 0 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | `official` | 0 | kernel.org, python.org, nginx.org, archlinux.org |
 | `self_hosted` | +10 | Custom domain under maintainer control |
 | `raw_hosting` | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | `unknown` | +20 | Domain not in any allowlist |
 | `homograph_attack` | +30 | Domain with Cyrillic homoglyphs (e.g. githab.com) |
 
-The trusted forge modifier is capped at **-20** total across all URLs (`src/trustsight/scoring.py`).
+A trusted forge is neutral, not a credit. Routing through github.com costs an
+attacker nothing, so it is reported as the weight-0 finding `P007` instead
+(`src/trustsight/scoring.py`).
 
 ### Availability
 
@@ -123,7 +125,11 @@ The same downgrade is applied, at any maturity, when the analysis recorded a cov
 
 ## Tier D : Verification
 
-Structural integrity protections in the resolved (post-diff) PKGBUILD. These subtract from the score; they can never increase it.
+Structural integrity protections declared in the resolved (post-diff) PKGBUILD.
+They are **reported, never scored**: each is emitted as a weight-0 finding in
+the `P` namespace. See
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited) for why
+a signal an attacker can assert for free must not lower a score.
 
 ### Sources
 
@@ -131,11 +137,12 @@ Structural integrity protections in the resolved (post-diff) PKGBUILD. These sub
 
 ### Evidence
 
-| Evidence | Modifier | Condition |
-|----------|----------|-----------|
-| `checksum_present` | -10 | Post-diff PKGBUILD has a non-empty sha256/sha512/b2/md5 checksum array. |
-| `validpgpkeys_declared` | -10 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
-| `gpg_verify_present` | -5 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
+| Evidence | Finding | Weight | Condition |
+|----------|---------|--------|-----------|
+| `checksum_present` | `P001` | 0 | Post-diff PKGBUILD has a non-empty sha256/sha512/b2/md5 checksum array. |
+| `validpgpkeys_declared` | `P002` | 0 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
+| `gpg_verify_present` | `P003` | 0 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
+| source pinning | `P005` / `P006` | 0 | Pinned to a commit hash, or to a tag (the weaker form: tags can be repointed). |
 
 ### End-state, not delta
 
@@ -145,7 +152,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 
 ### Availability
 
-**Available cold.** Computed from the diff text alone. Always scored at full weight. Negative modifiers can bring the total score below zero (the final score is then floored at 0).
+**Available cold.** Computed from the diff text alone. Contributes nothing to the score in either direction, so it is available and reported from the first run, with no maturity gate and no cold-start caveat.
 
 ---
 
@@ -154,6 +161,6 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 | Tier | Name | Cold? | Maturity-gated? | Direction | Max contribution per signal |
 |------|------|-------|-----------------|-----------|---------------------------|
 | A | Structural | Yes | No | Positive | 40 (CRITICAL) or 100 (FATAL) |
-| B | Priors/Context | Yes | No | Positive/negative | +30 (homograph) / -10 (trusted forge, capped -20) |
+| B | Priors/Context | Yes | No | Positive only | +30 (homograph); trusted forge is 0 |
 | C | History/Novelty | No : zero | Yes (×0→1) | Positive only | +20 (maintainer) |
-| D | Verification | Yes | No | Negative only | -10 (checksum or PGP) |
+| D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P007`) |

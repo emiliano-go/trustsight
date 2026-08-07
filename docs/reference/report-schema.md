@@ -53,6 +53,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "recent_commit_burst": bool,
   "diff_truncated": bool,
   "tree_analyzed": bool,
+  "changes": ["string"],
   "coverage_gaps": ["string"],
   "unresolved_sources": ["string"],
   "risk": "string",
@@ -89,6 +90,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `recent_commit_burst` | `bool` | `true` when the package's recent commit timestamps cluster unusually tightly. |
 | `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only its prefix was examined. The score then describes a prefix, not the change. |
 | `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
+| `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"line_truncated"`, `"tree_not_analyzed"` and `"unresolved_source"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
@@ -150,9 +152,9 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier: `R001`-`R013`, `R039`-`R131`, `C001`-`C007`, `D001`-`D004`, `SOURCE_BUCKET`, `NOVELTY`, `PINNING`, `VERIFICATION`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier: `R001`-`R013`, `R039`-`R131`, `C001`-`C007`, `D001`-`D004`, `P001`-`P007` (declared practice, always weight 0), `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
-| `weight` | `int` | Signed integer contribution. Positive = risk increase. Negative = risk decrease. |
+| `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. Truncated to 80 characters in CLI display; full string in JSON. |
 | `template` | `string` | The render string for this finding, with `{placeholders}` filled from `evidence`. Output is rendered from the template, so a finding says the same thing everywhere it appears. |
 | `evidence` | `dict` | The declared facts that triggered the rule, plus the raw matched text as `match`. This is what the finding is *about*, as opposed to prose describing it. |
@@ -186,8 +188,9 @@ There are two JSON shapes, and they are not the same object.
   It is what goes into `fact_json` and into an exported baseline.
 - The CLI's report JSON (`trustsight review --json`, `trustsight inspect
   --json`) is a presentation view of the same analysis. It carries `package`,
-  `score`, `risk`, `verdict`, `findings`, `file_changes`, `is_trivial`,
-  `aur_note`, and `version_comparison`.
+  `score`, `risk`, `risk_label`, `verdict`, `findings`, `changes`,
+  `coverage_gaps`, `file_changes`, `is_trivial`, `aur_note`, and
+  `version_comparison`.
 
 `version_comparison` is the one field worth knowing about by name. It records
 how the installed version relates to the AUR's declared `pkgver`, as one of

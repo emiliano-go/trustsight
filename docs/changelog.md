@@ -10,7 +10,7 @@
   map (Part C), and a vulnerability disclosure policy written for a static
   analyser, with supported versions, severity timelines, and an explicit list
   of what is not a vulnerability (Part D).
-- **`scripts/security_gates.py` and a CI job.** Twenty-four gates, one per
+- **`scripts/security_gates.py` and a CI job.** Thirty-two gates, one per
   invariant: no interpreter or shell execution, version arguments
   shape-checked, network confined to the four fetch modules, one declared host,
   every request timed out, bounded rule matching, bounded and never-indirect
@@ -42,6 +42,71 @@
 - **`PackageFact.risk`.** The verdict band is now carried on the fact and read
   through `scoring.verdict_level()` (bare band, for machines) or
   `scoring.verdict_label()` (qualified, for people).
+
+### Changed
+
+- **Declared verification is no longer credited (B10).** Checksums,
+  `validpgpkeys`, GPG signature sources, source pinning and trusted-forge
+  hosting were worth up to 25 points of discount. They are now weight-0
+  findings in a new `P` namespace (`P001`-`P003`, `P005`-`P007`), reported in
+  their own group under the line "TrustSight does not verify these claims. It
+  reports that the recipe makes them." `[verification_evidence]` and
+  `[pinning_weights]` are removed from the shipped config, so a local
+  `config.toml` cannot reintroduce a credit, and `trusted_forge` is 0.
+
+  These are **declared-practice findings**, not benign rules: they do not
+  establish that anything is benign, only that the recipe declares a practice.
+  Everything TrustSight sees is attacker-declared and TrustSight never fetches,
+  so a signal an attacker can assert for free must not be able to lower a score.
+
+  **Measured consequence.** Benign p95 moved 35 to 45 against the 3,246-diff
+  corpus, and benign diffs above the 20-point threshold moved 8.9% to 16.3%.
+  Separation still holds (benign p95 45 < malicious p5 60) with the margin
+  narrowing from 25 to 15. The `control-bin-package-declared-source` fixture
+  moved 20 to 35: it remains a control for the delivery rules and is no longer
+  one for the threshold. Twenty is left as the published threshold because
+  moving it is a calibration decision with its own evidence.
+
+- **`docs/security.md` no longer claims 20 is the benign 95th percentile.** It
+  was, before B10; it now sits at the 83.7th. The page states the measured
+  distribution instead, and the gate fails if the stale claim returns.
+
+- **Every page describing the subtractive model rewritten**: the scoring
+  formula and tier map in `rules.md`, the Tier D tables in `evidence-tiers.md`,
+  the "Why verification subtracts" section in `scoring-philosophy.md`, the
+  worked examples and breakdown legend in `reading-a-report.md`, plus
+  `configuration.md`, `explanation/index.md`, `corpus-and-priors.md`,
+  `cold-start-and-maturity.md`, `auditing-before-update.md`,
+  `configuring-rules-and-weights.md` and `index.md`. The calibration figures in
+  `reading-a-report.md` were re-derived rather than adjusted: zero-rate 74.9% to
+  69.1%, benign p95 30 to 45, test count 1,365 to 1,377.
+
+### Added
+
+- **B7, a change summary on every result.** `changes` on `PackageFact` and in
+  the JSON, sibling to `findings` and `coverage_gaps`, so "nothing fired" cannot
+  read as "nothing happened". Plain strings, no severity, never in
+  `triggered_rules`; `.SRCINFO` and `.gitignore` suppressed as always-noisy.
+- **B8, findings are checkable.** Content rules carry `file` and `line`; the 40
+  rules that legitimately cannot (temporal, maintainer, corpus, longitudinal,
+  dependency) declare an evidence class in `findings.NON_CONTENT_RULES` rather
+  than omitting the field silently.
+- **B9, no output grants permission to skip review.** A denylist over the
+  rendering templates, which caught a live violation on its first run: the
+  no-findings verdict ended "No risk signals fired." with no direction to
+  review, and now reads "No published rule matched. Review the diff before
+  building."
+- **`scoring.FLAG_THRESHOLD`**, so the 20-point threshold is read rather than
+  repeated.
+
+### Fixed
+
+- **Three render bugs found by looking at the output, not by a gate.** The
+  Score row printed the previous row's caption as the risk band (a `for label,
+  value in rows` loop shadowed it); the tool's own `[cyan]` markup printed
+  literally in the Rules Triggered rows, because it was passed to
+  `Text.assemble`, which does not parse markup; and the declared-practice group
+  left a ragged empty column for findings with no line number.
 
 ### Performance
 

@@ -436,4 +436,5 @@ def test_fallback_verdict_on_a_clean_package():
         ScoreEntry(rule_id="VERIFICATION", severity="INFO", weight=-10,
                    reason="checksum_present"),
     ]
-    assert "No risk signals fired" in fallback_verdict(fact)
+    # B9: the no-findings case states a fact and still directs to review.
+    assert "No published rule matched. Review the diff before building." in fallback_verdict(fact)

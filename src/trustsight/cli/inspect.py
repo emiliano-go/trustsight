@@ -9,7 +9,7 @@ from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
-from ..scoring import verdict_label, verdict_level
+from ..scoring import DECLARED_CAVEAT, verdict_label, verdict_level
 from ..safe_text import clean, safe_markup
 from ..unicode import describe_fatal_codepoints
 from .display import (
@@ -53,8 +53,24 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     inside = Table.grid(padding=(0, 2))
     inside.add_column(style="dim", justify="right", no_wrap=True)
     inside.add_column()
-    for label, value in rows:
-        inside.add_row(label, value)
+    for row_label, row_value in rows:
+        inside.add_row(row_label, row_value)
+
+    if fact.changes:
+        inside.add_row("", "")
+        inside.add_row("[underline]What changed[/]", "")
+        for entry in fact.changes:
+            inside.add_row("", Text("  " + clean(entry)))
+
+    declared = [e for e in fact.score_breakdown if e.rule_id.startswith("P")
+                and e.rule_id[1:].isdigit()]
+    if declared:
+        inside.add_row("", "")
+        inside.add_row("[underline]Declared verification[/]", "")
+        for entry in declared:
+            prefix = f"PKGBUILD:{entry.line}  " if entry.line is not None else ""
+            inside.add_row("", Text(f"  {prefix}{clean(entry.reason)}"))
+        inside.add_row("", Text("  " + DECLARED_CAVEAT, style="dim"))
 
     if fact.diff_summary.file_changes:
         inside.add_row("", "")
@@ -87,7 +103,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("[underline]Rules Triggered[/]", "")
         for entry in fact.score_breakdown:
             rid = entry.rule_id or ""
-            segs = [f"[cyan]{safe_markup(rid)}[/] "]
+            segs = [Text(clean(rid) + " ", style="cyan")]
             if show_score:
                 segs.append(str(_weight_text(entry.weight)) + " ")
             if show_risk:

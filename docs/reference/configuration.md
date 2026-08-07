@@ -36,7 +36,7 @@ Map each severity level to its numeric contribution to the base score. FATAL rul
 
 | Key | Type | Default | Effect |
 |-----|------|---------|--------|
-| `trusted_forge` | int | `-10` | Subtracted per URL from well-known forges (github.com, gitlab.com, etc.). Capped at -20 total across all URLs. |
+| `trusted_forge` | int | `0` | Well-known forges (github.com, gitlab.com, etc.). Neutral: hosting on a forge is a declared fact reported as `P007`, never a credit (B10). |
 | `official` | int | `0` | Official project domains (kernel.org, python.org, etc.). No score change. |
 | `self_hosted` | int | `10` | Domain controlled by the maintainer. |
 | `raw_hosting` | int | `15` | Raw/paste hosting (raw.githubusercontent.com, pastebin.com, etc.). |
@@ -55,28 +55,22 @@ Raw weights for Tier C novelty signals. These are multiplied by the maturity mul
 | `url_first_globally` | int | `10` | Raw weight for a URL never seen before in any package in the corpus. |
 | `maintainer_first_in_package` | int | `15` | Raw weight for a maintainer never seen before for this package. |
 
-### `[verification_evidence]`
+### Removed: `[verification_evidence]` and `[pinning_weights]`
 
-Subtractions (negative modifiers) for structural integrity protections present in the resolved PKGBUILD. Computed over the post-diff end-state, not the delta.
+Both sections applied negative weights for declared checksums, PGP keys, GPG
+verification and source pinning. They are gone, and setting them in a local
+`config.toml` now does nothing.
 
-| Key | Type | Default | Effect |
-|-----|------|---------|--------|
-| `checksum_present` | int | `-10` | Post-diff PKGBUILD has a non-empty checksum array. |
-| `validpgpkeys_declared` | int | `-10` | Post-diff PKGBUILD declares PGP key fingerprints. |
-| `gpg_verify_present` | int | `-5` | Post-diff PKGBUILD runs `gpg --verify` or equivalent. |
+Everything TrustSight sees is attacker-declared, and TrustSight never fetches,
+so it never confirms that a declared key signs anything or that a pinned commit
+holds what it claims. A signal an attacker can assert for free must not be able
+to lower a score. These facts are now reported as weight-0 declared-practice
+findings in the `P` namespace (`P001`-`P007`); see
+[the security model](../security.md#b10-positive-evidence-is-reported-never-credited).
 
-### `[pinning_weights]`
-
-Subtractions for source pinning levels. Only the weakest (worst) pinning level across all added URLs is used.
-
-| Key | Type | Default | Effect |
-|-----|------|---------|--------|
-| `checksum_pinned` | int | `-5` | URL covered by a valid sha256 checksum. |
-| `tag_pinned` | int | `-3` | URL references a tag or version (immutable ref). |
-| `branch_pinned` | int | `0` | URL references a mutable branch. |
-| `unpinned` | int | `0` | None of the above. |
-
-Pinning classification via `classify_pinning_level()` in `src/trustsight/buckets.py`.
+Pinning classification via `classify_pinning_level()` in
+`src/trustsight/buckets.py` still runs; it decides which `P` finding is
+emitted, not a score.
 
 ### `[ports]`
 

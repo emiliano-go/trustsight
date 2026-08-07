@@ -33,7 +33,7 @@ The scoring system is organized into four evidence tiers:
 | A | Structural | Pattern-matched rules against PKGBUILD commands (curl pipe bash, checksum disabled, sudo in functions) |
 | B | Priors/Context | Domain reputation of new source URLs (trusted forge, official, unknown, homograph) |
 | C | History/Novelty | First-seen URLs and maintainers, scaled by observation count |
-| D | Verification | Cryptographic integrity metadata (checksums, PGP keys, GPG verify) subtracts from the score |
+| D | Verification | Declared integrity metadata (checksums, PGP keys, GPG verify) reported at weight 0, never scored |
 
 A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 75+. FATAL rules (prompt injection, unicode bidi overrides) hard-stop at 100.
 
@@ -63,7 +63,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |------|----------------|
 | [How TrustSight Works](explanation/index.md) | Full pipeline: parse, analyze, score, classify, translate. |
 | [Security Model](security.md) | What TrustSight guarantees while reading hostile input, why the score is deterministic and reproducible, what a verdict claims, and how each invariant is enforced. |
-| [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights, rule design decisions. |
+| [Scoring Philosophy](explanation/scoring-philosophy.md) | Evidence tiers, why verification is declared rather than scored, corpus-derived weights, rule design decisions. |
 | [Cold Start and Maturity](explanation/cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating. |
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
 | [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |

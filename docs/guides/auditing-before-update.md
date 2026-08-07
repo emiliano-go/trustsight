@@ -50,9 +50,11 @@ The final score is the weighted sum of all triggered rules across four [evidence
 | **A** | Structural | Checksum disabled, source URL changed, new dependency added |
 | **B** | Priors / context | Domain trust buckets, prior package history |
 | **C** | History / novelty | First-seen URLs, maturity-gated weight |
-| **D** | Verification | `checksum_present -10`, `validpgpkeys -10`, `gpg -5` |
+| **D** | Verification | Declared checksums, `validpgpkeys`, GPG source, source pinning: reported as `P001`-`P007` at weight 0 |
 
-Pinning modifiers also apply: `checksum_pinned -5`, `tag_pinned -3`.
+Tier D never moves the score. Those are claims the recipe makes and TrustSight
+cannot confirm, so they are reported for you to check rather than credited; see
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 Three verdict states are possible:
 

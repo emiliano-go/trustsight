@@ -55,7 +55,7 @@ what the update *says*. So every analysis walks the same pipeline:
 
 > **Parse** the PKGBUILD into a structured representation, **Analyse** it
 > against pattern rules and context signals, **Score** the findings through an
-> additive/subtractive model, **Classify** the result into a band, and
+> additive model, with declared practice reported at weight 0, **Classify** the result into a band, and
 > **Translate** the findings into a template-based report.
 
 The bands are `Low`, `Medium`, `High`, `Critical` and `Inconclusive`. This page
@@ -140,6 +140,10 @@ never be suppressible is the "I did not watch that" light. Everything in
 [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
 exists to keep that light lit.
 
+A quiet panel still shows the readings. TrustSight reports what changed even
+when no rule matched, because a panel that goes blank when all is well is
+indistinguishable from one that has been switched off.
+
 Concretely, an UNFLAGGED result does **not** claim:
 
 - that the package is safe (only that no published rule matched what was
@@ -163,7 +167,7 @@ refusal to move between them silently:
 | What the tool has | Example | How it is presented |
 |-------------------|---------|---------------------|
 | **Known risk** | a rule matched (e.g. R013 confusable unicode) | FLAGGED, with the matching rule, file and line |
-| **Known safe evidence** | checksums verified, trusted forge, pinning | credit against the score |
+| **Declared safe evidence** | checksums declared, PGP keys declared, commit pinned | INFO, reported, never scored (B10) |
 | **Evidence that is contextually uncertain** | a `source=` URL computed at build time; a file the manifest did not list | **INCONCLUSIVE** |
 | **None known** | history too short to trust novelty at full weight | **INCONCLUSIVE** until warm |
 
@@ -210,6 +214,9 @@ hidden by default**.
   schema](reference/report-schema.md)).
 - An analysis that failed for a tracked package is reported as "this package
   was NOT vetted", so a skipped package cannot read as an unflagged one.
+- A result reports the changes it examined, not only the rules that fired. An
+  update with no findings still tells you what moved, so "nothing fired" cannot
+  read as "nothing happened".
 - A failure is reported as a failure and never absorbed into a result. The
   exit code distinguishes "the analysis ran" from "the analysis could not run",
   and says nothing about what was found.
@@ -495,6 +502,39 @@ qualified string for consumers that want to display it. **A consumer gating on
 stated in [using TrustSight in CI](guides/using-in-ci.md), which treats a
 non-empty `coverage_gaps` as blocking.
 
+**Where the threshold comes from.** UNFLAGGED is at or below 20 points
+(`scoring.FLAG_THRESHOLD`). The number is stated here because a reader cannot
+otherwise tell whether it is measured or chosen, and the honest answer is: it
+was measured, then the measurement moved underneath it.
+
+Twenty was originally the 95th percentile of the benign corpus. It is not any
+more. Against the 3,246-diff corpus as currently calibrated:
+
+| Measure | Value |
+|---------|-------|
+| benign median | 0 |
+| benign 95th percentile | 45 |
+| benign diffs scoring 0 | 69.1% |
+| benign diffs above 20 | 16.3% |
+| percentile that 20 now sits at | 83.7th |
+| malicious 5th percentile | 60 |
+| malicious minimum | 40 |
+
+So about one benign diff in six lands above the threshold. That is a direct and
+intended consequence of
+[B10](#b10-positive-evidence-is-reported-never-credited): declared checksums,
+PGP keys and trusted-forge hosting used to subtract up to 25 points, and no
+longer subtract anything, so packages that previously bought their way under 20
+now sit above it.
+
+The property the calibration gates actually enforce is the one that matters for
+separation: **benign p95 (45) stays below malicious p5 (60)**. The margin was 25
+before B10 and is 15 now. Twenty remains the published threshold because moving
+it is a calibration decision with its own evidence, not a bookkeeping fix to
+keep a sentence true. All of these numbers are re-measured on every push by
+`scripts/calibration_gates.py` and published in
+[fire rates](explanation/fire-rates.md).
+
 ### B3. Inconclusive is not presented as UNFLAGGED
 
 `Inconclusive` is produced in two situations:
@@ -538,6 +578,123 @@ A suppressed finding is returned and reported, never discarded. A silent
 suppression is indistinguishable from a missed detection, and those two must
 never look the same to a reviewer: one means a rule was switched off on
 purpose, the other means the tool failed.
+
+### B7. A result reports what changed, not only what fired
+
+A report made only of findings cannot distinguish "nothing fired and nothing
+changed" from "nothing fired and a great deal changed". Absence of alerts then
+reads as absence of change, which is the collapse the taxonomy already forbids
+one layer down.
+
+Every result carries a **change summary** beside its findings: the declared
+facts about what the diff did, whether or not a rule matched. Version moves,
+checksum behaviour, files added, removed or renamed, dependency changes,
+maintainer changes, source host changes, and the no-change case
+(`no changes in the AUR since last review (commit 8646e821)`). `.SRCINFO` and
+`.gitignore` are suppressed: they regenerate on nearly every bump, and listing
+them trains the reader to skim the section.
+
+Change entries are **not findings**. They carry no severity, no points, and
+never appear in `triggered_rules`; conflating the two would corrupt both the
+calibration and the reader's sense of what a finding is. In JSON they are a
+separate `changes` array, sibling to `findings` and `coverage_gaps`, so a
+consumer reading only `findings` is unaffected.
+
+### B8. A finding is checkable
+
+Every finding that matches file content carries `file` and `line`. A finding the
+reader can open and confirm in five seconds is a different object from an
+assertion they must trust, and that is the difference between an instrument
+reading and an opinion.
+
+Rules that legitimately cannot report a location (maintainer, temporal, graph,
+corpus) declare an **evidence class** instead, in `findings.NON_CONTENT_RULES`.
+Silently omitting the field is not permitted: a missing location must not be
+indistinguishable from a rule that forgot to set one.
+
+### B9. No output grants permission to skip review
+
+No rendered output states or implies that reading the diff is unnecessary,
+**including when nothing fired**. The trivial case states a fact, it does not
+issue a clearance:
+
+```
+some-pkg 1.2.3 -> 1.2.4
+  Only pkgver and sha256sums changed.
+  Review the diff before building.
+```
+
+Forbidden: "clean", "safe", "no issues", "looks fine", "nothing to review", or
+any phrasing whose plain reading is *you may proceed*. Enforced as a denylist
+over the rendering templates, so it costs nothing at runtime and fails the build
+when someone adds a friendly-sounding string.
+
+This belongs in Part B rather than being a style note. The rest of Part B bounds
+what a *score* may claim; this bounds what the *prose* may claim, and the prose
+is what most readers act on. An UNFLAGGED band with a reassuring sentence beside
+it defeats B6 regardless of what B6 says.
+
+### B10. Positive evidence is reported, never credited
+
+Verification and hardening signals (declared checksums, `validpgpkeys`, GPG
+signature sources, pinned commits, trusted-forge sources) are emitted as **INFO
+findings with weight 0** in the `P` namespace. They appear in the report and in
+`findings`. They do not enter the score in either direction.
+
+**Why weight 0 rather than a credit.** Everything TrustSight sees is
+attacker-declared. Adding `validpgpkeys=(...)`, pinning a `#commit=`, or routing
+through github.com costs an attacker nothing, and TrustSight never fetches, so it
+never confirms that a declared key signs anything or that a pinned commit
+contains what it claims. A signal an attacker can trivially assert must not be
+able to lower a score: the only reliable effect of such a mechanism is buying
+points back for whoever bothers to read the rules.
+
+Reporting it is still worth doing. The reader can verify these claims in ways
+TrustSight cannot, and "this package declares GPG verification" is genuinely
+useful context for a human decision. That is the division of labour the whole
+model rests on.
+
+They are called **declared-practice findings**, not benign rules. They do not
+establish that anything is benign; they report that the recipe declares a
+practice.
+
+**What this replaces.** Earlier versions applied subtractive weights
+(`checksum_present` -10, `validpgpkeys_declared` -10, `gpg_verify_present` -5,
+`checksum_pinned` -5, `tag_pinned` -3, trusted forge -10 capped at -20). Those
+are removed. The calibration problem they solved, a package doing GPG
+verification scoring worse than one doing nothing because SKIP on a `.asc` file
+added points, is fixed at source instead: R004 does not fire on a SKIP that is
+mandatory for a VCS source, structurally uncheckable for a signature file, or
+covered by declared PGP keys. The right fix was to stop the false positive, not
+to pay it back.
+
+**Presentation.** They render in their own group, visually distinct from risk
+findings and never as a running total:
+
+```
+Declared verification
+  PKGBUILD:24   validpgpkeys declared
+  PKGBUILD:22   checksums declared for all non-VCS sources
+  PKGBUILD:11   source pinned to a full commit hash
+
+  TrustSight does not verify these claims. It reports that the recipe makes them.
+```
+
+That last line is not a disclaimer, it is the finding's actual content. Without
+it the group reads as a safety certificate, which is the failure this page
+exists to prevent.
+
+Not all of them are emitted every time. Seventeen INFO lines on every package
+buries the risk findings, which is the opposite of what the group is for, so the
+default set is the ones a reader would find surprising by their absence and the
+rest render under `--verbose`.
+
+Declared practices that depend on corpus or longitudinal state follow the same
+cold-start discipline as their risk-side counterparts: silent when there is no
+history, never reporting "unchanged since first observation" when the answer is
+"nothing observed yet". Those are also the ones an attacker cannot fake cheaply:
+`validpgpkeys` can be added in a single commit, two years of stable
+maintainership in your local database cannot.
 
 ### B6. What a result does not claim
 
@@ -589,6 +746,14 @@ An exit code of 1 means a claim on this page has stopped being true.
 | `a truncated diff cannot read as unflagged` | B2 | `analysis/pipeline.py`, `full_aur/analyze.py` |
 | `a coverage gap is always shown with the band` | B2 | `coverage.qualified_band`, `scoring.verdict_label` |
 | `every result declares its coverage` | B2 | every `PackageFact(...)` construction |
+| `a result reports what changed` | B7 | `changes` on every `PackageFact` |
+| `change entries carry no severity` | B7 | `changes` is a list of plain strings |
+| `content findings carry a location` | B8 | `findings.NON_CONTENT_RULES` |
+| `no template grants permission to skip` | B9 | denylist over `verdict.py`, `findings.py` |
+| `positive evidence never changes the score` | B10 | every `P` finding is INFO, weight 0 |
+| `positive evidence cannot lower a FATAL` | B10, B4 | maximal declared evidence plus one FATAL |
+| `declared findings fire under the shipped config` | B10 | every `P` finding reachable with the config that ships |
+| `the flag threshold is derived, not copied` | B2 | `scoring.FLAG_THRESHOLD` |
 | `the maturity numbers are derived, not copied` | B3 | `scoring._MATURITY_THRESHOLD` |
 | `FATAL rules cannot be switched off` | B4 | `config.enforce_fatal_rules` |
 | `FATAL findings survive every override` | B4, B5 | `override.filter_triggered_rules` |

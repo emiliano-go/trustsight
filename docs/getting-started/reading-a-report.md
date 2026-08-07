@@ -23,7 +23,9 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**74.9 % of diffs score 0** (zero-rate). At the 95th percentile, benign packages score **30**; at the 5th percentile, the CRITICAL-class corpus scores **60**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The test suite covers **1,365 tests** across all modules.
+**69.1 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **45**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The test suite covers **1,377 tests** across all modules.
+
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 83.7th, so about **16 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### FLAGGED (score > 20)
 
@@ -84,14 +86,14 @@ Every new source URL in the diff is classified into a domain bucket. These are p
 
 | Bucket | Modifier | Examples |
 |--------|----------|---------|
-| Trusted forge | -10 | github.com, gitlab.com, codeberg.org, bitbucket.org |
+| Trusted forge | 0 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | Official | 0 | python.org, kernel.org, nginx.org, archlinux.org |
 | Self-hosted | +10 | Custom domains under the maintainer's control |
 | Raw hosting | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | Unknown | +20 | Any domain not in the allowlist |
 | Homograph attack | +30 | Visually confusable characters (githab.com with Cyrillic letters) |
 
-The trusted forge modifier is capped at -20 total across all URLs.
+A trusted forge adds nothing and subtracts nothing. It is reported separately as the declared-practice finding `P007`.
 
 Tier B signals are weaker than Tier A. An unknown domain alone does not prove malice : many legitimate projects self-host.
 
@@ -107,15 +109,18 @@ Tracks whether URLs and maintainers have been seen before, both globally and per
 
 All novelty signals are **maturity-gated** by the number of prior observations of this package. A completely fresh database produces zero novelty weight. This prevents false-positive floods on first run.
 
-### Tier D : Verification (evidence that subtracts from score)
+### Tier D : Verification (declared, never scored)
 
-When the post-diff PKGBUILD contains structural integrity protections, they reduce the score. These are **subtractions**: they can never increase the score:
+When the post-diff PKGBUILD declares structural integrity protections, they are reported as weight-0 findings in the `P` namespace. They do not move the score in either direction:
 
-| Evidence | Modifier |
-|----------|----------|
-| checksum_present | -10 |
-| validpgpkeys_declared | -10 |
-| gpg_verify_present | -5 |
+| Evidence | Finding | Weight |
+|----------|---------|--------|
+| checksums declared | `P001` | 0 |
+| `validpgpkeys` declared | `P002` | 0 |
+| signature source declared | `P003` | 0 |
+| pinned to a commit / tag | `P005` / `P006` | 0 |
+
+TrustSight never fetches, so it cannot confirm that a declared key signs anything or that a pinned commit holds what it claims, and adding any of these costs an attacker nothing. They are reported so *you* can check them, which is something you can do and the tool cannot. See [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 Verification evidence is computed over the resolved end-state of the PKGBUILD, not over the diff delta. A checksum that was already present and unchanged still counts.
 
@@ -133,16 +138,20 @@ Break this down left to right:
 
 | Part | Meaning |
 |------|---------|
-| `+25` | Weight contributed to the total score. Positive = risk increase. Negative = risk decrease (verification, trusted forges). |
+| `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier. R001-R131 are detection rules; C001-C007 are context rules; SOURCE_BUCKET, NOVELTY, PINNING, VERIFICATION are structural categories. |
+| `R004` | Rule identifier. R001-R131 are detection rules; C001-C007 are context rules; P001-P007 are declared-practice findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 
-Verification evidence lines appear as negative weights:
+Declared-practice lines appear at weight 0, in their own group:
 
 ```
- -10 INFO VERIFICATION Verification evidence: checksum_present (-10)
+Declared verification
+  P001  checksums declared for all non-VCS sources
+  P002  validpgpkeys declared
+
+  TrustSight does not verify these claims. It reports that the recipe makes them.
 ```
 
 ---
@@ -181,14 +190,14 @@ TrustSight Inspect: sketchy-package
   +25 HIGH   R004  Checksum Disabled: sha256sums=SKIP (no justification found)
   +20 MEDIUM SOURCE_BUCKET  Source URL classified as unknown
   +15 HIGH   NOVELTY  Source URL first seen globally (maturity=0.80)
-  -10 INFO   VERIFICATION  Verification evidence: validpgpkeys_declared (-10)
+    0 INFO   P002  validpgpkeys declared
 
   Verdict
   Checksum set to SKIP without VCS/signature justification. New download
   URL from sketchy-cdn.example.com : domain not seen before.
 ```
 
-**Interpretation**: The total is 25 + 20 + 15 - 10 = **50**, floored to max with the R004 weight. The checksum was disabled (Tier A, strong signal) without justification. The new source URL comes from an unknown domain (Tier B, moderate) and has never been seen before (Tier C, moderate : maturity at 80 % so near full weight). There is PGP key evidence (Tier D, -10). The verdict is FLAGGED at Medium severity. This package warrants manual inspection before update.
+**Interpretation**: The total is 25 + 20 + 15 = **60**. The checksum was disabled (Tier A, strong signal) without justification. The new source URL comes from an unknown domain (Tier B, moderate) and has never been seen before (Tier C, moderate : maturity at 80 % so near full weight). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 60, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
 
 ---
 

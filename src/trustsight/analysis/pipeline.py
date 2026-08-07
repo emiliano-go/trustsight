@@ -48,6 +48,7 @@ from ..coverage import (
 )
 from ..scoring import calculate_score, risk_level
 from ..schema import (
+    with_changes,
     DiffSummary,
     ExecutionChanges,
     NoveltyContext,
@@ -330,6 +331,7 @@ def analyze_package(
         final_score=score,
     )
 
+    with_changes(fact, diff_text)
     insert_analysis(
         package_id=package_id,
         old_version=installed_version,
@@ -463,7 +465,7 @@ def scan_diff(
         unresolved_patterns=unresolved_strings,
     )
 
-    return PackageFact(
+    return with_changes(PackageFact(
         package_name=package_name,
         diff_summary=DiffSummary(
             lines_added=sum(1 for line in diff_text.splitlines() if line.startswith("+")),
@@ -480,7 +482,7 @@ def scan_diff(
         risk=risk,
         score_breakdown=breakdown,
         final_score=score,
-    )
+    ), diff_text)
 
 
 def analyze_package_text(
@@ -552,6 +554,7 @@ def _make_fresh_analysis(
         risk=fail_closed(risk_level(0), gaps, []),
         final_score=0,
     )
+    with_changes(fact)
     insert_analysis(
         package_id=package_id,
         old_version=installed_version,

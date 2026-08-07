@@ -100,6 +100,11 @@ class PackageFact:
     coverage_gaps: list[str] = field(default_factory=list)
     unresolved_sources: list[str] = field(default_factory=list)
 
+    # B7: declared facts about what the diff did, whether or not a rule
+    # matched.  Context, never findings: no severity, no points, and never
+    # in triggered_rules.
+    changes: list[str] = field(default_factory=list)
+
     # The verdict band, which is *not* always risk_level(final_score): a
     # cold database or an incomplete analysis downgrades it to
     # "Inconclusive".  Readers must use this, never re-derive it.
@@ -160,6 +165,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "suppressed_rules": fact.suppressed_rules,
         "diff_truncated": fact.diff_truncated,
         "tree_analyzed": fact.tree_analyzed,
+        "changes": fact.changes,
         "coverage_gaps": fact.coverage_gaps,
         "unresolved_sources": fact.unresolved_sources,
         "risk": fact.risk,
@@ -180,3 +186,16 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "final_score": fact.final_score,
         "adapter": fact.adapter,
     }
+
+
+def with_changes(fact: PackageFact, diff_text: str = "") -> PackageFact:
+    """Populate ``fact.changes`` (B7) and return it.
+
+    Called by every producer so the summary cannot be forgotten on one
+    path, which is the failure mode ``every result declares its coverage``
+    exists to catch on the coverage side.
+    """
+    from .changes import summarise
+
+    fact.changes = summarise(fact, diff_text)
+    return fact

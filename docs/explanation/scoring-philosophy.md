@@ -11,26 +11,43 @@ Signals are grouped into four tiers:
 | **A : Structural** | Static analysis of the PKGBUILD | Always, no corpus needed | `curl \| bash`, base64 decode, variable source URL |
 | **B : Priors** | Corpus classification of URLs | Always (corpus is bundled/primed) | `trusted_forge`, `official`, `unknown`, `homograph` |
 | **C : History/Novelty** | Observation counts across corpus | Requires warm corpus (≥50 observations for full weight) | URL first seen globally, first seen in this package, new maintainer |
-| **D : Verification** | Cryptographic integrity metadata | Always | Checksum present, PGP key pinned, GPG signature |
+| **D : Verification** | Declared integrity metadata | Always | Checksum declared, PGP key declared, GPG signature source |
 
-Structural signals (A) are always weighted; they don't depend on any external data. Context signals (B) depend on corpus coverage but work from first run because the domain list is pre-built. History signals (C) require observation; they are definitionally meaningless on run one. Verification signals (D) subtract rather than add because they mitigate risk.
+Structural signals (A) are always weighted; they don't depend on any external data. Context signals (B) depend on corpus coverage but work from first run because the domain list is pre-built. History signals (C) require observation; they are definitionally meaningless on run one. Verification signals (D) are reported at weight 0: they are claims the recipe makes, not facts the tool confirms.
 
-## Why verification subtracts (not adds)
+## Why verification is declared, never scored
 
-The naive design (described in the Dropbox paper that inspired the tool) scored checksum-missing packages *higher*. This meant:
+The naive design (described in the Dropbox paper that inspired the tool) scored
+checksum-missing packages *higher*. This meant:
 
 - A package **with** checksums scored **higher** than one without.
-- A package with no checksums and no other signals scored **0** (clean).
+- A package with no checksums and no other signals scored **0**.
 
-This is inverted. Verification presence is risk mitigation, not risk evidence. TrustSight fixes this by making verification a subtraction from the base score:
+That is inverted, and TrustSight's first answer was to make verification
+subtractive. That answer was also wrong, for a different reason.
 
-| Signal | Effect |
-|--------|--------|
-| `checksum_present` | −10 |
-| `validpgpkeys` | −10 |
-| `gpg_verify_present` | −5 |
+Everything TrustSight sees is attacker-declared. Adding `validpgpkeys=(...)`,
+pinning a `#commit=`, or routing through github.com costs an attacker nothing,
+and TrustSight never fetches, so it never confirms that a declared key signs
+anything or that a pinned commit contains what it claims. A signal an attacker
+can assert for free must not be able to lower a score: the only reliable effect
+of such a mechanism is buying points back for whoever bothers to read the rules.
 
-A package with checksums starts at −10, and only positive signals (new URLs, curl|bash, untrusted source bucket) push it up.
+So declared verification is emitted as **weight-0 findings in the `P`
+namespace** and reported to the reader, who can check the claims in ways the
+tool cannot:
+
+| Signal | Finding | Weight |
+|--------|---------|--------|
+| checksums declared | `P001` | 0 |
+| `validpgpkeys` declared | `P002` | 0 |
+| signature source declared | `P003` | 0 |
+
+The original inversion is fixed at source rather than paid back: R004 does not
+fire on a `SKIP` that is mandatory for a VCS source, structurally uncheckable
+for a signature file, or covered by declared PGP keys. Stopping the false
+positive was the right fix. See
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 ## Severity weights
 
@@ -48,18 +65,22 @@ FATAL rules are special: they set the score to 100 and contribute zero weight. I
 
 ## Pinning and source buckets
 
-Pinning metadata reduces the score because it constrains the supply-chain attack surface:
+Pinning metadata is reported, not credited, for the same reason as verification:
+a pin is a claim about a ref that TrustSight never resolves.
 
-| Modifier | Effect |
-|----------|--------|
-| `checksum_pinned` | −5 |
-| `tag_pinned` | −3 |
+| Signal | Finding | Weight |
+|--------|---------|--------|
+| pinned to a commit | `P005` | 0 |
+| pinned to a tag | `P006` | 0 |
 
-Source bucket classification adjusts the score based on the integrity guarantees of the source:
+`P006` is deliberately phrased as the weaker form. A tag can be repointed; a
+commit hash cannot, which is why R079 exists.
+
+Source bucket classification only ever adds:
 
 | Bucket | Effect | Rationale |
 |--------|--------|-----------|
-| `trusted_forge` | −10 | GitHub, GitLab : platform integrity guarantees |
+| `trusted_forge` | 0 | GitHub, GitLab : neutral, reported as `P007` |
 | `official` | 0 | Upstream official domains : neutral |
 | `unknown` | +20 | Unrecognised domain : requires scrutiny |
 | `homograph` | +30 | Visually confusable domain : high risk |

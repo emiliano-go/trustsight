@@ -11,7 +11,7 @@ TrustSight exposes two configuration files. Together they control which rules fi
 | File | Purpose |
 |------|---------|
 | `rules.toml` | Enable/disable individual rules, adjust severity weights, set scope constraints |
-| `config.toml` | Global scoring parameters: `severity_weights`, `source_bucket_weights`, `verification_evidence`, `pinning_weights` |
+| `config.toml` | Global scoring parameters: `severity_weights`, `source_bucket_weights`, `novelty_weights` |
 
 Both files live in the TrustSight config directory and are read automatically on every run.
 
@@ -59,18 +59,13 @@ trusted = 3
 untrusted = 8
 unknown = 15
 malicious = 40
-
-[verification_evidence]
-checksum_present = -10
-validpgpkeys = -10
-gpg = -5
-
-[pinning_weights]
-checksum_pinned = -5
-tag_pinned = -3
 ```
 
-The verification evidence block subtracts from the score when the PKGBUILD includes security-relevant metadata. Pinning weights reward builds that pin to a specific checksum or tag.
+There is no block for verification or pinning. Declared checksums, PGP keys,
+GPG sources and source pins are reported as weight-0 `P001`-`P007` findings and
+cannot be given a weight: a signal an attacker can assert for free must not be
+able to move a score. See
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 ## Re-baselining after changes
 

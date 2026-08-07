@@ -58,7 +58,7 @@ The maintainer-first weight is highest because a maintainer change without a cor
 Novelty signals do not fire in isolation. They are evaluated alongside:
 
 - **Structural signals (tier A)**: a novel URL from a trusted forge with a valid checksum is less concerning than a novel URL from an unknown domain with checksums disabled.
-- **Context signals (tier B)**: novelty on a `trusted_forge` domain is discounted by the source bucket modifier. Novelty on an `unknown` or `homograph` domain compounds with the bucket weight.
+- **Context signals (tier B)**: a `trusted_forge` domain adds nothing of its own (its bucket modifier is 0). Novelty on an `unknown` or `homograph` domain compounds with the bucket weight.
 - **Verification signals (tier D)**: a novel URL with a checksum and PGP signature is less concerning than one without.
 
 The interaction is additive, not multiplicative. Each signal contributes independently, so a package with a novel URL on an unknown domain with no checksum accumulates contributions from all three.

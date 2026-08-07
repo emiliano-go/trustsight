@@ -44,9 +44,11 @@ The top-level position is not ignored, it is a separate claim: [R129](../referen
 
 ### 3. Score
 
-The score is a single integer from 0 to 100 computed from all signals. The calculation is purely additive and subtractive:
+The score is a single integer from 0 to 100 computed from all signals. The
+calculation is **purely additive**: nothing lowers a score.
 
-**Base score** = sum of severity weights of all fired rules, minus verification evidence, adjusted by source bucket modifiers and pinning discounts.
+**Base score** = sum of severity weights of all fired rules, plus source bucket
+modifiers, plus novelty weights scaled by maturity.
 
 Each severity level carries a weight that reflects its information value:
 
@@ -58,28 +60,46 @@ Each severity level carries a weight that reflects its information value:
 | LOW | 5 | Weak signal; context-dependent |
 | INFO | 0 | Recorded for audit only |
 
-FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the score is immediately set to 100 regardless of any other signals or subtractions. FATAL rules contribute 0 to the additive sum because their weight would be irrelevant; the hard stop at 100 is their entire effect.
+FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the
+score is immediately set to 100 regardless of any other signal. FATAL rules
+contribute 0 to the additive sum because their weight would be irrelevant; the
+hard stop at 100 is their entire effect.
 
-**Verification evidence subtracts** from the base score:
+**Declared verification is reported, never credited.** Checksums, PGP keys, GPG
+verification and source pinning are emitted as weight-0 findings in the `P`
+namespace and shown to the reader:
 
-| Evidence | Subtraction | Why |
-|----------|-------------|-----|
-| `checksum_present` | −10 | Integrity verification of the downloaded artifact |
-| `validpgpkeys_declared` | −10 | Declared PGP key fingerprints narrow trust to specific signers |
-| `gpg_verify_present` | −5 | Runtime signature verification |
+| Evidence | Finding | Weight |
+|----------|---------|--------|
+| checksums declared | `P001` | 0 |
+| `validpgpkeys` declared | `P002` | 0 |
+| signature source declared | `P003` | 0 |
+| pinned to a commit | `P005` | 0 |
+| pinned to a tag | `P006` | 0 |
+| trusted-forge source | `P007` | 0 |
 
-Verification presence is risk mitigation, not risk evidence. A package with checksums is safer than one without, all else being equal. The naive design (which scored checksum-missing packages higher) was inverted; TrustSight fixes this by making verification subtractive.
+Earlier versions subtracted for these. They no longer do. Everything TrustSight
+sees is attacker-declared, and TrustSight never fetches, so it never confirms
+that a declared key signs anything or that a pinned commit holds what it claims.
+Adding `validpgpkeys=(...)` costs an attacker nothing, so a credit for it is a
+mechanism whose only reliable effect is buying points back for whoever reads the
+rules. The reader can check these claims in ways the tool cannot, which is why
+they are still reported. See
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited).
+
+The calibration problem the subtractions solved, a package doing GPG
+verification scoring *worse* than one doing nothing because a `SKIP` on a `.asc`
+file added points, is fixed at source instead: R004 does not fire on a `SKIP`
+that is mandatory, structurally uncheckable, or covered by declared PGP keys.
 
 **Source bucket modifiers** adjust for the trustworthiness of the domain:
 
 | Bucket | Modifier | Rationale |
 |--------|----------|-----------|
-| `trusted_forge` | −10 | GitHub, GitLab, Codeberg provide platform integrity |
+| `trusted_forge` | 0 | A forge is neutral: reported as `P007`, never credited |
 | `official` | 0 | Known upstream domains are neutral |
 | `unknown` | +20 | Never-before-seen domain requires scrutiny |
 | `homograph` | +30 | Visually confusable domain is high risk |
-
-The trusted_forge discount is capped at a total of 20 across all URLs. This prevents a package with dozens of GitHub sources from accumulating an arbitrarily large discount.
 
 **Novelty weights** add to the score when maturity allows:
 
@@ -89,16 +109,15 @@ The trusted_forge discount is capped at a total of 20 across all URLs. This prev
 | `url_first_in_package` | 5 | x min(1, observations/50) |
 | `maintainer_first` | 15 | x min(1, observations/50) |
 
-The maturity gate exists because novelty is meaningless in a cold database. On first run, every URL is first-seen, every maintainer is first-seen. Full-weight novelty from a cold DB would flag every package, producing zero information. The gate phases in novelty weight linearly as observations accumulate, reaching full weight at 50 observations.
+The maturity gate exists because novelty is meaningless in a cold database. On
+first run, every URL is first-seen, every maintainer is first-seen. Full-weight
+novelty from a cold DB would flag every package, producing zero information. The
+gate phases in novelty weight linearly as observations accumulate, reaching full
+weight at 50 observations.
 
-**Pinning discounts** subtract for source pinning:
-
-| Pinning | Discount |
-|---------|----------|
-| `checksum_pinned` | −5 |
-| `tag_pinned` | −3 |
-
-The final score is clamped to 0 to 100. A package with checksums, a trusted forge source, and no rule firings starts at 15 (5 for checksum + 10 for trusted forge) and will score 0 after the floor clamp.
+The final score is clamped to 0 to 100. A package with checksums, a trusted
+forge source and no rule firings scores 0, and its three declared practices are
+reported beside that 0 rather than folded into it.
 
 ### 4. Classify
 
@@ -135,7 +154,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | Page | What it covers |
 |------|----------------|
 | [Security Model](../security.md) | Why the score is deterministic and reproducible; the security model |
-| [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, verification subtraction, corpus-derived weights |
+| [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, why verification is declared rather than scored, corpus-derived weights |
 | [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |

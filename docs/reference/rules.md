@@ -12,8 +12,6 @@ The final score is computed from four signal sources. Rules are the primary sour
 base = sum(severity_weight for each fired rule)
 base += source_bucket_modifiers (Tier B)
 base += novelty_weights scaled by maturity (Tier C)
-base -= verification_evidence (Tier D)
-base -= pinning_discounts
 final = clamp(base, 0, 100)
 ```
 
@@ -73,9 +71,15 @@ A pattern that matches the header while scoping itself to `function_body` theref
 | A (Structural) | R001-R131, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
-| D (Verification) | Checksum, PGP, GPG presence | Cryptographic integrity metadata (subtractive) |
+| D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
 
-Rules only contribute to Tier A. Tiers B, C, and D are computed independently and added to the score alongside the rule contributions.
+Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
+
+Tier D contributes nothing to the score. Declared verification is emitted as
+weight-0 `P001`-`P007` findings and reported to the reader: TrustSight never
+fetches, so it cannot confirm that a declared key signs anything, and a signal
+an attacker can assert for free must not be able to lower a score. See
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 ---
 
@@ -221,7 +225,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
 - **Pattern:** `validpgpkeys\s*=`
-- **Description:** Fires when a `validpgpkeys=` declaration appears in the diff. Declaring PGP key fingerprints is normally a *protective* act, so this rule does not score on its own; it exists to keep the declaration filter in `rules.py` honest (an excluded filter entry must never become a scored finding). The positive counterpart is the Tier D `validpgpkeys_declared` verification evidence.
+- **Description:** Fires when a `validpgpkeys=` declaration appears in the diff. Declaring PGP key fingerprints is normally a *protective* act, so this rule does not score on its own; it exists to keep the declaration filter in `rules.py` honest (an excluded filter entry must never become a scored finding). The declared-practice counterpart is `P002`, which reports the declaration at weight 0.
 
 ### R016: New Make/Opt/Check Dependency {#r016}
 
@@ -772,10 +776,12 @@ event.
   **emptied or removed after** - the package previously verified upstream
   signatures and now does not.
 
-This is the exact inverse of the verification-evidence you already *subtract*
-for. `detect_verification_evidence` adds a `validpgpkeys_declared` discount
-when signatures are present; R069 adds a positive signal when that protection
-is **removed**. Dropping GPG verification is a strong supply-chain signal with
+This is the exact inverse of the declared evidence. `detect_verification_evidence`
+emits `P002` at weight 0 when signatures are present, reporting the claim without
+crediting it; R069 adds a scoring signal when that protection is **removed**.
+The asymmetry is deliberate: declaring verification costs an attacker nothing,
+but removing it is a change to the recipe's own prior behaviour, which is
+evidence. Dropping GPG verification is a strong supply-chain signal with
 near-zero benign rate: maintainers almost never remove working signature
 verification.
 

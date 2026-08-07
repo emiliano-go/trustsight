@@ -40,6 +40,7 @@ from ..rules import apply_rules, clamp_text, get_raw_diff_lines
 from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
 from ..scoring import calculate_score
 from ..schema import (
+    with_changes,
     DiffSummary,
     ExecutionChanges,
     PackageFact,
@@ -236,6 +237,9 @@ def analyze_package_text(
             final_score=score,
         )
 
+        # No diff on the first-seen path: there is nothing to compare
+        # against, and the summary says so from the fact alone.
+        with_changes(fact)
         insert_analysis(
             package_id=package_id,
             old_version=old_version,
@@ -402,6 +406,7 @@ def analyze_package_text(
         final_score=score,
     )
 
+    with_changes(fact, diff_text)
     insert_analysis(
         package_id=package_id,
         old_version=old_version,

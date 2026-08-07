@@ -5,11 +5,29 @@ import pytest
 from typer.testing import CliRunner
 
 from trustsight.cli import app
+from trustsight.safe_text import clean
 
 pytestmark = pytest.mark.skipif(
     not shutil.which("pacman"),
     reason="pacman not available (non-Arch system)",
 )
+
+
+def help_text(*args) -> str:
+    """The help output for *args*, with the styling removed.
+
+    Rich styles an option's leading hyphen as its own span, so the bytes
+    of ``--repo`` are ``-\x1b[0m\x1b[1;36m-repo``: the literal substring
+    is not in the output and a plain ``in`` check fails even though the
+    flag is right there.  Which spans Rich chooses to split is a
+    presentation detail that moves between versions, so asserting on the
+    decorated bytes makes the test fail for reasons that have nothing to
+    do with the CLI.  ``safe_text.clean`` is the project's own escape
+    stripper; using it here means these tests exercise it too.
+    """
+    result = CliRunner().invoke(app, list(args))
+    assert result.exit_code == 0, result.output
+    return clean(result.output)
 
 
 def test_cli_help():
@@ -64,10 +82,9 @@ def test_cli_review_runs(tmp_path, monkeypatch):
 # --- Discovery flags ---
 
 def test_cli_review_help_shows_flags():
-    result = CliRunner().invoke(app, ["review", "--help"])
-    assert "--repo" in result.stdout
-    assert "--foreign" in result.stdout
-    assert "--all-repos" in result.stdout
+    out = help_text("review", "--help")
+    for flag in ("--repo", "--foreign", "--all-repos"):
+        assert flag in out
 
 
 @pytest.fixture
@@ -763,10 +780,9 @@ def test_display_version_spaces_are_unresolved():
 
 
 def test_full_aur_help_documents_watch():
-    result = CliRunner().invoke(app, ["full-aur", "--help"])
-    assert result.exit_code == 0
-    assert "--watch" in result.output
-    assert "--interval" in result.output
+    out = help_text("full-aur", "--help")
+    for flag in ("--watch", "--interval", "--cycles"):
+        assert flag in out
 
 
 def test_full_aur_watch_invokes_the_loop(monkeypatch):

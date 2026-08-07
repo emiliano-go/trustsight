@@ -402,20 +402,38 @@ def gate_version_args_are_shape_checked() -> Gate:
 
 
 def gate_regex_input_is_bounded() -> Gate:
-    """A single enormous line cannot stall the rule engine."""
-    from trustsight.config import load_rules
-    from trustsight.rules import apply_rules
+    """A single enormous line cannot stall *any* rule engine.
 
-    line = "+" + ("a" * (5 * 1024 * 1024))
-    rules = load_rules()
+    Measured through ``scan_diff``, not through ``apply_rules`` alone.
+    The rules in ``rules.toml`` go through ``apply_rules`` and were
+    clamped; the larger set emitted from ``analysis/`` matches the diff
+    text directly, and a gate that only exercised the first missed a
+    5 MiB line costing 15s in the second while reporting 0.17s.  The
+    property is about the pipeline an attacker actually reaches.
+    """
+    from trustsight.analysis import scan_diff
+    from trustsight.config import load_config
+    from trustsight.coverage import LINE_TRUNCATED
+
+    header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,3 @@\n pkgname=demo\n"
+    diff = header + "+build() { " + ("a" * (5 * 1024 * 1024)) + " ; }\n"
+
     start = time.monotonic()
-    apply_rules([line], [line], rules)
+    fact = scan_diff(diff, config=load_config(), package_name="demo")
     elapsed = time.monotonic() - start
+
+    problems = []
+    if elapsed >= 5.0:
+        problems.append(f"{elapsed:.2f}s for a 5 MiB line")
+    # Bounding the work must not quietly bound the evidence: the clamp
+    # drops the tail, so the run has to say so.
+    if LINE_TRUNCATED not in fact.coverage_gaps:
+        problems.append("the clamp dropped content without recording a gap")
     return Gate(
         "rule matching is bounded on hostile input",
-        elapsed < 5.0,
-        round(elapsed, 3),
-        f"{elapsed:.3f}s for a 5 MiB line (limit 5s)",
+        not problems,
+        problems or round(elapsed, 3),
+        f"{elapsed:.3f}s end to end for a 5 MiB line (limit 5s)",
     )
 
 
@@ -464,6 +482,51 @@ def gate_truncation_is_visible() -> Gate:
     if fact.risk not in ("Inconclusive", "High", "Critical"):
         problems.append(f"truncated diff reported {fact.risk!r}")
     return Gate("a truncated diff cannot read as unflagged", not problems, problems)
+
+
+def gate_maturity_numbers_are_not_duplicated() -> Gate:
+    """B3's two numbers are the constant, not a copy of it.
+
+    The doc states 50 (where novelty reaches full weight) and 25 (half of
+    it, where the Inconclusive downgrade stops applying).  Both are
+    derived from one constant, and a page that restates a constant will
+    eventually restate a stale one, so the page is checked against the
+    value and the behaviour is checked against the predicate.
+    """
+    from trustsight.schema import NoveltyContext, ScoreEntry
+    from trustsight.scoring import _MATURITY_THRESHOLD, calculate_score, maturity
+
+    problems = []
+    half = _MATURITY_THRESHOLD // 2
+
+    doc = (ROOT / "docs" / "security.md").read_text()
+    section = doc.split("### B3.")[-1].split("\n### ")[0]
+    if f"**{_MATURITY_THRESHOLD}**" not in section:
+        problems.append(f"B3 does not state the threshold ({_MATURITY_THRESHOLD})")
+    if f"fewer than {half}" not in section:
+        problems.append(f"B3 does not state the half point ({half})")
+
+    # The predicate itself: Medium band, cold, nothing strong -> Inconclusive.
+    if maturity(half) != 0.5 or maturity(_MATURITY_THRESHOLD) != 1.0:
+        problems.append("the maturity ramp does not reach 0.5 and 1.0 where stated")
+
+    weak = [{"rule_id": "R050", "severity": "MEDIUM", "name": "w", "match": ""}] * 2
+    cold = NoveltyContext(observation_count=half - 1)
+    warm = NoveltyContext(observation_count=_MATURITY_THRESHOLD)
+    _s, _b, cold_level = calculate_score(weak, {}, cold)
+    _s, _b, warm_level = calculate_score(weak, {}, warm)
+    if cold_level != "Inconclusive":
+        problems.append(f"a cold Medium was reported {cold_level!r}")
+    if warm_level == "Inconclusive":
+        problems.append("a warm Medium was downgraded")
+
+    strong = weak + [{"rule_id": "R001", "severity": "HIGH", "name": "s", "match": ""}]
+    _s, _b, strong_level = calculate_score(strong, {}, cold)
+    if strong_level == "Inconclusive":
+        problems.append("a HIGH finding was downgraded by the cold-start rule")
+
+    return Gate("the maturity numbers are derived, not copied", not problems,
+                problems or {"threshold": _MATURITY_THRESHOLD, "half": half})
 
 
 def gate_fatal_rules_cannot_be_removed() -> Gate:
@@ -621,6 +684,44 @@ def gate_a_gap_is_always_shown_with_the_band() -> Gate:
     return Gate("a coverage gap is always shown with the band", not problems, problems)
 
 
+def gate_reserved_names_are_refused_everywhere() -> Gate:
+    """No writer accepts a package name the rest of the code treats as internal.
+
+    ``packages`` is guarded because ``upsert_package`` checks, but
+    ``package_profiles`` and ``pkgbuild_snapshots`` are keyed by
+    ``package_name`` directly and were not.  Both are on the
+    ``import_baseline`` path, and AUR names may begin with an underscore,
+    so ``__seed__`` is a name someone could register.  Every writer that
+    takes a package name is checked here rather than three of them.
+    """
+    import trustsight.db as db
+
+    from calibration_gates import shipped_config
+
+    writers = [
+        ("upsert_package", lambda n: db.upsert_package(n, "1.0")),
+        ("save_package_profile", lambda n: db.save_package_profile(n, 1, "Low")),
+        ("save_pkgbuild_snapshot", lambda n: db.save_pkgbuild_snapshot(n, "x", "1")),
+    ]
+    problems = []
+    with shipped_config():
+        db.init_db()
+        for name in ("__seed__", "__evil", "__"):
+            for label, call in writers:
+                try:
+                    call(name)
+                    problems.append(f"{label} accepted {name!r}")
+                except ValueError:
+                    pass
+        # ...and an ordinary name is still writable.
+        for label, call in writers:
+            try:
+                call("ordinary-pkg")
+            except ValueError:
+                problems.append(f"{label} rejected an ordinary name")
+    return Gate("reserved names are refused by every writer", not problems, problems)
+
+
 def gate_a_baseline_supplies_state_not_rules() -> Gate:
     """A corpus baseline is prior state; it cannot change what a rule does.
 
@@ -682,6 +783,80 @@ def gate_source_urls_are_never_fetched() -> Gate:
     return Gate("declared source URLs are never fetched", not hits, hits)
 
 
+_ATX_PUNCT_RE = re.compile(r"[^\w\s-]")
+_MD_LINK_RE = re.compile(r"\]\(([^)\s]+)\)")
+_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+
+
+def _anchor(heading: str) -> str:
+    """The slug a Markdown renderer derives from a heading."""
+    text = heading.lstrip("#").strip()
+    # An explicit {#id} attribute wins, as used by the rules reference.
+    explicit = re.search(r"\{#([\w-]+)\}\s*$", text)
+    if explicit:
+        return explicit.group(1)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"\*\*?([^*]*)\*\*?", r"\1", text)
+    return _ATX_PUNCT_RE.sub("", text.lower()).replace(" ", "-")
+
+
+def gate_doc_cross_references_resolve() -> Gate:
+    """Every link between the docs points at a file and anchor that exist.
+
+    This is the documentation-level form of the failure B2 exists to
+    prevent: renaming a heading leaves every sentence on the page true,
+    and quietly breaks the links that connect one claim to another, with
+    nothing failing anywhere.  It nearly happened to this model when B2's
+    own heading was reworded, and heading rewording is *likely* on a page
+    people keep polishing.  Eight files reference each other, so the
+    check covers all of ``docs/``, not just ``security.md``.
+    """
+    docs = ROOT / "docs"
+    if not docs.exists():
+        return Gate("doc cross-references resolve", False, "docs/ is missing")
+
+    anchors: dict[Path, set[str]] = {}
+    for path in docs.rglob("*.md"):
+        found = set()
+        fenced = False
+        for line in path.read_text().splitlines():
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+            elif not fenced and line.startswith("#"):
+                found.add(_anchor(line))
+        anchors[path.resolve()] = found
+
+    broken: list[str] = []
+    for path in sorted(docs.rglob("*.md")):
+        fenced = False
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            if line.lstrip().startswith("```"):
+                fenced = not fenced
+                continue
+            if fenced:
+                continue
+            # Inline code is not markup.  A rule pattern such as
+            # `(?<![^\x00-\x7F])[...]` contains `](...)` and reads as a
+            # link to a regex fragment otherwise.
+            for target in _MD_LINK_RE.findall(_INLINE_CODE_RE.sub("`code`", line)):
+                if target.startswith(("http://", "https://", "mailto:")):
+                    continue
+                file_part, _, anchor = target.partition("#")
+                if file_part:
+                    dest = (path.parent / file_part).resolve()
+                    if not dest.exists():
+                        broken.append(f"{_rel(path)}:{lineno} -> {target} (no such file)")
+                        continue
+                else:
+                    dest = path.resolve()
+                if anchor and anchor not in anchors.get(dest, set()):
+                    broken.append(f"{_rel(path)}:{lineno} -> {target} (no such anchor)")
+
+    checked = sum(len(v) for v in anchors.values())
+    return Gate("doc cross-references resolve", not broken,
+                broken or f"{checked} anchors across {len(anchors)} files")
+
+
 def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     """``docs/security.md`` names exactly the invariants enforced here.
 
@@ -729,10 +904,13 @@ def run_gates() -> list[Gate]:
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
         gate_a_gap_is_always_shown_with_the_band(),
+        gate_maturity_numbers_are_not_duplicated(),
         gate_fatal_rules_cannot_be_removed(),
         gate_fatal_findings_cannot_be_suppressed(),
         gate_seed_cannot_rewrite_the_database(),
+        gate_reserved_names_are_refused_everywhere(),
         gate_a_baseline_supplies_state_not_rules(),
+        gate_doc_cross_references_resolve(),
     ]
     gates.append(gate_doc_lists_every_gate(gates))
     return gates

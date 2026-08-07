@@ -4,11 +4,20 @@ description: What TrustSight is, what it claims, what it does not claim, and how
 
 # Security Model
 
-TrustSight is an **instrument, not a judge**. It reads AUR PKGBUILD diffs, applies
+TrustSight is the **instrument panel, not the airworthiness certificate**.
+
+A quiet panel means no monitored condition tripped its threshold. It does not
+mean the aircraft is sound, and it never means you are cleared to fly. What a
+panel owes you is two things: every sensor it has reports honestly, and every
+sensor it does not have shows up as *missing* rather than dark. A gauge that
+reads zero because nothing is wrong and a gauge that reads zero because it was
+never wired are the same picture, and telling them apart is the entire job.
+
+So: an **instrument, not a judge**. TrustSight reads AUR PKGBUILD diffs, applies
 published detection rules, and reports what it found and what it could not see.
-It never decides whether a package is safe. A person does. That single
-distinction - **input, not verdict** - is the foundation this page is built on,
-in four statements that the rest of the document makes precise:
+It never decides whether a package is safe. A person does. That distinction -
+**input, not verdict** - is the foundation this page is built on, in four
+statements the rest of the document makes precise:
 
 - TrustSight reports on evidence, and on the absence of evidence.
 - Absence of evidence is never presented as proof of safety.
@@ -46,8 +55,14 @@ what the update *says*. So every analysis walks the same pipeline:
 
 > **Parse** the PKGBUILD into a structured representation, **Analyse** it
 > against pattern rules and context signals, **Score** the findings through an
-> additive/subtractive model, **Classify** the result as FLAGGED, UNFLAGGED, or
-> INCONCLUSIVE, and **Translate** the findings into a template-based report.
+> additive/subtractive model, **Classify** the result into a band, and
+> **Translate** the findings into a template-based report.
+
+The bands are `Low`, `Medium`, `High`, `Critical` and `Inconclusive`. This page
+says FLAGGED for anything above the 20-point threshold, UNFLAGGED for anything
+at or below it, and INCONCLUSIVE for the band of the same name; those are
+reading conventions for the prose, and `risk` in the JSON carries the band
+itself.
 
 Computation is local and deterministic: the same input always produces the same
 score and the same evidence record. Nothing about the score depends on a remote
@@ -80,11 +95,13 @@ TrustSight does three things, and only three: it reads, it computes, it reports.
 - **Reports** findings and their reasons, and what it could not examine.
 
 It does **not** build, run, install, or sandbox. The moment you run `makepkg`,
-you are outside this model. And a clear statement of what the tool never does
-is worth a paragraph each, because both are attack surfaces that simply do not
-exist here: it never fetches a URL a package declares (an SSRF would turn every
-reviewer into a probe), and it never connects to a host a package names. The
-only host is the literal `https://aur.archlinux.org`.
+you are outside this model.
+
+Two of the things it never does are worth stating on their own, because each
+removes an attack surface rather than defending one. It never fetches a URL a
+package declares, so there is no SSRF primitive to turn a reviewer into a probe.
+It never connects to a host a package names; the only host is the literal
+`https://aur.archlinux.org`.
 
 ### Guarantees
 
@@ -93,14 +110,14 @@ the analysis that produced it. The specifics, each with a gate, are in
 Part A and Part B; the short list is:
 
 - **Reproducible**: the same input, the same score and evidence record.
-- **Transparent**: every point is accountable to a matched rule, and the
-  breakdown is part of the output.
-- **Fail-closed on doubts**: an analysis that did not see the whole change
-  cannot report UNFLAGGED, and its band is shown as incomplete wherever a human
+- **Transparent**: every point is attributable to a named entry in the score
+  breakdown, and the breakdown is part of the output.
+- **Fails closed on doubt**: an analysis that did not see the whole change
+  cannot report UNFLAGGED, and its band is marked incomplete wherever a human
   sees it.
-- **Listened**: it never reads from the network the package nominated, never
-  executes package code, never extracts archives to disk, and never renders
-  untrusted text unescaped.
+- **Isolated**: it never fetches a URL the package named, never executes
+  package code, never extracts archives to disk, and never renders untrusted
+  text unescaped.
 - **Locked**: FATAL rules cannot be turned off, and suppression is always
   visible.
 - **Calibrated**: detection fire rates against a published benign corpus are
@@ -112,57 +129,58 @@ structural commitments.
 
 ### Non-guarantees: absence of alerts is not a certificate
 
-This is the danger edge. An UNFLAGGED result means "no published rule matched
-the evidence that was actually examined". That is a statement about *detection*
-alone. It is not the same as "no attack is possible" and it is not, on its own,
-an instruction to update.
+An UNFLAGGED result means "no published rule matched the evidence that was
+actually examined". That is a statement about *detection* alone. It is not the
+same as "no attack is possible", and it is not, on its own, an instruction to
+update.
 
-The analogue is an instrument panel: **no warning lights does not mean the
-aircraft is airworthy.** What the panel means is that no monitored condition
-tripped its threshold. The instrument reports only the sensors it has, and an
-alarm you cannot see is as bad as no alarm at all - so the panel must never
-suppress the "I did not watch that" light.
+This is the danger edge because it is where the panel is easiest to misread. An
+alarm you cannot see is as bad as no alarm at all, so the one light that must
+never be suppressible is the "I did not watch that" light. Everything in
+[B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+exists to keep that light lit.
 
 Concretely, an UNFLAGGED result does **not** claim:
 
-- the package is safe (only that no published rule matched what was examined);
-- the ruleset is complete (fire rates and gaps are published; detection has
-  documented ceilings);
+- that the package is safe (only that no published rule matched what was
+  examined);
+- that the ruleset is complete (fire rates and gaps are published; detection
+  has documented ceilings);
 - that runtime behaviour was observed (nothing is executed);
 - that the build will fetch what the recipe says (where that cannot be
   determined statically, the result is downgraded).
 
 What it *does* do is tell you exactly which sensors tripped, which sensors are
-missing, and what was never examined - so the decision weight is yours, not the
-tool's. See [Part B](#part-b-what-the-result-claims) for the precise claims.
+missing, and what was never examined - so the weight of the decision is yours,
+not the tool's. See [Part B](#part-b-what-the-result-claims) for the precise claims.
 
 ### The evidence taxonomy
 
-Every result reduces to one of three places in a taxonomy, and the taxonomy was
-stated completely, because the tool's trustworthiness is exactly its refusal to
-move between them silently:
+Every result reduces to one of four places in a taxonomy, and the taxonomy has
+to be stated completely, because the tool's trustworthiness is exactly its
+refusal to move between them silently:
 
-| The tool knows | Example | Presented as |
-|----------------|---------|--------------|
+| What the tool has | Example | How it is presented |
+|-------------------|---------|---------------------|
 | **Known risk** | a rule matched (e.g. R013 confusable unicode) | FLAGGED, with the matching rule, file and line |
 | **Known safe evidence** | checksums verified, trusted forge, pinning | credit against the score |
 | **Evidence that is contextually uncertain** | a `source=` URL computed at build time; a file the manifest did not list | **INCONCLUSIVE** |
 | **None known** | history too short to trust novelty at full weight | **INCONCLUSIVE** until warm |
 
-The middle and last rows are the ones most tools are tempted to collapse into
-"results nothing found", which is exactly the error the thesis forbids. A
-concrete form: the `unresolved_source` gap - a `source=` entry computed at
-build time (say `_url="$(curl ...)"`) - means the URL the build will actually
-fetch is not in the analysed text. The tool records the gap, reports
+The last two rows are the ones most tools are tempted to collapse into "nothing
+found", which is exactly the error the thesis forbids. A concrete form: the
+`unresolved_source` gap - a `source=` entry computed at build time, say
+`_url="$(curl ...)"` - means the URL the build will actually fetch is not in the
+analysed text. The tool records the gap, reports
 INCONCLUSIVE, and tells you the URL was never statically confirmable. The
 details of the taxonomy live in [evidence tiers](reference/evidence-tiers.md)
 and [what TrustSight cannot see](explanation/what-trustsight-cannot-see.md).
 
 ### Detection and authorization
 
-Detecting is not authorizing. The two mechanisms are different things, and a
-tool that lets the first silently pass for the second is the exact placement
-that this model rejects.
+Detecting is not authorizing. They are different acts, and a tool that lets the
+first quietly stand in for the second is making the exact substitution this
+model rejects.
 
 - **Detection** is what TrustSight does: rules fire, scores compute, gaps are
   recorded. Its output is *input*.
@@ -170,12 +188,13 @@ that this model rejects.
   to click, to merge. The tool does not perform that action, and no synthesized
   sentence from the tool performs it either.
 
-"That it disappears in CI" - the guide for pipelines is exactly this boundary:
-the pipeline owner writes the trailing decision in to a gate (for example, the
-UNFLAGGED check **and** the coverage check), and that decision is theirs, stated
-in their own shell script. The tool provides evidence and unknowns; the human
-authorizes. Human-in-the-loop is not a slogan here, it is the operating
-principle: **no verdict, however emphatic, is an authorization to act.**
+The boundary does not disappear in CI, it moves. A pipeline still authorizes,
+it just does so in advance: the pipeline owner writes the decision into a gate
+(for example, the UNFLAGGED check **and** the coverage check), and that decision
+is theirs, stated in their own script, where it can be read and argued with. The
+tool supplies evidence and unknowns; a person decides what they are worth.
+Human-in-the-loop is not a slogan here, it is the operating principle: **no
+verdict, however emphatic, is an authorization to act.**
 
 ### Uncertainty reaches the surface
 
@@ -191,11 +210,12 @@ hidden by default**.
   schema](reference/report-schema.md)).
 - An analysis that failed for a tracked package is reported as "this package
   was NOT vetted", so a skipped package cannot read as an unflagged one.
-- Errors from the tool preserve their semantics and never suppress the
-  results; the exit code stays "analysis ran" vs "analysis failed" and says
-  nothing about verdict.
+- A failure is reported as a failure and never absorbed into a result. The
+  exit code distinguishes "the analysis ran" from "the analysis could not run",
+  and says nothing about what was found.
 
-Part B spells out the invariants. Part C maps each one to a gate. The
+Part A states the invariants that protect the machine, Part B the limits on
+what a result may claim, and Part C maps every one of them to a gate. The
 taxonomy is the theory; the rest of this page is the enforcement.
 
 ---
@@ -235,7 +255,7 @@ detection or no detection.
 
 ### The invariants
 
-**A1. The input is not code.** There is no voice, no `exec`, no `os.system`, no
+**A1. The input is not code.** There is no `eval`, no `exec`, no `os.system`, no
 `shell=True`, and no unpickling anywhere in the source. Subprocesses are spawned
 only to ask the local `pacman` about installed packages and to compare versions
 with `vercmp`. Argument lists are always a list, never a string, so there is no
@@ -258,8 +278,8 @@ fails this never reaches a command line: it is compared in-process by
 `_simple_vercmp` instead. When `pyalpm` is installed, no subprocess is spawned at
 all and the comparison happens in-library.
 
-The residual risk is that the shape check is an allowlist-shaped denylist, and
-allowlists can be wrong. It is tested against both directions (real versions like
+The residual risk is that the shape check is an allowlist, and an allowlist can
+be wrong. It is tested against both directions (real versions like
 `1:1.1.1w-1` must pass, `-h`, `--help`, `; rm -rf /` and the empty string must
 fail), and passing it buys an attacker one `vercmp` argument out of a character
 set with no shell metacharacters in it.
@@ -282,17 +302,39 @@ walked lazily with a ceiling, the seed import refuses to expand past its limit,
 and the diff is truncated at a configured size. A remote end never decides how
 much of this machine's memory or time to use.
 
+`full-aur` and `full-aur --watch` change the *volume* of this, not its shape.
+A watch loop makes many requests to the one host in A3 over hours or days, so
+the bounds above are per-request and the loop adds two of its own: a configured
+interval with a 60-second floor, and an optional cycle count. Each cycle is an
+ordinary analysis; nothing about running on a timer relaxes A1 through A13.
+
+There is deliberately **no hook, callback, or notification command**: nothing in
+TrustSight spawns an operator-supplied program, with or without findings on
+stdin. That is worth stating because it is a natural thing to want from a watch
+loop, and a natural thing to add carelessly. If it is ever added it belongs in
+this part with its boundary written down, because such a hook would receive
+attacker-influenced JSON (package names, maintainer names, quoted evidence) and
+the operator's script would own what happens next. Today the only subprocesses
+are the `pacman` and `vercmp` calls in A1.
+
 **A5. Matching is bounded, and the bound is recorded.** Rule patterns are
 regexes running over attacker-written text, so the input is clamped to
 `rules.MAX_RULE_LINE_BYTES` (8 KiB) per line before matching. That bounds every
 pattern at once, including ones added later, in a way that no per-pattern audit
 can.
 
-A clamp is also a truncation seam: a payload placed past byte 8192 of each single
+The clamp applies to both rule engines. The patterns in `rules.toml` go through
+`apply_rules`; the larger set emitted from `analysis/` matches the diff text
+directly, and `rules.clamp_text` bounds that text before it gets there. That
+distinction is not cosmetic: while only the first was clamped, one 5 MiB line
+cost 0.17s through `apply_rules` and 15s through the code-emitted rules.
+
+A clamp is also a truncation seam: a payload placed past byte 8192 of a single
 line is not matched. A bound that silently drops content is exactly the class of
 skip B2 exists to prevent, so it does not stay silent. A diff containing any
 over-length line records the `line_truncated` coverage gap, and everything in B2
-then applies: the run cannot report flagged, and the gap is shown as tagged.
+then applies: the run cannot report UNFLAGGED, and the gap is shown with the
+band.
 Lines are joined across backslash continuations before this is measured, so the
 limit applies to the logical line an attacker actually controls.
 
@@ -308,9 +350,9 @@ line), and `_MAX_TABLE_BYTES` (1 MiB for the variable table as a whole).
 
 The important half is what happens at the bound. **A value that would exceed the
 bound is left unexpanded and never truncated.** An unexpanded `$payload` is
-reported as an unresolved pattern; a truncated one would look entirely resolved
-with its tail taken off, which is the same failure mode as A5's seam and is
-refused for the same reason.
+reported as an unresolved pattern; a truncated one would look like a fully resolved
+string with its tail quietly removed, which is the same failure mode as A5's
+seam and is refused for the same reason.
 
 Two forms are never resolved at all: indirect expansion `${!name}`, which would
 let a value choose which variable is read, and length `${#name}`. Both return
@@ -319,12 +361,12 @@ unresolved rather than a guess.
 **A7. Rendering data is data.** A finding's plain-English text is a template
 keyed by rule id, filled with named fields from the finding's evidence. Field
 values are substituted, never re-expanded and never evaluated: a value with
-`{0.__class__}` renders as those characters. No template is ever inferred from
+`{0.__class__}` renders as those characters. No template is ever drawn from
 package-controlled text, and a template missing a field falls back to the
 finding's reason instead of raising, so one malformed finding cannot abort a
 batch.
 
-Verdicts used to be capable listed through a language model. They are no longer,
+Verdicts used to be rendered through a language model. They are not any more,
 and that is a security property rather than a refactor: rendering now has no
 network dependency, no nondeterminism, and **no prompt-injection surface in the
 output path**. R012 still detects injection aimed at whoever reads the diff,
@@ -347,7 +389,7 @@ sequences, C0 and C1 control bytes, and DEL, and through `safe_markup` where the
 value is interpolated into Rich console markup. A package cannot repaint the
 screen to forge a verdict, cannot recolour a row, and cannot abort the render of
 a batch with an unbalanced markup tag. Stored evidence and JSON output are left
-byte-exact: sanitising happens at the point of rendering, not in the analyses.
+byte-exact: sanitising happens at the point of rendering, not in the analysis.
 
 **A11. Unless a local marker says otherwise, age is local.** A
 maintainer-supplied timestamp cannot convince the tool that a stale local copy
@@ -369,7 +411,7 @@ import requires `--allow-unsigned` and is logged as local-only.
 The bound matters more than the signature, because a signature says who built the
 artifact, not that the contents are honest. A baseline writes exactly three
 things: package profiles, PKGBUILD snapshots, and the metadata snapshot. It
-cannot change a rule, a pattern, a severity, a weight, a threshold, and it
+cannot change a rule, a pattern, a severity, a weight or a threshold, and it
 executes nothing. So the worst thing a hostile-but-validly-signed baseline can
 do is A12's attack at corpus scale: supply a prior that makes the present look
 unexceptional, reducing novelty and longitudinal signals across many packages
@@ -386,7 +428,7 @@ a corpus you would trust.
   chain this project consumes and does not audit.
 - **TrustSight's own distribution.** TrustSight ships as an AUR package, built
   from a fixed tag with a checksum in the recipe. It is subject to the same
-  threat it describes in this ticket. Verify the tag.
+  threat it describes. Verify the tag.
 
 ---
 
@@ -487,14 +529,15 @@ its confirmed tier also reaches FATAL and is emitted from code rather than from
 `rules.toml`.
 
 The reason these two in particular are locked: the payload targets the
-*reviewer*, not the machine. A run that skips them is not a tuned run - a run
-whose output cannot be trusted at all.
+*reviewer*, not the machine. A run that skips them is not a tuned run, it is a
+run whose output cannot be trusted at all.
 
 ### B5. Suppression is always visible
 
 A suppressed finding is returned and reported, never discarded. A silent
-suppression is indistinguishable from a missed detection, and the two must not
-look different.
+suppression is indistinguishable from a missed detection, and those two must
+never look the same to a reviewer: one means a rule was switched off on
+purpose, the other means the tool failed.
 
 ### B6. What a result does not claim
 
@@ -540,17 +583,20 @@ An exit code of 1 means a claim on this page has stopped being true.
 | `SQL is parameterised` | A9 | `db.py` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
+| `reserved names are refused by every writer` | A12, A13 | `db.upsert_package`, `db.save_package_profile`, `db.save_pkgbuild_snapshot` |
 | `a baseline supplies state, not rules` | A13 | `full_aur/export.import_baseline` |
 | `incomplete coverage fails closed` | B2 | `coverage.fail_closed` |
 | `a truncated diff cannot read as unflagged` | B2 | `analysis/pipeline.py`, `full_aur/analyze.py` |
 | `a coverage gap is always shown with the band` | B2 | `coverage.qualified_band`, `scoring.verdict_label` |
+| `the maturity numbers are derived, not copied` | B3 | `scoring._MATURITY_THRESHOLD` |
 | `FATAL rules cannot be switched off` | B4 | `config.enforce_fatal_rules` |
 | `FATAL findings survive every override` | B4, B5 | `override.filter_triggered_rules` |
+| `doc cross-references resolve` | this page, and every page linking to it | every `docs/**` link and anchor |
 | `docs/security.md matches the gates` | this page | the table above |
 
 A11 has no row of its own: freshness anchoring is enforced by
 `tests/test_fetcher.py` rather than by a gate, because the property is about
-which value a function reads and is checked most directly by saying it.
+which value a function reads, and is checked most directly by calling it.
 
 The last row is the one that keeps the rest honest: a gate with no entry here is
 an unstated guarantee, and an entry with no gate is an unsupported promise. Both
@@ -577,17 +623,19 @@ better than a description.
 1. There will be an acknowledgement within 72 hours.
 2. Triage follows within 7 days.
 3. In-scope issues get fixed on the timeline below.
-4. Do not report a public issue before a patch exists.
+4. Do not open a public issue before a patch exists.
 
 ### Supported versions
 
-Only the latest release is supported. Fixes ship in new versions, no backports.
+Only the latest release is supported. Fixes ship in a new version; there are no
+backports.
 
 ### What counts as a vulnerability in this kind of tool
 
 TrustSight is an evidence tool with published limits, so "it missed something"
-is a rule request, not a vulnerability. The taxonomy in this document decides
-the cases that are genuinely defects.
+is usually a rule request, not a vulnerability. The taxonomy above is what
+separates the two: a defect is a case where the tool moved between taxonomy
+rows silently, or failed to protect the machine while doing it.
 
 **In scope. Violations of Part A:**
 
@@ -596,27 +644,30 @@ the cases that are genuinely defects.
 - Any outbound connection to a host other than `aur.archlinux.org`, or any
   fetch of a URL a PKGBUILD declares.
 - Terminal escape sequences or markup reaching a terminal from
-  package-controlled text, including a getTerminal render crash.
+  package-controlled text, including a crash of the renderer.
 - Unbounded memory or CPU from a crafted package: a decompression bomb, a
   pathological regex input, a response with no cap.
 - SQL injection or any write to the database driven by package-controlled
   text outside the columns it belongs in.
-- A seed or baseline that changes what it is forbidden to: a rule, a pattern,
-  a severity, a weight, a metadata key it does not own, a row learned from a
-  real analysis. A validly signed baseline with hostile contents is not a
-  vulnerability: it is the documented shape of importing someone else's corpus
-  (see A12).
-- Violations of Part B:
-  - A construction that causes an analysis to **skip content without a
-    coverage gap being recorded**. Every bound that drops input has a gap; a
-    way to get content past the analyser silently is a vulnerability.
-  - A construction that produces **flag-free or Low verdicts despite an
-    incomplete analysis**, or that gets an incomplete analysis rendered with
-    an **unqualified band** to a human.
-  - Suppressing, removing or downgrading a FATAL rule or finding through
-    supported input.
-  - Making a finding disappear without a report of suppression.
-  - Any nondeterminism in the score.
+- A seed or baseline that changes state it is not permitted to change: a rule,
+  a pattern, a severity, a weight, a metadata key it does not own, or a row
+  learned from a real analysis. A validly signed baseline whose contents are
+  simply hostile is not this: that is the documented shape of importing someone
+  else's corpus, and A13 bounds what it can do.
+
+**In scope. Violations of Part B:**
+
+- A construction that causes an analysis to **skip content without a coverage
+  gap being recorded**. Every bound that drops input has a gap; any other way
+  to get content past the analyser silently is a vulnerability.
+- A construction that produces an **UNFLAGGED or Low result despite an
+  incomplete analysis**, or that gets an incomplete analysis rendered to a
+  human with an **unqualified band**.
+- Suppressing, removing or downgrading a FATAL rule or finding through any
+  supported input.
+- Making a finding disappear from the report without it appearing as
+  suppressed.
+- Any nondeterminism in the score: the same input producing different numbers.
 
 **Out of scope:** rule evasion; score tuning; false positives; compromised
 upstream packages (that is the point); anything requiring a local attacker with
@@ -627,17 +678,22 @@ analysis; anything after `makepkg`.
 
 | Severity | Definition | Fix released in |
 | --- | --- | --- |
-| Critical | Code execution or file write on the reviewer at the analyser input. | 7 days |
-| High | Any other Part A breach, verdict integrity breach. | 30 days |
-| Moderate | A Part A or Part B breach needing an unusual precondition. | 90 days |
+| Critical | Code execution or file write on the reviewer's machine, from analysing a package. | 7 days |
+| High | Any other Part A breach, or a verdict-integrity breach under Part B. | 30 days |
+| Moderate | A Part A or Part B breach that needs an unlikely precondition. | 90 days |
 | Low | Hardening, no demonstrated attack. | Next release |
 
 Reporters are credited in the changelog unless they ask not to be.
 
 ---
 
-A one-page reading: detect the flagged; that's the tool's job; the human does
-the rest. The [enforcement map](#part-c-the-enforcement-map) is where the same
-thesis is enforced on the detection side; the
-[evidence tiers](reference/evidence-tiers.md) are the sensor catalogue; and the
-thesis at the start of this document is the theory that both express.
+Back to the panel. The invariants in Part A are what keep the instrument
+working while the input tries to break it. Part B bounds what a reading is
+allowed to claim. Part C makes both fail the build the moment they stop being
+true, which is the only reason the first two paragraphs of this page are worth
+anything. The decision at the end is yours; the tool's job is to make sure you
+are making it with the sensors you think you have.
+
+The [evidence tiers](reference/evidence-tiers.md) are the sensor catalogue;
+[what TrustSight cannot see](explanation/what-trustsight-cannot-see.md) is the
+list of instruments this aircraft does not carry.

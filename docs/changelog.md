@@ -10,14 +10,18 @@
   map (Part C), and a vulnerability disclosure policy written for a static
   analyser, with supported versions, severity timelines, and an explicit list
   of what is not a vulnerability (Part D).
-- **`scripts/security_gates.py` and a CI job.** Twenty gates, one per
+- **`scripts/security_gates.py` and a CI job.** Twenty-three gates, one per
   invariant: no interpreter or shell execution, version arguments
   shape-checked, network confined to the four fetch modules, one declared host,
   every request timed out, bounded rule matching, bounded and never-indirect
   expansion, data-driven rendering, no archive extraction, parameterised SQL,
   inert terminal output, coverage failing closed, a gap always shown with the
-  band, FATAL integrity, seed and baseline containment. The last gate checks
-  that the doc and the gate list still describe the same set, so a guarantee
+  band, FATAL integrity, seed and baseline containment, reserved names refused
+  by every writer. Three of them guard the
+  documentation rather than the code: the maturity numbers in B3 must be derived
+  from `scoring._MATURITY_THRESHOLD` rather than copied beside it; every link
+  between pages under `docs/` must resolve to a file and an anchor that exist;
+  and the doc and the gate list must still describe the same set, so a guarantee
   cannot be added to one without the other.
 - **Coverage accounting (`src/trustsight/coverage.py`).** Four gaps are now
   first-class on `PackageFact` and in the JSON: `diff_truncated`,
@@ -79,12 +83,60 @@
 - **`corpus pivot` read a snapshot from the working directory**, so the answer
   depended on where the command was run and a planted file could steer it. One
   location now, under the config directory.
+- **The line clamp only covered half the rule engine.** A5 claimed the 8 KiB
+  per-line bound applied to every pattern "in a way that no per-pattern audit
+  can". It applied to `apply_rules`, which runs the ~30 patterns in
+  `rules.toml`, and not to the ~88 patterns emitted from `analysis/`, which
+  match the diff text directly. Measured on one 5 MiB line: 0.17s through
+  `apply_rules`, 15.06s through the code-emitted rules, an attacker-chosen
+  multiplier on review time bounded only by `max_diff_bytes`. `rules.clamp_text`
+  now clamps the text handed to the code rules at all three call sites,
+  shortening lines without dropping them so line numbers stay aligned. Same
+  input is now 0.54s end to end, with `line_truncated` still recorded. The gate
+  was measuring `apply_rules` alone, which is why it reported the property as
+  held; it now measures `scan_diff` end to end and asserts the gap is recorded,
+  so bounding the work cannot silently bound the evidence.
+- **The reserved-name guard covered one writer of three.** `upsert_package`
+  refuses `__seed__` and any `__`-prefixed name; `save_package_profile` and
+  `save_pkgbuild_snapshot` did not, and both are on the `import_baseline` path.
+  AUR names may begin with an underscore, so `__seed__` is registrable. No leak
+  into user-facing queries was reachable (those filter the sentinel), so this
+  was a latent inconsistency rather than a demonstrated exploit. All three
+  writers now refuse, `db.is_reserved_name` lets corpus callers skip instead of
+  raising, and the baseline importer treats a rejected row like a nameless one:
+  logged and skipped, never fatal to the import.
+- **A heading rename could silently break every link to it.** Renaming a
+  section leaves every sentence on the page true and quietly disconnects the
+  claims that pointed at it, with nothing failing anywhere: the documentation
+  form of skipping content without recording a coverage gap. It nearly happened
+  when B2 was reworded. The `doc cross-references resolve` gate now walks every
+  `docs/**` link, resolves the file and the anchor, and fails the build on a
+  dangling one. Inline code and fenced blocks are excluded, since a rule
+  pattern such as `(?<![^\x00-\x7F])[...]` contains `](...)` and is not a link.
+- **Two `--help` tests asserted on styled bytes.** Rich renders an option's
+  leading hyphen as its own span, so the literal `--repo` is not in the output
+  even though the flag is there, and which spans Rich splits moves between
+  versions. The assertions now strip styling with the project's own
+  `safe_text.clean`, which makes them width- and version-independent and
+  exercises the sanitiser at the same time.
 - **`differ.map_diff_lines` corrupted filenames.** `lstrip("b/")` strips
   characters, not a prefix, so `+++ b/build.sh` reported findings against
   `uild.sh`.
 
 ### Changed
 
+- **`docs/security.md` reorganised around a thesis.** The page now opens with
+  the position it is defending (TrustSight is the instrument panel, not the
+  airworthiness certificate; a sensor that was never wired must not read the
+  same as a sensor reporting zero) and the evidence taxonomy that follows from
+  it, before the four parts that make it enforceable. The operative claim
+  is that the tool must never move between taxonomy rows silently, which is
+  what Part B's coverage rules and Part C's gates exist to prevent.
+- **`--watch` is described in Part A.** A watch loop changes the volume of
+  fetching, not its shape: per-request bounds still apply, plus an interval
+  floor and an optional cycle count. The absence of any hook or notification
+  command is now stated explicitly, along with the boundary such a hook would
+  need if one is ever added, since it would receive attacker-influenced JSON.
 - **Rendering has no model in it, and that is now a stated invariant.** Verdict
   text is a template keyed by rule id filled with named evidence fields;
   values are substituted, never re-expanded or evaluated, and no template comes

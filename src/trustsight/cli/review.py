@@ -386,6 +386,9 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
         results = _analyze_outdated_batch(limited, None, verbose)
 
     if json_output:
+        from ..config import config_fingerprint
+
+        fingerprint = config_fingerprint()
         json_results = []
         for r in results:
             jr = {
@@ -407,6 +410,7 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 # consumer reading only `findings` is unaffected.
                 "changes": r.get("changes", []),
                 "coverage_gaps": r.get("coverage_gaps", []),
+                "config_fingerprint": fingerprint,
             }
             if show_score or show_risk:
                 jr["score"] = r.get("score")

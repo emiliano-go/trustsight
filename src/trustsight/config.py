@@ -1519,3 +1519,54 @@ def load_thresholds() -> dict:
 def load_iocs() -> dict:
     """Load the versioned indicator list from iocs.toml (R106)."""
     return load_toml("iocs.toml", copy_result=False)
+
+
+def config_fingerprint() -> str:
+    """A digest of the instrument: ruleset, thresholds and overrides.
+
+    B1's determinism is *algorithmic*, not configurational.  Two operators
+    with different `rules.toml` get different scores by design, so "the
+    same input always produces the same score" is only true holding the
+    configuration fixed.  Publishing the fingerprint makes that precise:
+    same input and same fingerprint must give the same number, and a
+    different fingerprint is a different instrument rather than a
+    nondeterministic one.
+
+    Covers what can change a score: every rule's id, pattern, severity,
+    match target and scope; the scoring weight tables; the thresholds; and
+    the active overrides.  Cosmetic fields (a rule's prose description) are
+    excluded, because editing a comment is not a different instrument.
+    """
+    import hashlib
+    import json
+
+    def rule_key(rule: dict) -> dict:
+        return {
+            k: rule.get(k) for k in
+            ("id", "pattern", "severity", "category", "match_target",
+             "scope", "added_only", "include_comments", "experimental")
+        }
+
+    config = load_config()
+    material = {
+        "rules": sorted((rule_key(r) for r in load_rules()),
+                        key=lambda r: r.get("id") or ""),
+        "severity_weights": config.get("severity_weights", {}),
+        "source_bucket_weights": config.get("source_bucket_weights", {}),
+        "novelty_weights": config.get("novelty_weights", {}),
+        "thresholds": load_thresholds(),
+        "limits": config.get("limits", {}),
+        "diff": config.get("diff", {}),
+    }
+    try:
+        from .override import load_overrides
+
+        material["overrides"] = sorted(
+            (o.rule_id, o.package or "") for o in load_overrides()
+        )
+    except Exception:
+        material["overrides"] = []
+
+    canonical = json.dumps(material, sort_keys=True, separators=(",", ":"),
+                           default=str).encode()
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()

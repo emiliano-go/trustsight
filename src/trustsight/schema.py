@@ -134,7 +134,13 @@ class PackageFact:
 
 def fact_to_dict(fact: PackageFact) -> dict:
     """Serialize a PackageFact to a plain dict."""
+    from .config import config_fingerprint
+
     return {
+        # B1: which instrument produced this.  Two operators comparing
+        # results can tell at a glance whether they are running the same
+        # rules, thresholds and overrides.
+        "config_fingerprint": config_fingerprint(),
         "package_name": fact.package_name,
         "old_version": fact.old_version,
         "new_version": fact.new_version,

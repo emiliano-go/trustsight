@@ -429,10 +429,11 @@ def analyze_package_text(
     if maintainer:
         update_package_maintainer(pkg_name, maintainer)
 
+    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
+    fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
+    with_changes(fact, diff_text)
     record_dependency_names(sorted(
-        name
-        for names in extract_dependency_changes(diff_text, pkg_name).values()
-        for name in names
+        name for names in dependency_changes.values() for name in names
     ))
 
     return fact

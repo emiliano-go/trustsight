@@ -22,6 +22,15 @@ log = logging.getLogger(__name__)
 _console = None
 _PLAUSIBLE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+~:-]+$")
 
+def band_colour(label: str) -> str:
+    """Colour for a possibly-qualified band such as "High (incomplete analysis)".
+
+    The qualifier is prose appended by coverage.qualified_band; the colour
+    belongs to the band itself, so it is looked up on the bare word.
+    """
+    return RISK_COLORS.get((label or "").split(" (")[0], "white")
+
+
 RISK_COLORS = {
     "Low": "green",
     "Medium": "yellow",

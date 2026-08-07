@@ -104,11 +104,14 @@ def summarise(fact, diff_text: str = "") -> list[str]:
         elif status == "renamed":
             entries.append(f"file renamed: {path}")
 
-    for kind, names in (("depends", getattr(fact, "dependency_changes", None) or {}),):
-        for op, listed in sorted(names.items()):
-            if listed:
-                sign = "+" if op == "added" else "-"
-                entries.append(f"{kind}: {' '.join(sign + n for n in sorted(listed))}")
+    # extract_dependency_changes returns {field: {newly added names}}, so
+    # every name here is an addition.  This block read a {op: names} shape
+    # that nothing produced, and the field it read was never populated, so
+    # dependency changes were silently absent from every summary.
+    for field_name, names in sorted((getattr(fact, "dependency_changes", None) or {}).items()):
+        if names:
+            added = " ".join("+" + n for n in sorted(names))
+            entries.append(f"{field_name}: {added}")
 
     if not entries:
         entries.append("no declared facts changed in the recipe")

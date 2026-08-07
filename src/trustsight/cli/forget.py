@@ -3,6 +3,7 @@ import json
 import typer
 
 from ..config import ensure_default_configs
+from ..safe_text import clean
 from ..db import (
     forget_package,
     forget_prune,
@@ -65,7 +66,7 @@ def register_commands(app: typer.Typer):
                     else:
                         typer.echo(f"Removed {len(removed)} package(s) not in the AUR:")
                     for name in sorted(removed):
-                        typer.echo(f"  {name}")
+                        typer.echo(f"  {clean(name)}")
             return
 
         if not yes and not json_output:

@@ -5,8 +5,9 @@ import typer
 from ..config import ensure_default_configs
 from ..db import get_all_packages, get_last_analysis, init_db
 from ..safe_text import clean
-from ..scoring import risk_level
+from ..scoring import stored_band
 from .display import (
+    band_colour,
     HAS_RICH,
     RISK_COLORS,
     _print_colored,
@@ -46,7 +47,7 @@ def register_commands(app: typer.Typer):
                 "version": display_version(pkg.get("current_version")),
                 "last_checked": pkg["last_checked"] or "",
                 "score": score,
-                "risk": risk_level(score) if last else "\u2014",
+                "risk": stored_band(last, score)[0] if last else "\u2014",
                 "maintainer": pkg["current_maintainer"] or "",
             })
 
@@ -79,7 +80,7 @@ def register_commands(app: typer.Typer):
                 if risk == "\u2014" or risk == "Inconclusive":
                     risk_obj = Text(risk, style="yellow")
                 else:
-                    risk_obj = Text(risk, style=RISK_COLORS.get(risk, "white"))
+                    risk_obj = Text(risk, style=band_colour(risk))
                 table.add_row(
                     Text(clean(r["name"])),
                     Text(version),

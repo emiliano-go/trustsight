@@ -5,8 +5,9 @@ import typer
 from ..config import ensure_default_configs
 from ..db import get_history, get_package_id, get_triggered_rules, init_db
 from ..safe_text import clean
-from ..scoring import risk_level
+from ..scoring import stored_band
 from .display import (
+    band_colour,
     HAS_RICH,
     RISK_COLORS,
     SIMPLE_HEAD,
@@ -48,7 +49,7 @@ def register_commands(app: typer.Typer):
                     "old_version": display_version(h.get("old_version")),
                     "new_version": display_version(h.get("new_version")),
                     "score": h.get("final_score", 0),
-                    "risk": risk_level(h.get("final_score", 0)),
+                    "risk": stored_band(h)[0],
                 }
                 if score_breakdown:
                     rules = get_triggered_rules(h["id"])
@@ -73,8 +74,8 @@ def register_commands(app: typer.Typer):
             for h in history_records:
                 ts = h.get("timestamp", "")[:10] if h.get("timestamp") else ""
                 score = h.get("final_score", 0)
-                risk = risk_level(score)
-                score_text = Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
+                risk = stored_band(h)[0]
+                score_text = Text(f"{score}/100", style=band_colour(risk))
                 table.add_row(ts, display_version(h.get("old_version")), display_version(h.get("new_version")), score_text, risk)
 
             con.print(table)

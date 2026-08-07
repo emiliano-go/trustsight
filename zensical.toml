@@ -139,7 +139,7 @@ toc = { permalink = true }
   public_base_url = "https://trustsight.emiliano-go.com/",
   site_name = "trustsight",
   title_template = "{title} - TrustSight",
-  default_og_image = "https://trustsight.emiliano-go.com/assets/images/og-image.png",
+  default_og_image = "https://trustsight.emiliano-go.com/assets/images/trustsight-banner.png",
   publisher_name = "Emiliano Gandini Outeda",
   locale = "en_US",
   twitter_site = "@emiliano_go_",

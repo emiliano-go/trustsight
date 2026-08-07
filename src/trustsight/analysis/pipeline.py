@@ -352,10 +352,11 @@ def analyze_package(
     if new_maintainer:
         update_package_maintainer(pkg_name, new_maintainer)
 
+    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
+    fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
+    with_changes(fact, diff_text)
     record_dependency_names(sorted(
-        name
-        for names in extract_dependency_changes(diff_text, pkg_name).values()
-        for name in names
+        name for names in dependency_changes.values() for name in names
     ))
     return fact
 
@@ -472,7 +473,7 @@ def scan_diff(
         unresolved_patterns=unresolved_strings,
     )
 
-    return with_changes(PackageFact(
+    fact = PackageFact(
         package_name=package_name,
         diff_summary=DiffSummary(
             lines_added=sum(1 for line in diff_text.splitlines() if line.startswith("+")),
@@ -489,7 +490,10 @@ def scan_diff(
         risk=risk,
         score_breakdown=breakdown,
         final_score=score,
-    ), diff_text)
+    )
+    deps_added = extract_dependency_changes(diff_text, package_name)
+    fact.dependency_changes = {k: sorted(v) for k, v in deps_added.items() if v}
+    return with_changes(fact, diff_text)
 
 
 def analyze_package_text(

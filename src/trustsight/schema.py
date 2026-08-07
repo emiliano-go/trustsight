@@ -100,6 +100,11 @@ class PackageFact:
     coverage_gaps: list[str] = field(default_factory=list)
     unresolved_sources: list[str] = field(default_factory=list)
 
+    # Newly declared dependency names, as {field: [names]} from
+    # deps.extract_dependency_changes.  Populated for the change summary
+    # (B7); the D-series rules compute their own view.
+    dependency_changes: dict[str, list[str]] = field(default_factory=dict)
+
     # B7: declared facts about what the diff did, whether or not a rule
     # matched.  Context, never findings: no severity, no points, and never
     # in triggered_rules.
@@ -166,6 +171,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "diff_truncated": fact.diff_truncated,
         "tree_analyzed": fact.tree_analyzed,
         "changes": fact.changes,
+        "dependency_changes": {k: sorted(v) for k, v in fact.dependency_changes.items()},
         "coverage_gaps": fact.coverage_gaps,
         "unresolved_sources": fact.unresolved_sources,
         "risk": fact.risk,

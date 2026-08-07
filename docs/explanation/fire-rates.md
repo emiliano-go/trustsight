@@ -55,6 +55,29 @@ Measured against the 3322-diff stratified corpus.
 
 ## Expanded rules (R039-R059)
 
+## Aggregate distribution
+
+Per-rule rates are below. The aggregate figures the security model cites are:
+
+| Measure | Value |
+|---------|-------|
+| benign corpus size | 3,246 diffs |
+| benign median | 0 |
+| benign 95th percentile | 45 |
+| benign diffs scoring 0 | 69.1% |
+| benign diffs above the 20-point threshold | 16.3% |
+| percentile at which 20 sits | 83.7th |
+| malicious 5th percentile | 60 |
+| malicious minimum | 40 |
+
+These are a **point-in-time measurement**, taken after
+[B10](../security.md#b10-positive-evidence-is-reported-never-credited) removed
+the verification credits. They are not recomputed on every push: the calibration
+gates assert only the property that matters for separation, `benign_p95 <
+malicious_p5`, and print those two numbers. Re-derive the rest with
+`python scripts/rebaseline.py` after any scoring change, and update this table
+in the same commit.
+
 Calibrated against the 3322-diff stratified corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |

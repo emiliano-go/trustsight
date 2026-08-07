@@ -591,9 +591,15 @@ The property the calibration gates actually enforce is the one that matters for
 separation: **benign p95 (45) stays below malicious p5 (60)**. The margin was 25
 before B10 and is 15 now. Twenty remains the published threshold because moving
 it is a calibration decision with its own evidence, not a bookkeeping fix to
-keep a sentence true. All of these numbers are re-measured on every push by
-`scripts/calibration_gates.py` and published in
-[fire rates](explanation/fire-rates.md).
+keep a sentence true.
+
+Be precise about what is automated here. `scripts/calibration_gates.py`
+re-computes **benign p95 and malicious p5 on every push** and fails the build if
+they cross. The other figures in the table above are a point-in-time
+measurement, not a per-push one; they are published in
+[fire rates](explanation/fire-rates.md) and have to be re-derived with
+`scripts/rebaseline.py` when scoring changes. A number in this table is only as
+current as the last person who ran that script.
 
 ### B3. Inconclusive is not presented as UNFLAGGED
 

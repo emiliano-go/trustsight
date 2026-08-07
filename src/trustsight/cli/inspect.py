@@ -9,7 +9,12 @@ from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
-from ..scoring import DECLARED_CAVEAT, verdict_label, verdict_level
+from ..scoring import (
+    DECLARED_CAVEAT,
+    DECLARED_DEFAULT,
+    verdict_label,
+    verdict_level,
+)
 from ..safe_text import clean, safe_markup
 from ..unicode import describe_fatal_codepoints
 from .display import (
@@ -64,12 +69,24 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
 
     declared = [e for e in fact.score_breakdown if e.rule_id.startswith("P")
                 and e.rule_id[1:].isdigit()]
+    # B10: the default set is the practices a reader would find surprising
+    # by their *absence*.  Listing every one of them on every package
+    # buries the risk findings, which is the opposite of the point.
+    hidden = 0
+    if not verbose:
+        shown = [e for e in declared if e.rule_id in DECLARED_DEFAULT]
+        hidden = len(declared) - len(shown)
+        declared = shown
     if declared:
         inside.add_row("", "")
         inside.add_row("[underline]Declared verification[/]", "")
         for entry in declared:
             prefix = f"PKGBUILD:{entry.line}  " if entry.line is not None else ""
             inside.add_row("", Text(f"  {prefix}{clean(entry.reason)}"))
+        if hidden:
+            inside.add_row("", Text(
+                f"  {hidden} more declared practice(s); --verbose to list them",
+                style="dim"))
         inside.add_row("", Text("  " + DECLARED_CAVEAT, style="dim"))
 
     if fact.diff_summary.file_changes:
@@ -102,6 +119,10 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("", "")
         inside.add_row("[underline]Rules Triggered[/]", "")
         for entry in fact.score_breakdown:
+            # Declared practices have their own group above; repeating them
+            # here would undo the point of showing a default subset.
+            if entry.rule_id.startswith("P") and entry.rule_id[1:].isdigit():
+                continue
             rid = entry.rule_id or ""
             segs = [Text(clean(rid) + " ", style="cyan")]
             if show_score:

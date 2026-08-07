@@ -122,6 +122,34 @@
   `Text.assemble`, which does not parse markup; and the declared-practice group
   left a ragged empty column for findings with no line number.
 
+### Fixed (audit pass)
+
+- **`forget --prune` echoed database-stored package names raw.** The A10 gate
+  exercised the review, inspect and corpus renders and not `forget`, `history`
+  or `list`, so the one surface printing unsanitised names was outside it. Now
+  cleaned, and the gate renders six surfaces instead of four.
+- **`history` and `list` re-derived the band from the saved score**, so a run
+  that `review` reported as `Inconclusive (incomplete analysis)` displayed a
+  bare "Low" or "Medium" the next time it was listed, violating B2 on two
+  surfaces. `scoring.stored_band()` now reads the band and gaps from the row's
+  `fact_json`; rows written before that field existed fall back to the derived
+  band and are reported as complete, which is the only honest thing to say
+  about them. Band colour keys off the bare word via `display.band_colour()`.
+- **The change summary never reported dependency changes.** Dead twice over:
+  `fact.dependency_changes` was set by nothing, and `changes.summarise` read a
+  `{op: names}` shape while `extract_dependency_changes` returns
+  `{field: {added names}}`. Adding `depends=('qt6-svg')` now yields
+  `depends: +qt6-svg`.
+- **`DECLARED_DEFAULT` was defined and referenced nowhere**, so every declared
+  practice rendered every time and B10's documented default-subset behaviour did
+  not exist. Now applied: the surprising-by-absence set (`P002`, `P003`, `P005`)
+  renders by default with "N more declared practice(s); --verbose to list them",
+  and `P` findings no longer duplicate into the Rules Triggered block.
+- **The calibration wording overclaimed.** `calibration_gates.py` re-computes
+  benign p95 and malicious p5 on every push and nothing else, so the aggregate
+  figures are a point-in-time measurement. `security.md` now says so, and
+  `fire-rates.md` actually publishes the table it was said to publish.
+
 ### Performance
 
 - **Analysis is about 42% faster: 14.9 ms to 8.7 ms per diff**, and a full

@@ -317,3 +317,36 @@ def calculate_score(
             level = "Inconclusive"
     level = fail_closed(level, coverage_gaps or [], breakdown)
     return final, breakdown, level
+
+
+def stored_band(row: dict | None, score: int | None = None) -> tuple[str, bool]:
+    """The band for a *stored* analysis row, and whether it was complete.
+
+    ``history`` and ``list`` used to re-derive the band from the saved
+    score with :func:`risk_level`, which cannot express "Inconclusive" and
+    knows nothing about coverage.  A run reported as incomplete by
+    ``review`` therefore displayed a bare "Low" or "Medium" the next time
+    it was listed, which is precisely what B2 forbids.
+
+    The band and the gaps are already in the row's ``fact_json``, so no
+    schema change is needed.  Rows written before that field existed fall
+    back to the derived band and are reported as complete, which is the
+    only thing that can be said about them honestly.
+    """
+    import json
+
+    if not row:
+        return "", True
+    raw = row.get("fact_json")
+    if raw:
+        try:
+            fact = json.loads(raw)
+        except (ValueError, TypeError):
+            fact = {}
+        band = fact.get("risk") or ""
+        gaps = fact.get("coverage_gaps") or []
+        if band:
+            return qualified_band(band, gaps), not gaps
+    if score is None:
+        score = row.get("final_score", 0) or 0
+    return risk_level(score), True

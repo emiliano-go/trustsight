@@ -32,6 +32,7 @@ from ..differ import (
     detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_urls_from_diff,
+    map_diff_lines,
 )
 from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
@@ -47,7 +48,7 @@ from ..schema import (
     TemporalContext,
     fact_to_dict,
 )
-from ..tokenizer import tokenize_and_resolve
+from ..tokenizer import tokenize_and_resolve_indexed
 from .properties import extract_properties, update_properties
 
 log = logging.getLogger(__name__)
@@ -282,12 +283,17 @@ def analyze_package_text(
         maintainer=maintainer,
     )
 
-    resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
+    resolved_strings, unresolved_strings, resolved_indices = (
+        tokenize_and_resolve_indexed(diff_text)
+    )
     raw_lines = get_raw_diff_lines(diff_text)
+    line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
         resolved_strings, raw_lines,
         include_experimental=config.get("rules", {}).get("experimental", False),
+        line_map=line_map,
+        resolved_indices=resolved_indices,
     )
     triggered_rules.extend(
         _structural_findings(

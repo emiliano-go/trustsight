@@ -461,22 +461,72 @@ def _resolve_added_lines(diff_text: str) -> list[str]:
     return resolved_lines
 
 
-def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
-    """Tokenize a diff and resolve variable references in added lines."""
+def _joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
+    """Like :func:`join_line_continuations`, but each logical line is
+    paired with the index of the first raw line that produced it.
+
+    ``apply_rules`` needs that index to attach a file/line: the resolved
+    candidate list omits assignment lines, so its own positions are not
+    the keys of :func:`~trustsight.differ.map_diff_lines`, which are raw
+    diff-line indexes.
+    """
+    out: list[tuple[int, str]] = []
+    parts: list[str] | None = None
+    marker = ""
+    start_index = -1
+
+    def flush() -> str:
+        return "".join(parts)
+
+    for i, line in enumerate(lines):
+        this_marker = line[0] if line[:1] in ("+", "-") else ""
+        body = line[1:] if this_marker else line
+        if parts is not None and this_marker == marker:
+            parts.append(" " + body.strip())
+        else:
+            if parts is not None:
+                out.append((start_index, marker + flush()))
+            parts, marker, start_index = [body], this_marker, i
+        tail = parts[-1]
+        if tail.rstrip().endswith("\\"):
+            parts[-1] = tail.rstrip()[:-1].rstrip()
+        else:
+            out.append((start_index, marker + flush()))
+            parts, marker, start_index = None, "", -1
+    if parts is not None:
+        out.append((start_index, marker + flush()))
+    return out
+
+
+def tokenize_and_resolve_indexed(
+    diff_text: str,
+) -> tuple[list[str], list[str], list[int]]:
+    """Tokenize a diff, resolve variable references in added lines, and
+    record the raw diff-line index of each resolved string.
+
+    The third list parallels ``resolved``: ``resolved[i]`` came from the
+    line at ``diff_text.splitlines()[indices[i]]``.  ``map_diff_lines`` is
+    keyed on those raw indexes, so a caller can attach a correct
+    file/line to every resolved-rule finding.
+    """
+    joined = _joined_indexed(diff_text.splitlines())
     additions = []
-    for line in join_line_continuations(diff_text.splitlines()):
+    addition_indices = []
+    for raw_index, line in joined:
         if line.startswith("+"):
             content = line[1:]
             if content.strip():
                 additions.append(content)
+                addition_indices.append(raw_index)
 
     var_table = _variable_table(additions)
 
     # An assignment whose value is statically known contributes its value
     # to the table rather than a command line to match against; anything
     # else is a candidate for resolution.
-    unresolved_candidates = [
-        line for line in additions
+    candidates = [
+        (addition_indices[k], line)
+        for k, line in enumerate(additions)
         if not (
             (m := _ASSIGNMENT_RE.match(line))
             and "$(" not in m.group(2)
@@ -486,9 +536,16 @@ def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
 
     resolved = []
     unresolved_out = []
-    for line in unresolved_candidates:
+    for _raw_index, line in candidates:
         r, ok = _substitute_with_resolve(line, var_table)
         resolved.append(r)
         if not ok or r == line:
             unresolved_out.append(line)
+    candidate_indices = [raw_index for raw_index, _line in candidates]
+    return resolved, unresolved_out, candidate_indices
+
+
+def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
+    """Tokenize a diff and resolve variable references in added lines."""
+    resolved, unresolved_out, _ = tokenize_and_resolve_indexed(diff_text)
     return resolved, unresolved_out

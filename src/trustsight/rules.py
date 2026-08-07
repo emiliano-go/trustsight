@@ -258,8 +258,18 @@ def apply_rules(
     rules: list[dict] | None = None,
     include_experimental: bool = False,
     line_map: dict[int, tuple[str, int]] | None = None,
+    resolved_indices: list[int] | None = None,
 ) -> list[dict]:
-    """Match rules against diff lines and return triggered findings."""
+    """Match rules against diff lines and return triggered findings.
+
+    *resolved_indices* maps each entry of *resolved_strings* back to its
+    raw diff-line index (the third output of
+    :func:`~trustsight.tokenizer.tokenize_and_resolve_indexed`).  Without
+    it, resolved candidates are paired with their position in the resolved
+    list, which is not a ``line_map`` key once assignment lines are
+    omitted: resolved findings would carry no file/line (or, on a
+    position collision, the wrong one).
+    """
     if rules is None:
         rules = list(load_rules())
     # R013, R047, R048 patterns are dynamically generated from config or
@@ -290,7 +300,13 @@ def apply_rules(
     # over every line of the diff.  Built once and shared, read-only.
     raw_candidates = filter_raw_lines(raw_diff_lines)
     added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
-    resolved_candidates = _to_pairs(resolved_strings)
+    if resolved_indices is not None:
+        resolved_candidates = [
+            (idx, clamp(line))
+            for idx, line in zip(resolved_indices, resolved_strings)
+        ]
+    else:
+        resolved_candidates = _to_pairs(resolved_strings)
 
     # Comments and plain declarations are filtered out (or never resolved)
     # for every other rule, because a commented-out command does not run and

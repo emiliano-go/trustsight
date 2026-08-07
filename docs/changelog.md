@@ -101,6 +101,20 @@
 
 ### Fixed
 
+- **Resolved rules lost their line numbers.** Fifteen shipped rules
+  (`R001`, `R002`, `R003`, `R008`, `R012`, `R039`-`R045`, `R055`-`R057`)
+  match `match_target = "resolved"`, and `apply_rules` looked a finding's
+  location up in `line_map` by the finding's position in the compacted
+  resolved list - but `line_map` is keyed by raw diff-line index, and the
+  resolved list omits assignment lines, so the positions did not line up.
+  Every resolved rule fired with no `file`/`line` (or, on a position
+  collision, the wrong one). The tokenizer now records the raw diff-line
+  index of each resolved string (`tokenize_and_resolve_indexed`), and
+  `apply_rules` maps through it; `full_aur` gained the `line_map` it never
+  passed. The B8 gate, which caught this in CI, now runs under
+  `shipped_config()` so a local `rules.toml` that overrides a rule's
+  `match_target` can never mask it again.
+
 - **Three render bugs found by looking at the output, not by a gate.** The
   Score row printed the previous row's caption as the risk band (a `for label,
   value in rows` loop shadowed it); the tool's own `[cyan]` markup printed
@@ -249,6 +263,12 @@
   floor and an optional cycle count. The absence of any hook or notification
   command is now stated explicitly, along with the boundary such a hook would
   need if one is ever added, since it would receive attacker-influenced JSON.
+- **`docs/security.md` states its assumptions.** The trust boundary is now
+  explicit and complete: the Python runtime, the operating system, local
+  filesystem permissions, the TLS trust store, CI, and the tool's dependencies
+  (`rich`, `pygit2`, `typer`, `tldextract`, SQLite, `libc`) are all trusted
+  rather than defended. If any of them is compromised, the page states, the
+  model no longer applies. What was implicit is now the border.
 - **Rendering has no model in it, and that is now a stated invariant.** Verdict
   text is a template keyed by rule id filled with named evidence fields;
   values are substituted, never re-expanded or evaluated, and no template comes

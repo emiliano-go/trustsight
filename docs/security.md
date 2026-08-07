@@ -27,9 +27,9 @@ statements the rest of the document makes precise:
 The page is organised as a thesis (read this first), then the four parts that
 make it precise and enforceable:
 
-- **The thesis** (below): adversary, boundaries, guarantees, non-guarantees,
-  the evidence taxonomy, detection versus authorization, and how uncertainty
-  reaches the person.
+- **The thesis** (below): adversary, boundaries, assumptions, guarantees,
+  non-guarantees, the evidence taxonomy, detection versus authorization, and
+  how uncertainty reaches the person.
 - **[Part A](#part-a-trustsight-as-a-program-under-attack)**: TrustSight as a
   program consuming hostile input - the invariants that protect the machine.
 - **[Part B](#part-b-what-the-result-claims)**: what a result claims about a
@@ -108,6 +108,45 @@ removes an attack surface rather than defending one. It never fetches a URL a
 package declares, so there is no SSRF primitive to turn a reviewer into a probe.
 It never connects to a host a package names; the only host is the literal
 `https://aur.archlinux.org`.
+
+### Assumptions
+
+The model above and the parts that follow are claims *about this program*: that
+its invariants hold when it runs. They are not claims about the machine it
+runs on. Like any model, this one rests on a set of assumptions, and stating
+them is what makes the boundary complete: a reader knows exactly where the
+analysis stops being the tool's responsibility.
+
+Each of these is taken as given, not defended:
+
+- **The Python runtime is trusted.** The interpreter, its bytecode loader, and
+  the standard library are the substrate the analysis runs on. A compromised
+  interpreter can do anything the process can.
+- **The operating system is trusted.** The kernel, the dynamic linker, and the
+  executable the process actually is are outside the model.
+- **Local filesystem permissions are trusted.** The files TrustSight reads
+  (its own config, the repository, the snapshots) are at the paths the
+  operator chose and are readable because the operator's permissions say so.
+  A hostile file at a *trusted* path is indistinguishable from a trusted file.
+- **The TLS trust store is trusted.** AUR traffic is protected only against a
+  network-level attacker; it assumes the certificate authorities in the local
+  store are honest and the store has not been altered.
+- **CI is not compromised.** The gates are meaningful because the machine that
+  runs them is running the code they check, and exercising that code with its
+  shipped configuration. A compromised CI is a compromised review, not a
+  detectable one.
+- **The dependencies are trusted.** `rich`, `pygit2`, `typer`, `tldextract`,
+  the Python interpreter and standard library, the `sqlite3` library and the
+  SQLite it wraps, and the runtime's own libraries (`libc` and friends) are
+  third-party or substrate code this project consumes and does not audit. The
+  concrete list is repeated where Part A documents what its program-level
+  invariants do not cover. If `rich`, `pygit2`, Python, SQLite, or `libc` is
+  compromised, this document no longer applies.
+
+If any of these is not true, this document no longer applies: the guarantees in
+Parts A and B are about the program, and the program is only as trustworthy as
+the layers beneath it. That is not a gap in the model, it is the model stating
+where its border is.
 
 ### Guarantees
 
@@ -442,7 +481,11 @@ a corpus you would trust.
 - **The dependencies TrustSight itself installs.** `pygit2`, `rich`, `typer`
   and `tldextract` are third party code in this process. The PSL data
   `tldextract` uses is pinned and read offline, but the libraries are a supply
-  chain this project consumes and does not audit.
+  chain this project consumes and does not audit. SQLite is trusted the same
+  way: every value reaches it through a parameterised statement (A9), but a
+  compromised SQLite is a compromised database, and this model assumes it is
+  not. The complete dependency boundary is stated in
+  [the thesis assumptions](#assumptions).
 - **TrustSight's own distribution.** TrustSight ships as an AUR package, built
   from a fixed tag with a checksum in the recipe. It is subject to the same
   threat it describes. Verify the tag.

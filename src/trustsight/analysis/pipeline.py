@@ -55,7 +55,7 @@ from ..schema import (
     PackageFact,
     fact_to_dict,
 )
-from ..tokenizer import tokenize_and_resolve
+from ..tokenizer import tokenize_and_resolve_indexed
 from .base import (
     _aggregate_pinning,
     _ensure_init,
@@ -184,7 +184,9 @@ def analyze_package(
 
     source_buckets = classify_urls(source_changes.added_urls)
 
-    resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
+    resolved_strings, unresolved_strings, resolved_indices = (
+        tokenize_and_resolve_indexed(diff_text)
+    )
     raw_lines = get_raw_diff_lines(diff_text)
     line_map = map_diff_lines(diff_text)
 
@@ -192,7 +194,9 @@ def analyze_package(
         resolved_strings, raw_lines,
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
+        resolved_indices=resolved_indices,
     )
+    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
     head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
     triggered_rules.extend(
         _structural_findings(
@@ -383,7 +387,9 @@ def scan_diff(
 
     source_buckets = classify_urls(source_changes.added_urls)
 
-    resolved_strings, unresolved_strings = tokenize_and_resolve(diff_text)
+    resolved_strings, unresolved_strings, resolved_indices = (
+        tokenize_and_resolve_indexed(diff_text)
+    )
     raw_lines = get_raw_diff_lines(diff_text)
     line_map = map_diff_lines(diff_text)
 
@@ -391,6 +397,7 @@ def scan_diff(
         resolved_strings, raw_lines, rules,
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
+        resolved_indices=resolved_indices,
     )
     triggered_rules.extend(
         _structural_findings(

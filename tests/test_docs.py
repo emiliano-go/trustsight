@@ -104,3 +104,27 @@ def test_no_documented_command_is_missing_from_the_cli():
     documented = set(re.findall(r"^## trustsight ([a-z-]+)", CLI_MD.read_text(), re.M))
     missing = sorted(c for c in documented if c not in _cli_names())
     assert missing == [], f"documented but not implemented: {missing}"
+
+
+# --- prose conventions ----------------------------------------------------
+
+# Standard punctuation only.  An em dash, an en dash and a spaced "--" all
+# render inconsistently across the terminal, the rendered site and a plain
+# `cat` of the file, and the project has settled on ":", ";", ",", "()" and
+# "-" instead.  Pinned as a test because it has drifted back three times.
+_BANNED_PUNCTUATION = {
+    "—": "em dash",
+    "–": "en dash",
+    " -- ": "spaced double hyphen",
+}
+
+
+def test_docs_use_standard_punctuation():
+    offenders = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            for char, name in _BANNED_PUNCTUATION.items():
+                if char in line:
+                    rel = path.relative_to(ROOT)
+                    offenders.append(f"{rel}:{lineno} {name}: {line.strip()[:70]}")
+    assert not offenders, "use : ; , () - instead\n" + "\n".join(offenders[:20])

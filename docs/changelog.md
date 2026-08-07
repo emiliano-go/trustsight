@@ -10,7 +10,7 @@
   map (Part C), and a vulnerability disclosure policy written for a static
   analyser, with supported versions, severity timelines, and an explicit list
   of what is not a vulnerability (Part D).
-- **`scripts/security_gates.py` and a CI job.** Twenty-three gates, one per
+- **`scripts/security_gates.py` and a CI job.** Twenty-four gates, one per
   invariant: no interpreter or shell execution, version arguments
   shape-checked, network confined to the four fetch modules, one declared host,
   every request timed out, bounded rule matching, bounded and never-indirect
@@ -42,6 +42,29 @@
 - **`PackageFact.risk`.** The verdict band is now carried on the fact and read
   through `scoring.verdict_level()` (bare band, for machines) or
   `scoring.verdict_label()` (qualified, for people).
+
+### Performance
+
+- **Analysis is about 42% faster: 14.9 ms to 8.7 ms per diff**, and a full
+  3246-diff corpus scan now completes in 31s. Detection is bit-identical: the
+  calibration gates, the campaign fixtures and the whole suite were re-run after
+  each change.
+  - `tokenizer.resolve_added_lines` is memoised per thread. Twenty call sites in
+    `analysis/` asked for the resolved form of the same diff and it was
+    recomputed every time, about a third of the cost. Keyed on identity rather
+    than equality, because hashing a multi-megabyte diff twenty times to avoid
+    computing it twenty times is not a saving.
+  - `rules._classify_enclosing_function` is memoised the same way, keyed on
+    content because each of its fifteen callers holds its own copy.
+  - `config.load_toml` gained `copy_result=False` for the six accessors whose
+    callers treat the result as read-only. `load_rules` and `load_config` keep
+    the deepcopy: `apply_rules` genuinely assigns to `rule["pattern"]`.
+  - Both memos are thread-local. `review` analyses packages in a pool, and a
+    shared cache would need its eviction sweep to be atomic with the insert; it
+    is not, and a `KeyError` in a worker surfaces as "this package was NOT
+    vetted". Five tests pin the properties that make the memos safe: no sharing
+    between callers, no confusion between diffs, no leakage across threads, and
+    no mutation of the shared config tables.
 
 ### Fixed
 
@@ -83,6 +106,23 @@
 - **`corpus pivot` read a snapshot from the working directory**, so the answer
   depended on where the command was run and a planted file could steer it. One
   location now, under the config directory.
+- **Three more instances of one recurring failure**, now written up in
+  [reviewing a security control](contributing/security-review.md): a control
+  applied at one of several equivalent call sites, with the gate pointed at a
+  covered one.
+  - `terminal output is inert` exercised `review`'s renderer only.
+    `_inspect_rich` interpolated a rule id raw and leaked escape sequences; the
+    gate now renders through four paths and names them in its result, and
+    `cli/corpus._render_pivot` was extracted from its command so it could be
+    one of them.
+  - Four of the five `PackageFact` producers set `coverage_gaps`. The
+    first-analysis path declared `tree_analyzed=True` having read no tree at
+    all and reported a bare "Low". The new `every result declares its coverage`
+    gate walks the AST for every construction, so a sixth producer fails rather
+    than shipping a false coverage claim.
+  - `pacman -Sl <repo>` had no `--` separator, unlike the `pacman -Q` call
+    beside it. The repo name is operator input rather than package input, so
+    this is consistency rather than a hole, but the separator is free.
 - **The line clamp only covered half the rule engine.** A5 claimed the 8 KiB
   per-line bound applied to every pattern "in a way that no per-pattern audit
   can". It applied to `apply_rules`, which runs the ~30 patterns in
@@ -125,6 +165,13 @@
 
 ### Changed
 
+- **`docs/contributing/security-review.md`**, a new page: how to scope a gate so
+  it covers the entry point an attacker reaches, the four times this project got
+  it wrong, and a table of which gates enumerate the whole source and which
+  sample a single path.
+- **Punctuation normalised across the docs** to `: ; , () -`, with no em dashes,
+  en dashes or spaced `--` anywhere. Pinned by `test_docs_use_standard_punctuation`,
+  because it had drifted back three times.
 - **`docs/security.md` reorganised around a thesis.** The page now opens with
   the position it is defending (TrustSight is the instrument panel, not the
   airworthiness certificate; a sensor that was never wired must not read the
@@ -499,7 +546,7 @@
   hot path.
 
 - **Typosquat detection uses `top_dependency_pairs()`.** The rank-and-compare
-  loop now fetches name–count pairs in a single query instead of running one
+  loop now fetches name-count pairs in a single query instead of running one
   query per candidate, fixing a performance regression on large databases.
 
 ### Removed
@@ -532,7 +579,7 @@
 
 ### Added
 
-- **Temporal context rules (R065–R067).** Three new code-emitted rules that
+- **Temporal context rules (R065-R067).** Three new code-emitted rules that
   inspect git commit timestamps on the AUR repository rather than diff content.
   All are on by default with no config toggle.
 
@@ -542,7 +589,7 @@
   | R066 | Brand New Package | INFO (w 0) | First AUR commit < 30 days old |
   | R067 | Stale Package Revived | MEDIUM (w 15) | Gap to last analyzed commit > 365 days |
 
-- **Install, build, and maintainer rules (R068–R073).** Six new code-emitted
+- **Install, build, and maintainer rules (R068-R073).** Six new code-emitted
   rules that inspect install hooks, GPG verification removal, build environment
   subversion, maintainer takeovers, capability density, and release cadence.
 
@@ -558,7 +605,7 @@
   All R068-R073 are always on, gated only by diff content or database
   maturity rather than an experimental flag.
 
-- **Naming and dependency-set rules (R074–R075).** Two new code-emitted rules
+- **Naming and dependency-set rules (R074-R075).** Two new code-emitted rules
   that detect package-name typosquatting and aggregate dependency-set expansion.
 
   | Rule | Name | Severity | Category | Condition |

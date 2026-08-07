@@ -226,7 +226,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 ### R016: New Make/Opt/Check Dependency {#r016}
 
 - **Target:** `raw_line`
-- **Severity:** INFO (weight 0) — see Note
+- **Severity:** INFO (weight 0); see Note
 - **Category:** `dependency`
 - **Pattern:** `(?:makedepends|optdepends|checkdepends)\s*=`
 - **Scope:** All lines
@@ -261,7 +261,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network`
-- **Pattern:** `(?!)` — never matches
+- **Pattern:** `(?!)` (never matches)
 - **Description:** A network socket opening at execution time. Shipped with a never-matching placeholder pattern because the current model cannot observe post-install behaviour from a static diff; the identifier is reserved so a future runtime probe can emit it without a baseline change.
 
 ### R021: Suspicious file write {#r021}
@@ -269,7 +269,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** HIGH (weight 25)
 - **Category:** `filesystem`
-- **Pattern:** `(?!)` — never matches
+- **Pattern:** `(?!)` (never matches)
 - **Description:** A write to a sensitive filesystem location (services, `cron.d`, `$HOME/.config/autostart`). Same treatment as R020: shipped as a reserved `runtime` placeholder, never emitted by the static diff engine.
 
 ### R022: Sensitive binary execution {#r022}
@@ -277,7 +277,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
-- **Pattern:** `(?!)` — never matches
+- **Pattern:** `(?!)` (never matches)
 - **Description:** Execution of a sensitive binary in an unexpected position. Reserved `never-match` placeholder, as R020/R021.
 
 ### R023: Strace detection attempt (TracerPid check) {#r023}
@@ -285,7 +285,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `evasion`
-- **Pattern:** `(?!)` — never matches
+- **Pattern:** `(?!)` (never matches)
 - **Description:** Reading `/proc/self/status` `TracerPid` to detect a debugger or sandbox. Anti-analysis behaviour. Reserved `never-match` runtime placeholder.
 
 ### R024: Strace log truncated (possible flood evasion) {#r024}
@@ -293,7 +293,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** HIGH (weight 25)
 - **Category:** `evasion`
-- **Pattern:** `(?!)` — never matches
+- **Pattern:** `(?!)` (never matches)
 - **Description:** A beacon/timestamp flood that forces an audit log to truncate. Reserved `never-match` runtime placeholder; complements the R023 debugger probe.
 
 ### R025: Eval or Exec Usage {#r025}
@@ -386,7 +386,7 @@ The `experimental` flag remains supported for future additions. A rule carrying 
 experimental = true
 ```
 
-Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `R014` and `R016`-`R025` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved** — they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
+Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `R014` and `R016`-`R025` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved**: they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
 
 Every `raw_line` rule below sets `added_only = true`.
 
@@ -1723,9 +1723,9 @@ A `confirmed` indicator cannot be suppressed through `overrides.json`.
 The R-series identifier space is not contiguous. Reserved ids appear nowhere
 in the shipped config or the code-emitted rule set:
 
-- `R015`, `R026`-`R038` — held apart so the core and expanded ranges stay
+- `R015`, `R026`-`R038`: held apart so the core and expanded ranges stay
   readable, and reassigning them could clash with user `rules.toml` overrides.
-- `R078`, `R091`, `R099`, `R103`-`R104`, `R109`, `R113` — unassigned in the
+- `R078`, `R091`, `R099`, `R103`-`R104`, `R109`, `R113`: unassigned in the
   current shipped configuration. `R103`/`R109` are claimed above as the
   novelty ceiling; the rest are simply unused and may be returned to service
   when a detection needs them.

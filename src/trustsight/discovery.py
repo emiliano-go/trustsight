@@ -236,7 +236,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
     """
     # First check the repo listing exists and has packages.
     sl = subprocess.run(
-        ["pacman", "-Sl", repo],
+        ["pacman", "-Sl", "--", repo],
         capture_output=True, text=True, check=False,
     )
     if sl.returncode != 0:
@@ -331,7 +331,7 @@ def find_outdated_from_list(
 def _repo_exists(repo: str) -> bool:
     """Return True if *repo* is known to pacman."""
     result = subprocess.run(
-        ["pacman", "-Sl", repo],
+        ["pacman", "-Sl", "--", repo],
         capture_output=True, text=True, check=False,
     )
     return result.returncode == 0

@@ -59,6 +59,17 @@ def pivot_cmd(
         _print_colored(result["error"], "red")
         raise typer.Exit(code=2)
 
+    _render_pivot(result)
+
+
+def _render_pivot(result: dict) -> None:
+    """Print a pivot result.
+
+    Split out of ``pivot_cmd`` so it can be exercised directly: a renderer
+    that cannot be called without a CLI invocation cannot be covered by
+    the ``terminal output is inert`` gate, and an uncoverable render path
+    is where an unsanitised value hides.
+    """
     listed = "shipped indicator" if result["listed"] else "not on the shipped list"
     header = f"{result['indicator']}  ({result['type']}, {listed})"
     if result["listed"]:
@@ -72,7 +83,7 @@ def pivot_cmd(
         return
 
     if not result["matches"]:
-        _print_colored(header, "cyan")
+        _print_colored(clean(header), "cyan")
         _print_colored(
             f"No package in {', '.join(result['sources'])} references it. "
             "A miss is uninformative.", "yellow",

@@ -87,7 +87,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("[underline]Rules Triggered[/]", "")
         for entry in fact.score_breakdown:
             rid = entry.rule_id or ""
-            segs = [f"[cyan]{rid}[/] "]
+            segs = [f"[cyan]{safe_markup(rid)}[/] "]
             if show_score:
                 segs.append(str(_weight_text(entry.weight)) + " ")
             if show_risk:
@@ -144,8 +144,8 @@ def _status_text(fact) -> str:
 
 def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     print(f"TrustSight Inspect: {clean(fact.package_name)}")
-    print(f"  Version: {version_transition(fact)}")
-    print(f"  Status: {_status_text(fact)}")
+    print(f"  Version: {clean(version_transition(fact))}")
+    print(f"  Status: {clean(_status_text(fact))}")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.maintainer_changed:
@@ -171,7 +171,7 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             if show_score:
                 segs.append(f"{e.weight:+d}")
             if show_risk:
-                segs.append(f"{e.severity:<8}")
+                segs.append(f"{clean(e.severity):<8}")
             segs.append(clean(e.reason))
             print(" ".join(segs))
     if fact.suppressed_rules:

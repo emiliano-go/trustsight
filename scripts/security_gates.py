@@ -237,54 +237,112 @@ def gate_sql_is_parameterised() -> Gate:
     return Gate("SQL is parameterised", not hits, hits)
 
 
-def gate_terminal_output_is_inert() -> Gate:
-    """A hostile package cannot write escape sequences to the terminal.
+HOSTILE = "\x1b[2J\x1b[H[bold red]VERDICT: CLEAN[/]\x9b31m"
 
-    Rendered end to end through the real ``review`` renderer, because the
-    property that matters is what reaches the user's screen, not whether
-    a particular helper was called.
-    """
-    from rich.console import Console
 
-    import trustsight.cli.display as display
-    import trustsight.cli.review as review
+def _hostile_fact():
+    from trustsight.schema import (
+        DiffSummary, ExecutionChanges, PackageFact, ScoreEntry, SourceChanges,
+    )
 
-    hostile = "\x1b[2J\x1b[H[bold red]VERDICT: CLEAN[/]\x9b31m"
-    results = [{
-        "package": hostile,
-        "old_version": "1.0",
-        "new_version": "1.1",
-        "score": 75,
-        "verdict": f"something happened {hostile}",
-        "risk": "High",
-        "first_seen": False,
-        "coverage_gaps": [],
-        "version_comparison": "",
-        "aur_note": None,
+    return PackageFact(
+        package_name=HOSTILE, old_version="1.0", new_version="1.1",
+        maintainer_changed=True,
+        previous_maintainer=HOSTILE, current_maintainer=HOSTILE,
+        diff_summary=DiffSummary(1, 1, [HOSTILE],
+                                 [{"path": HOSTILE, "status": "added"}]),
+        source_changes=SourceChanges(added_urls=[HOSTILE],
+                                     checksum_behavior=HOSTILE),
+        source_buckets={HOSTILE: "unknown"},
+        execution_changes=ExecutionChanges(resolved_commands=[HOSTILE]),
+        suppressed_rules=[{"rule_id": HOSTILE, "override_reason": HOSTILE}],
+        score_breakdown=[ScoreEntry(rule_id=HOSTILE, severity="HIGH", weight=25,
+                                    reason=HOSTILE, file=HOSTILE, line=1)],
+        final_score=75, risk="High",
+    )
+
+
+def _hostile_result():
+    return {
+        "package": HOSTILE, "old_version": "1.0", "new_version": "1.1",
+        "score": 75, "verdict": f"something happened {HOSTILE}",
+        "risk": "High", "risk_label": "High", "first_seen": False,
+        "coverage_gaps": [], "version_comparison": "", "aur_note": HOSTILE,
         "findings": [{
-            "rule_id": hostile, "file": hostile, "line": 3,
-            "description": hostile, "template": "", "evidence": {},
+            "rule_id": HOSTILE, "file": HOSTILE, "line": 3,
+            "description": HOSTILE, "template": "", "evidence": {},
             "severity": "HIGH", "weight": 25,
         }],
-        "file_changes": [{"path": hostile, "status": "added"}],
+        "file_changes": [{"path": HOSTILE, "status": "added"}],
         "is_trivial": False,
-    }]
+    }
 
-    buffer = io.StringIO()
-    saved = display._console
-    display._console = Console(file=buffer, force_terminal=False, width=200)
-    try:
-        review._render_results_rich(results, 1, False, True, True, False)
-    finally:
-        display._console = saved
 
-    out = buffer.getvalue()
+def gate_terminal_output_is_inert() -> Gate:
+    """No renderer lets a hostile package write escapes to the terminal.
+
+    *Every* render path, not one of them.  The first version of this gate
+    exercised ``review``'s Rich renderer alone and passed while
+    ``_inspect_rich`` leaked escape sequences through an unsanitised rule
+    id, which is the failure mode described in
+    [reviewing a security control](../docs/contributing/security-review.md):
+    a control applied at one of several equivalent call sites, with the
+    check pointed at a covered one.
+    """
+    import contextlib
+
+    from rich.console import Console
+
+    import trustsight.cli.corpus as corpus_cli
+    import trustsight.cli.display as display
+    import trustsight.cli.inspect as inspect_cli
+    import trustsight.cli.review as review
+
+    fact, result = _hostile_fact(), _hostile_result()
+
+    def rich(fn) -> str:
+        buffer = io.StringIO()
+        saved = display._console
+        display._console = Console(file=buffer, force_terminal=False, width=200)
+        try:
+            fn()
+        finally:
+            display._console = saved
+        return buffer.getvalue()
+
+    def plain(fn) -> str:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            fn()
+        return buffer.getvalue()
+
+    renders = {
+        "review rich": lambda: rich(
+            lambda: review._render_results_rich([result], 1, False, True, True, False)),
+        "inspect rich": lambda: rich(
+            lambda: inspect_cli._inspect_rich(fact, show_score=True, show_risk=True)),
+        "inspect plain": lambda: plain(
+            lambda: inspect_cli._inspect_plain(fact, show_score=True, show_risk=True)),
+        "corpus pivot": lambda: rich(lambda: corpus_cli._render_pivot({
+            "indicator": HOSTILE, "type": "host", "listed": True,
+            "confidence": HOSTILE, "sources": ["corpus"],
+            "matches": [{"package": HOSTILE, "surface": HOSTILE, "detail": HOSTILE}],
+        })),
+    }
+
     problems = []
-    if "\x1b" in out or "\x9b" in out:
-        problems.append("escape sequence reached the terminal")
-    if "VERDICT: CLEAN" in out and "[bold red]" not in out:
-        problems.append("markup was interpreted, not printed")
-    return Gate("terminal output is inert", not problems, problems)
+    for name, run in renders.items():
+        try:
+            out = run()
+        except Exception as exc:  # a crash is also a way to lose the batch
+            problems.append(f"{name}: raised {type(exc).__name__}")
+            continue
+        if "\x1b" in out or "\x9b" in out:
+            problems.append(f"{name}: escape sequence reached the terminal")
+        if "VERDICT: CLEAN" in out and "[bold red]" not in out:
+            problems.append(f"{name}: markup was interpreted, not printed")
+    return Gate("terminal output is inert", not problems,
+                problems or sorted(renders))
 
 
 def gate_expansion_is_bounded() -> Gate:
@@ -646,6 +704,41 @@ def gate_seed_cannot_rewrite_the_database() -> Gate:
     return Gate("a seed cannot rewrite the database", not problems, problems)
 
 
+def gate_every_producer_accounts_for_coverage() -> Gate:
+    """Every construction of a PackageFact declares what it examined.
+
+    Enumerated from the source rather than from the paths a test happens
+    to call.  Four of the five producers set ``coverage_gaps``; the fifth,
+    the first-analysis path, declared ``tree_analyzed=True`` having read
+    no tree at all and reported a bare "Low".  A producer added later
+    fails here rather than shipping a result that silently claims full
+    coverage.
+    """
+    hits: list[str] = []
+    found = 0
+    for path in _python_files():
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if _call_name(node).split(".")[-1] != "PackageFact":
+                continue
+            found += 1
+            kwargs = {kw.arg for kw in node.keywords}
+            if "coverage_gaps" not in kwargs:
+                hits.append(f"{_rel(path)}:{node.lineno} no coverage_gaps=")
+            # tree_analyzed=True as a literal is a claim, not a measurement.
+            for kw in node.keywords:
+                if kw.arg == "tree_analyzed" and isinstance(kw.value, ast.Constant):
+                    if kw.value.value is True:
+                        hits.append(
+                            f"{_rel(path)}:{node.lineno} tree_analyzed hardcoded True"
+                        )
+    if not found:
+        hits.append("no PackageFact construction found: the check sees nothing")
+    return Gate("every result declares its coverage", not hits, hits or found)
+
+
 def gate_a_gap_is_always_shown_with_the_band() -> Gate:
     """A reviewer never sees a bare band for an incomplete analysis.
 
@@ -904,6 +997,7 @@ def run_gates() -> list[Gate]:
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
         gate_a_gap_is_always_shown_with_the_band(),
+        gate_every_producer_accounts_for_coverage(),
         gate_maturity_numbers_are_not_duplicated(),
         gate_fatal_rules_cannot_be_removed(),
         gate_fatal_findings_cannot_be_suppressed(),

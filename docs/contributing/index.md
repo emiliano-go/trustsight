@@ -13,6 +13,9 @@ below applies to work on the tool itself.
   fixture guidelines, fire-rate gate
 - [Re-baselining](re-baselining.md): when and how to re-baseline after config or
   rule changes
+- [Reviewing a Security Control](security-review.md): how to scope a gate so it
+  covers the entry point an attacker reaches, and the failure mode that keeps
+  recurring
 
 ## The boundary
 

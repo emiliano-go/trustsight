@@ -39,7 +39,8 @@ def test_get_installed_from_repo(mock_run):
     result = get_installed_from_repo("myrepo")
     assert result == [("pkg-a", "1.0"), ("pkg-b", "2.0-1")]
     # first call: pacman -Sl
-    assert mock_run.call_args_list[0][0][0][:3] == ["pacman", "-Sl", "myrepo"]
+    # "--" ends option parsing: a repo name is data, never a flag.
+    assert mock_run.call_args_list[0][0][0][:4] == ["pacman", "-Sl", "--", "myrepo"]
     # second call: pacman -Q
     assert mock_run.call_args_list[1][0][0] == ["pacman", "-Q"]
 
@@ -369,7 +370,7 @@ def test_get_installed_from_repo_special_chars(mock_run):
     result = get_installed_from_repo("my-custom_repo+")
     assert result == [("pkg-foo", "1.0")]
     # first call uses pacman -Sl with the special-char repo name
-    assert mock_run.call_args_list[0][0][0][:3] == ["pacman", "-Sl", "my-custom_repo+"]
+    assert mock_run.call_args_list[0][0][0][:4] == ["pacman", "-Sl", "--", "my-custom_repo+"]
 
 
 def test_discover_packages_empty_repos_list():

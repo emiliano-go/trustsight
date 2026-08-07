@@ -40,8 +40,13 @@ from ..novelty import (
 from ..deps import extract_dependency_changes
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines
-from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
-from ..scoring import calculate_score
+from ..coverage import (
+    fail_closed,
+    gaps_from,
+    oversized_lines,
+    unresolved_source_lines,
+)
+from ..scoring import calculate_score, risk_level
 from ..schema import (
     DiffSummary,
     ExecutionChanges,
@@ -522,11 +527,17 @@ def _make_fresh_analysis(
     new_pkg = _package_is_new(repo, commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
+    tree_manifest: list = []
     if commit:
         from .delivery import scan_tree_manifest
-        tree_manifest = _collect_tree_files(repo, commit)
+        tree_manifest = _collect_tree_files(repo, commit) or []
         if tree_manifest:
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
+    # This path used to declare tree_analyzed=True unconditionally, which
+    # was false whenever there was no commit to read a tree from: a first
+    # analysis of an empty repository examined nothing and reported a bare
+    # "Low".  It is the same coverage accounting as every other producer.
+    gaps = gaps_from(tree_analyzed=bool(tree_manifest))
     fact = PackageFact(
         package_name=pkg_name,
         old_version=installed_version,
@@ -536,7 +547,9 @@ def _make_fresh_analysis(
         novelty_context=novelty,
         first_seen=True,
         temporal_source="git_commit",
-        tree_analyzed=True,
+        tree_analyzed=bool(tree_manifest),
+        coverage_gaps=gaps,
+        risk=fail_closed(risk_level(0), gaps, []),
         final_score=0,
     )
     insert_analysis(

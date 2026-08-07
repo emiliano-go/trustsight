@@ -588,6 +588,7 @@ An exit code of 1 means a claim on this page has stopped being true.
 | `incomplete coverage fails closed` | B2 | `coverage.fail_closed` |
 | `a truncated diff cannot read as unflagged` | B2 | `analysis/pipeline.py`, `full_aur/analyze.py` |
 | `a coverage gap is always shown with the band` | B2 | `coverage.qualified_band`, `scoring.verdict_label` |
+| `every result declares its coverage` | B2 | every `PackageFact(...)` construction |
 | `the maturity numbers are derived, not copied` | B3 | `scoring._MATURITY_THRESHOLD` |
 | `FATAL rules cannot be switched off` | B4 | `config.enforce_fatal_rules` |
 | `FATAL findings survive every override` | B4, B5 | `override.filter_triggered_rules` |
@@ -597,6 +598,11 @@ An exit code of 1 means a claim on this page has stopped being true.
 A11 has no row of its own: freshness anchoring is enforced by
 `tests/test_fetcher.py` rather than by a gate, because the property is about
 which value a function reads, and is checked most directly by calling it.
+
+How each gate is scoped, and the recurring mistake that lets one pass while its
+invariant is broken, is set out in
+[reviewing a security control](contributing/security-review.md). Read it before
+adding an invariant or a gate.
 
 The last row is the one that keeps the rest honest: a gate with no entry here is
 an unstated guarantee, and an entry with no gate is an unsupported promise. Both

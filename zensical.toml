@@ -118,6 +118,7 @@ name = "trustsight on PyPI"
 "Development Setup" = "contributing/development-setup.md"
 "Writing a Rule" = "contributing/writing-a-rule.md"
 "Re-baselining" = "contributing/re-baselining.md"
+"Reviewing a Security Control" = "contributing/security-review.md"
 
 [[project.nav]]
 "Changelog" = "changelog.md"

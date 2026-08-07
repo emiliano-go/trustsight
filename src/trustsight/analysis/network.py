@@ -553,3 +553,15 @@ def claims_upload_line(body: str, config=None) -> bool:
             if host in hosts or any(host.endswith("." + h) for h in hosts):
                 return True
     return False
+
+
+def claims_pipe_to_shell(body: str) -> bool:
+    """True when R001/R002 own this line, so R061 can stand down.
+
+    R061 reports an undeclared *download*; when that same download is
+    piped straight into a shell it is not merely fetch-but-undeclared but
+    remote code execution, which is R001/R002's heavier claim.  Firing
+    both would score one command twice, which is why R129 already yields
+    to this signal.
+    """
+    return bool(_PIPE_TO_SHELL_RE.search(body))

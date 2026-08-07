@@ -4,6 +4,9 @@ on:
     - cron: "0 6 1 * *"
   workflow_dispatch:
 
+permissions:
+  issues: write
+
 jobs:
   drift:
     runs-on: ubuntu-latest

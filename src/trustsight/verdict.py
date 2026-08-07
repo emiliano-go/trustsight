@@ -3,6 +3,14 @@ from .schema import PackageFact, ScoreEntry
 
 _SEVERITY_ORDER = ["FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
 
+# B9, enforced structurally rather than lexically.  Every verdict ends with
+# a direction to look, so the gate can assert that something is *present*
+# rather than chasing an open-ended list of reassuring phrasings.  A wording
+# nobody anticipated cannot slip past a check that requires a direction.
+REVIEW_DIRECTION = "Review the diff before building."
+FATAL_DIRECTION = "Do not build this package. Inspect the diff and report it."
+DIRECTIONS = (REVIEW_DIRECTION, FATAL_DIRECTION)
+
 
 def _render(entry: ScoreEntry, fact: PackageFact) -> str:
     template = entry.template or TEMPLATES.get(entry.rule_id)
@@ -24,8 +32,11 @@ def fallback_verdict(fact: PackageFact) -> str:
     if fact.first_seen:
         seen = "No prior history for this package"
         if not fact.old_version and not fact.new_version:
-            return f"{seen}. Insufficient data for a verdict."
-        return f"First analysis. {seen}. No version bump confirmed yet."
+            return f"{seen}. Insufficient data for a verdict. {REVIEW_DIRECTION}"
+        return (
+            f"First analysis. {seen}. No version bump confirmed yet. "
+            f"{REVIEW_DIRECTION}"
+        )
 
     reasons = []
     if fact.diff_summary.files_changed:
@@ -58,11 +69,12 @@ def fallback_verdict(fact: PackageFact) -> str:
         return (
             f"{change_summary}. {detail}. "
             f"The package is attempting to deceive the reviewer, so the score "
-            f"is capped at maximum regardless of other evidence."
+            f"is capped at maximum regardless of other evidence. "
+            f"{FATAL_DIRECTION}"
         )
 
     details = [_render(e, fact) for e in fired[:5]]
     if len(fired) > 5:
         details.append(f"and {len(fired) - 5} more signal(s)")
     signals = "; ".join(details)
-    return f"Version bump. {change_summary}. Signals: {signals}."
+    return f"Version bump. {change_summary}. Signals: {signals}. {REVIEW_DIRECTION}"

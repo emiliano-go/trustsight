@@ -52,7 +52,15 @@ def _find_line(diff_text: str, fragment: str) -> int | None:
 
 def _find_line_in_diff(diff_text: str, pattern: str, prefix: str = r"\+") -> int | None:
     """Return the 1-based line number of the first ``+``/``-`` line matching *pattern*."""
-    full = re.compile(r"^" + prefix + r".*" + pattern, re.IGNORECASE)
+    # A fragment ending in a lone backslash (an escaped URL sliced at
+    # 60/80 bytes, say) is not a legal pattern.  structural.py guards the
+    # same compile the same way; without it a long URL in a corpus diff
+    # would crash the whole run with re.error instead of degrading the
+    # line number to None.
+    try:
+        full = re.compile(r"^" + prefix + r".*" + pattern, re.IGNORECASE)
+    except re.error:
+        full = re.compile(r"^" + prefix + r".*" + re.escape(pattern), re.IGNORECASE)
     for i, line in enumerate(diff_text.splitlines()):
         if full.search(line):
             return i + 1

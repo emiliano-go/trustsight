@@ -10,6 +10,7 @@ import base64
 import binascii
 import gzip
 import io
+import re
 import tarfile
 import zipfile
 
@@ -138,6 +139,26 @@ def test_r119_ignores_probe_in_heredoc_data():
 +}
 """
     assert "R119" not in rule_ids(structural(diff))
+
+
+def test_find_line_in_diff_survives_a_lone_trailing_backslash():
+    """A pre-escaped URL sliced mid-escape ends in a lone trailing
+    backslash, which is not a legal regex; the guard must fall back to
+    escaping instead of raising re.error (seen in CI as ``bad escape
+    (end of pattern)`` when the corpus rebuild changed which hunk a
+    long source_url line lands in).
+    """
+    from trustsight.analysis.delivery import _find_line_in_diff
+
+    fragment = "https://example.invalid/very/long/source/url/path/with/dots.and.more"
+    sliced = re.escape(fragment)[:60]
+    while sliced and not sliced.endswith("\\"):
+        sliced = sliced[:-1]
+
+    diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n+source=(\"https://example.invalid/full/source/url\")\n"
+    assert _find_line_in_diff(diff, sliced) is None
+
+    assert _find_line_in_diff(diff, "full/source/url") == 3
 
 
 # --- R120: reconstructed-executable payload ---

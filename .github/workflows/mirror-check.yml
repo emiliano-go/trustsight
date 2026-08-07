@@ -9,6 +9,9 @@ on:
     - cron: "0 6 * * 0"
   workflow_dispatch:
 
+permissions:
+  issues: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -61,10 +64,10 @@ jobs:
               sys.exit(1)
           print(f"All {len(entries)} lock entries verified OK")
 
-      - name: Verify corpus hash matches baseline
+      - name: Report corpus content hash
         shell: python
         run: |
-          import hashlib, json, sys
+          import hashlib, json
           from pathlib import Path
 
           h = hashlib.sha256()
@@ -74,12 +77,22 @@ jobs:
 
           expected = json.loads(
               Path("tests/fixtures/baseline.json").read_text()
-          )["corpus_content_sha256"]
+          ).get("corpus_content_sha256")
 
-          if actual != expected:
-              print(f"Corpus content hash drifted.\n  baseline.json: {expected}\n  rebuilt:       {actual}")
-              sys.exit(1)
-          print(f"Corpus content hash matches baseline: {actual}")
+          # Informational, never a gate.  The diffs are produced with
+          # `git diff -W` and --xfuncname, whose hunk grouping is a
+          # function of the git version, so two healthy reconstructions on
+          # different runners do not necessarily produce byte-identical
+          # diffs even for the same commits.  Failing here would be the
+          # "old build, new runner" false alarm, not a mirror defect.
+          # Mirror health is enforced by the MISSING/ORPHAN check and by
+          # build_corpus aborting on an unreachable sha above.
+          if expected and actual == expected:
+              print(f"Corpus content hash matches baseline: {actual}")
+          else:
+              print(f"Corpus content hash (informational): {actual}")
+              if expected:
+                  print(f"  does not match baseline.json: {expected}")
 
       - name: Alert on failure
         if: failure() && github.event_name == 'schedule'
@@ -90,8 +103,9 @@ jobs:
               'The weekly mirror integrity check failed.',
               '',
               'The vendored corpus could not be reconstructed from',
-              '`tests/fixtures/corpus.lock`, or the rebuilt corpus no longer',
-              'matches `corpus_content_sha256` in `tests/fixtures/baseline.json`.',
+              '`tests/fixtures/corpus.lock` (unreachable sha, empty diff,',
+              'or MISSING/ORPHAN files), so the AUR mirror may have',
+              'dropped a branch or rewritten history.',
               '',
               'Reproduce locally:',
               '',

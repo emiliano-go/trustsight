@@ -84,7 +84,6 @@
     "must_fire": [
       "R004"
     ],
-    "must_not_fire": [],
     "min_score": 25,
     "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
@@ -92,7 +91,6 @@
     "must_fire": [
       "R004"
     ],
-    "must_not_fire": [],
     "min_score": 25,
     "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
@@ -160,18 +158,22 @@
     "must_fire": [
       "R009"
     ],
-    "min_score": 40
+    "min_score": 40,
+    "max_score": 70,
+    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not R009. R009 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (R009 CRITICAL 40 + R058 HIGH 25 = 65)."
   },
   "R010-curl-fetch.diff": {
     "must_fire": [
       "R129"
     ],
+    "min_score": 25,
     "relabelled": "R010 -> R129 2026-08-05: R010 is scoped to build functions by design; a top-level fetch runs when makepkg merely sources the recipe, which is R129's claim"
   },
   "R011-wget-fetch.diff": {
     "must_fire": [
       "R129"
     ],
+    "min_score": 25,
     "relabelled": "R011 -> R129 2026-08-05: same as R010; the parse-time position is the finding, not the downloader's name"
   },
   "R014-validpgpkeys-added.diff": {
@@ -181,22 +183,17 @@
     "relabelled": "R014 -> R130 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
   },
   "R015-depends-added.diff": {
-    "must_fire": [
-      "R015"
-    ],
-    "min_score": 15
+    "relabelled": "R015 -> (none) 2026-08-07: R015 is a reserved ID. A depends addition is reported as a fact (dependency_changes) and scored only by D001 (novel dependency), which needs a seeded corpus; the gates measure on a cold DB, so this is silent by design there."
   },
   "R016-makedepends-added.diff": {
     "must_fire": [
-      "R016"
+      "D003"
     ],
-    "min_score": 10
+    "min_score": 10,
+    "relabelled": "R016 -> D003 2026-08-07: R016 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
   },
   "R016-optdepends-added.diff": {
-    "must_fire": [
-      "R016"
-    ],
-    "min_score": 10
+    "relabelled": "R016 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
   },
   "R017-chmod-suid.diff": {
     "must_fire": [
@@ -216,7 +213,6 @@
     "must_fire": [
       "R128"
     ],
-    "must_not_fire": [],
     "min_score": 15,
     "relabelled": "R018 -> R128 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
   },
@@ -224,6 +220,7 @@
     "must_fire": [
       "R131"
     ],
+    "min_score": 10,
     "relabelled": "R019 -> R131 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which R070 cannot see (it is scoped to build functions)"
   },
   "R025-eval.diff": {
@@ -235,10 +232,10 @@
   },
   "R025-exec.diff": {
     "must_fire": [
-      "R011"
+      "R129"
     ],
     "min_score": 30,
-    "relabelled": "R025 dropped: no shipped rule names exec of fetched output; R011/R060/R061 carry the diff"
+    "relabelled": "R025 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which R129 claims (HIGH 25) plus the source bucket (20)."
   },
   "R026-checksum-to-skip.diff": {
     "must_fire": [

@@ -19,6 +19,16 @@ jobs:
       - name: Install
         run: pip install -e ".[dev]"
 
+      # The corpus is not committed (*.diff is gitignored), so the checkout
+      # has no diffs to score.  Rebuild the exact corpus named by the lock,
+      # the same way mirror-check and corpus-drift already do, before the
+      # gates can run.
+      - name: Reconstruct corpus from lock
+        run: |
+          python scripts/build_corpus.py --from-manifest \
+            --manifest tests/fixtures/corpus.lock \
+            --out tests/fixtures/benign-corpus
+
       - name: Run the calibration gates over the whole corpus
         run: python scripts/calibration_gates.py --json gates.json
 

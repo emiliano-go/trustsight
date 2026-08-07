@@ -213,6 +213,17 @@ def calculate_score(
 
     bucket_weights = config.get("source_bucket_weights", {})
     forge_urls: list[str] = []
+    # The source-bucket prior is a property of the source *list*, not of
+    # each URL in it: a package that adds thirty unknown-host URLs is one
+    # diff whose provenance is unknown, not thirty separate facts.  Under
+    # per-URL summation a legitimate multi-source package (electron,
+    # fonts) scored like a CRITICAL finding, which the §10 separation gate
+    # (benign_p95 < malicious_p5) caught.  The modifier of the least-trusted
+    # single added URL is the whole contribution; the homograph penalty
+    # (+30) still outranks the unknown one (+20) when both appear.
+    bucket_modifier = 0
+    bucket_url: str | None = None
+    bucket_name: str | None = None
     for url, bucket in source_buckets.items():
         modifier = bucket_weights.get(bucket, 0)
         if bucket in DECLARED_BUCKETS:
@@ -222,15 +233,18 @@ def calculate_score(
             # still firing in tests, whose config still carried -10.
             forge_urls.append(url)
             continue
-        base += modifier
-        severity = "INFO" if modifier <= 0 else "MEDIUM"
-        weight_display = modifier
+        if modifier > bucket_modifier:
+            bucket_modifier = modifier
+            bucket_url, bucket_name = url, bucket
+    if bucket_url is not None:
+        base += bucket_modifier
+        severity = "INFO" if bucket_modifier <= 0 else "MEDIUM"
         breakdown.append(
             ScoreEntry(
                 rule_id="SOURCE_BUCKET",
                 severity=severity,
-                weight=weight_display,
-                reason=f"Source URL classified as {bucket} ({url})",
+                weight=bucket_modifier,
+                reason=f"Source URL classified as {bucket_name} ({bucket_url})",
             )
         )
     if forge_urls:

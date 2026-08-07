@@ -303,7 +303,21 @@ def import_baseline(
             raise InvalidSignatureError("Baseline signature verification failed.")
         log.info("signature verified")
 
-    imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0}
+    imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0,
+                "packages_warmed": 0}
+
+    # A13 reports the shape of what a baseline did rather than warning on
+    # it.  A threshold on "novelty dropped across many packages" would fire
+    # on the success case: reducing novelty across many packages is a
+    # baseline's entire function.  So state the delta as a fact and let the
+    # operator judge.
+    from ..db import get_package_profile
+
+    had_history = {
+        profile["package_name"] for profile in profiles_in
+        if isinstance(profile, dict) and isinstance(profile.get("package_name"), str)
+        and get_package_profile(profile["package_name"]) is not None
+    }
 
     # A row without a name is not a row.  Skipping is right where raising
     # would be wrong: the artifact is signed, so a malformed entry is a
@@ -370,8 +384,17 @@ def import_baseline(
         save_metadata(meta_dict, default_metadata_path())
         imported["metadata_items"] = len(meta_dict)
 
+    imported["packages_warmed"] = imported["profiles"] - len(had_history)
+
     if json_output:
         print(json.dumps(imported))
     else:
         log.info("Imported %(profiles)d profiles, %(snapshots)d snapshots, "
                  "%(metadata_items)d metadata items", imported)
+        # The number that matters to a reader: how much of the corpus this
+        # artifact just moved from no-history to warm.
+        log.info(
+            "%d package(s) moved from no-history to warm; novelty signals on "
+            "those will be quieter from now on",
+            imported["packages_warmed"],
+        )

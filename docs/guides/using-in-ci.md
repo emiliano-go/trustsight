@@ -4,7 +4,10 @@ description: How to integrate TrustSight into CI/CD pipelines.
 
 # Using TrustSight in CI
 
-TrustSight is designed to be scripted. The exit code and the review table give you everything you need to gate a pipeline; no JSON parser required.
+The default terminal output is the findings list, not a score: the score exists
+and is deterministic, but the tool leads with evidence. Automation therefore
+runs on the JSON contract below, the only machine-readable surface, and the one
+this guide uses throughout.
 
 ## Exit codes
 

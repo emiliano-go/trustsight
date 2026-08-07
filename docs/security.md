@@ -64,6 +64,12 @@ at or below it, and INCONCLUSIVE for the band of the same name; those are
 reading conventions for the prose, and `risk` in the JSON carries the band
 itself.
 
+The score and its band are computed on every run and shown on request. The
+default output is the findings and the change summary: what matched, where, and
+what changed. `--score` adds the number and the band; `--json` carries them when
+`--score` or `--risk` is passed, because a consumer needs the machine-readable
+form.
+
 Computation is local and deterministic: the same input always produces the same
 score and the same evidence record. Nothing about the score depends on a remote
 service, a model, or a clock TrustSight does not control. Fetching is a separate,
@@ -115,6 +121,10 @@ Part A and Part B; the short list is:
 - **Fails closed on doubt**: an analysis that did not see the whole change
   cannot report UNFLAGGED, and its band is marked incomplete wherever a human
   sees it.
+- **Not headline-shaped**: the default output is evidence, not a verdict. The
+  score exists, is deterministic, and is available on request; it is not what
+  the tool leads with, because a number invites a decision the tool is not
+  entitled to make.
 - **Isolated**: it never fetches a URL the package named, never executes
   package code, never extracts archives to disk, and never renders untrusted
   text unescaped.
@@ -450,7 +460,10 @@ and every clause below is a limit on the claim.
 The score is deterministic: the same input always produces the same number and
 the same breakdown. It is not a probability, not a confidence, and not a
 prediction. A score of 0 means "no published rule matched the evidence
-examined", which is exactly as strong as the rule set is, and no stronger.
+examined", which is exactly as strong as the rule set is, and no stronger. The
+score is computed on every run so that `--score`, `--json`, coverage logic and
+CI gating all see the same value: determinism does not depend on how it is
+displayed.
 
 ### B2. An unflagged verdict is never issued for an analysis that was incomplete
 
@@ -494,6 +507,10 @@ Score: 75/100 (High (incomplete analysis))
 
 and the gap itself is listed, naming which part was not examined. `Inconclusive`
 is not qualified, because it already says the same thing.
+
+Default does not mean optional. Hiding the band by default must not become a way
+to skip the qualification when `--score` is passed: the moment a band is shown,
+it is shown qualified.
 
 Machine output keeps the two facts separate rather than in a sentence: `risk`
 is the bare band, `coverage_gaps` is the list, and `risk_label` is the

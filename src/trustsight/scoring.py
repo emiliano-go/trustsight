@@ -4,18 +4,80 @@ from .schema import NoveltyContext, ScoreEntry
 
 _MATURITY_THRESHOLD = 50
 
-_DEFAULT_VERIFICATION_EVIDENCE = {
-    "checksum_present": -10,
-    "validpgpkeys_declared": -10,
-    "gpg_verify_present": -5,
+# The UNFLAGGED ceiling.  Measured, not chosen: it is the 95th percentile of
+# the benign corpus.  risk_level() and every consumer read this rather than
+# repeating 20.
+FLAG_THRESHOLD = 20
+
+# B10.  Verification and hardening signals are *declared* by the recipe and
+# never confirmed by this tool: TrustSight does not fetch, so it never learns
+# that a declared key signs anything or that a pinned commit holds what it
+# claims.  Adding ``validpgpkeys=(...)``, pinning a ``#commit=``, or routing
+# through github.com costs an attacker nothing.  A signal an attacker can
+# assert for free must not be able to lower a score, because the only
+# reliable effect of such a mechanism is buying points back for whoever
+# bothers to read the rules.  So these are emitted at weight 0 and reported
+# to the person, who can check them in ways the tool cannot.  That is the
+# division of labour the whole model rests on.
+#
+# This replaces subtractive weights (checksum_present -10,
+# validpgpkeys_declared -10, gpg_verify_present -5, checksum_pinned -5,
+# tag_pinned -3, and a trusted-forge credit capped at -20).  The calibration
+# problem they existed to solve, a package doing GPG verification scoring
+# worse than one doing nothing because SKIP on a .asc file added points, is
+# fixed at source instead: R004 does not fire on a SKIP that is mandatory
+# for a VCS source, structurally uncheckable for a signature file, or
+# covered by declared PGP keys (``is_skip_justified``).  Stopping the false
+# positive was the right fix; paying it back was not.
+# The P namespace: declared-practice findings.  Deliberately not "benign
+# rules": they do not establish that anything is benign, they report that
+# the recipe *declares* a verification or hardening practice.  A distinct
+# prefix means a reader seeing P0xx in the output knows immediately that it
+# is not a risk finding.  Every one is INFO, weight 0, and checkable by the
+# reader against the file.
+P_CHECKSUMS = "P001"
+P_VALIDPGPKEYS = "P002"
+P_SIGNATURE_SOURCE = "P003"
+P_COMMIT_PINNED = "P005"
+P_TAG_PINNED = "P006"
+P_TRUSTED_FORGE = "P007"
+
+# Buckets whose membership is itself the declared fact.  Kept beside the
+# weights so that changing a weight cannot change which findings exist.
+DECLARED_BUCKETS = frozenset({"trusted_forge"})
+
+_PINNED_LEVELS = {"checksum_pinned": P_COMMIT_PINNED, "tag_pinned": P_TAG_PINNED}
+
+_EVIDENCE_IDS = {
+    "checksum_present": P_CHECKSUMS,
+    "validpgpkeys_declared": P_VALIDPGPKEYS,
+    "gpg_verify_present": P_SIGNATURE_SOURCE,
 }
 
-_DEFAULT_PINNING_WEIGHTS = {
-    "checksum_pinned": -5,
-    "tag_pinned": -3,
-    "branch_pinned": 0,
-    "unpinned": 0,
+DECLARED_REASONS = {
+    P_CHECKSUMS: "checksums declared for all non-VCS sources",
+    P_VALIDPGPKEYS: "validpgpkeys declared",
+    P_SIGNATURE_SOURCE: "a signature source accompanies a source, with PGP keys declared",
+    P_COMMIT_PINNED: "source pinned to a full commit hash",
+    # Phrased so it cannot be read as reassurance: the tag pin is the weaker
+    # form, and R079 exists precisely because a tag can be moved.
+    P_TAG_PINNED: "source pinned to a tag (tags can be repointed; commit pins cannot)",
+    P_TRUSTED_FORGE: "source hosted on a trusted forge over HTTPS",
 }
+
+# Which declared practices are worth stating unprompted.  Seventeen INFO
+# lines on every package buries the risk findings, which is the opposite of
+# what the group is for, so the default set is the ones a reader would find
+# *surprising by their absence*.  The rest render under --verbose.
+DECLARED_DEFAULT = frozenset({P_VALIDPGPKEYS, P_COMMIT_PINNED, P_SIGNATURE_SOURCE})
+
+# What the group must say wherever it is rendered.  Not a disclaimer: it is
+# the finding's actual content.  Without it the group reads as a safety
+# certificate, which is the failure this model exists to prevent.
+DECLARED_CAVEAT = (
+    "TrustSight does not verify these claims. It reports that the recipe "
+    "makes them."
+)
 
 
 def maturity(n_obs: int) -> float:
@@ -34,7 +96,7 @@ def maturity(n_obs: int) -> float:
 
 def risk_level(score: int) -> str:
     """Return the risk level label for a numeric score."""
-    if score <= 20:
+    if score <= FLAG_THRESHOLD:
         return "Low"
     elif score <= 50:
         return "Medium"
@@ -150,11 +212,15 @@ def calculate_score(
         return 100, breakdown, "Critical"
 
     bucket_weights = config.get("source_bucket_weights", {})
-    total_forge_modifier = 0
+    forge_urls: list[str] = []
     for url, bucket in source_buckets.items():
         modifier = bucket_weights.get(bucket, 0)
-        if modifier < 0:
-            total_forge_modifier += modifier
+        if bucket in DECLARED_BUCKETS:
+            # Identity, not weight.  This used to test `modifier < 0`, so
+            # when trusted_forge went to 0 under B10 the branch became
+            # unreachable and P007 stopped existing in production while
+            # still firing in tests, whose config still carried -10.
+            forge_urls.append(url)
             continue
         base += modifier
         severity = "INFO" if modifier <= 0 else "MEDIUM"
@@ -167,15 +233,15 @@ def calculate_score(
                 reason=f"Source URL classified as {bucket} ({url})",
             )
         )
-    if total_forge_modifier < 0:
-        capped = max(total_forge_modifier, -20)
-        base += capped
+    if forge_urls:
         breakdown.append(
             ScoreEntry(
-                rule_id="SOURCE_BUCKET",
+                rule_id=P_TRUSTED_FORGE,
                 severity="INFO",
-                weight=capped,
-                reason="Trusted forge modifier (capped at -20)",
+                weight=0,
+                reason=DECLARED_REASONS[P_TRUSTED_FORGE],
+                params={"count": len(forge_urls)},
+                evidence={"count": len(forge_urls)},
             )
         )
 
@@ -221,31 +287,23 @@ def calculate_score(
                 )
             )
 
-    pinning_weights = config.get("pinning_weights", _DEFAULT_PINNING_WEIGHTS)
-    pin_modifier = pinning_weights.get(pinning_level, 0)
-    if pin_modifier < 0:
-        base += pin_modifier
+    pin_id = _PINNED_LEVELS.get(pinning_level)
+    if pin_id:
         breakdown.append(
             ScoreEntry(
-                rule_id="PINNING",
-                severity="INFO",
-                weight=pin_modifier,
-                reason=f"Source pinning: {pinning_level} ({pin_modifier})",
+                rule_id=pin_id, severity="INFO", weight=0,
+                reason=DECLARED_REASONS[pin_id],
             )
         )
 
-    evidence_weights = config.get("verification_evidence", _DEFAULT_VERIFICATION_EVIDENCE)
     for evidence in (verification_evidence or []):
-        modifier = evidence_weights.get(evidence, 0)
-        if modifier == 0:
+        evidence_id = _EVIDENCE_IDS.get(evidence)
+        if evidence_id is None:
             continue
-        base += modifier
         breakdown.append(
             ScoreEntry(
-                rule_id="VERIFICATION",
-                severity="INFO",
-                weight=modifier,
-                reason=f"Verification evidence: {evidence} ({modifier})",
+                rule_id=evidence_id, severity="INFO", weight=0,
+                reason=DECLARED_REASONS[evidence_id],
             )
         )
 

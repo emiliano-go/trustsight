@@ -80,7 +80,7 @@ def config_show(
         data["scoring_weights"] = {}
         for group in (
             "severity_weights", "source_bucket_weights",
-            "novelty_weights", "verification_evidence", "pinning_weights",
+            "novelty_weights",
         ):
             data["scoring_weights"][group] = (cfg.get(group) or {}).copy()
         typer.echo(json.dumps(data, indent=2))
@@ -101,7 +101,7 @@ def config_show(
         weights.add_column("Weight", justify="right")
         for group in (
             "severity_weights", "source_bucket_weights",
-            "novelty_weights", "verification_evidence", "pinning_weights",
+            "novelty_weights",
         ):
             for key, value in (cfg.get(group) or {}).items():
                 weights.add_row(group, key, _weight_text(int(value)))

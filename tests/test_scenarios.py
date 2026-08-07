@@ -377,8 +377,12 @@ def test_skip_checksum_earns_no_pinning_discount():
     )
 
 
-def test_real_checksum_still_earns_credit():
-    """The counterpart: a genuine digest must still be credited."""
+def test_real_checksum_is_reported_not_credited():
+    """B10: a genuine digest is a *declared* fact, reported at weight 0.
+
+    It is still worth reporting: the reader can verify a digest in a way
+    TrustSight cannot, since TrustSight never fetches the artifact.
+    """
     from trustsight.analysis import scan_diff
     from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
 
@@ -390,11 +394,9 @@ def test_real_checksum_still_earns_credit():
     rules = tomllib.loads(DEFAULT_RULES)["rules"]
     fact = scan_diff(diff, rules=rules, config=cfg, package_name="p", seen_urls={})
 
-    assert any(
-        e.rule_id == "VERIFICATION" and "checksum_present" in e.reason
-        for e in fact.score_breakdown
-    )
-
+    declared = [e for e in fact.score_breakdown if e.rule_id == "P001"]
+    assert declared, [e.rule_id for e in fact.score_breakdown]
+    assert all(e.weight == 0 and e.severity == "INFO" for e in declared)
 
 def test_fallback_verdict_does_not_claim_a_flagged_package_is_clean():
     """The fallback is shown whenever the LLM is off or suppressed, so it

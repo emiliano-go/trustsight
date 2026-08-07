@@ -284,7 +284,7 @@ LOW = 5
 INFO = 0
 
 [source_bucket_weights]
-trusted_forge = -10
+trusted_forge = 0
 official = 0
 self_hosted = 10
 raw_hosting = 15
@@ -389,17 +389,6 @@ R064 = true
 # 21.4% of benign diffs and is context for a reviewer, not a signal.  That
 # is why it is the one rule here safe to leave on.
 R060 = true
-
-[verification_evidence]
-checksum_present = -10
-validpgpkeys_declared = -10
-gpg_verify_present = -5
-
-[pinning_weights]
-checksum_pinned = -5
-tag_pinned = -3
-branch_pinned = 0
-unpinned = 0
 
 [ports]
 # Standard ports excluded from R047 (source URL uses non-standard port).

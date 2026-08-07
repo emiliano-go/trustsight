@@ -38,7 +38,7 @@ def test_load_config_bucket_weights(tmp_path, monkeypatch):
 
     config = load_config()
     weights = config["source_bucket_weights"]
-    assert weights["trusted_forge"] == -10
+    assert weights["trusted_forge"] == 0  # B10: reported, not credited
     assert weights["unknown"] == 20
     assert weights["raw_hosting"] == 15
 
@@ -433,3 +433,42 @@ def test_the_legacy_r012_pattern_is_upgradable(tmp_path, monkeypatch):
     assert rule["include_comments"] is True
     assert "do not" not in rule["pattern"]  # escaped form, not prose
     assert "assistant" in rule["pattern"]
+
+
+# --- the test fixture must not describe a config the tool does not ship ----
+
+def test_shared_config_has_no_keys_the_tool_no_longer_reads():
+    """A fixture key with no shipped counterpart hides shipped behaviour.
+
+    `SHARED_CONFIG` carried `verification_evidence` and `pinning_weights`
+    after both were removed from `DEFAULT_CONFIG`. Nothing failed, because
+    the fixture kept feeding the old weights to the scorer, and `P007` was
+    dead in production while green in the suite.
+
+    Values may legitimately differ (tests pick round novelty weights so the
+    arithmetic is readable). Whole *sections* may not: a section the tool
+    never loads is a description of a program that does not exist.
+    """
+    from trustsight.config import DEFAULT_CONFIG
+
+    from tests.conftest import SHARED_CONFIG
+
+    shipped = tomllib.loads(DEFAULT_CONFIG)
+    orphans = sorted(set(SHARED_CONFIG) - set(shipped))
+    assert not orphans, (
+        f"fixture declares sections the shipped config does not have: {orphans}"
+    )
+
+
+def test_shared_config_covers_every_bucket_the_tool_ships():
+    """A bucket missing from the fixture is a bucket no test exercises."""
+    from trustsight.config import DEFAULT_CONFIG
+
+    from trustsight.config import DEFAULT_CONFIG
+
+    from tests.conftest import SHARED_CONFIG
+
+    shipped = tomllib.loads(DEFAULT_CONFIG)["source_bucket_weights"]
+    fixture = SHARED_CONFIG["source_bucket_weights"]
+    missing = sorted(set(shipped) - set(fixture))
+    assert not missing, f"buckets never exercised by the shared fixture: {missing}"

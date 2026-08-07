@@ -112,8 +112,11 @@ def test_pipeline_subtly_malicious():
         "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10, "maintainer_first_in_package": 20},
     }
     score, breakdown, level = calculate_score(triggered, buckets, NoveltyContext(), config)
-    assert score == 15
-    assert level == "Low"
+    # 25, not 15: under B10 the trusted-forge source is reported (P007) and
+    # no longer credited -10, so the HIGH finding stands on its own.
+    assert score == 25
+    assert level == "Medium"
+    assert any(e.rule_id == "P007" and e.weight == 0 for e in breakdown)
 
 
 def test_pipeline_hard_to_spot_malicious():

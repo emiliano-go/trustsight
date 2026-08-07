@@ -24,8 +24,6 @@ SHARED_RULES = [
 
 SHARED_CONFIG = {
     "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
-    "source_bucket_weights": {"trusted_forge": -10, "official": 0, "raw_hosting": 15, "unknown": 20, "self_hosted": 10},
+    "source_bucket_weights": {"trusted_forge": 0, "official": 0, "raw_hosting": 15, "unknown": 20, "self_hosted": 10, "homograph_attack": 30},
     "novelty_weights": {"url_first_globally": 15, "url_first_in_package": 10, "maintainer_first_in_package": 20},
-    "verification_evidence": {"checksum_present": -10, "validpgpkeys_declared": -10, "gpg_verify_present": -5},
-    "pinning_weights": {"checksum_pinned": -5, "tag_pinned": -3, "branch_pinned": 0, "unpinned": 0},
 }

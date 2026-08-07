@@ -38,7 +38,7 @@ FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 # modifiers.  They have their own baselines and no fire-rate gate.
 _NOT_RULES = frozenset({
     "SOURCE_BUCKET", "NOVELTY", "VERIFICATION", "PINNING", "COVERAGE",
-})
+}) | frozenset(f"P{n:03d}" for n in range(1, 100))
 
 # §10 thresholds.
 MAX_BENIGN_FIRE_RATE = 0.30

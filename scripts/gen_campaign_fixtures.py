@@ -260,9 +260,15 @@ add("control-bin-package-declared-source",
         context="pkgname=demo-appimage\npkgver=1.0",
     ),
     description="A -bin/-appimage package whose binary arrives through a "
-                "declared, checksummed source",
+                "declared, checksummed source.  Scores 35 under B10: the "
+                "declared checksum is reported (P001) but no longer credited, "
+                "so C005 and the unknown-host bucket stand on their own.  It "
+                "remains a control for the delivery rules, which must stay "
+                "silent; it is no longer a control for the 20-point threshold, "
+                "and that is the calibration cost of not paying back points "
+                "for a claim an attacker can make for free.",
     campaign="control", fidelity="representative",
-    must_not_fire=["R118", "R120", "R124", "R128"], max_score=20)
+    must_not_fire=["R118", "R120", "R124", "R128"], max_score=35)
 
 
 def main() -> int:

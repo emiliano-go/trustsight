@@ -78,10 +78,12 @@ def test_score_with_unknown_bucket():
     assert any(e.rule_id == "SOURCE_BUCKET" for e in breakdown)
 
 
-def test_score_with_trusted_forge_bucket():
+def test_a_trusted_forge_is_reported_never_credited():
+    """B10: routing through github.com costs an attacker nothing."""
     score, breakdown, level = calculate_score([], {"https://github.com/user/repo.tar.gz": "trusted_forge"}, NoveltyContext(), SHARED_CONFIG)
-    assert score == 0  # -10 but floor is 0
-    assert any(e.rule_id == "SOURCE_BUCKET" for e in breakdown)
+    assert score == 0
+    declared = [e for e in breakdown if e.rule_id == "P007"]
+    assert declared and all(e.weight == 0 and e.severity == "INFO" for e in declared)
 
 
 def test_score_with_raw_hosting_bucket():
@@ -95,7 +97,8 @@ def test_score_mixed_buckets():
         "https://evil.com/payload.tar.gz": "unknown",
     }
     score, breakdown, level = calculate_score([], buckets, NoveltyContext(), SHARED_CONFIG)
-    assert score == 10  # -10 + 20 = 10
+    # The unknown host still costs; the forge no longer pays it back.
+    assert score == 20
 
 
 # --- Score with novelty ---
@@ -225,14 +228,15 @@ def test_fatal_overrides_lower_score():
     assert level == "Critical"
 
 
-def test_verification_evidence_reduces_score():
+def test_verification_evidence_does_not_reduce_the_score():
+    """B10: declared verification is reported, never credited."""
     triggered = [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}]
     score, breakdown, level = calculate_score(
         triggered, {}, NoveltyContext(), SHARED_CONFIG,
         verification_evidence=["checksum_present", "validpgpkeys_declared"],
     )
-    # 5 (LOW) + (-10) + (-10) = -15 -> floor at 0
-    assert score == 0
+    without, _, _ = calculate_score(triggered, {}, NoveltyContext(), SHARED_CONFIG)
+    assert score == without == 5
 
 
 def test_verification_evidence_in_breakdown():
@@ -240,25 +244,27 @@ def test_verification_evidence_in_breakdown():
         [], {}, NoveltyContext(), SHARED_CONFIG,
         verification_evidence=["gpg_verify_present"],
     )
-    assert any(e.rule_id == "VERIFICATION" for e in breakdown)
+    assert any(e.rule_id == "P003" and e.weight == 0 for e in breakdown)
 
 
-def test_pinning_checksum_reduces_score():
+def test_pinning_is_reported_never_credited():
     score, breakdown, level = calculate_score(
         [], {}, NoveltyContext(), SHARED_CONFIG,
         pinning_level="checksum_pinned",
     )
-    assert score == 0  # score starts at 0, -5 pinned -> floor at 0
-    assert any(e.rule_id == "PINNING" for e in breakdown)
+    assert score == 0
+    assert any(e.rule_id == "P005" and e.weight == 0 for e in breakdown)
 
 
-def test_pinning_tag_does_not_floor():
+def test_a_tag_pin_is_reported_as_the_weaker_form():
     score, breakdown, level = calculate_score(
         [{"rule_id": "R001", "severity": "LOW", "name": "Curl", "match": "curl"}],
         {}, NoveltyContext(), SHARED_CONFIG,
         pinning_level="tag_pinned",
     )
-    assert score == 2  # 5 + (-3) = 2
+    # A tag pin buys nothing: a tag can be repointed, which is what R079 is for.
+    assert score == 5
+    assert any(e.rule_id == "P006" and e.weight == 0 for e in breakdown)
 
 
 # --- Inconclusive state ---

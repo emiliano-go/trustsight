@@ -347,7 +347,8 @@ def detect_gpg_verification_removed(diff_text: str) -> bool:
 def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") -> list[str]:
     """Return a list of verification evidence strings present in the post-diff end-state.
 
-    Each item is a key into ``config.verification_evidence`` weights.
+    Each item is a key into ``scoring.DECLARED_REASONS``.  These are
+    *declared* facts, reported at weight 0 (B10), never credited.
     Evidence is computed over the resolved PKGBUILD-as-it-will-be-installed,
     not over the diff delta; a checksum's protective value doesn't depend
     on whether it changed in this commit.

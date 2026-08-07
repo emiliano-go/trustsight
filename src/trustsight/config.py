@@ -890,8 +890,17 @@ def ensure_default_configs():
 _toml_cache: dict[str, tuple[tuple, dict]] = {}
 
 
-def load_toml(name: str) -> dict:
-    """Load and parse a TOML file from the config directory"""
+def load_toml(name: str, copy_result: bool = True) -> dict:
+    """Load and parse a TOML file from the config directory.
+
+    *copy_result* may be set False only by an accessor whose callers treat
+    the result as read-only.  The deepcopy is not free: the analysis path
+    asks for these tables several times per diff, and copying them was
+    about 6% of a corpus scan.  ``load_rules`` keeps the copy because
+    ``apply_rules`` really does assign to ``rule["pattern"]`` for the three
+    generated patterns, and ``load_config`` keeps it because it is handed
+    to every caller in the program.
+    """
     path = CONFIG_DIR / name
     if not path.exists():
         ensure_default_configs()
@@ -908,7 +917,7 @@ def load_toml(name: str) -> dict:
             # object itself would let one caller's edit reach every later
             # one.  Copying is still an order of magnitude cheaper than
             # re-reading and re-parsing the file.
-            return copy.deepcopy(cached[1])
+            return copy.deepcopy(cached[1]) if copy_result else cached[1]
     with open(path, "rb") as f:
         data = tomllib.load(f)
     if stamp is not None:
@@ -1495,29 +1504,29 @@ def _free_registrar_tld_pattern() -> str:
 
 def load_domains() -> dict:
     """Load trusted domains from trusted_domains.toml"""
-    return load_toml("trusted_domains.toml")
+    return load_toml("trusted_domains.toml", copy_result=False)
 
 
 def load_patterns() -> dict:
     """Load pattern tables from patterns.toml (R081/R082/D003)."""
-    return load_toml("patterns.toml")
+    return load_toml("patterns.toml", copy_result=False)
 
 
 def load_naming() -> dict:
     """Load naming tables from naming.toml (D002/D004/R074)."""
-    return load_toml("naming.toml")
+    return load_toml("naming.toml", copy_result=False)
 
 
 def load_hosts() -> dict:
     """Load host tables from hosts.toml (R047/R048/R087)."""
-    return load_toml("hosts.toml")
+    return load_toml("hosts.toml", copy_result=False)
 
 
 def load_thresholds() -> dict:
     """Load thresholds from thresholds.toml (R082/R125/R126)."""
-    return load_toml("thresholds.toml")
+    return load_toml("thresholds.toml", copy_result=False)
 
 
 def load_iocs() -> dict:
     """Load the versioned indicator list from iocs.toml (R106)."""
-    return load_toml("iocs.toml")
+    return load_toml("iocs.toml", copy_result=False)

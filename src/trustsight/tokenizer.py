@@ -1,4 +1,5 @@
 import re
+import threading
 
 # Expansion is bounded by *passes*, not by nesting depth: each pass
 # rewrites one innermost ``${...}``, so a value that keeps producing new
@@ -272,6 +273,41 @@ def _substitute_with_resolve(text: str, var_table: dict[str, str]) -> tuple[str,
     return reconstructed, ok and fully
 
 
+# Twenty call sites in analysis/ ask for the resolved form of the *same*
+# diff, once each, and it used to be recomputed every time: 8000 calls for
+# 400 diffs, about a third of the analysis cost.  The function is pure, so
+# the result is memoised per thread.
+#
+# Keyed on identity, not equality: a diff can be megabytes, and hashing it
+# twenty times to avoid computing it twenty times is not a saving.  Every
+# caller inside one analysis is handed the same object, so identity hits.
+# Two entries, because the pipeline holds both the raw diff and its
+# clamped form (rules.clamp_text) and alternates between them.
+#
+# Thread-local because `review` analyses packages in a pool; a shared cache
+# would need a lock on the hot path and would give one package's lines to
+# another on an identity collision after a free.
+_memo = threading.local()
+_MEMO_ENTRIES = 2
+
+
+def _memoised(kind: str, key: str, compute):
+    """Return ``compute()`` for *key*, reusing a recent identical object."""
+    store = getattr(_memo, kind, None)
+    if store is None:
+        store = _memo.__dict__.setdefault(kind, [])
+    for cached_key, cached_value in store:
+        if cached_key is key:
+            # A copy: callers receive a plain list they may treat as their
+            # own, and a shared one would turn any future in-place edit
+            # into a bug in an unrelated rule.
+            return list(cached_value)
+    value = compute()
+    store.append((key, value))
+    del store[:-_MEMO_ENTRIES]
+    return list(value)
+
+
 def join_line_continuations(lines: list[str]) -> list[str]:
     """Join shell line continuations into single logical lines.
 
@@ -407,6 +443,10 @@ def resolve_added_lines(diff_text: str) -> list[str]:
     added assignment made the two sequences different lengths and shifted
     every following line onto the wrong position.
     """
+    return _memoised("resolved", diff_text, lambda: _resolve_added_lines(diff_text))
+
+
+def _resolve_added_lines(diff_text: str) -> list[str]:
     lines = join_line_continuations(diff_text.splitlines())
     var_table = _variable_table(
         [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]

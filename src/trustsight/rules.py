@@ -1,4 +1,5 @@
 import re
+import threading
 
 from .config import load_rules
 from .findings import stamp
@@ -170,7 +171,41 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
     return contexts
 
 
+# Fifteen call sites in analysis/ classify the *same* lines, once each.
+# The key is the content, not the object: each caller holds its own copy
+# from tokenizer.resolve_added_lines, so identity never matches.  Hashing
+# a few hundred short strings is far cheaper than re-running two regexes
+# over every one of them, and Python caches a str's hash after the first
+# use, so the second and later lookups are close to free.
+# Thread-local, like the tokenizer memo: `review` analyses packages in a
+# pool, and a shared dict would need the eviction sweep to be atomic with
+# the insert.  It is not, and a KeyError inside a worker surfaces to the
+# user as "this package was NOT vetted" - a correctness failure bought for
+# a few microseconds of sharing.
+_classify_memo = threading.local()
+_CLASSIFY_ENTRIES = 4
+
+
+def _classified(kind: str, lines: list[str], compute):
+    cache = getattr(_classify_memo, "cache", None)
+    if cache is None:
+        cache = _classify_memo.__dict__.setdefault("cache", {})
+    key = (kind, tuple(lines))
+    hit = cache.get(key)
+    if hit is None:
+        hit = compute(lines)
+        cache[key] = hit
+        while len(cache) > _CLASSIFY_ENTRIES:
+            del cache[next(iter(cache))]
+    return dict(hit)
+
+
 def _classify_enclosing_function(lines: list[str]) -> dict[int, str]:
+    """Memoised wrapper: see :func:`_enclosing_function_map`."""
+    return _classified("fn", lines, _enclosing_function_map)
+
+
+def _enclosing_function_map(lines: list[str]) -> dict[int, str]:
     """Return ``{line_index: enclosing_function_name}``.
 
     Lines outside any function are absent from the mapping.  A bare

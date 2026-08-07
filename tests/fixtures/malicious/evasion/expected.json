@@ -1,0 +1,50 @@
+{
+  "evasion-fetch-via-indirect.diff": {
+    "known_gap": true,
+    "description": "The fetch tool is reached through ${!C} indirection, so the resolved line keeps no literal curl/wget for R001/R002/R061 and R129 to name",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-shell-via-indirect.diff": {
+    "known_gap": true,
+    "description": "curl is variable-routed and the shell is reached through ${!P}: R001's shell alternation names literals only",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-command-via-plus-eq.diff": {
+    "known_gap": true,
+    "description": "C is built only with +=, which the assignment resolver does not track, so $C never resolves to a literal curl line",
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "evasion-depends-via-plus-eq.diff": {
+    "known_gap": true,
+    "description": "depends+= is not parsed as a dependency declaration, so nothing reports it (cold DB) and D003 sees no network makedepends",
+    "must_fire": [
+      "D001"
+    ],
+    "min_score": 25
+  },
+  "evasion-heredoc-fed-indirect.diff": {
+    "known_gap": true,
+    "description": "The remote-execution line lives inside a heredoc fed straight to a shell; the literal pipe-to-shell rules never see it once the fetch is indirect",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-heredoc-written-indirect.diff": {
+    "known_gap": true,
+    "description": "The recipe writes an executable script into $srcdir and sources it; R121/R124 want the writer and the executor in the same visible line, and the fetch inside is indirect",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  }
+}

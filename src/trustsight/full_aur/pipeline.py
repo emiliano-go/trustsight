@@ -16,6 +16,7 @@ from ..db import (
     latest_cycle_time,
     maintainer_activity_history,
     record_cycle_events,
+    is_reserved_name,
     save_package_profile,
     save_pkgbuild_snapshot,
 )
@@ -174,6 +175,8 @@ def _run_corpus_sweep(
         if delta <= 0:
             continue
         for member in finding["params"]["members"]:
+            if is_reserved_name(member):
+                continue
             new_score = max(0, min(100, _profile_score(member, scores) + delta))
             save_package_profile(member, new_score, risk_level(new_score))
     return findings
@@ -297,6 +300,10 @@ def run_baseline_build(
             ),
             tree_manifest=tree_manifest,
         )
+
+        if is_reserved_name(name):
+            _logger().warning("skipping reserved package name %r", name)
+            continue
 
         save_pkgbuild_snapshot(
             package_name=name,

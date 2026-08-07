@@ -36,7 +36,7 @@ from ..differ import (
 from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
-from ..rules import apply_rules, get_raw_diff_lines
+from ..rules import apply_rules, clamp_text, get_raw_diff_lines
 from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
 from ..scoring import calculate_score
 from ..schema import (
@@ -287,10 +287,10 @@ def analyze_package_text(
     )
     triggered_rules.extend(
         _structural_findings(
-            diff_text, source_changes, source_buckets,
+            clamp_text(diff_text), source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
-            current_text=new_pkgbuild,
+            current_text=clamp_text(new_pkgbuild),
         )
     )
     if tree_manifest:

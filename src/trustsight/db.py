@@ -252,6 +252,20 @@ def _migrate(conn: sqlite3.Connection) -> None:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
 
+_RESERVED_NAMES = frozenset({"__seed__"})
+
+
+def is_reserved_name(name: str) -> bool:
+    """True when *name* is an internal sentinel, not a real package.
+
+    AUR package names may begin with an underscore, so ``__seed__`` is a
+    name someone could actually register.  Writers reject it; callers that
+    walk a corpus use this to skip it, because one such name must not be
+    able to abort a cycle over ninety thousand packages.
+    """
+    return name in _RESERVED_NAMES or name.startswith("__")
+
+
 def upsert_package(name: str, version: str) -> int:
     """Insert or update a package record, returning its id."""
     if name in _RESERVED_NAMES or name.startswith("__"):
@@ -814,7 +828,6 @@ def get_history(package_id: int, limit: int = 20) -> list[dict]:
         return [dict(r) for r in rows]
 
 
-_RESERVED_NAMES = frozenset({"__seed__"})
 
 def get_all_packages() -> list[dict]:
     """Return every package row excluding internal sentinels, ordered by name."""
@@ -907,6 +920,13 @@ def save_pkgbuild_snapshot(
     srcinfo_text: Optional[str] = None,
 ) -> None:
     """Insert or update the PKGBUILD snapshot for *package_name*."""
+    # Same guard as upsert_package.  These two tables are keyed by
+    # package_name directly rather than through packages(id), so they were
+    # the way round the reserved-name check: a baseline artifact, or an
+    # AUR package actually named __seed__, could write a row under a name
+    # the rest of the code treats as internal.
+    if package_name in _RESERVED_NAMES or package_name.startswith("__"):
+        raise ValueError(f"reserved package name: {package_name!r}")
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO pkgbuild_snapshots
@@ -939,6 +959,13 @@ def save_package_profile(
     last_risk: str = "",
 ) -> None:
     """Insert or update the package profile."""
+    # Same guard as upsert_package.  These two tables are keyed by
+    # package_name directly rather than through packages(id), so they were
+    # the way round the reserved-name check: a baseline artifact, or an
+    # AUR package actually named __seed__, could write a row under a name
+    # the rest of the code treats as internal.
+    if package_name in _RESERVED_NAMES or package_name.startswith("__"):
+        raise ValueError(f"reserved package name: {package_name!r}")
     with get_connection() as conn:
         conn.execute(
             """INSERT INTO package_profiles

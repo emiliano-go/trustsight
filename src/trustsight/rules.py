@@ -85,6 +85,30 @@ def clamp(line: str) -> str:
     return line if len(line) <= MAX_RULE_LINE_BYTES else line[:MAX_RULE_LINE_BYTES]
 
 
+def clamp_text(text: str | None) -> str | None:
+    """Apply :func:`clamp` to every line of *text*, keeping the line count.
+
+    The rules in ``analysis/`` are regexes too, and there are more of them
+    than there are in ``rules.toml``, but they match against the diff text
+    directly rather than through :func:`apply_rules`, so the per-line clamp
+    never reached them.  One 5 MiB line cost 0.17s through ``apply_rules``
+    and 15s through the code-emitted rules, which is an attacker-chosen
+    multiplier on how long a review takes.
+
+    Lines are shortened, never dropped, so every index still refers to the
+    line it did before and ``map_diff_lines`` keeps pointing at the right
+    place.  Callers must measure ``coverage.oversized_lines`` on the
+    *original* text first: after this, the evidence of truncation is gone,
+    and a bound that drops content without recording it is exactly what
+    the ``line_truncated`` gap exists to prevent.
+    """
+    if text is None:
+        return None
+    if len(text) <= MAX_RULE_LINE_BYTES:
+        return text
+    return "\n".join(clamp(line) for line in text.split("\n"))
+
+
 def _to_pairs(lines: list[str]) -> list[tuple[int, str]]:
     """pair each line with its original index"""
     return [(i, clamp(line)) for i, line in enumerate(lines)]

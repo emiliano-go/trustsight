@@ -314,11 +314,17 @@ def import_baseline(
         ):
             log.warning("skipping baseline profile without a package name")
             continue
-        save_package_profile(
-            package_name=profile["package_name"],
-            last_score=profile.get("last_score", 0),
-            last_risk=profile.get("last_risk", ""),
-        )
+        try:
+            save_package_profile(
+                package_name=profile["package_name"],
+                last_score=profile.get("last_score", 0),
+                last_risk=profile.get("last_risk", ""),
+            )
+        except ValueError as exc:
+            # A reserved name.  Same treatment as a row with no name: one
+            # bad entry must not abort an otherwise good import.
+            log.warning("skipping baseline profile: %s", exc)
+            continue
         imported["profiles"] += 1
 
     for snap in snapshots_in:
@@ -327,13 +333,17 @@ def import_baseline(
         ):
             log.warning("skipping baseline snapshot without a package name")
             continue
-        save_pkgbuild_snapshot(
-            package_name=snap["package_name"],
-            pkgbuild_text=snap.get("pkgbuild_text", ""),
-            version=snap.get("version", ""),
-            last_modified=snap.get("last_modified", 0),
-            srcinfo_text=snap.get("srcinfo_text"),
-        )
+        try:
+            save_pkgbuild_snapshot(
+                package_name=snap["package_name"],
+                pkgbuild_text=snap.get("pkgbuild_text", ""),
+                version=snap.get("version", ""),
+                last_modified=snap.get("last_modified", 0),
+                srcinfo_text=snap.get("srcinfo_text"),
+            )
+        except ValueError as exc:
+            log.warning("skipping baseline snapshot: %s", exc)
+            continue
         imported["snapshots"] += 1
 
     metadata_list = data.get("metadata_snapshot", [])

@@ -39,7 +39,7 @@ from ..novelty import (
 )
 from ..deps import extract_dependency_changes
 from ..override import filter_triggered_rules
-from ..rules import apply_rules, get_raw_diff_lines
+from ..rules import apply_rules, clamp_text, get_raw_diff_lines
 from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
 from ..scoring import calculate_score
 from ..schema import (
@@ -190,10 +190,10 @@ def analyze_package(
     head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
     triggered_rules.extend(
         _structural_findings(
-            diff_text, source_changes, source_buckets,
+            clamp_text(diff_text), source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
-            current_text=head_pkgbuild,
+            current_text=clamp_text(head_pkgbuild),
         )
     )
     tree_manifest = _collect_tree_files(repo, head_commit)
@@ -387,9 +387,9 @@ def scan_diff(
     )
     triggered_rules.extend(
         _structural_findings(
-            diff_text, source_changes, source_buckets,
+            clamp_text(diff_text), source_changes, source_buckets,
             package_name=package_name, config=config,
-            current_text=current_text,
+            current_text=clamp_text(current_text),
         )
     )
     if tree_manifest:

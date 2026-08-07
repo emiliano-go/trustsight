@@ -724,3 +724,71 @@ def test_stored_rows_do_not_show_a_bare_band_for_an_incomplete_run():
 
     # A row written before the field existed falls back honestly.
     assert stored_band({"final_score": 60})[0] == "High"
+
+
+# --- B1 fingerprint / A14 / B9 structural ---------------------------------
+
+
+def test_the_fingerprint_moves_only_with_the_instrument():
+    import trustsight.config as config_module
+    from trustsight.config import config_fingerprint
+
+    first = config_fingerprint()
+    assert first.startswith("sha256:")
+    assert config_fingerprint() == first, "fingerprint is not stable"
+
+    saved = config_module.load_thresholds
+    config_module.load_thresholds = lambda: {"thresholds": {"probe": 1}}
+    try:
+        assert config_fingerprint() != first
+    finally:
+        config_module.load_thresholds = saved
+    assert config_fingerprint() == first, "fingerprint did not return"
+
+
+def test_the_report_carries_the_fingerprint():
+    from trustsight.config import config_fingerprint
+    from trustsight.schema import fact_to_dict
+
+    fact = scan_diff(HEADER + "+pkgver=2\n", package_name="demo")
+    assert fact_to_dict(fact)["config_fingerprint"] == config_fingerprint()
+
+
+@pytest.mark.parametrize("case", [
+    "first-seen", "first-seen-versions", "nothing-fired", "signals", "fatal",
+])
+def test_every_verdict_ends_with_a_direction(case):
+    """B9 structurally: something present, not a phrasing absent."""
+    from trustsight.schema import DiffSummary
+    from trustsight.verdict import DIRECTIONS, fallback_verdict
+
+    facts = {
+        "first-seen": PackageFact(first_seen=True),
+        "first-seen-versions": PackageFact(first_seen=True, old_version="1",
+                                           new_version="2"),
+        "nothing-fired": PackageFact(diff_summary=DiffSummary(files_changed=["PKGBUILD"])),
+        "signals": PackageFact(
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+            score_breakdown=[ScoreEntry(rule_id="R001", severity="HIGH", weight=25)]),
+        "fatal": PackageFact(
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+            score_breakdown=[ScoreEntry(rule_id="R012", severity="FATAL", weight=0)]),
+    }
+    assert fallback_verdict(facts[case]).rstrip().endswith(DIRECTIONS)
+
+
+def test_a_package_named_safe_does_not_trip_the_denylist():
+    """B9's denylist covers template text; field values are package-owned."""
+    from security_gates import gate_no_template_grants_permission
+
+    for name in ("safe-rs", "clean-arch", "nothing-to-review"):
+        fact = scan_diff(HEADER + "+pkgver=2\n", package_name=name)
+        assert fact.final_score == 0, name
+    assert gate_no_template_grants_permission().passed
+
+
+def test_every_input_bound_is_a_literal():
+    from security_gates import gate_every_input_bound_is_a_source_constant
+
+    gate = gate_every_input_bound_is_a_source_constant()
+    assert gate.passed, gate.measured

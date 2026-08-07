@@ -53,6 +53,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "recent_commit_burst": bool,
   "diff_truncated": bool,
   "tree_analyzed": bool,
+  "config_fingerprint": "sha256:...",
   "changes": ["string"],
   "coverage_gaps": ["string"],
   "unresolved_sources": ["string"],
@@ -90,6 +91,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `recent_commit_burst` | `bool` | `true` when the package's recent commit timestamps cluster unusually tightly. |
 | `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only its prefix was examined. The score then describes a prefix, not the change. |
 | `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
+| `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"line_truncated"`, `"tree_not_analyzed"` and `"unresolved_source"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |

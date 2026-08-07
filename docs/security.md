@@ -7,8 +7,10 @@ description: What TrustSight is, what it claims, what it does not claim, and how
 TrustSight is the **instrument panel, not the airworthiness certificate**.
 
 A quiet panel means no monitored condition tripped its threshold. It does not
-mean the aircraft is sound, and it never means you are cleared to fly. What a
-panel owes you is two things: every sensor it has reports honestly, and every
+mean the aircraft is sound, and it does not authorize a takeoff: that is a
+decision the pilot makes. You abort the update or you authorize it, and nothing
+on this panel can do that for you. What a panel owes you is two things: every
+sensor it has reports honestly, and every
 sensor it does not have shows up as *missing* rather than dark. A gauge that
 reads zero because nothing is wrong and a gauge that reads zero because it was
 never wired are the same picture, and telling them apart is the entire job.
@@ -352,6 +354,13 @@ connects to a host named by the package under review. The analysis itself is
 local and deterministic, as the thesis describes; fetching is a separate stage,
 with one destination.
 
+Cloning executes nothing. Repositories are fetched bare through `pygit2`
+(libgit2), which does not run git hooks on clone, and TrustSight configures no
+`clean`, `smudge` or `fsmonitor` filter, the git-config-driven paths where a
+fetch can otherwise become an execution. This documents a property the library
+already has rather than a control this project adds; per the assumptions, a
+compromised `pygit2` is outside the model.
+
 **A4. Every read is bounded.** Every request has a timeout. Every response has a
 byte cap. Decompression is capped before it is materialised, tar members are
 walked lazily with a ceiling, the seed import refuses to expand past its limit,
@@ -447,6 +456,14 @@ screen to forge a verdict, cannot recolour a row, and cannot abort the render of
 a batch with an unbalanced markup tag. Stored evidence and JSON output are left
 byte-exact: sanitising happens at the point of rendering, not in the analysis.
 
+Sanitisation removes control sequences; it does not transform confusable
+characters. A package or maintainer *name* built from homoglyphs (a Cyrillic `a`
+in an otherwise-Latin name) renders as the characters it contains, because
+rewriting an identifier would misrepresent what is actually installed.
+Name-level confusability is a **detection** concern, handled by rules over the
+name, not a rendering one. A10 guarantees the terminal cannot be driven; it does
+not guarantee a name reads the way it looks.
+
 **A11. Unless a local marker says otherwise, age is local.** A
 maintainer-supplied timestamp cannot convince the tool that a stale local copy
 is current; recency is anchored to a local marker.
@@ -474,6 +491,17 @@ unexceptional, reducing novelty and longitudinal signals across many packages
 at once. What it cannot do is make a rule stop matching. Import a baseline from
 a corpus you would trust.
 
+**A14. An attacker cannot force unbounded resource use.** A4 bounds what
+arrives, A5 bounds what is matched, A6 bounds what is expanded. Together: no
+package-controlled input decides how much CPU, memory, network or disk this
+process consumes. Every bound is a constant in the source rather than a function
+of the input, and every bound that drops content records a coverage gap, so
+bounded never means silently truncated.
+
+That last clause is what makes A14 more than a summary of the three. It ties the
+resource guarantee to [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete),
+so a bound can never be used as a quiet skip.
+
 ### What this part does not protect
 
 - **Building the package.** TrustSight never runs a PKGBUILD. Once you type
@@ -500,9 +528,25 @@ and every clause below is a limit on the claim.
 
 ### B1. A score is a sum of matched evidence, nothing more
 
-The score is deterministic: the same input always produces the same number and
-the same breakdown. It is not a probability, not a confidence, and not a
-prediction. A score of 0 means "no published rule matched the evidence
+Determinism is algorithmic, not configurational. The same input, under the same
+configuration and the same shipped ruleset, always produces the same score and
+the same breakdown. Changing rules, thresholds or overrides changes the
+instrument, deliberately, visibly, and at the operator's hand. That is a
+different instrument, not a nondeterministic one.
+
+Every report carries a **config fingerprint**, a hash over the effective
+ruleset, the scoring weights, the thresholds and the active overrides:
+
+```
+"config_fingerprint": "sha256:4f2a..."
+```
+
+Two operators comparing results can see immediately whether they are running the
+same instrument. It also gives Part D's nondeterminism clause a precise meaning:
+same input and same fingerprint with a different score is a vulnerability; a
+different fingerprint is a different configuration.
+
+The score is not a probability, not a confidence, and not a prediction. A score of 0 means "no published rule matched the evidence
 examined", which is exactly as strong as the rule set is, and no stronger. The
 score is computed on every run so that `--score`, `--json`, coverage logic and
 CI gating all see the same value: determinism does not depend on how it is
@@ -691,9 +735,19 @@ some-pkg 1.2.3 -> 1.2.4
 ```
 
 Forbidden: "clean", "safe", "no issues", "looks fine", "nothing to review", or
-any phrasing whose plain reading is *you may proceed*. Enforced as a denylist
-over the rendering templates, so it costs nothing at runtime and fails the build
-when someone adds a friendly-sounding string.
+any phrasing whose plain reading is *you may proceed*.
+
+Enforced **structurally rather than lexically**. Every terminal render of a
+result ends with a direction to review, and the gate asserts the presence of
+that direction rather than the absence of a phrasing. A wording the denylist
+never anticipated cannot bypass a check that requires something to be there. The
+denylist is retained as a secondary check for the obvious cases.
+
+The denylist covers **template text only**. Substituted field values are
+package-controlled, and a package legitimately named `safe-rs` or `clean-arch`
+must not fail the build or trip a check. This is
+[A7](#the-invariants)'s separation applied to B9: templates are code-owned and
+checked, fields are package-owned and never checked.
 
 This belongs in Part B rather than being a style note. The rest of Part B bounds
 what a *score* may claim; this bounds what the *prose* may claim, and the prose
@@ -824,6 +878,10 @@ An exit code of 1 means a claim on this page has stopped being true.
 | `FATAL rules cannot be switched off` | B4 | `config.enforce_fatal_rules` |
 | `FATAL findings survive every override` | B4, B5 | `override.filter_triggered_rules` |
 | `doc cross-references resolve` | this page, and every page linking to it | every `docs/**` link and anchor |
+| `the score is deterministic under a fixed fingerprint` | B1 | `config.config_fingerprint`, two-run comparison |
+| `every input bound is a source constant` | A14 | bound constants are module-level literals |
+| `every result render ends with a direction to review` | B9 | `verdict.DIRECTIONS`, structural |
+| `no git filters or hooks are configured` | A3 | clone configuration |
 | `docs/security.md matches the gates` | this page | the table above |
 
 A11 has no row of its own: freshness anchoring is enforced by
@@ -904,7 +962,8 @@ rows silently, or failed to protect the machine while doing it.
   supported input.
 - Making a finding disappear from the report without it appearing as
   suppressed.
-- Any nondeterminism in the score: the same input producing different numbers.
+- Any nondeterminism in the score: the same input, under the same
+  `config_fingerprint`, producing different numbers.
 
 **Out of scope:** rule evasion; score tuning; false positives; compromised
 upstream packages (that is the point); anything requiring a local attacker with

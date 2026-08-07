@@ -10,7 +10,7 @@
   map (Part C), and a vulnerability disclosure policy written for a static
   analyser, with supported versions, severity timelines, and an explicit list
   of what is not a vulnerability (Part D).
-- **`scripts/security_gates.py` and a CI job.** Thirty-two gates, one per
+- **`scripts/security_gates.py` and a CI job.** Thirty-six gates, one per
   invariant: no interpreter or shell execution, version arguments
   shape-checked, network confined to the four fetch modules, one declared host,
   every request timed out, bounded rule matching, bounded and never-indirect
@@ -121,6 +121,45 @@
   literally in the Rules Triggered rows, because it was passed to
   `Text.assemble`, which does not parse markup; and the declared-practice group
   left a ragged empty column for findings with no line number.
+
+### Added (security model corrections)
+
+- **B1 restated: determinism is algorithmic, not configurational.** "The same
+  input always produces the same number" was false, and invited a Part D report
+  under the nondeterminism clause: two operators with different `rules.toml` get
+  different scores by design. Reports now carry a **`config_fingerprint`**, a
+  digest over the effective ruleset, scoring weights, thresholds and active
+  overrides, so the claim is checkable. Part D's clause now reads "the same
+  input, under the same `config_fingerprint`, producing different numbers".
+- **A14, the overarching resource guarantee.** A4 bounds what arrives, A5 what
+  is matched, A6 what is expanded; together, no package-controlled input decides
+  how much CPU, memory, network or disk this process uses. Every bound is a
+  source constant rather than a function of the input, and every bound that
+  drops content records a coverage gap, tying the guarantee to B2 so a bound can
+  never be used as a quiet skip.
+- **B9 inverted from denylist to structural requirement.** A denylist over
+  phrasings is a treadmill. Every verdict now ends with a direction to review,
+  and the primary gate asserts that the direction is **present** rather than
+  that a phrasing is absent. Four of the five verdict paths were ending without
+  one (first analysis, first analysis with versions, the FATAL path, and the
+  signals path); FATAL now ends "Do not build this package. Inspect the diff and
+  report it." The denylist is retained as a secondary check and is now scoped to
+  **template text only**, via AST rather than a line regex, so a package named
+  `safe-rs` or `clean-arch` cannot trip it. That is A7's separation applied to
+  B9: templates are code-owned and checked, fields are package-owned and never
+  checked.
+- **A3 addendum: cloning executes nothing.** libgit2 runs no hooks on clone and
+  TrustSight configures no `clean`, `smudge` or `fsmonitor` filter, the
+  git-config paths where a fetch becomes an execution. Documented as a property
+  of the library rather than a control this project adds.
+- **A10 addendum: sanitisation is not transliteration.** A name built from
+  homoglyphs renders as the characters it contains, because rewriting an
+  identifier would misrepresent what is installed. Name-level confusability is a
+  detection concern, not a rendering one.
+- **Baseline import reports its delta** instead of warning on it: "N package(s)
+  moved from no-history to warm". A threshold on "novelty dropped across many
+  packages" would fire on the success case, since that is a baseline's entire
+  function. A13's real defence is the bound on what a baseline may write.
 
 ### Fixed (audit pass)
 

@@ -92,6 +92,7 @@ TEMPLATES: dict[str, str] = {
     # --- Gap closures: parse-time fetch, signing keys, build flags ---
     "R130": "{detail}",
     "R131": "{detail}: {value}",
+    "R132": "{detail}: {body}",
 
     # --- Phase 4: Class B ---
     "R115": "epoch={epoch} newly introduced",

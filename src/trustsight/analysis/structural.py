@@ -12,6 +12,7 @@ from .base import (
 from .build import (
     _build_findings,
     _build_flag_findings,
+    _indirect_expansion_findings,
     _indirect_remote_execution_findings,
     _reconstruction_findings,
     _sudo_findings,
@@ -243,6 +244,7 @@ def _structural_findings(
     _reconstruction_findings(diff_text, config or {}, add)
     _signing_key_findings(diff_text, add)
     _indirect_remote_execution_findings(diff_text, config or {}, add)
+    _indirect_expansion_findings(diff_text, config or {}, add)
     _delivery_findings(diff_text, config or {}, add)
     _persistence_findings(diff_text, config or {}, add)
     _recon_findings(diff_text, config or {}, add)

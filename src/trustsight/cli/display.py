@@ -1,9 +1,17 @@
 import logging
-import re
 import sys
 
 from ..scoring import risk_level, verdict_label, verdict_level
 from ..unicode import describe_fatal_codepoints, strip_ansi
+
+# Fact-to-text helpers live in ``verdict`` so the review engine and the API
+# can render a version line without importing anything CLI-shaped.  They are
+# re-exported here because that is where every caller already looks for them.
+from ..verdict import (  # noqa: F401
+    display_version,
+    no_aur_change_note,
+    version_transition,
+)
 
 try:
     from rich.box import SIMPLE_HEAD
@@ -20,7 +28,6 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 _console = None
-_PLAUSIBLE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+~:-]+$")
 
 def band_colour(label: str) -> str:
     """Colour for a possibly-qualified band such as "High (incomplete analysis)".
@@ -64,57 +71,7 @@ TIER_NAMES = {
 }
 
 
-def display_version(v: str | None) -> str:
-    if not v:
-        return "-"
-    if not _PLAUSIBLE_VERSION_RE.fullmatch(v):
-        return "unresolved"
-    return v
 
-
-def version_transition(fact) -> str:
-    """Render the version line for *fact* without implying a false update.
-
-    An ``old -> new`` arrow is a claim that the two are comparable and that
-    the right-hand side is newer.  For a VCS package that claim is wrong in
-    both halves: the installed value is a full version built from whatever
-    the upstream repository held at build time, and the AUR side is the
-    placeholder ``pkgver=`` line, which is routinely *behind*.  Rendering
-    that as an arrow reported a downgrade as an update.
-    """
-    from ..analysis.version import COMPARISON_INCONCLUSIVE, COMPARISON_SAME
-
-    old = display_version(fact.old_version)
-    new = display_version(fact.new_version)
-    comparison = getattr(fact, "version_comparison", "")
-    if comparison == COMPARISON_INCONCLUSIVE and fact.old_version and fact.new_version:
-        return f"{old} installed / AUR pkgver {new} (not comparable)"
-    if comparison == COMPARISON_SAME:
-        return old
-    return f"{old} -> {new}"
-
-
-def no_aur_change_note(fact) -> str | None:
-    """The plan §13.3 line, when the AUR holds nothing new for this package.
-
-    The user asked what changed; the honest answer when the commit has not
-    moved is that nothing did, plus why the installed version still looks
-    different.
-    """
-    from ..analysis.version import COMPARISON_INCONCLUSIVE
-
-    if not fact.old_commit or fact.old_commit != fact.new_commit:
-        return None
-    note = (
-        "No changes in the AUR since last review "
-        f"(commit {fact.new_commit[:8]})."
-    )
-    if getattr(fact, "version_comparison", "") == COMPARISON_INCONCLUSIVE:
-        note += (
-            "  Your installed version differs because this is a VCS package "
-            "rebuilt locally."
-        )
-    return note
 
 
 def console() -> "Console":

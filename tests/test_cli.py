@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
+from trustsight import review as engine
 from trustsight.cli import app
 from trustsight.safe_text import clean
 
@@ -346,8 +347,6 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
     concurrently and hands each analysis the commit time it just saw;
     analyze_package then finds the clone current and skips the network.
     """
-    from trustsight import cli
-
     fetched = []
 
     class FakeRepo:
@@ -366,15 +365,15 @@ def test_batch_prefetches_then_analyses_without_refetching(monkeypatch):
         seen[name] = kwargs
         return _fact(name)
 
-    monkeypatch.setattr(cli.review, "analyze_package", fake_analyze)
-    monkeypatch.setattr(cli.review, "_verdict_for", lambda fact: "ok")
+    monkeypatch.setattr(engine, "analyze_package", fake_analyze)
+    monkeypatch.setattr(engine, "verdict_for", lambda fact: "ok")
 
     pkgs = [
         {"name": "alpha", "current_version": "1.0", "latest_version": "1.1",
          "last_modified": 1699999999},
         {"name": "beta", "current_version": "2.0", "latest_version": "2.1"},
     ]
-    results = cli.review._analyze_outdated_batch(pkgs)
+    results = engine.analyze_outdated_batch(pkgs)
 
     assert [r["package"] for r in results] == ["alpha", "beta"]
     assert sorted(name for name, _ in fetched) == ["alpha", "beta"]
@@ -400,8 +399,6 @@ def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
     import threading
     import time
 
-    from trustsight import cli
-
     release = threading.Event()
     started = threading.Event()
 
@@ -414,7 +411,7 @@ def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
     monkeypatch.setattr("trustsight.fetcher.clone_or_fetch", fake_fetch)
     monkeypatch.setattr("trustsight.fetcher.last_fetch_time", lambda repo: None)
     monkeypatch.setattr(
-        cli.review, "load_config", lambda: {"limits": {"prefetch_timeout": 1}}
+        engine, "load_config", lambda: {"limits": {"prefetch_timeout": 1}}
     )
 
     pkgs = [
@@ -424,7 +421,7 @@ def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
     phases = []
     began = time.monotonic()
     try:
-        hints = cli.review._prefetch(
+        hints = engine.prefetch(
             pkgs, lambda cur, total, phase: phases.append((cur, phase))
         )
         elapsed = time.monotonic() - began
@@ -440,19 +437,17 @@ def test_prefetch_deadline_abandons_a_stalled_fetch(monkeypatch):
 
 def test_one_bad_package_does_not_end_the_run(monkeypatch):
     """A failure is contained: other packages are still analysed."""
-    from trustsight import cli
-
-    monkeypatch.setattr(cli.review, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli.review, "_verdict_for", lambda fact: "ok")
+    monkeypatch.setattr(engine, "prefetch", lambda pkgs, cb=None: {})
+    monkeypatch.setattr(engine, "verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "broken":
             raise RuntimeError("boom")
         return _fact(name)
 
-    monkeypatch.setattr(cli.review, "analyze_package", fake_analyze)
+    monkeypatch.setattr(engine, "analyze_package", fake_analyze)
 
-    results = cli.review._analyze_outdated_batch([
+    results = engine.analyze_outdated_batch([
         {"name": "broken", "current_version": "1.0"},
         {"name": "fine", "current_version": "1.0"},
     ])
@@ -469,19 +464,17 @@ def test_a_failed_package_is_reported_not_dropped(monkeypatch):
     one, so anything able to provoke a crash could keep itself out of the
     report entirely.
     """
-    from trustsight import cli
-
-    monkeypatch.setattr(cli.review, "_prefetch", lambda pkgs, cb=None: {})
-    monkeypatch.setattr(cli.review, "_verdict_for", lambda fact: "ok")
+    monkeypatch.setattr(engine, "prefetch", lambda pkgs, cb=None: {})
+    monkeypatch.setattr(engine, "verdict_for", lambda fact: "ok")
 
     def fake_analyze(name, **kwargs):
         if name == "evil":
             raise RuntimeError("crafted crash")
         return _fact(name)
 
-    monkeypatch.setattr(cli.review, "analyze_package", fake_analyze)
+    monkeypatch.setattr(engine, "analyze_package", fake_analyze)
 
-    results = cli.review._analyze_outdated_batch([
+    results = engine.analyze_outdated_batch([
         {"name": "evil", "current_version": "1.0", "latest_version": "1.1"},
         {"name": "good", "current_version": "1.0", "latest_version": "1.1"},
     ])
@@ -540,8 +533,8 @@ def test_discover_packages_first_run_returns_none(
     mock_save.assert_called_once()
 
 
-@patch("trustsight.cli.review._get_installed_packages")
-@patch("trustsight.cli.review.load_config")
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
 @patch("trustsight.full_aur.metadata.load_metadata")
 @patch("trustsight.full_aur.metadata.fetch_metadata")
 @patch("trustsight.full_aur.metadata.save_metadata")
@@ -569,8 +562,8 @@ def test_discover_packages_all_includes_snapshot_misses(
     assert total == 2
 
 
-@patch("trustsight.cli.review._get_installed_packages")
-@patch("trustsight.cli.review.load_config")
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
 @patch("trustsight.full_aur.metadata.load_metadata")
 @patch("trustsight.full_aur.metadata.fetch_metadata")
 @patch("trustsight.full_aur.metadata.save_metadata")
@@ -634,7 +627,7 @@ def test_get_installed_packages_warns_repo_not_exist(mock_exists, mock_repo):
     result = _get_installed_packages(
         repos=["nonexistent"], include_foreign=False,
         all_repos=False, all_packages=False,
-        _warn_func=lambda msg: warnings.append(msg),
+        on_warn=lambda msg: warnings.append(msg),
     )
     assert len(warnings) == 1
     assert "does not exist" in warnings[0]
@@ -654,7 +647,7 @@ def test_get_installed_packages_warns_repo_empty(mock_exists, mock_repo):
     result = _get_installed_packages(
         repos=["empty-repo"], include_foreign=False,
         all_repos=False, all_packages=False,
-        _warn_func=lambda msg: warnings.append(msg),
+        on_warn=lambda msg: warnings.append(msg),
     )
     assert len(warnings) == 1
     assert "exists but no packages" in warnings[0]
@@ -694,7 +687,7 @@ def test_get_installed_packages_repo_plus_foreign(mock_exists, mock_foreign, moc
     result = _get_installed_packages(
         repos=["myrepo"], include_foreign=True,
         all_repos=False, all_packages=False,
-        _warn_func=lambda msg: None,
+        on_warn=lambda msg: None,
     )
     assert len(result) == 2
     names = {p["name"] for p in result}
@@ -742,7 +735,7 @@ def test_get_installed_packages_deduplicates(mock_foreign, mock_repo):
     result = _get_installed_packages(
         repos=["repo-x"], include_foreign=True,
         all_repos=False, all_packages=False,
-        _warn_func=lambda msg: None,
+        on_warn=lambda msg: None,
     )
     assert len(result) == 1
     assert result[0]["name"] == "shared-pkg"

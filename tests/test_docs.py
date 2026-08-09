@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 RULES_MD = ROOT / "docs" / "reference" / "rules.md"
 CLI_MD = ROOT / "docs" / "reference" / "cli.md"
 CONFIG_MD = ROOT / "docs" / "reference" / "configuration.md"
+API_MD = ROOT / "docs" / "reference" / "python-api.md"
 CLI_SRC = ROOT / "src" / "trustsight" / "cli"
 
 SHIPPED_RULES = tomllib.loads(DEFAULT_RULES)["rules"]
@@ -87,6 +88,29 @@ def test_every_flag_is_documented():
     md = CLI_MD.read_text()
     undocumented = sorted(f for f in _cli_flags() if f not in md)
     assert undocumented == [], f"undocumented flags: {undocumented}"
+
+
+def test_every_public_api_name_is_documented():
+    """A public name nobody documented is one nobody meant to promise.
+
+    The API surface is the thing callers pin to, so it may not grow by
+    accident: adding an export without a reference entry fails here.
+    """
+    from trustsight import api
+
+    md = API_MD.read_text()
+    undocumented = sorted(n for n in api.__all__ if f"`{n}`" not in md)
+    assert undocumented == [], f"undocumented API names: {undocumented}"
+
+
+def test_the_package_root_reexports_exactly_the_api_surface():
+    """`from trustsight import X` must mean the same X as `trustsight.api.X`."""
+    import trustsight
+    from trustsight import api
+
+    assert sorted(api.__all__) == sorted(trustsight._API_NAMES)
+    for name in api.__all__:
+        assert getattr(trustsight, name) is getattr(api, name)
 
 
 def test_every_config_section_is_documented():

@@ -131,6 +131,33 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 ---
 
+## Use it from Python
+
+Every flow above is available as a library through [`trustsight.api`](docs/reference/python-api.md), which returns dataclasses instead of printing. Nothing else under `trustsight.` is public.
+
+```python
+from trustsight import TrustSight
+
+ts = TrustSight()
+
+report = ts.inspect("some-package")
+print(report.risk_label, report.verdict)
+
+result = ts.review(limit=25)
+for r in result.flagged:
+    print(r.package, r.risk, r.verdict)
+for failure in result.failures:
+    print("NOT VETTED:", failure.package, failure.error)
+
+for cycle in ts.watch(interval=1800):     # full-aur --watch, as a generator
+    for package, rule_id in cycle.new_alerts:
+        print(rule_id, package)
+```
+
+Two rules carry over from the CLI. Use `report.risk`, never a band re-derived from `report.score`: an analysis that could not read the whole change reports `Inconclusive` regardless of the number. And check `result.failures`, because a package that could not be analysed is a result, not an absence.
+
+---
+
 ## How scoring works
 
 Scoring is fully deterministic: same input always produces the same score. The pipeline is:

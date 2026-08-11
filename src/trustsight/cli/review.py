@@ -1,7 +1,6 @@
 import json
 import logging
 import sys
-import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
 
 import typer
@@ -15,8 +14,7 @@ from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
-from ..fetcher import clone_or_fetch, last_fetch_time
-from ..scoring import risk_level, verdict_label, verdict_level
+from ..scoring import verdict_label, verdict_level
 from .display import (
     HAS_RICH,
     RISK_COLORS,
@@ -24,7 +22,6 @@ from .display import (
     console,
     display_version,
     no_aur_change_note,
-    _score_text,
 )
 
 log = logging.getLogger(__name__)
@@ -144,6 +141,9 @@ def _prefetch_deadline() -> int:
 
 
 def _prefetch(pkgs: list[dict], progress_callback=None) -> dict[str, int]:
+    # Imported inside the function so a test that patches
+    # ``trustsight.fetcher.clone_or_fetch`` is picked up at call time; a
+    # module-level ``from ..fetcher import`` binds a copy the patch cannot reach.
     from ..fetcher import clone_or_fetch, last_fetch_time
 
     def fetch(entry: dict) -> tuple[str, int | None]:
@@ -331,7 +331,13 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
             "findings": findings,
             "file_changes": file_changes,
             "is_trivial": is_trivial,
+            "ioc_matches": fact.ioc_matches,
         }
+        # B5: a suppression travels with the result unconditionally.  It used
+        # to ride along only under --verbose, so the default JSON dropped it
+        # silently, and a silent suppression is indistinguishable from a
+        # missed detection - the one thing B5 exists to prevent.
+        res["suppressed_rules"] = fact.suppressed_rules
         if verbose:
             fired = [
                 {"rule_id": e.rule_id, "severity": e.severity}
@@ -339,7 +345,6 @@ def _analyze_outdated_batch(pkgs: list[dict], progress_callback=None, verbose: b
                 if e.weight > 0 or e.severity == "FATAL"
             ]
             res["triggered_rules"] = fired
-            res["suppressed_rules"] = fact.suppressed_rules
             res["_verbose_fact"] = fact
         results.append(res)
     results.extend(failures)
@@ -411,6 +416,25 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 "changes": r.get("changes", []),
                 "coverage_gaps": r.get("coverage_gaps", []),
                 "config_fingerprint": fingerprint,
+                # B5: unconditional.  Hiding a suppression behind --verbose
+                # makes a switched-off rule look the same as one that never
+                # matched, to exactly the consumer least able to tell.
+                "suppressed_rules": r.get("suppressed_rules", []),
+                "ioc_matches": [
+                    {
+                        "type": m.type,
+                        "value": m.value,
+                        "source": m.source,
+                        "confidence": m.confidence,
+                        "provenance": m.provenance,
+                        "campaign": m.campaign,
+                        "added": m.added,
+                        "surface": m.surface,
+                        "line": m.line,
+                        "expired": m.expired,
+                    }
+                    for m in r.get("ioc_matches", [])
+                ],
             }
             if show_score or show_risk:
                 jr["score"] = r.get("score")
@@ -418,7 +442,6 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 jr["risk_label"] = r.get("risk_label")
             if verbose:
                 jr["triggered_rules"] = r.get("triggered_rules", [])
-                jr["suppressed_rules"] = r.get("suppressed_rules", [])
             json_results.append(jr)
         typer.echo(json.dumps(json_results, indent=2))
         return
@@ -479,6 +502,13 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
 
             for entry in r.get("changes", []):
                 typer.echo(f"  ~ {clean(entry)}")
+            for m in r.get("ioc_matches", []):
+                expired = " [EXPIRED]" if m.expired else ""
+                line = f" line {m.line}" if m.line is not None else ""
+                typer.echo(
+                    f"  [IOC] [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
+                    f"{line} ({clean(m.surface)}){expired}"
+                )
             for gap in r.get("coverage_gaps", []):
                 typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
 
@@ -559,6 +589,17 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             for entry in changes[1:]:
                 table.add_row("", Text(clean(entry)))
 
+        ioc_matches = r.get("ioc_matches", [])
+        if ioc_matches:
+            table.add_row("IOC matches", "")
+            for m in ioc_matches:
+                expired = " [EXPIRED]" if m.expired else ""
+                line = f" line {m.line}" if m.line is not None else ""
+                table.add_row("", Text(
+                    f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
+                    f"{line} ({clean(m.surface)}){expired}"
+                ))
+
         for gap in r.get("coverage_gaps", []):
             table.add_row("Not vetted", GAP_REASONS.get(gap, gap))
 
@@ -630,7 +671,9 @@ def register_commands(app: typer.Typer):
             init_db()
             seed_imported = False
             if config.get("seed", {}).get("auto_import", True):
-                seed_stats = maybe_auto_import_seed(quiet=json_output or quiet)
+                seed_stats = maybe_auto_import_seed(
+                    quiet=json_output or quiet, allow_release_fetch=True
+                )
                 if seed_stats is not None:
                     seed_imported = True
 

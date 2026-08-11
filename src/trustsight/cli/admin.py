@@ -29,7 +29,6 @@ from ..db import (
 )
 from ..lint import SEVERITY_ERROR, lint_rules
 from ..override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides, remove_override
-from ..scoring import risk_level
 from ..unicode import strip_ansi
 from .display import (
     HAS_RICH,
@@ -292,6 +291,8 @@ def override_wizard(
         return
 
     if available:
+        from rich.table import Table
+
         con.print(f"\n[bold]Triggered rules for [cyan]{package}[/][/]\n")
         table = Table(box=SIMPLE_HEAD)
         table.add_column("#", style="dim", justify="right")
@@ -487,7 +488,8 @@ def db_backup(
 
 @baseline_app.command("build")
 def baseline_build(
-    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
+    bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
     export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact"),
     sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
@@ -496,7 +498,7 @@ def baseline_build(
     from ..full_aur.pipeline import run_baseline_build
     ensure_default_configs()
     init_db()
-    run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output)
+    run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output, bootstrap=bootstrap)
 
 
 @baseline_app.command("import")
@@ -537,8 +539,9 @@ def register_commands(app: typer.Typer):
             bundled = Path(__file__).parent.parent / "data" / "seed.db.gz"
             if not bundled.exists():
                 msg = (
-                    "No bundled seed found. Build one with:\n"
-                    "  python scripts/generate_seed.py --out src/trustsight/data/seed.db\n"
+                    "No bundled seed ships in this build. The seed lives on "
+                    "the release channel; fetch the verified baseline with:\n"
+                    "  trustsight seed fetch\n"
                     "or pass an existing seed with --file."
                 )
                 if json_output:
@@ -751,7 +754,8 @@ def register_commands(app: typer.Typer):
 
     @app.command("full-aur")
     def full_aur_cmd(
-        resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+        resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
+        bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
         export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
         sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
         watch: bool = typer.Option(False, "--watch", help="Keep running cycles on an interval until interrupted"),
@@ -761,9 +765,11 @@ def register_commands(app: typer.Typer):
     ):
         """Bootstrap or update the full-AUR baseline corpus.
 
-        With --watch the same cycle repeats on an interval: refresh the
-        metadata snapshot, analyse what changed, run the corpus sweep, and
-        report each cluster once rather than on every cycle.
+        Without a prior snapshot a full bootstrap fetches every PKGBUILD in
+        the AUR, so it must be asked for with --bootstrap. Every cycle is
+        capped (limits.corpus_max_per_cycle) and resumes automatically, so a
+        large amount of work advances in gentle chunks. With --watch the
+        cycle repeats on an interval.
         """
         from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
@@ -778,7 +784,7 @@ def register_commands(app: typer.Typer):
                 raise typer.Exit(2)
             run_watch(interval=interval, cycles=cycles, json_output=json_output)
             return
-        run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output)
+        run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output, bootstrap=bootstrap)
 
     @app.command("import-baseline")
     def import_baseline_cmd(

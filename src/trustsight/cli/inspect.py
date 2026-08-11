@@ -5,7 +5,6 @@ import typer
 from ..analysis import analyze_package
 from ..config import ensure_default_configs, load_config
 from ..db import (
-    get_package as _get_pkg,
     init_db,
     maybe_auto_import_seed,
 )
@@ -142,6 +141,15 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
                         for offset, name in found:
                             inside.add_row("", f"  offset {offset}: [red]{name}[/]")
 
+    if fact.ioc_matches:
+        inside.add_row("", "")
+        inside.add_row("[underline]IOC baseline matches[/]", "")
+        for m in fact.ioc_matches:
+            expired = " [EXPIRED]" if m.expired else ""
+            line = f" line {m.line}" if m.line is not None else ""
+            text = f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}"
+            inside.add_row("", Text(text))
+
     if fact.suppressed_rules:
         inside.add_row("", "")
         inside.add_row("[yellow]Suppressed by override[/]", "")
@@ -211,6 +219,12 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
                 segs.append(f"{clean(e.severity):<8}")
             segs.append(clean(e.reason))
             print(" ".join(segs))
+    if fact.ioc_matches:
+        print("  IOC baseline matches:")
+        for m in fact.ioc_matches:
+            expired = " [EXPIRED]" if m.expired else ""
+            line = f" line {m.line}" if m.line is not None else ""
+            print(f"    [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}")
     if fact.suppressed_rules:
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
@@ -236,7 +250,7 @@ def register_commands(app: typer.Typer):
         ensure_default_configs()
         init_db()
         if load_config().get("seed", {}).get("auto_import", True):
-            maybe_auto_import_seed(quiet=json_output)
+            maybe_auto_import_seed(quiet=json_output, allow_release_fetch=True)
 
         from ..discovery import get_aur_package_info
         info = get_aur_package_info([package])

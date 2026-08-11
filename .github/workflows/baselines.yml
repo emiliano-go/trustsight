@@ -1,0 +1,104 @@
+name: Release Baselines
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ioc_source:
+        description: Curator name recorded in the IOC baseline manifests
+        default: emiliano-go
+
+permissions:
+  contents: write
+
+# Builds and uploads the ``baseline-*`` release assets for a published
+# release: the hashed novelty seed, the curated IOC baseline pairs, and the
+# summary manifest.  Every asset ships with a detached ``.sig`` under the
+# distribution key held in the BASELINE_SIGNING_KEY Actions secret; the
+# tool refuses a download whose signature does not verify against the
+# pinned key shipped in the package (see docs/reference/baseline-keys.md).
+#
+# The corpus baseline (baseline-corpus-<tag>.tar.zst) is exported by the
+# maintainer from an incrementally grown full-aur database and uploaded
+# separately; see docs/contributing/publishing-baselines.md.
+
+jobs:
+  baselines:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # The seed step below reads the AUR git mirror, which build_corpus
+      # reconstructs from the lockfile.  Keyed on the lock, as in the
+      # corpus-drift job, so a corpus change forces a cold rebuild.
+      - name: Cache AUR objects
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trustsight/aur.git
+          key: aur-objects-${{ hashFiles('tests/fixtures/corpus.lock') }}
+          restore-keys: aur-objects-
+
+      - name: Reconstruct corpus from lock
+        run: |
+          python scripts/build_corpus.py --from-manifest \
+            --manifest tests/fixtures/corpus.lock \
+            --out /tmp/benign-corpus
+
+      - name: Build the hashed seed
+        shell: bash
+        run: |
+          python scripts/generate_seed.py --out /tmp/seed.db
+          python - <<'EOF'
+          import json
+          import sqlite3
+          conn = sqlite3.connect("/tmp/seed.db")
+          rows = conn.execute("SELECT name, count FROM maintainer_counts").fetchall()
+          conn.close()
+          with open("/tmp/maintainers.jsonl", "w", encoding="utf-8") as fh:
+              for name, count in rows:
+                  if not name:
+                      continue
+                  fh.write(json.dumps({"name": name, "package_count": count or 0}) + "\n")
+          EOF
+          python scripts/build_hashed_seed.py /tmp/maintainers.jsonl --out /tmp/seed-v2
+
+      - name: Write the distribution signing key
+        env:
+          BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
+        run: |
+          if [ -z "$BASELINE_SIGNING_KEY" ]; then
+            echo "no BASELINE_SIGNING_KEY secret configured; cannot sign assets" >&2
+            exit 1
+          fi
+          printf '%s' "$BASELINE_SIGNING_KEY" > /tmp/sign-key.pem
+
+      - name: Build and sign the baseline-* assets
+        shell: bash
+        run: |
+          IOC_ARGS=()
+          for f in data/iocs/*.json; do
+            base="$(basename "$f")"
+            [ "$base" = "example.json" ] && continue
+            incident="${base%.json}"
+            IOC_ARGS+=(--ioc "$f" --ioc-source "${{ inputs.ioc_source || 'emiliano-go' }}" --ioc-incident "$incident")
+          done
+          python scripts/build_release_baselines.py \
+            --out /tmp/baselines \
+            --sign-key /tmp/sign-key.pem \
+            --seed-v2-dir /tmp/seed-v2 \
+            "${IOC_ARGS[@]}"
+
+      - name: Upload baseline-* assets to the release
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            echo "No release event tag; run this workflow from a published release or upload manually." >&2
+            exit 1
+          fi
+          gh release upload "$TAG" /tmp/baselines/baseline-* --clobber

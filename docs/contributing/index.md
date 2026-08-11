@@ -13,6 +13,8 @@ below applies to work on the tool itself.
   fixture guidelines, fire-rate gate
 - [Re-baselining](re-baselining.md): when and how to re-baseline after config or
   rule changes
+- [Publishing Baselines](publishing-baselines.md): the maintainer workflow for
+  building, signing, verifying, and publishing the corpus and IOC baselines
 - [Reviewing a Security Control](security-review.md): how to scope a gate so it
   covers the entry point an attacker reaches, and the failure mode that keeps
   recurring
@@ -20,7 +22,8 @@ below applies to work on the tool itself.
 ## The boundary
 
 TrustSight does three things, and only three: it **reads** the repository and
-the single AUR endpoint, it **computes** evidence locally and deterministically
+the AUR endpoint (plus the signed release assets an operator explicitly asks
+for), it **computes** evidence locally and deterministically
 without ever executing a PKGBUILD, and it **reports** findings and gaps. A
 change that adds a fourth job to the analysis stage (running code, fetching a
 declared URL, writing outside the data directories) violates the boundary and

@@ -160,4 +160,5 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |
 | [Fire Rates](fire-rates.md) | Per-rule false-positive rates on the benign corpus and the 30 % gate |
 | [What TrustSight Cannot See](what-trustsight-cannot-see.md) | The reasoned ceiling of the tool |
+| [Seed Provenance](seed-provenance.md) | How the novelty seed is built, signed on the release channel, and audited |
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |

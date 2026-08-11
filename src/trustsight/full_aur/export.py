@@ -27,7 +27,6 @@ from ..db import (
     save_pkgbuild_snapshot,
     save_package_profile,
 )
-from ..db import get_db_path
 
 log = logging.getLogger(__name__)
 
@@ -231,7 +230,6 @@ def build_artifact(
 ) -> None:
     """Assemble and optionally sign the baseline artifact."""
     log.info("Building baseline artifact ...")
-    db_path = get_db_path()
 
     with get_connection() as conn:
         profiles = [

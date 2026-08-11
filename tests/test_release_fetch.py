@@ -240,6 +240,32 @@ def test_auto_import_is_silent_when_the_channel_fails(tmp_path, monkeypatch):
     assert seed_observation_count() == 0
 
 
+def test_release_seed_failure_logs_reason(tmp_path, monkeypatch, caplog):
+    """The unavailable-seed path must log its reason, not raise a stray
+    NameError from an undefined logger (ruff F821, previously masked by
+    the broad except in maybe_auto_import_seed)."""
+    import logging
+
+    import trustsight.db as dbmod
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+
+    def boom(asset_name, **kwargs):
+        raise release.ReleaseFetchError("offline")
+
+    monkeypatch.setattr(release, "download_asset", boom)
+    monkeypatch.setattr(
+        dbmod, "bundled_seed_path", lambda: tmp_path / "absent-seed.db.gz"
+    )
+
+    with caplog.at_level(logging.INFO, logger="trustsight.db"):
+        assert dbmod.maybe_auto_import_seed(
+            quiet=True, allow_release_fetch=True
+        ) is None
+    assert "release seed unavailable" in caplog.text
+
+
 # ---------------------------------------------------------------------------
 # ioc update through the channel
 # ---------------------------------------------------------------------------

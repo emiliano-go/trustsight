@@ -2,6 +2,7 @@ import atexit
 from datetime import datetime, timezone
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -15,6 +16,8 @@ from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from .config import DATA_DIR
+
+log = logging.getLogger(__name__)
 
 # Ceiling on a decompressed seed database.  The bundled seed is ~20 MB
 # compressed and a few hundred MB expanded; ``trustsight seed-db`` takes a

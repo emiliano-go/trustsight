@@ -745,7 +745,7 @@ added_only = true
 [[rules]]
 id = "R054"
 name = "Persistence Unit Outside Package Root"
-# The path anchor used to be [\s"'] alone, which only reaches the
+# The path anchor used to be [\\s"'] alone, which only reaches the
 # idiomatic "${pkgdir}"/usr/lib/systemd/system/ form.  The merged-quote
 # "${pkgdir}/usr/lib/systemd/system/" and unquoted $pkgdir/usr/lib/...
 # forms stage the identical root-level unit (pacman installs what the

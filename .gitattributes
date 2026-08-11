@@ -1,0 +1,5 @@
+# Release tarballs are for AUR reviewers, not for the packaging itself.
+# The PKGBUILD lives on the branch (git clone builders, AUR publication);
+# a checksum inside a tarball can never match the tarball it is inside,
+# so shipping it in the archive only ever produces stale-looking hashes.
+packaging/ export-ignore

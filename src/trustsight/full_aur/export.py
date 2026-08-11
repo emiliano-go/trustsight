@@ -273,11 +273,17 @@ def build_artifact(
     if private_key_path:
         path = Path(private_key_path)
         if not path.exists():
-            log.warning("private key not found at %s; building unsigned", private_key_path)
-        else:
-            sig = sign_artifact(canonical, path)
-            artifact["signature"] = sig.hex()
-            log.info("artifact signed with %s", private_key_path)
+            # A requested signature is part of the contract: the artifact
+            # cannot be produced as asked, so failing loudly beats shipping
+            # an artifact the operator believes is signed.
+            raise FileNotFoundError(
+                f"signing key not found at {private_key_path}; refusing to "
+                "build an artifact the caller asked to sign. Run the export "
+                "without --sign for an unsigned local artifact."
+            )
+        sig = sign_artifact(canonical, path)
+        artifact["signature"] = sig.hex()
+        log.info("artifact signed with %s", private_key_path)
 
     # Include metadata outside the signed payload (it is hashed, not embedded)
     artifact["metadata_snapshot"] = metadata_list
@@ -308,6 +314,8 @@ def import_baseline(
     path_obj = Path(path)
     if not path_obj.exists():
         raise FileNotFoundError(f"Baseline artifact not found: {path}")
+    if not path_obj.is_file():
+        raise ValueError(f"Baseline artifact is not a regular file: {path}")
 
     data, sig = _read_artifact(path_obj)
 

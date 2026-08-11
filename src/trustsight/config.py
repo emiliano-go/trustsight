@@ -1199,8 +1199,35 @@ DEFAULT_IOCS = (
 )
 
 
+INT_WEIGHT_GROUPS = ("severity_weights", "source_bucket_weights", "novelty_weights")
+KNOWN_BOOL_KEYS = ("seed.auto_import", "rules.experimental")
+
+
 def set_config(key: str, value: str):
     """Set a config key to a new value in config.toml"""
+    if key in KNOWN_BOOL_KEYS:
+        if value.strip().lower() in ("true", "1", "yes", "on"):
+            value = "true"
+        elif value.strip().lower() in ("false", "0", "no", "off"):
+            value = "false"
+        else:
+            raise ValueError(
+                f"{key} expects true or false, got {value!r}"
+            )
+    else:
+        section = key.split(".", 1)[0] if "." in key else ""
+        if section not in INT_WEIGHT_GROUPS:
+            raise ValueError(
+                f"unknown config key {key!r}; set seed.auto_import, "
+                "rules.experimental, or a weight in "
+                + ", ".join(INT_WEIGHT_GROUPS)
+            )
+        try:
+            value = str(int(value))
+        except ValueError:
+            raise ValueError(
+                f"weight {key} expects an integer, got {value!r}"
+            ) from None
     path = CONFIG_DIR / "config.toml"
     if not path.exists():
         ensure_default_configs()

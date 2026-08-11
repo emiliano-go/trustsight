@@ -65,6 +65,12 @@ def load_overrides() -> list[RuleOverride]:
         if not isinstance(entry, dict) or not entry.get("rule_id"):
             continue
         known = {k: v for k, v in entry.items() if k in _OVERRIDE_FIELDS}
+        # Null reason/created_at from a hand edit must not crash the
+        # rendering path (strip_ansi(None) raises); coerce to "" instead.
+        if known.get("reason") is None:
+            known["reason"] = ""
+        if known.get("created_at") is None:
+            known["created_at"] = ""
         try:
             loaded.append(RuleOverride(**known))
         except TypeError:
@@ -101,8 +107,15 @@ def add_override(
         package=package,
         created_at=_now(),
     )
-    overrides.append(override)
-    save_overrides(overrides)
+    # An identical override already present is replaced, not duplicated:
+    # adding twice is idempotent and a stale reason cannot linger.
+    kept = [
+        o
+        for o in overrides
+        if not (o.rule_id == override.rule_id and o.package == override.package)
+    ]
+    kept.append(override)
+    save_overrides(kept)
     return override
 
 

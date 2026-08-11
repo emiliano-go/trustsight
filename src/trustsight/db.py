@@ -11,7 +11,7 @@ import tempfile
 import threading
 import warnings
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Optional
 
 from .config import DATA_DIR
@@ -1005,6 +1005,14 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
                 f"seed archive exceeds {MAX_SEED_BYTES} bytes; refusing to expand"
             )
         for member in members:
+            # Path containment: a member name must be a relative path inside
+            # the destination.  Absolute names or ``..`` segments would let a
+            # crafted archive write anywhere the user can write.
+            member_parts = PurePosixPath(member.name).parts
+            if PurePosixPath(member.name).is_absolute() or ".." in member_parts:
+                raise ValueError(
+                    f"seed archive member escapes the extraction directory: {member.name}"
+                )
             target = dest / member.name
             if member.isdir():
                 target.mkdir(parents=True, exist_ok=True)

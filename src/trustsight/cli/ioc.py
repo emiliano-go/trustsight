@@ -84,7 +84,7 @@ def ioc_sources(
         table.add_column("Kind", style="dim")
         table.add_column("Name")
         table.add_column("Status")
-        for source in configured or ["(all imported sources)"]:
+        for source in configured:
             table.add_row("configured", source, "enabled" if enabled else "disabled")
         for source in imported:
             table.add_row("imported", source, "")
@@ -95,11 +95,18 @@ def ioc_sources(
                 "enabled" if feed.get("enabled", False) else "disabled",
             )
         console().print(table)
+        if not configured and not imported:
+            console().print(
+                "[dim]No sources configured; imported baselines are all "
+                "shown unless a configured source restricts them.[/]"
+            )
     else:
         print(f"IOC baseline stage: {'enabled' if enabled else 'disabled'}")
         print("Configured sources:")
-        for source in configured or ["(all imported sources)"]:
+        for source in configured:
             print(f"  - {source}")
+        if not configured and not imported:
+            print("  (none; imported baselines are all shown)")
         print("Imported sources:")
         for source in imported:
             print(f"  - {source}")
@@ -213,6 +220,14 @@ def ioc_update(
 
     paths = path or []
     if not paths:
+        from .. import release as _release
+        if _release.offline():
+            msg = "ioc update fetches from the release channel; TRUSTSIGHT_OFFLINE is set."
+            if json_output:
+                typer.echo(json.dumps({"status": "skipped", "reason": msg}))
+            else:
+                _print_colored(f"skipped: {msg}", "yellow")
+            raise typer.Exit(code=0)
         feeds = _config_feeds()
         if not feeds:
             msg = "No --path given and no feeds configured. Use 'ioc import <dir>' instead."
@@ -288,6 +303,16 @@ def ioc_list(
     """List active IOC baseline entries."""
     ensure_default_configs()
     init_db()
+
+    from ..iocs import IOC_TYPES
+    if type and type.lower() not in IOC_TYPES:
+        msg = (f"unknown indicator type {type!r}; expected one of "
+               f"{', '.join(sorted(IOC_TYPES))}")
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
 
     entries = active_iocs(source=source, expired=include_expired)
     if type:
@@ -389,6 +414,13 @@ def ioc_export(
         return
 
     out = Path(output)
+    if out.exists() and not out.is_dir():
+        msg = f"output path exists and is not a directory: {output}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
     out.mkdir(parents=True, exist_ok=True)
     manifest = {
         "version": 1,

@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import typer
@@ -59,6 +60,10 @@ def main() -> None:
     contract in docs/reference/exit-codes.md: 0 means the command ran, 2 means
     it could not run or complete. Deliberate exits (typer.Exit) pass through.
     """
+    # The corpus pipeline reports progress through logging; without a
+    # handler those messages (including its refusal to bootstrap) would be
+    # invisible.  Messages go to stderr so stdout stays machine-readable.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
         app()
     except typer.Exit:

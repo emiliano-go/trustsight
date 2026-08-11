@@ -214,6 +214,9 @@ class CycleResult:
     flagged: list[tuple[str, int]] = field(default_factory=list)
     elapsed: float = 0.0
     bootstrap: bool = False
+    # True when the cycle deliberately did no work and the caller should
+    # report a failure (from-scratch bootstrap refused, empty fetch).
+    refused: bool = False
 
 
 def _logger(json_output: bool):
@@ -343,9 +346,18 @@ def run_baseline_build(
     _log = _logger(json_output)
 
     _log("Fetching AUR metadata snapshot …")
-    new_meta = fetch_metadata()
+    try:
+        new_meta = fetch_metadata()
+    except Exception as exc:
+        raise RuntimeError(f"failed to fetch the AUR metadata snapshot: {exc}") from exc
     meta_count = len(new_meta)
     _log(f"Fetched {meta_count} package entries")
+    if not new_meta:
+        # An empty reply would clobber the stored snapshot on the
+        # "Nothing to process" path below; keep the last good one.
+        _log("The AUR metadata fetch returned nothing; keeping the previous snapshot")
+        result.refused = True
+        return result
 
     old_meta = load_metadata(_meta_snapshot_path())
 
@@ -366,6 +378,7 @@ def run_baseline_build(
                 "and resumes automatically), or run 'trustsight review' first "
                 "so an incremental snapshot already exists to diff against."
             )
+            result.refused = True
             return result
         added = sorted(new_meta)
         changed: list[str] = []
@@ -567,9 +580,20 @@ def watch_interval_seconds(requested: Optional[int] = None) -> int:
     request loop against someone else's mirror.
     """
     limits = load_config().get("limits", {})
-    default = int(limits.get("watch_interval", 3600))
-    floor = int(limits.get("watch_min_interval", 60))
-    return max(floor, int(requested) if requested else default)
+    try:
+        default = int(limits.get("watch_interval", 3600))
+    except (TypeError, ValueError):
+        default = 3600
+    try:
+        floor = int(limits.get("watch_min_interval", 60))
+    except (TypeError, ValueError):
+        floor = 60
+    if requested is not None:
+        try:
+            requested = int(requested)
+        except (TypeError, ValueError):
+            requested = None
+    return max(floor, int(requested) if requested is not None else default)
 
 
 def run_watch(
@@ -598,9 +622,23 @@ def run_watch(
         f"Watching the AUR: one cycle every {delay}s"
         + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
     )
+    attempts = 0
     try:
         while True:
-            result = run_baseline_build(json_output=json_output)
+            # A transient failure (network blip, rate limit) must not kill an
+            # unattended watcher: report, wait, and retry.  The cycle cap
+            # still bounds the total, so a persistently broken cycle cannot
+            # spin forever either.
+            try:
+                result = run_baseline_build(json_output=json_output)
+            except Exception as exc:
+                attempts += 1
+                _log(f"Cycle failed ({exc}); retrying in {delay}s")
+                if cycles and attempts >= cycles:
+                    break
+                sleep(delay)
+                continue
+            attempts = 0
             results.append(result)
             if result.new_alerts:
                 _log(f"{len(result.new_alerts)} new alert(s) this cycle")

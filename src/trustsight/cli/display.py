@@ -224,8 +224,10 @@ def _fmt_bytes(n: int) -> str:
 
 def _print_colored(msg: str, color: str = "", stderr: bool = False):
     if HAS_RICH:
+        from rich.markup import escape
+
         style = f"[{color}]" if color else ""
-        console().print(f"{style}{msg}[/]")
+        console().print(f"{style}{escape(msg)}[/]")
     else:
         kwargs = {"file": sys.stderr} if stderr else {}
         print(msg, **kwargs)

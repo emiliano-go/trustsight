@@ -51,13 +51,16 @@ def pivot_cmd(
 
     result = pivot(indicator, type=type_)
 
+    if result.get("error"):
+        if json_output:
+            typer.echo(json.dumps({"error": result["error"]}))
+        else:
+            _print_colored(result["error"], "red")
+        raise typer.Exit(code=2)
+
     if json_output:
         typer.echo(json.dumps(result, indent=2))
         return
-
-    if result.get("error"):
-        _print_colored(result["error"], "red")
-        raise typer.Exit(code=2)
 
     _render_pivot(result)
 

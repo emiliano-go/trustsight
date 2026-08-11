@@ -181,10 +181,16 @@ def _load_manifest(path: Path) -> BaselineManifest:
         data = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as exc:
         raise MalformedBaselineError(f"manifest.json is not valid JSON: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise MalformedBaselineError("manifest.json is not valid UTF-8") from exc
     if not isinstance(data, dict):
         raise MalformedBaselineError("manifest.json must be a JSON object")
+    try:
+        version = int(data.get("version", 1))
+    except (TypeError, ValueError) as exc:
+        raise MalformedBaselineError("manifest.json version must be an integer") from exc
     return BaselineManifest(
-        version=int(data.get("version", 1)),
+        version=version,
         source=str(data.get("source", "")),
         created_at=str(data.get("created_at", "")),
         expires_at=str(data.get("expires_at", "")),
@@ -200,8 +206,13 @@ def _load_manifest(path: Path) -> BaselineManifest:
 def _load_iocs(path: Path) -> list[IocEntry]:
     """Parse ``iocs.jsonl`` into :class:`IocEntry` rows."""
     raw = _load_text(path)
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise MalformedBaselineError("iocs.jsonl is not valid UTF-8") from exc
     entries: list[IocEntry] = []
-    for lineno, line in enumerate(raw.decode("utf-8").splitlines(), start=1):
+    seen: set[tuple[str, str, str]] = set()
+    for lineno, line in enumerate(text.splitlines(), start=1):
         line = line.strip()
         if not line:
             continue
@@ -228,6 +239,14 @@ def _load_iocs(path: Path) -> list[IocEntry]:
         if not source:
             log.warning("iocs.jsonl line %d: missing source; skipping", lineno)
             continue
+        key = (type_, value, source)
+        if key in seen:
+            log.warning(
+                "iocs.jsonl line %d: duplicate %s %r for %s; skipping",
+                lineno, type_, value, source,
+            )
+            continue
+        seen.add(key)
         entries.append(
             IocEntry(
                 type=type_,
@@ -343,32 +362,52 @@ def import_baseline(
         source = base.name or "unknown"
 
     now = _now_iso()
+    skipped = 0
     with get_connection() as conn:
-        conn.execute("DELETE FROM ioc_entries WHERE source = ?", (source,))
-        for entry in entries:
+        # Refresh the current view of the source: manifest rows replace the
+        # non-expired entries, while expired rows from previous imports are
+        # kept so historical reports stay attributable (see the module
+        # docstring and db.py's schema comment).
+        rows = conn.execute(
+            "SELECT id, expires_at FROM ioc_entries WHERE source = ?", (source,)
+        ).fetchall()
+        keep_ids = [r["id"] for r in rows if _is_expired(r["expires_at"])]
+        if keep_ids:
+            placeholders = ",".join("?" * len(keep_ids))
             conn.execute(
-                """INSERT INTO ioc_entries
-                   (type, value, source, confidence, provenance, campaign,
-                    added, expires_at, imported_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    entry.type,
-                    entry.value,
-                    source,
-                    entry.confidence,
-                    entry.provenance,
-                    entry.campaign,
-                    entry.added,
-                    entry.expires_at,
-                    now,
-                ),
+                f"DELETE FROM ioc_entries WHERE source = ? AND id NOT IN ({placeholders})",
+                (source, *keep_ids),
             )
+        else:
+            conn.execute("DELETE FROM ioc_entries WHERE source = ?", (source,))
+        for entry in entries:
+            try:
+                conn.execute(
+                    """INSERT INTO ioc_entries
+                       (type, value, source, confidence, provenance, campaign,
+                        added, expires_at, imported_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        entry.type,
+                        entry.value,
+                        source,
+                        entry.confidence,
+                        entry.provenance,
+                        entry.campaign,
+                        entry.added,
+                        entry.expires_at,
+                        now,
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                # A kept expired row already covers this indicator.
+                skipped += 1
         conn.commit()
 
     return {
         "source": source,
-        "entries_imported": len(entries),
-        "entries_skipped": 0,
+        "entries_imported": len(entries) - skipped,
+        "entries_skipped": skipped,
         "verified": verified,
     }
 
@@ -390,7 +429,13 @@ def _is_expired(expires_at: str | None) -> bool:
     if not expires_at:
         return False
     try:
-        return datetime.fromisoformat(expires_at) < datetime.now(timezone.utc)
+        dt = datetime.fromisoformat(expires_at)
+        if dt.tzinfo is None:
+            # Naive timestamps are treated as UTC so a hand-written baseline
+            # actually expires instead of being compared against an aware
+            # clock (which would raise TypeError and never expire).
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt < datetime.now(timezone.utc)
     except (ValueError, TypeError):
         return False
 

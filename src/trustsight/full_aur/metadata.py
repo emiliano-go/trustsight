@@ -85,7 +85,12 @@ def fetch_metadata(on_progress=None) -> dict:
     and the expected content length.
     """
     log.info("fetching AUR metadata from %s", _METADATA_URL)
-    resp = urlopen(_METADATA_URL, timeout=HTTP_TIMEOUT)
+    try:
+        resp = urlopen(_METADATA_URL, timeout=HTTP_TIMEOUT)
+    except Exception as exc:
+        raise RuntimeError(
+            f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
+        ) from exc
     total = int(resp.headers.get("Content-Length", 0))
     buf = bytearray()
     while True:

@@ -141,6 +141,34 @@ def test_import_v2_from_tar_gz(db, tmp_path):
     assert stats["maintainers"] == 2
 
 
+@pytest.mark.parametrize(
+    "member_name",
+    [
+        "trustsight-seed-v2/../../escaped.txt",
+        "../trustsight-seed-v2/../escaped.txt",
+        "/tmp/trustsight-seed-v2/escaped.txt",
+        "trustsight-seed-v2/../../escaped.txt",
+    ],
+)
+def test_import_v2_rejects_escaping_archive_members(db, tmp_path, member_name):
+    """A crafted archive whose members escape the extraction directory must
+    be refused entirely, not extracted anywhere outside it."""
+    archive = tmp_path / "evil.tar.gz"
+    payload = tmp_path / "evil-payload.txt"
+    payload.write_text("pwned")
+    with tarfile.open(archive, "w:gz") as tf:
+        info = tf.gettarinfo(str(payload), arcname=member_name)
+        info.name = member_name  # tarfile strips absolute prefixes; re-set it
+        with open(payload, "rb") as fh:
+            tf.addfile(info, fh)
+
+    with pytest.raises(ValueError, match="escapes the extraction directory"):
+        import_seed(archive)
+
+    assert not (tmp_path / "escaped.txt").exists()
+    assert not Path("/etc/escaped.txt").exists()
+
+
 def test_lookup_maintainer_finds_hashed_identity(db, tmp_path):
     seed_dir = _build_v2_seed(tmp_path)
     import_seed(seed_dir)

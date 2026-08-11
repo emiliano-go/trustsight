@@ -265,7 +265,15 @@ def register_commands(app: typer.Typer):
                     _print_colored(msg, "red")
                 raise typer.Exit(code=2)
 
-        fact = analyze_package(package)
+        try:
+            fact = analyze_package(package)
+        except Exception as exc:
+            msg = f"Analysis of '{package}' failed: {exc}"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
         if json_output:
             data = _fact_to_dict(fact)
             if verbose:

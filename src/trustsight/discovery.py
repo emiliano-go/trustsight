@@ -122,11 +122,21 @@ def _vercmp(v1: str, v2: str) -> int:
         return 0
 
 
+def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:
+    """Run a pacman subcommand, or fail with a message instead of a bare
+    FileNotFoundError when pacman is not on PATH (containers, non-Arch)."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"{args[0]} is required but was not found on PATH; install "
+            "pacman (Arch Linux) or run this command on an Arch system"
+        ) from None
+
+
 def get_installed_aur_packages() -> dict[str, str]:
     """Return a dict of installed AUR package names to versions."""
-    result = subprocess.run(
-        ["pacman", "-Qm"], capture_output=True, text=True, check=False
-    )
+    result = _run_pacman(["pacman", "-Qm"])
     packages = {}
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -239,9 +249,7 @@ def fetch_package_info(name: str) -> Optional[dict]:
 
 def get_all_installed() -> dict[str, str]:
     """Return all installed packages as {name: version}."""
-    result = subprocess.run(
-        ["pacman", "-Q"], capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman", "-Q"])
     packages = {}
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -261,10 +269,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
     pacman tracks their origin.
     """
     # First check the repo listing exists and has packages.
-    sl = subprocess.run(
-        ["pacman", "-Sl", "--", repo],
-        capture_output=True, text=True, check=False,
-    )
+    sl = _run_pacman(["pacman", "-Sl", "--", repo])
     if sl.returncode != 0:
         # repo does not exist; caller should handle the message.
         return []  # sentinel: caller can re-check with _repo_exists
@@ -290,9 +295,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
 
 def get_installed_foreign() -> list[tuple[str, str]]:
     """Return (name, version) pairs installed from foreign sources (AUR)."""
-    result = subprocess.run(
-        ["pacman", "-Qm"], capture_output=True, text=True, check=False
-    )
+    result = _run_pacman(["pacman", "-Qm"])
     packages = []
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -305,10 +308,7 @@ def get_installed_foreign() -> list[tuple[str, str]]:
 
 def get_local_repos_from_pacman_conf() -> list[str]:
     """Return local repos from pacman.conf, excluding official ones."""
-    result = subprocess.run(
-        ["pacman-conf", "--repo-list"],
-        capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman-conf", "--repo-list"])
     if result.returncode != 0:
         raise RuntimeError(
             f"Failed to read pacman.conf: {result.stderr.strip()}"
@@ -356,10 +356,7 @@ def find_outdated_from_list(
 
 def _repo_exists(repo: str) -> bool:
     """Return True if *repo* is known to pacman."""
-    result = subprocess.run(
-        ["pacman", "-Sl", "--", repo],
-        capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman", "-Sl", "--", repo])
     return result.returncode == 0
 
 

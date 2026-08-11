@@ -187,6 +187,84 @@ def test_import_drops_bad_entries(baseline_dir, isolated_db):
     assert result["entries_imported"] == 1
 
 
+def test_reimport_keeps_expired_rows_of_the_source(baseline_dir, isolated_db):
+    """Re-importing a source must replace only its non-expired rows; expired
+    history stays attributable (module docstring and schema promise)."""
+    manifest = json.loads((baseline_dir / "manifest.json").read_text())
+    manifest["source"] = "expiring-feed"
+    (baseline_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    rows = [
+        {"type": "domain", "value": "old.example", "source": "expiring-feed",
+         "expires_at": yesterday},
+        {"type": "domain", "value": "new.example", "source": "expiring-feed"},
+    ]
+    (baseline_dir / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8"
+    )
+    import_baseline(baseline_dir, allow_unsigned=True)
+
+    (baseline_dir / "iocs.jsonl").write_text(
+        json.dumps({"type": "domain", "value": "other.example", "source": "expiring-feed"}),
+        encoding="utf-8",
+    )
+    result = import_baseline(baseline_dir, allow_unsigned=True)
+    assert result["entries_imported"] == 1
+    # The expired row survived the re-import; the replaced row did not.
+    expired_view = active_iocs(source="expiring-feed", expired=True)
+    values = {e.value for e in expired_view}
+    assert "old.example" in values
+    assert "new.example" not in values
+    assert "other.example" in values
+
+
+def test_import_duplicate_rows_are_deduped_not_crash(baseline_dir, isolated_db):
+    """Two identical (type, value, source) rows in one baseline must import
+    once, not raise IntegrityError."""
+    (baseline_dir / "iocs.jsonl").write_text(
+        "\n".join([
+            json.dumps({"type": "domain", "value": "dup.example", "source": "test-feed"}),
+            json.dumps({"type": "domain", "value": "dup.example", "source": "test-feed"}),
+            json.dumps({"type": "domain", "value": "keep.example", "source": "test-feed"}),
+        ]),
+        encoding="utf-8",
+    )
+    result = import_baseline(baseline_dir, allow_unsigned=True)
+    assert result["entries_imported"] == 2
+    assert len(active_iocs(source="test-feed")) == 2
+
+
+def test_naive_expires_at_is_treated_as_utc(baseline_dir, isolated_db):
+    """A tz-less expires_at must actually expire, not be misread as
+    permanently active."""
+    manifest = json.loads((baseline_dir / "manifest.json").read_text())
+    manifest["source"] = "naive-feed"
+    (baseline_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    rows = [
+        {"type": "domain", "value": "naive.example", "source": "naive-feed",
+         "expires_at": yesterday.replace("+00:00", "")},
+    ]
+    (baseline_dir / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8"
+    )
+    import_baseline(baseline_dir, allow_unsigned=True)
+    assert len(active_iocs(source="naive-feed")) == 0
+    assert len(active_iocs(source="naive-feed", expired=True)) == 1
+
+
+def test_malformed_manifest_version_and_encoding_are_clean_errors(baseline_dir, isolated_db):
+    manifest = json.loads((baseline_dir / "manifest.json").read_text())
+    manifest["version"] = "abc"
+    (baseline_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(MalformedBaselineError, match="version"):
+        import_baseline(baseline_dir, allow_unsigned=True)
+
+    (baseline_dir / "manifest.json").write_bytes(b"\xff\xfe\x00manifest")
+    with pytest.raises(MalformedBaselineError, match="UTF-8"):
+        import_baseline(baseline_dir, allow_unsigned=True)
+
+
 def test_active_iocs_filters_by_source(baseline_dir, isolated_db):
     import_baseline(baseline_dir, allow_unsigned=True)
     assert len(active_iocs(source="test-feed")) == 3

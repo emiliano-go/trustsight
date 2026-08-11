@@ -25,6 +25,13 @@ def register_commands(app: typer.Typer):
         """List all packages tracked in the database with their latest score."""
         ensure_default_configs()
         init_db()
+        if limit < 0:
+            msg = "--limit must be 0 (unlimited) or a positive count"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
 
         all_pkgs = get_all_packages()
         if limit:
@@ -72,8 +79,6 @@ def register_commands(app: typer.Typer):
                 risk = r["risk"]
                 if score is not None:
                     score_cell = _score_text(score, risk)
-                elif version == "unresolved" or version == "\u2014":
-                    score_cell = Text("\u2014", style="dim")
                 else:
                     score_cell = Text("\u2014", style="dim")
                 if risk == "\u2014" or risk == "Inconclusive":

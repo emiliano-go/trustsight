@@ -27,7 +27,7 @@ from .display import (
 log = logging.getLogger(__name__)
 
 
-def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn):
+def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn, json_output=False):
     try:
         from ..full_aur.metadata import fetch_metadata, load_metadata, save_metadata
         from ..discovery import _vercmp
@@ -55,7 +55,13 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
             else:
                 meta = fetch_metadata()
             save_metadata(meta, path=meta_path)
-            _print_colored("Downloaded AUR metadata snapshot. Run again to review changes.", "green")
+            if json_output:
+                typer.echo(json.dumps({
+                    "status": "metadata_downloaded",
+                    "message": "AUR metadata snapshot downloaded; run again to review changes.",
+                }))
+            else:
+                _print_colored("Downloaded AUR metadata snapshot. Run again to review changes.", "green")
             return None, 0
 
         installed = _get_installed_packages(repos, include_foreign, all_repos_flag, all_packages, _warn_func=_warn)
@@ -408,6 +414,9 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 "verdict": r["verdict"],
                 "first_seen": r.get("first_seen", False),
                 "is_trivial": r.get("is_trivial", False),
+                # Explicit failed flag: a consumer gating on `findings == []`
+                # must be able to tell "clean" from "not vetted".
+                "failed": r.get("failed", False),
                 # Always present, with or without --score: a consumer
                 # gating on the score must be able to see that the score
                 # describes an incomplete analysis.
@@ -694,6 +703,14 @@ def register_commands(app: typer.Typer):
             _step("Discovering packages...")
             effective_limit = limit
 
+            if limit < 0:
+                msg = "--limit must be 0 (unlimited) or a positive count"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+
             user_specified = not (repo is None and not foreign and not all_repos)
             if user_specified:
                 repos = repo or []
@@ -708,6 +725,10 @@ def register_commands(app: typer.Typer):
                     include_foreign = True
 
             def _warn(msg: str):
+                if json_output:
+                    # Keep stdout a pure JSON document; diagnostics go to stderr.
+                    print(f"Warning: {msg}", file=sys.stderr)
+                    return
                 if not HAS_RICH:
                     print(f"Warning: {msg}")
                     return
@@ -722,24 +743,39 @@ def register_commands(app: typer.Typer):
                     if repos:
                         _warn(str(exc) + "; falling back to explicit repos.")
                     else:
-                        if not HAS_RICH:
+                        if json_output:
+                            typer.echo(json.dumps({"error": str(exc)}))
+                        elif not HAS_RICH:
                             print(f"Error: {exc}")
                         else:
                             console().print(f"[red]Error:[/] {exc}")
                         raise typer.Exit(code=2)
 
-            changed_installed, total_installed = _discover_packages(
-                repos=repos,
-                include_foreign=include_foreign,
-                all_repos_flag=all_repos_flag,
-                all_packages=all_packages,
-                _warn=_warn,
-            )
+            try:
+                changed_installed, total_installed = _discover_packages(
+                    repos=repos,
+                    include_foreign=include_foreign,
+                    all_repos_flag=all_repos_flag,
+                    all_packages=all_packages,
+                    _warn=_warn,
+                    json_output=json_output,
+                )
+            except RuntimeError as exc:
+                if json_output:
+                    typer.echo(json.dumps({"error": str(exc)}))
+                else:
+                    _print_colored(str(exc), "red", stderr=True)
+                raise typer.Exit(code=2)
 
             if changed_installed is None:
+                if json_output:
+                    typer.echo(json.dumps({"error": "package discovery failed"}))
+                    raise typer.Exit(code=2)
                 return
             if not changed_installed:
-                if all_packages:
+                if json_output:
+                    typer.echo(json.dumps([]))
+                elif all_packages:
                     _print_colored("No AUR packages found to review.", "green")
                 else:
                     _print_colored("No outdated packages found.", "green")

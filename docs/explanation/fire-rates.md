@@ -80,7 +80,7 @@ malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
 in the same commit.
 
-Calibrated against the 3322-diff stratified corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+Calibrated against the 3,246-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|

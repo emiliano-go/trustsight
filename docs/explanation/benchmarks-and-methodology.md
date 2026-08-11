@@ -14,9 +14,9 @@ The benign corpus includes package updates that are not perfectly clean: routine
 
 The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
 
-- **CRITICAL** p5 = 40
-- **Benign** p95 = 20
-- Gap = +20 points
+- **CRITICAL** p5 = 60
+- **Benign** p95 = 45
+- Gap = +15 points
 
 Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
 
@@ -26,7 +26,7 @@ Absolute p95 on either class is not useful in isolation. A tool that scores ever
 
 The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
 
-If the CRITICAL p5 is 40 and the benign p95 is 20, a threshold set at 20 catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 20-point gap provides margin for error: if the threshold is set at 21 instead of 20, the false-positive rate drops further while still catching all CRITICAL samples.
+If the CRITICAL p5 is 60 and the benign p95 is 45, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 15-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
 
 The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
 

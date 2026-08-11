@@ -22,11 +22,14 @@ Usage:
 
 import argparse
 import gzip
+import json
 import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pygit2
@@ -265,9 +268,50 @@ def build(out_path: Path, limit: int = 0, progress_every: int = 2000) -> dict:
     return {
         "urls": len(url_counter),
         "maintainers": len(maint_counter),
+        "maintainer_observations": sum(maint_counter.values()),
         "dependency_names": len(dep_counter),
         "observations": packages_with_sources,
+        "package_count": len(branches),
     }
+
+
+def build_provenance(
+    *,
+    source: str,
+    package_count: int,
+    packages_with_sources: int,
+    maintainer_count: int,
+    observation_count: int,
+    mirror_size_bytes: int,
+    command: str,
+    built_at: str | None = None,
+) -> dict:
+    """Assemble the seed-provenance record for a fresh build.
+
+    The record is what lets a third party reproduce the published seed and
+    compare what they got: the exact mirror path, the sizes it observed,
+    the build timestamp and the command line that produced it.  It is
+    written by ``--provenance-out`` and shipped inside the seed archive as
+    ``trustsight-seed-v2/seed-provenance.json``; it is metadata about the
+    build, never part of the hashed content.
+    """
+    return {
+        "format_version": "1.0.0",
+        "source": source,
+        "package_count": package_count,
+        "packages_with_sources": packages_with_sources,
+        "maintainer_count": maintainer_count,
+        "observation_count": observation_count,
+        "mirror_size_bytes": mirror_size_bytes,
+        "built_at": built_at or datetime.now(timezone.utc).isoformat(),
+        "command": command,
+    }
+
+
+def _mirror_size_bytes(path: Path) -> int:
+    """Total size of the mirror on disk, via ``du -sb``."""
+    out = subprocess.check_output(["du", "-sb", str(path)], text=True)
+    return int(out.split()[0])
 
 
 def main():
@@ -276,8 +320,26 @@ def main():
                         default=Path("src/trustsight/data/seed.db"))
     parser.add_argument("--limit", type=int, default=0,
                         help="Only read this many branches (for a quick run)")
+    parser.add_argument("--provenance-out", type=Path, default=None,
+                        help="Write seed-provenance.json describing this build")
     args = parser.parse_args()
-    build(args.out, limit=args.limit)
+    stats = build(args.out, limit=args.limit)
+
+    if args.provenance_out:
+        provenance = build_provenance(
+            source=str(AUR_REPO),
+            package_count=stats["package_count"],
+            packages_with_sources=stats["observations"],
+            maintainer_count=stats["maintainers"],
+            observation_count=stats["maintainer_observations"],
+            mirror_size_bytes=_mirror_size_bytes(AUR_REPO),
+            command=" ".join(sys.argv),
+        )
+        args.provenance_out.parent.mkdir(parents=True, exist_ok=True)
+        args.provenance_out.write_text(
+            json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+        )
+        print(f"Provenance written: {args.provenance_out}")
 
 
 if __name__ == "__main__":

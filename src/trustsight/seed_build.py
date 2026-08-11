@@ -61,6 +61,7 @@ def build_seed(
     raw_maintainers: list[dict],
     out_dir: Path,
     hash_algorithm: str = DEFAULT_HASH_ALGORITHM,
+    provenance: Path | None = None,
 ) -> dict:
     """Build a v2 hashed maintainer seed under *out_dir*.
 
@@ -70,13 +71,19 @@ def build_seed(
     and ``source`` (optional str).
 
     Writes ``trustsight-seed-v2/seed_meta.json`` and
-    ``trustsight-seed-v2/maintainers.jsonl`` under *out_dir*.
+    ``trustsight-seed-v2/maintainers.jsonl`` under *out_dir*.  If
+    *provenance* is given, the file is copied verbatim into the seed
+    directory as ``seed-provenance.json``; it is metadata about the build,
+    never part of the hashed content.
 
     Returns the seed metadata dict.
     """
     out_dir = Path(out_dir)
     seed_dir = out_dir / "trustsight-seed-v2"
     seed_dir.mkdir(parents=True, exist_ok=True)
+
+    if provenance is not None and not Path(provenance).is_file():
+        raise SystemExit(f"provenance file not found: {provenance}")
 
     salt = _generate_salt()
     now = datetime.now(timezone.utc).isoformat()
@@ -152,6 +159,10 @@ def build_seed(
         for line in maintainer_lines:
             fh.write(json.dumps(line, separators=(",", ":")) + "\n")
 
+    if provenance is not None:
+        prov_dst = seed_dir / "seed-provenance.json"
+        prov_dst.write_bytes(Path(provenance).read_bytes())
+
     return {
         **meta,
         "seed_dir": str(seed_dir),
@@ -195,10 +206,16 @@ def main() -> None:
         default=DEFAULT_HASH_ALGORITHM,
         help="Hash algorithm (default: sha256)",
     )
+    parser.add_argument(
+        "--provenance",
+        type=Path,
+        default=None,
+        help="seed-provenance.json to copy into the seed directory verbatim",
+    )
     args = parser.parse_args()
 
     raw = _read_raw_maintainers(args.input)
-    result = build_seed(raw, args.out, args.algorithm)
+    result = build_seed(raw, args.out, args.algorithm, args.provenance)
     print(f"Wrote {result['count']} hashed maintainers to {result['seed_dir']}")
     print(f"  salt: {result['salt']}")
     print(f"  seed_hash: {result['seed_hash']}")

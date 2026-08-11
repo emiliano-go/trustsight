@@ -7,7 +7,8 @@ written.
 
 Usage:
     python scripts/build_hashed_seed.py raw_maintainers.json --out seed-v2
-    python scripts/build_hashed_seed.py raw_maintainers.jsonl --out seed-v2
+    python scripts/build_hashed_seed.py raw_maintainers.jsonl --out seed-v2 \
+        --provenance seed-provenance.json   # ship the build record too
 """
 
 import sys

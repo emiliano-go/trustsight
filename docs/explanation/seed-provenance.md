@@ -108,12 +108,22 @@ directory as `baseline-seed.tar.gz` and signs its exact bytes with the
 distribution key, writing the detached `baseline-seed.tar.gz.sig` used at
 import.
 
+Every build records its inputs: `generate_seed.py --provenance-out` writes
+`seed-provenance.json` (the source mirror path and on-disk size, the package,
+maintainer and observation counts, the UTC build timestamp, and the exact
+command line), and `build_hashed_seed.py --provenance` ships it inside the
+archive as `trustsight-seed-v2/seed-provenance.json`. It is metadata about
+the build, never part of the hashed content, and it is what lets a third
+party reproduce the seed and compare their record against the published one.
+
 The release workflow [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml)
 runs this pipeline on the channel release (a `baseline-<date>` tag, published
 after the software release it serves; see the
-[publishing guide](../contributing/publishing-baselines.md)) and uploads the
-`baseline-*` assets, so the seed a fresh install fetches is the output of the
-published scripts over a mirror reconstructed from the corpus lockfile.
+[publishing guide](../contributing/publishing-baselines.md)). The canonical
+seed is built by the maintainer from the full AUR mirror; CI rebuilds only
+when the release has no `baseline-seed.tar.gz` yet, from a mirror
+reconstructed from the corpus lockfile. The fallback is auditable but smaller
+than the canonical full-mirror seed, and never overwrites an uploaded one.
 `trustsight seed fetch --tag baseline-<date>` pins the exact channel release
 instead of following `latest`.
 
@@ -130,8 +140,11 @@ same mirror state. Two checks cover the two failure modes:
 trustsight seed fetch --json   # "status: ok" means the signature verified
 
 # 2. It is the published script over the published input:
-python scripts/generate_seed.py --out /tmp/seed-audit.db
+python scripts/generate_seed.py --out /tmp/seed-audit.db \
+  --provenance-out /tmp/seed-audit-provenance.json
 # compare maintainers with --src/trustsight/seed-audit against a fresh build
+# and diff your seed-provenance.json against the published one: same mirror
+# state must produce the same package, maintainer and observation counts.
 ```
 
 The schema itself is auditable in one read: it is the `SCHEMA` literal at the

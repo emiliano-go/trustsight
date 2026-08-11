@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Channel releases keep the canonical seed and prove their own plumbing.**
+  The baselines workflow now checks the channel release for an existing
+  `baseline-seed.tar.gz` before building: the canonical seed is
+  maintainer-built from the full AUR mirror and uploaded, and CI rebuilds a
+  lock-derived fallback only when it is missing (auditable but smaller, and
+  never overwriting an uploaded seed). Every seed built by the published
+  scripts now ships `trustsight-seed-v2/seed-provenance.json` (source mirror
+  path and size, package, maintainer and observation counts, build timestamp
+  and command line), written by `generate_seed.py --provenance-out` and
+  copied into the archive by `build_hashed_seed.py --provenance`, so anyone
+  can reproduce the seed and diff their record against the published one. A
+  manual workflow run doubles as a pipeline test; see
+  [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
+
 ## [0.12.0] - 2026-08-10
 
 ### Added

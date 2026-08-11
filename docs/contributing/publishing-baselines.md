@@ -46,13 +46,25 @@ key; the tool refuses any download whose signature does not verify.
 The seed and IOC assets are built and uploaded **automatically** by
 [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml),
 which only runs for `baseline-*` releases and manual dispatch (software
-releases skip it entirely). The seed is rebuilt from a mirror reconstructed
-from the corpus lockfile; the mirror lives in the CI cache, so a cold cache
-fails the job loudly rather than shipping an unverified or empty seed, and
-the maintainer then uploads the locally built, self-verified assets to the
-channel release (see below). The corpus baseline cannot be rebuilt from
-nothing in CI: it is grown incrementally by `full-aur` runs on a maintainer
-machine and is uploaded separately, as described below.
+releases skip it entirely). The workflow checks the release for an existing
+`baseline-seed.tar.gz` first: the **canonical seed is maintainer-built from
+the full AUR mirror**, signed, and uploaded to the channel release, and CI
+never overwrites it. If the seed is missing, CI builds a **lock-derived
+fallback** from a mirror reconstructed from the corpus lockfile (the mirror
+lives in the CI cache, keyed on the lock); the fallback is auditable but
+smaller than the canonical full-mirror seed, so a release that needs a seed
+still ships one, degraded but functional. The corpus baseline cannot be
+rebuilt from nothing in CI: it is grown incrementally by `full-aur` runs on
+a maintainer machine and is uploaded separately, as described below.
+
+Every seed built by the published scripts ships with
+`trustsight-seed-v2/seed-provenance.json` (written by
+`generate_seed.py --provenance-out` and copied into the seed directory by
+`build_hashed_seed.py --provenance`): the source mirror path and size, the
+package, maintainer and observation counts, the build timestamp and the
+command line. Anyone reproducing the seed from the same mirror state can
+compare it directly against the published record (see
+[seed provenance](../explanation/seed-provenance.md)).
 
 ## Prerequisites: the signing key
 
@@ -204,6 +216,32 @@ assets are named `baseline-ioc-<source>-<incident>-manifest.json` and
 `trustsight ioc update` to fetch them sets a feed with `name` (or `asset`)
 equal to `<source>-<incident>` and `url` pointing at the release channel;
 see [configuration](../reference/configuration.md#baselinesiocfeeds).
+
+## Dispatch test (manual verification)
+
+To prove the automated pipeline end to end without publishing anything, run
+the release workflow manually:
+
+```bash
+gh workflow run baselines.yml
+```
+
+Expected output:
+
+- `Check for existing seed`: passes (no release to inspect on manual
+  dispatch, so the job reports the seed as missing)
+- `Build the hashed seed`: runs (lock-derived fallback from the cached
+  mirror)
+- `Write the distribution signing key`: passes (secret live)
+- `Build and sign the baseline-* assets`: runs and signs the fallback seed
+- `Upload baseline-* assets to the release`: exits 1 on missing release tag
+  (**by design**)
+
+The upload step failing on a manual run is not a regression: there is no
+release to upload to, and `gh release upload` requires a tag. What matters
+is that everything before it passed, which proves the secret, the seed
+pipeline and the signing path are all live. If the workflow fails at any
+step before the upload, fix it before publishing the next channel release.
 
 ## Rotation and hygiene
 

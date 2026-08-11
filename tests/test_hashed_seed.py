@@ -301,3 +301,28 @@ def test_lookup_without_a_salt_returns_none_not_error(db):
     """A cold database (no seed imported, no salt) must answer, not crash."""
     assert lookup_maintainer("Anyone At All") is None
     assert is_maintainer_globally_novel("Anyone At All") is True
+
+
+def test_provenance_file_ships_inside_the_seed_dir(tmp_path):
+    """--provenance copies the build record into the seed directory, so the
+    release packaging (which tars the whole directory) carries it."""
+    prov = tmp_path / "seed-provenance.json"
+    prov.write_text('{"format_version": "1.0.0", "source": "/tmp/aur.git"}\n')
+    seed_dir = tmp_path / "out"
+    result = build_seed(
+        [{"name": "Alice Example", "source": "aur"}],
+        seed_dir,
+        provenance=prov,
+    )
+    shipped = Path(result["seed_dir"]) / "seed-provenance.json"
+    assert shipped.read_text() == prov.read_text()
+
+
+def test_provenance_missing_input_is_an_error(tmp_path):
+    """A dangling --provenance must fail loudly, not ship an empty record."""
+    with pytest.raises(SystemExit):
+        build_seed(
+            [{"name": "Alice Example", "source": "aur"}],
+            tmp_path / "out",
+            provenance=tmp_path / "does-not-exist.json",
+        )

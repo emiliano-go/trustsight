@@ -41,8 +41,11 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       sha256: ${{ steps.checksum.outputs.sha256 }}
     steps:
+      # git is required so that actions/checkout performs a real checkout:
+      # the container's fallback downloads the source archive, which honours
+      # .gitattributes export-ignore and therefore omits packaging/.
       - name: Install tooling
-        run: pacman -Syu --noconfirm --needed base-devel
+        run: pacman -Syu --noconfirm --needed base-devel git
 
       - name: Resolve tag
         id: tag

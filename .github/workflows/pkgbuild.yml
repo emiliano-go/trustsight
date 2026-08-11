@@ -7,17 +7,57 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      # The container ships no git, so actions/checkout falls back to
+      # downloading the source archive, which honours .gitattributes
+      # export-ignore and therefore omits packaging/.  Install git first
+      # to get a real checkout.
+      - name: Install tooling
+        run: pacman -Syu --noconfirm base-devel sudo git
+
       - uses: actions/checkout@v4
-      - name: Build and install from PKGBUILD
+
+      - name: Prepare builder user
         run: |
-          pacman -Syu --noconfirm base-devel sudo
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Fetch the release tarball
+        run: |
+          set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          tar -C "$GITHUB_WORKSPACE" -czf "/tmp/trustsight-${pkgver}.tar.gz" --transform "s|^\.|trustsight-${pkgver}|" .
-          cp "/tmp/trustsight-${pkgver}.tar.gz" .
-          su builder -c "cd '$PWD' && makepkg -si --noconfirm --skipchecksums --nocheck"
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/v${pkgver}.tar.gz"
+          # The archive is generated on demand, so a fresh tag can 404 briefly.
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$url" -o "trustsight-${pkgver}.tar.gz"; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "::error::${url} still unavailable after 5 attempts"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "Downloaded ${url}"
+
+      - name: Verify the recorded checksum against the release tarball
+        run: |
+          set -eu
+          cd "$GITHUB_WORKSPACE/packaging/aur"
+          pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
+          expected=$(sed -n "s/^sha256sums=('\(.*\)')$/\1/p" PKGBUILD)
+          actual=$(sha256sum "trustsight-${pkgver}.tar.gz" | cut -d' ' -f1)
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::PKGBUILD sha256sums ${expected} does not match release tarball ${actual}"
+            exit 1
+          fi
+          echo "Checksum matches: ${actual}"
+
+      - name: Build and install from the release tarball
+        run: |
+          cd "$GITHUB_WORKSPACE/packaging/aur"
+          su builder -c "cd '$PWD' && makepkg -si --noconfirm --nocheck"
+
       - name: Verify installation
         run: trustsight --version

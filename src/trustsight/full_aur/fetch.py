@@ -234,15 +234,24 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     return manifest
 
 
-def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]]]:
-    """PKGBUILD text plus the snapshot tree manifest when available.
+def fetch_pkgbuild_with_tree(
+    name: str,
+) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict]]:
+    """PKGBUILD text, the snapshot tree manifest, and an R122 finding.
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
     same committed file tree the git path does (R118-tree).  The tarball is
     fetched from the AUR mirror - never from a PKGBUILD-declared URL - so
     this is consistent with the "static, offline" review claim.  Falls back
     to the cgit text-only fetch when the tarball cannot be read.
+
+    The full tarball bytes are handed to ``check_archive_trailer`` (R122):
+    the corpus side is the one place AUR content is downloaded, so it is
+    also where the archive container is inspected.  A trailer anomaly is
+    returned as a stamped finding; a clean archive returns None.
     """
+    from ..analysis.archives import check_archive_trailer
+
     url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
     body = _http_get(url)
     if body is not None:
@@ -251,14 +260,14 @@ def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tu
             pkgbuild = _pkgbuild_from_tarfile(tf, name)
             manifest = _snapshot_manifest(tf)
             if pkgbuild is not None:
-                return pkgbuild, manifest
+                return pkgbuild, manifest, check_archive_trailer(body)
         except Exception as e:
             # Benign: a missing or empty snapshot tarball just means we fall
             # back to the cgit text fetch below.  Debug, not warning, so a
             # bootstrap of tens of thousands of packages does not spam the
             # progress bar with one line per VCS/-bin package.
             log.debug("snapshot tarball for %s unusable: %s", name, e)
-    return fetch_pkgbuild(name), None
+    return fetch_pkgbuild(name), None, None
 
 
 def default_resume_path() -> Path:

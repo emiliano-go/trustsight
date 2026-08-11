@@ -156,7 +156,7 @@ def fake_aur(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: state["meta"])
     monkeypatch.setattr(
         pipeline, "fetch_pkgbuild_with_tree",
-        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None),
+        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None),
     )
     monkeypatch.setattr(pipeline, "save_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "clear_resume_state", lambda *a, **k: None)

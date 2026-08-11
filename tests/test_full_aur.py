@@ -86,10 +86,11 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
         "icon.png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 8,
     })
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
+    assert trailer_finding is None
     heads = dict(manifest)
     assert "demo/PKGBUILD" in heads
     assert heads["demo/evil"] == elf
@@ -101,10 +102,27 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
     from trustsight.full_aur import fetch as F
 
     with patch.object(F, "_http_get", side_effect=[None, b"pkgname=demo\n"]):
-        text, manifest = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
+    assert trailer_finding is None
+
+
+def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
+    """The snapshot path surfaces R122 when the archive has trailing junk."""
+    from trustsight.full_aur import fetch as F
+
+    body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
+    with patch.object(F, "_http_get", return_value=body):
+        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
+
+    assert text == "pkgname=demo\npkgver=1.0\n"
+    assert manifest is not None
+    assert trailer_finding is not None
+    assert trailer_finding["rule_id"] == "R122"
+    assert trailer_finding["params"]["kind"] == "gzip"
+    assert trailer_finding["params"]["trailing_bytes"] == 4
 
 
 # --- parallel prefetch for the bootstrap (ordered, error-tolerant) ---
@@ -118,12 +136,12 @@ def test_iter_prefetched_preserves_order_under_concurrency():
 
     def fetch(name):
         time.sleep(random.uniform(0, 0.005))  # variable latency
-        return (f"pkgbuild-{name}", None)
+        return (f"pkgbuild-{name}", None, None)
 
     names = [f"pkg-{i}" for i in range(60)]
     out = list(_iter_prefetched(names, fetch, workers=8))
     assert [n for n, _ in out] == names
-    assert out[3][1] == ("pkgbuild-pkg-3", None)
+    assert out[3][1] == ("pkgbuild-pkg-3", None, None)
 
 
 def test_iter_prefetched_yields_none_for_a_failing_fetch():
@@ -132,11 +150,11 @@ def test_iter_prefetched_yields_none_for_a_failing_fetch():
     def fetch(name):
         if name == "boom":
             raise RuntimeError("network")
-        return (f"ok-{name}", None)
+        return (f"ok-{name}", None, None)
 
     out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
-    assert out["boom"] == (None, None)
-    assert out["a"] == ("ok-a", None)
+    assert out["boom"] == (None, None, None)
+    assert out["a"] == ("ok-a", None, None)
 
 
 # --- polite fetching: rate cap + backoff on 429/5xx/reset ---

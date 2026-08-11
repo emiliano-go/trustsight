@@ -150,6 +150,7 @@ def analyze_package_text(
     temporal: TemporalContext,
     srcinfo: Optional[str] = None,
     tree_manifest: Optional[list[tuple[str, bytes]]] = None,
+    archive_trailer_finding: Optional[dict] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -168,6 +169,10 @@ def analyze_package_text(
             tarball, when it was fetched.  Runs the R118-tree scan; when
             absent the result reports ``tree_analyzed=false`` rather than
             silently reading as full coverage.
+        archive_trailer_finding:  an R122 finding stamped by
+            ``check_archive_trailer`` on the snapshot tarball bytes, when
+            one was produced.  Surfaced exactly like the R118-tree scan
+            results, so the corpus path reports what the archive carried.
 
     Returns:
         A fully-scored PackageFact.
@@ -209,6 +214,8 @@ def analyze_package_text(
         if tree_manifest:
             from ..analysis.delivery import scan_tree_manifest
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
+        if archive_trailer_finding:
+            triggered_rules.append(archive_trailer_finding)
         triggered_rules, suppressed_rules = filter_triggered_rules(
             triggered_rules, package=pkg_name
         )
@@ -314,6 +321,8 @@ def analyze_package_text(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    if archive_trailer_finding:
+        triggered_rules.append(archive_trailer_finding)
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )

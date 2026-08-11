@@ -272,7 +272,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
     Analysis stays serial and ordered (novelty reads the observations earlier
     packages recorded), so only the fetch is parallelised: a bounded window of
     fetches is kept in flight and consumed in order.  A fetch that raises
-    yields ``(None, None)`` rather than aborting the run.
+    yields ``(None, None, None)`` rather than aborting the run.
     """
     names = list(names)
     window = max(workers * 3, 24)
@@ -287,7 +287,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
             try:
                 result = future.result()
             except Exception:
-                result = (None, None)
+                result = (None, None, None)
             yield name, result
             if idx < len(names):
                 inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
@@ -419,7 +419,7 @@ def run_baseline_build(
     def _fetch_one(name):
         meta = new_meta.get(name)
         if meta is None:
-            return (None, None)
+            return (None, None, None)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
     def _store(name, fetched) -> str:
@@ -432,7 +432,7 @@ def run_baseline_build(
         if is_reserved_name(name):
             log.warning("skipping reserved package name %r", name)
             return "reserved"
-        new_pkgbuild, tree_manifest = fetched
+        new_pkgbuild, tree_manifest, trailer_finding = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -454,6 +454,7 @@ def run_baseline_build(
                 source="aur_metadata",
             ),
             tree_manifest=tree_manifest,
+            archive_trailer_finding=trailer_finding,
         )
         save_pkgbuild_snapshot(
             package_name=name,
@@ -652,6 +653,5 @@ def run_watch(
     except KeyboardInterrupt:
         _log(f"Watch stopped after {len(results)} cycle(s)")
     return results
-
 
 

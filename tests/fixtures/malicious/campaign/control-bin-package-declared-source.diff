@@ -1,0 +1,10 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,7 @@
+ pkgname=demo-appimage
+ pkgver=1.0
++source=("https://downloads.demo.example/demo-1.0-x86_64.AppImage")
++sha256sums=('4d1c8b0f1b6e2a3c9f0d7e8a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c')
++package() {
++  install -Dm755 "$srcdir/demo-1.0-x86_64.AppImage" "$pkgdir/usr/bin/demo"
++}

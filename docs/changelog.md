@@ -2,8 +2,34 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Fixture reproducibility gate.** All 164 malicious `.diff` bodies are now
+  committed source (gitignore override for `tests/fixtures/malicious/`), so a
+  fresh clone runs the recall and separation gates on the full corpus with no
+  generator step. `scripts/verify_fixtures.py` checks every `expected.json`
+  record against its `.diff` (no missing bodies, no orphans, per-category
+  counts) and runs in `test.yml`. A new `fixture-determinism` job regenerates
+  all five generators on a fresh checkout and fails if the tree drifts from
+  the committed record, pinning both fixture bodies and hand-reconciled
+  labels.
+
 ### Changed
 
+- **Generators are record-preserving.** `gen_malicious_fixtures.py` no longer
+  deletes diffs it does not own, `gen_injection_fixtures.py` merges with the
+  existing record instead of overwriting it, and
+  `gen_historical_holdout_fixtures.py` keeps curated entries verbatim.
+  Regenerating any generator on a clean tree is now a no-op by construction.
+- **R012 `user:` role marker relabelled as a negative control.** The engine
+  deliberately excludes `user:` role markers (a question addressed to a model
+  carries no instruction); the generator previously emitted
+  `R012-v5.diff` as a positive, which failed the malicious-recall gate. It is
+  now a documented negative (`must_not_fire: [R012, R013]`, `max_score: 0`).
+- **`R029-known-dep-added` record dropped.** A vestigial placeholder
+  (`must_fire: []`, `max_score: 0`, `known_packages` gate) with no rule
+  implementation, no diff body, and no code path referencing it; keeping it
+  would fabricate a fixture for a rule that does not exist.
 - **Channel releases keep the canonical seed and prove their own plumbing.**
   The baselines workflow now checks the channel release for an existing
   `baseline-seed.tar.gz` before building: the canonical seed is

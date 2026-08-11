@@ -6,6 +6,12 @@ Usage:
 Labels are validated against the *shipped* config with a cold database,
 exactly the context the calibration gates measure, so what this script
 writes is what ``calibration_gates.py`` will check.
+
+Record-preserving: this script owns its FIXTURES entries only. It never
+deletes .diff files it does not own, and for keys that already exist in
+expected.json it keeps the committed (hand-reconciled) entry verbatim.
+The committed record is the source of truth; edit expected.json (and this
+script's ``expect``) together when labels legitimately change.
 """
 
 import argparse
@@ -281,13 +287,18 @@ def main():
 
     args.out.mkdir(parents=True, exist_ok=True)
 
-    # Clear existing non-injection fixtures (keep R012/R013 ones)
-    for f in list(args.out.glob("*.diff")):
-        if not f.name.startswith("R01") and not f.name.startswith("control"):
-            f.unlink()
-
+    # Record-preserving: never delete a .diff this script does not own.
+    # Owned fixtures are overwritten below; anything else (injection R012/R013
+    # fixtures, legacy curated bodies) is left untouched so regeneration can
+    # never destroy committed state.
     expected = {}
     failures = []
+
+    existing_exp = args.out / "expected.json"
+    existing = {}
+    if existing_exp.exists():
+        with open(existing_exp) as f:
+            existing = json.load(f)
 
     # Labels must agree with the gates, so validate with the same context:
     # shipped config, cold database, and the fixture's own name as the
@@ -334,21 +345,33 @@ def main():
                 entry["min_score"] = min_s
             if max_s < 100:
                 entry["max_score"] = max_s
+
+            if fname in existing:
+                # The committed record is authoritative: keep it verbatim and
+                # only add review notes the record lacks. This is what makes
+                # regeneration safe against hand-reconciled labels.
+                curated = dict(existing[fname])
+                for note_key in ("relabelled", "description"):
+                    if note_key in entry and note_key not in curated:
+                        curated[note_key] = entry[note_key]
+                entry = curated
+
             expected[fname] = entry
 
-    # Merge with existing injection fixtures; carry relabelled/description
-    # notes forward so regeneration never erases the review trail.
-    existing_exp = args.out / "expected.json"
-    if existing_exp.exists():
-        with open(existing_exp) as f:
-            existing = json.load(f)
-        for k, v in existing.items():
-            if k not in expected:
-                expected[k] = v
-            else:
-                for note_key in ("relabelled", "description"):
-                    if note_key in v and note_key not in expected[k]:
-                        expected[k][note_key] = v[note_key]
+    # Merge with fixtures owned by other generators (injection R012/R013,
+    # legacy curated keys); carry review notes forward so regeneration never
+    # erases the review trail.
+    for k, v in existing.items():
+        if k not in expected:
+            expected[k] = v
+        else:
+            for note_key in ("relabelled", "description"):
+                if note_key in v and note_key not in expected[k]:
+                    expected[k][note_key] = v[note_key]
+
+    # Stable key order so regeneration is byte-identical regardless of the
+    # order generators ran in.
+    expected = {k: expected[k] for k in sorted(expected)}
 
     with open(args.out / "expected.json", "w") as f:
         json.dump(expected, f, indent=2, ensure_ascii=False)

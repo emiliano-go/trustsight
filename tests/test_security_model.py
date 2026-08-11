@@ -252,6 +252,144 @@ def test_the_review_row_shows_the_qualified_band():
     assert "size cap" in out, "the gap itself must be named, not only implied"
 
 
+# --- Inconclusive says why: coverage gap vs cold start --------------------
+
+
+def test_gap_caused_inconclusive_names_the_gap():
+    fact = PackageFact(
+        final_score=10, risk="Inconclusive", coverage_gaps=[DIFF_TRUNCATED],
+    )
+    assert verdict_label(fact) == "Inconclusive (diff truncated: payload may be hidden)"
+
+
+def test_cold_start_inconclusive_carries_the_remaining_count():
+    from trustsight.schema import NoveltyContext
+    from trustsight.scoring import _MATURITY_THRESHOLD
+
+    # The count is the distance to maturity 0.5, derived from the same
+    # constant the downgrade predicate reads - never restated.
+    half = -(-_MATURITY_THRESHOLD // 2)
+    fact = PackageFact(
+        final_score=25, risk="Inconclusive",
+        novelty_context=NoveltyContext(observation_count=3),
+    )
+    assert verdict_label(fact) == (
+        f"Inconclusive (cold start: {half - 3} more analyses needed)"
+    )
+
+
+def test_gap_and_cold_start_the_gap_wins():
+    """The more urgent cause owns the label; the routine one is omitted."""
+    from trustsight.schema import NoveltyContext
+
+    fact = PackageFact(
+        final_score=25, risk="Inconclusive", coverage_gaps=[TREE_NOT_ANALYZED],
+        novelty_context=NoveltyContext(observation_count=3),
+    )
+    label = verdict_label(fact)
+    assert label == "Inconclusive (repository files not examined: payload may be hidden)"
+    assert "cold start" not in label
+
+
+def test_every_gap_has_an_urgency_wording():
+    from trustsight.coverage import GAPS, GAP_INCONCLUSIVE_REASONS
+
+    assert set(GAP_INCONCLUSIVE_REASONS) == set(GAPS)
+
+
+def test_an_unknown_gap_falls_back_to_generic_wording():
+    """A gap name written by a newer build still surfaces, worded generically."""
+    from trustsight.coverage import inconclusive_label
+
+    assert inconclusive_label(["some_future_gap"]) == (
+        "Inconclusive (some_future_gap: analysis incomplete)"
+    )
+
+
+def test_multiple_gaps_are_all_named():
+    from trustsight.coverage import inconclusive_label
+
+    label = inconclusive_label([DIFF_TRUNCATED, UNRESOLVED_SOURCE])
+    assert label == (
+        "Inconclusive (diff truncated: payload may be hidden; "
+        "source computed at build time: fetch destination unknown)"
+    )
+
+
+def test_a_gap_qualified_high_is_unchanged():
+    decoy = PackageFact(final_score=75, risk="High", coverage_gaps=[DIFF_TRUNCATED])
+    assert verdict_label(decoy) == "High" + INCOMPLETE_SUFFIX
+
+
+def test_cold_start_inconclusive_end_to_end():
+    """Through calculate_score, not a hand-built band."""
+    from trustsight.schema import NoveltyContext
+    from trustsight.scoring import _MATURITY_THRESHOLD
+
+    half = -(-_MATURITY_THRESHOLD // 2)
+    weak = [{"rule_id": "R050", "severity": "MEDIUM", "name": "w", "match": ""}] * 2
+    novelty = NoveltyContext(observation_count=half - 1)
+    score, _breakdown, level = calculate_score(weak, {}, novelty)
+    assert level == "Inconclusive"
+    fact = PackageFact(final_score=score, risk=level, novelty_context=novelty)
+    assert verdict_label(fact) == "Inconclusive (cold start: 1 more analyses needed)"
+
+
+def test_the_json_report_keeps_the_bare_band_and_carries_the_label():
+    """risk stays a bare band; the qualified string rides risk_label."""
+    from trustsight.cli.display import _fact_to_dict
+    from trustsight.schema import NoveltyContext
+
+    gapped = _fact_to_dict(PackageFact(
+        package_name="demo", final_score=10, risk="Inconclusive",
+        coverage_gaps=[DIFF_TRUNCATED],
+    ))
+    assert gapped["risk"] == "Inconclusive"
+    assert gapped["risk_label"] == "Inconclusive (diff truncated: payload may be hidden)"
+    assert gapped["coverage_gaps"] == [DIFF_TRUNCATED]
+
+    cold = _fact_to_dict(PackageFact(
+        package_name="demo", final_score=25, risk="Inconclusive",
+        novelty_context=NoveltyContext(observation_count=3),
+    ))
+    assert cold["risk"] == "Inconclusive"
+    assert cold["risk_label"].startswith("Inconclusive (cold start: ")
+    assert cold["coverage_gaps"] == []
+
+
+def test_the_review_row_shows_the_inconclusive_cause():
+    from trustsight.cli.review import _render_results_rich
+
+    out = _render_review([{
+        "package": "demo", "old_version": "1.0", "new_version": "1.1",
+        "score": 10, "verdict": "something", "risk": "Inconclusive",
+        "risk_label": "Inconclusive (diff truncated: payload may be hidden)",
+        "coverage_gaps": [DIFF_TRUNCATED], "first_seen": False,
+        "version_comparison": "", "aur_note": None, "findings": [],
+        "file_changes": [], "is_trivial": False,
+    }], _render_results_rich)
+    assert "payload may be hidden" in out
+
+
+def test_stored_rows_differentiate_the_inconclusive_cause():
+    """history/list read fact_json: gaps name the gap, cold start says so."""
+    import json
+
+    from trustsight.scoring import stored_band
+
+    row = {"final_score": 10, "fact_json": json.dumps(
+        {"risk": "Inconclusive", "coverage_gaps": [DIFF_TRUNCATED]})}
+    label, complete = stored_band(row)
+    assert label == "Inconclusive (diff truncated: payload may be hidden)"
+    assert complete is False
+
+    # The observation count is not in the stored row, so the cold-start
+    # case is named without the remaining-analyses count.
+    cold_row = {"final_score": 25, "fact_json": json.dumps(
+        {"risk": "Inconclusive", "coverage_gaps": []})}
+    assert stored_band(cold_row) == ("Inconclusive (cold start)", True)
+
+
 # --- the line clamp is a declared gap, not a silent skip ------------------
 
 
@@ -752,6 +890,88 @@ def test_the_report_carries_the_fingerprint():
 
     fact = scan_diff(HEADER + "+pkgver=2\n", package_name="demo")
     assert fact_to_dict(fact)["config_fingerprint"] == config_fingerprint()
+
+
+def test_inspect_json_carries_the_fingerprint_too():
+    """B1 says *every* machine-readable report, not the ones that happened to.
+
+    `inspect --json` goes through display._fact_to_dict, which omitted the
+    fingerprint while review --json and fact_to_dict carried it, so the
+    guarantee was true of two paths out of three.
+    """
+    from trustsight.cli.display import _fact_to_dict
+    from trustsight.config import config_fingerprint
+
+    fact = scan_diff(HEADER + "+pkgver=2\n", package_name="demo")
+    assert _fact_to_dict(fact)["config_fingerprint"] == config_fingerprint()
+
+
+def test_a_suppression_survives_the_default_json(tmp_path, monkeypatch):
+    """B5: no flag may hide a suppression.
+
+    `suppressed_rules` rode along only under --verbose, so the default
+    `review --json` made a switched-off rule indistinguishable from one that
+    never matched.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "src" / "trustsight" / "cli" / "review.py"
+    tree = ast.parse(src.read_text())
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test)
+        if "verbose" not in test and "quiet" not in test:
+            continue
+        for inner in ast.walk(node):
+            assert not (isinstance(inner, ast.Constant)
+                        and inner.value == "suppressed_rules"), (
+                f"suppressed_rules is emitted under `if {test}` "
+                f"at cli/review.py:{inner.lineno}"
+            )
+
+
+def test_the_shipped_baseline_key_is_pinned_and_valid():
+    """A13: a real ed25519 distribution key is pinned (v0.12.0), so signed
+    baseline import works.  The shipped file is 32 raw key bytes, not the old
+    placeholder, and it loads without raising."""
+    from trustsight.full_aur.export import (
+        InvalidSignatureError,
+        NoTrustedKeyError,
+        _load_trusted_pubkey,
+        _TRUSTED_PUBKEY_FILE,
+    )
+
+    # The two error types stay distinct: "no key pinned" must never be reported
+    # as "your artifact is forged".
+    assert not issubclass(NoTrustedKeyError, InvalidSignatureError)
+
+    key = _load_trusted_pubkey(_TRUSTED_PUBKEY_FILE)
+    assert len(key) == 32
+
+
+def test_a_non_key_file_is_reported_as_no_pinned_key(tmp_path):
+    """The placeholder detection is about length: a build that pins a non-key
+    file refuses with NoTrustedKeyError rather than the forged-signature error
+    that would accuse a good artifact."""
+    import pytest as _pytest
+
+    from trustsight.full_aur.export import NoTrustedKeyError, _load_trusted_pubkey
+
+    not_a_key = tmp_path / "baseline_pubkey.pem"
+    not_a_key.write_text("# instructions, not key bytes\n")
+    with _pytest.raises(NoTrustedKeyError, match="No distribution key is pinned"):
+        _load_trusted_pubkey(not_a_key)
+
+
+def test_a_real_key_length_is_accepted(tmp_path):
+    """The refusal is about length, so a genuine 32-byte key must pass it."""
+    from trustsight.full_aur.export import _load_trusted_pubkey
+
+    key = tmp_path / "pub.pem"
+    key.write_bytes(b"\x01" * 32)
+    assert _load_trusted_pubkey(key) == b"\x01" * 32
 
 
 @pytest.mark.parametrize("case", [

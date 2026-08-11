@@ -1,15 +1,5 @@
 # Changelog
 
-## [Unreleased]
-
-### Changed
-
-- **The release channel is its own release kind.** Baseline assets (`baseline-*`)
-  ship on `baseline-<date>` channel releases, published after the software
-  release they serve so the tool's default `latest` channel resolves to them;
-  software releases (`vX.Y.Z`) never carry baseline assets. The release
-  baseline workflow only runs for `baseline-*` tags and manual dispatch.
-
 ## [0.12.0] - 2026-08-10
 
 ### Added
@@ -117,6 +107,12 @@
 
 ### Changed
 
+- **The release channel is its own release kind.** Baseline assets
+  (`baseline-*`) ship on `baseline-<date>` channel releases, published after
+  the software release they serve so the tool's default `latest` channel
+  resolves to them; software releases (`vX.Y.Z`) never carry baseline assets.
+  The release baseline workflow only runs for `baseline-*` tags and manual
+  dispatch.
 - **The novelty seed no longer ships inside the package.** The 20 MB
   `src/trustsight/data/seed.db.gz` is gone from the repo, wheel and package;
   the seed is distributed as the signed `baseline-seed.tar.gz` release asset

@@ -111,7 +111,7 @@ import.
 The release workflow [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml)
 runs this pipeline on the channel release (a `baseline-<date>` tag, published
 after the software release it serves; see the
-[publishing guide](contributing/publishing-baselines.md)) and uploads the
+[publishing guide](../contributing/publishing-baselines.md)) and uploads the
 `baseline-*` assets, so the seed a fresh install fetches is the output of the
 published scripts over a mirror reconstructed from the corpus lockfile.
 `trustsight seed fetch --tag baseline-<date>` pins the exact channel release

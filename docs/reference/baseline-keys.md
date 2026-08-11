@@ -32,7 +32,7 @@ named with the `baseline-` prefix, and **a channel release** (tag
 from software releases: a `vX.Y.Z` tag carries the program and its notes,
 never baseline assets, and a channel release is published after its software
 release so `latest` (the tool's default channel) resolves to it; the
-[publishing guide](contributing/publishing-baselines.md) documents the
+[publishing guide](../contributing/publishing-baselines.md) documents the
 cadence and `seed fetch --tag` for pinning.
 
 | Asset | What it is | Consumed by |

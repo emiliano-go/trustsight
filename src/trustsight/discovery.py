@@ -9,6 +9,32 @@ from typing import Optional
 AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
 log = logging.getLogger(__name__)
 
+# A4: every response has a byte cap, the RPC included.  A realistic multiinfo
+# reply for any batch this tool sends is well under a megabyte; 64 MiB is far
+# above that and still bounds what a hostile or malfunctioning endpoint can make
+# json.load buffer.  A reply past the cap raises, is caught by the callers
+# below, and degrades to "query failed" rather than exhausting memory.
+_MAX_RPC_BYTES = 64 * 1024 * 1024
+
+
+class _RpcResponseTooLarge(Exception):
+    """The RPC response exceeded _MAX_RPC_BYTES."""
+
+
+def _load_rpc_json(resp, limit: int | None = None):
+    """Read at most *limit* bytes from *resp* and parse JSON, or raise.
+
+    *limit* defaults to ``_MAX_RPC_BYTES``, resolved at call time so the cap
+    stays a single tunable module constant.  One extra byte is read so an
+    exactly-at-limit body is still distinguishable from an over-limit one.
+    """
+    if limit is None:
+        limit = _MAX_RPC_BYTES
+    raw = resp.read(limit + 1)
+    if len(raw) > limit:
+        raise _RpcResponseTooLarge(f"AUR RPC response exceeds {limit} bytes")
+    return json.loads(raw)
+
 _OFFICIAL_REPOS = frozenset({
     "core", "extra", "community", "multilib",
     "testing", "core-testing", "extra-testing",
@@ -129,7 +155,7 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
         return {}
 
     # Check cache for fresh entries
-    from .db import get_db_path, read_aur_cache, write_aur_cache
+    from .db import read_aur_cache, write_aur_cache
     from .config import load_config
 
     cfg = load_config().get("discovery", {})
@@ -151,9 +177,9 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
     url = _aur_info_url(missed)
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
-            data = json.load(resp)
+            data = _load_rpc_json(resp)
             results = {r["Name"]: r for r in data.get("results", [])}
-    except (urllib.error.URLError, json.JSONDecodeError):
+    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
         log.warning("AUR RPC query failed for %d package(s)", len(missed))
         results = {}
 
@@ -203,10 +229,10 @@ def fetch_package_info(name: str) -> Optional[dict]:
     url = _aur_info_url([name])
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.load(resp)
+            data = _load_rpc_json(resp)
             if data["resultcount"] > 0:
                 return data["results"][0]
-    except (urllib.error.URLError, json.JSONDecodeError):
+    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
         pass
     return None
 

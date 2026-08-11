@@ -38,7 +38,12 @@ from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines
-from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
+from ..coverage import (
+    gaps_from,
+    oversized_lines,
+    parse_time_substitution_lines,
+    unresolved_source_lines,
+)
 from ..scoring import calculate_score
 from ..schema import (
     with_changes,
@@ -301,6 +306,7 @@ def analyze_package_text(
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
             current_text=clamp_text(new_pkgbuild),
+            tree_manifest=tree_manifest,
         )
     )
     if tree_manifest:
@@ -376,6 +382,7 @@ def analyze_package_text(
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
+        parse_time_substitutions=parse_time_substitution_lines(diff_text),
     )
 
     score, breakdown, risk = calculate_score(

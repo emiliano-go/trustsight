@@ -1,4 +1,5 @@
 import re
+import shlex
 import threading
 
 # Expansion is bounded by *passes*, not by nesting depth: each pass
@@ -38,6 +39,92 @@ _PRINTF_LITERAL_RE = re.compile(
 # between two identifier characters is pure concatenation in shell and is
 # dropped; a standalone '' argument (whitespace on both sides) is kept.
 _EMPTY_QUOTE_CONCAT_RE = re.compile(r"(?<=\w)(?:''|\"\")(?=\w)")
+
+# Partial (non-empty) quoting: c"u"rl -> curl, ba"sh" -> bash, "PA"TH= ->
+# PATH=.  Shell removes quotes and concatenates the adjacent segments of one
+# word, so ``c"u"rl`` is the single word ``curl``.  Quote-type nesting is
+# respected: a ' inside double quotes is literal ("don't" keeps its
+# apostrophe), a " inside single quotes is literal, and a backslash-escaped
+# quote outside quotes stays escaped and opens nothing.
+#
+# A pair is stripped when removing it cannot change how the line reads as
+# shell:
+#
+# - word-glued: a neighbour on at least one side continues the word (an
+#   identifier or path character), and the content holds no whitespace and
+#   no quote characters.  This is the non-empty twin of the empty-quote rule
+#   above; both exist because ``c"u"rl`` reached no rule that names a
+#   literal ``curl``.
+# - standalone: the content is non-empty and free of whitespace, quotes and
+#   the metacharacters that would become structure (a pipe, a redirection,
+#   a comment opener) once unquoted.  ``"${arr[0]}"`` expands to a quoted
+#   command word, and without this the pipe-to-shell rules still see no
+#   literal shell after the ``|``.  A quoted string with spaces (a message,
+#   ``'foo: a thing'`` in optdepends) or with structure inside (``'foo>=1'``
+#   in a depends array) keeps its quotes, so tokenisation for the other
+#   rules does not shift, and a standalone empty '' stays: it is an empty
+#   argument, data rather than concatenation.
+_WORD_ADJACENT = "A-Za-z0-9_./+:@~-"
+_STRUCTURAL_METACHARS = "|&;<>()#"
+
+
+def _quotes_removable(content: str, pre: str, post: str) -> bool:
+    """Decide whether one quote pair vanishes under bash's quote removal."""
+    glued = (bool(pre) and pre in _WORD_ADJACENT) or (
+        bool(post) and post in _WORD_ADJACENT
+    )
+    clean = not any(c.isspace() or c in "'\"" for c in content)
+    if glued:
+        return not content or clean
+    if not content:
+        return False
+    return clean and not any(c in _STRUCTURAL_METACHARS for c in content)
+
+
+def _strip_shell_quotes(text: str) -> str:
+    """Remove shell quotes the way bash does, subject to _quotes_removable.
+
+    A small state machine, not a regex: the matching close of a quote is
+    found with quote-type nesting (the other quote character is literal
+    inside, a backslash-escaped quote inside double quotes does not close),
+    and an unterminated quote keeps the rest of the line verbatim.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c == "\\" and i + 1 < n:
+            # An escaped character is not a quote opener, whatever it is.
+            out.append(text[i : i + 2])
+            i += 2
+            continue
+        if c not in "'\"":
+            out.append(c)
+            i += 1
+            continue
+        q = c
+        j = i + 1
+        while j < n:
+            d = text[j]
+            if q == '"' and d == "\\" and j + 1 < n:
+                j += 2
+                continue
+            if d == q:
+                break
+            j += 1
+        if j >= n:
+            out.append(text[i:])
+            break
+        content = text[i + 1 : j]
+        pre = text[i - 1] if i > 0 else ""
+        post = text[j + 1] if j + 1 < n else ""
+        if _quotes_removable(content, pre, post):
+            out.append(content)
+        else:
+            out.append(text[i : j + 1])
+        i = j + 1
+    return "".join(out)
 
 _ANSI_C_ESCAPES = {
     "n": "\n", "t": "\t", "r": "\r", "a": "\a", "b": "\b",
@@ -116,7 +203,12 @@ def reconstruct_literals(text: str) -> tuple[str, bool]:
 
     result = _PRINTF_LITERAL_RE.sub(_printf_sub, result)
     result = _EMPTY_QUOTE_CONCAT_RE.sub("", result)
-    return result, not _ANSI_C_OPENER_RE.search(result)
+    # After ANSI-C opener detection has run below, so a genuine ``$'`` is
+    # still counted as unreconstructed; intra-word quote stripping only
+    # removes ordinary pairs.
+    unreconstructed = bool(_ANSI_C_OPENER_RE.search(result))
+    result = _strip_shell_quotes(result)
+    return result, not unreconstructed
 
 
 def _glob_to_regex(pat: str) -> re.Pattern:
@@ -170,7 +262,11 @@ def _strip_affix(val: str, op: str, pat: str) -> str:
     return val
 
 
-def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
+def _expand_one(
+    body: str,
+    vars_: dict[str, str],
+    arrays: dict[str, list[str]] | None = None,
+) -> str | None:
     """Resolve a single innermost ${...} body.
 
     *body* is the content between ${ and }; all nested expansions have
@@ -178,9 +274,23 @@ def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
 
     Returns None (unresolved) for forms we refuse to evaluate.
     """
+    arrays = arrays or {}
+
     # Indirect expansion and length: never resolve.
     if body.startswith("!") or body.startswith("#"):
         return None
+
+    # Array element or whole-array expansion.
+    m = re.match(r"^(\w+)\[(\*|@|\d+)\]$", body)
+    if m:
+        name, idx = m.group(1), m.group(2)
+        arr = arrays.get(name)
+        if arr is None:
+            return None
+        if idx in ("*", "@"):
+            return " ".join(arr)
+        i = int(idx)
+        return arr[i] if 0 <= i < len(arr) else ""
 
     # //pat/rep  |  //pat  (delete)  |  /pat/rep
     m = re.match(r"^(\w+)(//|/)([^/]*)(?:/(.*))?$", body)
@@ -188,7 +298,8 @@ def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
         name, mode, pat, rep = m.group(1), m.group(2), m.group(3), m.group(4) or ""
         val = vars_.get(name)
         if val is None:
-            return None
+            # Bash treats an unset scalar in ${var/pat/rep} as empty.
+            return ""
         regex = _glob_to_regex(pat)
         if mode == "//":
             return regex.sub(rep, val)
@@ -200,7 +311,7 @@ def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
         name, op, pat = m.group(1), m.group(2), m.group(3)
         val = vars_.get(name)
         if val is None:
-            return None
+            return ""
         return _strip_affix(val, op, pat)
 
     # :-default  /  :=default
@@ -215,30 +326,38 @@ def _expand_one(body: str, vars_: dict[str, str]) -> str | None:
         name, off, length = m.group(1), m.group(2), m.group(3)
         val = vars_.get(name)
         if val is None:
-            return None
+            return ""
         return val[int(off) : int(off) + int(length)] if length else val[int(off) :]
 
     # plain variable reference
     if re.fullmatch(r"\w+", body):
+        if body in arrays:
+            arr = arrays[body]
+            return arr[0] if arr else ""
         return vars_.get(body)
 
     return None
 
 
-def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
+def resolve_expansions(
+    text: str,
+    vars_: dict[str, str],
+    arrays: dict[str, list[str]] | None = None,
+) -> tuple[str, bool]:
     """Resolve nested ${...} parameter expansions innermost-first.
 
     Returns (resolved_text, fully_resolved).
     fully_resolved is False if any ${...} remains after the cap; the caller
     MUST treat that as unresolved, never as a literal value.
     """
+    arrays = arrays or {}
     all_resolved = True
     for _ in range(_MAX_EXPANSION_PASSES):
         before = text
         m = _INNERMOST_RE.search(text)
         if m is None:
             return text, all_resolved and "${" not in text
-        replacement = _expand_one(m.group(1), vars_)
+        replacement = _expand_one(m.group(1), vars_, arrays)
         if replacement is None:
             all_resolved = False
         else:
@@ -248,28 +367,40 @@ def resolve_expansions(text: str, vars_: dict[str, str]) -> tuple[str, bool]:
     return text, False
 
 
-def _substitute_with_resolve(text: str, var_table: dict[str, str]) -> tuple[str, bool]:
-    """Resolve $var and ${var...} references in *text*, returning
+def _substitute_with_resolve(
+    text: str,
+    var_table: dict[str, str],
+    array_table: dict[str, list[str]] | None = None,
+) -> tuple[str, bool]:
+    """Resolve $var, ${var...} and ${arr[i]} references in *text*, returning
     (resolved, fully_resolved).  R117 literal reconstruction runs on the
     resolved line, so obfuscated forms reach rules in their plain-text
     shape while the line is marked unresolved when reconstruction fails."""
+    array_table = array_table or {}
+
+    def replacer(match: re.Match) -> str:
+        var = match.group(1) or match.group(2)
+        if var in array_table:
+            arr = array_table[var]
+            return arr[0] if arr else match.group(0)
+        return var_table.get(var, match.group(0))
+
     # First resolve simple ${var} and $var.
-    resolved = _VAR_REF_RE.sub(
-        lambda m: var_table.get(m.group(1) or m.group(2), m.group(0)),
-        text,
-    )
+    resolved = _VAR_REF_RE.sub(replacer, text)
     if len(resolved) > _MAX_LINE_LEN:
         return text, False
-    # Then resolve parameter expansions (${var//pat/rep}, etc.).
+    # Then resolve parameter expansions (${var//pat/rep}, ${arr[i]}, etc.).
     ok = True
     if "${" in resolved:
-        resolved, ok = resolve_expansions(resolved, var_table)
-        if not ok or len(resolved) > _MAX_LINE_LEN:
+        resolved, ok = resolve_expansions(resolved, var_table, array_table)
+        if len(resolved) > _MAX_LINE_LEN:
             return text, False
     # R117: reconstruct obfuscated literals as data, never executed.
     reconstructed, fully = reconstruct_literals(resolved)
     if len(reconstructed) > _MAX_LINE_LEN:
         return text, False
+    # Partial expansion is kept: a resolved ${arr[0]} -> curl still helps
+    # rules see the downloader even when ${url} on the same line is unknown.
     return reconstructed, ok and fully
 
 
@@ -368,8 +499,17 @@ _ASSIGNMENT_RE = re.compile(
     r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*(.+)"
 )
 
+# Array assignment opener: ``_c=(curl -fsSL)`` or ``source=(`` spanning
+# several lines.  Captured group 3 is the text after ``(``.
+_ARRAY_ASSIGNMENT_RE = re.compile(
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*\((.*)"
+)
 
-_VAR_REF_RE = re.compile(r"\$\{(\w+)\}|\$(\w+)")
+
+# Simple variable references.  A braced reference that is immediately
+# followed by ``[`` is an array subscript and is handled by
+# :func:`resolve_expansions` instead, so the ``[`` stays outside this match.
+_VAR_REF_RE = re.compile(r"\$\{(\w+)\}(?!\[)|\$(\w+)")
 
 
 # Substitution is iterated, and each round can double a value that refers
@@ -387,58 +527,167 @@ _MAX_LINE_LEN = 65536
 _MAX_TABLE_BYTES = 1 << 20
 
 
-def _substitute(text: str, var_table: dict[str, str], limit: int = _MAX_LINE_LEN) -> str:
-    """resolve variable references in text using a variable table"""
+def _strip_outer_quotes(value: str) -> str:
+    """Remove one matching pair of surrounding quotes, if present."""
+    if (value.startswith('"') and value.endswith('"')) or (
+        value.startswith("'") and value.endswith("'")
+    ):
+        return value[1:-1]
+    return value
+
+
+def _collect_array_entries(additions: list[str], start_idx: int) -> tuple[int, list[str]]:
+    """Collect the entries of a ``name=( ...)`` array starting at *start_idx*.
+
+    Returns the index of the line that closed the array and the list of
+    entries (outer quotes removed by ``shlex``).  Nested parentheses inside
+    quotes are ignored; the closing ``)`` that balances the opener is not
+    included in the parsed content.
+    """
+    first = additions[start_idx]
+    m = _ARRAY_ASSIGNMENT_RE.match(first)
+    if not m:
+        return start_idx, []
+    # *rest* is the text after the opening ``(`` on the first line; the
+    # opener itself is represented by the initial depth of 1.
+    rest = m.group(3)
+    depth = 1
+    in_single = in_double = False
+    parts: list[str] = []
+    i = start_idx
+    for line in [rest] + additions[start_idx + 1 :]:
+        content: list[str] = []
+        j = 0
+        while j < len(line):
+            ch = line[j]
+            if in_double:
+                if ch == "\\" and j + 1 < len(line):
+                    content.append(ch)
+                    content.append(line[j + 1])
+                    j += 2
+                    continue
+                if ch == '"':
+                    in_double = False
+                content.append(ch)
+                j += 1
+                continue
+            if in_single:
+                if ch == "'":
+                    in_single = False
+                content.append(ch)
+                j += 1
+                continue
+            if ch == '"':
+                in_double = True
+                content.append(ch)
+                j += 1
+                continue
+            if ch == "'":
+                in_single = True
+                content.append(ch)
+                j += 1
+                continue
+            if ch == '(':
+                depth += 1
+                content.append(ch)
+                j += 1
+                continue
+            if ch == ')':
+                depth -= 1
+                if depth == 0:
+                    break
+                content.append(ch)
+                j += 1
+                continue
+            content.append(ch)
+            j += 1
+        parts.append("".join(content))
+        if depth == 0:
+            break
+        i += 1
+    try:
+        entries = [e for e in shlex.split(" ".join(parts)) if e]
+    except ValueError:
+        entries = []
+    return i, entries
+
+
+def _substitute(
+    text: str,
+    var_table: dict[str, str],
+    array_table: dict[str, list[str]] | None = None,
+    limit: int = _MAX_LINE_LEN,
+) -> str:
+    """Resolve variable and array references in *text*."""
+    array_table = array_table or {}
+
     def replacer(match: re.Match) -> str:
-        """look up the matched variable in the table"""
         var = match.group(1) or match.group(2)
+        if var in array_table:
+            arr = array_table[var]
+            return arr[0] if arr else match.group(0)
         return var_table.get(var, match.group(0))
 
     result = _VAR_REF_RE.sub(replacer, text)
     if len(result) > limit:
         return text
     if "${" in result:
-        result, _ok = resolve_expansions(result, var_table)
+        result, _ok = resolve_expansions(result, var_table, array_table)
         if len(result) > limit:
             return text
     reconstructed, _fully = reconstruct_literals(result)
     return reconstructed if len(reconstructed) <= limit else text
 
 
-def _variable_table(additions: list[str]) -> dict[str, str]:
-    """Resolve assignments among added lines into ``{name: value}``."""
+def _variable_table(
+    additions: list[str],
+) -> tuple[dict[str, str], dict[str, list[str]]]:
+    """Resolve assignments among added lines into scalar and array tables."""
     var_table: dict[str, str] = {}
-    for line in additions:
-        match = _ASSIGNMENT_RE.match(line)
-        if not match:
+    array_table: dict[str, list[str]] = {}
+    i = 0
+    while i < len(additions):
+        line = additions[i]
+        # Arrays first: ``source=(... )`` may span multiple added lines.
+        arr_match = _ARRAY_ASSIGNMENT_RE.match(line)
+        if arr_match:
+            name, op = arr_match.group(1), arr_match.group(2)
+            close_idx, entries = _collect_array_entries(additions, i)
+            if entries:
+                if op == "+=":
+                    array_table.setdefault(name, []).extend(entries)
+                else:
+                    array_table[name] = entries
+            i = close_idx + 1
             continue
-        name, op, value = match.group(1), match.group(2), match.group(3).strip()
-        if (value.startswith('"') and value.endswith('"')) or (
-            value.startswith("'") and value.endswith("'")
-        ):
-            value = value[1:-1]
-        # A command substitution has no static value, so it cannot be
-        # folded into the table.
-        if "$(" not in value and "`" not in value:
-            # ``+=`` appends to whatever the name already holds (empty when
-            # it is unset, matching bash), so a command assembled across
-            # several += lines resolves to one literal string.
-            if op == "+=":
-                var_table[name] = var_table.get(name, "") + value
-            else:
-                var_table[name] = value
+        scalar_match = _ASSIGNMENT_RE.match(line)
+        if scalar_match:
+            name, op, value = (
+                scalar_match.group(1),
+                scalar_match.group(2),
+                scalar_match.group(3).strip(),
+            )
+            value = _strip_outer_quotes(value)
+            # A command substitution has no static value, so it cannot be
+            # folded into the table.
+            if "$(" not in value and "`" not in value:
+                if op == "+=":
+                    var_table[name] = var_table.get(name, "") + value
+                else:
+                    var_table[name] = value
+        i += 1
 
     for _ in range(10):
         new_table: dict[str, str] = {}
         for k, v in var_table.items():
-            substituted, _ = _substitute_with_resolve(v, var_table)
+            substituted, _ = _substitute_with_resolve(v, var_table, array_table)
             new_table[k] = substituted if len(substituted) <= _MAX_VALUE_LEN else v
         if new_table == var_table:
             break
         var_table = new_table
         if sum(len(v) for v in var_table.values()) > _MAX_TABLE_BYTES:
             break
-    return var_table
+    return var_table, array_table
 
 
 def resolve_added_lines(diff_text: str) -> list[str]:
@@ -459,13 +708,13 @@ def resolve_added_lines(diff_text: str) -> list[str]:
 
 def _resolve_added_lines(diff_text: str) -> list[str]:
     lines = join_line_continuations(diff_text.splitlines())
-    var_table = _variable_table(
+    var_table, array_table = _variable_table(
         [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
     )
     resolved_lines = []
     for line in lines:
         if line.startswith("+"):
-            r, _ok = _substitute_with_resolve(line[1:], var_table)
+            r, _ok = _substitute_with_resolve(line[1:], var_table, array_table)
             resolved_lines.append("+" + r)
         else:
             resolved_lines.append(line)
@@ -530,7 +779,7 @@ def tokenize_and_resolve_indexed(
                 additions.append(content)
                 addition_indices.append(raw_index)
 
-    var_table = _variable_table(additions)
+    var_table, array_table = _variable_table(additions)
 
     # An assignment whose value is statically known contributes its value
     # to the table rather than a command line to match against; anything
@@ -548,7 +797,7 @@ def tokenize_and_resolve_indexed(
     resolved = []
     unresolved_out = []
     for _raw_index, line in candidates:
-        r, ok = _substitute_with_resolve(line, var_table)
+        r, ok = _substitute_with_resolve(line, var_table, array_table)
         resolved.append(r)
         if not ok or r == line:
             unresolved_out.append(line)

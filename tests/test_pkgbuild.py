@@ -1,13 +1,11 @@
 import re
 import shutil
 import subprocess
-import tarfile
 from pathlib import Path
 
 import pytest
 import tomllib
 
-import trustsight
 
 PKGBUILD_DIR = Path(__file__).resolve().parent.parent / "packaging" / "aur"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"

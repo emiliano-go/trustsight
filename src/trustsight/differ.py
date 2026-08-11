@@ -290,11 +290,171 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     return urls
 
 
+_SOURCE_OPEN_RE = re.compile(r"^\+\s*(?:_?\w*source\w*)\s*=\s*\(", re.IGNORECASE)
+_CMD_SUBST_RE = re.compile(r"\$\(|`")
+
+
 def source_array_has_command_substitution(diff_text: str) -> bool:
-    """Detect command substitution inside an added ``source=()`` array."""
-    return any(
-        _SOURCE_CMD_SUBST_RE.search(line) for line in diff_text.splitlines()
-    )
+    """Detect command substitution inside an added ``source=()`` array.
+
+    Multi-line aware: the opener and the ``$(...)`` continuation line are
+    usually different physical lines, so the whole open array is tracked, not
+    just the single line the substitution shares with ``source=``.
+    """
+    in_array = False
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        if _SOURCE_CMD_SUBST_RE.search(line):
+            return True
+        if not in_array:
+            if _SOURCE_OPEN_RE.match(line) and ")" not in line:
+                in_array = True
+            continue
+        # Inside an open array: only added/context lines belong to it.
+        if line.startswith("+") and _CMD_SUBST_RE.search(line):
+            return True
+        if ")" in line:
+            in_array = False
+    return False
+
+
+# A local ``source=()`` entry is a file shipped inside the AUR repo, which
+# makepkg copies into ``$srcdir`` where ``prepare()``/``build()`` can run it.
+# Its bytes are committed and visible, but generate_diff's filename filter
+# used to drop everything that was not PKGBUILD/.SRCINFO/*.install, so a
+# ``curl | bash`` moved into ``setup.sh`` reached no rule.  These helpers put
+# that content back in front of the scanner.  Cap it: an untrusted repo must
+# not force the reviewer to read an unbounded file, and the pipeline's own
+# diff cap still bounds the combined text on top of this.
+_COMPANION_MAX_BYTES = 65536
+# One array element: a single- or double-quoted string, or a bare word.
+# bash accepts ``source=(setup.sh)`` unquoted, so a quoted-only parser was
+# evaded by simply dropping the quotes.
+_ARRAY_TOKEN_RE = re.compile(r"""'([^']*)'|"([^"]*)"|([^\s()'"]+)""")
+
+
+def local_source_names(pkgbuild_text: str) -> set[str]:
+    """Basenames of the local (non-URL) entries in the ``source=()`` arrays.
+
+    A ``name::url`` rename is a download and is skipped; a bare filename,
+    quoted or not, is a companion file the recipe ships.  ``source_x86_64``
+    and friends count.
+    """
+    names: set[str] = set()
+    in_array = False
+    for raw in pkgbuild_text.splitlines():
+        line = raw.strip()
+        if not in_array:
+            if not _SOURCE_ARRAY_START_RE.match(line):
+                continue
+            in_array = True
+            line = line[line.index("(") + 1:]
+        segment = line.split(")", 1)[0] if ")" in line else line
+        for q1, q2, bare in _ARRAY_TOKEN_RE.findall(segment):
+            tok = q1 or q2 or bare
+            if not tok or "://" in tok:
+                continue
+            names.add(tok.rsplit("/", 1)[-1])
+        if ")" in line:
+            in_array = False
+    return names
+
+
+def _top_level_blob(tree, name: str):
+    """The blob named *name* at the tree root, or None."""
+    try:
+        entry = tree[name]
+    except (KeyError, TypeError):
+        return None
+    if getattr(entry, "type_str", None) != "blob":
+        return None
+    return entry
+
+
+# Metadata files the diff already carries; scanning them here would double
+# every finding.  ``.install`` is matched by suffix separately.
+_COMPANION_SKIP = frozenset({"PKGBUILD", ".SRCINFO", ".gitignore"})
+
+
+def _companion_names(tree, pkgbuild_text: str) -> list[str]:
+    """Committed top-level files whose content the recipe pulls in.
+
+    A file is included when it is a declared ``source=()`` entry *or* its name
+    appears anywhere in the PKGBUILD: ``bash "${startdir}/helper.sh"`` names a
+    committed file that makepkg never copies through ``source=()`` yet the
+    build still executes, so declaring the source was never required to run
+    it.  Tying the scan to files the recipe *names* keeps an unrelated
+    committed blob out of it while leaving no referenced file unread.
+    """
+    declared = local_source_names(pkgbuild_text)
+    names: list[str] = []
+    for entry in tree:
+        if getattr(entry, "type_str", None) != "blob":
+            continue
+        name = entry.name
+        if name in _COMPANION_SKIP or name.endswith(".install"):
+            continue
+        if name in declared or name in pkgbuild_text:
+            names.append(name)
+    return names
+
+
+def companion_source_hunks(
+    repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES
+) -> str:
+    """Committed companion files rendered as added-file diff hunks.
+
+    Every committed text file the PKGBUILD names -- a declared ``source=()``
+    entry or one it merely executes/sources/patches by path -- is emitted as
+    a ``+++ b/<name>`` hunk whose whole current content is added lines, so the
+    ordinary line rules, the tokenizer and ``map_diff_lines`` see it with
+    correct file attribution.  Binary and ELF files are left out: R118-tree
+    already owns embedded binaries, and text rules over binary bytes are
+    noise.  The full current content is emitted, not just this commit's diff,
+    so a payload committed earlier and merely referenced now is still read.
+    """
+    commit = repo.get(commit_oid)
+    if commit is None:
+        return ""
+    pkgbuild = _top_level_blob(commit.tree, "PKGBUILD")
+    if pkgbuild is None:
+        return ""
+    try:
+        pkgbuild_text = repo[pkgbuild.id].data.decode("utf-8", errors="replace")
+    except (KeyError, TypeError, ValueError):
+        return ""
+
+    hunks: list[str] = []
+    used = 0
+    for name in sorted(set(_companion_names(commit.tree, pkgbuild_text))):
+        entry = _top_level_blob(commit.tree, name)
+        if entry is None:
+            continue
+        try:
+            data = repo[entry.id].data
+        except (KeyError, TypeError, ValueError):
+            continue
+        # NUL in the head marks a binary; ELF is R118's job, not the text
+        # rules'.
+        if b"\x00" in data[:8192] or data[:4] == b"\x7fELF":
+            continue
+        text = data.decode("utf-8", errors="replace")
+        lines: list[str] = []
+        for ln in text.splitlines():
+            if used + len(ln) + 1 > max_bytes:
+                break
+            lines.append(ln)
+            used += len(ln) + 1
+        if not lines:
+            continue
+        hunks.append(
+            f"--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
+            + "\n".join("+" + ln for ln in lines)
+        )
+        if used >= max_bytes:
+            break
+    return "\n".join(hunks)
 
 
 _GPG_VERIFY_RE = re.compile(

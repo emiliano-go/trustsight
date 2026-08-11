@@ -401,3 +401,46 @@ def test_discover_packages_deduplicates(
 
     assert len(result) == 1
     assert result[0]["name"] == "shared-pkg"
+
+
+# --- A4: the RPC response is byte-capped ---
+
+
+def test_load_rpc_json_accepts_a_small_response():
+    import io
+
+    from trustsight.discovery import _load_rpc_json
+
+    resp = io.BytesIO(b'{"resultcount": 0, "results": []}')
+    assert _load_rpc_json(resp, limit=1024) == {"resultcount": 0, "results": []}
+
+
+def test_load_rpc_json_rejects_an_oversized_response():
+    import io
+
+    from trustsight.discovery import _RpcResponseTooLarge, _load_rpc_json
+
+    resp = io.BytesIO(b"[" + b"0," * 10_000 + b"0]")
+    with pytest.raises(_RpcResponseTooLarge):
+        _load_rpc_json(resp, limit=64)
+
+
+def test_get_aur_package_info_degrades_on_oversized_rpc(monkeypatch):
+    """An over-cap RPC reply is treated as a failed query, not buffered."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(disc, "_MAX_RPC_BYTES", 64)
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(b'{"results": [' + b'{"Name": "x"},' * 1000 + b'{"Name": "y"}]}')
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    # Nothing raises out; the oversized reply degrades to an empty result.
+    assert disc.get_aur_package_info(["somepkg"]) == {}

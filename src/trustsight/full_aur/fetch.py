@@ -1,8 +1,12 @@
 """PKGBUILD fetcher via cgit with snapshot fallback."""
 
+import errno
 import json
 import logging
+import random
 import tarfile
+import threading
+import time
 import urllib.request
 import urllib.error
 from urllib.parse import quote
@@ -18,7 +22,58 @@ _SNAPSHOT_URL = "https://aur.archlinux.org/cgit/aur.git/snapshot"
 _RESUME_FILE = "full-aur-resume.json"
 
 _HTTP_TIMEOUT = 60
-_REQUEST_DELAY = 0.05  # 50ms between requests to stay polite
+
+# The AUR's cgit sits behind rate limiting and Anubis anti-scraping, and it
+# will 429, 5xx, or reset the connection when hit too fast; a bootstrap makes
+# ~120k requests, so being a good citizen is not optional.  Two mechanisms
+# keep it polite:
+#
+# 1. A single global minimum interval between request *starts*, shared across
+#    every worker thread.  This caps the aggregate rate regardless of how many
+#    fetches run concurrently: raising ``corpus_fetch_workers`` fills the
+#    pipeline up to this ceiling, it does not exceed it.
+# 2. Retry with exponential backoff on the errors that mean "slow down"
+#    (429, 500/502/503/504, connection reset), honouring a ``Retry-After``
+#    header when the server sends one.
+_MIN_REQUEST_INTERVAL = 0.2  # seconds; ~5 requests/second aggregate
+_MAX_RETRIES = 5
+_BACKOFF_BASE = 1.0
+_BACKOFF_MAX = 60.0
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+_rate_lock = threading.Lock()
+_last_request_at = [0.0]
+
+
+def _throttle() -> None:
+    """Block until the global minimum inter-request interval has elapsed."""
+    with _rate_lock:
+        now = time.monotonic()
+        wait = _last_request_at[0] + _MIN_REQUEST_INTERVAL - now
+        if wait > 0:
+            time.sleep(wait)
+        _last_request_at[0] = time.monotonic()
+
+
+def _backoff_delay(attempt: int) -> float:
+    return min(_BACKOFF_BASE * (2 ** attempt) + random.uniform(0, 0.5), _BACKOFF_MAX)
+
+
+def _retry_after(http_error) -> Optional[float]:
+    headers = getattr(http_error, "headers", None)
+    value = headers.get("Retry-After") if headers else None
+    if not value:
+        return None
+    try:
+        return min(float(value), _BACKOFF_MAX)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_transient_urlerror(reason) -> bool:
+    if isinstance(reason, (ConnectionResetError, ConnectionRefusedError, TimeoutError)):
+        return True
+    return getattr(reason, "errno", None) in (errno.ECONNRESET, errno.ECONNREFUSED, errno.ETIMEDOUT)
 
 # An AUR snapshot tarball is a few kilobytes and a PKGBUILD smaller still.
 # The ceiling is not about the AUR behaving badly - it is that a response
@@ -38,31 +93,48 @@ def _http_get(url: str) -> Optional[bytes]:
 
     The body is read in chunks and abandoned past ``MAX_RESPONSE_BYTES``.
     """
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
-        resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
-        buf = bytearray()
-        while True:
-            chunk = resp.read(65536)
-            if not chunk:
-                break
-            buf.extend(chunk)
-            if len(buf) > MAX_RESPONSE_BYTES:
-                log.warning(
-                    "response from %s exceeds %d bytes; abandoning",
-                    url, MAX_RESPONSE_BYTES,
-                )
-                return None
-        return bytes(buf)
-    except urllib.error.HTTPError as e:
-        log.warning("HTTP %d fetching %s", e.code, url)
-        return None
-    except urllib.error.URLError as e:
-        log.warning("URL error fetching %s: %s", url, e.reason)
-        return None
-    except Exception as e:
-        log.warning("unexpected error fetching %s: %s", url, e)
-        return None
+    for attempt in range(_MAX_RETRIES + 1):
+        _throttle()
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
+            resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
+            buf = bytearray()
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                buf.extend(chunk)
+                if len(buf) > MAX_RESPONSE_BYTES:
+                    log.warning(
+                        "response from %s exceeds %d bytes; abandoning",
+                        url, MAX_RESPONSE_BYTES,
+                    )
+                    return None
+            return bytes(buf)
+        except urllib.error.HTTPError as e:
+            if e.code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
+                delay = _retry_after(e)
+                if delay is None:
+                    delay = _backoff_delay(attempt)
+                log.debug("HTTP %d fetching %s; backing off %.1fs (attempt %d/%d)",
+                          e.code, url, delay, attempt + 1, _MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("HTTP %d fetching %s", e.code, url)
+            return None
+        except urllib.error.URLError as e:
+            if _is_transient_urlerror(e.reason) and attempt < _MAX_RETRIES:
+                delay = _backoff_delay(attempt)
+                log.debug("URL error fetching %s: %s; backing off %.1fs (attempt %d/%d)",
+                          url, e.reason, delay, attempt + 1, _MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("URL error fetching %s: %s", url, e.reason)
+            return None
+        except Exception as e:
+            log.warning("unexpected error fetching %s: %s", url, e)
+            return None
+    return None
 
 
 def _is_anubis_challenge(body: bytes) -> bool:
@@ -181,7 +253,11 @@ def fetch_pkgbuild_with_tree(name: str) -> tuple[Optional[str], Optional[list[tu
             if pkgbuild is not None:
                 return pkgbuild, manifest
         except Exception as e:
-            log.warning("snapshot tarball for %s unusable: %s", name, e)
+            # Benign: a missing or empty snapshot tarball just means we fall
+            # back to the cgit text fetch below.  Debug, not warning, so a
+            # bootstrap of tens of thousands of packages does not spam the
+            # progress bar with one line per VCS/-bin package.
+            log.debug("snapshot tarball for %s unusable: %s", name, e)
     return fetch_pkgbuild(name), None
 
 

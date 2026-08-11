@@ -206,11 +206,24 @@ def test_r054_persistence_outside_package_root():
 
 
 @pytest.mark.parametrize("line", [
-    '+  install -Dm644 t.service "$pkgdir/usr/lib/systemd/system/t.service"',
+    # The idiomatic split-quote form always matched.  The merged-quote and
+    # unquoted forms stage the identical root-level unit and used to slip
+    # the [\s"'] anchor (the char before the path is } or r).
+    '+  install -Dm644 t.service "${pkgdir}"/usr/lib/systemd/system/t.service',
+    '+  install -Dm644 t.service "${pkgdir}/usr/lib/systemd/system/t.service"',
+    '+  install -Dm644 t.service $pkgdir/usr/lib/systemd/system/t.service',
     '+  install -Dm644 job "$pkgdir/etc/cron.d/job"',
 ])
-def test_r054_ignores_pkgdir_units(line):
-    """Installing a unit into $pkgdir is what a correct PKGBUILD does."""
+def test_r054_fires_on_pkgdir_units_in_any_quoting_style(line):
+    """A unit staged into $pkgdir is still a persistent root-level unit."""
+    assert fires("R054", [line])
+
+
+@pytest.mark.parametrize("line", [
+    '+  install -Dm644 t.service "$pkgdir/usr/lib/systemd/user/t.service"',
+    '+  install -Dm644 t.service "$pkgdir/usr/share/t.service"',
+])
+def test_r054_ignores_non_persistence_paths(line):
     assert not fires("R054", [line])
 
 

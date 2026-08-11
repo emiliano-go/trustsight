@@ -9,7 +9,6 @@ from ..scoring import stored_band
 from .display import (
     band_colour,
     HAS_RICH,
-    RISK_COLORS,
     _print_colored,
     _score_text,
     console,

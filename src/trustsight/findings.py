@@ -93,6 +93,7 @@ TEMPLATES: dict[str, str] = {
     "R130": "{detail}",
     "R131": "{detail}: {value}",
     "R132": "{detail}: {body}",
+    "R136": "{position}() executes repo-committed file not declared in source=(): {path}",
 
     # --- Phase 4: Class B ---
     "R115": "epoch={epoch} newly introduced",

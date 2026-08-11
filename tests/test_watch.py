@@ -182,7 +182,7 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
         "pkg": _entry("pkg", "alice", 1_800_000_000),
         "other": _entry("other", "alice", 1_800_000_000),
     }
-    first = run_baseline_build()
+    first = run_baseline_build(bootstrap=True)
     assert first.bootstrap
     assert first.cluster_findings == []
 
@@ -197,3 +197,68 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
 
     third = run_baseline_build()
     assert third.new_alerts == []
+
+
+# --- bootstrap guard + per-cycle cap (safe-by-default corpus growth) ---
+
+
+def test_bootstrap_is_refused_without_the_flag(fake_aur):
+    """A from-scratch bootstrap must be asked for, not triggered by a missing
+    snapshot; the footgun that scraped the whole AUR by accident is closed."""
+    from trustsight.db import get_connection
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    fake_aur["meta"] = {"pkg": _entry("pkg", "alice", 1_800_000_000)}
+    result = run_baseline_build()  # no --bootstrap, no snapshot
+
+    assert result.bootstrap is False
+    assert result.processed == 0
+    with get_connection() as c:
+        assert c.execute("SELECT COUNT(*) FROM package_profiles").fetchone()[0] == 0
+
+
+def test_bootstrap_proceeds_with_the_flag(fake_aur):
+    from trustsight.db import get_connection
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    fake_aur["meta"] = {
+        "pkg": _entry("pkg", "alice", 1_800_000_000),
+        "two": _entry("two", "alice", 1_800_000_000),
+    }
+    result = run_baseline_build(bootstrap=True)
+    assert result.bootstrap is True
+    with get_connection() as c:
+        assert c.execute("SELECT COUNT(*) FROM package_profiles").fetchone()[0] == 2
+
+
+def test_a_capped_cycle_processes_a_chunk_and_resumes(fake_aur, monkeypatch):
+    """With a cap of 1, a three-package bootstrap advances one per cycle,
+    resumes automatically (no --bootstrap needed to continue), and only
+    finishes the transition on the last chunk."""
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.db import get_connection
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    store: dict = {}
+    monkeypatch.setattr(pipeline, "save_resume_state", lambda s: store.__setitem__("state", s))
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda: store.get("state"))
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: store.pop("state", None))
+    monkeypatch.setattr(pipeline, "_max_per_cycle", lambda: 1)
+
+    fake_aur["meta"] = {n: _entry(n, "alice", 1_800_000_000) for n in ("a", "b", "c")}
+
+    def _count():
+        with get_connection() as c:
+            return c.execute("SELECT COUNT(*) FROM package_profiles").fetchone()[0]
+
+    run_baseline_build(bootstrap=True)      # chunk 1
+    assert _count() == 1
+    assert "state" in store                 # partial: resume kept, snapshot not advanced
+
+    run_baseline_build()                    # chunk 2, resumes without --bootstrap
+    assert _count() == 2
+    assert "state" in store
+
+    run_baseline_build()                    # chunk 3 completes the transition
+    assert _count() == 3
+    assert "state" not in store             # resume cleared on completion

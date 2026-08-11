@@ -100,8 +100,8 @@ def _signing_key_findings(diff_text: str, add) -> None:
     for line in diff_text.splitlines():
         if line.startswith(("+++", "---", "@@")):
             continue
-        side = line[0] if line[:1] in "+- " else " "
-        body = line[1:] if line[:1] in "+- " else line
+        side = line[0] if line[:1] in ("+", "-", " ") else " "
+        body = line[1:] if line[:1] in ("+", "-", " ") else line
         opens = bool(_VALIDPGPKEYS_LINE_RE.match(body))
         if side == "-" and (opens or in_removed):
             had_keys_before = had_keys_before or bool(_VALIDPGPKEYS_ENTRY_RE.search(body))
@@ -153,6 +153,7 @@ def _structural_findings(
     package_name: str = "",
     config: dict | None = None,
     current_text: str | None = None,
+    tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
@@ -245,7 +246,7 @@ def _structural_findings(
     _signing_key_findings(diff_text, add)
     _indirect_remote_execution_findings(diff_text, config or {}, add)
     _indirect_expansion_findings(diff_text, config or {}, add)
-    _delivery_findings(diff_text, config or {}, add)
+    _delivery_findings(diff_text, config or {}, add, tree_manifest=tree_manifest)
     _persistence_findings(diff_text, config or {}, add)
     _recon_findings(diff_text, config or {}, add)
     _exotic_protocol_findings(diff_text, config or {}, add)

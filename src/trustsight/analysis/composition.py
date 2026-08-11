@@ -93,7 +93,7 @@ _STAGE_OF = {
     "R120": "payload", "R121": "payload",
     "R082": "obfuscation", "R117": "obfuscation",
     "R119": "anti_analysis", "R132": "anti_analysis",
-    "R124": "write_then_exec",
+    "R124": "write_then_exec", "R136": "write_then_exec",
     "R084": "staging",
     "R086": "recon",
     "R085": "persistence", "R114": "persistence", "R128": "persistence",

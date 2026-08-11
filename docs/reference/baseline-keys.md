@@ -27,7 +27,13 @@ that pins a new public key; there is no in-band revocation.
 ### The release channel
 
 Every baseline the tool consumes at runtime is distributed as a release asset
-named with the `baseline-` prefix, and a release ships the whole family:
+named with the `baseline-` prefix, and **a channel release** (tag
+`baseline-<date>`) ships the whole family. Channel releases are kept apart
+from software releases: a `vX.Y.Z` tag carries the program and its notes,
+never baseline assets, and a channel release is published after its software
+release so `latest` (the tool's default channel) resolves to it; the
+[publishing guide](contributing/publishing-baselines.md) documents the
+cadence and `seed fetch --tag` for pinning.
 
 | Asset | What it is | Consumed by |
 |-------|-----------|-------------|

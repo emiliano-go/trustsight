@@ -11,7 +11,7 @@ A13 / A13b / P1 in the [security model](../security.md).
 
 Every baseline the tool consumes at runtime is distributed as a GitHub
 release asset in the TrustSight repository, named with the `baseline-`
-prefix, and a release ships the whole family:
+prefix, and **a baseline release ships the whole family**:
 
 - `baseline-seed.tar.gz` (the v2 hashed novelty seed) plus `.sig`;
 - `baseline-ioc-<source>-<incident>-manifest.json` and
@@ -19,6 +19,22 @@ prefix, and a release ships the whole family:
   input, each with its `.sig`;
 - `baseline-corpus.tar.zst` (the corpus baseline) plus `.sig`;
 - `baseline-manifest.json` (per-asset SHA-256, size and signature).
+
+**Two release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
+and carry the program and its release notes, never baseline assets. Channel
+releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
+and carry the `baseline-*` assets. A channel release is published **after**
+its software release, so it becomes the repository's `latest` release and
+the tool's default `/releases/latest/download/...` channel resolves to it
+without any per-tag plumbing. The intended cadence: publish a software
+release, then publish a fresh `baseline-<date>` right behind it whenever the
+baselines need refreshing.
+
+**Pinning.** The default channel follows `latest`, which moves the next time
+a newer release is published. `trustsight seed fetch --tag baseline-2026-08-10`
+pins a specific channel release, and `release.asset_url(name, tag)` resolves
+it; keep the tag of the channel release you verified if you want a
+reproducible seed.
 
 `scripts/build_release_baselines.py` assembles and signs the family:
 it takes the seed's `trustsight-seed-v2/` directory, the curated IOC inputs,
@@ -28,11 +44,15 @@ the manifest. Every asset also gets a detached `.sig` sibling under the same
 key; the tool refuses any download whose signature does not verify.
 
 The seed and IOC assets are built and uploaded **automatically** by
-[`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml)
-on every `release: published` event (the seed is rebuilt from a mirror
-reconstructed from the corpus lockfile). The corpus baseline cannot be
-rebuilt from nothing in CI: it is grown incrementally by `full-aur` runs on
-a maintainer machine and is uploaded separately, as described below.
+[`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml),
+which only runs for `baseline-*` releases and manual dispatch (software
+releases skip it entirely). The seed is rebuilt from a mirror reconstructed
+from the corpus lockfile; the mirror lives in the CI cache, so a cold cache
+fails the job loudly rather than shipping an unverified or empty seed, and
+the maintainer then uploads the locally built, self-verified assets to the
+channel release (see below). The corpus baseline cannot be rebuilt from
+nothing in CI: it is grown incrementally by `full-aur` runs on a maintainer
+machine and is uploaded separately, as described below.
 
 ## Prerequisites: the signing key
 
@@ -101,12 +121,17 @@ Path.home().joinpath("trustsight-release.raw").write_bytes(p.private_bytes_raw()
 chmod 600 ~/trustsight-release.raw
 ```
 
-Attach it to the release with the `baseline-` prefix:
+Attach it to the **channel** release (tag `baseline-<date>`, not the software
+tag), keeping the `baseline-` prefix:
+
+```bash
+gh release upload baseline-2026-08-10 dist/baseline-corpus.tar.zst dist/baseline-corpus.tar.zst.sig
+```
 
 ```bash
 python scripts/build_release_baselines.py --out dist/ \
     --sign-key ~/trustsight-release.raw --corpus baseline-corpus.tar.zst
-gh release upload <tag> dist/baseline-corpus.tar.zst dist/baseline-corpus.tar.zst.sig
+gh release upload baseline-2026-08-10 dist/baseline-corpus.tar.zst dist/baseline-corpus.tar.zst.sig
 shred -u ~/trustsight-release.raw   # the raw key is deleted when you are done
 ```
 

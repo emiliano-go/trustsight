@@ -12,19 +12,29 @@ permissions:
   contents: write
 
 # Builds and uploads the ``baseline-*`` release assets for a published
-# release: the hashed novelty seed, the curated IOC baseline pairs, and the
-# summary manifest.  Every asset ships with a detached ``.sig`` under the
-# distribution key held in the BASELINE_SIGNING_KEY Actions secret; the
-# tool refuses a download whose signature does not verify against the
-# pinned key shipped in the package (see docs/reference/baseline-keys.md).
+# *baseline* release (tag ``baseline-<date>``): the hashed novelty seed, the
+# curated IOC baseline pairs, and the summary manifest.  Every asset ships
+# with a detached ``.sig`` under the distribution key held in the
+# BASELINE_SIGNING_KEY Actions secret; the tool refuses a download whose
+# signature does not verify against the pinned key shipped in the package
+# (see docs/reference/baseline-keys.md).
 #
-# The corpus baseline (baseline-corpus-<tag>.tar.zst) is exported by the
+# Software releases (vX.Y.Z) never carry baseline assets; the job guard
+# below skips them so a publish cannot clobber or rebuild the channel.  The
+# corpus baseline (baseline-corpus-<tag>.tar.zst) is exported by the
 # maintainer from an incrementally grown full-aur database and uploaded
 # separately; see docs/contributing/publishing-baselines.md.
 
 jobs:
   baselines:
     runs-on: ubuntu-latest
+    # The channel is released as ``baseline-<date>``; the seed build needs
+    # the AUR git mirror, which only a maintainer machine has (or a cache
+    # warmed manually), so a cold CI mirror fails the job loudly and the
+    # maintainer uploads the verified assets instead.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || startsWith(github.event.release.tag_name, 'baseline-')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

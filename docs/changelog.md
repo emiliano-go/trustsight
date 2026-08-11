@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-10
+
 ### Added
 
 - **A release channel for every baseline.** All baselines the tool consumes

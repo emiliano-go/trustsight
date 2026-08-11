@@ -105,3 +105,127 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
 
     assert text == "pkgname=demo\n"
     assert manifest is None
+
+
+# --- parallel prefetch for the bootstrap (ordered, error-tolerant) ---
+
+
+def test_iter_prefetched_preserves_order_under_concurrency():
+    import random
+    import time
+
+    from trustsight.full_aur.pipeline import _iter_prefetched
+
+    def fetch(name):
+        time.sleep(random.uniform(0, 0.005))  # variable latency
+        return (f"pkgbuild-{name}", None)
+
+    names = [f"pkg-{i}" for i in range(60)]
+    out = list(_iter_prefetched(names, fetch, workers=8))
+    assert [n for n, _ in out] == names
+    assert out[3][1] == ("pkgbuild-pkg-3", None)
+
+
+def test_iter_prefetched_yields_none_for_a_failing_fetch():
+    from trustsight.full_aur.pipeline import _iter_prefetched
+
+    def fetch(name):
+        if name == "boom":
+            raise RuntimeError("network")
+        return (f"ok-{name}", None)
+
+    out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
+    assert out["boom"] == (None, None)
+    assert out["a"] == ("ok-a", None)
+
+
+# --- polite fetching: rate cap + backoff on 429/5xx/reset ---
+
+
+def _fast_fetch(monkeypatch):
+    """Neutralise the real sleeps so retry logic runs instantly in tests."""
+    import trustsight.full_aur.fetch as fetch
+    monkeypatch.setattr(fetch, "_MIN_REQUEST_INTERVAL", 0.0)
+    monkeypatch.setattr(fetch, "_BACKOFF_BASE", 0.0)
+    monkeypatch.setattr(fetch, "_BACKOFF_MAX", 0.0)
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    return fetch
+
+
+def test_http_get_retries_429_then_succeeds(monkeypatch):
+    import urllib.error
+
+    fetch = _fast_fetch(monkeypatch)
+    calls = {"n": 0}
+
+    class _Resp:
+        def read(self, _n): 
+            if not hasattr(self, "_done"):
+                self._done = True
+                return b"payload"
+            return b""
+
+    def fake_urlopen(req, timeout=0):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests",
+                                         {"Retry-After": "0"}, None)
+        return _Resp()
+
+    monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
+    assert fetch._http_get("https://x/y") == b"payload"
+    assert calls["n"] == 3   # two 429s, then success
+
+
+def test_http_get_retries_connection_reset(monkeypatch):
+    import urllib.error
+
+    fetch = _fast_fetch(monkeypatch)
+    calls = {"n": 0}
+
+    class _Resp:
+        def read(self, _n):
+            if not hasattr(self, "_done"):
+                self._done = True
+                return b"ok"
+            return b""
+
+    def fake_urlopen(req, timeout=0):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise urllib.error.URLError(ConnectionResetError(104, "reset"))
+        return _Resp()
+
+    monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
+    assert fetch._http_get("https://x/y") == b"ok"
+    assert calls["n"] == 2
+
+
+def test_http_get_does_not_retry_a_404(monkeypatch):
+    import urllib.error
+
+    fetch = _fast_fetch(monkeypatch)
+    calls = {"n": 0}
+
+    def fake_urlopen(req, timeout=0):
+        calls["n"] += 1
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
+    assert fetch._http_get("https://x/y") is None
+    assert calls["n"] == 1   # 404 is terminal, no retries
+
+
+def test_http_get_gives_up_after_max_retries(monkeypatch):
+    import urllib.error
+
+    fetch = _fast_fetch(monkeypatch)
+    calls = {"n": 0}
+
+    def fake_urlopen(req, timeout=0):
+        calls["n"] += 1
+        raise urllib.error.HTTPError(req.full_url, 503, "Unavailable", {}, None)
+
+    monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
+    assert fetch._http_get("https://x/y") is None
+    assert calls["n"] == fetch._MAX_RETRIES + 1

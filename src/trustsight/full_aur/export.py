@@ -22,7 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from ..config import load_config
 from ..db import (
     get_connection,
     save_pkgbuild_snapshot,
@@ -49,6 +48,18 @@ class UnsignedBaselineError(Exception):
 
 class InvalidSignatureError(Exception):
     """Raised when the artifact signature does not verify."""
+
+
+class NoTrustedKeyError(Exception):
+    """Raised when this build pins no distribution key to verify against.
+
+    Distinct from InvalidSignatureError on purpose.  The shipped
+    ``baseline_pubkey.pem`` is still a placeholder carrying no key bytes, so
+    every signed import failed as "signature verification failed" - which
+    accuses the artifact of being forged when the truth is that this build
+    cannot check it either way.  Telling an operator their good artifact is
+    tampered with is worse than telling them nothing.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -139,6 +150,32 @@ def verify_artifact(canonical_bytes: bytes, signature: bytes, pubkey: bytes) -> 
         return True
     except Exception:
         return False
+
+
+#: An ed25519 public key is exactly 32 raw bytes.  Anything else in the
+#: pinned key file is not a key, whatever it is.
+_ED25519_PUBKEY_BYTES = 32
+
+
+def _load_trusted_pubkey(path: Path) -> bytes:
+    """The pinned distribution key, or a refusal that says which failure it is.
+
+    A13 claims signed baselines are verified against a pinned key.  Until a
+    key pair is actually generated for distribution that claim describes a
+    code path, not a working import, and the operator is entitled to be told
+    which of the two they are hitting.
+    """
+    raw = path.read_bytes()
+    if len(raw) != _ED25519_PUBKEY_BYTES:
+        raise NoTrustedKeyError(
+            f"No distribution key is pinned in this build: {path} holds "
+            f"{len(raw)} bytes, not a {_ED25519_PUBKEY_BYTES}-byte ed25519 "
+            "public key.  Signed baseline import is unavailable until a key "
+            "is shipped; this says nothing about whether your artifact is "
+            "genuine.  A baseline you built yourself imports with "
+            "--allow-unsigned."
+        )
+    return raw
 
 
 class MalformedBaselineError(Exception):
@@ -265,7 +302,8 @@ def import_baseline(
     """Verify and import a signed baseline artifact.
 
     Merges profiles, snapshots, and metadata into the local database.
-    Raises ``UnsignedBaselineError`` or ``InvalidSignatureError``.
+    Raises ``UnsignedBaselineError``, ``NoTrustedKeyError`` or
+    ``InvalidSignatureError``.
     """
     path_obj = Path(path)
     if not path_obj.exists():
@@ -298,7 +336,7 @@ def import_baseline(
         if not pubkey_path.exists():
             log.error("trusted public key not found at %s; refusing import", pubkey_path)
             raise FileNotFoundError(f"trusted public key not found: {pubkey_path}")
-        pubkey = pubkey_path.read_bytes()
+        pubkey = _load_trusted_pubkey(pubkey_path)
         if not verify_artifact(canonical, sig, pubkey):
             raise InvalidSignatureError("Baseline signature verification failed.")
         log.info("signature verified")

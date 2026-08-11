@@ -329,12 +329,34 @@ watch_interval = 3600
 watch_min_interval = 60
 
 [seed]
-# Import the bundled novelty seed the first time TrustSight runs against
-# an empty database.  Without it every source URL looks novel and
-# maturity stays at zero, which downgrades every Medium verdict to
-# INCONCLUSIVE.  The seed is public AUR data and is additive; it can
-# never overwrite something learned from a real analysis.
+# Import the novelty seed the first time TrustSight runs against
+# an empty database.  The seed is a signed release asset
+# (baseline-seed.tar.gz) fetched from the release channel; the fetch
+# is verified against the pinned key and skipped silently when
+# offline.  Without it every source URL looks novel and maturity stays
+# at zero, which downgrades every Medium verdict to INCONCLUSIVE.  The
+# seed is public AUR data and is additive; it can never overwrite
+# something learned from a real analysis.
 auto_import = true
+
+[baselines.ioc]
+# IOC Federation baselines (v0.12.0).  ``enabled`` gates the match stage
+# during analysis; ``sources`` is a list of baseline source names to
+# consult.  An empty list means "all imported sources".  Baselines are
+# imported with ``trustsight ioc import <dir>``.
+enabled = true
+sources = []
+
+[[baselines.ioc.feeds]]
+# Example feed entry.  TrustSight ships with no default feeds; operators
+# add trusted sources here and import them explicitly.  A feed whose url
+# is a release-channel URL is updated by `trustsight ioc update`, which
+# downloads baseline-ioc-<asset>-manifest.json/-iocs.jsonl, verifies the
+# distribution signature, and imports with the curator-key check.  Any
+# other url is refused.  `asset` defaults to `name`.
+name = "example-feed"
+url = "https://example.org/trustsight/ioc-baseline/"
+enabled = false
 
 [discovery]
 # Default repositories to scan when no --repo/--foreign/--all-repos CLI
@@ -723,7 +745,14 @@ added_only = true
 [[rules]]
 id = "R054"
 name = "Persistence Unit Outside Package Root"
-pattern = '[\\s"\\x27](?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/'
+# The path anchor used to be [\s"'] alone, which only reaches the
+# idiomatic "${pkgdir}"/usr/lib/systemd/system/ form.  The merged-quote
+# "${pkgdir}/usr/lib/systemd/system/" and unquoted $pkgdir/usr/lib/...
+# forms stage the identical root-level unit (pacman installs what the
+# recipe staged), so a $pkgdir prefix in any quoting style is an anchor
+# too.  This rule reads raw added lines, independently of tokenizer
+# quote handling.
+pattern = '(?:[\\s"\\x27]|\\$\\{?pkgdir\\}?)(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/'
 severity = "HIGH"
 category = "persistence"
 match_target = "raw_line"
@@ -1519,6 +1548,23 @@ def load_thresholds() -> dict:
 def load_iocs() -> dict:
     """Load the versioned indicator list from iocs.toml (R106)."""
     return load_toml("iocs.toml", copy_result=False)
+
+
+def load_ioc_sources() -> list[str]:
+    """Return the configured IOC baseline source names to consult.
+
+    An empty list means "all sources currently imported into the local
+    database".  The ``[baselines.ioc]`` table may not exist on legacy
+    installs; in that case the baseline stage runs against every source.
+    """
+    cfg = load_config()
+    section = cfg.get("baselines", {}).get("ioc", {})
+    sources = section.get("sources", [])
+    if not sources:
+        return []
+    if isinstance(sources, str):
+        return [sources]
+    return [str(s).strip() for s in sources if str(s).strip()]
 
 
 def config_fingerprint() -> str:

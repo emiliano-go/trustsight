@@ -124,6 +124,16 @@ seed is built by the maintainer from the full AUR mirror; CI rebuilds only
 when the release has no `baseline-seed.tar.gz` yet, from a mirror
 reconstructed from the corpus lockfile. The fallback is auditable but smaller
 than the canonical full-mirror seed, and never overwrites an uploaded one.
+
+The gap is not cosmetic. The lock is a calibration corpus, not a sample of
+the AUR: a seed built from the lock (3,246 packages) contains about 137
+distinct maintainers, while the canonical seed built from the full AUR
+mirror (about 116,000 package branches) contains about 35,587. Shipping the
+lock-derived seed would reduce novelty coverage by 99.6%, flagging
+experienced maintainers as new on every package outside the lock. That is
+why the canonical seed is always the one a fresh install fetches, and why
+the CI fallback exists only to keep a release shippable, never as a
+substitute for the maintainer-built seed.
 `trustsight seed fetch --tag baseline-<date>` pins the exact channel release
 instead of following `latest`.
 

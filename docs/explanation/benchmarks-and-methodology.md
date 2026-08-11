@@ -36,26 +36,32 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| CRITICAL-class recall | 100% (all CRITICAL samples detected) | A change that causes any CRITICAL sample to score 0 (missed detection) is rejected. Every CRITICAL pattern in the corpus must fire the expected rules. |
-| CRITICAL-class p5 > benign p95 | Separation gate: the worst CRITICAL scores must exceed the best benign scores | A change that narrows the gap (by reducing CRITICAL scores or inflating benign scores) is rejected. The gap must stay at least 20 points. |
-| Benign zero-rate >= 80% | Drift detection: prevents weight inflation that would catch benign packages | A change that increases benign scores (causing more false positives) is rejected if zero-rate drops below 80%. |
+| Malicious recall | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled attack is rejected. The committed corpus is 164 fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. |
+| Separation | benign p95 stays below malicious p5 (strict) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
+| Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
+| Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
 
-### Why three gates and not one
+A known-gaps gate additionally requires each `known_gap` fixture to *still*
+fail its label, so closing a gap forces an explicit relabel.
 
-A single gate (for example, "CRITICAL recall >= 100%") would allow weight inflation: making all rules fire harder would increase CRITICAL scores but would also increase benign scores. The separation gate (p5 > p95) prevents this by requiring the gap to stay positive. The zero-rate gate prevents score drift that degrades the user experience for benign packages.
+### Why several gates and not one
 
-The three gates together enforce three distinct properties: detection (no missed threats), separation (meaningful threshold gap), and baseline (low false-positive rate). Each gate independently blocks regressions in its dimension.
+A single gate (for example, "CRITICAL recall >= 100%") would allow weight inflation: making all rules fire harder would increase malicious scores but would also increase benign scores. The separation gate (benign p95 < malicious p5) prevents this by requiring the gap to stay positive. The fire-rate cap prevents any single rule from becoming a false-positive census on the benign corpus.
+
+The gates together enforce three distinct properties: detection (no missed labelled attacks), separation (meaningful threshold gap), and baseline (low false-positive rate). Each gate independently blocks regressions in its dimension.
 
 ### Current numbers
 
+Measured against the 3,246-diff locked corpus (point-in-time; re-derive with `scripts/rebaseline.py` when scoring changes):
+
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 82.0% | >= 80% |
-| Ruleset trigger rate | 18.0% | benign diffs that fire at least one non-INFO rule |
-| CRITICAL recall | 100% (12/12) | 100% |
-| CRITICAL p5 | 40 | > benign p95 |
-| Benign p95 | 20 | < CRITICAL p5 |
-| Tests | 689 (19 files) | n/a |
+| Benign zero-rate | 69.1% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 30.9% | benign diffs that fire at least one non-INFO rule |
+| Malicious recall | 100% | 100% of labelled fixtures |
+| CRITICAL p5 | 60 | > benign p95 |
+| Benign p95 | 45 | < CRITICAL p5 (margin: 15) |
+| Tests | 1,535 (43 files) | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model. A change that moves any metric past its gate is rejected in CI.
 
@@ -80,7 +86,7 @@ The per-stratum requirement prevents the benchmark from optimizing for easy clas
 
 Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 82.0% zero-rate means 18.0% of benign diffs fire at least one non-INFO rule - the majority of those are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 69.1% zero-rate means 69.1% of benign diffs score 0. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

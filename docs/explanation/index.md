@@ -144,7 +144,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- **689 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
+- **1,535 tests**, **69.1% zero-rate** on the 3,246-diff locked corpus, **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 40**, **benign p95 = 25**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 16 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

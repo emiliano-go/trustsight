@@ -109,12 +109,12 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 
 | Class | Metric | Value |
 |-------|--------|-------|
-| CRITICAL | p5 (5th percentile) | **40** |
-| Benign | p95 (95th percentile) | **20** |
-| Zero-rate (benign scored >0) | percentage | **81.5%** |
-| Test count | total | **267** |
+| CRITICAL | p5 (5th percentile) | **60** |
+| Benign | p95 (95th percentile) | **45** |
+| Zero-rate (benign scored 0) | percentage | **69.1%** |
+| Test count | total | **1,535** |
 
-**The gate:** if a CRITICAL-class package consistently scores at or above its p5 (40) and no benign package exceeds its p95 (20), the classifier achieves clean separation with no overlap.
+**The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (45), the classifier achieves clean separation with no overlap.
 
 To set up your own gate:
 
@@ -122,7 +122,7 @@ To set up your own gate:
 2. **Choose a threshold**: typically 30-40, depending on your tolerance for benign novelty signals.
 3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from UNFLAGGED to FLAGGED without a corresponding PKGBUILD change is a regression.
 
-The CRITICAL recall of **100%** means every CRITICAL-class malice sample in the corpus scores ≥40. A gate at 40 catches all known CRITICAL patterns and passes benign bumps that score ≤20 at the 95th percentile.
+The CRITICAL recall of **100%** means every labelled malice sample in the corpus fires the rules it is labelled for. A gate at 40 catches all known CRITICAL patterns and passes benign bumps that score below the 95th percentile.
 
 ## Nightly vs per-commit
 

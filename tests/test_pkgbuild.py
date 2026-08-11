@@ -15,6 +15,15 @@ _PKGBUILD_NEEDS_MAKEPKG = pytest.mark.skipif(
     reason="makepkg not available (non-Arch system)",
 )
 
+# Release archives exclude packaging/ by .gitattributes export-ignore (a
+# tarball cannot contain the PKGBUILD for its own checksum), so the tests in
+# this module cannot run from the shipped artifact; they run in the repo
+# checkout, which is where the PKGBUILD lives.
+pytestmark = pytest.mark.skipif(
+    not (PKGBUILD_DIR / "PKGBUILD").exists(),
+    reason="PKGBUILD not present (release archive excludes packaging/)",
+)
+
 # Map from pyproject.toml dependency name to Arch Python package name.
 _PYPI_TO_ARCH = {
     "pygit2": "python-pygit2",

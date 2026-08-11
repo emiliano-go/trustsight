@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.12.1] - 2026-08-11
+
+### Fixed
+
+- **The release archive failed its own `check()` step.** The tests in
+  `tests/test_pkgbuild.py` read `packaging/aur/PKGBUILD`, but release
+  tarballs exclude `packaging/` by `.gitattributes` `export-ignore` (a
+  tarball cannot contain the PKGBUILD for its own checksum), so
+  `makepkg -si` from the v0.12.0 archive aborted with six failures. Those
+  PKGBUILD-hygiene tests now skip when the PKGBUILD is absent, and still
+  run in the repository checkout where it lives.
+
+### Changed
+
+- **The PKGBUILD CI job now executes `check()` against the release
+  tarball.** The build step dropped `--nocheck`, so a regression that
+  breaks the shipped artifact fails the `PKGBUILD` workflow instead of
+  shipping. Version bumped to 0.12.1 (the archival checksum is computed by
+  the release workflow from the served tarball, never by hand).
+
+### Stats
+
+- 1 commit since v0.12.0
+- Package version 0.12.1
+
 ## [Unreleased]
 
 ### Added

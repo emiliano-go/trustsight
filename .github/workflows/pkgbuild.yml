@@ -57,7 +57,9 @@ jobs:
       - name: Build and install from the release tarball
         run: |
           cd "$GITHUB_WORKSPACE/packaging/aur"
-          su builder -c "cd '$PWD' && makepkg -si --noconfirm --nocheck"
+          # No --nocheck: check() runs the shipped test suite from the
+          # release archive, which is the build every user will do.
+          su builder -c "cd '$PWD' && makepkg -si --noconfirm"
 
       - name: Verify installation
         run: trustsight --version

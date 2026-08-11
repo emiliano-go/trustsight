@@ -464,7 +464,6 @@ def test_shared_config_covers_every_bucket_the_tool_ships():
     """A bucket missing from the fixture is a bucket no test exercises."""
     from trustsight.config import DEFAULT_CONFIG
 
-    from trustsight.config import DEFAULT_CONFIG
 
     from tests.conftest import SHARED_CONFIG
 

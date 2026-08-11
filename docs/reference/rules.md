@@ -528,8 +528,8 @@ Every `raw_line` rule below sets `added_only = true`.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
-- **Pattern:** `[\s"\x27](?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/`
-- **Description:** Detects a cron job or systemd unit written to an absolute system path rather than into `$pkgdir`. Installing a unit *into* `$pkgdir` is correct packaging; writing to the live filesystem during a build is not.
+- **Pattern:** `(?:[\s"\x27]|\$\{?pkgdir\}?)(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/`
+- **Description:** Detects a cron job or systemd unit written to a system path. A unit staged into `$pkgdir` is flagged too, in any quoting style (`"${pkgdir}"/usr/lib/...`, `"${pkgdir}/usr/lib/..."`, `$pkgdir/usr/lib/...`): pacman installs what the recipe staged, so all three produce the same persistent root-level unit. Writing to the live filesystem during a build is the worse case of the same finding.
 
 ### R055: Git Clone With Variable Branch {#r055}
 

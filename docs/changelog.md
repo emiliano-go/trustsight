@@ -13,6 +13,22 @@
   all five generators on a fresh checkout and fails if the tree drifts from
   the committed record, pinning both fixture bodies and hand-reconciled
   labels.
+- **R122: the corpus path reports archive trailer anomalies.** The snapshot
+  tarball bytes fetched for the full-AUR corpus now go through
+  `check_archive_trailer`, a pure function over bytes: trailing bytes after
+  the gzip member, a missing tar end-of-archive block, or content after the
+  zip end-of-central-directory record produce a stamped R122 finding,
+  surfaced exactly like the R118-tree scan results. The review path still
+  never downloads PKGBUILD-declared URLs, so R122 only ever sees the AUR's
+  own snapshot tarballs; see
+  [rules.md](reference/rules.md#r122).
+- **A signed-commit policy, enforced on critical paths.** Changes to the
+  tokenizer, scoring, config, database, security gates, CI workflows,
+  packaging, and baseline keys must be GPG-signed: `.github/CODEOWNERS`
+  assigns those paths to the maintainer, the `verify-commit-sigs` workflow
+  checks every critical-path commit in a pull request to `master`, and
+  `CONTRIBUTING.md` documents key setup and the list of critical paths.
+  Signing is encouraged (but not required) for everything else.
 
 ### Changed
 
@@ -43,6 +59,54 @@
   can reproduce the seed and diff their record against the published one. A
   manual workflow run doubles as a pipeline test; see
   [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
+- **Release tarballs no longer carry `packaging/`, and CI validates the
+  checksum the PKGBUILD records.** `export-ignore` keeps the PKGBUILD out of
+  the GitHub source tarball, so the release artifact can no longer disagree
+  with itself. `release-pkgbuild.yml` computes the checksum from the tarball
+  served at the release tag, verifies it with `makepkg --verifysource`, and
+  commits it to the default branch; `pkgbuild.yml` now downloads the actual
+  release tarball and fails the build on a checksum mismatch instead of
+  building with `--skipchecksums`. Both Arch containers install git before
+  checkout so `actions/checkout` performs a real checkout rather than the
+  REST-API archive fallback that had silently omitted `packaging/`.
+- **Machine-readable output stays machine-readable.** `review`, `inspect`,
+  `history`, `list`, `corpus` and `ioc` in `--json` mode keep stdout a pure
+  JSON document: warnings and progress events go to stderr, errors become a
+  JSON error object with exit code 2, and `review --json` results carry an
+  explicit `failed` flag, unconditional `suppressed_rules` and `ioc_matches`,
+  and score fields only under `--score` and `--risk`. Negative `--limit`
+  values and unknown `--type` values are rejected with a clean error instead
+  of a traceback.
+- **IOC and baseline handling hardened.** `ioc import` dedupes identical
+  rows instead of crashing, keeps expired rows of a source across
+  re-imports (`entries_skipped`), treats naive `expires_at` values as UTC,
+  and reports malformed manifest versions or encodings as clean errors;
+  `ioc update` honours `TRUSTSIGHT_OFFLINE`; `ioc export` refuses to
+  overwrite an existing file; `ioc sources` drops the placeholder row. The
+  seed and baseline import path rejects archive members that escape the
+  extraction directory (absolute paths, `..` segments), `import-baseline`
+  refuses a non-file path, and `db check` and `db backup` survive a corrupt
+  database with readable errors and validate the backup output path.
+- **`full-aur` refuses to do nothing silently.** An empty metadata fetch no
+  longer clobbers the stored snapshot, fetch failures are wrapped in
+  actionable errors, a missing `--sign` key is a hard error, invalid watch
+  intervals are coerced to the floor, and a failed watch cycle is retried
+  instead of killing the watcher. `config set` validates keys and value
+  types and `config show` tolerates hand-edited non-integer weights;
+  `override` tolerates null reasons and dedupes new entries; `forget
+  --prune` refuses partial RPC replies and handles EOF on confirmation;
+  discovery reports a friendly error when pacman is missing from PATH; the
+  display layer escapes rich markup in untrusted messages.
+
+### Fixed
+
+- **The seed release path logs through a real logger.** `db.py` referenced a
+  module `log` it never defined, masked until now by a broad exception
+  handler, so failures while seeding from the release channel died without
+  a reason; the module logger is defined and a test pins the failure path.
+  `config.py`'s `\s` escape no longer triggers a SyntaxWarning, and
+  `export.py` drops a dead assignment left over from the baseline export
+  rework.
 
 ## [0.12.0] - 2026-08-10
 

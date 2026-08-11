@@ -14,6 +14,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ruff check
+python scripts/security_gates.py
 ```
 
 If you change rules, scoring, tokenizer behavior, or calibration fixtures, also run:

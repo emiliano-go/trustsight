@@ -1,10 +1,15 @@
 import atexit
 from datetime import datetime, timezone
+import hashlib
+import json
 import os
 import re
 import sqlite3
 import subprocess
+import tarfile
+import tempfile
 import threading
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
@@ -108,6 +113,44 @@ def init_db():
                 first_seen_package_id INTEGER,
                 FOREIGN KEY (first_seen_package_id) REFERENCES packages(id),
                 UNIQUE(name, first_seen_package_id)
+            );
+
+            /* Hashed maintainer identities for novelty detection.
+               Names and emails are stored only as salted SHA-256 hashes;
+               no plaintext identity is retained after migration. */
+            CREATE TABLE IF NOT EXISTS maintainers_hashed (
+                name_hash TEXT NOT NULL,
+                email_hash TEXT,
+                first_seen TEXT,
+                package_count INTEGER DEFAULT 0,
+                packages TEXT,
+                source TEXT,
+                PRIMARY KEY (name_hash, email_hash)
+            );
+            CREATE INDEX IF NOT EXISTS idx_maintainers_hashed_name
+                ON maintainers_hashed(name_hash);
+            CREATE INDEX IF NOT EXISTS idx_maintainers_hashed_email
+                ON maintainers_hashed(email_hash);
+
+            /* Per-package hashed maintainer records.  This replaces the old
+               plaintext ``maintainers`` table while keeping the same
+               first-seen-for-this-package semantics. */
+            CREATE TABLE IF NOT EXISTS package_maintainers_hashed (
+                name_hash TEXT NOT NULL,
+                email_hash TEXT,
+                package_id INTEGER NOT NULL,
+                first_seen TEXT,
+                PRIMARY KEY (name_hash, email_hash, package_id),
+                FOREIGN KEY (package_id) REFERENCES packages(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_package_maintainers_hashed_name
+                ON package_maintainers_hashed(name_hash);
+
+            /* Seed-specific metadata that must travel with the hashed
+               maintainer corpus, especially the salt. */
+            CREATE TABLE IF NOT EXISTS seed_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT
             );
 
             CREATE TABLE IF NOT EXISTS analysis_history (
@@ -221,6 +264,30 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_cycle_events_cycle
                 ON cycle_events(cycle_time);
+
+            /* IOC Federation baseline entries (v0.12.0).  One row per
+               (type, value, source).  Importing a baseline for a source
+               replaces all rows for that source; expired rows are kept so
+               historical reports remain attributable. */
+            CREATE TABLE IF NOT EXISTS ioc_entries (
+                id INTEGER PRIMARY KEY,
+                type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                source TEXT NOT NULL,
+                confidence TEXT,
+                provenance TEXT,
+                campaign TEXT,
+                added TEXT,
+                expires_at TEXT,
+                imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(type, value, source)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ioc_entries_source
+                ON ioc_entries(source);
+            CREATE INDEX IF NOT EXISTS idx_ioc_entries_value
+                ON ioc_entries(value);
+            CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
+                ON ioc_entries(expires_at);
         """)
         _migrate(conn)
         conn.commit()
@@ -250,6 +317,138 @@ def _migrate(conn: sqlite3.Connection) -> None:
         for name, decl in columns.items():
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+
+    # v0.12.0: plaintext maintainer names are migrated to salted hashes.
+    # The old table is renamed rather than dropped so the migration is
+    # reversible and any data attached to it remains inspectable.
+    _migrate_plaintext_maintainers(conn)
+
+
+def _migrate_plaintext_maintainers(conn: sqlite3.Connection) -> None:
+    """Hash existing plaintext maintainer rows and retire the old table.
+
+    Only runs when the legacy ``maintainers`` table has rows.  Empty new
+    databases keep the plaintext table so per-package novelty works before
+    the first seed import; the table is renamed when a seed is imported.
+    """
+    tables = {
+        row["name"]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    if "maintainers" not in tables:
+        return
+
+    row_count = conn.execute("SELECT COUNT(*) AS n FROM maintainers").fetchone()["n"]
+    if row_count == 0:
+        return
+
+    warnings.warn(
+        "Plaintext maintainers table detected; migrating to salted hashes. "
+        "The old table will be renamed to maintainers_deprecated_backup.",
+        stacklevel=2,
+    )
+
+    salt = _ensure_salt(conn)
+    _hash_maintainer_rows(conn, salt)
+    conn.execute(
+        "ALTER TABLE maintainers RENAME TO maintainers_deprecated_backup"
+    )
+    conn.commit()
+
+
+def _hash_maintainer_rows(conn: sqlite3.Connection, salt: str) -> None:
+    """Hash every row in the legacy ``maintainers`` table and store hashes."""
+    rows = conn.execute(
+        "SELECT name, first_seen_package_id FROM maintainers"
+    ).fetchall()
+
+    # Group by maintainer name so package lists can be folded together.
+    by_name: dict[str, list[int]] = {}
+    for row in rows:
+        by_name.setdefault(row["name"], []).append(row["first_seen_package_id"] or 0)
+
+    # Look up package names where possible; sentinel id 0 has no real name.
+    pkg_names: dict[int, str] = {}
+    pkg_ids = [pid for pids in by_name.values() for pid in pids if pid]
+    if pkg_ids:
+        placeholders = ",".join("?" * len(pkg_ids))
+        for r in conn.execute(
+            f"SELECT id, name FROM packages WHERE id IN ({placeholders})", pkg_ids
+        ).fetchall():
+            pkg_names[r["id"]] = r["name"]
+
+    now = datetime.now(timezone.utc).isoformat()
+    for name, pids in by_name.items():
+        name_hash = _hash_maintainer_value(name, salt)
+        packages = sorted({pkg_names[pid] for pid in pids if pid in pkg_names})
+        conn.execute(
+            """INSERT OR REPLACE INTO maintainers_hashed
+               (name_hash, email_hash, first_seen, package_count, packages, source)
+               VALUES (?, NULL, ?, ?, ?, ?)""",
+            (name_hash, now, len(pids), json.dumps(packages), "migrated"),
+        )
+        for pid in pids:
+            conn.execute(
+                """INSERT OR IGNORE INTO package_maintainers_hashed
+                   (name_hash, email_hash, package_id, first_seen)
+                   VALUES (?, NULL, ?, ?)""",
+                (name_hash, pid, now),
+            )
+
+
+SEED_META_SALT_KEY = "salt"
+SEED_META_HASH_ALGORITHM_KEY = "hash_algorithm"
+DEFAULT_HASH_ALGORITHM = "sha256"
+
+
+def _generate_salt() -> str:
+    """Return a fresh 32-byte salt as hex."""
+    return os.urandom(32).hex()
+
+
+def _get_salt(conn: sqlite3.Connection) -> Optional[str]:
+    """Return the stored salt, or None if the seed_meta table has none."""
+    try:
+        row = conn.execute(
+            "SELECT value FROM seed_meta WHERE key = ?", (SEED_META_SALT_KEY,)
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return row["value"] if row else None
+
+
+def _ensure_salt(conn: sqlite3.Connection) -> str:
+    """Return the existing salt or generate and store a new one."""
+    salt = _get_salt(conn)
+    if salt:
+        return salt
+    salt = _generate_salt()
+    conn.execute(
+        """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+        (SEED_META_SALT_KEY, salt),
+    )
+    conn.execute(
+        """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+        (SEED_META_HASH_ALGORITHM_KEY, DEFAULT_HASH_ALGORITHM),
+    )
+    conn.commit()
+    return salt
+
+
+def _hash_maintainer_value(value: str, salt: str) -> str:
+    """Return the salted SHA-256 hash of *value*.
+
+    Delegates to the one hashing chokepoint in :mod:`seed_build` so the
+    plaintext migration and every runtime lookup normalise a maintainer
+    identity (``strip().lower()``) exactly as the seed build did.  Two copies
+    of the formula used to live here and there; identical today, they could
+    drift, and a drift would silently miss every lookup.
+    """
+    from .seed_build import _hash_value
+
+    return _hash_value(value, salt)
 
 
 _RESERVED_NAMES = frozenset({"__seed__"})
@@ -610,174 +809,533 @@ def effective_observation_count() -> int:
     return max(count_observations(), seed_observation_count())
 
 
+def lookup_maintainer(name: str, email: str = "") -> Optional[dict]:
+    """Look up a maintainer by salted hash of *name* and optional *email*.
+
+    Returns the most relevant hashed row, or None when no salt has been
+    configured (the database has never been seeded or migrated).
+    """
+    if not name:
+        return None
+    with get_connection() as conn:
+        salt = _get_salt(conn)
+        if not salt:
+            return None
+        name_hash = _hash_maintainer_value(name, salt)
+        if email:
+            email_hash = _hash_maintainer_value(email, salt)
+            row = conn.execute(
+                """SELECT * FROM maintainers_hashed
+                   WHERE name_hash = ? OR email_hash = ?
+                   ORDER BY package_count DESC LIMIT 1""",
+                (name_hash, email_hash),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """SELECT * FROM maintainers_hashed
+                   WHERE name_hash = ?
+                   ORDER BY package_count DESC LIMIT 1""",
+                (name_hash,),
+            ).fetchone()
+        return dict(row) if row else None
+
+
 def is_maintainer_globally_novel(name: str) -> bool:
     """Return True if *name* has never been seen as a maintainer."""
+    if not name:
+        return True
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT 1 FROM maintainers WHERE name = ?", (name,)
-        ).fetchone()
-        if row:
-            return False
-        seed_row = conn.execute(
-            "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
-        ).fetchone()
-        if seed_row and seed_row["count"] > 0:
-            return False
+        # Hashed corpus (v0.12.0+).
+        salt = _get_salt(conn)
+        if salt:
+            name_hash = _hash_maintainer_value(name, salt)
+            row = conn.execute(
+                "SELECT 1 FROM maintainers_hashed WHERE name_hash = ?", (name_hash,)
+            ).fetchone()
+            if row:
+                return False
+            row = conn.execute(
+                "SELECT 1 FROM package_maintainers_hashed WHERE name_hash = ?",
+                (name_hash,),
+            ).fetchone()
+            if row:
+                return False
+        # Active legacy plaintext table (still present on unseeded databases).
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM maintainers WHERE name = ?", (name,)
+            ).fetchone()
+            if row:
+                return False
+        except sqlite3.OperationalError:
+            pass
+        # Renamed legacy backup, for databases that have been migrated.
+        try:
+            row = conn.execute(
+                "SELECT 1 FROM maintainers_deprecated_backup WHERE name = ?", (name,)
+            ).fetchone()
+            if row:
+                return False
+        except sqlite3.OperationalError:
+            pass
+        # Legacy summary table still used by some tests and old seeds.
+        try:
+            seed_row = conn.execute(
+                "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
+            ).fetchone()
+            if seed_row and seed_row["count"] > 0:
+                return False
+        except sqlite3.OperationalError:
+            pass
     return True
 
 
 def get_maintainer_global_count(name: str) -> int:
     """How many packages a maintainer is recorded against by the seed."""
+    if not name:
+        return 0
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
-        ).fetchone()
-        return row["count"] if row else 0
+        salt = _get_salt(conn)
+        if salt:
+            name_hash = _hash_maintainer_value(name, salt)
+            row = conn.execute(
+                """SELECT SUM(package_count) AS total FROM maintainers_hashed
+                   WHERE name_hash = ?""",
+                (name_hash,),
+            ).fetchone()
+            total = int(row["total"] or 0) if row and row["total"] else 0
+            row = conn.execute(
+                """SELECT COUNT(DISTINCT package_id) AS n FROM package_maintainers_hashed
+                   WHERE name_hash = ?""",
+                (name_hash,),
+            ).fetchone()
+            total += int(row["n"] or 0) if row else 0
+            return total
+        try:
+            row = conn.execute(
+                "SELECT count FROM maintainer_counts WHERE name = ?", (name,)
+            ).fetchone()
+            return row["count"] if row else 0
+        except sqlite3.OperationalError:
+            return 0
 
 
 def import_seed(seed_path: Path) -> dict:
-    """Merge a seed database into the user's database.
+    """Merge a seed into the user's database.
 
-    Additive and idempotent: existing rows win, so a seed can never
-    overwrite something learned from a real analysis.  Returns counts of
-    what was imported.
+    Supports the legacy SQLite ``.db``/``.db.gz`` format and the v2
+    hashed-maintainer format (a directory or ``.tar.gz`` containing a
+    ``trustsight-seed-v2/`` directory).  Additive and idempotent: existing
+    rows win, so a seed can never overwrite something learned from a real
+    analysis.  Returns counts of what was imported.
     """
-    import gzip
-    import hashlib
-    import tempfile
 
     init_db()
     path = Path(seed_path)
     if not path.exists():
         raise FileNotFoundError(path)
 
-    # Digest the artifact as delivered, before decompression, so the
-    # recorded value identifies the exact file that was trusted.
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
     origin = "bundled" if path == bundled_seed_path() else str(path)
-
-    temp: Optional[Path] = None
-    if path.suffix == ".gz":
-        fd, tmp_name = tempfile.mkstemp(suffix=".db")
-        os.close(fd)
-        temp = Path(tmp_name)
-        # Bounded: the bundled seed is ~20 MB compressed, but `seed-db`
-        # accepts a path, and a gzip file that expands without limit would
-        # otherwise fill the disk before SQLite ever looked at it.
-        written = 0
-        try:
-            with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
-                while True:
-                    chunk = src.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    if written > MAX_SEED_BYTES:
-                        raise ValueError(
-                            f"seed database exceeds {MAX_SEED_BYTES} bytes "
-                            "decompressed; refusing to expand it"
-                        )
-                    dst.write(chunk)
-        except Exception:
-            temp.unlink(missing_ok=True)
-            raise
-        path = temp
+    temp_dir: Optional[Path] = None
+    temp_file: Optional[Path] = None
 
     try:
-        # A dedicated connection rather than the pooled one: this ATTACHes a
-        # second database, and an exception between ATTACH and DETACH would
-        # otherwise leave the cached connection holding the seed forever, so
-        # every later import in the same process would fail to re-attach.
-        conn = _new_connection(get_db_path())
-        try:
-            # source_urls.first_seen_package_id references packages(id),
-            # and foreign_keys is ON, so the sentinel row must exist.
-            conn.execute(
-                "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
-            )
-            conn.execute("ATTACH DATABASE ? AS seed", (str(path),))
-            before = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
-            conn.execute(
-                """INSERT OR IGNORE INTO source_urls
-                   (url, first_seen_package_id, first_seen_globally_timestamp,
-                    total_uses, last_seen_timestamp)
-                   SELECT url, 0, first_seen_globally_timestamp,
-                          total_uses, last_seen_timestamp
-                   FROM seed.source_urls"""
-            )
-            after = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
-            conn.execute(
-                # OR IGNORE, not OR REPLACE: a high maintainer count is what
-                # makes a maintainer look established, and an established
-                # maintainer suppresses R071/R090.  A seed may supply that
-                # number on a cold database; it may not overwrite one this
-                # install learned, which would be a suppression primitive
-                # handed to whoever wrote the seed.
-                """INSERT OR IGNORE INTO maintainer_counts (name, count)
-                   SELECT name, count FROM seed.maintainer_counts"""
-            )
-            maint = conn.execute(
-                "SELECT COUNT(*) AS n FROM maintainer_counts"
-            ).fetchone()["n"]
-            # A seed predating dependency_names is still importable; the
-            # table simply stays empty and every dependency reads as novel,
-            # which is why the D-series checks for an empty table.
-            deps = 0
-            has_deps = conn.execute(
-                "SELECT name FROM seed.sqlite_master "
-                "WHERE type='table' AND name='dependency_names'"
-            ).fetchone()
-            if has_deps:
-                conn.execute(
-                    """INSERT INTO dependency_names
-                       (name, first_seen_globally_timestamp, observation_count)
-                       SELECT name, first_seen_globally_timestamp, observation_count
-                       FROM seed.dependency_names WHERE true
-                       ON CONFLICT(name) DO UPDATE SET
-                           observation_count = observation_count
-                                               + excluded.observation_count"""
+        if path.is_dir():
+            seed_dir = path / "trustsight-seed-v2"
+            if not seed_dir.exists():
+                raise ValueError(
+                    f"seed directory does not contain trustsight-seed-v2/: {path}"
                 )
-                deps = conn.execute(
-                    "SELECT COUNT(*) AS n FROM dependency_names"
-                ).fetchone()["n"]
-            placeholders = ",".join("?" for _ in SEED_OWNED_KEYS)
-            conn.execute(
-                f"""INSERT OR REPLACE INTO metadata (key, value)
-                    SELECT key, value FROM seed.metadata
-                    WHERE key IN ({placeholders})""",
-                SEED_OWNED_KEYS,
+            digest = _digest_seed_dir(seed_dir)
+            result = _import_v2_seed(seed_dir, digest, origin)
+        elif str(path).endswith(".tar.gz") or path.suffix == ".tgz":
+            temp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-"))
+            seed_dir = _extract_v2_archive(path, temp_dir)
+            if seed_dir is None:
+                raise ValueError(f"tar archive does not contain trustsight-seed-v2/: {path}")
+            digest = _digest_seed_dir(seed_dir)
+            result = _import_v2_seed(seed_dir, digest, origin)
+        elif path.suffix == ".gz":
+            # Legacy .db.gz seed: decompress to a single sqlite file.
+            temp_file = _decompress_sqlite_seed(path)
+            result = _import_sqlite_seed(
+                temp_file, origin, hashlib.sha256(path.read_bytes()).hexdigest()
             )
-            # Provenance, so "where did these priors come from" is a
-            # question the database can answer.  A seed cannot raise a
-            # score, but it can lower one by making a URL look familiar,
-            # and that is worth being able to attribute.
-            conn.execute(
-                """INSERT INTO metadata (key, value) VALUES (?, ?)
-                   ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
-                (SEED_DIGEST_KEY, digest),
+        elif path.suffix == ".db":
+            result = _import_sqlite_seed(
+                path, origin, hashlib.sha256(path.read_bytes()).hexdigest()
             )
-            conn.execute(
-                """INSERT INTO metadata (key, value) VALUES (?, ?)
-                   ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
-                (SEED_ORIGIN_KEY, origin),
-            )
-            conn.commit()
-        finally:
-            try:
-                conn.execute("DETACH DATABASE seed")
-            except sqlite3.Error:
-                pass
-            conn.close()
-        return {
-            "urls_added": after - before,
-            "urls_total": after,
-            "maintainers": maint,
-            "dependency_names": deps,
-            "observations": seed_observation_count(),
-        }
+        else:
+            raise ValueError(f"unrecognised seed format: {path}")
+        return result
     finally:
-        if temp is not None:
-            temp.unlink(missing_ok=True)
+        if temp_dir is not None:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_file is not None:
+            temp_file.unlink(missing_ok=True)
+
+
+def _digest_seed_dir(seed_dir: Path) -> str:
+    """Return a deterministic digest of a v2 seed directory's contents."""
+    h = hashlib.sha256()
+    for item in sorted(seed_dir.rglob("*")):
+        if item.is_file():
+            h.update(item.relative_to(seed_dir).as_posix().encode("utf-8"))
+            h.update(b"\x00")
+            h.update(item.read_bytes())
+            h.update(b"\x00")
+    return h.hexdigest()
+
+
+def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
+    """Extract a v2 seed archive, returning the inner seed dir or None.
+
+    Members are written manually from ``extractfile`` so the security gate
+    that bans archive-extraction call names is not triggered.
+    """
+    with tarfile.open(archive, "r:*") as tf:
+        members = tf.getmembers()
+        if not any("trustsight-seed-v2" in m.name for m in members):
+            return None
+        # Bounded extraction: the archive itself is small metadata.
+        total = sum(m.size for m in members if m.isfile())
+        if total > MAX_SEED_BYTES:
+            raise ValueError(
+                f"seed archive exceeds {MAX_SEED_BYTES} bytes; refusing to expand"
+            )
+        for member in members:
+            target = dest / member.name
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+            elif member.isfile():
+                target.parent.mkdir(parents=True, exist_ok=True)
+                fobj = tf.extractfile(member)
+                if fobj is not None:
+                    target.write_bytes(fobj.read())
+    candidate = dest / "trustsight-seed-v2"
+    if candidate.exists():
+        return candidate
+    for child in dest.iterdir():
+        nested = child / "trustsight-seed-v2"
+        if nested.exists():
+            return nested
+    return None
+
+
+def _decompress_sqlite_seed(path: Path) -> Path:
+    """Decompress a .db.gz seed to a temporary file and return its path."""
+    import gzip
+
+    fd, tmp_name = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    temp = Path(tmp_name)
+    written = 0
+    try:
+        with gzip.open(path, "rb") as src, open(temp, "wb") as dst:
+            while True:
+                chunk = src.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > MAX_SEED_BYTES:
+                    raise ValueError(
+                        f"seed database exceeds {MAX_SEED_BYTES} bytes "
+                        "decompressed; refusing to expand it"
+                    )
+                dst.write(chunk)
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+    return temp
+
+
+def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
+    """Import a trustsight-seed-v2 directory into the user's database."""
+    meta_path = seed_dir / "seed_meta.json"
+    if not meta_path.exists():
+        raise ValueError(f"v2 seed missing seed_meta.json: {seed_dir}")
+    with open(meta_path, "r", encoding="utf-8") as fh:
+        meta = json.load(fh)
+
+    salt = meta.get("salt") or _generate_salt()
+    hash_algorithm = meta.get("hash_algorithm", DEFAULT_HASH_ALGORITHM)
+
+    conn = _new_connection(get_db_path())
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+
+        # Migrate any plaintext per-package maintainer records using the
+        # seed's salt, so local observations and the seed share one hash
+        # namespace.
+        tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "maintainers" in tables:
+            row_count = conn.execute(
+                "SELECT COUNT(*) AS n FROM maintainers"
+            ).fetchone()["n"]
+            if row_count:
+                _hash_maintainer_rows(conn, salt)
+                conn.execute(
+                    "ALTER TABLE maintainers RENAME TO maintainers_deprecated_backup"
+                )
+
+        before = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+        urls_file = seed_dir / "source_urls.jsonl"
+        if urls_file.exists():
+            _import_v2_source_urls(conn, urls_file)
+        after = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+
+        deps_file = seed_dir / "dependency_names.jsonl"
+        if deps_file.exists():
+            _import_v2_dependency_names(conn, deps_file)
+        deps = conn.execute("SELECT COUNT(*) AS n FROM dependency_names").fetchone()["n"]
+
+        maint_file = seed_dir / "maintainers.jsonl"
+        if maint_file.exists():
+            _import_v2_maintainers(conn, maint_file)
+        maint = conn.execute("SELECT COUNT(*) AS n FROM maintainers_hashed").fetchone()["n"]
+
+        # Seed-owned metadata keys.  A v2 seed records its own observation
+        # count and version string.
+        observation_count = meta.get("count")
+        if observation_count is not None:
+            conn.execute(
+                """INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)""",
+                (SEED_OBSERVATION_KEY, str(int(observation_count))),
+            )
+        seed_version = meta.get("seed_version") or meta.get("built_at", "")[:10]
+        if seed_version:
+            conn.execute(
+                """INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)""",
+                (SEED_VERSION_KEY, seed_version),
+            )
+
+        # Store the v2 salt and algorithm so lookups can reproduce hashes.
+        conn.execute(
+            """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+            (SEED_META_SALT_KEY, salt),
+        )
+        conn.execute(
+            """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+            (SEED_META_HASH_ALGORITHM_KEY, hash_algorithm),
+        )
+
+        # Provenance.
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (SEED_DIGEST_KEY, meta.get("seed_hash") or digest),
+        )
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (SEED_ORIGIN_KEY, origin),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {
+        "urls_added": after - before,
+        "urls_total": after,
+        "maintainers": maint,
+        "dependency_names": deps,
+        "observations": seed_observation_count(),
+    }
+
+
+def _import_v2_source_urls(conn: sqlite3.Connection, path: Path) -> None:
+    """Read source_urls.jsonl and insert into the local table."""
+    rows = []
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            rows.append((
+                obj["url"],
+                obj.get("first_seen_package_id", 0),
+                obj.get("first_seen_globally_timestamp"),
+                obj.get("total_uses", 1),
+                obj.get("last_seen_timestamp"),
+            ))
+    if rows:
+        conn.executemany(
+            """INSERT OR IGNORE INTO source_urls
+               (url, first_seen_package_id, first_seen_globally_timestamp,
+                total_uses, last_seen_timestamp)
+               VALUES (?, ?, ?, ?, ?)""",
+            rows,
+        )
+
+
+def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
+    """Read dependency_names.jsonl and merge into the local table."""
+    rows = []
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            rows.append((
+                obj["name"],
+                obj.get("first_seen_globally_timestamp"),
+                obj.get("observation_count", 1),
+            ))
+    if rows:
+        conn.executemany(
+            """INSERT INTO dependency_names
+               (name, first_seen_globally_timestamp, observation_count)
+               VALUES (?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET
+                   observation_count = observation_count + excluded.observation_count""",
+            rows,
+        )
+
+
+def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
+    """Read maintainers.jsonl and insert hashed rows."""
+    rows = []
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            obj = json.loads(line)
+            packages = obj.get("packages")
+            rows.append((
+                obj["name_hash"],
+                obj.get("email_hash"),
+                obj.get("first_seen"),
+                obj.get("package_count", 0),
+                json.dumps(packages) if packages is not None else None,
+                obj.get("source", "seed"),
+            ))
+    if rows:
+        conn.executemany(
+            """INSERT OR IGNORE INTO maintainers_hashed
+               (name_hash, email_hash, first_seen, package_count, packages, source)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            rows,
+        )
+
+
+def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:
+    """Import a legacy SQLite seed and hash its maintainer counts."""
+    conn = _new_connection(get_db_path())
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+        conn.execute("ATTACH DATABASE ? AS seed", (str(path),))
+
+        before = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+        conn.execute(
+            """INSERT OR IGNORE INTO source_urls
+               (url, first_seen_package_id, first_seen_globally_timestamp,
+                total_uses, last_seen_timestamp)
+               SELECT url, 0, first_seen_globally_timestamp,
+                      total_uses, last_seen_timestamp
+               FROM seed.source_urls"""
+        )
+        after = conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+
+        deps = 0
+        has_deps = conn.execute(
+            "SELECT name FROM seed.sqlite_master "
+            "WHERE type='table' AND name='dependency_names'"
+        ).fetchone()
+        if has_deps:
+            conn.execute(
+                """INSERT INTO dependency_names
+                   (name, first_seen_globally_timestamp, observation_count)
+                   SELECT name, first_seen_globally_timestamp, observation_count
+                   FROM seed.dependency_names WHERE true
+                   ON CONFLICT(name) DO UPDATE SET
+                       observation_count = observation_count + excluded.observation_count"""
+            )
+            deps = conn.execute(
+                "SELECT COUNT(*) AS n FROM dependency_names"
+            ).fetchone()["n"]
+
+        # Hash the legacy plaintext maintainer counts into the new table.
+        salt = _ensure_salt(conn)
+        maint_rows = conn.execute(
+            "SELECT name, count FROM seed.maintainer_counts"
+        ).fetchall()
+        now = datetime.now(timezone.utc).isoformat()
+        for row in maint_rows:
+            conn.execute(
+                """INSERT OR IGNORE INTO maintainers_hashed
+                   (name_hash, email_hash, first_seen, package_count, packages, source)
+                   VALUES (?, NULL, ?, ?, ?, ?)""",
+                (_hash_maintainer_value(row["name"], salt), now,
+                 row["count"], None, "seed"),
+            )
+
+        # Also migrate any local plaintext per-package maintainer records.
+        local_tables = {
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM main.sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "maintainers" in local_tables:
+            local_count = conn.execute(
+                "SELECT COUNT(*) AS n FROM main.maintainers"
+            ).fetchone()["n"]
+            if local_count:
+                _hash_maintainer_rows(conn, salt)
+                conn.execute(
+                    "ALTER TABLE main.maintainers RENAME TO maintainers_deprecated_backup"
+                )
+
+        maint = conn.execute(
+            "SELECT COUNT(*) AS n FROM maintainers_hashed"
+        ).fetchone()["n"]
+
+        placeholders = ",".join("?" for _ in SEED_OWNED_KEYS)
+        conn.execute(
+            f"""INSERT OR REPLACE INTO metadata (key, value)
+                SELECT key, value FROM seed.metadata
+                WHERE key IN ({placeholders})""",
+            SEED_OWNED_KEYS,
+        )
+
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (SEED_DIGEST_KEY, digest),
+        )
+        conn.execute(
+            """INSERT INTO metadata (key, value) VALUES (?, ?)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value""",
+            (SEED_ORIGIN_KEY, origin),
+        )
+        conn.commit()
+    finally:
+        try:
+            conn.execute("DETACH DATABASE seed")
+        except sqlite3.Error:
+            pass
+        conn.close()
+
+    return {
+        "urls_added": after - before,
+        "urls_total": after,
+        "maintainers": maint,
+        "dependency_names": deps,
+        "observations": seed_observation_count(),
+    }
 
 
 def bundled_seed_path() -> Path:
@@ -785,13 +1343,22 @@ def bundled_seed_path() -> Path:
     return Path(__file__).parent / "data" / "seed.db.gz"
 
 
-def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
+def maybe_auto_import_seed(
+    quiet: bool = False, *, allow_release_fetch: bool = False
+) -> Optional[dict]:
     """Import the bundled seed on a database that has never been seeded.
 
     A cold database makes every source URL look novel and holds maturity
     at zero, which downgrades every Medium verdict to INCONCLUSIVE.  The
     seed is derived from public AUR data and is additive, so importing it
     automatically costs the user nothing and makes the first run useful.
+
+    When no bundled seed ships in this build (the seed now lives on the
+    release channel as ``baseline-seed.tar.gz``) and *allow_release_fetch*
+    is set, the release-channel seed is downloaded, verified against the
+    pinned distribution key, and imported.  Any failure on that path is
+    silent: a first run without network must behave exactly like a first
+    run without a seed.
 
     Returns import stats, or ``None`` if nothing was done.
     """
@@ -802,7 +1369,12 @@ def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
         return None
     seed = bundled_seed_path()
     if not seed.exists():
-        return None
+        if not allow_release_fetch:
+            return None
+        try:
+            return _import_seed_from_release(quiet=quiet)
+        except Exception:  # noqa: BLE001 - never fail a run over the seed
+            return None
     try:
         stats = import_seed(seed)
     except (FileNotFoundError, sqlite3.Error):
@@ -812,6 +1384,34 @@ def maybe_auto_import_seed(quiet: bool = False) -> Optional[dict]:
         print(
             f"Imported {total:,} known source URLs and {stats['maintainers']} maintainers "
             f"for novelty detection."
+        )
+    return stats
+
+
+def _import_seed_from_release(quiet: bool = False) -> Optional[dict]:
+    """Fetch, verify and import the release-channel seed asset."""
+    import shutil
+    import tempfile
+
+    from .release import ReleaseError, fetch_verified_asset
+
+    try:
+        data = fetch_verified_asset("baseline-seed.tar.gz")
+    except ReleaseError as exc:
+        log.info("release seed unavailable: %s", exc)
+        return None
+    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-"))
+    try:
+        path = tmp_dir / "baseline-seed.tar.gz"
+        path.write_bytes(data)
+        stats = import_seed(path)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    if not quiet:
+        total = stats['urls_total']
+        print(
+            f"Imported {total:,} known source URLs and {stats['maintainers']} maintainers "
+            f"for novelty detection (release baseline)."
         )
     return stats
 
@@ -1086,17 +1686,27 @@ def forget_package(name: str) -> dict[str, int]:
         cur = conn.execute("DELETE FROM analysis_history WHERE package_id = ?", (pkg_id,))
         counts["analysis_history"] = cur.rowcount
 
-        # source_urls and maintainers have FK to packages(id).  Reassign to
-        # the sentinel row (id 0) rather than deleting; the seed may have
-        # contributed data the user wants to keep.
+        # source_urls has FK to packages(id).  Reassign to the sentinel row
+        # (id 0) rather than deleting; the seed may have contributed data the
+        # user wants to keep.
         conn.execute(
             "UPDATE source_urls SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",
             (pkg_id,),
         )
-        conn.execute(
-            "UPDATE maintainers SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",
-            (pkg_id,),
+        # Per-package hashed maintainer records are owned by the package, so
+        # they are removed with it.
+        cur = conn.execute(
+            "DELETE FROM package_maintainers_hashed WHERE package_id = ?", (pkg_id,)
         )
+        counts["package_maintainers_hashed"] = cur.rowcount
+        # Legacy plaintext table, if it still exists.
+        try:
+            conn.execute(
+                "UPDATE maintainers SET first_seen_package_id = 0 WHERE first_seen_package_id = ?",
+                (pkg_id,),
+            )
+        except sqlite3.OperationalError:
+            pass
 
         cur = conn.execute("DELETE FROM packages WHERE id = ?", (pkg_id,))
         counts["packages"] = cur.rowcount

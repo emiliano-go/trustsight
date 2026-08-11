@@ -54,6 +54,8 @@ not about the tool.
 `pyalpm` (optional) is in the `community` repository (formerly AUR).
 No AUR dependencies are required.
 
-The bundled novelty seed (`src/trustsight/data/seed.db.gz`, ~12 MB) ships inside
-the wheel, so the installed package includes it and the first run needs no
-network access.
+The novelty seed is no longer bundled inside the wheel; it is distributed as
+the signed `baseline-seed.tar.gz` release asset. On the first run the tool
+fetches and verifies it (mine with `trustsight seed fetch`), and on a
+machine without network access the first run simply starts from a cold
+database.

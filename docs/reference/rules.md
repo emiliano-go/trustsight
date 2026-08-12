@@ -95,7 +95,7 @@ rendered from `DECLARED_REASONS`.
 | `P002` | `validpgpkeys` declared |
 | `P003` | A signature source accompanies a source, with PGP keys declared |
 | `P005` | Source pinned to a full commit hash (`checksum_pinned`) |
-| `P006` | Source pinned to a tag — the weaker pin; `R079` exists because a tag can be repointed |
+| `P006` | Source pinned to a tag - the weaker pin, which `R079` exists to flag because a tag can be repointed |
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
 
 `P004` is skipped. Only `P002`, `P003` and `P005` render unprompted by default:

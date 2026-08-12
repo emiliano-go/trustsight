@@ -46,6 +46,12 @@ Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC base
 
 ---
 
+## Security model
+
+TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) and the [security invariants](docs/security.md).
+
+---
+
 ## What it detects
 
 | Attack / Risk | How TrustSight catches it |
@@ -180,12 +186,6 @@ Signals come from 13 core detection rules (R001-R013), the expanded TOML set (R0
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 
 See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
-
----
-
-## Security model
-
-TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) and the [security invariants](docs/security.md).
 
 ---
 

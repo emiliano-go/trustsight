@@ -1,43 +1,54 @@
 # Changelog
 
-## [0.12.1] - 2026-08-11
-
-### Fixed
-
-- **The release archive failed its own `check()` step.** The tests in
-  `tests/test_pkgbuild.py` read `packaging/aur/PKGBUILD`, but release
-  tarballs exclude `packaging/` by `.gitattributes` `export-ignore` (a
-  tarball cannot contain the PKGBUILD for its own checksum), so
-  `makepkg -si` from the v0.12.0 archive aborted with six failures. Those
-  PKGBUILD-hygiene tests now skip when the PKGBUILD is absent, and still
-  run in the repository checkout where it lives.
-
-### Changed
-
-- **The PKGBUILD CI job now executes `check()` against the release
-  tarball.** The build step dropped `--nocheck`, so a regression that
-  breaks the shipped artifact fails the `PKGBUILD` workflow instead of
-  shipping. Version bumped to 0.12.1 (the archival checksum is computed by
-  the release workflow from the served tarball, never by hand).
-
-### Stats
-
-- 1 commit since v0.12.0
-- Package version 0.12.1
-
 ## [Unreleased]
 
 ### Added
 
-- **Fixture reproducibility gate.** All 164 malicious `.diff` bodies are now
-  committed source (gitignore override for `tests/fixtures/malicious/`), so a
-  fresh clone runs the recall and separation gates on the full corpus with no
-  generator step. `scripts/verify_fixtures.py` checks every `expected.json`
-  record against its `.diff` (no missing bodies, no orphans, per-category
-  counts) and runs in `test.yml`. A new `fixture-determinism` job regenerates
-  all five generators on a fresh checkout and fails if the tree drifts from
-  the committed record, pinning both fixture bodies and hand-reconciled
-  labels.
+- **A public API (`trustsight.api`).** Every flow the CLI drives is available
+  as a library: `TrustSight` exposes `inspect`, `analyze_text`, `review`,
+  `refresh_corpus`, `watch`, `pivot`, `history`, `packages`, `forget`,
+  `prune`, `config` and `status`, returning frozen dataclasses (`Report`,
+  `ReviewResult`, `Finding`, `HistoryEntry`, `TrackedPackage`, `CycleReport`,
+  `PivotResult`, ...) whose `to_dict()` is byte-identical to the
+  corresponding `--json` output. The `trustsight` package resolves these
+  names lazily (PEP 562), so `import trustsight` for `__version__` alone
+  never loads typer, rich or the analysis stack. The CLI and the API share
+  one pipeline: the review engine moved out of `cli/review.py` into
+  `trustsight.review`, and `cli/review.py` keeps its historical spellings as
+  re-exports. `review --json` during a metadata bootstrap now reports
+  `{"status": "metadata_downloaded", ...}` and stays a pure JSON document.
+  See [python-api.md](reference/python-api.md).
+
+## [0.12.1] - 2026-08-11
+
+### Changed
+
+- **The release tarball's checksum is validated end to end in CI.** The Arch
+  containers install git before checkout, so `actions/checkout` performs a
+  real clone instead of falling back to the source archive (which honours
+  `.gitattributes` `export-ignore` and therefore omits `packaging/`). The
+  `PKGBUILD` workflow downloads the actual shipped tarball, fails the build
+  with an explicit error on a checksum mismatch, and builds from it with
+  `makepkg`; no `--skipchecksums` anywhere. The release workflow computes the
+  checksum from the served tarball, verifies it with
+  `makepkg --verifysource`, and commits the PKGBUILD and `.SRCINFO` to the
+  default branch; the tag stays frozen so the tarball, and therefore the
+  checksum, stays stable.
+- **The PKGBUILD CI job now executes `check()` against the release tarball.**
+  The build step dropped `--nocheck`, so a regression that breaks the shipped
+  artifact fails the `PKGBUILD` workflow instead of reaching users.
+- **Calibration figures refreshed to the 3,246-diff locked corpus.** The
+  published numbers now match the committed corpus: 69.1% benign zero-rate,
+  benign p95 = 45 against malicious p5 = 60, strict positive separation as
+  the only separation gate. The stale 3322-diff references and pre-B10
+  numbers across [security.md](security.md), the reading-a-report guide,
+  fire-rates, the benchmarks page and the index pages were reconciled, and
+  the CONTRIBUTING quick start now runs the security gates.
+- **The README was modernized** to match the current CLI surface and the
+  signed release channel, with verified links across the documentation.
+
+### Added
+
 - **R122: the corpus path reports archive trailer anomalies.** The snapshot
   tarball bytes fetched for the full-AUR corpus now go through
   `check_archive_trailer`, a pure function over bytes: trailing bytes after
@@ -45,93 +56,38 @@
   zip end-of-central-directory record produce a stamped R122 finding,
   surfaced exactly like the R118-tree scan results. The review path still
   never downloads PKGBUILD-declared URLs, so R122 only ever sees the AUR's
-  own snapshot tarballs; see
-  [rules.md](reference/rules.md#r122).
+  own snapshot tarballs; see [rules.md](reference/rules.md#r122).
+- **The malicious corpus is committed source.** All 164 malicious `.diff`
+  bodies are now committed (a gitignore override for
+  `tests/fixtures/malicious/`), so a fresh clone runs the recall and
+  separation gates on the full corpus with no generator step.
+  `scripts/verify_fixtures.py` checks every `expected.json` record against
+  its `.diff` (no missing bodies, no orphans, per-category counts), and a new
+  `fixture-determinism` job regenerates all five generators on a fresh
+  checkout and fails if the tree drifts from the committed record.
 - **A signed-commit policy, enforced on critical paths.** Changes to the
   tokenizer, scoring, config, database, security gates, CI workflows,
   packaging, and baseline keys must be GPG-signed: `.github/CODEOWNERS`
   assigns those paths to the maintainer, the `verify-commit-sigs` workflow
   checks every critical-path commit in a pull request to `master`, and
   `CONTRIBUTING.md` documents key setup and the list of critical paths.
-  Signing is encouraged (but not required) for everything else.
-
-### Changed
-
-- **Generators are record-preserving.** `gen_malicious_fixtures.py` no longer
-  deletes diffs it does not own, `gen_injection_fixtures.py` merges with the
-  existing record instead of overwriting it, and
-  `gen_historical_holdout_fixtures.py` keeps curated entries verbatim.
-  Regenerating any generator on a clean tree is now a no-op by construction.
-- **R012 `user:` role marker relabelled as a negative control.** The engine
-  deliberately excludes `user:` role markers (a question addressed to a model
-  carries no instruction); the generator previously emitted
-  `R012-v5.diff` as a positive, which failed the malicious-recall gate. It is
-  now a documented negative (`must_not_fire: [R012, R013]`, `max_score: 0`).
-- **`R029-known-dep-added` record dropped.** A vestigial placeholder
-  (`must_fire: []`, `max_score: 0`, `known_packages` gate) with no rule
-  implementation, no diff body, and no code path referencing it; keeping it
-  would fabricate a fixture for a rule that does not exist.
-- **Channel releases keep the canonical seed and prove their own plumbing.**
-  The baselines workflow now checks the channel release for an existing
-  `baseline-seed.tar.gz` before building: the canonical seed is
-  maintainer-built from the full AUR mirror and uploaded, and CI rebuilds a
-  lock-derived fallback only when it is missing (auditable but smaller, and
-  never overwriting an uploaded seed). Every seed built by the published
-  scripts now ships `trustsight-seed-v2/seed-provenance.json` (source mirror
-  path and size, package, maintainer and observation counts, build timestamp
-  and command line), written by `generate_seed.py --provenance-out` and
-  copied into the archive by `build_hashed_seed.py --provenance`, so anyone
-  can reproduce the seed and diff their record against the published one. A
-  manual workflow run doubles as a pipeline test; see
-  [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
-- **Release tarballs no longer carry `packaging/`, and CI validates the
-  checksum the PKGBUILD records.** `export-ignore` keeps the PKGBUILD out of
-  the GitHub source tarball, so the release artifact can no longer disagree
-  with itself. `release-pkgbuild.yml` computes the checksum from the tarball
-  served at the release tag, verifies it with `makepkg --verifysource`, and
-  commits it to the default branch; `pkgbuild.yml` now downloads the actual
-  release tarball and fails the build on a checksum mismatch instead of
-  building with `--skipchecksums`. Both Arch containers install git before
-  checkout so `actions/checkout` performs a real checkout rather than the
-  REST-API archive fallback that had silently omitted `packaging/`.
-- **Machine-readable output stays machine-readable.** `review`, `inspect`,
-  `history`, `list`, `corpus` and `ioc` in `--json` mode keep stdout a pure
-  JSON document: warnings and progress events go to stderr, errors become a
-  JSON error object with exit code 2, and `review --json` results carry an
-  explicit `failed` flag, unconditional `suppressed_rules` and `ioc_matches`,
-  and score fields only under `--score` and `--risk`. Negative `--limit`
-  values and unknown `--type` values are rejected with a clean error instead
-  of a traceback.
-- **IOC and baseline handling hardened.** `ioc import` dedupes identical
-  rows instead of crashing, keeps expired rows of a source across
-  re-imports (`entries_skipped`), treats naive `expires_at` values as UTC,
-  and reports malformed manifest versions or encodings as clean errors;
-  `ioc update` honours `TRUSTSIGHT_OFFLINE`; `ioc export` refuses to
-  overwrite an existing file; `ioc sources` drops the placeholder row. The
-  seed and baseline import path rejects archive members that escape the
-  extraction directory (absolute paths, `..` segments), `import-baseline`
-  refuses a non-file path, and `db check` and `db backup` survive a corrupt
-  database with readable errors and validate the backup output path.
-- **`full-aur` refuses to do nothing silently.** An empty metadata fetch no
-  longer clobbers the stored snapshot, fetch failures are wrapped in
-  actionable errors, a missing `--sign` key is a hard error, invalid watch
-  intervals are coerced to the floor, and a failed watch cycle is retried
-  instead of killing the watcher. `config set` validates keys and value
-  types and `config show` tolerates hand-edited non-integer weights;
-  `override` tolerates null reasons and dedupes new entries; `forget
-  --prune` refuses partial RPC replies and handles EOF on confirmation;
-  discovery reports a friendly error when pacman is missing from PATH; the
-  display layer escapes rich markup in untrusted messages.
 
 ### Fixed
 
-- **The seed release path logs through a real logger.** `db.py` referenced a
-  module `log` it never defined, masked until now by a broad exception
-  handler, so failures while seeding from the release channel died without
-  a reason; the module logger is defined and a test pins the failure path.
-  `config.py`'s `\s` escape no longer triggers a SyntaxWarning, and
-  `export.py` drops a dead assignment left over from the baseline export
-  rework.
+- **The release archive failed its own `check()` step.** Six tests in
+  `tests/test_pkgbuild.py` read `packaging/aur/PKGBUILD`, which GitHub source
+  archives exclude by `.gitattributes` `export-ignore` (a tarball cannot
+  contain the PKGBUILD for its own checksum). `makepkg -si` from the v0.12.0
+  archive aborted with six failures. The PKGBUILD-hygiene tests now skip when
+  `packaging/` is absent, and still run in the repository checkout where the
+  PKGBUILD lives.
+
+### Stats
+
+- 11 commits since v0.12.0
+- 198 files changed, +2370 / -425
+- 1536 tests, all passing
+- Package version 0.12.1
 
 ## [0.12.0] - 2026-08-10
 
@@ -332,6 +288,69 @@
   `configuring-rules-and-weights.md` and `index.md`. The calibration figures in
   `reading-a-report.md` were re-derived rather than adjusted: zero-rate 74.9% to
   69.1%, benign p95 30 to 45, test count 1,365 to 1,377.
+- **Generators are record-preserving.** `gen_malicious_fixtures.py` no longer
+  deletes diffs it does not own, `gen_injection_fixtures.py` merges with the
+  existing record instead of overwriting it, and
+  `gen_historical_holdout_fixtures.py` keeps curated entries verbatim.
+  Regenerating any generator on a clean tree is now a no-op by construction.
+- **R012 `user:` role marker relabelled as a negative control.** The engine
+  deliberately excludes `user:` role markers (a question addressed to a model
+  carries no instruction); the generator previously emitted
+  `R012-v5.diff` as a positive, which failed the malicious-recall gate. It is
+  now a documented negative (`must_not_fire: [R012, R013]`, `max_score: 0`).
+- **`R029-known-dep-added` record dropped.** A vestigial placeholder
+  (`must_fire: []`, `max_score: 0`, `known_packages` gate) with no rule
+  implementation, no diff body, and no code path referencing it; keeping it
+  would fabricate a fixture for a rule that does not exist.
+- **Channel releases keep the canonical seed and prove their own plumbing.**
+  The baselines workflow now checks the channel release for an existing
+  `baseline-seed.tar.gz` before building: the canonical seed is
+  maintainer-built from the full AUR mirror and uploaded, and CI rebuilds a
+  lock-derived fallback only when it is missing (auditable but smaller, and
+  never overwriting an uploaded seed). Every seed built by the published
+  scripts now ships `trustsight-seed-v2/seed-provenance.json` (source mirror
+  path and size, package, maintainer and observation counts, build timestamp
+  and command line), written by `generate_seed.py --provenance-out` and
+  copied into the archive by `build_hashed_seed.py --provenance`, so anyone
+  can reproduce the seed and diff their record against the published one. A
+  manual workflow run doubles as a pipeline test; see
+  [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
+- **Release tarballs no longer carry `packaging/`.** `export-ignore` keeps
+  the PKGBUILD out of the GitHub source tarball, so the release artifact can
+  no longer disagree with itself. The CI side of the checksum contract is
+  v0.12.1: `release-pkgbuild.yml` computes the checksum from the served
+  tarball, verifies it with `makepkg --verifysource`, and commits it to the
+  default branch; `pkgbuild.yml` downloads the actual release tarball and
+  fails the build on a checksum mismatch instead of building with
+  `--skipchecksums`.
+- **Machine-readable output stays machine-readable.** `review`, `inspect`,
+  `history`, `list`, `corpus` and `ioc` in `--json` mode keep stdout a pure
+  JSON document: warnings and progress events go to stderr, errors become a
+  JSON error object with exit code 2, and `review --json` results carry an
+  explicit `failed` flag, unconditional `suppressed_rules` and `ioc_matches`,
+  and score fields only under `--score` and `--risk`. Negative `--limit`
+  values and unknown `--type` values are rejected with a clean error instead
+  of a traceback.
+- **IOC and baseline handling hardened.** `ioc import` dedupes identical
+  rows instead of crashing, keeps expired rows of a source across
+  re-imports (`entries_skipped`), treats naive `expires_at` values as UTC,
+  and reports malformed manifest versions or encodings as clean errors;
+  `ioc update` honours `TRUSTSIGHT_OFFLINE`; `ioc export` refuses to
+  overwrite an existing file; `ioc sources` drops the placeholder row. The
+  seed and baseline import path rejects archive members that escape the
+  extraction directory (absolute paths, `..` segments), `import-baseline`
+  refuses a non-file path, and `db check` and `db backup` survive a corrupt
+  database with readable errors and validate the backup output path.
+- **`full-aur` refuses to do nothing silently.** An empty metadata fetch no
+  longer clobbers the stored snapshot, fetch failures are wrapped in
+  actionable errors, a missing `--sign` key is a hard error, invalid watch
+  intervals are coerced to the floor, and a failed watch cycle is retried
+  instead of killing the watcher. `config set` validates keys and value
+  types and `config show` tolerates hand-edited non-integer weights;
+  `override` tolerates null reasons and dedupes new entries; `forget
+  --prune` refuses partial RPC replies and handles EOF on confirmation;
+  discovery reports a friendly error when pacman is missing from PATH; the
+  display layer escapes rich markup in untrusted messages.
 
 ### Added
 
@@ -440,6 +459,13 @@
   benign p95 and malicious p5 on every push and nothing else, so the aggregate
   figures are a point-in-time measurement. `security.md` now says so, and
   `fire-rates.md` actually publishes the table it was said to publish.
+- **The seed release path logs through a real logger.** `db.py` referenced a
+  module `log` it never defined, masked until now by a broad exception
+  handler, so failures while seeding from the release channel died without
+  a reason; the module logger is defined and a test pins the failure path.
+  `config.py`'s `\s` escape no longer triggers a SyntaxWarning, and
+  `export.py` drops a dead assignment left over from the baseline export
+  rework.
 
 ### Performance
 

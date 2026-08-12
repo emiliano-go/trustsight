@@ -24,6 +24,7 @@ from ..differ import (
     extract_urls_from_diff,
     generate_diff,
     map_diff_lines,
+    truncate_diff,
 )
 from ..fetcher import (
     clone_or_fetch,
@@ -157,7 +158,10 @@ def analyze_package(
         else:
             return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
 
-    diff_text, diff_summary = generate_diff(repo, old_commit, head_commit, config.get("diff", {}).get("max_context_lines", 3))
+    diff_text, diff_summary = generate_diff(
+        repo, old_commit, head_commit,
+        config.get("diff", {}).get("max_context_lines", 3),
+    )
 
     # A local source=() companion file is build input the recipe copies into
     # $srcdir and can execute; its committed content is scanned with the same
@@ -169,12 +173,9 @@ def analyze_package(
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
-    diff_bytes = diff_text.encode("utf-8", errors="replace")
-    diff_truncated = len(diff_bytes) > max_bytes
+    diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
-        diff_bytes = diff_bytes[:max_bytes]
-        diff_text = diff_bytes.decode("utf-8", errors="replace")
 
     source_changes = extract_urls_from_diff(diff_text)
 

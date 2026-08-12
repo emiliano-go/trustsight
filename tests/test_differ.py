@@ -8,6 +8,9 @@ from trustsight.differ import (
     extract_urls_from_diff,
     local_source_names,
     source_array_has_command_substitution,
+    map_diff_lines,
+    _post_diff_lines,
+    truncate_diff,
 )
 
 
@@ -120,6 +123,42 @@ def test_extract_urls_changed_hostname_typo_squat():
     result = extract_urls_from_diff(diff)
     assert len(result.added_urls) == 1
     assert "github.com" in result.added_urls[0]
+
+
+def test_extract_urls_is_sorted_and_deduplicated():
+    diff = "+https://z.example/a https://a.example/b https://z.example/a\n"
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://a.example/b", "https://z.example/a"]
+
+
+def test_map_diff_lines_ignores_content_outside_hunks():
+    diff = "+outside\n+++ b/PKGBUILD\n@@ -1 +1 @@\n+inside\n"
+    assert map_diff_lines(diff) == {3: ("PKGBUILD", 1)}
+
+
+def test_map_diff_lines_handles_malformed_hunk_without_crashing():
+    diff = "+++ b/PKGBUILD\n@@ broken\n+payload\n"
+    assert map_diff_lines(diff) == {}
+
+
+def test_post_diff_lines_removes_only_one_prefix():
+    diff = "+++ b/PKGBUILD\n@@ -1 +1 @@\n+  leading\n++literal-plus\n"
+    assert _post_diff_lines(diff) == ["  leading", "+literal-plus"]
+
+
+def test_truncate_diff_is_utf8_safe_and_reports_status():
+    diff = "+" + ("é" * 20) + "\n+payload-after-cap\n"
+    bounded, truncated = truncate_diff(diff, max_bytes=7)
+    assert truncated is True
+    assert bounded == "+ééé"
+    assert "payload-after-cap" not in bounded
+    assert len(bounded.encode("utf-8")) <= 7
+
+
+def test_truncate_diff_is_stable_at_and_below_limit():
+    diff = "+safe\n"
+    assert truncate_diff(diff, max_bytes=len(diff.encode())) == (diff, False)
+    assert truncate_diff(diff, max_bytes=1) == ("+", True)
 
 
 # --- Checksum detection ---

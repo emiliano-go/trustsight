@@ -33,6 +33,7 @@ from ..differ import (
     detect_verification_evidence,
     extract_urls_from_diff,
     map_diff_lines,
+    truncate_diff,
 )
 from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
@@ -272,12 +273,9 @@ def analyze_package_text(
     diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
-    diff_bytes = diff_text.encode("utf-8", errors="replace")
-    diff_truncated = len(diff_bytes) > max_bytes
+    diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
-        diff_bytes = diff_bytes[:max_bytes]
-        diff_text = diff_bytes.decode("utf-8", errors="replace")
 
     source_changes = extract_urls_from_diff(diff_text)
     source_buckets = classify_urls(source_changes.added_urls)

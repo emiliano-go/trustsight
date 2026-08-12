@@ -9,6 +9,27 @@ _HUNK_HEADER_RE = re.compile(
     r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@"
 )
 
+# These are parser-side safety rails; the pipeline's configured diff cap still
+# owns the final coverage decision for an analysis.
+MAX_GENERATED_DIFF_BYTES = 5 * 1024 * 1024
+MAX_COMPANION_BYTES = 65536
+MAX_COMPANION_FILES = 256
+MAX_DIFF_PATH_BYTES = 4096
+MAX_URLS_PER_SIDE = 4096
+MAX_URL_TOKEN_BYTES = 8192
+MAX_DIFF_BYTES = 5 * 1024 * 1024
+
+
+def truncate_diff(diff_text: str, max_bytes: int = MAX_DIFF_BYTES) -> tuple[str, bool]:
+    """Return a deterministic UTF-8-safe prefix and truncation status."""
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+        raise ValueError("max_bytes must be a positive integer")
+    max_bytes = min(max_bytes, MAX_DIFF_BYTES)
+    encoded = diff_text.encode("utf-8", errors="replace")
+    if len(encoded) <= max_bytes:
+        return diff_text, False
+    return encoded[:max_bytes].decode("utf-8", errors="ignore"), True
+
 
 def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     """Map diff-line index → (file_name, new_file_line_number).
@@ -22,6 +43,7 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     lines = diff_text.splitlines()
     current_file = "PKGBUILD"
     new_lineno = 0
+    in_hunk = False
 
     for i, line in enumerate(lines):
         if line.startswith("+++ "):
@@ -30,14 +52,20 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
             # finding in it cited a path that does not exist.
             name = line[4:].strip()
             current_file = name.removeprefix("b/") if name.startswith("b/") else name
+            current_file = current_file[:MAX_DIFF_PATH_BYTES]
             continue
         if line.startswith("--- "):
             continue
         m = _HUNK_HEADER_RE.match(line)
         if m:
-            new_lineno = int(m.group(1))
+            try:
+                new_lineno = int(m.group(1))
+            except ValueError:
+                in_hunk = False
+                continue
+            in_hunk = True
             continue
-        if line.startswith(("+", " ", "-")):
+        if in_hunk and line.startswith(("+", " ", "-")):
             mapping[i] = (current_file, new_lineno)
             if line.startswith(("+", " ")):
                 new_lineno += 1
@@ -53,7 +81,8 @@ _DELTA_STATUS_MAP = {
 
 
 def generate_diff(
-    repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3
+    repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3,
+    max_bytes: int | None = None,
 ) -> tuple[str, DiffSummary]:
     """Generate a unified diff between two commits."""
     old_commit = repo.get(old_oid)
@@ -63,18 +92,32 @@ def generate_diff(
     diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
 
     filtered_patches = []
+    generated_bytes = 0
     for patch in diff:
         delta = patch.delta
         path = delta.new_file.path
         old_path = delta.old_file.path
         if (path in ("PKGBUILD", ".SRCINFO") or path.endswith(".install")
                 or old_path in ("PKGBUILD", ".SRCINFO") or old_path.endswith(".install")):
-            filtered_patches.append(patch.text)
+            text = patch.text
+            if max_bytes is not None:
+                if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+                    raise ValueError("max_bytes must be a positive integer")
+                max_bytes = min(max_bytes, MAX_GENERATED_DIFF_BYTES)
+                remaining = max_bytes - generated_bytes
+                if remaining <= 0:
+                    break
+                text, _ = truncate_diff(text, remaining)
+                generated_bytes += len(text.encode("utf-8", errors="replace"))
+            filtered_patches.append(text)
 
     unified = "\n".join(filtered_patches)
     lines_added = diff.stats.insertions
     lines_removed = diff.stats.deletions
-    files_changed = list({delta.new_file.path for delta in diff.deltas})
+    files_changed = sorted({
+        delta.new_file.path if delta.status != GIT_DELTA_DELETED else delta.old_file.path
+        for delta in diff.deltas
+    })
 
     file_changes = []
     for delta in diff.deltas:
@@ -83,6 +126,7 @@ def generate_diff(
         if path not in (".SRCINFO", ".gitignore"):
             file_changes.append({"path": path, "status": status})
 
+    file_changes.sort(key=lambda item: (item["path"], item["status"]))
     summary = DiffSummary(
         lines_added=lines_added,
         lines_removed=lines_removed,
@@ -138,16 +182,18 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     for line in diff_text.splitlines():
         if line.startswith("+") and "http" in line:
             for u in _URL_TOKEN_RE.findall(line):
-                added_urls.add(_clean_url(u))
+                if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
+                    added_urls.add(_clean_url(u))
         elif line.startswith("-") and "http" in line:
             for u in _URL_TOKEN_RE.findall(line):
-                removed_urls.add(_clean_url(u))
+                if len(removed_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
+                    removed_urls.add(_clean_url(u))
 
     checksum_behavior = detect_checksum_changes(diff_text)
 
     return SourceChanges(
-        added_urls=list(added_urls),
-        removed_urls=list(removed_urls),
+        added_urls=sorted(added_urls),
+        removed_urls=sorted(removed_urls),
         checksum_behavior=checksum_behavior,
     )
 
@@ -327,7 +373,7 @@ def source_array_has_command_substitution(diff_text: str) -> bool:
 # that content back in front of the scanner.  Cap it: an untrusted repo must
 # not force the reviewer to read an unbounded file, and the pipeline's own
 # diff cap still bounds the combined text on top of this.
-_COMPANION_MAX_BYTES = 65536
+_COMPANION_MAX_BYTES = MAX_COMPANION_BYTES
 # One array element: a single- or double-quoted string, or a bare word.
 # bash accepts ``source=(setup.sh)`` unquoted, so a quoted-only parser was
 # evaded by simply dropping the quotes.
@@ -414,6 +460,7 @@ def companion_source_hunks(
     noise.  The full current content is emitted, not just this commit's diff,
     so a payload committed earlier and merely referenced now is still read.
     """
+    max_bytes = max(1, min(max_bytes, MAX_COMPANION_BYTES))
     commit = repo.get(commit_oid)
     if commit is None:
         return ""
@@ -427,12 +474,15 @@ def companion_source_hunks(
 
     hunks: list[str] = []
     used = 0
-    for name in sorted(set(_companion_names(commit.tree, pkgbuild_text))):
+    for name in sorted(set(_companion_names(commit.tree, pkgbuild_text)))[:MAX_COMPANION_FILES]:
         entry = _top_level_blob(commit.tree, name)
         if entry is None:
             continue
         try:
-            data = repo[entry.id].data
+            blob = repo[entry.id]
+            if getattr(blob, "size", 0) > max_bytes - used:
+                break
+            data = blob.data
         except (KeyError, TypeError, ValueError):
             continue
         # NUL in the head marks a binary; ELF is R118's job, not the text
@@ -478,10 +528,12 @@ def _post_diff_lines(diff_text: str) -> list[str]:
     """
     out: list[str] = []
     for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "@@")):
+            continue
         if line.startswith("-"):
             continue
         if line.startswith("+") or line.startswith(" "):
-            out.append(line.lstrip("+ "))
+            out.append(line[1:])
     return out
 
 

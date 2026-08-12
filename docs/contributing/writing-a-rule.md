@@ -40,6 +40,48 @@ C-series rules are defined as Python code in the `analysis/` package. They expre
 
 Users cannot disable C-series rules.
 
+## Categorising and documenting it {#categorising}
+
+Two different things are called a category, and a new rule needs both.
+
+The `category` field above names the **capability** a match touched
+(`network`, `persistence`, `obfuscation`). It is fine-grained, it is set
+per-rule, and it is what `R072` counts when it looks for a diff whose hits
+span three or more capabilities. Reuse an existing value where one fits.
+
+`RuleCategory`, in `src/trustsight/categories.py`, names the **kind of
+claim** the rule makes. The set is closed, every rule has exactly one, and
+it decides which page under `docs/reference/rules/` carries the rule's
+definition. Add the id to `RULE_CATEGORIES` in the same change that adds
+the rule:
+
+```python
+RULE_CATEGORIES: dict[str, RuleCategory] = {
+    ...
+    "R141": _C.FETCH_AND_EXECUTION,
+}
+```
+
+Then write the `### R141: Name {#r141}` section on that category's page,
+and add a stub to `docs/reference/rules/system.md`:
+
+```markdown
+### R141 {#r141}
+
+See [R141: Name](fetch-and-execution.md#r141).
+```
+
+Then regenerate the index, whose legend and quick-reference table are both
+derived rather than hand-maintained:
+
+```bash
+python scripts/build_rules_index.py
+```
+
+`tests/test_docs.py` fails if any of those is missing, if the section lands
+on a page the category does not own, if a quoted pattern has drifted from
+the shipped one, or if the id is absent from the quick-reference table.
+
 ## When to use each
 
 | Scenario                                       | Use      |

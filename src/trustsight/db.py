@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 # compressed and a few hundred MB expanded; ``trustsight seed-db`` takes a
 # path, so the ceiling is what stops an arbitrary .gz from filling the disk.
 MAX_SEED_BYTES = 2 * 1024 * 1024 * 1024
+MAX_SEED_MEMBERS = 100_000
 
 
 def get_db_path() -> Path:
@@ -999,6 +1000,11 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
     """
     with tarfile.open(archive, "r:*") as tf:
         members = tf.getmembers()
+        if len(members) > MAX_SEED_MEMBERS:
+            raise ValueError(
+                f"seed archive contains more than {MAX_SEED_MEMBERS} members; "
+                "refusing to expand"
+            )
         if not any("trustsight-seed-v2" in m.name for m in members):
             return None
         # Bounded extraction: the archive itself is small metadata.
@@ -1008,6 +1014,10 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
                 f"seed archive exceeds {MAX_SEED_BYTES} bytes; refusing to expand"
             )
         for member in members:
+            if member.issym() or member.islnk() or member.isdev() or member.isfifo():
+                raise ValueError(
+                    f"seed archive contains unsupported link or device member: {member.name}"
+                )
             # Path containment: a member name must be a relative path inside
             # the destination.  Absolute names or ``..`` segments would let a
             # crafted archive write anywhere the user can write.

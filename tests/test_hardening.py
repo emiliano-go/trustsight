@@ -337,3 +337,34 @@ def test_a_seed_database_bomb_is_refused(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="exceeds"):
         db.import_seed(bomb)
+
+
+def test_seed_archive_rejects_symlink_members(tmp_path):
+    import tarfile
+    import trustsight.db as db
+
+    archive = tmp_path / "seed.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        info = tarfile.TarInfo("trustsight-seed-v2/link")
+        info.type = tarfile.SYMTYPE
+        info.linkname = "/etc/passwd"
+        tf.addfile(info)
+
+    with pytest.raises(ValueError, match="unsupported link"):
+        db._extract_v2_archive(archive, tmp_path / "out")
+
+
+def test_seed_archive_rejects_excessive_member_count(tmp_path, monkeypatch):
+    import tarfile
+    import trustsight.db as db
+
+    monkeypatch.setattr(db, "MAX_SEED_MEMBERS", 1)
+    archive = tmp_path / "seed.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        for name in ("trustsight-seed-v2/a", "trustsight-seed-v2/b"):
+            info = tarfile.TarInfo(name)
+            info.size = 0
+            tf.addfile(info)
+
+    with pytest.raises(ValueError, match="members"):
+        db._extract_v2_archive(archive, tmp_path / "out")

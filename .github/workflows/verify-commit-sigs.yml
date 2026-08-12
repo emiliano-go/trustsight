@@ -12,7 +12,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -35,19 +35,8 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GITHUB_TOKEN"]
 
-          critical_paths = {
-              "scripts/security_gates.py",
-              "src/trustsight/tokenizer.py",
-              "src/trustsight/scoring.py",
-              "src/trustsight/config.py",
-              "src/trustsight/db.py",
-              "docs/security.md",
-              ".github/workflows/security.yml",
-              ".github/workflows/calibration.yml",
-              "packaging/aur/PKGBUILD",
-              "docs/reference/baseline-keys.md",
-              "src/trustsight/full_aur/baseline_pubkey.pem",
-          }
+          from scripts.critical_paths import CRITICAL_PATHS
+          critical_paths = set(CRITICAL_PATHS)
 
           diff = subprocess.check_output(
               ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],

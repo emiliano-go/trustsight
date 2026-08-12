@@ -40,8 +40,8 @@ jobs:
       github.event_name == 'workflow_dispatch'
       || startsWith(github.event.release.tag_name, 'baseline-')
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
 
@@ -54,7 +54,7 @@ jobs:
       # mirror fails the seed build loudly rather than shipping a partial
       # seed; the fallback then is the maintainer's own upload.
       - name: Cache AUR objects
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/trustsight/aur.git
           key: aur-objects-${{ hashFiles('tests/fixtures/corpus.lock') }}

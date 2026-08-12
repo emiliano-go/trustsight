@@ -67,7 +67,7 @@ These areas affect the project's published security claims. A change here usuall
 
 ## Security Critical Paths
 
-Changes to the paths below require careful review:
+Changes to the paths listed in `scripts/critical_paths.py` require careful review and GPG-signed commits:
 
 | File | Why it matters |
 |---|---|

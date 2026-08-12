@@ -17,10 +17,15 @@ The checks fall into three groups:
 """
 
 import re
-import time
 from dataclasses import dataclass
 
 from .rules import _COMMENT_OR_DEP_RE, apply_rules
+from .regex_safety import (
+    BACKTRACK_BUDGET_S as _BACKTRACK_BUDGET_S,
+    BACKTRACK_REPS as _BACKTRACK_REPS,
+    backtracking_risk,
+    has_nested_quantifier,
+)
 
 VALID_SEVERITIES = frozenset({"FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"})
 VALID_MATCH_TARGETS = frozenset({"raw_line", "resolved"})
@@ -126,33 +131,12 @@ def _pattern_matches_empty(compiled: re.Pattern) -> bool:
 # repetitions a classic ``(a+)+$`` takes ~110ms on Python 3.10 while
 # a linear pattern takes ~0.03ms; on 3.12+ the optimised re engine
 # runs it in ~15ms at 18 reps, so 22 restores the margin.
-_BACKTRACK_REPS = 22
-_BACKTRACK_BUDGET_S = 0.02
-
-_BACKTRACK_PROBES = (
-    "a" * _BACKTRACK_REPS + "!",
-    "a" * _BACKTRACK_REPS,
-    " " * _BACKTRACK_REPS + "!",
-    "https://" + "a." * (_BACKTRACK_REPS // 2) + "com",
-    "curl " + "|" * _BACKTRACK_REPS,
-    "/" * _BACKTRACK_REPS + "!",
-)
-
-
 def _backtracking_risk(compiled: re.Pattern) -> float:
     """Time *compiled* against short pathological inputs.
 
     Returns the worst elapsed time in seconds.
     """
-    worst = 0.0
-    for probe in _BACKTRACK_PROBES:
-        start = time.perf_counter()
-        try:
-            compiled.search(probe)
-        except RecursionError:
-            return _BACKTRACK_BUDGET_S * 100
-        worst = max(worst, time.perf_counter() - start)
-    return worst
+    return backtracking_risk(compiled)
 
 
 def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[LintFinding]:
@@ -257,7 +241,7 @@ def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
         ))
 
     elapsed = _backtracking_risk(compiled)
-    if elapsed > _BACKTRACK_BUDGET_S:
+    if has_nested_quantifier(pattern) or elapsed > _BACKTRACK_BUDGET_S:
         findings.append(LintFinding(
             rid, SEVERITY_ERROR, "backtracking",
             f"pattern took {elapsed * 1000:.0f}ms on a {_BACKTRACK_REPS}-character "

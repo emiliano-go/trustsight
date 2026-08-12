@@ -1,9 +1,13 @@
 import re
 import threading
+import logging
 
 from .config import load_rules
 from .findings import stamp
 from .tokenizer import join_line_continuations
+from .regex_safety import BACKTRACK_BUDGET_S, backtracking_risk, has_nested_quantifier
+
+_log = logging.getLogger(__name__)
 
 # Lines starting with # after stripping + prefix are comments.
 # Dependency declarations contain package names, not code; matching
@@ -76,6 +80,11 @@ def _compiled(pattern: str):
     try:
         compiled = re.compile(pattern, re.IGNORECASE)
     except re.error:
+        compiled = None
+    if compiled is not None and (
+        has_nested_quantifier(pattern) or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+    ):
+        _log.warning("refusing regex pattern with excessive backtracking risk")
         compiled = None
     _pattern_cache[pattern] = compiled
     return compiled

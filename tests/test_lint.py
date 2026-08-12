@@ -137,6 +137,12 @@ def test_catastrophic_backtracking_is_flagged():
     assert _checks(findings, "backtracking")[0].level == SEVERITY_ERROR
 
 
+def test_runtime_rule_matching_refuses_catastrophic_pattern():
+    from trustsight.rules import _compiled
+
+    assert _compiled(r"(a+)+$") is None
+
+
 def test_disjoint_nested_quantifier_is_not_flagged():
     findings = lint_rules([
         _rule(pattern=r"\bchmod\s+(?:-\S+\s+)*[2467][0-7]{3}\b")

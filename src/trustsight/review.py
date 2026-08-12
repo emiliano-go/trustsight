@@ -17,8 +17,7 @@ from typing import Callable, Optional
 
 from .analysis import analyze_package
 from .config import CONFIG_DIR, load_config
-from .coverage import describe as describe_coverage
-from .scoring import verdict_label, verdict_level
+from .reporting import evaluate_fact, is_trivial
 from .verdict import no_aur_change_note
 
 log = logging.getLogger(__name__)
@@ -202,17 +201,11 @@ def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = N
 
 
 def verdict_for(fact) -> str:
-    from .verdict import fallback_verdict
-    return fallback_verdict(fact)
+    return evaluate_fact(fact)["verdict"]
 
 
 def is_trivial_update(fact, findings: list[dict]) -> bool:
-    if not fact.diff_summary.files_changed:
-        return True
-    for f in findings:
-        if f.get("rule_id") not in ("C002",):
-            return False
-    return True
+    return is_trivial(fact, findings)
 
 
 def analyze_outdated_batch(
@@ -278,8 +271,6 @@ def analyze_outdated_batch(
                 _, _, fact, verdict, _ = result
                 analysed_by_idx[idx] = (entry, fact, verdict)
 
-    from .verdict import _render as _render_verdict
-
     results = []
     for idx in range(total):
         item = analysed_by_idx.get(idx)
@@ -287,58 +278,18 @@ def analyze_outdated_batch(
             continue
         entry, fact, verdict = item
 
-        findings = []
-        for e in fact.score_breakdown:
-            if e.weight > 0 or e.severity in ("FATAL", "CRITICAL"):
-                desc = _render_verdict(e, fact)
-                findings.append({
-                    "rule_id": e.rule_id,
-                    "file": e.file,
-                    "line": e.line,
-                    "description": desc,
-                    "template": e.template,
-                    "evidence": e.evidence,
-                    "severity": e.severity,
-                    "weight": e.weight,
-                })
-
-        file_changes = fact.diff_summary.file_changes
-        is_trivial = is_trivial_update(fact, findings)
-
-        # Coverage first: what the run could not see qualifies everything
-        # the verdict goes on to say about what it did see.
-        coverage_note = describe_coverage(fact.coverage_gaps)
-        if coverage_note:
-            verdict = f"{coverage_note} {verdict}"
-        res = {
-            "package": entry["name"],
-            "old_version": entry.get("current_version", ""),
-            "new_version": entry.get("latest_version", ""),
-            "score": fact.final_score,
-            "verdict": verdict,
-            "risk": verdict_level(fact),
-            # The label a person sees: same band, qualified when the run
-            # did not read the whole change (coverage.qualified_band).
-            "risk_label": verdict_label(fact),
-            "first_seen": fact.first_seen,
-            "diff_truncated": fact.diff_truncated,
-            "changes": fact.changes,
-            "coverage_gaps": fact.coverage_gaps,
-            # A VCS package's AUR pkgver is a placeholder its build replaces,
-            # so the two versions are not comparable and must not render as
-            # an update arrow (plan §13).
-            "version_comparison": fact.version_comparison,
-            "aur_note": no_aur_change_note(fact),
-            "findings": findings,
-            "file_changes": file_changes,
-            "is_trivial": is_trivial,
-            "ioc_matches": fact.ioc_matches,
-        }
+        evaluated = evaluate_fact(fact)
+        evaluated["old_version"] = entry.get("current_version", "")
+        evaluated["new_version"] = entry.get("latest_version", "")
+        evaluated["aur_note"] = no_aur_change_note(fact)
+        evaluated.pop("raw", None)
+        evaluated.pop("fact", None)
+        res = evaluated
         # B5: a suppression travels with the result unconditionally.  It used
         # to ride along only under --verbose, so the default JSON dropped it
         # silently, and a silent suppression is indistinguishable from a
         # missed detection - the one thing B5 exists to prevent.
-        res["suppressed_rules"] = fact.suppressed_rules
+        res["suppressed_rules"] = evaluated["suppressed_rules"]
         if verbose:
             fired = [
                 {"rule_id": e.rule_id, "severity": e.severity}

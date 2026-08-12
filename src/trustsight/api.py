@@ -71,10 +71,50 @@ RISK_LEVELS = ("Low", "Medium", "High", "Critical")
 
 # Above this score the CLI counts a package as flagged in its summary line.
 FLAG_THRESHOLD = 20
+MAX_API_PACKAGES = 10_000
+MAX_API_HISTORY = 10_000
+MAX_API_REPOS = 256
+MAX_API_TEXT_BYTES = 5 * 1024 * 1024
+MAX_API_NAME_BYTES = 256
 
 
 class TrustSightError(Exception):
     """Base class for every error this module raises deliberately."""
+
+
+def _validate_limit(value: int, *, name: str, maximum: int) -> None:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    if value < 0 or value > maximum:
+        raise ValueError(f"{name} must be between 0 and {maximum}")
+
+
+def _validate_nonnegative(value: int, *, name: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+
+
+def _validate_text(value: str, *, name: str, maximum: int = MAX_API_TEXT_BYTES) -> None:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a string")
+    if len(value.encode("utf-8")) > maximum:
+        raise ValueError(f"{name} must be at most {maximum} UTF-8 bytes")
+
+
+def _validate_name(value: str, *, name: str = "package") -> None:
+    _validate_text(value, name=name, maximum=MAX_API_NAME_BYTES)
+    if not value:
+        raise ValueError(f"{name} must not be empty")
+
+
+def _validate_names(value: Sequence[str], *, name: str, maximum: int) -> None:
+    if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
+        raise ValueError(f"{name} must be a sequence of strings")
+    if len(value) > maximum:
+        raise ValueError(f"{name} must contain at most {maximum} names")
+    item_name = name[:-1] if name.endswith("s") else name
+    for item in value:
+        _validate_name(item, name=f"{item_name} name")
 
 
 class PackageNotFound(TrustSightError):
@@ -468,22 +508,29 @@ def _hook(callback: Optional[ProgressHook]):
 
 
 def _findings_from_breakdown(fact) -> tuple[Finding, ...]:
-    from .verdict import _render
+    return _findings_from_evaluation(_evaluate_fact(fact))
 
-    out = []
-    for e in fact.score_breakdown:
-        if e.weight > 0 or e.severity in ("FATAL", "CRITICAL"):
-            out.append(Finding(
-                rule_id=e.rule_id,
-                severity=e.severity,
-                weight=e.weight,
-                description=_render(e, fact),
-                file=e.file,
-                line=e.line,
-                template=e.template,
-                evidence=dict(e.evidence) if e.evidence else {},
-            ))
-    return tuple(out)
+
+def _findings_from_evaluation(evaluated: dict) -> tuple[Finding, ...]:
+    return tuple(
+        Finding(
+            rule_id=row["rule_id"],
+            severity=row["severity"],
+            weight=row["weight"],
+            description=row["description"],
+            file=row["file"],
+            line=row["line"],
+            template=row["template"],
+            evidence=row["evidence"],
+        )
+        for row in evaluated["findings"]
+    )
+
+
+def _evaluate_fact(fact) -> dict:
+    from .reporting import evaluate_fact
+
+    return evaluate_fact(fact)
 
 
 def _suppressed(rows: Sequence[dict]) -> tuple[SuppressedRule, ...]:
@@ -507,37 +554,25 @@ def _file_changes(rows: Sequence[dict]) -> tuple[FileChange, ...]:
 
 def _report_from_fact(fact) -> Report:
     """Build a Report from an internal PackageFact."""
-    from .coverage import describe as describe_coverage
-    from .review import is_trivial_update, verdict_for
-    from .schema import fact_to_dict
-    from .scoring import verdict_label, verdict_level
-
-    findings = _findings_from_breakdown(fact)
-    verdict = verdict_for(fact)
-    note = describe_coverage(fact.coverage_gaps)
-    if note:
-        verdict = f"{note} {verdict}"
-
-    raw = fact_to_dict(fact)
-    raw["verdict"] = verdict
-    raw["risk_label"] = verdict_label(fact)
-    raw["version_comparison"] = fact.version_comparison
+    evaluated = _evaluate_fact(fact)
+    findings = _findings_from_evaluation(evaluated)
+    raw = evaluated["raw"]
 
     return Report(
-        package=fact.package_name,
-        old_version=fact.old_version,
-        new_version=fact.new_version,
-        old_commit=fact.old_commit,
-        new_commit=fact.new_commit,
-        score=fact.final_score,
-        risk=verdict_level(fact),
-        risk_label=verdict_label(fact),
-        verdict=verdict,
+        package=evaluated["package"],
+        old_version=evaluated["old_version"],
+        new_version=evaluated["new_version"],
+        old_commit=evaluated["old_commit"],
+        new_commit=evaluated["new_commit"],
+        score=evaluated["score"],
+        risk=evaluated["risk"],
+        risk_label=evaluated["risk_label"],
+        verdict=evaluated["verdict"],
         findings=findings,
-        suppressed=_suppressed(fact.suppressed_rules),
-        changes=tuple(fact.changes),
-        coverage_gaps=tuple(fact.coverage_gaps),
-        file_changes=_file_changes(fact.diff_summary.file_changes),
+        suppressed=_suppressed(evaluated["suppressed_rules"]),
+        changes=tuple(evaluated["changes"]),
+        coverage_gaps=tuple(evaluated["coverage_gaps"]),
+        file_changes=_file_changes(evaluated["file_changes"]),
         added_urls=tuple(fact.source_changes.added_urls),
         removed_urls=tuple(fact.source_changes.removed_urls),
         source_buckets=dict(fact.source_buckets),
@@ -548,12 +583,12 @@ def _report_from_fact(fact) -> Report:
         maintainer_changed=fact.maintainer_changed,
         dependency_changes={k: sorted(v) for k, v in fact.dependency_changes.items()},
         first_seen=fact.first_seen,
-        is_trivial=is_trivial_update(fact, [f.to_dict() for f in findings]),
-        diff_truncated=fact.diff_truncated,
+        is_trivial=evaluated["is_trivial"],
+        diff_truncated=evaluated["diff_truncated"],
         tree_analyzed=fact.tree_analyzed,
-        version_comparison=fact.version_comparison,
+        version_comparison=evaluated["version_comparison"],
         adapter=fact.adapter,
-        config_fingerprint=raw.get("config_fingerprint", ""),
+        config_fingerprint=evaluated["config_fingerprint"],
         _raw=raw,
     )
 
@@ -580,54 +615,28 @@ def _report_from_result(row: dict) -> Report:
             _raw=raw,
         )
 
-    findings = tuple(
-        Finding(
-            rule_id=f.get("rule_id", ""),
-            severity=f.get("severity", ""),
-            weight=f.get("weight", 0),
-            description=f.get("description", ""),
-            file=f.get("file", ""),
-            line=f.get("line"),
-            template=f.get("template", ""),
-            evidence=dict(f.get("evidence") or {}),
-        )
-        for f in row.get("findings", [])
-    )
-    raw = {
-        "package_name": row["package"],
-        "old_version": row.get("old_version", ""),
-        "new_version": row.get("new_version", ""),
-        "final_score": row.get("score", 0),
-        "risk": row.get("risk", ""),
-        "risk_label": row.get("risk_label", ""),
-        "verdict": row.get("verdict", ""),
-        "first_seen": row.get("first_seen", False),
-        "is_trivial": row.get("is_trivial", False),
-        "diff_truncated": row.get("diff_truncated", False),
-        "changes": list(row.get("changes", [])),
-        "coverage_gaps": list(row.get("coverage_gaps", [])),
-        "version_comparison": row.get("version_comparison", ""),
-        "file_changes": list(row.get("file_changes", [])),
-        "score_breakdown": [f.to_dict() for f in findings],
-        "suppressed_rules": list(row.get("suppressed_rules", [])),
-    }
+    from .reporting import evaluate_review_row
+
+    evaluated = evaluate_review_row(row)
+    findings = _findings_from_evaluation(evaluated)
+    raw = evaluated["raw"]
     return Report(
-        package=row["package"],
-        old_version=row.get("old_version", ""),
-        new_version=row.get("new_version", ""),
-        score=row.get("score") or 0,
-        risk=row.get("risk", ""),
-        risk_label=row.get("risk_label") or row.get("risk", ""),
-        verdict=row.get("verdict", ""),
+        package=evaluated["package"],
+        old_version=evaluated["old_version"],
+        new_version=evaluated["new_version"],
+        score=evaluated["score"],
+        risk=evaluated["risk"],
+        risk_label=evaluated["risk_label"],
+        verdict=evaluated["verdict"],
         findings=findings,
-        suppressed=_suppressed(row.get("suppressed_rules", [])),
-        changes=tuple(row.get("changes", [])),
-        coverage_gaps=tuple(row.get("coverage_gaps", [])),
-        file_changes=_file_changes(row.get("file_changes", [])),
-        first_seen=row.get("first_seen", False),
-        is_trivial=row.get("is_trivial", False),
-        diff_truncated=row.get("diff_truncated", False),
-        version_comparison=row.get("version_comparison", ""),
+        suppressed=_suppressed(evaluated["suppressed_rules"]),
+        changes=tuple(evaluated["changes"]),
+        coverage_gaps=tuple(evaluated["coverage_gaps"]),
+        file_changes=_file_changes(evaluated["file_changes"]),
+        first_seen=evaluated["first_seen"],
+        is_trivial=evaluated["is_trivial"],
+        diff_truncated=evaluated["diff_truncated"],
+        version_comparison=evaluated["version_comparison"],
         _raw=raw,
     )
 
@@ -782,6 +791,7 @@ class TrustSight:
         """
         from .analysis import analyze_package
 
+        _validate_name(package)
         self._ensure_ready()
 
         if check_aur:
@@ -820,6 +830,13 @@ class TrustSight:
         from .full_aur.analyze import analyze_package_text
         from .schema import TemporalContext
 
+        _validate_name(package)
+        _validate_text(new_pkgbuild, name="new_pkgbuild")
+        if old_pkgbuild is not None:
+            _validate_text(old_pkgbuild, name="old_pkgbuild")
+        _validate_text(maintainer, name="maintainer", maximum=MAX_API_NAME_BYTES)
+        if srcinfo is not None:
+            _validate_text(srcinfo, name="srcinfo")
         self._ensure_ready()
         fact = analyze_package_text(
             pkg_name=package,
@@ -868,6 +885,12 @@ class TrustSight:
             ones with a newer AUR version.
         """
         from .review import analyze_outdated_batch, discover_packages
+
+        _validate_limit(limit, name="limit", maximum=MAX_API_PACKAGES)
+        if packages is not None:
+            _validate_names(packages, name="packages", maximum=MAX_API_PACKAGES)
+        if repos is not None:
+            _validate_names(repos, name="repos", maximum=MAX_API_REPOS)
 
         self._ensure_ready()
 
@@ -977,17 +1000,24 @@ class TrustSight:
         :param cycles: stop after this many cycles (0 = until the caller
             stops iterating).
         """
-        from .full_aur.pipeline import run_baseline_build, watch_interval_seconds
+        if interval is not None:
+            _validate_nonnegative(interval, name="interval")
+        _validate_nonnegative(cycles, name="cycles")
 
-        self._ensure_ready()
-        delay = watch_interval_seconds(interval)
-        count = 0
-        while True:
-            yield _cycle_report(run_baseline_build())
-            count += 1
-            if cycles and count >= cycles:
-                return
-            sleep(delay)
+        def _run() -> Iterator[CycleReport]:
+            from .full_aur.pipeline import run_baseline_build, watch_interval_seconds
+
+            self._ensure_ready()
+            delay = watch_interval_seconds(interval)
+            count = 0
+            while True:
+                yield _cycle_report(run_baseline_build())
+                count += 1
+                if cycles and count >= cycles:
+                    return
+                sleep(delay)
+
+        return _run()
 
     def import_baseline(self, path: str | Path, *, allow_unsigned: bool = False) -> None:
         """Import a signed baseline corpus artifact.
@@ -1017,6 +1047,9 @@ class TrustSight:
         from .full_aur.pivot import pivot as _pivot
         from .iocs import IOC_TYPES
 
+        _validate_text(indicator, name="indicator", maximum=MAX_API_NAME_BYTES)
+        if not indicator:
+            raise ValueError("indicator must not be empty")
         self._ensure_ready()
         if type is not None and type not in IOC_TYPES:
             raise TrustSightError(
@@ -1060,6 +1093,7 @@ class TrustSight:
         from .scoring import stored_band
         from .verdict import display_version
 
+        _validate_limit(limit, name="limit", maximum=MAX_API_HISTORY)
         self._ensure_ready()
         pkg_id = get_package_id(package)
         if pkg_id is None:
@@ -1087,6 +1121,7 @@ class TrustSight:
         from .scoring import stored_band
         from .verdict import display_version
 
+        _validate_limit(limit, name="limit", maximum=MAX_API_PACKAGES)
         self._ensure_ready()
         rows = get_all_packages()
         if limit:

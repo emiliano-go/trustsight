@@ -15,14 +15,55 @@ jobs:
         run: pacman -Syu --noconfirm base-devel sudo git
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Tags are what separate "this commit is a finished release" from
+          # "this commit bumped the version and the tag does not exist yet".
+          # The default shallow checkout carries neither the tags nor the
+          # history to tell the two apart.
+          fetch-depth: 0
+
+      # A release moves pkgver and the checksum in two separate commits, and
+      # it cannot do otherwise: the checksum is of the tarball GitHub builds
+      # from the tag, so it cannot be known until the tag exists.  Between
+      # those two commits the PKGBUILD names a version whose recorded
+      # checksum is still the previous release's, and asserting equality
+      # there fails the build for a state the release procedure guarantees.
+      # Both commits in that window are identifiable:
+      #
+      #   chore(release): bump to vX    tag vX does not exist yet
+      #   (tag vX pushed)               HEAD is the tag's own commit
+      #   packaging: set checksum       tag exists and HEAD is past it
+      #
+      # Only the third state can hold the assertion, and outside the window
+      # it is exactly as strict as it was before.
+      - name: Decide whether the recorded checksum can be verified yet
+        id: release
+        run: |
+          set -eu
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
+          tag="v${pkgver}"
+          if ! git rev-parse -q --verify "refs/tags/${tag}^{commit}" >/dev/null; then
+            echo "::notice::${tag} does not exist yet; release in flight, tarball checks skipped."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse "${tag}^{commit}")" ]; then
+            echo "::notice::HEAD is ${tag} itself; the checksum lands in the commit after the tag, tarball checks skipped."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Prepare builder user
+        if: steps.release.outputs.ready == 'true'
         run: |
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Fetch the release tarball
+        if: steps.release.outputs.ready == 'true'
         run: |
           set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
@@ -42,6 +83,7 @@ jobs:
           echo "Downloaded ${url}"
 
       - name: Verify the recorded checksum against the release tarball
+        if: steps.release.outputs.ready == 'true'
         run: |
           set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
@@ -55,6 +97,7 @@ jobs:
           echo "Checksum matches: ${actual}"
 
       - name: Build and install from the release tarball
+        if: steps.release.outputs.ready == 'true'
         run: |
           cd "$GITHUB_WORKSPACE/packaging/aur"
           # No --nocheck: check() runs the shipped test suite from the
@@ -62,4 +105,5 @@ jobs:
           su builder -c "cd '$PWD' && makepkg -si --noconfirm"
 
       - name: Verify installation
+        if: steps.release.outputs.ready == 'true'
         run: trustsight --version

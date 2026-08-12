@@ -19,6 +19,15 @@
   `{"status": "metadata_downloaded", ...}` and stays a pure JSON document.
   See [python-api.md](reference/python-api.md).
 
+### Changed
+
+- **The rules reference documents every implemented rule.** Added sections
+  for R132 (Indirect Command Expansion), R136-R140 (Committed File Executed
+  Without Declaration, Fetch Then Execute, Downloaded Source File Executed,
+  Service ExecStart Targets Undeclared Binary, PATH Injection With Undeclared
+  Directory) and a Declared-practice findings subsection for P001-P007; the
+  delivery section header and Tier A span now cover R001-R140.
+
 ## [0.12.1] - 2026-08-11
 
 ### Changed

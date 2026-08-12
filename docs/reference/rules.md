@@ -68,7 +68,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R131, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R140, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -80,6 +80,30 @@ weight-0 `P001`-`P007` findings and reported to the reader: TrustSight never
 fetches, so it cannot confirm that a declared key signs anything, and a signal
 an attacker can assert for free must not be able to lower a score. See
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
+
+### Declared-practice findings (P001-P007) {#declared-practice}
+
+The P namespace reports practices the recipe *declares*, not risks that were
+found. The `P` prefix exists so a reader seeing `P0xx` in the output knows at
+once that it is not a risk finding. Every one is INFO, weight 0, and checkable
+by the reader against the file itself. Defined in `src/trustsight/scoring.py`;
+rendered from `DECLARED_REASONS`.
+
+| Id | Meaning |
+|----|---------|
+| `P001` | Checksums declared for all non-VCS sources (`sha256sums`) |
+| `P002` | `validpgpkeys` declared |
+| `P003` | A signature source accompanies a source, with PGP keys declared |
+| `P005` | Source pinned to a full commit hash (`checksum_pinned`) |
+| `P006` | Source pinned to a tag — the weaker pin; `R079` exists because a tag can be repointed |
+| `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
+
+`P004` is skipped. Only `P002`, `P003` and `P005` render unprompted by default:
+five of the seven on every package would bury the risk findings, and the
+default set is the ones a reader would find *surprising by their absence*. The
+rest render under `--verbose`. The P namespace contrasts with R079/R096/R110:
+those fire when a practice is *changed*, these report when one is *present*.
+No P finding can lower a score - B10.
 
 ---
 
@@ -1286,7 +1310,7 @@ Fire rate: 0 of 3246.
 
 ---
 
-## Reconstruction and delivery (R117 to R124, R127) {#delivery-rules}
+## Reconstruction and delivery (R117 to R124, R127, R132, R136 to R140) {#delivery-rules}
 
 ### R117: Obfuscated Literal Reconstructed {#r117}
 
@@ -1304,6 +1328,27 @@ A literal that cannot be rebuilt is reported as the inconclusive case.
 Unreconstructable input is never read as UNFLAGGED.
 
 Fire rate: 0 of 3246.
+
+### R132: Indirect Command Expansion {#r132}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `obfuscation`
+- **Condition:** An added line inside a build function contains the indirect-expansion form `${!name}` where `name` is a plain (non-subscripted) variable name, and the expanded fragment participates in a command that reaches the shell.
+
+`${!C}` expands to the *value of the variable whose name is held in `C`*, so
+`C=curl; ${!C} URL | bash` executes `curl` while the recipe carries no literal
+`curl` and no literal shell on the line R001/R002/R129/R121 read. The tokenizer
+refuses to evaluate indirection statically, so the obfuscated line reaches the
+rules verbatim and every literal-match rule steps over it: flagging the
+indirection itself closes that whole family at once.
+
+Only the plain `${!name}` form is indirection. `${!arr[@]}` and `${!arr[*]}`
+list an array's keys, and `${!prefix*}` lists variable names by prefix - all
+common and benign - so the trailing `}` after the bare name is required, which
+excludes every subscripted or globbing form. Detected by
+`_indirect_expansion_findings()` in `src/trustsight/analysis/build.py`.
+
+---
 
 ### R118: Embedded Binary In Tree {#r118}
 
@@ -1396,6 +1441,76 @@ Fire rate: 0 of 3246.
 
 Each still executes remote code at build time, so it belongs with R001/R002
 rather than at R010/R011's "uses curl" LOW.
+
+### R136: Committed File Executed Without Declaration {#r136}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an R124-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path.
+
+R121/R124 own files the recipe itself writes; R118 owns committed ELF
+binaries. Between them sat the cleartext helper script: committed to the AUR
+repository, never named in `source=()` (so makepkg never copies it into
+`$srcdir` and its bytes never reach the differ), and executed through
+`$startdir` or a `../` climb. Two signals, either sufficient: the `$startdir`
+or `../` path reference (available even without a manifest), or the basename
+in the tree manifest (only when a manifest was supplied - without one the rule
+never guesses). An absolute `/usr/share/...` target cannot be a repository
+file, however its basename collides, so the manifest signal requires a
+relative path. Detected by `_committed_execution_findings()` in
+`src/trustsight/analysis/delivery.py`.
+
+### R137: Fetch Then Execute {#r137}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `network_execution`
+- **Condition:** Inside a build/package/check/prepare function (install hooks already have R062), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) and the same function later executes that file.
+
+This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
+pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
+the declared `source=()` array are deliberately excluded - they have their
+own rule (R138), so checksum-bearing source files are not double-counted.
+Detected by `_fetch_then_execute_findings()` in
+`src/trustsight/analysis/delivery.py`.
+
+### R138: Downloaded Source File Executed {#r138}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+- **Condition:** An interpreter (`bash`/`sh`/`zsh`/`dash`/`ksh`/`python`/`perl`/`ruby`), `source`, `.` or `./` form executes a file whose basename is declared in the `source=()` array.
+
+Checksums protect integrity, not intent: a `source=(... .sh)` followed by
+`bash "$srcdir/that.sh"` is remote code execution just like `curl | bash`,
+only hidden behind the ordinary download path. Build-system scripts
+(`configure`, `make`, `meson`, `ninja`, `cmake`) are common declared-source
+executables and stay silent; the rule targets interpreted execution of a
+downloaded script. Detected by `_source_file_execution_findings()` in
+`src/trustsight/analysis/delivery.py`.
+
+### R139: Service ExecStart Targets Undeclared Binary {#r139}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** A systemd service unit's `ExecStart` points at an absolute path, and the recipe installs an executable to that path whose source is neither declared in `source=()` nor present in the repository manifest.
+
+Service units are read from the tree manifest when one is supplied, and from
+added diff lines otherwise (a whole service file in the diff, parsed by
+heuristic). The installed executable must come from an `install` with an
+explicit `7xx` mode or no `-m` flag (install's default is 755). Such files
+arrive through the unseen source tarball, so their content cannot be audited.
+Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery.py`.
+
+### R140: PATH Injection With Undeclared Directory {#r140}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `build`
+- **Condition:** Inside a build/package/check/prepare function, a `PATH=` assignment adds a single-level `$srcdir/<subdir>` directory that is neither a declared `source=()` basename nor a repository manifest member.
+
+`PATH=$srcdir/tools:$PATH make` lets the recipe smuggle a binary into a
+standard command's search path. Adding the plain source root is common enough
+that it stays silent; deeper paths are more likely to be legitimate project
+layouts, so only single-level subdirectories are flagged. Detected by
+`_path_injection_findings()` in `src/trustsight/analysis/delivery.py`.
 
 ---
 

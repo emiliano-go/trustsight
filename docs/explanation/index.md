@@ -34,7 +34,7 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions. R009 (sudo) was later moved out of the TOML ruleset entirely, because "inside a function body" still admitted `optdepends` names and `echo` strings; it is now a code rule that requires `sudo` at a command position.
 
-The top-level position is not ignored, it is a separate claim: [R129](../reference/rules.md#r129) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
+The top-level position is not ignored, it is a separate claim: [R129](../reference/rules/fetch-and-execution.md#r129) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
 
 **Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: a bundled domain list assigns each URL to a bucket (trusted_forge, official, self_hosted, raw_hosting, unknown, or homograph). No network calls are made at analysis time; the domain list is pre-computed from the corpus.
 
@@ -155,7 +155,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 |------|----------------|
 | [Security Model](../security.md) | Why the score is deterministic and reproducible; the security model |
 | [Scoring Philosophy](scoring-philosophy.md) | Evidence tiers, why verification is declared rather than scored, corpus-derived weights |
-| [Rules Reference](../reference/rules.md) | Complete rule catalog with severity, weight, target, and scoring formula |
+| [Rules Reference](../reference/rules/index.md) | Complete rule catalog with severity, weight, target, and scoring formula |
 | [Cold Start and Maturity](cold-start-and-maturity.md) | Why novelty is meaningless on run one; maturity gating |
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |
 | [Fire Rates](fire-rates.md) | Per-rule false-positive rates on the benign corpus and the 30 % gate |

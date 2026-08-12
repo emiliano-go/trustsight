@@ -20,7 +20,7 @@ This is enforced during development, and again in CI: `scripts/calibration_gates
 
 Calibration is one of two gate suites. The other, `scripts/security_gates.py`, enforces [the security model](../security.md): what the tool guarantees while reading hostile input, and what a verdict is allowed to claim. Neither suite can pass on behalf of the other.
 
-In practice the shipped rules sit far below the gate. The worst scoring rule measures 0.039, and the rules added after the core set are mostly at zero: the working standard for a new rule is no benign fires at all, with any exception named and explained in the [rules reference](../reference/rules.md#experimental-fire-rates).
+In practice the shipped rules sit far below the gate. The worst scoring rule measures 0.039, and the rules added after the core set are mostly at zero: the working standard for a new rule is no benign fires at all, with any exception named and explained in the [rules reference](../reference/rules/system.md#experimental-fire-rates).
 
 ## Which corpus
 
@@ -150,7 +150,7 @@ Fire rates marked "TBD" require a live git
 repository and cannot be measured against the static corpus; R071
 falls in this category.
 
-The measured-fire-rate table in the [rules reference](../reference/rules.md#experimental-fire-rates)
+The measured-fire-rate table in the [rules reference](../reference/rules/system.md#experimental-fire-rates)
 records the remaining code-emitted rules (R083-R131) that were calibrated after this page was written;
 they are not repeated here.
 

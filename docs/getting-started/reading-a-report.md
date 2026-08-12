@@ -206,5 +206,5 @@ TrustSight Inspect: sketchy-package
 - [Guides: real workflows](../guides/index.md): CI integration, batch review, alert thresholds.
 - [Explanation: what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md): analysis blind spots.
 - [Explanation: cold start and maturity](../explanation/cold-start-and-maturity.md): how the novelty gate works.
-- [Reference: rule catalog](../reference/rules.md): every rule with patterns and examples.
+- [Reference: rule catalog](../reference/rules/index.md): every rule with patterns and examples.
 - [Reference: report schema](../reference/report-schema.md): score formula and evidence structure.

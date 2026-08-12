@@ -22,9 +22,9 @@ A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **U
 
 | Score range | What it means |
 |-------------|---------------|
-| **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules.md) matched. |
+| **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules/index.md) matched. |
 | **41-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
-| **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
+| **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules/system.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
 | **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the package has fewer than 25 recorded analyses, which is where maturity crosses 0.5 (see [cold start](../explanation/cold-start-and-maturity.md)), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
 
 > **Practical threshold:** score **25+** warrants attention. **40+** means skip the update and inspect first.

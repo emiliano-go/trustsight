@@ -86,6 +86,6 @@ After editing `rules.toml` or `config.toml`:
 ## See also
 
 - [Config reference](../reference/configuration.md): full schema for both files.
-- [Rules reference (R001-R131)](../reference/rules.md): per-rule defaults.
+- [Rules reference (R001-R131)](../reference/rules/index.md): per-rule defaults.
 - [Tuning false positives](tuning-false-positives.md): how to fix rules that over-fire on your packages.
 - [Running the sandbox](running-the-sandbox.md): isolated build execution.

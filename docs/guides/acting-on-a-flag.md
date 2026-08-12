@@ -16,7 +16,7 @@ This shows:
 
 - The **diff summary**: every line added, removed, or changed between the installed and candidate PKGBUILD.
 - **Resolved commands**: the expanded `source=()`, `sha256sums=()`, `validpgpkeys=()`, etc., as they would execute during the build.
-- **Triggered rules**: which [R-series](../reference/rules.md) and [C-series](../reference/rules.md#c-series) rules fired, with the specific lines that matched.
+- **Triggered rules**: which [R-series](../reference/rules/index.md) and [C-series](../reference/rules/system.md#c-series) rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 
 ## Step 2: Trace the score to specific PKGBUILD lines
@@ -76,5 +76,5 @@ After investigation you may decide a rule is over-firing on your package set. Se
 ## See also
 
 - [Auditing before update](auditing-before-update.md): the review workflow.
-- [Rules reference (R001-R131)](../reference/rules.md): what each rule detects.
+- [Rules reference (R001-R131)](../reference/rules/index.md): what each rule detects.
 - [Evidence tiers](../reference/evidence-tiers.md): how evidence is weighted.

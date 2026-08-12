@@ -109,5 +109,5 @@ packages overnight would be re-announced on every cycle until the metadata
 changed again, and an operator learns to ignore a feed that repeats itself.
 
 See [the CLI reference](../reference/cli.md#trustsight-full-aur) for the flags
-and [the Class D rules](../reference/rules.md#class-d-rules) for what the sweep
+and [the Class D rules](../reference/rules/system.md#class-d-rules) for what the sweep
 can find.

@@ -105,5 +105,5 @@ If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Rest
 ## See also
 
 - [Configuring rules and weights](configuring-rules-and-weights.md)
-- [Rules reference](../reference/rules.md)
+- [Rules reference](../reference/rules/index.md)
 - [Cold start and maturity](../explanation/cold-start-and-maturity.md)

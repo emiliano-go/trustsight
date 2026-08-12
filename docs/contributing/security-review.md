@@ -79,7 +79,8 @@ Worth knowing when you are relying on one:
 `every request has a timeout`, `archives are never extracted to disk`,
 `SQL is parameterised`, `declared source URLs are never fetched`,
 `every result declares its coverage`, `a baseline supplies state, not rules`,
-`doc cross-references resolve`.
+`doc cross-references resolve`, `critical paths are synchronised`, and
+`docs/security.md matches the gates`.
 
 **Behavioural, loop over every known site:** `terminal output is inert` (four
 renderers), `reserved names are refused by every writer` (three writers),
@@ -88,11 +89,14 @@ renderers), `reserved names are refused by every writer` (three writers),
 **Behavioural, single path, because the property is about one function:**
 `expansion is bounded and never indirect`, `incomplete coverage fails closed`,
 `a coverage gap is always shown with the band`, `version arguments are
-shape-checked`, `the maturity numbers are derived, not copied`.
+shape-checked`, `the maturity numbers are derived, not copied`, `differ
+hostile input is bounded`, and `differ output is deterministic`.
 
 `rule matching is bounded on hostile input` deliberately measures `scan_diff`
 end to end rather than any single matcher, because that is the only place both
 rule engines are reached.
+
+The tokenizer and regex checks are deliberately separate from the broad rule matching gate. `tokenizer hostile-input smoke is deterministic` exercises fixed hostile expansion cases, while `regex patterns pass adversarial audit` audits configured and source patterns against bounded probes. The differ gates exercise hostile URL and malformed-hunk input and verify stable output order. When adding a new parser or input-bound constant, add both a focused adversarial test and a gate or structural check, then document the bound in A4 or A5.
 
 ## When you add an invariant
 

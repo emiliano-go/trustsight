@@ -2,7 +2,7 @@
 
 <img src="https://raw.githubusercontent.com/emiliano-go/trustsight/refs/heads/master/docs/assets/images/trustsight-banner.png" alt="TrustSight" width="700"/>
 
-Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals, then produces a deterministic risk score with a plain-English explanation.
+Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals, then produces a deterministic evidence report.
 
 <p align="center">
   <a href="https://www.python.org/downloads/">
@@ -40,15 +40,15 @@ trustsight review
 
 Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `pacman -Qm`, `pacman -Sl` for local repos, or `--repo`/`--all-repos` flags).
 
-The score is always deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
+The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
 
-Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On first use the tool downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. See [installation](docs/getting-started/installation.md) for details.
+Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On first use the tool downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. See [installation](https://trustsight.emiliano-go.com/getting-started/installation/) for details.
 
 ---
 
 ## Security model
 
-TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) and the [security invariants](docs/security.md).
+TrustSight is **evidence-producing**, not proof-of-safety. Read the [full security model](https://trustsight.emiliano-go.com/security/) for the threat model, invariants, and enforcement gates. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured evidence report, not a gate. See [what TrustSight cannot see](https://trustsight.emiliano-go.com/explanation/what-trustsight-cannot-see/).
 
 ---
 
@@ -65,7 +65,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. It audits and does no
 | **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (about 180,000 known source URLs and 35,587 hashed maintainer identities, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
 | **Known-bad indicators** | Matches package URLs and strings against signed, federated IOC baselines from the release channel; reported in the IOC tier, outside the heuristic score |
 | **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
-| **LLM prompt injection** in package metadata | Pattern-matches common injection templates; primary defense is structural (the LLM cannot change the score) (R012) |
+| **Prompt injection** in package metadata | Pattern-matches common injection templates; primary defense is structural (R012) |
 | **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (R069) |
 | **Untrusted maintainer takeover** | A maintainer change to someone never seen before (R071) |
 | **Stale package revived** | A package with no updates for over a year suddenly gets one (R067) |
@@ -81,7 +81,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. It audits and does no
 | **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
 | **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
 
-The output is a **risk assessment**, not a proof of safety. A clean score means no known risk signals fired, not that the package is safe. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) for details.
+The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. A clean score means no known risk signals fired, not that the package is safe. See [what TrustSight cannot see](https://trustsight.emiliano-go.com/explanation/what-trustsight-cannot-see/) for details.
 
 ---
 
@@ -124,29 +124,29 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 
 | Command | What it does |
 |---|---|
-| [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos`, `--verbose` flags. |
-| [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
-| [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package. |
-| [`trustsight forget <package>`](docs/reference/cli.md) | Remove a tracked package and all its history, or prune packages that no longer exist in the AUR (`--prune`). |
-| [`trustsight list`](docs/reference/cli.md) | List all packages tracked in the database. |
-| [`trustsight status`](docs/reference/cli.md) | Show database and system health statistics. |
-| [`trustsight config`](docs/reference/cli.md) | Manage configuration (`show`, `set`, `sync-rules`). |
-| [`trustsight seed-db`](docs/reference/cli.md) | Import a novelty seed (`.db`, `.db.gz`, or a v2 `.tar.gz`). The release-channel seed imports automatically on first review. |
-| [`trustsight seed`](docs/reference/cli.md) | Inspect the hashed maintainer seed, fetch the verified release-channel seed, or migrate legacy plaintext rows. |
-| [`trustsight db`](docs/reference/cli.md) | Database maintenance (`check`, `vacuum`, `backup`). |
-| [`trustsight override`](docs/reference/cli.md) | Suppress a rule that misfires on your packages. |
-| [`trustsight lint-rules`](docs/reference/cli.md) | Check `rules.toml` for unreachable or malformed rules. |
-| [`trustsight full-aur`](docs/reference/cli.md) | Bootstrap or update the full-AUR baseline corpus; `--watch` runs repeated cycles on an interval. |
-| [`trustsight baseline`](docs/reference/cli.md) | Build or import a full-AUR baseline artifact, optionally signed with your key. |
-| [`trustsight import-baseline`](docs/reference/cli.md) | Verify and import a signed baseline artifact. |
-| [`trustsight ioc`](docs/reference/cli.md) | Manage IOC federation baselines (`update`, `list`, `export`, `sources`). |
-| [`trustsight corpus`](docs/reference/cli.md) | Corpus-wide queries over the full-AUR baseline (`pivot`, `import`, `export`). |
+| [`trustsight review`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-review) | Scan outdated AUR packages and produce a findings table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos`, `--verbose` flags. |
+| [`trustsight inspect <package>`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-inspect-package) | Deep-dive on a single package: findings, source URLs, resolved commands, novelty context. |
+| [`trustsight history <package>`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-history-package) | Show past analysis results for a package. |
+| [`trustsight forget <package>`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-forget-package) | Remove a tracked package and all its history, or prune packages that no longer exist in the AUR (`--prune`). |
+| [`trustsight list`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-list) | List all packages tracked in the database. |
+| [`trustsight status`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-status) | Show database and system health statistics. |
+| [`trustsight config`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-config) | Manage configuration (`show`, `set`, `sync-rules`). |
+| [`trustsight seed-db`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-seed-db) | Import a novelty seed (`.db`, `.db.gz`, or a v2 `.tar.gz`). The release-channel seed imports automatically on first review. |
+| [`trustsight seed`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-seed) | Inspect the hashed maintainer seed, fetch the verified release-channel seed, or migrate legacy plaintext rows. |
+| [`trustsight db`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-db) | Database maintenance (`check`, `vacuum`, `backup`). |
+| [`trustsight override`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-override) | Suppress a rule that misfires on your packages. |
+| [`trustsight lint-rules`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-lint-rules) | Check `rules.toml` for unreachable or malformed rules. |
+| [`trustsight full-aur`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-full-aur) | Bootstrap or update the full-AUR baseline corpus; `--watch` runs repeated cycles on an interval. |
+| [`trustsight baseline`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-baseline) | Build or import a full-AUR baseline artifact, optionally signed with your key. |
+| [`trustsight import-baseline`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-import-baseline) | Verify and import a signed baseline artifact. |
+| [`trustsight ioc`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-ioc) | Manage IOC federation baselines (`update`, `list`, `export`, `sources`). |
+| [`trustsight corpus`](https://trustsight.emiliano-go.com/reference/cli/#trustsight-corpus) | Corpus-wide queries over the full-AUR baseline (`pivot`, `import`, `export`). |
 
 ---
 
 ## Use it from Python
 
-Every flow above is available as a library through [`trustsight.api`](docs/reference/python-api.md), which returns dataclasses instead of printing. Nothing else under `trustsight.` is public.
+Every flow above is available as a library through [`trustsight.api`](https://trustsight.emiliano-go.com/reference/python-api/), which returns dataclasses instead of printing. Nothing else under `trustsight.` is public.
 
 ```python
 from trustsight import TrustSight
@@ -185,7 +185,7 @@ Signals come from 13 core detection rules (R001-R013), the expanded TOML set (R0
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 
-See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
+See [scoring philosophy](https://trustsight.emiliano-go.com/explanation/scoring-philosophy/).
 
 ---
 
@@ -199,8 +199,8 @@ MIT
 
 | Section | Description |
 |---|---|
-| [Getting Started](docs/getting-started/) | One-tutorial path from install to first review |
-| [Full documentation](docs/index.md) | Docs landing page |
-| [Contributing](CONTRIBUTING.md) | How to report bugs, contribute code, improve docs |
-| [Security](docs/security.md) | Vulnerability disclosure policy |
-| [License](docs/license.md) | MIT full text |
+| [Getting Started](https://trustsight.emiliano-go.com/getting-started/) | One-tutorial path from install to first review |
+| [Full documentation](https://trustsight.emiliano-go.com/) | Docs landing page |
+| [Contributing](https://trustsight.emiliano-go.com/contributing/) | How to report bugs, contribute code, improve docs |
+| [Security](https://trustsight.emiliano-go.com/security/) | Vulnerability disclosure policy |
+| [License](https://trustsight.emiliano-go.com/license/) | MIT full text |

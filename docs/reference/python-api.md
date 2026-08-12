@@ -67,6 +67,14 @@ Construction does no I/O. The config directory, the database and the bundled obs
 
 `auto_import_seed` defaults to `None`, which follows `seed.auto_import` in `config.toml`, the same as the CLI. Pass `False` to run against a cold database deliberately. A cold database makes every novelty signal meaningless, and TrustSight reports the band as `Inconclusive` rather than pretending otherwise; see [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
+### API input limits
+
+The API validates caller-controlled collection and loop bounds before it initializes analysis state. `review(limit=...)` and `packages(limit=...)` accept at most 10,000 items; `history(limit=...)` accepts at most 10,000 entries; explicit `review(packages=...)` lists contain at most 10,000 non-empty names; and `review(repos=...)` accepts at most 256 non-empty names. Limits must be integers, not booleans, and cannot be negative. `watch(cycles=...)` and `watch(interval=...)` reject negative or non-integer values. Invalid values raise `ValueError` before database or network work begins.
+
+`inspect()` package names and `pivot()` indicators are limited to 256 UTF-8 bytes. `analyze_text()` limits `new_pkgbuild`, `old_pkgbuild`, and `srcinfo` to 5 MiB each; maintainer names are limited to 256 UTF-8 bytes. Oversized or non-string values are rejected before initialization.
+
+These are process-safety bounds, not pagination guarantees. Use smaller limits for interactive callers, and consume `watch()` incrementally rather than materialising an unbounded cycle stream.
+
 Usable as a context manager, which releases the thread's database connections on exit:
 
 ```python
@@ -245,7 +253,7 @@ The analysis of one package.
 | `dependency_changes` | `dict` | Newly declared dependency names by field. |
 | `first_seen` | `bool` | No prior history, so novelty signals carry no weight yet. |
 | `is_trivial` | `bool` | Only `pkgver` and checksums moved. |
-| `diff_truncated` | `bool` | The diff exceeded the configured cap and only its prefix was read. |
+| `diff_truncated` | `bool` | The diff exceeded the configured cap and only a deterministic UTF-8-safe prefix was read; the report is incomplete and cannot be read as clean. |
 | `tree_analyzed` | `bool` | The repository file manifest was inspected. |
 | `version_comparison` | `str` | How the installed version relates to the AUR `pkgver`, or `""` if nothing compared them. |
 | `adapter` | `str` | `git` or `corpus`. |

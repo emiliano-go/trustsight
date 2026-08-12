@@ -102,7 +102,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `current_maintainer` | `string` | Committer name for the HEAD commit. |
 | `first_seen` | `bool` | `true` if this is the first analysis for this package (no prior commit to diff against). |
 | `recent_commit_burst` | `bool` | `true` when the package's recent commit timestamps cluster unusually tightly. |
-| `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only its prefix was examined. The score then describes a prefix, not the change. |
+| `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only a deterministic UTF-8-safe prefix was examined. The score then describes a prefix, not the change; `coverage_gaps` is non-empty and the result cannot be read as a complete clean analysis. |
 | `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |

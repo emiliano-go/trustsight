@@ -19,7 +19,17 @@
   `{"status": "metadata_downloaded", ...}` and stays a pure JSON document.
   See [python-api.md](reference/python-api.md).
 
+- **Shared CLI/API evaluation semantics.** The public API and CLI now consume one reporting layer for findings, verdicts, risk bands, coverage, changes, suppressions and JSON serialization. API limits, explicit package lists and watch parameters are validated before analysis begins, and API results are returned as dataclasses without rendering terminal output.
+
+- **Public API inputs are bounded before side effects.** Package and indicator names, repository and package lists, PKGBUILD text, metadata text, and history/review limits now have explicit ceilings with type and boolean validation.
+
+- **Adversarial security coverage.** Deterministic tokenizer fuzzing, regex audits, differ hostile-input checks, archive hardening tests and critical path policy tests are now part of the test and security-gate coverage.
+
 ### Changed
+
+- **Differ input is bounded and deterministic.** Generated patches, companion files, paths, and extracted URL tokens now have explicit limits; companion blobs are checked before reading, malformed hunks fail closed, and URL/file summaries use stable ordering. Adversarial differ tests and security gates cover hostile size, malformed syntax, and repeatability.
+
+- **Diff truncation is UTF-8-safe and shared across analysis paths.** Git and offline analysis use the same bounded prefix helper and preserve an explicit truncation flag, so partial multibyte input cannot corrupt parser text and truncated results remain covered by `diff_truncated`.
 
 - **The rules reference documents every implemented rule.** Added sections
   for R132 (Indirect Command Expansion), R136-R140 (Committed File Executed
@@ -27,6 +37,18 @@
   Service ExecStart Targets Undeclared Binary, PATH Injection With Undeclared
   Directory) and a Declared-practice findings subsection for P001-P007; the
   delivery section header and Tier A span now cover R001-R140.
+
+- **Tokenizer hostile-input coverage was expanded.** A deterministic fuzz harness now exercises assignments, nested and cyclic expansion, malformed quoting, arrays, namerefs, command substitutions, diff markers, Unicode, memoization and the `scan_diff` boundary. It asserts bounded output, termination, deterministic results and JSON-safe integration output without changing the deliberately open R133-R135 behavior.
+
+- **Regex backtracking remains bounded by input clamping.** Rule matching still uses Python's standard `re` module; every logical line is clamped to 8 KiB before matching and the security gates measure hostile matching time. A staged regex hardening plan is documented in the security model rather than adding a new runtime dependency without comparative evidence.
+
+- **Configured regexes now fail closed at runtime.** A pattern that exceeds the bounded adversarial probe budget is refused by the rule compiler instead of being run against package-controlled text. `scripts/regex_audit.py` audits configured and source patterns, and `scripts/benchmark_regex_engines.py` provides an optional comparison with the third-party `regex` engine without adding it as a runtime dependency.
+
+- **CI actions are pinned to immutable commit SHAs.** GitHub workflow actions no longer follow mutable version tags, and the signed-commit workflow shares one canonical critical-path list with the security policy and contributor guidance.
+
+- **Seed archive handling is stricter.** Seed imports now cap archive member counts and refuse symlinks, hardlinks, device nodes and FIFOs before extraction, preserving the existing size and path-containment limits.
+
+- **Documentation and default-report language were aligned with the security model.** The README now describes deterministic evidence reports rather than risk-score verdicts, documents the opt-in `--score`/`--risk` display, removes the obsolete LLM wording, and points at the published documentation site.
 
 ## [0.12.1] - 2026-08-11
 

@@ -47,6 +47,8 @@ likely to be touched by a rule or pipeline change:
 - **A claim without a gate is a claim not made.** New guarantees go into
   `scripts/security_gates.py` **and** the security model page, together.
 
+Tokenizer and regex changes require hostile-input tests. Run the deterministic tokenizer fuzz suite with the regular tokenizer tests and security gates. Do not replace Python's `re` module or add a regex engine dependency without a comparative benchmark, syntax-compatibility review, packaging review and a maintainer discussion.
+
 ## Signed Commits
 
 GPG-signed commits are required for changes to security-critical paths: the tokenizer, scoring, config, database, security gates, CI workflows, packaging, and baseline keys. The `CODEOWNERS` file and the `verify-commit-sigs` workflow enforce this.

@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.13.1] - 2026-08-12
+
+### Fixed
+
+- **The PKGBUILD workflow failed twice on every release.** A release moves
+  `pkgver` and the recorded checksum in two separate commits, and it cannot
+  do otherwise: the checksum is of the tarball GitHub builds from the tag, so
+  it is unknowable until the tag exists. `pkgbuild.yml` runs on every push,
+  including the version-bump commit and the tag pointing at it, and asserted
+  that the recorded checksum matches the tarball for the recorded version.
+  Between those two commits that assertion cannot hold, so the job failed for
+  a state the release procedure guarantees, once for the branch push and once
+  for the tag push. The workflow now identifies the window (the tag for
+  `pkgver` does not exist yet, or `HEAD` is the tag's own commit) and skips
+  the tarball steps with a notice. Outside the window the assertion is
+  unchanged and just as strict.
+
+- **`check()` never ran against the release tarball it was added to
+  protect.** v0.12.1 added a build of the shipped artifact so a regression
+  that breaks it fails CI instead of reaching users, but that build lives in
+  `pkgbuild.yml` and could not see the release it was meant to guard. The
+  only commit where the checksum assertion can pass is the
+  `packaging: set checksum for vX` commit, which `release-pkgbuild.yml`
+  pushes with `GITHUB_TOKEN`, and GitHub does not trigger workflows from such
+  pushes. The guarantee therefore first held on the next unrelated push, well
+  after users could install the release. `release-pkgbuild.yml` now builds
+  and installs the tarball itself (`makepkg -si --noconfirm`, no `--nocheck`)
+  in the job that already has the container, the tarball and the corrected
+  PKGBUILD, so the release run proves the artifact before publishing it.
+
+### Stats
+
+- 4 commits since v0.13.0
+- 6 files changed, +106 / -6
+- 2029 tests (47 files), all passing
+- 51/51 security gates, 10/10 calibration gates
+- Package version 0.13.1
+
 ## [0.13.0] - 2026-08-12
 
 ### Added

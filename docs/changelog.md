@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.0] - 2026-08-12
 
 ### Added
 
@@ -78,6 +78,14 @@
 - **Seed archive handling is stricter.** Seed imports now cap archive member counts and refuse symlinks, hardlinks, device nodes and FIFOs before extraction, preserving the existing size and path-containment limits.
 
 - **Documentation and default-report language were aligned with the security model.** The README now describes deterministic evidence reports rather than risk-score verdicts, documents the opt-in `--score`/`--risk` display, removes the obsolete LLM wording, and points at the published documentation site.
+
+### Stats
+
+- 19 commits since v0.12.1
+- 84 files changed, +8112 / -2415
+- 2029 tests (47 files), all passing
+- 51/51 security gates, 10/10 calibration gates
+- Package version 0.13.0
 
 ## [0.12.1] - 2026-08-11
 

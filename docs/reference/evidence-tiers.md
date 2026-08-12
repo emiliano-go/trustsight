@@ -72,7 +72,13 @@ attacker nothing, so it is reported as the weight-0 finding `P007` instead
 
 ### Scope
 
-Evaluated per-URL. Each added URL contributes its bucket modifier independently. Only **added** URLs are classified; removed URLs are not scored.
+The bucket prior is scored once per diff, at the modifier of the least-trusted
+single added URL (the maximum), not summed per URL. A package adding thirty
+unknown-host URLs is one diff whose provenance is unknown, not thirty separate
+facts; summing stacked the modifier until legitimate multi-source packages
+(electron, fonts) outscored CRITICAL findings, which the §10 separation gate
+(`benign_p95 < malicious_p5`) exists to catch. Only **added** URLs are
+classified; removed URLs are not scored.
 
 ---
 

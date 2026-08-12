@@ -1,3 +1,4 @@
+import logging
 import sys
 
 import typer
@@ -38,6 +39,8 @@ from .list_cmd import register_commands as _register_list
 from .forget import register_commands as _register_forget
 from .admin import register_commands as _register_admin
 from .corpus import register_commands as _register_corpus
+from .ioc import register_commands as _register_ioc
+from .seed import register_commands as _register_seed
 
 _register_review(app)
 _register_inspect(app)
@@ -46,6 +49,8 @@ _register_list(app)
 _register_forget(app)
 _register_admin(app)
 _register_corpus(app)
+_register_ioc(app)
+_register_seed(app)
 
 
 def main() -> None:
@@ -55,6 +60,10 @@ def main() -> None:
     contract in docs/reference/exit-codes.md: 0 means the command ran, 2 means
     it could not run or complete. Deliberate exits (typer.Exit) pass through.
     """
+    # The corpus pipeline reports progress through logging; without a
+    # handler those messages (including its refusal to bootstrap) would be
+    # invisible.  Messages go to stderr so stdout stays machine-readable.
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
         app()
     except typer.Exit:

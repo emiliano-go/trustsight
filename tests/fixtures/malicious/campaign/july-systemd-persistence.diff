@@ -1,0 +1,12 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,9 @@
+ pkgname=demo
+ pkgver=1.0
++package() {
++  install -Dm644 /dev/null "$pkgdir/usr/lib/systemd/system/demo.service"
++  cat >> "$pkgdir/usr/lib/systemd/system/demo.service" <<EOF
++[Service]
++ExecStart=/tmp/.demo-helper
++EOF
++}

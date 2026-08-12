@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,5 @@
+ pkgname=demo
+ pkgver=1.0
++package() {
++  install -Dm644 demo.hook "$pkgdir/usr/share/libalpm/hooks/demo.hook"
++}

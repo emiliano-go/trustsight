@@ -225,6 +225,43 @@ def _indirect_remote_execution_findings(diff_text, config, add) -> None:
             return
 
 
+# ---------------------------------------------------------------------------
+# R132 - a command or shell is named through indirect variable expansion
+# ---------------------------------------------------------------------------
+
+# ``${!C}`` expands to the value of the variable whose *name* is held in C, so
+# ``C=curl; ${!C} url | bash`` runs curl while the recipe carries no literal
+# curl and no literal shell on the line R001/R002/R129/R121 read.  The
+# tokenizer refuses to evaluate indirection (it cannot know the target
+# statically), so the obfuscated line reaches the rules verbatim and every
+# literal-matching rule steps over it.  Flagging the indirection itself is
+# what closes that whole family at once.
+#
+# Only the plain ``${!name}`` form is indirection.  ``${!arr[@]}`` and
+# ``${!arr[*]}`` list an array's keys, and ``${!prefix*}`` lists variable
+# names by prefix - all common and benign - so the trailing ``}`` after the
+# bare name is required, which excludes every subscripted or globbing form.
+_INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
+
+
+def _indirect_expansion_findings(diff_text, config, add) -> None:
+    """A command or shell is reached through indirect expansion (R132)."""
+    for line in join_line_continuations(diff_text.splitlines()):
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        body = _strip_comment(line[1:])
+        m = _INDIRECT_EXPANSION_RE.search(body)
+        if not m:
+            continue
+        add("R132", "Indirect Command Expansion", "CRITICAL", "obfuscation",
+            f"a command or shell is named through indirect expansion "
+            f"{m.group(0)}: {body.strip()[:80]}",
+            line=_added_line_number(diff_text, body.strip()[:30]),
+            body=body.strip()[:80],
+            detail=f"indirect expansion {m.group(0)} hides the command it runs")
+        return
+
+
 def _build_findings(diff_text, config, add) -> None:
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
@@ -380,6 +417,18 @@ def _build_findings(diff_text, config, add) -> None:
 # is ordinary shell, not a campaign marker.
 _REVEALED_RUN_RE = re.compile(r"[!-~]{3,}")
 
+# Ordinary quoted data (``depends=('glibc' 'foo')``) is not obfuscation, but
+# quote stripping would make it look as if something was hidden.  Only report
+# R117 when the original line carried one of the reconstruction targets.
+_OBFUSCATION_MARKER_RE = re.compile(
+    r"(?<=\w)(?:''|\"\")(?=\w)"          # empty-quote concat: b''u''n
+    r"|\$\(\s*printf\s+['\"]"           # $(printf 'literal')
+    r"|\$'"                                # ANSI-C quote (also: fully=False)
+    r"|\w['\"][^'\"\s]*['\"]"          # partial quoting, left-glued
+    r"|['\"][^'\"\s]*['\"]\w",        # partial quoting, right-glued
+    re.IGNORECASE,
+)
+
 
 def _reconstruction_findings(diff_text, config, add) -> None:
     """Report that a line was read in reconstructed form (R117).
@@ -412,6 +461,8 @@ def _reconstruction_findings(diff_text, config, add) -> None:
                 reconstructed=False, body=body.strip()[:80])
             return
         if rebuilt == body:
+            continue
+        if not _OBFUSCATION_MARKER_RE.search(body):
             continue
         revealed = [
             token for token in _REVEALED_RUN_RE.findall(rebuilt)

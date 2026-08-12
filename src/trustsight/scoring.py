@@ -1,5 +1,5 @@
 from .config import load_config
-from .coverage import GAP_REASONS, fail_closed, qualified_band
+from .coverage import GAP_REASONS, fail_closed, inconclusive_label, qualified_band
 from .schema import NoveltyContext, ScoreEntry
 
 _MATURITY_THRESHOLD = 50
@@ -120,15 +120,39 @@ def verdict_level(fact) -> str:
     return stored or risk_level(getattr(fact, "final_score", 0))
 
 
+def _cold_start_remaining(fact) -> int | None:
+    """Analyses still needed before the cold-start downgrade lifts.
+
+    The downgrade stops applying when :func:`maturity` reaches 0.5, which
+    is half of ``_MATURITY_THRESHOLD`` observations.  Both numbers are
+    derived here from the constant rather than restated, so the count in
+    the label cannot drift from the predicate it describes.  ``None``
+    when the fact's package is already past the half point.
+    """
+    half = -(-_MATURITY_THRESHOLD // 2)
+    obs = getattr(getattr(fact, "novelty_context", None), "observation_count", 0) or 0
+    if obs >= half:
+        return None
+    return half - obs
+
+
 def verdict_label(fact) -> str:
     """The band for *fact* as it must be shown to a person.
 
     Same value as :func:`verdict_level`, qualified when the run did not
-    see the whole change.  Every human-facing render uses this; machine
-    output uses ``verdict_level`` plus ``coverage_gaps``, so a consumer
-    gets the two facts separately instead of parsing a sentence.
+    see the whole change, and - for Inconclusive - naming its cause: a
+    coverage gap reads as the urgent case ("payload may be hidden"), a
+    cold database as the routine one, with the analyses still needed
+    (see :func:`coverage.inconclusive_label`).  Every human-facing
+    render uses this; machine output uses ``verdict_level`` plus
+    ``coverage_gaps``, so a consumer gets the two facts separately
+    instead of parsing a sentence.
     """
-    return qualified_band(verdict_level(fact), getattr(fact, "coverage_gaps", []))
+    level = verdict_level(fact)
+    gaps = getattr(fact, "coverage_gaps", [])
+    if level == "Inconclusive":
+        return inconclusive_label(gaps, _cold_start_remaining(fact))
+    return qualified_band(level, gaps)
 
 
 def calculate_score(
@@ -213,6 +237,17 @@ def calculate_score(
 
     bucket_weights = config.get("source_bucket_weights", {})
     forge_urls: list[str] = []
+    # The source-bucket prior is a property of the source *list*, not of
+    # each URL in it: a package that adds thirty unknown-host URLs is one
+    # diff whose provenance is unknown, not thirty separate facts.  Under
+    # per-URL summation a legitimate multi-source package (electron,
+    # fonts) scored like a CRITICAL finding, which the §10 separation gate
+    # (benign_p95 < malicious_p5) caught.  The modifier of the least-trusted
+    # single added URL is the whole contribution; the homograph penalty
+    # (+30) still outranks the unknown one (+20) when both appear.
+    bucket_modifier = 0
+    bucket_url: str | None = None
+    bucket_name: str | None = None
     for url, bucket in source_buckets.items():
         modifier = bucket_weights.get(bucket, 0)
         if bucket in DECLARED_BUCKETS:
@@ -222,15 +257,18 @@ def calculate_score(
             # still firing in tests, whose config still carried -10.
             forge_urls.append(url)
             continue
-        base += modifier
-        severity = "INFO" if modifier <= 0 else "MEDIUM"
-        weight_display = modifier
+        if modifier > bucket_modifier:
+            bucket_modifier = modifier
+            bucket_url, bucket_name = url, bucket
+    if bucket_url is not None:
+        base += bucket_modifier
+        severity = "INFO" if bucket_modifier <= 0 else "MEDIUM"
         breakdown.append(
             ScoreEntry(
                 rule_id="SOURCE_BUCKET",
                 severity=severity,
-                weight=weight_display,
-                reason=f"Source URL classified as {bucket} ({url})",
+                weight=bucket_modifier,
+                reason=f"Source URL classified as {bucket_name} ({bucket_url})",
             )
         )
     if forge_urls:
@@ -345,6 +383,13 @@ def stored_band(row: dict | None, score: int | None = None) -> tuple[str, bool]:
             fact = {}
         band = fact.get("risk") or ""
         gaps = fact.get("coverage_gaps") or []
+        if band == "Inconclusive":
+            if gaps:
+                return inconclusive_label(gaps), False
+            # The stored row has no observation count, so the cold-start
+            # cause is named without the remaining-analyses count that a
+            # live fact can show.
+            return "Inconclusive (cold start)", True
         if band:
             return qualified_band(band, gaps), not gaps
     if score is None:

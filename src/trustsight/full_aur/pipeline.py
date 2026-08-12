@@ -1,10 +1,29 @@
 """Bootstrap and incremental corpus pipeline."""
 
 import logging
+import sys
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
+
+try:
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+        TimeRemainingColumn,
+    )
+    from rich.console import Console
+
+    _HAS_RICH = True
+except ImportError:  # pragma: no cover - rich is a dependency, but degrade gracefully
+    _HAS_RICH = False
 
 from ..analysis.base import _ensure_init
 from ..config import load_config
@@ -195,6 +214,9 @@ class CycleResult:
     flagged: list[tuple[str, int]] = field(default_factory=list)
     elapsed: float = 0.0
     bootstrap: bool = False
+    # True when the cycle deliberately did no work and the caller should
+    # report a failure (from-scratch bootstrap refused, empty fetch).
+    refused: bool = False
 
 
 def _logger(json_output: bool):
@@ -209,18 +231,112 @@ def _logger(json_output: bool):
     return _log
 
 
+def _fetch_workers() -> int:
+    """How many PKGBUILD fetches run concurrently.
+
+    The bootstrap's cost is dominated by one network fetch per package;
+    fetching a window ahead in parallel is the biggest speedup.  It is bounded
+    twice over: this worker count, and a global aggregate rate cap in the
+    fetcher (``fetch._MIN_REQUEST_INTERVAL``).  The rate cap is the real limit,
+    because the AUR's cgit rate-limits per IP; more workers than the cap can
+    keep busy only idle, so the default is small.  Tunable via
+    ``limits.corpus_fetch_workers``.
+    """
+    try:
+        configured = int(load_config().get("limits", {}).get("corpus_fetch_workers", 0))
+    except (TypeError, ValueError):
+        configured = 0
+    return configured if configured > 0 else 5
+
+
+def _max_per_cycle() -> int:
+    """Cap on packages processed per invocation, so a large delta or a
+    bootstrap advances in bounded, resumable chunks instead of one avalanche.
+
+    Default 2000.  Set ``limits.corpus_max_per_cycle`` to another value, or to
+    ``0`` to disable the cap and process the whole delta in one run.
+    """
+    limits = load_config().get("limits", {})
+    if "corpus_max_per_cycle" not in limits:
+        return 2000
+    try:
+        n = int(limits["corpus_max_per_cycle"])
+    except (TypeError, ValueError):
+        return 2000
+    return n if n > 0 else 0
+
+
+def _iter_prefetched(names, fetch_fn, workers: int):
+    """Yield ``(name, fetch_result)`` in *names* order, fetching ahead.
+
+    Analysis stays serial and ordered (novelty reads the observations earlier
+    packages recorded), so only the fetch is parallelised: a bounded window of
+    fetches is kept in flight and consumed in order.  A fetch that raises
+    yields ``(None, None, None)`` rather than aborting the run.
+    """
+    names = list(names)
+    window = max(workers * 3, 24)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        inflight: deque = deque()
+        idx = 0
+        while idx < len(names) and len(inflight) < window:
+            inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
+            idx += 1
+        while inflight:
+            name, future = inflight.popleft()
+            try:
+                result = future.result()
+            except Exception:
+                result = (None, None, None)
+            yield name, result
+            if idx < len(names):
+                inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
+                idx += 1
+
+
+def _corpus_progress(total: int, json_output: bool):
+    """A rich progress bar for the analysis loop, or None when not interactive.
+
+    Renders on stderr so it does not corrupt the artifact or a piped ``--json``
+    stream; falls back to periodic log lines when there is no TTY.
+    """
+    if not (_HAS_RICH and not json_output and sys.stderr.isatty()):
+        return None
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("elapsed"),
+        TimeElapsedColumn(),
+        TextColumn("eta"),
+        TimeRemainingColumn(),
+        console=Console(stderr=True),
+    )
+    progress.start()
+    task = progress.add_task("Analysing packages", total=total)
+    return progress, task
+
+
 def run_baseline_build(
     resume: bool = False,
     export_path: Optional[str] = None,
     sign_key: Optional[str] = None,
     json_output: bool = False,
+    bootstrap: bool = False,
 ) -> CycleResult:
     """Bootstrap or update the full-AUR corpus.
 
-    Fetches the metadata snapshot, diffs against the stored copy (or
-    treats every package as new for a fresh bootstrap), downloads
-    PKGBUILDs, analyses each package, stores results, and optionally
-    exports a signed baseline artifact.
+    Fetches the metadata snapshot, diffs against the stored copy, downloads
+    the changed PKGBUILDs, analyses each package, stores results, and
+    optionally exports a signed baseline artifact.
+
+    A from-scratch bootstrap (no prior snapshot) fetches every PKGBUILD in the
+    AUR, which is heavy on a shared community mirror.  It is not done by
+    accident: *bootstrap* must be True to start one.  Every cycle, bootstrap
+    or delta, is bounded by :func:`_max_per_cycle` and resumes automatically,
+    so a large amount of work advances in gentle chunks across invocations
+    rather than one avalanche.
 
     Returns what the cycle did so ``run_watch`` can report on it; the
     single-shot CLI path ignores the value.
@@ -230,18 +346,45 @@ def run_baseline_build(
     _log = _logger(json_output)
 
     _log("Fetching AUR metadata snapshot …")
-    new_meta = fetch_metadata()
+    try:
+        new_meta = fetch_metadata()
+    except Exception as exc:
+        raise RuntimeError(f"failed to fetch the AUR metadata snapshot: {exc}") from exc
     meta_count = len(new_meta)
     _log(f"Fetched {meta_count} package entries")
+    if not new_meta:
+        # An empty reply would clobber the stored snapshot on the
+        # "Nothing to process" path below; keep the last good one.
+        _log("The AUR metadata fetch returned nothing; keeping the previous snapshot")
+        result.refused = True
+        return result
 
     old_meta = load_metadata(_meta_snapshot_path())
 
+    # Resume state is loaded unconditionally: a capped or interrupted cycle
+    # continues where it left off.  ``--resume`` stays accepted but is implied.
+    resume_state = load_resume_state()
+    in_progress = bool(resume_state and resume_state.get("processed"))
+
     if old_meta is None:
+        # Refuse to start a whole-AUR bootstrap unless it was asked for.  A
+        # continuation of one already under way (resume state present, snapshot
+        # not yet advanced) is allowed to proceed without re-passing the flag.
+        if not bootstrap and not in_progress:
+            _log(
+                f"Refusing a from-scratch corpus bootstrap of {meta_count} "
+                "packages: it fetches the whole AUR and leans on a shared "
+                "mirror. Pass --bootstrap to start one (it is capped per cycle "
+                "and resumes automatically), or run 'trustsight review' first "
+                "so an incremental snapshot already exists to diff against."
+            )
+            result.refused = True
+            return result
         added = sorted(new_meta)
         changed: list[str] = []
         removed: list[str] = []
         result.bootstrap = True
-        _log("No prior snapshot found; processing all packages")
+        _log("Bootstrap: processing the whole AUR in capped, resumable cycles")
     else:
         changes = diff_metadata(old_meta, new_meta)
         added = sorted(n for n, s in changes.items() if s == "added")
@@ -255,38 +398,50 @@ def run_baseline_build(
     if not to_process:
         _log("Nothing to process")
         save_metadata(new_meta, _meta_snapshot_path())
+        clear_resume_state()
         return result
 
-    resume_state = load_resume_state() if resume else None
     processed: set[str] = set(resume_state.get("processed", [])) if resume_state else set()
     scores: dict[str, int] = {}
 
-    _log(f"Processing {len(to_process)} packages ({len(processed)} previously done)")
+    # Cap the work per invocation so even a bootstrap advances in bounded,
+    # resumable chunks.  The remainder is picked up on the next run.
+    cap = _max_per_cycle()
+    pending_all = [n for n in to_process if n not in processed]
+    pending = pending_all[:cap] if cap else pending_all
+    partial = bool(cap) and len(pending_all) > cap
+    _log(
+        f"Processing {len(pending)} package(s) this cycle "
+        f"({len(processed)} already done, {len(pending_all)} pending)"
+    )
     batch_start = time.time()
 
-    for i, name in enumerate(to_process):
-        if name in processed:
-            continue
+    def _fetch_one(name):
+        meta = new_meta.get(name)
+        if meta is None:
+            return (None, None, None)
+        return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
+    def _store(name, fetched) -> str:
+        """Analyse and persist one fetched package.  Returns a status string:
+        ``ok``, ``vanished``, ``reserved`` or ``fetch_failed``."""
         meta = new_meta.get(name)
         if meta is None:
             log.warning("metadata for %s vanished; skipping", name)
-            continue
-
-        pkgbase = _pkg_or_base(meta)
+            return "vanished"
+        if is_reserved_name(name):
+            log.warning("skipping reserved package name %r", name)
+            return "reserved"
+        new_pkgbuild, tree_manifest, trailer_finding = fetched
+        if new_pkgbuild is None:
+            log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
+            return "fetch_failed"
 
         old_snapshot = get_pkgbuild_snapshot(name)
         old_pkgbuild = old_snapshot["pkgbuild_text"] if old_snapshot else None
         prev_last_modified: Optional[int] = (
             old_snapshot["last_modified"] if old_snapshot else None
         )
-
-        new_pkgbuild, tree_manifest = fetch_pkgbuild_with_tree(pkgbase)
-        if new_pkgbuild is None:
-            log.warning("could not fetch PKGBUILD for %s (base: %s)", name, pkgbase)
-            save_resume_state({"processed": sorted(processed | {name})})
-            continue
-
         fact = analyze_package_text(
             pkg_name=name,
             old_pkgbuild=old_pkgbuild,
@@ -299,19 +454,14 @@ def run_baseline_build(
                 source="aur_metadata",
             ),
             tree_manifest=tree_manifest,
+            archive_trailer_finding=trailer_finding,
         )
-
-        if is_reserved_name(name):
-            _logger().warning("skipping reserved package name %r", name)
-            continue
-
         save_pkgbuild_snapshot(
             package_name=name,
             pkgbuild_text=new_pkgbuild,
             version=fact.new_version or meta.get("Version", ""),
             last_modified=meta.get("LastModified", 0),
         )
-
         save_package_profile(
             package_name=name,
             last_score=fact.final_score,
@@ -320,17 +470,54 @@ def run_baseline_build(
             # every bootstrap.  The label is derived from the score.
             last_risk=risk_level(fact.final_score),
         )
-
         scores[name] = fact.final_score
-        processed.add(name)
+        return "ok"
 
-        if (i + 1) % 1000 == 0:
-            elapsed = time.time() - batch_start
-            rate = (i + 1) / elapsed if elapsed > 0 else 0
-            _log(f"Processed {i + 1}/{len(to_process)} packages ({rate:.1f}/s)")
-            save_resume_state({"processed": sorted(processed)})
+    fetch_failures = 0
+    progress = _corpus_progress(len(pending), json_output)
+    try:
+        done = 0
+        for name, fetched in _iter_prefetched(pending, _fetch_one, _fetch_workers()):
+            status = _store(name, fetched)
+            if status == "fetch_failed":
+                fetch_failures += 1
+            # A fetch failure is marked done too, so a resume does not retry a
+            # package the mirror has no snapshot for on every pass.
+            processed.add(name)
+            done += 1
+
+            if progress is not None:
+                progress[0].update(
+                    progress[1], advance=1, description=f"Analysing {name[:36]}"
+                )
+            elif done % 1000 == 0:
+                elapsed = time.time() - batch_start
+                rate = done / elapsed if elapsed > 0 else 0
+                _log(f"Processed {done}/{len(pending)} packages ({rate:.1f}/s)")
+
+            if done % 1000 == 0:
+                save_resume_state({"processed": sorted(processed)})
+    finally:
+        if progress is not None:
+            progress[0].stop()
+
+    if fetch_failures:
+        _log(f"{fetch_failures} package(s) had no fetchable PKGBUILD this cycle")
 
     save_resume_state({"processed": sorted(processed)})
+
+    if partial:
+        # More of this transition remains.  Do not advance the snapshot, run
+        # the corpus sweep, or export a half-built corpus: the next invocation
+        # continues from the saved resume state.
+        remaining = len(pending_all) - len(pending)
+        _log(
+            f"Cycle capped at {len(pending)} package(s); {remaining} still "
+            "pending. Run 'trustsight full-aur' again to continue."
+        )
+        result.processed = len(processed)
+        return result
+
     save_metadata(new_meta, _meta_snapshot_path())
     clear_resume_state()
 
@@ -394,9 +581,20 @@ def watch_interval_seconds(requested: Optional[int] = None) -> int:
     request loop against someone else's mirror.
     """
     limits = load_config().get("limits", {})
-    default = int(limits.get("watch_interval", 3600))
-    floor = int(limits.get("watch_min_interval", 60))
-    return max(floor, int(requested) if requested else default)
+    try:
+        default = int(limits.get("watch_interval", 3600))
+    except (TypeError, ValueError):
+        default = 3600
+    try:
+        floor = int(limits.get("watch_min_interval", 60))
+    except (TypeError, ValueError):
+        floor = 60
+    if requested is not None:
+        try:
+            requested = int(requested)
+        except (TypeError, ValueError):
+            requested = None
+    return max(floor, int(requested) if requested is not None else default)
 
 
 def run_watch(
@@ -425,9 +623,23 @@ def run_watch(
         f"Watching the AUR: one cycle every {delay}s"
         + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
     )
+    attempts = 0
     try:
         while True:
-            result = run_baseline_build(json_output=json_output)
+            # A transient failure (network blip, rate limit) must not kill an
+            # unattended watcher: report, wait, and retry.  The cycle cap
+            # still bounds the total, so a persistently broken cycle cannot
+            # spin forever either.
+            try:
+                result = run_baseline_build(json_output=json_output)
+            except Exception as exc:
+                attempts += 1
+                _log(f"Cycle failed ({exc}); retrying in {delay}s")
+                if cycles and attempts >= cycles:
+                    break
+                sleep(delay)
+                continue
+            attempts = 0
             results.append(result)
             if result.new_alerts:
                 _log(f"{len(result.new_alerts)} new alert(s) this cycle")
@@ -441,6 +653,5 @@ def run_watch(
     except KeyboardInterrupt:
         _log(f"Watch stopped after {len(results)} cycle(s)")
     return results
-
 
 

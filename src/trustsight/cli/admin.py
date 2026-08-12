@@ -29,7 +29,6 @@ from ..db import (
 )
 from ..lint import SEVERITY_ERROR, lint_rules
 from ..override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides, remove_override
-from ..scoring import risk_level
 from ..unicode import strip_ansi
 from .display import (
     HAS_RICH,
@@ -88,6 +87,8 @@ def config_show(
 
     if HAS_RICH:
         from rich.table import Table
+        from rich.text import Text
+
         table = Table(title="TrustSight configuration", box=SIMPLE_HEAD)
         table.add_column("Key", style="cyan")
         table.add_column("Value", overflow="fold")
@@ -104,7 +105,12 @@ def config_show(
             "novelty_weights",
         ):
             for key, value in (cfg.get(group) or {}).items():
-                weights.add_row(group, key, _weight_text(int(value)))
+                try:
+                    weight_int = int(value)
+                except (TypeError, ValueError):
+                    weights.add_row(group, key, Text(str(value), style="dim"))
+                else:
+                    weights.add_row(group, key, _weight_text(weight_int))
         console().print(weights)
     else:
         for k, v in rows:
@@ -118,7 +124,14 @@ def config_set(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Set a configuration value."""
-    set_config(key, value)
+    try:
+        set_config(key, value)
+    except ValueError as exc:
+        if json_output:
+            typer.echo(json.dumps({"error": str(exc)}))
+        else:
+            _print_colored(str(exc), "red")
+        raise typer.Exit(code=2)
     msg = f"Set {key} in {CONFIG_DIR / 'config.toml'}"
     if json_output:
         typer.echo(json.dumps({"status": "ok", "key": key}))
@@ -276,8 +289,13 @@ def override_wizard(
 
     con = console()
 
-    with con.status(f"Analyzing {package}...", spinner="dots"):
-        fact = analyze_package(package)
+    try:
+        with con.status(f"Analyzing {package}...", spinner="dots"):
+            fact = analyze_package(package)
+    except Exception as exc:
+        msg = f"Could not analyze '{package}': {exc}"
+        _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
 
     existing = get_active_overrides(package=package)
     existing_ids = {o.rule_id for o in existing}
@@ -292,6 +310,8 @@ def override_wizard(
         return
 
     if available:
+        from rich.table import Table
+
         con.print(f"\n[bold]Triggered rules for [cyan]{package}[/][/]\n")
         table = Table(box=SIMPLE_HEAD)
         table.add_column("#", style="dim", justify="right")
@@ -308,11 +328,16 @@ def override_wizard(
         con.print()
         added = []
         while True:
-            pick = typer.prompt(
-                "Enter rule ID or # to suppress (or q to quit)",
-                default="q",
-                show_default=False,
-            )
+            try:
+                pick = typer.prompt(
+                    "Enter rule ID or # to suppress (or q to quit)",
+                    default="q",
+                    show_default=False,
+                )
+            except EOFError:
+                # stdin is not interactive (piped/CI): stop cleanly.
+                con.print("[yellow]Input closed; no more overrides added.[/]")
+                break
             if pick.lower() in ("q", "quit", ""):
                 break
 
@@ -332,8 +357,13 @@ def override_wizard(
                 con.print(f"[red]No rule matches '{pick}'.[/] Try again or enter q to quit.")
                 continue
 
-            reason = typer.prompt(f"Reason for suppressing {matched.rule_id}")
-            if not reason.strip():
+            reason = None
+            try:
+                reason = typer.prompt(f"Reason for suppressing {matched.rule_id}")
+            except EOFError:
+                con.print("[yellow]Input closed; override not added.[/]")
+                break
+            if not reason or not reason.strip():
                 con.print("[red]Reason cannot be empty.[/]")
                 continue
 
@@ -389,15 +419,23 @@ def db_check(
 ):
     """Run integrity check on the database."""
     ensure_default_configs()
-    init_db()
     from ..db import get_connection
+    try:
+        init_db()
+    except sqlite3.DatabaseError:
+        # A corrupt database is exactly what this command must diagnose;
+        # crashing on the schema init would defeat the point.
+        pass
 
     errors = []
-    with get_connection() as conn:
-        rows = conn.execute("PRAGMA integrity_check").fetchall()
-        for r in rows:
-            if r[0] != "ok":
-                errors.append(r[0])
+    try:
+        with get_connection() as conn:
+            rows = conn.execute("PRAGMA integrity_check").fetchall()
+            for r in rows:
+                if r[0] != "ok":
+                    errors.append(r[0])
+    except sqlite3.DatabaseError as exc:
+        errors.append(str(exc))
 
     if json_output:
         typer.echo(json.dumps({
@@ -463,15 +501,38 @@ def db_backup(
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         output = str(db_path) + f".{ts}.bak"
 
-    with get_connection() as conn:
-        backup_conn = sqlite3.connect(output)
-        try:
-            conn.backup(backup_conn, pages=0)
-        finally:
-            backup_conn.close()
+    out_path = Path(output)
+    if out_path.exists() and db_path != out_path and out_path.samefile(db_path):
+        msg = f"backup path must differ from the live database: {output}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if not out_path.parent.exists():
+        msg = f"backup directory does not exist: {out_path.parent}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
+    try:
+        with get_connection() as conn:
+            backup_conn = sqlite3.connect(output)
+            try:
+                conn.backup(backup_conn, pages=0)
+            finally:
+                backup_conn.close()
+    except sqlite3.Error as exc:
+        msg = f"backup failed: {exc}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
 
     size = Path(output).stat().st_size
-
     if json_output:
         typer.echo(json.dumps({
             "status": "ok",
@@ -487,16 +548,27 @@ def db_backup(
 
 @baseline_app.command("build")
 def baseline_build(
-    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
+    bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
     export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact"),
     sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Bootstrap or update the full-AUR baseline corpus."""
+    from .. import release
     from ..full_aur.pipeline import run_baseline_build
     ensure_default_configs()
     init_db()
-    run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output)
+    if release.offline():
+        msg = "baseline build needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    result = run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output, bootstrap=bootstrap)
+    if result.refused:
+        raise typer.Exit(code=2)
 
 
 @baseline_app.command("import")
@@ -506,10 +578,28 @@ def baseline_import(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Import a signed baseline corpus artifact."""
-    from ..full_aur.export import import_baseline
     ensure_default_configs()
     init_db()
-    import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
+    _import_baseline_wrapped(path, json_output, allow_unsigned)
+
+
+def _import_baseline_wrapped(path: str, json_output: bool, allow_unsigned: bool) -> None:
+    """Import a corpus baseline, turning failure into a structured exit 2.
+
+    Errors (missing file, malformed artifact, bad signature, missing
+    cryptography) are reported like every other failure path: as JSON when
+    ``--json`` is set, otherwise as a single colored line.
+    """
+    from ..full_aur.export import import_baseline
+    try:
+        import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
+    except Exception as exc:
+        msg = str(exc) or exc.__class__.__name__
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
 
 
 # --- seed-db ---
@@ -537,8 +627,9 @@ def register_commands(app: typer.Typer):
             bundled = Path(__file__).parent.parent / "data" / "seed.db.gz"
             if not bundled.exists():
                 msg = (
-                    "No bundled seed found. Build one with:\n"
-                    "  python scripts/generate_seed.py --out src/trustsight/data/seed.db\n"
+                    "No bundled seed ships in this build. The seed lives on "
+                    "the release channel; fetch the verified baseline with:\n"
+                    "  trustsight seed fetch\n"
                     "or pass an existing seed with --file."
                 )
                 if json_output:
@@ -568,8 +659,8 @@ def register_commands(app: typer.Typer):
                 if not json_output:
                     print(f"Importing seed from {seed}...")
                 stats = import_seed(seed)
-        except FileNotFoundError:
-            msg = f"Seed file not found: {seed}"
+        except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+            msg = f"Failed to import seed from {seed}: {exc}"
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
@@ -751,7 +842,8 @@ def register_commands(app: typer.Typer):
 
     @app.command("full-aur")
     def full_aur_cmd(
-        resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap"),
+        resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
+        bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
         export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact (.tar.zst)"),
         sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
         watch: bool = typer.Option(False, "--watch", help="Keep running cycles on an interval until interrupted"),
@@ -761,24 +853,47 @@ def register_commands(app: typer.Typer):
     ):
         """Bootstrap or update the full-AUR baseline corpus.
 
-        With --watch the same cycle repeats on an interval: refresh the
-        metadata snapshot, analyse what changed, run the corpus sweep, and
-        report each cluster once rather than on every cycle.
+        Without a prior snapshot a full bootstrap fetches every PKGBUILD in
+        the AUR, so it must be asked for with --bootstrap. Every cycle is
+        capped (limits.corpus_max_per_cycle) and resumes automatically, so a
+        large amount of work advances in gentle chunks. With --watch the
+        cycle repeats on an interval.
         """
+        from .. import release
         from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
         init_db()
+        if release.offline():
+            msg = "full-aur needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
         if watch:
-            if export or sign:
+            if export or sign or bootstrap or resume:
                 typer.secho(
-                    "--export/--sign describe a single artifact; run them "
+                    "--export/--sign describe a single artifact, and "
+                    "--bootstrap/--resume a single cycle; run them "
                     "without --watch.",
                     fg=typer.colors.RED,
                 )
                 raise typer.Exit(2)
+            if cycles < 0:
+                msg = "--cycles must be 0 (until interrupted) or a positive count"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
             run_watch(interval=interval, cycles=cycles, json_output=json_output)
             return
-        run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output)
+        result = run_baseline_build(
+            resume=resume, export_path=export, sign_key=sign,
+            json_output=json_output, bootstrap=bootstrap,
+        )
+        if result.refused:
+            raise typer.Exit(code=2)
 
     @app.command("import-baseline")
     def import_baseline_cmd(
@@ -787,7 +902,6 @@ def register_commands(app: typer.Typer):
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Import a signed baseline corpus artifact."""
-        from ..full_aur.export import import_baseline
         ensure_default_configs()
         init_db()
-        import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
+        _import_baseline_wrapped(path, json_output, allow_unsigned)

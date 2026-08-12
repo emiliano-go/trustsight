@@ -129,7 +129,7 @@ The score maps to a verdict class:
 | 21+ | FLAGGED | Signals warrant review before updating |
 | Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change; requires manual review |
 
-The 20-point threshold is derived from corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 20; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 40. The 20-point gap between these two distributions is the operational separation: a threshold at 20 catches every CRITICAL-class threat in the benchmark set with zero false positives at the benign median.
+The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 45; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 15-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
 
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
@@ -144,9 +144,9 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- **689 tests**, **82.0% zero-rate** on a rebuilt 3,322-diff stratified benign corpus, **100% CRITICAL recall** (12/12).
-- **CRITICAL p5 = 40**, **benign p95 = 25**: the gap that matters.
-- Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 16 of 21 fire on zero benign diffs.
+- **1,535 tests**, **69.1% zero-rate** on the 3,246-diff locked corpus, **100% malicious recall** (all labelled fixtures).
+- **CRITICAL p5 = 60**, **benign p95 = 45**: the gap that matters.
+- Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).
 
 ## Start here
@@ -160,4 +160,5 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Corpus and Priors](corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting |
 | [Fire Rates](fire-rates.md) | Per-rule false-positive rates on the benign corpus and the 30 % gate |
 | [What TrustSight Cannot See](what-trustsight-cannot-see.md) | The reasoned ceiling of the tool |
+| [Seed Provenance](seed-provenance.md) | How the novelty seed is built, signed on the release channel, and audited |
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |

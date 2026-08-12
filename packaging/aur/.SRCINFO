@@ -1,6 +1,6 @@
 pkgbase = trustsight
 	pkgdesc = A CLI tool to vet AUR package updates before install
-	pkgver = 0.11.0
+	pkgver = 0.12.1
 	pkgrel = 1
 	url = https://github.com/emiliano-go/trustsight
 	arch = any
@@ -17,7 +17,7 @@ pkgbase = trustsight
 	depends = python-typer
 	depends = python-cryptography
 	optdepends = pyalpm: native version comparison (faster discovery)
-	source = trustsight-0.11.0.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.11.0.tar.gz
-	sha256sums = 53c37fc4aba767be47bc7460ff3b2a01fe7ccb251e14441cfc9d73b54bcfe020
+	source = trustsight-0.12.1.tar.gz::https://github.com/emiliano-go/trustsight/archive/refs/tags/v0.12.1.tar.gz
+	sha256sums = 71df6e938060767a5d97b9a7407f1ef17b45d4fe155bb2d296d714eac4e001c6
 
 pkgname = trustsight

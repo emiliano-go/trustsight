@@ -38,7 +38,12 @@ from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines
-from ..coverage import gaps_from, oversized_lines, unresolved_source_lines
+from ..coverage import (
+    gaps_from,
+    oversized_lines,
+    parse_time_substitution_lines,
+    unresolved_source_lines,
+)
 from ..scoring import calculate_score
 from ..schema import (
     with_changes,
@@ -145,6 +150,7 @@ def analyze_package_text(
     temporal: TemporalContext,
     srcinfo: Optional[str] = None,
     tree_manifest: Optional[list[tuple[str, bytes]]] = None,
+    archive_trailer_finding: Optional[dict] = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -163,6 +169,10 @@ def analyze_package_text(
             tarball, when it was fetched.  Runs the R118-tree scan; when
             absent the result reports ``tree_analyzed=false`` rather than
             silently reading as full coverage.
+        archive_trailer_finding:  an R122 finding stamped by
+            ``check_archive_trailer`` on the snapshot tarball bytes, when
+            one was produced.  Surfaced exactly like the R118-tree scan
+            results, so the corpus path reports what the archive carried.
 
     Returns:
         A fully-scored PackageFact.
@@ -204,6 +214,8 @@ def analyze_package_text(
         if tree_manifest:
             from ..analysis.delivery import scan_tree_manifest
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
+        if archive_trailer_finding:
+            triggered_rules.append(archive_trailer_finding)
         triggered_rules, suppressed_rules = filter_triggered_rules(
             triggered_rules, package=pkg_name
         )
@@ -301,6 +313,7 @@ def analyze_package_text(
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
             current_text=clamp_text(new_pkgbuild),
+            tree_manifest=tree_manifest,
         )
     )
     if tree_manifest:
@@ -308,6 +321,8 @@ def analyze_package_text(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    if archive_trailer_finding:
+        triggered_rules.append(archive_trailer_finding)
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
@@ -376,6 +391,7 @@ def analyze_package_text(
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
+        parse_time_substitutions=parse_time_substitution_lines(diff_text),
     )
 
     score, breakdown, risk = calculate_score(

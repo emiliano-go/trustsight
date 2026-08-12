@@ -1,0 +1,17 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,14 @@
+ pkgname=demo
+ pkgver=1.0
++build() {
++  case "$(uname -m)" in x86_64) _arch=amd64 ;; esac
++  [ "$(getconf LONG_BIT)" = 64 ] || _arch=i386
++  cat > demo.desktop <<'EOF'
++[Desktop Entry]
++Name=Demo
++EOF
++  make
++}
++package() {
++  install -Dm644 demo.desktop "$pkgdir/usr/share/applications/demo.desktop"
++}

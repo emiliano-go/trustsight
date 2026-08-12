@@ -18,6 +18,7 @@ from ..db import (
     upsert_package,
 )
 from ..differ import (
+    companion_source_hunks,
     detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_urls_from_diff,
@@ -44,6 +45,7 @@ from ..coverage import (
     fail_closed,
     gaps_from,
     oversized_lines,
+    parse_time_substitution_lines,
     unresolved_source_lines,
 )
 from ..scoring import calculate_score, risk_level
@@ -57,13 +59,14 @@ from ..schema import (
 )
 from ..tokenizer import tokenize_and_resolve_indexed
 from .base import (
+    _GLOBAL_URL_KEY,
     _aggregate_pinning,
     _ensure_init,
     _get_installed_version,
-    _GLOBAL_URL_KEY,
     _has_install_hook,
 )
 from .composition import _meta_annotations
+from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import _structural_findings
 from .version import compare_installed_to_aur, is_vcs_package
@@ -156,6 +159,15 @@ def analyze_package(
 
     diff_text, diff_summary = generate_diff(repo, old_commit, head_commit, config.get("diff", {}).get("max_context_lines", 3))
 
+    # A local source=() companion file is build input the recipe copies into
+    # $srcdir and can execute; its committed content is scanned with the same
+    # rules as the PKGBUILD, or a curl|bash simply moves one file over and the
+    # filename filter above drops it.  Appended before the byte cap, so an
+    # oversized companion truncates the combined diff and fails closed.
+    companion = companion_source_hunks(repo, head_commit)
+    if companion:
+        diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
+
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_bytes = diff_text.encode("utf-8", errors="replace")
     diff_truncated = len(diff_bytes) > max_bytes
@@ -197,16 +209,16 @@ def analyze_package(
         resolved_indices=resolved_indices,
     )
     head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
-    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
+    tree_manifest = _collect_tree_files(repo, head_commit)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
             maintainer_changed=maintainer_changed,
             package_name=pkg_name, config=config,
             current_text=clamp_text(head_pkgbuild),
+            tree_manifest=tree_manifest,
         )
     )
-    tree_manifest = _collect_tree_files(repo, head_commit)
     if tree_manifest:
         from .delivery import scan_tree_manifest
         triggered_rules.extend(
@@ -286,6 +298,7 @@ def analyze_package(
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
+        parse_time_substitutions=parse_time_substitution_lines(diff_text),
     )
 
     score, breakdown, risk = calculate_score(
@@ -293,6 +306,10 @@ def analyze_package(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
+    )
+
+    ioc_matches = ioc_baseline_matches(
+        diff_text, pkg_name, current_text=head_pkgbuild
     )
 
     # The installed version is a full [epoch:]pkgver-pkgrel built locally;
@@ -333,6 +350,7 @@ def analyze_package(
         temporal_source="git_commit",
         score_breakdown=breakdown,
         final_score=score,
+        ioc_matches=ioc_matches,
     )
 
     with_changes(fact, diff_text)
@@ -405,6 +423,7 @@ def scan_diff(
             clamp_text(diff_text), source_changes, source_buckets,
             package_name=package_name, config=config,
             current_text=clamp_text(current_text),
+            tree_manifest=tree_manifest,
         )
     )
     if tree_manifest:
@@ -458,6 +477,7 @@ def scan_diff(
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
+        parse_time_substitutions=parse_time_substitution_lines(diff_text),
     )
 
     score, breakdown, risk = calculate_score(
@@ -465,6 +485,10 @@ def scan_diff(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
+    )
+
+    ioc_matches = ioc_baseline_matches(
+        diff_text, package_name, current_text=current_text
     )
 
     exec_changes = ExecutionChanges(
@@ -490,6 +514,7 @@ def scan_diff(
         risk=risk,
         score_breakdown=breakdown,
         final_score=score,
+        ioc_matches=ioc_matches,
     )
     deps_added = extract_dependency_changes(diff_text, package_name)
     fact.dependency_changes = {k: sorted(v) for k, v in deps_added.items() if v}

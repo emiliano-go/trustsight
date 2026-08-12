@@ -1,0 +1,12 @@
+# Security-critical paths require maintainer review.
+/scripts/security_gates.py @emiliano-go
+/src/trustsight/tokenizer.py @emiliano-go
+/src/trustsight/scoring.py @emiliano-go
+/src/trustsight/config.py @emiliano-go
+/src/trustsight/db.py @emiliano-go
+/docs/security.md @emiliano-go
+/.github/workflows/security.yml @emiliano-go
+/.github/workflows/calibration.yml @emiliano-go
+/packaging/aur/PKGBUILD @emiliano-go
+/docs/reference/baseline-keys.md @emiliano-go
+/src/trustsight/full_aur/baseline_pubkey.pem @emiliano-go

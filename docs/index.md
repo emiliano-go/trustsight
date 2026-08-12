@@ -37,7 +37,7 @@ The scoring system is organized into four evidence tiers:
 
 A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 75+. FATAL rules (prompt injection, unicode bidi overrides) hard-stop at 100.
 
-**Key numbers:** 74.9% benign zero-rate, benign p95 = 30 against malicious p5 = 60 on a rebuilt 3,246-diff stratified corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
+**Key numbers:** 69.1% benign zero-rate, benign p95 = 45 against malicious p5 = 60 on the 3,246-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
 
 See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules.md) for the complete rule catalog.
 

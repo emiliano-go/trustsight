@@ -1,23 +1,178 @@
 # Changelog
 
+## [0.12.1] - 2026-08-11
+
+### Fixed
+
+- **The release archive failed its own `check()` step.** The tests in
+  `tests/test_pkgbuild.py` read `packaging/aur/PKGBUILD`, but release
+  tarballs exclude `packaging/` by `.gitattributes` `export-ignore` (a
+  tarball cannot contain the PKGBUILD for its own checksum), so
+  `makepkg -si` from the v0.12.0 archive aborted with six failures. Those
+  PKGBUILD-hygiene tests now skip when the PKGBUILD is absent, and still
+  run in the repository checkout where it lives.
+
+### Changed
+
+- **The PKGBUILD CI job now executes `check()` against the release
+  tarball.** The build step dropped `--nocheck`, so a regression that
+  breaks the shipped artifact fails the `PKGBUILD` workflow instead of
+  shipping. Version bumped to 0.12.1 (the archival checksum is computed by
+  the release workflow from the served tarball, never by hand).
+
+### Stats
+
+- 1 commit since v0.12.0
+- Package version 0.12.1
+
 ## [Unreleased]
 
 ### Added
 
+- **Fixture reproducibility gate.** All 164 malicious `.diff` bodies are now
+  committed source (gitignore override for `tests/fixtures/malicious/`), so a
+  fresh clone runs the recall and separation gates on the full corpus with no
+  generator step. `scripts/verify_fixtures.py` checks every `expected.json`
+  record against its `.diff` (no missing bodies, no orphans, per-category
+  counts) and runs in `test.yml`. A new `fixture-determinism` job regenerates
+  all five generators on a fresh checkout and fails if the tree drifts from
+  the committed record, pinning both fixture bodies and hand-reconciled
+  labels.
+- **R122: the corpus path reports archive trailer anomalies.** The snapshot
+  tarball bytes fetched for the full-AUR corpus now go through
+  `check_archive_trailer`, a pure function over bytes: trailing bytes after
+  the gzip member, a missing tar end-of-archive block, or content after the
+  zip end-of-central-directory record produce a stamped R122 finding,
+  surfaced exactly like the R118-tree scan results. The review path still
+  never downloads PKGBUILD-declared URLs, so R122 only ever sees the AUR's
+  own snapshot tarballs; see
+  [rules.md](reference/rules.md#r122).
+- **A signed-commit policy, enforced on critical paths.** Changes to the
+  tokenizer, scoring, config, database, security gates, CI workflows,
+  packaging, and baseline keys must be GPG-signed: `.github/CODEOWNERS`
+  assigns those paths to the maintainer, the `verify-commit-sigs` workflow
+  checks every critical-path commit in a pull request to `master`, and
+  `CONTRIBUTING.md` documents key setup and the list of critical paths.
+  Signing is encouraged (but not required) for everything else.
+
+### Changed
+
+- **Generators are record-preserving.** `gen_malicious_fixtures.py` no longer
+  deletes diffs it does not own, `gen_injection_fixtures.py` merges with the
+  existing record instead of overwriting it, and
+  `gen_historical_holdout_fixtures.py` keeps curated entries verbatim.
+  Regenerating any generator on a clean tree is now a no-op by construction.
+- **R012 `user:` role marker relabelled as a negative control.** The engine
+  deliberately excludes `user:` role markers (a question addressed to a model
+  carries no instruction); the generator previously emitted
+  `R012-v5.diff` as a positive, which failed the malicious-recall gate. It is
+  now a documented negative (`must_not_fire: [R012, R013]`, `max_score: 0`).
+- **`R029-known-dep-added` record dropped.** A vestigial placeholder
+  (`must_fire: []`, `max_score: 0`, `known_packages` gate) with no rule
+  implementation, no diff body, and no code path referencing it; keeping it
+  would fabricate a fixture for a rule that does not exist.
+- **Channel releases keep the canonical seed and prove their own plumbing.**
+  The baselines workflow now checks the channel release for an existing
+  `baseline-seed.tar.gz` before building: the canonical seed is
+  maintainer-built from the full AUR mirror and uploaded, and CI rebuilds a
+  lock-derived fallback only when it is missing (auditable but smaller, and
+  never overwriting an uploaded seed). Every seed built by the published
+  scripts now ships `trustsight-seed-v2/seed-provenance.json` (source mirror
+  path and size, package, maintainer and observation counts, build timestamp
+  and command line), written by `generate_seed.py --provenance-out` and
+  copied into the archive by `build_hashed_seed.py --provenance`, so anyone
+  can reproduce the seed and diff their record against the published one. A
+  manual workflow run doubles as a pipeline test; see
+  [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
+- **Release tarballs no longer carry `packaging/`, and CI validates the
+  checksum the PKGBUILD records.** `export-ignore` keeps the PKGBUILD out of
+  the GitHub source tarball, so the release artifact can no longer disagree
+  with itself. `release-pkgbuild.yml` computes the checksum from the tarball
+  served at the release tag, verifies it with `makepkg --verifysource`, and
+  commits it to the default branch; `pkgbuild.yml` now downloads the actual
+  release tarball and fails the build on a checksum mismatch instead of
+  building with `--skipchecksums`. Both Arch containers install git before
+  checkout so `actions/checkout` performs a real checkout rather than the
+  REST-API archive fallback that had silently omitted `packaging/`.
+- **Machine-readable output stays machine-readable.** `review`, `inspect`,
+  `history`, `list`, `corpus` and `ioc` in `--json` mode keep stdout a pure
+  JSON document: warnings and progress events go to stderr, errors become a
+  JSON error object with exit code 2, and `review --json` results carry an
+  explicit `failed` flag, unconditional `suppressed_rules` and `ioc_matches`,
+  and score fields only under `--score` and `--risk`. Negative `--limit`
+  values and unknown `--type` values are rejected with a clean error instead
+  of a traceback.
+- **IOC and baseline handling hardened.** `ioc import` dedupes identical
+  rows instead of crashing, keeps expired rows of a source across
+  re-imports (`entries_skipped`), treats naive `expires_at` values as UTC,
+  and reports malformed manifest versions or encodings as clean errors;
+  `ioc update` honours `TRUSTSIGHT_OFFLINE`; `ioc export` refuses to
+  overwrite an existing file; `ioc sources` drops the placeholder row. The
+  seed and baseline import path rejects archive members that escape the
+  extraction directory (absolute paths, `..` segments), `import-baseline`
+  refuses a non-file path, and `db check` and `db backup` survive a corrupt
+  database with readable errors and validate the backup output path.
+- **`full-aur` refuses to do nothing silently.** An empty metadata fetch no
+  longer clobbers the stored snapshot, fetch failures are wrapped in
+  actionable errors, a missing `--sign` key is a hard error, invalid watch
+  intervals are coerced to the floor, and a failed watch cycle is retried
+  instead of killing the watcher. `config set` validates keys and value
+  types and `config show` tolerates hand-edited non-integer weights;
+  `override` tolerates null reasons and dedupes new entries; `forget
+  --prune` refuses partial RPC replies and handles EOF on confirmation;
+  discovery reports a friendly error when pacman is missing from PATH; the
+  display layer escapes rich markup in untrusted messages.
+
+### Fixed
+
+- **The seed release path logs through a real logger.** `db.py` referenced a
+  module `log` it never defined, masked until now by a broad exception
+  handler, so failures while seeding from the release channel died without
+  a reason; the module logger is defined and a test pins the failure path.
+  `config.py`'s `\s` escape no longer triggers a SyntaxWarning, and
+  `export.py` drops a dead assignment left over from the baseline export
+  rework.
+
+## [0.12.0] - 2026-08-10
+
+### Added
+
+- **A release channel for every baseline.** All baselines the tool consumes
+  now ship as signed GitHub release assets with the `baseline-` prefix:
+  `baseline-seed.tar.gz` (the hashed novelty seed),
+  `baseline-ioc-<source>-<incident>-manifest.json` / `-iocs.jsonl` (per-curator
+  IOC baselines), `baseline-corpus.tar.zst` (the corpus baseline) and
+  `baseline-manifest.json` (per-asset SHA-256, size and signature). Every
+  asset carries a detached Ed25519 `.sig` under the pinned distribution key,
+  verified before any payload is read; a download that does not verify is
+  refused, never imported. New in the tool: `trustsight seed fetch` (download,
+  verify, import), release-channel `ioc update` (per-curator verification
+  preserved on top of the distribution signature), first-run auto-import of a
+  missing seed from the channel, and `scripts/build_release_baselines.py`
+  (build, sign, self-verify, manifest). The
+  [`.github/workflows/baselines.yml`](../.github/workflows/baselines.yml)
+  workflow builds and uploads the seed, IOC and manifest assets on every
+  published release, signing with the `BASELINE_SIGNING_KEY` Actions secret;
+  the corpus baseline is exported by the maintainer and uploaded per the
+  publishing guide.
 - **A security model, stated and enforced.** [`docs/security.md`](security.md)
   is now the canonical page: TrustSight as a program consuming hostile input
   (Part A), what a verdict claims and does not claim (Part B), an enforcement
   map (Part C), and a vulnerability disclosure policy written for a static
   analyser, with supported versions, severity timelines, and an explicit list
   of what is not a vulnerability (Part D).
-- **`scripts/security_gates.py` and a CI job.** Thirty-six gates, one per
+- **`scripts/security_gates.py` and a CI job.** Forty-five gates, one per
   invariant: no interpreter or shell execution, version arguments
   shape-checked, network confined to the four fetch modules, one declared host,
   every request timed out, bounded rule matching, bounded and never-indirect
   expansion, data-driven rendering, no archive extraction, parameterised SQL,
   inert terminal output, coverage failing closed, a gap always shown with the
   band, FATAL integrity, seed and baseline containment, reserved names refused
-  by every writer. Three of them guard the
+  by every writer. The v0.12.0 additions guard the two new subsystems: an IOC
+  match always carries its source (A13b), never contributes to the score (B1),
+  is reported when expired rather than silently dropped, and never appears in
+  the rule config layer; the novelty seed stores no plaintext identity (P1) and
+  hashes deterministically. Three gates guard the
   documentation rather than the code: the maturity numbers in B3 must be derived
   from `scoring._MATURITY_THRESHOLD` rather than copied beside it; every link
   between pages under `docs/` must resolve to a file and an anchor that exist;
@@ -42,8 +197,105 @@
 - **`PackageFact.risk`.** The verdict band is now carried on the fact and read
   through `scoring.verdict_level()` (bare band, for machines) or
   `scoring.verdict_label()` (qualified, for people).
+- **IOC Federation baseline system (v0.12.0, `src/trustsight/ioc_baseline.py`).**
+  A signed, multi-curator, time-bounded inventory of known-bad artifacts
+  (domains, file hashes, package names) that sits outside the heuristic score.
+  Baselines are Ed25519-signed directories (`manifest.json` + `iocs.jsonl`),
+  imported per source and replaced idempotently; each match names the curator
+  that flagged it (attribution, not aggregation), carries its incident and
+  evidence URL, and reports expiry rather than silently lapsing. A new
+  `IOC Match` stage runs after rule matching and attaches
+  `PackageFact.ioc_matches`; matches never enter `score_breakdown` and never
+  move the number. New `[baselines.ioc]` config section, `ioc_entries` table,
+  and `trustsight ioc {sources,import,update,list,export}` commands. See
+  [the IOC reference](reference/ioc.md).
+- **User-data hashing for the novelty seed (v0.12.0).** The bundled seed's
+  ~36k maintainer names and emails are stored as salted SHA-256 hashes, not
+  plaintext: the novelty and maturity signals need only "have we seen this
+  identity before", never the literal string. A per-seed 32-byte salt defeats
+  precomputed tables; the salt travels in `seed_meta`. Names and emails are
+  normalised (`strip().lower()`) at one hashing chokepoint so the seed build,
+  the plaintext-to-hashed migration, and every runtime lookup agree. An old
+  plaintext seed is migrated on first run and the original table renamed to
+  `maintainers_deprecated_backup`. New `maintainers_hashed` /
+  `package_maintainers_hashed` tables and `trustsight seed {info,stats,migrate}`
+  commands. Documented in [seed provenance](explanation/seed-provenance.md).
+- **Committed-file scanning (`differ.companion_source_hunks`).** A payload that
+  ships as a file inside the AUR repo (declared in `source=()` or merely named
+  by the recipe, e.g. `bash "${startdir}/helper.sh"`) is now read with the same
+  rules as the PKGBUILD. The differ used to feed only `PKGBUILD`, `.SRCINFO`
+  and `*.install` to the scanner, so a `curl | bash` moved one file over
+  reached no rule; the whole current content of every companion the recipe
+  names is scanned, so a payload committed earlier and referenced later is
+  still seen. Unreferenced committed files are left alone.
+- **Two coverage gaps.** `unresolved_source` now tracks a multi-line
+  `source=()` array whose `$(...)` rides a continuation line, not only the
+  opener; and `unresolved_parse_time` records a top-level command substitution
+  that runs while makepkg *sources* the PKGBUILD for metadata, before any rule
+  reads it. Both fail closed to `Inconclusive`.
+- **R137 (Fetch Then Execute, CRITICAL).** The split download-then-run form a
+  reviewer would read as two innocuous lines: a downloader writes a file and
+  the same function later executes it. R001/R002 own the single-line pipe;
+  R137 owns the split.
 
 ### Changed
+
+- **The release channel is its own release kind.** Baseline assets
+  (`baseline-*`) ship on `baseline-<date>` channel releases, published after
+  the software release they serve so the tool's default `latest` channel
+  resolves to them; software releases (`vX.Y.Z`) never carry baseline assets.
+  The release baseline workflow only runs for `baseline-*` tags and manual
+  dispatch.
+- **The novelty seed no longer ships inside the package.** The 20 MB
+  `src/trustsight/data/seed.db.gz` is gone from the repo, wheel and package;
+  the seed is distributed as the signed `baseline-seed.tar.gz` release asset
+  (v2 hashed format). First-run auto-import keeps working by fetching and
+  verifying the channel asset (silently skipping on failure or offline), and
+  `seed fetch` imports it on demand. The security model's network doctrine
+  now names **two declared hosts**: `aur.archlinux.org` everywhere, and
+  `github.com` confined to the new fetch module `release.py` (seed fetch,
+  `ioc update`, first-run import), with the `network confined to the fetch
+  modules` and `one network host, declared` gates updated to match.
+- **`trustsight full-aur` is safe by default: no accidental whole-AUR scrape.**
+  A missing snapshot used to silently trigger a from-scratch bootstrap that
+  fetched every PKGBUILD in the AUR (~120k). That now **refuses** unless
+  `--bootstrap` is passed. Every cycle, delta or bootstrap, is capped at
+  `[limits] corpus_max_per_cycle` (default 2000) and resumes automatically, so
+  a large amount of work advances in bounded, resumable chunks instead of one
+  avalanche; a capped cycle does not advance the snapshot, run the corpus
+  sweep, or export a half-built corpus until the transition completes.
+  `--resume` is now implied (cycles resume on their own) and kept only for
+  compatibility. The intended cadence is incremental: run `full-aur`
+  periodically so each cycle fetches only the changed packages.
+- **`trustsight full-aur` is faster, rate-limited, and shows progress.** The
+  corpus build fetched one PKGBUILD per package serially, with feedback only
+  every 1000 packages. PKGBUILDs are now fetched a window ahead, several at a
+  time (`[limits] corpus_fetch_workers`, default 5); analysis stays serial and
+  in package order so novelty still reads earlier packages' observations. The
+  fetcher is a good citizen to the AUR's cgit (which rate-limits per IP and
+  runs anti-scraping): a global aggregate rate cap (~5 requests/second) bounds
+  the request rate regardless of worker count, and requests retry with
+  exponential backoff on `429`, `5xx` and connection resets, honouring a
+  `Retry-After` header. On an
+  interactive terminal the analysis loop renders a live progress bar on stderr
+  (current package, `M/N`, elapsed, ETA), and falls back to periodic log lines
+  when there is no TTY or under `--json`. Benign per-package snapshot fallbacks
+  (a VCS or `-bin` package with no tarball) dropped from a warning per package
+  to debug, and a genuinely unfetchable PKGBUILD is counted and reported once.
+  A latent `TypeError` on the reserved-name path (`_logger()` called without
+  its argument) is fixed.
+- **The tokenizer normalises partial quoting.** `c"u"rl` and `ba"sh"` are
+  reconstructed to `curl` and `bash` before rules match, the non-empty twin of
+  the empty-quote rule, so intra-word quoting no longer hides a literal from
+  the resolved-line rules. A standalone quoted argument (a message, a URL, a
+  `depends` entry with structure) keeps its quotes, so tokenisation for the
+  other rules does not shift.
+- **Maintainer identities hash through one chokepoint.** `db._hash_maintainer_value`
+  delegates to `seed_build._hash_value`, and both normalise `strip().lower()`,
+  so a maintainer whose name or email differs only in case or whitespace is one
+  identity rather than a fresh novelty signal every time. The two formulas used
+  to be copied in two modules; identical then, they could drift, and a drift
+  would silently miss every lookup.
 
 - **Declared verification is no longer credited (B10).** Checksums,
   `validpgpkeys`, GPG signature sources, source pinning and trusted-forge
@@ -361,6 +613,60 @@
   prune/abort, override add/remove, db check, lint-rules) now exit 2. Exit 1
   is no longer used by any command; a verdict still never changes the exit
   code.
+
+### Added
+
+- **R132: a command or shell named through `${!name}` indirection.**
+  `C=curl; ${!C} url | bash` runs curl while the recipe carries no literal
+  curl and no literal shell for R001/R002/R129/R121 to name, because the
+  tokenizer refuses to evaluate indirection it cannot know statically.
+  Flagging the indirection itself (CRITICAL, obfuscation, staged
+  `anti_analysis`) closes that whole family; the benign `${!arr[@]}` and
+  `${!prefix*}` key-and-name-listing forms are excluded by construction.
+- **The evasion fixture corpus (`scripts/gen_evasion_fixtures.py`).** Recipe
+  shapes that bypass the engine are written down *before* they are closed and
+  kept as the record of what the engine can and cannot yet see. Six original
+  evasions (indirect expansion, `+=`-accumulated commands and deps,
+  heredoc-fed and heredoc-written recipes), of which five are now detected
+  and relabelled into the recall corpus, plus three new open gaps filed for
+  the rules that will close them: R133 (array-subscript routing), R134
+  (nameref routing) and R135 (command-substitution spelling). Each fixture
+  enforces its state in both directions: an open gap must fail its label,
+  a relabelled fixture must pass it, so a patch that closes a gap turns
+  `gate_known_gaps_unchanged` red instead of leaving a stale record.
+
+### Changed
+
+- **The source-bucket prior scores at its worst URL, not its sum.** Each
+  added URL contributed its bucket modifier individually, so appending the
+  same suspiciously hosted URL many times (the `discord_arch_electron`
+  case: ~26 entries at +20 each) stacked into CRITICAL on the strength of a
+  single weak fact. The prior is now the maximum modifier over all added
+  URLs: one diff whose provenance is unknown, not thirty separate facts,
+  which restores the calibration separation (benign p95 strictly below
+  malicious p5). `homograph_attack` still dominates at +30, and trusted
+  forges still contribute nothing.
+- **The assignment resolver accumulates `+=`.** `_ASSIGNMENT_RE` now reads
+  the operator: `=` is a fresh binding, `+=` appends to the current value
+  (a fresh name starts empty, matching bash). A fetch command assembled
+  across `C+=curl` / `C+=' https://…'` lines therefore resolves to a
+  literal `curl https://… | bash` that R001 owns, instead of staying an
+  opaque `$C` the literal-matching rules step over.
+- **The synthetic fixtures now validate under the shipped config before
+  writing.** `scripts/gen_malicious_fixtures.py` resolves labels against the
+  same cold-DB, `shipped_config()` context `scan_malicious` runs in, so a
+  rule that stops detecting fails at generation time, and a fixture whose
+  label was hand-reconciled (R004/R009/R025/R026/R027/R039/R059/R128/R129/R130)
+  can no longer be silently clobbered by a regenerate.
+
+### Fixed
+
+- **`depends+=` was invisible to the dependency rules.** Accumulated
+  dependency declarations were never parsed as declarations, so a recipe
+  that appended to `depends` cold showed no finding at all. The generator
+  now keeps `evasion-depends-via-plus-eq` filed as an open gap (novelty
+  rules are DB-backed and silent under the gates' cold DB) rather than
+  pretending the parse gap is closed.
 
 ## [0.11.0] - 2026-07-30
 

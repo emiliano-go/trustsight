@@ -528,8 +528,8 @@ Every `raw_line` rule below sets `added_only = true`.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
-- **Pattern:** `[\s"\x27](?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/`
-- **Description:** Detects a cron job or systemd unit written to an absolute system path rather than into `$pkgdir`. Installing a unit *into* `$pkgdir` is correct packaging; writing to the live filesystem during a build is not.
+- **Pattern:** `(?:[\s"\x27]|\$\{?pkgdir\}?)(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/`
+- **Description:** Detects a cron job or systemd unit written to a system path. A unit staged into `$pkgdir` is flagged too, in any quoting style (`"${pkgdir}"/usr/lib/...`, `"${pkgdir}/usr/lib/..."`, `$pkgdir/usr/lib/...`): pacman installs what the recipe staged, so all three produce the same persistent root-level unit. Writing to the live filesystem during a build is the worse case of the same finding.
 
 ### R055: Git Clone With Variable Branch {#r055}
 
@@ -1363,17 +1363,17 @@ Fire rate: 0 of 3246.
 - **Category:** `integrity`
 - **Condition:** An archive carries data past its declared trailer (gzip, tar or zip).
 
-R122 is a pure function over bytes (`check_archive_trailer`). It is tested but
-**not wired into any shipped analysis path**, so it fires on nothing today: no
-code hands it bytes.
+R122 is a pure function over bytes (`check_archive_trailer`). It is wired on
+the corpus-side AUR snapshot path, where `fetch_pkgbuild_with_tree` already
+has the tarball bytes and the analysis pipeline can surface the finding
+without fetching any PKGBUILD-supplied URL.
 
-That is deliberate rather than unfinished. Fetching what a PKGBUILD points at
+That is deliberate rather than incomplete. Fetching what a PKGBUILD points at
 would add an SSRF primitive, tell the attacker who scanned them, and break the
 one-host boundary the [security model](../security.md#the-invariants)
-enforces. The only bytes TrustSight is willing to feed it are the AUR's own
-snapshot tarball, corpus-side, where downloads are centralised and distributed
-as facts. Until that path exists, R122 is a function with a test suite and no
-call site, and this page says so rather than implying coverage that is absent.
+enforces. The only bytes TrustSight feeds to R122 are the AUR's own snapshot
+tarball bytes, corpus-side, where downloads are centralised and distributed as
+facts.
 
 ### R124: Write Then Execute {#r124}
 
@@ -1751,6 +1751,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 74.9 % | Percentage of benign diffs scoring 0. |
-| Benign p95 | 30 | 95th percentile score on benign corpus. |
+| Benign zero-rate | 69.1 % | Percentage of benign diffs scoring 0. |
+| Benign p95 | 45 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

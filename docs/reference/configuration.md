@@ -118,7 +118,39 @@ A config written before this section existed still gets these defaults: `load_co
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `auto_import` | bool | `true` | Import the bundled novelty seed the first time TrustSight runs against a database that has neither a seed nor any analysis history. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
+| `auto_import` | bool | `true` | Import the novelty seed the first time TrustSight runs against a database that has neither a seed nor any analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the first run fetches and verifies it (silently skipping when offline or the download fails verification). See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
+
+### `[baselines]`
+
+Container for federated baseline sources.  Currently only the IOC baseline
+stage is implemented.
+
+#### `[baselines.ioc]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `true` | Run the IOC baseline match stage during analysis. |
+| `sources` | array of strings | `[]` | Baseline source names to consult. An empty list means "all imported sources". |
+
+#### `[[baselines.ioc.feeds]]`
+
+Configured feed entries for `trustsight ioc update`.  TrustSight ships with
+no default feeds; operators add trusted sources here.  A feed whose `url`
+names the TrustSight [release channel](baseline-keys.md#the-release-channel)
+is updated automatically: `ioc update` downloads the pair
+`baseline-ioc-<prefix>-manifest.json` and `baseline-ioc-<prefix>-iocs.jsonl`
+(plus their detached signatures), verifies both against the pinned
+distribution key, then imports with the curator-key check the normal
+`ioc import` path performs.  Any other `url` is refused with an explicit
+"not implemented" error; there is no scheme in which an unverified remote
+baseline is imported.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `name` | string | Feed identifier (a `[a-z0-9.-]` slug by default, or set `asset`). |
+| `url` | string | Feed URL.  Release-channel URLs (`https://github.com/emiliano-go/trustsight/releases`) trigger verified updates. |
+| `asset` | string | Optional asset prefix override.  Defaults to `name`; the assets fetched are `baseline-ioc-<prefix>-manifest.json` and `baseline-ioc-<prefix>-iocs.jsonl`. |
+| `enabled` | bool | Whether the feed is active. |
 
 ### `[deep]`
 
@@ -162,6 +194,8 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 | `prefetch_timeout` | int | `120` | Seconds `trustsight review` waits for the whole prefetch batch. Whatever has not arrived is abandoned and fetched again during analysis. |
 | `watch_interval` | int | `3600` | Seconds between cycles of `trustsight full-aur --watch`. |
 | `watch_min_interval` | int | `60` | Floor applied to `--interval`. The AUR regenerates its metadata dump every few minutes, so a shorter interval only re-downloads the same snapshot. |
+| `corpus_fetch_workers` | int | `5` | How many PKGBUILD fetches `trustsight full-aur` runs concurrently during a corpus build. Analysis stays serial and ordered; only the network fetch is parallelised. Not written to the shipped config, but honoured if you add it. A global aggregate rate cap in the fetcher (~5 requests/second) is the real limiter, because the AUR's cgit rate-limits per IP and now runs anti-scraping; raising this past what the cap can keep busy only idles threads. |
+| `corpus_max_per_cycle` | int | `2000` | Maximum packages `trustsight full-aur` processes per invocation. A larger delta, or a bootstrap, advances in bounded, resumable chunks: the cycle stops after this many, saves progress, and the next run continues. Set to `0` to disable the cap and process the whole delta in one run. Not written to the shipped config, but honoured if you add it. |
 
 ---
 

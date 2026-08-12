@@ -1,0 +1,105 @@
+name: Verify commit signatures on critical paths
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check critical-path commit signatures
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          import urllib.request
+
+          base_sha = os.environ["BASE_SHA"]
+          head_sha = os.environ["HEAD_SHA"]
+          repo = os.environ["GITHUB_REPOSITORY"]
+          token = os.environ["GITHUB_TOKEN"]
+
+          critical_paths = {
+              "scripts/security_gates.py",
+              "src/trustsight/tokenizer.py",
+              "src/trustsight/scoring.py",
+              "src/trustsight/config.py",
+              "src/trustsight/db.py",
+              "docs/security.md",
+              ".github/workflows/security.yml",
+              ".github/workflows/calibration.yml",
+              "packaging/aur/PKGBUILD",
+              "docs/reference/baseline-keys.md",
+              "src/trustsight/full_aur/baseline_pubkey.pem",
+          }
+
+          diff = subprocess.check_output(
+              ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
+              text=True,
+          ).splitlines()
+          touched = sorted(path for path in diff if path in critical_paths)
+          if not touched:
+              print("No critical paths touched; signature check skipped.")
+              raise SystemExit(0)
+
+          commits = subprocess.check_output(
+              ["git", "rev-list", f"{base_sha}..{head_sha}"],
+              text=True,
+          ).splitlines()
+
+          opener = urllib.request.build_opener()
+          opener.addheaders = [
+              ("Accept", "application/vnd.github+json"),
+              ("Authorization", f"Bearer {token}"),
+              ("X-GitHub-Api-Version", "2022-11-28"),
+              ("User-Agent", "trustsight-signature-check"),
+          ]
+
+          bad = []
+          for sha in commits:
+              url = f"https://api.github.com/repos/{repo}/commits/{sha}"
+              with opener.open(url) as response:
+                  payload = json.load(response)
+              verification = payload["commit"].get("verification") or {}
+              signature = verification.get("signature") or ""
+              verified = bool(verification.get("verified"))
+              is_gpg = signature.startswith("-----BEGIN PGP SIGNATURE-----")
+              if not verified or not is_gpg:
+                  bad.append(
+                      (
+                          sha,
+                          payload["commit"]["message"].splitlines()[0],
+                          verification.get("reason", "unsigned"),
+                          "GPG" if is_gpg else "non-GPG or missing signature",
+                      )
+                  )
+
+          if bad:
+              print("ERROR: Critical-path changes require GPG-signed commits.")
+              print("Touched critical paths:")
+              for path in touched:
+                  print(f"  {path}")
+              print("Unsigned or non-GPG commits:")
+              for sha, subject, reason, detail in bad:
+                  print(f"  {sha[:7]} {subject} ({reason}; {detail})")
+              print("See CONTRIBUTING.md for setup steps.")
+              raise SystemExit(1)
+
+          print("All commits touching critical paths are GPG-signed.")
+          PY

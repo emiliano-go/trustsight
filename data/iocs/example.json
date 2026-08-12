@@ -1,0 +1,24 @@
+[
+  {
+    "type": "domain",
+    "value": "malware.example",
+    "confidence": "confirmed",
+    "provenance": "EXAMPLE ONLY: replace with a primary-source advisory URL",
+    "campaign": "example-incident",
+    "expires_at": "2027-01-01T00:00:00Z"
+  },
+  {
+    "type": "hash",
+    "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "confidence": "confirmed",
+    "provenance": "EXAMPLE ONLY: the sha256 of the malicious artifact",
+    "campaign": "example-incident"
+  },
+  {
+    "type": "package",
+    "value": "demo-malware-pkg",
+    "confidence": "confirmed",
+    "provenance": "EXAMPLE ONLY: the AUR package name from the advisory",
+    "campaign": "example-incident"
+  }
+]

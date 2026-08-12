@@ -15,4 +15,27 @@ jobs:
           python-version: ${{ matrix.python }}
           allow-prereleases: true
       - run: pip install -e ".[dev]"
+      - run: python scripts/verify_fixtures.py
       - run: pytest tests/
+
+  # The malicious .diff bodies are committed source (fixture-reproducibility
+  # fallback). Regenerating them must be a no-op: if any generator drifts from
+  # the committed record (the .diff bodies or the hand-reconciled expected.json
+  # labels), this job fails and the drift must be fixed before the change can
+  # land.
+  fixture-determinism:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev]"
+      - run: python scripts/gen_historical_holdout_fixtures.py
+      - run: python scripts/gen_evasion_fixtures.py
+      - run: python scripts/gen_malicious_fixtures.py
+      - run: python scripts/gen_campaign_fixtures.py
+      - run: python scripts/gen_injection_fixtures.py
+      - run: python scripts/verify_fixtures.py
+      - name: Fail if regeneration changed the committed record
+        run: git diff --exit-code -- tests/fixtures/malicious/

@@ -37,7 +37,7 @@ from .display import (
 log = logging.getLogger(__name__)
 
 
-def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn):
+def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn, json_output=False):
     """Engine discovery plus the download progress bar it cannot draw."""
     on_download = None
     progress_state = {}
@@ -64,19 +64,26 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
             progress.update(progress_state["task"], total=total, completed=pos, refresh=True)
 
     try:
-        return _discover_engine(
+        discovered = _discover_engine(
             repos=repos,
             include_foreign=include_foreign,
             all_repos=all_repos_flag,
             all_packages=all_packages,
             on_warn=_warn,
             on_download=on_download,
-            on_notice=lambda msg: _print_colored(msg, "green"),
+            on_notice=None if json_output else lambda msg: _print_colored(msg, "green"),
         )
     finally:
         progress = progress_state.get("progress")
         if progress is not None:
             progress.stop()
+
+    if json_output and discovered[0] is None:
+        typer.echo(json.dumps({
+            "status": "metadata_downloaded",
+            "message": "AUR metadata snapshot downloaded; run again to review changes.",
+        }))
+    return discovered
 
 
 def _version_cell(result: dict) -> str:
@@ -88,7 +95,6 @@ def _version_cell(result: dict) -> str:
     if result.get("version_comparison") == COMPARISON_INCONCLUSIVE:
         return f"{old} installed / AUR pkgver {new} (not comparable)"
     return f"{old}  \u2192  {new}"
-
 
 
 
@@ -151,6 +157,9 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 "verdict": r["verdict"],
                 "first_seen": r.get("first_seen", False),
                 "is_trivial": r.get("is_trivial", False),
+                # Explicit failed flag: a consumer gating on `findings == []`
+                # must be able to tell "clean" from "not vetted".
+                "failed": r.get("failed", False),
                 # Always present, with or without --score: a consumer
                 # gating on the score must be able to see that the score
                 # describes an incomplete analysis.
@@ -159,6 +168,25 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 "changes": r.get("changes", []),
                 "coverage_gaps": r.get("coverage_gaps", []),
                 "config_fingerprint": fingerprint,
+                # B5: unconditional.  Hiding a suppression behind --verbose
+                # makes a switched-off rule look the same as one that never
+                # matched, to exactly the consumer least able to tell.
+                "suppressed_rules": r.get("suppressed_rules", []),
+                "ioc_matches": [
+                    {
+                        "type": m.type,
+                        "value": m.value,
+                        "source": m.source,
+                        "confidence": m.confidence,
+                        "provenance": m.provenance,
+                        "campaign": m.campaign,
+                        "added": m.added,
+                        "surface": m.surface,
+                        "line": m.line,
+                        "expired": m.expired,
+                    }
+                    for m in r.get("ioc_matches", [])
+                ],
             }
             if show_score or show_risk:
                 jr["score"] = r.get("score")
@@ -166,7 +194,6 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 jr["risk_label"] = r.get("risk_label")
             if verbose:
                 jr["triggered_rules"] = r.get("triggered_rules", [])
-                jr["suppressed_rules"] = r.get("suppressed_rules", [])
             json_results.append(jr)
         typer.echo(json.dumps(json_results, indent=2))
         return
@@ -227,6 +254,13 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
 
             for entry in r.get("changes", []):
                 typer.echo(f"  ~ {clean(entry)}")
+            for m in r.get("ioc_matches", []):
+                expired = " [EXPIRED]" if m.expired else ""
+                line = f" line {m.line}" if m.line is not None else ""
+                typer.echo(
+                    f"  [IOC] [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
+                    f"{line} ({clean(m.surface)}){expired}"
+                )
             for gap in r.get("coverage_gaps", []):
                 typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
 
@@ -307,6 +341,17 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             for entry in changes[1:]:
                 table.add_row("", Text(clean(entry)))
 
+        ioc_matches = r.get("ioc_matches", [])
+        if ioc_matches:
+            table.add_row("IOC matches", "")
+            for m in ioc_matches:
+                expired = " [EXPIRED]" if m.expired else ""
+                line = f" line {m.line}" if m.line is not None else ""
+                table.add_row("", Text(
+                    f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
+                    f"{line} ({clean(m.surface)}){expired}"
+                ))
+
         for gap in r.get("coverage_gaps", []):
             table.add_row("Not vetted", GAP_REASONS.get(gap, gap))
 
@@ -378,7 +423,9 @@ def register_commands(app: typer.Typer):
             init_db()
             seed_imported = False
             if config.get("seed", {}).get("auto_import", True):
-                seed_stats = maybe_auto_import_seed(quiet=json_output or quiet)
+                seed_stats = maybe_auto_import_seed(
+                    quiet=json_output or quiet, allow_release_fetch=True
+                )
                 if seed_stats is not None:
                     seed_imported = True
 
@@ -399,6 +446,14 @@ def register_commands(app: typer.Typer):
             _step("Discovering packages...")
             effective_limit = limit
 
+            if limit < 0:
+                msg = "--limit must be 0 (unlimited) or a positive count"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+
             user_specified = not (repo is None and not foreign and not all_repos)
             if user_specified:
                 repos = repo or []
@@ -413,6 +468,10 @@ def register_commands(app: typer.Typer):
                     include_foreign = True
 
             def _warn(msg: str):
+                if json_output:
+                    # Keep stdout a pure JSON document; diagnostics go to stderr.
+                    print(f"Warning: {msg}", file=sys.stderr)
+                    return
                 if not HAS_RICH:
                     print(f"Warning: {msg}")
                     return
@@ -427,24 +486,39 @@ def register_commands(app: typer.Typer):
                     if repos:
                         _warn(str(exc) + "; falling back to explicit repos.")
                     else:
-                        if not HAS_RICH:
+                        if json_output:
+                            typer.echo(json.dumps({"error": str(exc)}))
+                        elif not HAS_RICH:
                             print(f"Error: {exc}")
                         else:
                             console().print(f"[red]Error:[/] {exc}")
                         raise typer.Exit(code=2)
 
-            changed_installed, total_installed = _discover_packages(
-                repos=repos,
-                include_foreign=include_foreign,
-                all_repos_flag=all_repos_flag,
-                all_packages=all_packages,
-                _warn=_warn,
-            )
+            try:
+                changed_installed, total_installed = _discover_packages(
+                    repos=repos,
+                    include_foreign=include_foreign,
+                    all_repos_flag=all_repos_flag,
+                    all_packages=all_packages,
+                    _warn=_warn,
+                    json_output=json_output,
+                )
+            except RuntimeError as exc:
+                if json_output:
+                    typer.echo(json.dumps({"error": str(exc)}))
+                else:
+                    _print_colored(str(exc), "red", stderr=True)
+                raise typer.Exit(code=2)
 
             if changed_installed is None:
+                if json_output:
+                    typer.echo(json.dumps({"error": "package discovery failed"}))
+                    raise typer.Exit(code=2)
                 return
             if not changed_installed:
-                if all_packages:
+                if json_output:
+                    typer.echo(json.dumps([]))
+                elif all_packages:
                     _print_colored("No AUR packages found to review.", "green")
                 else:
                     _print_colored("No outdated packages found.", "green")

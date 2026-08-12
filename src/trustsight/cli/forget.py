@@ -54,6 +54,19 @@ def register_commands(app: typer.Typer):
                 else:
                     _print_colored(msg, "red")
                 raise typer.Exit(code=2)
+            if len(aur_names) < len(names):
+                # A short reply would be read as "these packages vanished"
+                # and their history deleted.  The RPC batches in one call, so
+                # fewer names than asked for means a truncated response.
+                msg = (
+                    f"AUR RPC replied with {len(aur_names)} of {len(names)} "
+                    "packages; refusing to prune on a partial reply. Retry."
+                )
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red")
+                raise typer.Exit(code=2)
             removed = forget_prune(aur_names, dry_run=dry_run)
             if json_output:
                 typer.echo(json.dumps({"prune": {n: c for n, c in removed.items()}}, indent=2))
@@ -73,7 +86,11 @@ def register_commands(app: typer.Typer):
             typer.echo(f"About to permanently remove {len(packages)} package(s):")
             for p in packages:
                 typer.echo(f"  {p}")
-            confirm = input("Are you sure? [y/N] ")
+            try:
+                confirm = input("Are you sure? [y/N] ")
+            except EOFError:
+                typer.echo("Aborted.")
+                raise typer.Exit(code=2)
             if confirm.lower() not in ("y", "yes"):
                 typer.echo("Aborted.")
                 raise typer.Exit(code=2)

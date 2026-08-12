@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,5 @@
+# Maintainer: Alice <alice@example.com>
+pkgname=benign-pkg
+-pkgver=1.0
++pkgver=1.1

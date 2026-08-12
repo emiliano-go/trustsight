@@ -1,5 +1,5 @@
 import shutil
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
@@ -119,6 +119,7 @@ def test_cli_review_flag_repo(tmp_path, monkeypatch):
             "include_foreign": False,
             "all_repos_flag": False,
             "all_packages": False,
+            "json_output": False,
             "_warn": mock_disc.call_args[1]["_warn"],
         }
 

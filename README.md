@@ -26,7 +26,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ## Setup
 
-> This package is not yet in the AUR, so installation is git clones + build untill 1.0.0
+> Not published to the AUR yet: `aur.archlinux.org/trustsight.git` does not exist. Build from the PKGBUILD in this repository.
 
 ```bash
 # 1. Install
@@ -42,8 +42,7 @@ Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `p
 
 The score is always deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
 
-> **Not published to the AUR yet.** Build from the PKGBUILD in this repository.
-> Also installable via `pip install trustsight`.
+Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On first use the tool downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. See [installation](docs/getting-started/installation.md) for details.
 
 ---
 
@@ -57,7 +56,8 @@ The score is always deterministic and calculated locally. Verdicts are template-
 | **Source URL typosquatting** (`githab.com` instead of `github.com`) | Character-level edit distance against known forge domains (R008) |
 | **Package-name typosquatting** (e.g. `libuvc` resembling `libuv`) | Edit-distance comparison against more popular packages in the seed database (R074) |
 | **URL swapped without a version bump** | Tracks source URL changes that are not accompanied by a new version (C003) |
-| **Novel / never-before-seen URLs or maintainers** | Compares against a bundled seed of 178,491 known AUR source URLs; flags first-seen domains and maintainers (novelty tier) |
+| **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (about 180,000 known source URLs and 35,587 hashed maintainer identities, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
+| **Known-bad indicators** | Matches package URLs and strings against signed, federated IOC baselines from the release channel; reported in the IOC tier, outside the heuristic score |
 | **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
 | **LLM prompt injection** in package metadata | Pattern-matches common injection templates; primary defense is structural (the LLM cannot change the score) (R012) |
 | **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (R069) |
@@ -75,7 +75,7 @@ The score is always deterministic and calculated locally. Verdicts are template-
 | **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
 | **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
 
-The output is a **risk assessment**, not a proof of safety. A clean score means no known risk signals fired, not that the package is safe. See the [trust model](docs/explanation/trust-model.md) for details.
+The output is a **risk assessment**, not a proof of safety. A clean score means no known risk signals fired, not that the package is safe. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) for details.
 
 ---
 
@@ -121,13 +121,20 @@ The tiered evidence display is the differentiator: every signal (rule, bucket, n
 | [`trustsight review`](docs/reference/cli.md) | Scan outdated AUR packages and produce a scored table with tiered evidence. Supports `--repo`, `--foreign`, `--all-repos`, `--verbose` flags. |
 | [`trustsight inspect <package>`](docs/reference/cli.md) | Deep-dive on a single package: full score breakdown, source URLs, resolved commands, novelty context. |
 | [`trustsight history <package>`](docs/reference/cli.md) | Show past analysis results for a package. |
-| [`trustsight config set`](docs/reference/cli.md) | Set individual config keys. |
-| [`trustsight seed-db`](docs/reference/cli.md) | Import the bundled URL database for novelty detection. Runs automatically on first review. |
+| [`trustsight forget <package>`](docs/reference/cli.md) | Remove a tracked package and all its history, or prune packages that no longer exist in the AUR (`--prune`). |
 | [`trustsight list`](docs/reference/cli.md) | List all packages tracked in the database. |
 | [`trustsight status`](docs/reference/cli.md) | Show database and system health statistics. |
+| [`trustsight config`](docs/reference/cli.md) | Manage configuration (`show`, `set`, `sync-rules`). |
+| [`trustsight seed-db`](docs/reference/cli.md) | Import a novelty seed (`.db`, `.db.gz`, or a v2 `.tar.gz`). The release-channel seed imports automatically on first review. |
+| [`trustsight seed`](docs/reference/cli.md) | Inspect the hashed maintainer seed, fetch the verified release-channel seed, or migrate legacy plaintext rows. |
 | [`trustsight db`](docs/reference/cli.md) | Database maintenance (`check`, `vacuum`, `backup`). |
 | [`trustsight override`](docs/reference/cli.md) | Suppress a rule that misfires on your packages. |
 | [`trustsight lint-rules`](docs/reference/cli.md) | Check `rules.toml` for unreachable or malformed rules. |
+| [`trustsight full-aur`](docs/reference/cli.md) | Bootstrap or update the full-AUR baseline corpus; `--watch` runs repeated cycles on an interval. |
+| [`trustsight baseline`](docs/reference/cli.md) | Build or import a full-AUR baseline artifact, optionally signed with your key. |
+| [`trustsight import-baseline`](docs/reference/cli.md) | Verify and import a signed baseline artifact. |
+| [`trustsight ioc`](docs/reference/cli.md) | Manage IOC federation baselines (`update`, `list`, `export`, `sources`). |
+| [`trustsight corpus`](docs/reference/cli.md) | Corpus-wide queries over the full-AUR baseline (`pivot`, `import`, `export`). |
 
 ---
 
@@ -168,7 +175,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 13 detection rules (R001-R013), 44 code-emitted rules (R039-R082), 4 dependency-graph rules (D001-D004), and 7 code-structure rules (C001-C007), all calibrated against a 3,322+ diff corpus of benign AUR updates.
+Signals come from 13 core detection rules (R001-R013), the expanded TOML set (R039-R059), code-emitted rules (R060+), 4 dependency-graph rules (D001-D004) and 7 code-structure rules (C001-C007), all calibrated against a 3,246-diff benign corpus and a 3,322-diff stratified corpus of real AUR updates.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 
@@ -178,7 +185,7 @@ See [scoring-philosophy.md](docs/explanation/scoring-philosophy.md).
 
 ## Security model
 
-TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [trust-model.md](docs/explanation/trust-model.md).
+TrustSight is **evidence-producing**, not proof-of-safety. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured risk assessment to inform your decision, not a gate. See [what TrustSight cannot see](docs/explanation/what-trustsight-cannot-see.md) and the [security invariants](docs/security.md).
 
 ---
 

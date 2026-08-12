@@ -2,7 +2,6 @@ import logging
 import sys
 
 from ..scoring import risk_level, verdict_label, verdict_level
-from ..unicode import describe_fatal_codepoints, strip_ansi
 
 # Fact-to-text helpers live in ``verdict`` so the review engine and the API
 # can render a version line without importing anything CLI-shaped.  They are
@@ -105,7 +104,30 @@ def _score_text(score: int, risk: str | None = None) -> "Text":
 
 
 def _fact_to_dict(fact):
+    from ..config import config_fingerprint
+    from ..ioc_baseline import IocMatch
+
+    def _ioc_match_dict(m: IocMatch) -> dict:
+        return {
+            "type": m.type,
+            "value": m.value,
+            "source": m.source,
+            "confidence": m.confidence,
+            "provenance": m.provenance,
+            "campaign": m.campaign,
+            "added": m.added,
+            "surface": m.surface,
+            "line": m.line,
+            "expired": m.expired,
+        }
+
     data = {
+        # B1: which instrument produced this.  Every machine-readable report
+        # carries it, so two operators comparing results can tell at a glance
+        # whether they are running the same rules, thresholds and overrides.
+        # `review --json` and schema.fact_to_dict carried it and this one did
+        # not, which made the guarantee true of some reports and not others.
+        "config_fingerprint": config_fingerprint(),
         "package": fact.package_name,
         "old_version": fact.old_version,
         "new_version": fact.new_version,
@@ -144,6 +166,8 @@ def _fact_to_dict(fact):
         ]
     if fact.execution_changes.resolved_commands:
         data["resolved_commands"] = fact.execution_changes.resolved_commands[:50]
+    if fact.ioc_matches:
+        data["ioc_matches"] = [_ioc_match_dict(m) for m in fact.ioc_matches]
     return data
 
 
@@ -157,8 +181,10 @@ def _fmt_bytes(n: int) -> str:
 
 def _print_colored(msg: str, color: str = "", stderr: bool = False):
     if HAS_RICH:
+        from rich.markup import escape
+
         style = f"[{color}]" if color else ""
-        console().print(f"{style}{msg}[/]")
+        console().print(f"{style}{escape(msg)}[/]")
     else:
         kwargs = {"file": sys.stderr} if stderr else {}
         print(msg, **kwargs)

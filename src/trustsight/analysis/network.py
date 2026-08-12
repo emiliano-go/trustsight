@@ -180,8 +180,8 @@ def _git_refs_by_side(diff_text: str) -> dict[str, dict[str, set[tuple[str, str]
     for line in diff_text.splitlines():
         if line.startswith(("+++", "---", "@@", "diff ", "index ")):
             continue
-        side = line[0] if line[:1] in "+- " else " "
-        body = line[1:] if line[:1] in "+- " else line
+        side = line[0] if line[:1] in ("+", "-", " ") else " "
+        body = line[1:] if line[:1] in ("+", "-", " ") else line
         for url in _GIT_URL_RE.findall(body):
             match = _GIT_REF_RE.search(url)
             if match:
@@ -196,7 +196,7 @@ def _pin_vars_by_side(diff_text: str) -> dict[str, dict[str, tuple[str, str]]]:
     assignments on changed lines."""
     sides: dict[str, dict[str, tuple[str, str]]] = {"+": {}, "-": {}}
     for line in diff_text.splitlines():
-        if line.startswith(("+++", "---")) or line[:1] not in "+-":
+        if line.startswith(("+++", "---")) or line[:1] not in ("+", "-"):
             continue
         match = _PIN_VAR_RE.match(line[1:])
         if match:
@@ -268,7 +268,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
     if any(
         _VERSION_TOKEN_RE.match(line[1:])
         for line in diff_text.splitlines()
-        if line[:1] in "+-" and not line.startswith(("+++", "---"))
+        if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))
     ):
         return
 
@@ -409,6 +409,51 @@ _PIPE_TO_SHELL_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Function calls inside command substitutions: $(_latest_commit) or `_ver`.
+_CMDSUB_CALL_RE = re.compile(r"(?:\$\(|`)\s*(\w+)\b")
+
+
+def _fetch_function_names(diff_text: str, config) -> set[str]:
+    """Return names of added functions whose bodies contain a parse-time fetch.
+
+    Used to detect parse-time command substitutions that invoke a function
+    hiding the downloader, e.g. ``_pin=$(_latest_commit)`` where
+    ``_latest_commit()`` calls ``curl``.
+    """
+    patterns = _parse_time_fetch_patterns(config)
+    lines = resolve_added_lines(diff_text)
+    fetchers: set[str] = set()
+    current: str | None = None
+    depth = 0
+    for line in lines:
+        if not line.startswith("+"):
+            continue
+        body = line[1:]
+        if current is None:
+            m = re.match(r"^\s*(\w+)\s*\(\s*\)\s*\{", body)
+            if not m:
+                continue
+            current = m.group(1)
+            depth = body.count("{") - body.count("}")
+            # Strip the function signature so the command-position fetch patterns
+            # see the body content, not the wrapping ``_name() {``.
+            body = body[body.find("{") + 1:]
+            if depth <= 0:
+                # One-line function: test the remainder before the closing brace.
+                body = body.split("}", 1)[0]
+                if any(p.search(body) for p in patterns):
+                    fetchers.add(current)
+                current = None
+                depth = 0
+                continue
+        depth += body.count("{") - body.count("}")
+        if any(p.search(body) for p in patterns):
+            fetchers.add(current)
+        if depth <= 0:
+            current = None
+            depth = 0
+    return fetchers
+
 
 def _parse_time_fetch_findings(diff_text, config, add) -> None:
     """A network client runs when the PKGBUILD is merely *sourced* (R129).
@@ -428,6 +473,7 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
     lines = mask_to_recipe(resolve_added_lines(diff_text))
     enclosing = _classify_enclosing_function(lines)
     patterns = _parse_time_fetch_patterns(config)
+    fetch_funcs = _fetch_function_names(diff_text, config)
     in_array = False
     for i, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):
@@ -451,6 +497,14 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
             continue
         if enclosing.get(i) is not None or _PIPE_TO_SHELL_RE.search(body):
             continue
+        if fetch_funcs & set(_CMDSUB_CALL_RE.findall(body)):
+            add("R129", "Parse-time Network Fetch", "HIGH", "network",
+                f"top-level command substitution invokes a function that "
+                f"fetches over the network: {stripped[:80]}",
+                line=_find_line(diff_text, stripped[:40]),
+                body=stripped[:80],
+                detail="network fetch runs at parse time via a function call")
+            return
         for pattern in patterns:
             if pattern.search(body):
                 add("R129", "Parse-time Network Fetch", "HIGH", "network",

@@ -362,19 +362,31 @@ trustsight seed-db [--import] [--file PATH] [--force]
 
 On an empty database every source URL looks first-seen and `maturity()` returns 0, which gates tier C off entirely and downgrades every Medium verdict to INCONCLUSIVE. The seed supplies both halves of what maturity is really asking about: a body of known AUR source URLs, and a bootstrap observation count.
 
-The bundled seed is built from the AUR git mirror by `scripts/generate_seed.py`, which parses each package's `.SRCINFO` (including the arch-suffixed `source_x86_64` arrays, where `-bin` packages put their real download) and the `# Maintainer:` comment from its PKGBUILD. URLs are normalised with the same `normalize_url()` the runtime uses, so a routine version bump matches a seeded entry.
+The seed no longer ships inside the package. It is published as the signed
+`baseline-seed.tar.gz` release asset (v2 hashed format) and fetched with
+`trustsight seed fetch`; `seed-db --file` still imports any `.db`, `.db.gz`
+or `.tar.gz` seed you built yourself. The underlying data is built from the
+AUR git mirror by `scripts/generate_seed.py`, which parses each package's
+`.SRCINFO` (including the arch-suffixed `source_x86_64` arrays, where `-bin`
+packages put their real download) and the `# Maintainer:` comment from its
+PKGBUILD. URLs are normalised with the same `normalize_url()` the runtime
+uses, so a routine version bump matches a seeded entry.
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
 | `--import` | Import the seed. This is the default action; the flag is accepted for explicitness. |
-| `--file PATH` | Import a specific `.db` or `.db.gz` instead of the bundled one. |
+| `--file PATH` | Import a specific seed file (`.db`, `.db.gz`, or a `.tar.gz` v2 seed) instead of the default. |
 | `--force` | Re-import even if a seed has already been imported. |
 
 ### Automatic import
 
-`trustsight review` and `trustsight inspect` import the bundled seed on first use when the database has no seed **and** no analysis history. Disable with:
+`trustsight review` and `trustsight inspect` attempt the verified
+release-channel seed on first use when the database has no seed **and** no
+analysis history; on a machine without network, or when the download fails
+verification, the attempt is silently skipped and the run starts cold.
+Disable with:
 
 ```toml
 [seed]
@@ -389,7 +401,38 @@ Import takes a few seconds for the full seed and is additive: existing rows win,
 
 ### Trust
 
-The seed is derived entirely from public AUR data and is reproducible: re-running the generator against the same mirror produces the same database. It only ever makes novelty signals *quieter*; it cannot lower a rule score, change a severity, or suppress a finding. A tampered seed could at most hide a novelty signal, never fabricate an UNFLAGGED verdict.
+The seed is derived entirely from public AUR data and is reproducible: re-running the generator against the same mirror produces the same database. The release asset is accepted only when its detached ed25519 signature verifies against the key pinned in the package (fingerprint in [baseline keys](baseline-keys.md)); the import records the digest of the exact bytes that were verified. It only ever makes novelty signals *quieter*; it cannot lower a rule score, change a severity, or suppress a finding. A tampered seed could at most hide a novelty signal, never fabricate an UNFLAGGED verdict.
+
+---
+
+## trustsight seed
+
+Inspect and migrate the hashed maintainer seed (v0.12.0).
+
+```
+trustsight seed info
+trustsight seed stats
+trustsight seed migrate [--from-backup]
+trustsight seed fetch [--tag TAG] [--key PATH]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `info` | Show seed metadata and hashing configuration. |
+| `stats` | Show hashed maintainer counts by source. |
+| `migrate` | Migrate plaintext maintainer rows into the hashed store. |
+| `fetch` | Download `baseline-seed.tar.gz` from the release channel, verify its detached Ed25519 signature against the pinned distribution key, and import it. Refuses (exit 2) anything that does not verify. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--tag` | Fetch a specific release tag instead of the latest release. |
+| `--key` | Verify against this ed25519 public key file instead of the pinned key shipped in the package. |
+| `--from-backup` | Migrate from the `maintainers_deprecated_backup` table left behind after the automatic v0.12.0 migration. |
+| `--json` | Output JSON. |
 
 ---
 
@@ -512,7 +555,7 @@ trustsight baseline import FILE
 Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs via codeload (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
 
 ```
-trustsight full-aur [--resume] [--export PATH] [--sign PATH]
+trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH]
 trustsight full-aur --watch [--interval SECONDS] [--cycles N]
 ```
 
@@ -520,15 +563,16 @@ trustsight full-aur --watch [--interval SECONDS] [--cycles N]
 
 | Flag | Description |
 |------|-------------|
-| `--resume` | Continue an interrupted bootstrap. The bootstrap saves progress after each package. |
-| `--export PATH` | Write the signed baseline artifact to this path. |
+| `--bootstrap` | Allow a from-scratch bootstrap of the whole AUR when there is no prior snapshot. Required to start one, because it fetches every PKGBUILD; without it a snapshot-less run refuses rather than scraping ~120k packages by accident. The bootstrap is capped per cycle and resumes automatically, so run the command repeatedly to finish it in gentle chunks. |
+| `--resume` | Continue an interrupted cycle. Now implied: every cycle resumes automatically from its saved progress, so this flag is accepted but no longer needed. |
+| `--export PATH` | Write the signed baseline artifact to this path. Only written when the cycle *completes* the current transition; a capped, still-pending cycle does not export a half-built corpus. |
 | `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
 | `--watch` | Keep running cycles on an interval until interrupted. |
 | `--interval SECONDS` | Seconds between `--watch` cycles. Defaults to `[limits] watch_interval` (3600) and is clamped to `[limits] watch_min_interval` (60). |
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
 | `--json` | Output JSON. |
 
-The first run processes all packages; subsequent runs only process changed ones (using the cached metadata snapshot). Suitable for cron.
+With a prior snapshot present (any `trustsight review` run creates one), a cycle processes only the changed packages, which is the intended cadence: run it periodically and the corpus grows incrementally. A from-scratch bootstrap is the exception, gated behind `--bootstrap`. Either way, each invocation is capped at `[limits] corpus_max_per_cycle` (default 2000) and resumes, so a large amount of work advances in bounded, resumable chunks rather than one avalanche.
 
 Use `--export` to produce a shareable baseline that other TrustSight instances can consume via `trustsight import-baseline`.
 
@@ -541,6 +585,17 @@ Use `--export` to produce a shareable baseline that other TrustSight instances c
 5. Report the packages that scored 40 or more this cycle, worst first.
 
 The first cycle of a fresh install is a bootstrap: with no prior snapshot there is nothing to deviate from, so the corpus sweep is silent by construction.
+
+### Progress and performance
+
+A bootstrap analyses the whole AUR (tens of thousands of packages), and its cost is dominated by one PKGBUILD fetch per package. Two things make that bearable:
+
+- **A progress bar.** When the output is an interactive terminal, the analysis loop renders a live bar on **stderr** with the current package, an `M/N` count, elapsed time and an ETA. It is on stderr so it never corrupts a `--export` artifact or a piped `--json` stream; a non-TTY (a cron job, a pipe, `--json`) falls back to a log line every 1000 packages.
+- **Parallel fetching, rate-capped.** PKGBUILDs are fetched a window ahead, several at a time (`[limits] corpus_fetch_workers`, default 5). Analysis itself stays strictly serial and in package order, because novelty reads the observations earlier packages recorded; only the fetch is parallelised. The AUR's cgit rate-limits per IP and runs anti-scraping, so the fetcher enforces a **global aggregate rate cap** (~5 requests/second across all workers) and **backs off** on `429`, `5xx` and connection resets, honouring a `Retry-After` header. Raising the worker count past what the cap can keep busy only idles threads; the cap, not the worker count, is what keeps a 120k-package bootstrap from getting the IP blocked.
+
+Benign per-package fetch fallbacks (a VCS or `-bin` package with no snapshot tarball falls back to a cgit text fetch) are logged at debug level, so they do not flood the bar; a genuine unfetchable PKGBUILD is counted and the total reported once at the end.
+
+Even so, a full from-scratch bootstrap is roughly a hundred thousand rate-limited fetches, which takes hours and leans on a shared community host. Prefer to let the corpus grow **incrementally**: run `full-aur` (or `--watch`) periodically so each cycle fetches only the small metadata delta, and publish updated baselines over time rather than rebuilding the whole corpus at once.
 
 ### Watch mode
 
@@ -578,6 +633,42 @@ trustsight import-baseline <path>
 |------|-------------|
 | `--allow-unsigned` | Import even if the artifact is unsigned. Use only for self-built local artifacts. |
 | `--json` | Output JSON. |
+
+---
+
+## trustsight ioc
+
+Manage IOC federation baselines.  Baselines are signed or unsigned directories
+containing `manifest.json` and `iocs.jsonl`; they supplement the local
+`iocs.toml` used by R106.
+
+```
+trustsight ioc sources
+trustsight ioc import <dir> [--source NAME] [--allow-unsigned]
+trustsight ioc update [--path DIR]...
+trustsight ioc list [--source SOURCE] [--type TYPE] [--include-expired]
+trustsight ioc export [<dir>] [--source SOURCE] [--json]
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `sources` | Show configured and imported baseline sources. |
+| `import` | Import a baseline directory. Replaces any existing rows for the same source. |
+| `update` | Re-import baselines from local directories, or, when no `--path` is given, update every enabled feed whose `url` is a release-channel URL: the `baseline-ioc-<prefix>-manifest.json` / `-iocs.jsonl` pair is downloaded, verified against the pinned distribution key, and imported (curator-key verification still applies). Feeds with any other URL are refused. |
+| `list` | List active IOC entries, optionally filtered by source or type. |
+| `export` | Write the current IOC database to a baseline directory, or with `--json` and no directory, print the merged IOC view to stdout for debugging. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--source` | Override or filter by baseline source name. |
+| `--allow-unsigned` | Import a baseline whose signature is missing or cannot be verified. Use only for local baselines. |
+| `--path` | Baseline directory to re-import with `ioc update`. Can be repeated. |
+| `--type` | Filter `ioc list` by indicator type (`package`, `domain`, or `hash`). |
+| `--include-expired` | Include expired entries in `ioc list`. |
 
 ---
 

@@ -13,6 +13,8 @@ below applies to work on the tool itself.
   fixture guidelines, fire-rate gate
 - [Re-baselining](re-baselining.md): when and how to re-baseline after config or
   rule changes
+- [Publishing Baselines](publishing-baselines.md): the maintainer workflow for
+  building, signing, verifying, and publishing the corpus and IOC baselines
 - [Reviewing a Security Control](security-review.md): how to scope a gate so it
   covers the entry point an attacker reaches, and the failure mode that keeps
   recurring
@@ -20,7 +22,8 @@ below applies to work on the tool itself.
 ## The boundary
 
 TrustSight does three things, and only three: it **reads** the repository and
-the single AUR endpoint, it **computes** evidence locally and deterministically
+the AUR endpoint (plus the signed release assets an operator explicitly asks
+for), it **computes** evidence locally and deterministically
 without ever executing a PKGBUILD, and it **reports** findings and gaps. A
 change that adds a fourth job to the analysis stage (running code, fetching a
 declared URL, writing outside the data directories) violates the boundary and
@@ -44,6 +47,12 @@ likely to be touched by a rule or pipeline change:
 - **A claim without a gate is a claim not made.** New guarantees go into
   `scripts/security_gates.py` **and** the security model page, together.
 
+## Signed Commits
+
+GPG-signed commits are required for changes to security-critical paths: the tokenizer, scoring, config, database, security gates, CI workflows, packaging, and baseline keys. The `CODEOWNERS` file and the `verify-commit-sigs` workflow enforce this.
+
+For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required.
+
 ## Non-guarantees to respect
 
 Absence of alerts is not a certificate, and absence on a test machine is not
@@ -55,10 +64,10 @@ benign corpus and real case reports are the arguments that matter.
 
 | Metric             | Value                           |
 |--------------------|---------------------------------|
-| Tests              | 1,365 (36 files)                |
+| Tests              | 1,535 (43 files)                |
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |
-| Rules              | R001-R131, C001-C007, D001-D004 |
+| Rules              | R001-R140 (R133-R135 not implemented), P001-P007, C001-C007, D001-D004 |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |

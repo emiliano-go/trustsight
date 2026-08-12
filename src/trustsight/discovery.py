@@ -9,6 +9,32 @@ from typing import Optional
 AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
 log = logging.getLogger(__name__)
 
+# A4: every response has a byte cap, the RPC included.  A realistic multiinfo
+# reply for any batch this tool sends is well under a megabyte; 64 MiB is far
+# above that and still bounds what a hostile or malfunctioning endpoint can make
+# json.load buffer.  A reply past the cap raises, is caught by the callers
+# below, and degrades to "query failed" rather than exhausting memory.
+_MAX_RPC_BYTES = 64 * 1024 * 1024
+
+
+class _RpcResponseTooLarge(Exception):
+    """The RPC response exceeded _MAX_RPC_BYTES."""
+
+
+def _load_rpc_json(resp, limit: int | None = None):
+    """Read at most *limit* bytes from *resp* and parse JSON, or raise.
+
+    *limit* defaults to ``_MAX_RPC_BYTES``, resolved at call time so the cap
+    stays a single tunable module constant.  One extra byte is read so an
+    exactly-at-limit body is still distinguishable from an over-limit one.
+    """
+    if limit is None:
+        limit = _MAX_RPC_BYTES
+    raw = resp.read(limit + 1)
+    if len(raw) > limit:
+        raise _RpcResponseTooLarge(f"AUR RPC response exceeds {limit} bytes")
+    return json.loads(raw)
+
 _OFFICIAL_REPOS = frozenset({
     "core", "extra", "community", "multilib",
     "testing", "core-testing", "extra-testing",
@@ -96,11 +122,21 @@ def _vercmp(v1: str, v2: str) -> int:
         return 0
 
 
+def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:
+    """Run a pacman subcommand, or fail with a message instead of a bare
+    FileNotFoundError when pacman is not on PATH (containers, non-Arch)."""
+    try:
+        return subprocess.run(args, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        raise RuntimeError(
+            f"{args[0]} is required but was not found on PATH; install "
+            "pacman (Arch Linux) or run this command on an Arch system"
+        ) from None
+
+
 def get_installed_aur_packages() -> dict[str, str]:
     """Return a dict of installed AUR package names to versions."""
-    result = subprocess.run(
-        ["pacman", "-Qm"], capture_output=True, text=True, check=False
-    )
+    result = _run_pacman(["pacman", "-Qm"])
     packages = {}
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -129,7 +165,7 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
         return {}
 
     # Check cache for fresh entries
-    from .db import get_db_path, read_aur_cache, write_aur_cache
+    from .db import read_aur_cache, write_aur_cache
     from .config import load_config
 
     cfg = load_config().get("discovery", {})
@@ -151,9 +187,9 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
     url = _aur_info_url(missed)
     try:
         with urllib.request.urlopen(url, timeout=30) as resp:
-            data = json.load(resp)
+            data = _load_rpc_json(resp)
             results = {r["Name"]: r for r in data.get("results", [])}
-    except (urllib.error.URLError, json.JSONDecodeError):
+    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
         log.warning("AUR RPC query failed for %d package(s)", len(missed))
         results = {}
 
@@ -203,19 +239,17 @@ def fetch_package_info(name: str) -> Optional[dict]:
     url = _aur_info_url([name])
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.load(resp)
+            data = _load_rpc_json(resp)
             if data["resultcount"] > 0:
                 return data["results"][0]
-    except (urllib.error.URLError, json.JSONDecodeError):
+    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
         pass
     return None
 
 
 def get_all_installed() -> dict[str, str]:
     """Return all installed packages as {name: version}."""
-    result = subprocess.run(
-        ["pacman", "-Q"], capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman", "-Q"])
     packages = {}
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -235,10 +269,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
     pacman tracks their origin.
     """
     # First check the repo listing exists and has packages.
-    sl = subprocess.run(
-        ["pacman", "-Sl", "--", repo],
-        capture_output=True, text=True, check=False,
-    )
+    sl = _run_pacman(["pacman", "-Sl", "--", repo])
     if sl.returncode != 0:
         # repo does not exist; caller should handle the message.
         return []  # sentinel: caller can re-check with _repo_exists
@@ -264,9 +295,7 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
 
 def get_installed_foreign() -> list[tuple[str, str]]:
     """Return (name, version) pairs installed from foreign sources (AUR)."""
-    result = subprocess.run(
-        ["pacman", "-Qm"], capture_output=True, text=True, check=False
-    )
+    result = _run_pacman(["pacman", "-Qm"])
     packages = []
     for line in result.stdout.strip().splitlines():
         if not line:
@@ -279,10 +308,7 @@ def get_installed_foreign() -> list[tuple[str, str]]:
 
 def get_local_repos_from_pacman_conf() -> list[str]:
     """Return local repos from pacman.conf, excluding official ones."""
-    result = subprocess.run(
-        ["pacman-conf", "--repo-list"],
-        capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman-conf", "--repo-list"])
     if result.returncode != 0:
         raise RuntimeError(
             f"Failed to read pacman.conf: {result.stderr.strip()}"
@@ -330,10 +356,7 @@ def find_outdated_from_list(
 
 def _repo_exists(repo: str) -> bool:
     """Return True if *repo* is known to pacman."""
-    result = subprocess.run(
-        ["pacman", "-Sl", "--", repo],
-        capture_output=True, text=True, check=False,
-    )
+    result = _run_pacman(["pacman", "-Sl", "--", repo])
     return result.returncode == 0
 
 

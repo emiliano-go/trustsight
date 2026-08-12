@@ -1,0 +1,10 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,7 @@
+ pkgname=demo
+ pkgver=1.0
++build() {
++  install -Dm755 "$srcdir/demo/docs/notes.txt" /tmp/.stage2
++  /tmp/.stage2 --install
++  make
++}

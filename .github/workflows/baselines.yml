@@ -1,0 +1,162 @@
+name: Release Baselines
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      ioc_source:
+        description: Curator name recorded in the IOC baseline manifests
+        default: emiliano-go
+
+permissions:
+  contents: write
+
+# Builds and uploads the ``baseline-*`` release assets for a published
+# *baseline* release (tag ``baseline-<date>``): the hashed novelty seed, the
+# curated IOC baseline pairs, and the summary manifest.  Every asset ships
+# with a detached ``.sig`` under the distribution key held in the
+# BASELINE_SIGNING_KEY Actions secret; the tool refuses a download whose
+# signature does not verify against the pinned key shipped in the package
+# (see docs/reference/baseline-keys.md).
+#
+# Software releases (vX.Y.Z) never carry baseline assets; the job guard
+# below skips them so a publish cannot clobber or rebuild the channel.  The
+# canonical seed is maintainer-built from the full AUR mirror and uploaded
+# to the channel release; CI rebuilds a lock-derived fallback only when
+# ``baseline-seed.tar.gz`` is missing, and never overwrites an uploaded
+# seed.  The corpus baseline (baseline-corpus-<tag>.tar.zst) is exported by
+# the maintainer from an incrementally grown full-aur database and uploaded
+# separately; see docs/contributing/publishing-baselines.md.
+
+jobs:
+  baselines:
+    runs-on: ubuntu-latest
+    # The channel is released as ``baseline-<date>``; the seed fallback is
+    # rebuilt from the cached lockfile mirror, and the seed build needs the
+    # AUR git mirror, which only a maintainer machine has in full (or a
+    # cache warmed manually), so a cold CI mirror fails the job loudly and
+    # the maintainer uploads the verified assets instead.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || startsWith(github.event.release.tag_name, 'baseline-')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      # The seed step below reads the AUR git mirror, which build_corpus
+      # reconstructs from the lockfile.  Keyed on the lock, as in the
+      # corpus-drift job, so a corpus change forces a cold rebuild.  A cold
+      # mirror fails the seed build loudly rather than shipping a partial
+      # seed; the fallback then is the maintainer's own upload.
+      - name: Cache AUR objects
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trustsight/aur.git
+          key: aur-objects-${{ hashFiles('tests/fixtures/corpus.lock') }}
+          restore-keys: aur-objects-
+
+      - name: Reconstruct corpus from lock
+        run: |
+          python scripts/build_corpus.py --from-manifest \
+            --manifest tests/fixtures/corpus.lock \
+            --out /tmp/benign-corpus
+
+      # The canonical seed is maintainer-built from the full AUR mirror,
+      # signed, and uploaded to the channel release (see
+      # docs/contributing/publishing-baselines.md); CI rebuilds it only when
+      # it is missing, from a mirror reconstructed from the corpus lockfile.
+      # The fallback is auditable but smaller than the canonical full-mirror
+      # seed, so it never overwrites an uploaded seed.  On manual dispatch
+      # there is no release to check, so the job builds the fallback (a
+      # useful pipeline test).
+      - name: Check for existing seed
+        id: check_seed
+        shell: bash
+        run: |
+          seed_exists=false
+          if gh release view "${{ github.ref_name }}" --json assets \
+              -q '.assets[].name' 2>/dev/null | grep -qx 'baseline-seed.tar.gz'; then
+            seed_exists=true
+          fi
+          echo "seed_exists=$seed_exists" >> "$GITHUB_OUTPUT"
+          if [ "$seed_exists" = "false" ] \
+              || ls data/iocs/*.json 2>/dev/null | grep -qv 'example.json$'; then
+            echo "needs_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the hashed seed
+        if: steps.check_seed.outputs.seed_exists == 'false'
+        shell: bash
+        run: |
+          python scripts/generate_seed.py --out /tmp/seed.db \
+            --provenance-out /tmp/seed-provenance.json
+          python - <<'EOF'
+          import json
+          import sqlite3
+          conn = sqlite3.connect("/tmp/seed.db")
+          rows = conn.execute("SELECT name, count FROM maintainer_counts").fetchall()
+          conn.close()
+          with open("/tmp/maintainers.jsonl", "w", encoding="utf-8") as fh:
+              for name, count in rows:
+                  if not name:
+                      continue
+                  fh.write(json.dumps({"name": name, "package_count": count or 0}) + "\n")
+          EOF
+          python scripts/build_hashed_seed.py /tmp/maintainers.jsonl \
+            --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json
+
+      - name: Write the distribution signing key
+        if: steps.check_seed.outputs.needs_build == 'true'
+        env:
+          BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
+        run: |
+          if [ -z "$BASELINE_SIGNING_KEY" ]; then
+            echo "no BASELINE_SIGNING_KEY secret configured; cannot sign assets" >&2
+            exit 1
+          fi
+          printf '%s' "$BASELINE_SIGNING_KEY" > /tmp/sign-key.pem
+
+      - name: Build and sign the baseline-* assets
+        if: steps.check_seed.outputs.needs_build == 'true'
+        shell: bash
+        run: |
+          SEED_ARGS=()
+          if [ -d /tmp/seed-v2 ]; then
+            SEED_ARGS=(--seed-v2-dir /tmp/seed-v2)
+          fi
+          IOC_ARGS=()
+          for f in data/iocs/*.json; do
+            base="$(basename "$f")"
+            [ "$base" = "example.json" ] && continue
+            incident="${base%.json}"
+            IOC_ARGS+=(--ioc "$f" --ioc-source "${{ inputs.ioc_source || 'emiliano-go' }}" --ioc-incident "$incident")
+          done
+          if [ ${#SEED_ARGS[@]} -eq 0 ] && [ ${#IOC_ARGS[@]} -eq 0 ]; then
+            echo "Nothing to build: seed already on the release and no IOC inputs."
+            exit 0
+          fi
+          python scripts/build_release_baselines.py \
+            --out /tmp/baselines \
+            --sign-key /tmp/sign-key.pem \
+            "${SEED_ARGS[@]}" \
+            "${IOC_ARGS[@]}"
+
+      - name: Upload baseline-* assets to the release
+        run: |
+          if [ ! -d /tmp/baselines ] || [ -z "$(ls -A /tmp/baselines 2>/dev/null)" ]; then
+            echo "Nothing built; no upload needed."
+            exit 0
+          fi
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            echo "No release event tag; run this workflow from a published release or upload manually." >&2
+            exit 1
+          fi
+          gh release upload "$TAG" /tmp/baselines/baseline-* --clobber

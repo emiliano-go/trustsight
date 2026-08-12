@@ -24,18 +24,20 @@ In practice the shipped rules sit far below the gate. The worst scoring rule mea
 
 ## Which corpus
 
-Fire rates are currently measured against two corpora:
+Fire rates are measured against the one locked corpus:
 
 | Corpus | Diffs | Packages | What it covers |
 |--------|-------|----------|----------------|
-| Benign (3246-diff) | 3,246 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
-| Stratified (3322-diff) | 3,322 | ~200 | The same corpus extended for the R039+ expanded ruleset calibration. Overlaps the 3246-diff set but includes additional packages for broader coverage. |
+| Benign (lock) | 3,246 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
 
-Both are pinned by `corpus.lock` and regenerated deterministically from the AUR git mirror. See [Corpus and Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-methodology.md).
+The corpus is pinned by `corpus.lock` and regenerated deterministically from
+the AUR git mirror (CI rebuilds it before the calibration gates; a local
+checkout may carry a larger un-pruned superset on disk). See [Corpus and
+Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-methodology.md).
 
 ## Core rules (R001-R013)
 
-Measured against the 3322-diff stratified corpus.
+Measured against the 3,246-diff locked corpus.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|
@@ -78,7 +80,7 @@ malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
 in the same commit.
 
-Calibrated against the 3322-diff stratified corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+Calibrated against the 3,246-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|

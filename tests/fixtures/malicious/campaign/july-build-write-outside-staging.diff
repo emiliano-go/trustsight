@@ -1,0 +1,9 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,6 @@
+ pkgname=demo
+ pkgver=1.0
++build() {
++  install -Dm755 helper /usr/local/bin/demo-helper
++  make
++}

@@ -1,7 +1,10 @@
 import re
+from datetime import datetime, timezone
 
 from .config import DEFAULT_KNOWN_SUFFIXES, load_naming
 from .db import (
+    _get_salt,
+    _hash_maintainer_value,
     dependency_observation_count,
     dependency_table_populated,
     effective_observation_count,
@@ -185,22 +188,46 @@ def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
 
 def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
     """Record a maintainer in the novelty database and return whether it is novel for the package"""
+    if not maintainer_name:
+        return False
     with get_connection() as conn:
         cur = conn.cursor()
 
-        existing = cur.execute(
-            """SELECT id FROM maintainers
-               WHERE name = ? AND first_seen_package_id = ?""",
-            (maintainer_name, package_id),
-        ).fetchone()
+        salt = _get_salt(conn)
+        if salt:
+            name_hash = _hash_maintainer_value(maintainer_name, salt)
+            existing = cur.execute(
+                """SELECT 1 FROM package_maintainers_hashed
+                   WHERE name_hash = ? AND package_id = ?""",
+                (name_hash, package_id),
+            ).fetchone()
 
-        if existing is None:
-            cur.execute(
-                "INSERT INTO maintainers (name, first_seen_package_id) VALUES (?, ?)",
+            if existing is None:
+                now = datetime.now(timezone.utc).isoformat()
+                cur.execute(
+                    """INSERT INTO package_maintainers_hashed
+                       (name_hash, email_hash, package_id, first_seen)
+                       VALUES (?, NULL, ?, ?)""",
+                    (name_hash, package_id, now),
+                )
+                conn.commit()
+                return True
+        else:
+            # No salt yet: fall back to the legacy plaintext table so the
+            # first-seen-for-this-package semantics stay intact.
+            existing = cur.execute(
+                """SELECT id FROM maintainers
+                   WHERE name = ? AND first_seen_package_id = ?""",
                 (maintainer_name, package_id),
-            )
-            conn.commit()
-            return True
+            ).fetchone()
+
+            if existing is None:
+                cur.execute(
+                    "INSERT INTO maintainers (name, first_seen_package_id) VALUES (?, ?)",
+                    (maintainer_name, package_id),
+                )
+                conn.commit()
+                return True
 
     return False
 

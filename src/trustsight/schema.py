@@ -1,5 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .ioc_baseline import IocMatch
 
 
 @dataclass
@@ -131,10 +134,28 @@ class PackageFact:
     score_breakdown: list[ScoreEntry] = field(default_factory=list)
     final_score: int = 0
 
+    # IOC Federation baseline matches (v0.12.0).  Context only; no score.
+    ioc_matches: list["IocMatch"] = field(default_factory=list)
+
 
 def fact_to_dict(fact: PackageFact) -> dict:
     """Serialize a PackageFact to a plain dict."""
     from .config import config_fingerprint
+    from .ioc_baseline import IocMatch
+
+    def _ioc_match_dict(m: IocMatch) -> dict:
+        return {
+            "type": m.type,
+            "value": m.value,
+            "source": m.source,
+            "confidence": m.confidence,
+            "provenance": m.provenance,
+            "campaign": m.campaign,
+            "added": m.added,
+            "surface": m.surface,
+            "line": m.line,
+            "expired": m.expired,
+        }
 
     return {
         # B1: which instrument produced this.  Two operators comparing
@@ -197,6 +218,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         ],
         "final_score": fact.final_score,
         "adapter": fact.adapter,
+        "ioc_matches": [_ioc_match_dict(m) for m in fact.ioc_matches],
     }
 
 

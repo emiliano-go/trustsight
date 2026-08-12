@@ -20,6 +20,7 @@ import base64
 import binascii
 import os
 import re
+import shlex
 
 from ..config import (
     DEFAULT_ANTI_ANALYSIS_PROBES,
@@ -129,8 +130,59 @@ def _magic_name(data: bytes) -> str | None:
     return None
 
 
-_B64_RUN_RE = re.compile(r"[A-Za-z0-9+/=]{32,}")
-_HEX_RUN_RE = re.compile(r"[0-9a-fA-F]{32,}")
+# A decoded payload that is shell-script text without a shebang: the first
+# non-blank line opens with a command token, or any line pipes into a shell.
+# The magic check above misses this shape because nothing marks the bytes as
+# executable; makepkg never needed a marker, only a consumer.
+_SHELL_LEAD_TOKEN_RE = re.compile(
+    r"(?:curl|wget|bash|sh|nc|ncat|socat|python3?|perl|ruby|chmod|chown"
+    r"|eval|base64)\b",
+    re.IGNORECASE,
+)
+_PIPE_TO_SHELL_RE = re.compile(r"\|\s*(?:bash|sh)\b", re.IGNORECASE)
+
+
+def _payload_name(data: bytes) -> str | None:
+    """Identify a decoded payload: executable magic or shell-script text.
+
+    The shell-text branch is deliberately narrower than "is text": the bytes
+    must decode as UTF-8, be essentially all printable, and open with a
+    command token or pipe into a shell.  Icons, fonts, keys and config blobs
+    are binary or prose and stay silent, which is the rule's declared
+    must-not-fire surface.
+    """
+    if magic := _magic_name(data):
+        return magic
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if not text.strip():
+        return None
+    printable = sum(1 for ch in text if ch.isprintable() or ch in "\n\r\t")
+    if printable / len(text) < 0.95:
+        return None
+    if _PIPE_TO_SHELL_RE.search(text):
+        return "shell script"
+    first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    if _SHELL_LEAD_TOKEN_RE.match(first):
+        return "shell script"
+    return None
+
+
+# Bounded runs: do not let an assignment prefix like ``payload=`` merge
+# into the encoded token.  ``=`` is valid base64 padding only at the end, so
+# it is allowed as a boundary character.
+_B64_RUN_RE = re.compile(
+    r"(?<![A-Za-z0-9+/])"
+    r"[A-Za-z0-9+/]{32,}(?:==?)?"
+    r"(?![A-Za-z0-9+/])"
+)
+_HEX_RUN_RE = re.compile(
+    r"(?<![0-9a-fA-F])"
+    r"[0-9a-fA-F]{32,}"
+    r"(?![0-9a-fA-F])"
+)
 
 
 def _decode_b64(run: str) -> bytes | None:
@@ -191,12 +243,17 @@ def _uu_blocks(added_lines: list[str]) -> list[tuple[bytes, str]]:
 
 
 def _reconstructed_payload_findings(diff_text, config, add) -> None:
-    """An encoded blob whose decoded bytes carry executable magic.
+    """An encoded blob whose decoded bytes are an executable payload.
 
     R120 is the type check on R117's reconstruction output: one check covers
-    every encoding (base64, hex, uuencode) without naming it.  Encoded text
-    assets, checksums, and keys decode to bytes that match no magic, so the
-    rule's must-not-fire surface is structural rather than positional.
+    every encoding (base64, hex, uuencode) without naming it.  The decoded
+    side is executable magic (ELF, shebang, PE, Mach-O) or shell-script
+    text without a shebang (a ``curl | bash`` blob carries no magic).  The
+    heredoc-body skip the positional rules keep does not apply here: a long
+    encoded run is data either way, and the payload's hiding place is exactly
+    where the check must read.  Encoded text assets, checksums, and keys
+    decode to bytes that match neither branch, so the rule's must-not-fire
+    surface is structural rather than positional.
     """
     lines = resolve_added_lines(diff_text)
     added = [ln[1:] for ln in lines if ln.startswith("+")]
@@ -206,7 +263,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 
         for run in _HEX_RUN_RE.findall(body):
             decoded = _decode_hex(run)
-            if decoded and (magic := _magic_name(decoded)):
+            if decoded and (magic := _payload_name(decoded)):
                 add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
                     f"hex blob on the line decodes to {magic}: {line.strip()[:80]}",
                     line=_find_line(diff_text, run),
@@ -215,7 +272,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 
         for run in _B64_RUN_RE.findall(body):
             decoded = _decode_b64(run)
-            if decoded and (magic := _magic_name(decoded)):
+            if decoded and (magic := _payload_name(decoded)):
                 add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
                     f"base64 blob on the line decodes to {magic}: {line.strip()[:80]}",
                     line=_find_line(diff_text, run),
@@ -223,7 +280,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
                 return
 
     for decoded, context in _uu_blocks(added):
-        if magic := _magic_name(decoded):
+        if magic := _payload_name(decoded):
             add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
                 f"uuencoded block decodes to {magic}: {context.strip()[:80]}",
                 line=_find_line(diff_text, "begin"),
@@ -318,9 +375,14 @@ _R124_BENIGN_EXEC = frozenset({
 def _norm_path(p: str) -> str:
     """Normalise a recipe path for comparison."""
     p = p.strip().strip('"\'')
+    p = re.sub(r"^\$\{(?:srcdir|pkgdir|startdir|BUILDDIR)\}/?", "", p)
     p = re.sub(r"^\$(?:srcdir|pkgdir|startdir|BUILDDIR)/?", "", p)
     p = re.sub(r"^\./", "", p)
     p = re.sub(r"/+", "/", p)
+    # A destination written as ``${pkgdir}/usr/lib/foo`` becomes
+    # ``usr/lib/foo``; normalise it to the absolute path it represents.
+    if re.match(r"^(?:usr|etc|opt|bin|lib|lib32|lib64|sbin)/", p):
+        p = "/" + p
     return p
 
 
@@ -374,6 +436,13 @@ def _declared_source_basenames(diff_text: str) -> set[str]:
         for ent in entries:
             ent = ent.strip()
             if not ent or ent in ("(", ")"):
+                continue
+            # shlex in POSIX mode glues a trailing `)` to the preceding quoted
+            # token when the array closes on the same line: "url") becomes one
+            # token.  Strip the syntactic close paren; real filenames ending in
+            # `)` are rare enough that this is safe.
+            ent = ent.rstrip(")")
+            if not ent:
                 continue
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:
@@ -468,6 +537,380 @@ def _write_execute_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
+# R137 - network fetch then execute
+# ---------------------------------------------------------------------------
+
+# A downloader that writes to a file and a later execution of that file in
+# the same function.  This is ``curl -o stage.sh ... ; bash stage.sh`` split
+# across lines so the pipe-to-shell regex (R001/R002) never sees the ``|``.
+_FETCH_CLIENT_RE = re.compile(r"\b(curl|wget|aria2c|axel)\b", re.IGNORECASE)
+
+_FETCH_OUTPUT_RE = re.compile(
+    r"\b(curl|wget|aria2c|axel)\b"
+    r"[^;&|]*?"
+    r"(?:\s-[oO]\s+|\s--output(?:\s+|=)|\s--output-document(?:\s+|=)|>\s*)"
+    r"((?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)",
+    re.IGNORECASE,
+)
+
+# Build/package/check/prepare only; install hooks already have R062.
+_BUILD_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS)
+
+
+def _collect_fetch_outputs(body: str) -> list[str]:
+    """Normalised paths a network client on *body* writes to a file."""
+    paths: list[str] = []
+    if not _FETCH_CLIENT_RE.search(body):
+        return paths
+    for m in _FETCH_OUTPUT_RE.finditer(body):
+        path = _norm_path(m.group(2))
+        if path:
+            paths.append(path)
+    return paths
+
+
+def _fetch_then_execute_findings(diff_text, config, add) -> None:
+    """A downloader writes a file and the same function later executes it (R137).
+
+    R001/R002 own the single-line pipe form; R137 owns the split form.
+    Files that arrived via the declared ``source=()`` array are deliberately
+    excluded here - they have their own rule (R138) so checksum-bearing
+    source files are not double-counted.
+    """
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    source_basenames = _declared_source_basenames(diff_text)
+    heredoc_body = _heredoc_body_indices(lines)
+
+    fetched_by_fn: dict[str, list[str]] = {}
+
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+") or fn not in _BUILD_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+
+        for path in _collect_fetch_outputs(body):
+            fetched_by_fn.setdefault(fn, []).append(path)
+
+        for path in _collect_executions(body):
+            base = os.path.basename(path)
+            for fpath in list(fetched_by_fn.get(fn, [])):
+                fbase = os.path.basename(fpath)
+                if fpath != path and fbase != base:
+                    continue
+                if base in source_basenames or base in _R124_BENIGN_EXEC:
+                    continue
+                add("R137", "Fetch Then Execute", "CRITICAL", "network_execution",
+                    f"{fn}() downloads {fpath or path} and then executes it",
+                    line=_find_line(diff_text, path or base),
+                    position=fn, path=path)
+                return
+
+
+# ---------------------------------------------------------------------------
+# R138 - execution of a downloaded source file
+# ---------------------------------------------------------------------------
+
+# An interpreter run on a file that arrived through the declared source=()
+# array.  Checksums protect integrity, not intent; a ``source=(... .sh)``
+# followed by ``bash "$srcdir/that.sh"`` is remote code execution just like
+# ``curl | bash``, only hidden behind the ordinary download path.
+_SOURCE_EXEC_RE = re.compile(
+    _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\s+(\S+)"
+    r"|" + _CMD_START + r"source\s+(\S+)"
+    r"|" + _CMD_START + r"\.\s+(\S+)"
+    r"|\./(\S+)",
+    re.IGNORECASE,
+)
+
+
+def _source_file_execution_findings(diff_text, config, add) -> None:
+    """A file downloaded via ``source=()`` is executed as a script (R138).
+
+    Build-system scripts (configure, make, meson, ninja, cmake) are common
+    declared-source executables and stay silent; the rule targets interpreted
+    execution of a downloaded script.
+    """
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    source_basenames = _declared_source_basenames(diff_text)
+    heredoc_body = _heredoc_body_indices(lines)
+
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+") or fn not in _BUILD_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+
+        for m in _SOURCE_EXEC_RE.finditer(body):
+            raw = next((g for g in m.groups() if g), None)
+            if not raw:
+                continue
+            path = _norm_path(raw)
+            base = os.path.basename(path)
+            if not base or base in _R124_BENIGN_EXEC:
+                continue
+            if base not in source_basenames:
+                continue
+            add("R138", "Downloaded Source File Executed", "HIGH", "execution",
+                f"{fn}() executes declared source file {base}",
+                line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
+                position=fn, path=path)
+            return
+
+
+# ---------------------------------------------------------------------------
+# R139 - systemd service running an undeclared binary
+# ---------------------------------------------------------------------------
+
+# A service unit installed by the package points at a binary the recipe
+# installs, but that binary is neither declared in ``source=()`` nor present
+# in the repository manifest.  Such files arrive through the unseen source
+# tarball, so their content cannot be audited.
+_EXECSTART_RE = re.compile(r"^ExecStart\s*=\s*(.+)$", re.IGNORECASE | re.MULTILINE)
+
+# ``install -Dm755 src dest`` and friends that stage an executable to a
+# system directory.  The source basename is what we need to attribute.
+_INSTALL_CMD_RE = re.compile(r"\binstall\b", re.IGNORECASE)
+
+
+def _installed_executables(diff_text: str) -> set[tuple[str, str]]:
+    """Return (source_basename, normalised_dest_path) for installed executables.
+
+    Only considers installs with explicit 7xx modes or with no ``-m`` flag
+    (install defaults to 755).  Destination paths are normalised so they can
+    be compared to ExecStart paths.
+    """
+    found: set[tuple[str, str]] = set()
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    heredoc_body = _heredoc_body_indices(lines)
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+") or fn not in _BUILD_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+        if not _INSTALL_CMD_RE.search(body):
+            continue
+        # Mode: explicit 7xx or no -m flag (install defaults to 755).
+        mode_match = re.search(r"\s-[a-zA-Z]*[mM]\s*(\d+)", body)
+        if mode_match and not mode_match.group(1).startswith("7"):
+            continue
+        try:
+            tokens = shlex.split(body)
+        except ValueError:
+            continue
+        # Drop the leading 'install' command and every option token.
+        args = [t for t in tokens[1:] if not t.startswith("-")]
+        if len(args) < 2:
+            continue
+        src = _norm_path(args[-2])
+        dst = _norm_path(args[-1])
+        if not src or not dst:
+            continue
+        found.add((os.path.basename(src), dst))
+    return found
+
+
+def _service_binary_findings(diff_text, tree_manifest, add) -> None:
+    """A systemd service's ExecStart points at an undeclared binary (R139).
+
+    Service units are read from the tree manifest when one is supplied, and
+    from added diff lines otherwise.  If the ExecStart target is installed
+    from a file that is neither a declared source nor part of the repository
+    manifest, the binary is invisible to static review.
+    """
+    source_basenames = _declared_source_basenames(diff_text)
+    manifest_basenames = (
+        None if tree_manifest is None
+        else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
+    )
+    installed = _installed_executables(diff_text)
+    if not installed:
+        return
+
+    service_texts: list[str] = []
+    if tree_manifest is not None:
+        for name, data in tree_manifest:
+            if name.endswith(".service"):
+                try:
+                    service_texts.append(data.decode("utf-8", errors="replace"))
+                except Exception:
+                    continue
+    for line in resolve_added_lines(diff_text):
+        if line.startswith("+") and ".service" in line:
+            # Heuristic: if the diff contains the whole service file, parse it.
+            # Real service files are usually committed, so the manifest branch
+            # above is the normal case.
+            service_texts.append(line[1:])
+
+    exec_targets: set[str] = set()
+    for text in service_texts:
+        for m in _EXECSTART_RE.finditer(text):
+            target = m.group(1).split(None, 1)[0].strip("\"'")
+            if target.startswith("/"):
+                exec_targets.add(target)
+
+    for src_base, dst in installed:
+        if dst not in exec_targets:
+            continue
+        if src_base in source_basenames:
+            continue
+        if manifest_basenames is not None and src_base in manifest_basenames:
+            continue
+        add("R139", "Service ExecStart Targets Undeclared Binary", "HIGH", "persistence",
+            f"systemd service runs {dst}, installed from undeclared {src_base}",
+            line=_find_line(diff_text, dst.split("/")[-1]),
+            exec_target=dst, source_file=src_base)
+        return
+
+
+# ---------------------------------------------------------------------------
+# R140 - PATH injection with an undeclared build-tree directory
+# ---------------------------------------------------------------------------
+
+# ``PATH=$srcdir/tools:$PATH make`` lets the recipe smuggle a binary into a
+# standard command's search path.  When the added directory is not declared in
+# ``source=()`` and not present in the repository manifest, its contents are
+# invisible to review.
+_PATH_ASSIGN_RE = re.compile(r"\bPATH\s*=\s*([^;\n]+)", re.IGNORECASE)
+_PATH_BUILD_DIR_RE = re.compile(
+    r"\$\{?(?:srcdir|pkgdir|startdir|BUILDDIR)\}?/([^:\s]+)",
+    re.IGNORECASE,
+)
+
+
+def _path_injection_findings(diff_text, tree_manifest, add) -> None:
+    """PATH is extended with an undeclared build-tree directory (R140).
+
+    Only applies inside build/package/check/prepare functions.  Adding the
+    plain source root is common enough that it stays silent; adding a
+    subdirectory whose content cannot be attributed is the signal.
+    """
+    source_basenames = _declared_source_basenames(diff_text)
+    manifest_basenames = (
+        None if tree_manifest is None
+        else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
+    )
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    heredoc_body = _heredoc_body_indices(lines)
+
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+") or fn not in _BUILD_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+        for m in _PATH_ASSIGN_RE.finditer(body):
+            rhs = m.group(1)
+            for dirm in _PATH_BUILD_DIR_RE.finditer(rhs):
+                subdir = dirm.group(1).strip('"\'').rstrip("/")
+                if not subdir or "/" in subdir:
+                    # Only single-level subdirectories are flagged; deeper
+                    # paths are more likely to be legitimate project layouts.
+                    continue
+                if subdir in source_basenames:
+                    continue
+                if manifest_basenames is not None and subdir in manifest_basenames:
+                    continue
+                add("R140", "PATH Injection With Undeclared Directory", "HIGH", "build",
+                    f"{fn}() adds undeclared $srcdir/{subdir} to PATH",
+                    line=_find_line(diff_text, f"PATH={rhs.strip()[:40]}"),
+                    position=fn, directory=subdir)
+                return
+
+
+# ---------------------------------------------------------------------------
+# R136 - execution of a committed but undeclared repository file
+# ---------------------------------------------------------------------------
+
+# Path evidence that the execution target lives in the cloned repository,
+# not in the extracted sources: makepkg sets ``$startdir`` to the directory
+# the PKGBUILD was read from, and ``../`` climbs out of ``$srcdir`` the same
+# way.  ``$srcdir`` is absent on purpose: a ``bash "$srcdir/run.sh"`` whose
+# file rode the tarball is the ordinary build flow.
+_STARTDIR_PATH_RE = re.compile(r"\$\{?startdir\}?|(?:^|/)\.\.(?:/|$)", re.IGNORECASE)
+
+
+def _committed_execution_findings(diff_text, tree_manifest, add) -> None:
+    """An execution whose target is a repo-committed file the recipe never
+    declared (R136).
+
+    R121/R124 own files the recipe itself writes; R118 owns committed ELF
+    binaries.  Between them sat the cleartext helper script: committed to
+    the AUR repository, never named in ``source=()`` (so makepkg never
+    copies it into ``$srcdir`` and its bytes never reach the differ), and
+    executed through ``$startdir`` or a ``../`` climb.  Two signals, either
+    sufficient:
+
+    - the executed path references ``${startdir}``/``$startdir`` or walks
+      ``../`` — available even when the repository tree was not analyzed;
+    - the executed basename is present in the tree manifest — only when a
+      manifest was supplied; without one the rule never guesses.
+
+    Declared ``source=()`` basenames, files the recipe wrote earlier in the
+    same function, and the configure/make artifact names R124 already
+    exempts stay silent.  The manifest signal requires a relative path: an
+    absolute ``/usr/share/...`` target cannot be a repository file, however
+    its basename collides.
+    """
+    lines = resolve_added_lines(diff_text)
+    enclosing = _classify_enclosing_function(lines)
+    source_basenames = _declared_source_basenames(diff_text)
+    heredoc_body = _heredoc_body_indices(lines)
+    manifest_basenames = (
+        None if tree_manifest is None
+        else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
+    )
+
+    written_by_fn: dict[str, set[str]] = {}
+    for i, line in enumerate(lines):
+        fn = enclosing.get(i)
+        if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS:
+            continue
+        if i in heredoc_body:
+            continue
+        body = _strip_comment(line[1:])
+
+        written = written_by_fn.setdefault(fn, set())
+        for _kind, wpath in _collect_writes(body, fn):
+            if wpath:
+                written.add(os.path.basename(wpath))
+
+        for m in _EXECUTION_RE.finditer(body):
+            raw = next((g for g in m.groups() if g), None)
+            if not raw:
+                continue
+            path = _norm_path(raw)
+            base = os.path.basename(path)
+            if not base or base in source_basenames or base in _R124_BENIGN_EXEC:
+                continue
+            if base in written:
+                continue
+            committed = (
+                manifest_basenames is not None
+                and base in manifest_basenames
+                and not raw.strip().strip('"\'').startswith("/")
+            )
+            if not committed and not _STARTDIR_PATH_RE.search(raw):
+                continue
+            add("R136", "Committed File Executed Without Declaration", "HIGH", "execution",
+                f"{fn}() executes repo-committed file not declared in source=(): {base}",
+                line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
+                position=fn, path=path)
+            return
+
+
+# ---------------------------------------------------------------------------
 # R118-tree - embedded binary in the repository manifest
 # ---------------------------------------------------------------------------
 
@@ -521,8 +964,13 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
 # ---------------------------------------------------------------------------
 
 
-def _delivery_findings(diff_text, config, add) -> None:
-    """Run the diff-text Phase 2 rules (R119-R121, R124) through *add*."""
+def _delivery_findings(diff_text, config, add, tree_manifest=None) -> None:
+    """Run the diff-text Phase 2 rules (R119-R121, R124, R136-R140) through *add*."""
     _anti_analysis_findings(diff_text, config, add)
     _reconstructed_payload_findings(diff_text, config, add)
     _write_execute_findings(diff_text, config, add)
+    _fetch_then_execute_findings(diff_text, config, add)
+    _source_file_execution_findings(diff_text, config, add)
+    _service_binary_findings(diff_text, tree_manifest, add)
+    _path_injection_findings(diff_text, tree_manifest, add)
+    _committed_execution_findings(diff_text, tree_manifest, add)

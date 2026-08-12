@@ -332,7 +332,13 @@ def analyze_outdated_batch(
             "findings": findings,
             "file_changes": file_changes,
             "is_trivial": is_trivial,
+            "ioc_matches": fact.ioc_matches,
         }
+        # B5: a suppression travels with the result unconditionally.  It used
+        # to ride along only under --verbose, so the default JSON dropped it
+        # silently, and a silent suppression is indistinguishable from a
+        # missed detection - the one thing B5 exists to prevent.
+        res["suppressed_rules"] = fact.suppressed_rules
         if verbose:
             fired = [
                 {"rule_id": e.rule_id, "severity": e.severity}
@@ -340,7 +346,6 @@ def analyze_outdated_batch(
                 if e.weight > 0 or e.severity == "FATAL"
             ]
             res["triggered_rules"] = fired
-            res["suppressed_rules"] = fact.suppressed_rules
             res["_verbose_fact"] = fact
         results.append(res)
     results.extend(failures)

@@ -97,7 +97,9 @@ name = "trustsight on PyPI"
 "Python API" = "reference/python-api.md"
 "Rules Reference" = "reference/rules.md"
 "Configuration Reference" = "reference/configuration.md"
+"IOC Federation" = "reference/ioc.md"
 "Report Schema" = "reference/report-schema.md"
+"Baseline Keys" = "reference/baseline-keys.md"
 "Evidence Tiers" = "reference/evidence-tiers.md"
 "Exit Codes" = "reference/exit-codes.md"
 
@@ -110,6 +112,7 @@ name = "trustsight on PyPI"
 "Corpus and Priors" = "explanation/corpus-and-priors.md"
 "Fire Rates" = "explanation/fire-rates.md"
 "What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
+"Seed Provenance" = "explanation/seed-provenance.md"
 "Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
 
 [[project.nav]]
@@ -119,6 +122,7 @@ name = "trustsight on PyPI"
 "Development Setup" = "contributing/development-setup.md"
 "Writing a Rule" = "contributing/writing-a-rule.md"
 "Re-baselining" = "contributing/re-baselining.md"
+"Publishing Baselines" = "contributing/publishing-baselines.md"
 "Reviewing a Security Control" = "contributing/security-review.md"
 
 [[project.nav]]

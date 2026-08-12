@@ -67,6 +67,19 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "override_package": "string or null"
     }
   ],
+  "ioc_matches": [
+    {
+      "type": "domain | hash | package",
+      "value": "string",
+      "source": "string",
+      "confidence": "string",
+      "provenance": "string",
+      "campaign": "string",
+      "surface": "string",
+      "line": "int or null",
+      "expired": bool
+    }
+  ],
   "final_score": int
 }
 ```
@@ -93,11 +106,12 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
-| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"line_truncated"`, `"tree_not_analyzed"` and `"unresolved_source"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
+| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"unresolved_source"` and `"unresolved_parse_time"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
 | `suppressed_rules` | `list[dict]` | Rules suppressed by user override. Each entry has `rule_id`, `severity`, `override_reason`, and `override_package`. These did not contribute to the score. |
+| `ioc_matches` | `list[dict]` | IOC federation baseline hits (v0.12.0). Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
 ### `diff_summary`
@@ -193,6 +207,14 @@ There are two JSON shapes, and they are not the same object.
   `score`, `risk`, `risk_label`, `verdict`, `findings`, `changes`,
   `coverage_gaps`, `file_changes`, `is_trivial`, `aur_note`, and
   `version_comparison`.
+
+`risk` is the bare band (`"Low"`, `"Medium"`, `"High"`, `"Critical"` or
+`"Inconclusive"`). `risk_label` is the same band qualified for a person: a
+coverage gap appends ` (incomplete analysis)` to an elevated band, and an
+`Inconclusive` names its cause: the gap(s) behind it, e.g.
+`Inconclusive (diff truncated: payload may be hidden)`, or the cold start,
+e.g. `Inconclusive (cold start: 22 more analyses needed)`. Machine consumers
+should gate on `risk` and `coverage_gaps`, not parse `risk_label`.
 
 `version_comparison` is the one field worth knowing about by name. It records
 how the installed version relates to the AUR's declared `pkgver`, as one of

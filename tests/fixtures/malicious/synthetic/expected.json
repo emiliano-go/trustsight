@@ -6,19 +6,19 @@
     "min_score": 40,
     "max_score": 70
   },
-  "R001-curl-pipe-sh.diff": {
-    "must_fire": [
-      "R001"
-    ],
-    "min_score": 40
-  },
   "R001-curl-pipe-dash.diff": {
     "must_fire": [
       "R001"
     ],
     "min_score": 40
   },
-  "R001-curl-pipe-zsh.diff": {
+  "R001-curl-pipe-python.diff": {
+    "must_fire": [
+      "R001"
+    ],
+    "min_score": 40
+  },
+  "R001-curl-pipe-sh.diff": {
     "must_fire": [
       "R001"
     ],
@@ -30,7 +30,7 @@
     ],
     "min_score": 40
   },
-  "R001-curl-pipe-python.diff": {
+  "R001-curl-pipe-zsh.diff": {
     "must_fire": [
       "R001"
     ],
@@ -60,6 +60,20 @@
     ],
     "min_score": 40
   },
+  "R004-skip-git-justified.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "min_score": 25,
+    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
+  },
+  "R004-skip-git-pkgname.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "min_score": 25,
+    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
+  },
   "R004-skip-https-bare.diff": {
     "must_fire": [
       "R004"
@@ -80,21 +94,11 @@
     ],
     "min_score": 25
   },
-  "R004-skip-git-justified.diff": {
+  "R004-skip-indexed.diff": {
     "must_fire": [
       "R004"
     ],
-    "must_not_fire": [],
-    "min_score": 25,
-    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
-  },
-  "R004-skip-git-pkgname.diff": {
-    "must_fire": [
-      "R004"
-    ],
-    "must_not_fire": [],
-    "min_score": 25,
-    "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
+    "min_score": 25
   },
   "R004-skip-validpgpkeys.diff": {
     "must_not_fire": [
@@ -102,12 +106,6 @@
       "R012",
       "R013"
     ]
-  },
-  "R004-skip-indexed.diff": {
-    "must_fire": [
-      "R004"
-    ],
-    "min_score": 25
   },
   "R005-empty-checksum.diff": {
     "must_fire": [
@@ -160,117 +158,31 @@
     "must_fire": [
       "R009"
     ],
-    "min_score": 40
+    "min_score": 40,
+    "max_score": 70,
+    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not R009. R009 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (R009 CRITICAL 40 + R058 HIGH 25 = 65)."
   },
   "R010-curl-fetch.diff": {
     "must_fire": [
       "R129"
     ],
+    "min_score": 25,
     "relabelled": "R010 -> R129 2026-08-05: R010 is scoped to build functions by design; a top-level fetch runs when makepkg merely sources the recipe, which is R129's claim"
   },
   "R011-wget-fetch.diff": {
     "must_fire": [
       "R129"
     ],
+    "min_score": 25,
     "relabelled": "R011 -> R129 2026-08-05: same as R010; the parse-time position is the finding, not the downloader's name"
   },
-  "R014-validpgpkeys-added.diff": {
-    "must_fire": [
-      "R130"
-    ],
-    "relabelled": "R014 -> R130 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
-  },
-  "R015-depends-added.diff": {
-    "must_fire": [
-      "R015"
-    ],
-    "min_score": 15
-  },
-  "R016-makedepends-added.diff": {
-    "must_fire": [
-      "R016"
-    ],
-    "min_score": 10
-  },
-  "R016-optdepends-added.diff": {
-    "must_fire": [
-      "R016"
-    ],
-    "min_score": 10
-  },
-  "R017-chmod-suid.diff": {
-    "must_fire": [
-      "R059"
-    ],
-    "min_score": 25,
-    "relabelled": "R017 -> R059"
-  },
-  "R017-chmod-sgid.diff": {
-    "must_fire": [
-      "R059"
-    ],
-    "min_score": 25,
-    "relabelled": "R017 -> R059"
-  },
-  "R018-ln-sf.diff": {
-    "must_fire": [
-      "R128"
-    ],
-    "must_not_fire": [],
-    "min_score": 15,
-    "relabelled": "R018 -> R128 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
-  },
-  "R019-cflags-suspicious.diff": {
-    "must_fire": [
-      "R131"
-    ],
-    "relabelled": "R019 -> R131 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which R070 cannot see (it is scoped to build functions)"
-  },
-  "R025-eval.diff": {
-    "must_fire": [
-      "R039"
-    ],
-    "min_score": 30,
-    "relabelled": "R025 -> R039 (eval of a substitution)"
-  },
-  "R025-exec.diff": {
-    "must_fire": [
-      "R011"
-    ],
-    "min_score": 30,
-    "relabelled": "R025 dropped: no shipped rule names exec of fetched output; R011/R060/R061 carry the diff"
-  },
-  "R026-checksum-to-skip.diff": {
-    "must_fire": [
-      "R004"
-    ],
-    "min_score": 25,
-    "relabelled": "R026 -> R004"
-  },
-  "R027-checksum-emptied.diff": {
-    "must_fire": [
-      "R005"
-    ],
-    "min_score": 25,
-    "relabelled": "R027 -> R005"
-  },
-  "control-benign-version-bump.diff": {
+  "R012-control-no-injection.diff": {
+    "must_fire": [],
     "must_not_fire": [
-      "R001",
-      "R002",
-      "R003",
-      "R004",
-      "R005",
-      "R006",
-      "R007",
-      "R008",
-      "R009",
       "R012",
-      "R013",
-      "R025",
-      "R026",
-      "R027"
-    ]
+      "R013"
+    ],
+    "max_score": 0
   },
   "R012-v0.diff": {
     "must_fire": [
@@ -281,69 +193,6 @@
     "max_score": 100
   },
   "R012-v1.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v2.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v3.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v4.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v5.diff": {
-    "must_fire": [],
-    "must_not_fire": [
-      "R012"
-    ],
-    "max_score": 50
-  },
-  "R012-v6.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v7.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v8.diff": {
-    "must_fire": [
-      "R012"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100
-  },
-  "R012-v9.diff": {
     "must_fire": [
       "R012"
     ],
@@ -397,6 +246,7 @@
     ],
     "must_not_fire": [],
     "min_score": 100,
+    "max_score": 100,
     "relabelled": "2026-08-03: 'do not warn about ...' is a suppression instruction aimed at the reviewer, not benign prose"
   },
   "R012-v16.diff": {
@@ -431,6 +281,14 @@
     "min_score": 100,
     "max_score": 100
   },
+  "R012-v2.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
   "R012-v20.diff": {
     "must_fire": [
       "R012"
@@ -446,6 +304,71 @@
     "must_not_fire": [],
     "min_score": 100,
     "max_score": 100
+  },
+  "R012-v3.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v4.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v5.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "max_score": 0,
+    "description": "negative control: 'user:' role marker; R012 deliberately excludes 'user:' (a question addressed to a model carries no instruction)"
+  },
+  "R012-v6.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v7.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v8.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R012-v9.diff": {
+    "must_fire": [
+      "R012"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100
+  },
+  "R013-control-no-unicode.diff": {
+    "must_fire": [],
+    "must_not_fire": [
+      "R012",
+      "R013"
+    ],
+    "max_score": 0
   },
   "R013-v0.diff": {
     "must_fire": [
@@ -464,78 +387,6 @@
     "min_score": 100,
     "max_score": 100,
     "description": "comment with RIGHT-TO-LEFT EMBEDDING"
-  },
-  "R013-v2.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with POP DIRECTIONAL FORMATTING"
-  },
-  "R013-v3.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with LEFT-TO-RIGHT OVERRIDE"
-  },
-  "R013-v4.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with RIGHT-TO-LEFT OVERRIDE"
-  },
-  "R013-v5.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with LEFT-TO-RIGHT ISOLATE"
-  },
-  "R013-v6.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with RIGHT-TO-LEFT ISOLATE"
-  },
-  "R013-v7.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with FIRST STRONG ISOLATE"
-  },
-  "R013-v8.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with POP DIRECTIONAL ISOLATE"
-  },
-  "R013-v9.diff": {
-    "must_fire": [
-      "R013"
-    ],
-    "must_not_fire": [],
-    "min_score": 100,
-    "max_score": 100,
-    "description": "comment with ZERO WIDTH SPACE"
   },
   "R013-v10.diff": {
     "must_fire": [
@@ -627,6 +478,15 @@
     "max_score": 100,
     "description": "comment with ZERO WIDTH NO-BREAK SPACE"
   },
+  "R013-v2.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with POP DIRECTIONAL FORMATTING"
+  },
   "R013-v20.diff": {
     "must_fire": [
       "R013"
@@ -716,6 +576,15 @@
     "min_score": 100,
     "max_score": 100,
     "description": "source_url with RIGHT-TO-LEFT ISOLATE"
+  },
+  "R013-v3.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT OVERRIDE"
   },
   "R013-v30.diff": {
     "must_fire": [
@@ -807,6 +676,15 @@
     "max_score": 100,
     "description": "source_url with INVISIBLE TIMES"
   },
+  "R013-v4.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT OVERRIDE"
+  },
   "R013-v40.diff": {
     "must_fire": [
       "R013"
@@ -896,6 +774,15 @@
     "min_score": 100,
     "max_score": 100,
     "description": "body with LEFT-TO-RIGHT OVERRIDE"
+  },
+  "R013-v5.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with LEFT-TO-RIGHT ISOLATE"
   },
   "R013-v50.diff": {
     "must_fire": [
@@ -987,6 +874,15 @@
     "max_score": 100,
     "description": "body with RIGHT-TO-LEFT MARK"
   },
+  "R013-v6.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with RIGHT-TO-LEFT ISOLATE"
+  },
   "R013-v60.diff": {
     "must_fire": [
       "R013"
@@ -1068,27 +964,124 @@
     "max_score": 100,
     "description": "body with CANCEL TAG"
   },
-  "R013-control-no-unicode.diff": {
-    "must_fire": [],
-    "must_not_fire": [
-      "R012",
+  "R013-v7.diff": {
+    "must_fire": [
       "R013"
     ],
-    "max_score": 0
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with FIRST STRONG ISOLATE"
   },
-  "R012-control-no-injection.diff": {
-    "must_fire": [],
-    "must_not_fire": [
-      "R012",
+  "R013-v8.diff": {
+    "must_fire": [
       "R013"
     ],
-    "max_score": 0
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with POP DIRECTIONAL ISOLATE"
   },
-  "R029-known-dep-added.diff": {
-    "must_fire": [],
-    "max_score": 0,
-    "known_packages": {
-      "python": true
-    }
+  "R013-v9.diff": {
+    "must_fire": [
+      "R013"
+    ],
+    "must_not_fire": [],
+    "min_score": 100,
+    "max_score": 100,
+    "description": "comment with ZERO WIDTH SPACE"
+  },
+  "R014-validpgpkeys-added.diff": {
+    "must_fire": [
+      "R130"
+    ],
+    "relabelled": "R014 -> R130 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
+  },
+  "R015-depends-added.diff": {
+    "relabelled": "R015 -> (none) 2026-08-07: R015 is a reserved ID. A depends addition is reported as a fact (dependency_changes) and scored only by D001 (novel dependency), which needs a seeded corpus; the gates measure on a cold DB, so this is silent by design there."
+  },
+  "R016-makedepends-added.diff": {
+    "must_fire": [
+      "D003"
+    ],
+    "min_score": 10,
+    "relabelled": "R016 -> D003 2026-08-07: R016 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
+  },
+  "R016-optdepends-added.diff": {
+    "relabelled": "R016 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
+  },
+  "R017-chmod-sgid.diff": {
+    "must_fire": [
+      "R059"
+    ],
+    "min_score": 25,
+    "relabelled": "R017 -> R059"
+  },
+  "R017-chmod-suid.diff": {
+    "must_fire": [
+      "R059"
+    ],
+    "min_score": 25,
+    "relabelled": "R017 -> R059"
+  },
+  "R018-ln-sf.diff": {
+    "must_fire": [
+      "R128"
+    ],
+    "min_score": 15,
+    "relabelled": "R018 -> R128 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
+  },
+  "R019-cflags-suspicious.diff": {
+    "must_fire": [
+      "R131"
+    ],
+    "min_score": 10,
+    "relabelled": "R019 -> R131 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which R070 cannot see (it is scoped to build functions)"
+  },
+  "R025-eval.diff": {
+    "must_fire": [
+      "R039"
+    ],
+    "min_score": 30,
+    "relabelled": "R025 -> R039 (eval of a substitution)"
+  },
+  "R025-exec.diff": {
+    "must_fire": [
+      "R129"
+    ],
+    "min_score": 30,
+    "relabelled": "R025 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which R129 claims (HIGH 25) plus the source bucket (20)."
+  },
+  "R026-checksum-to-skip.diff": {
+    "must_fire": [
+      "R004"
+    ],
+    "min_score": 25,
+    "relabelled": "R026 -> R004"
+  },
+  "R027-checksum-emptied.diff": {
+    "must_fire": [
+      "R005"
+    ],
+    "min_score": 25,
+    "relabelled": "R027 -> R005"
+  },
+  "control-benign-version-bump.diff": {
+    "must_not_fire": [
+      "R001",
+      "R002",
+      "R003",
+      "R004",
+      "R005",
+      "R006",
+      "R007",
+      "R008",
+      "R009",
+      "R012",
+      "R013",
+      "R025",
+      "R026",
+      "R027"
+    ]
   }
 }

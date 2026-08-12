@@ -15,6 +15,11 @@ import unicodedata
 from pathlib import Path
 
 FIXTURE_DIR = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "malicious" / "synthetic"
+# Note: 'user:' is matched here ONLY so the template below can be emitted as
+# a negative control. The R012 rule deliberately excludes 'user:' role
+# markers (a question addressed to a model carries no instruction); see the
+# role family in config.py.
+USER_ROLE_NEGATIVE = "user: what does this package do?"
 INJECTION_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
@@ -124,12 +129,23 @@ def main():
         if INJECTION_PATTERN.search(t):
             name = f"R012-v{i}.diff"
             FIXTURE_DIR.joinpath(name).write_text(make_diff(t))
-            expected[name] = {
-                "must_fire": ["R012"],
-                "must_not_fire": [],
-                "min_score": 100,
-                "max_score": 100,
-            }
+            if t == USER_ROLE_NEGATIVE:
+                expected[name] = {
+                    "must_fire": [],
+                    "must_not_fire": ["R012", "R013"],
+                    "max_score": 0,
+                    "description": ("negative control: 'user:' role marker; "
+                                    "R012 deliberately excludes 'user:' (a "
+                                    "question addressed to a model carries no "
+                                    "instruction)"),
+                }
+            else:
+                expected[name] = {
+                    "must_fire": ["R012"],
+                    "must_not_fire": [],
+                    "min_score": 100,
+                    "max_score": 100,
+                }
             i += 1
 
     j = 0
@@ -170,7 +186,24 @@ def main():
     }
 
     expected_path = FIXTURE_DIR / "expected.json"
-    expected_path.write_text(json.dumps(expected, indent=2) + "\n")
+    existing = {}
+    if expected_path.exists():
+        existing = json.loads(expected_path.read_text())
+
+    # Record-preserving merge: this script owns the R012/R013/control keys
+    # only. Keys owned by other generators (e.g. the malicious FIXTURES
+    # entries with hand-reconciled labels) are carried through verbatim.
+    merged = {k: v for k, v in expected.items() if k in expected}
+    for k, v in existing.items():
+        if k not in merged:
+            merged[k] = v
+        else:
+            for note_key in ("relabelled", "description"):
+                if note_key in v and note_key not in merged[k]:
+                    merged[k][note_key] = v[note_key]
+    expected_path.write_text(
+        json.dumps({k: merged[k] for k in sorted(merged)}, indent=2) + "\n"
+    )
 
     r012_count = i
     r013_count = j

@@ -9,8 +9,8 @@ property is, the gate decides whether it holds.
 Two families:
 
 * **Part A** - TrustSight as a program consuming hostile input.  These are
-  structural: no shell, one network host, bounded reads, parameterised SQL,
-  sanitised output.
+  structural: no shell, declared network hosts, bounded reads, parameterised
+  SQL, sanitised output.
 * **Part B** - what a verdict claims.  These are behavioural: an incomplete
   analysis cannot read as clean, a FATAL rule cannot be switched off, a seed
   cannot rewrite the database it is merged into.
@@ -24,6 +24,7 @@ Exit code is 1 if any gate fails, 0 otherwise.
 
 import argparse
 import ast
+import contextlib
 import io
 import json
 import re
@@ -110,12 +111,15 @@ def gate_no_interpreter_calls() -> Gate:
 
 # Modules allowed to open a socket.  Everything else, including all of
 # analysis/, is offline by construction: the rule engine must never be
-# able to turn a PKGBUILD into an outbound request.
+# able to turn a PKGBUILD into an outbound request.  ``release.py`` is the
+# release channel: it exists to download ``baseline-*`` release assets and
+# nothing else.
 _NETWORK_MODULES = {
     "discovery.py",
     "fetcher.py",
     "full_aur/fetch.py",
     "full_aur/metadata.py",
+    "release.py",
 }
 
 _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connection")
@@ -143,13 +147,19 @@ def gate_network_is_confined() -> Gate:
 # request is built from it, so that is what is checked.
 _URL_LITERAL_RE = re.compile(r"https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
 _ENDPOINT_HOST = "aur.archlinux.org"
+_RELEASE_HOST = "github.com"
+#: Source modules (relative to src/trustsight) that may name the release
+#: host.  The AUR host is allowed everywhere; the release host only here.
+_RELEASE_MODULES = {"release.py"}
 
 
 def gate_single_network_host() -> Gate:
-    """Every endpoint constant in the source names the AUR and nothing else."""
+    """Every endpoint constant names a declared host: the AUR, or the
+    release channel from the release module and nothing else."""
     hits: list[str] = []
     found = set()
     for path in _python_files():
+        rel = str(path.relative_to(SRC))
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assign):
@@ -161,8 +171,11 @@ def gate_single_network_host() -> Gate:
                 continue
             for host in _URL_LITERAL_RE.findall(node.value.value):
                 found.add(host)
-                if host != _ENDPOINT_HOST:
-                    hits.append(f"{_rel(path)}:{node.lineno} {host}")
+                if host == _ENDPOINT_HOST:
+                    continue
+                if host == _RELEASE_HOST and rel in _RELEASE_MODULES:
+                    continue
+                hits.append(f"{_rel(path)}:{node.lineno} {host}")
     if not found:
         hits.append("no endpoint constant found: the check is not looking at anything")
     return Gate("one network host, declared", not hits, hits or sorted(found))
@@ -193,6 +206,8 @@ def gate_no_archive_extraction() -> Gate:
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 name = _call_name(node).split(".")[-1]
+                # tarfile.extractfile returns a file-like object and does not
+                # write to disk; only path-based extraction is prohibited.
                 if name in ("extract", "extractall", "unpack_archive"):
                     hits.append(f"{_rel(path)}:{node.lineno} {name}()")
     return Gate("archives are never extracted to disk", not hits, hits)
@@ -590,7 +605,7 @@ def gate_maturity_numbers_are_not_duplicated() -> Gate:
     eventually restate a stale one, so the page is checked against the
     value and the behaviour is checked against the predicate.
     """
-    from trustsight.schema import NoveltyContext, ScoreEntry
+    from trustsight.schema import NoveltyContext
     from trustsight.scoring import _MATURITY_THRESHOLD, calculate_score, maturity
 
     problems = []
@@ -741,6 +756,270 @@ def gate_seed_cannot_rewrite_the_database() -> Gate:
             problems.append("the seed overwrote a locally learned maintainer count")
         seed_path.unlink(missing_ok=True)
     return Gate("a seed cannot rewrite the database", not problems, problems)
+
+
+def gate_hashed_maintainers_protect_privacy() -> Gate:
+    """P1: after seeding, maintainer identities are stored only as salted hashes.
+
+    The v0.12.0 seed format never writes plaintext names or emails.  The
+    local database mirrors that invariant: the hashed maintainer table has
+    no plaintext columns, and a seeded database always carries the salt
+    needed to reproduce the hashes.
+    """
+    import shutil
+    import sqlite3
+    import tempfile
+
+    import trustsight.db as db
+    import trustsight.seed_build as seed_build
+
+    from calibration_gates import shipped_config
+
+    problems = []
+    with shipped_config():
+        db.init_db()
+
+        # Build a tiny v2 seed from raw maintainer records.
+        raw = [
+            {"name": "Alice Example", "email": "alice@example.com",
+             "packages": ["pkg-a"], "source": "aur"},
+            {"name": "Bob Builder", "packages": ["pkg-b"], "source": "aur"},
+        ]
+        seed_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-"))
+        try:
+            seed_build.build_seed(raw, seed_dir)
+            db.import_seed(seed_dir)
+
+            with db.get_connection() as local:
+                # Hashed table must not contain plaintext identity columns.
+                columns = {
+                    row["name"]
+                    for row in local.execute(
+                        "PRAGMA table_info(maintainers_hashed)"
+                    ).fetchall()
+                }
+                for forbidden in ("name", "email"):
+                    if forbidden in columns:
+                        problems.append(
+                            f"maintainers_hashed has plaintext '{forbidden}' column"
+                        )
+
+                # A seeded database must have a stored salt.
+                salt = db._get_salt(local)
+                if not salt:
+                    problems.append("seed_meta.salt is missing after seed import")
+
+                # No plaintext maintainer names should remain in the active
+                # maintainer tables.
+                for forbidden in ("Alice Example", "Bob Builder", "alice@example.com"):
+                    for table in ("maintainers_hashed", "package_maintainers_hashed"):
+                        try:
+                            rows = local.execute(
+                                f"SELECT 1 FROM {table} WHERE name_hash = ? OR email_hash = ?",
+                                (forbidden, forbidden),
+                            ).fetchall()
+                        except sqlite3.OperationalError:
+                            continue
+                        if rows:
+                            problems.append(
+                                f"plaintext value '{forbidden}' found in {table}"
+                            )
+        finally:
+            shutil.rmtree(seed_dir, ignore_errors=True)
+    return Gate("hashed maintainers protect privacy", not problems, problems)
+
+
+def _seed_ioc_baseline(source: str = "test-feed", expires_at: str = ""):
+    """Import a tiny IOC baseline into the current db; return its entries."""
+    import json
+    import tempfile
+
+    import trustsight.ioc_baseline as ioc
+
+    base = Path(tempfile.mkdtemp(prefix="trustsight-ioc-"))
+    manifest = {
+        "version": 1, "source": source, "created_at": ioc._now_iso(),
+        "expires_at": "", "signature": "", "public_key": "",
+    }
+    (base / "manifest.json").write_text(json.dumps(manifest))
+    rows = [
+        {"type": "domain", "value": "malware.example", "source": source,
+         "confidence": "high", "provenance": "ASA-2026-0001",
+         "campaign": "2026-06", "expires_at": expires_at},
+        {"type": "hash", "value": "a" * 64, "source": source,
+         "confidence": "high", "provenance": "vendor", "expires_at": expires_at},
+    ]
+    (base / "iocs.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+    ioc.import_baseline(base, allow_unsigned=True)
+    return base
+
+
+def gate_ioc_match_carries_source() -> Gate:
+    """A13b: an IOC finding is attribution, so it names who called it bad.
+
+    Every IocMatch the analysis produces must carry a non-empty ``source``;
+    a match that cannot say which curator flagged the artifact is aggregation,
+    not attribution, and A13b forbids merging IOCs into an anonymous set.
+    """
+    import shutil
+
+    import trustsight.config as config_module
+    import trustsight.db as db
+    from trustsight.analysis.ioc_match import ioc_baseline_matches
+    from calibration_gates import shipped_config
+
+    problems: list[str] = []
+    with shipped_config():
+        db.init_db()
+        base = _seed_ioc_baseline()
+        # The stage reads config via load_config(); enable the baseline there.
+        cfg = config_module.load_config()
+        cfg.setdefault("baselines", {})["ioc"] = {"enabled": True, "sources": []}
+        saved = config_module.load_config
+        config_module.load_config = lambda: cfg
+        try:
+            diff = "+source=('https://malware.example/x.tar.gz')\n"
+            matches = ioc_baseline_matches(diff, package_name="demo")
+        finally:
+            config_module.load_config = saved
+            shutil.rmtree(base, ignore_errors=True)
+        if not matches:
+            problems.append("a known-bad domain produced no IOC match")
+        for m in matches:
+            if not getattr(m, "source", ""):
+                problems.append(f"IOC match for {m.value!r} carries no source")
+    return Gate("an IOC match carries its source", not problems, problems)
+
+
+def gate_ioc_no_score_contribution() -> Gate:
+    """B1: an IOC match is detection, not a weighted finding.
+
+    IOC matches live on ``PackageFact.ioc_matches``, never in
+    ``score_breakdown``, and never move the number.  The same PKGBUILD scores
+    identically whether or not a known-bad indicator matches: the IOC is
+    reported alongside the score, it does not become part of it.
+    """
+    import shutil
+
+    import trustsight.config as config_module
+    import trustsight.db as db
+    from trustsight.analysis import scan_diff
+    from calibration_gates import shipped_config
+
+    problems: list[str] = []
+    with shipped_config():
+        db.init_db()
+        base_cfg = config_module.load_config()
+        diff = "+source=('https://malware.example/x.tar.gz')\n"
+
+        saved = config_module.load_config
+        try:
+            # Baseline disabled: reference score, no IOC stage.
+            base_cfg.setdefault("baselines", {})["ioc"] = {"enabled": False}
+            config_module.load_config = lambda: base_cfg
+            base_fact = scan_diff(diff, config=base_cfg, package_name="demo", seen_urls={})
+
+            base = _seed_ioc_baseline()
+            base_cfg["baselines"]["ioc"] = {"enabled": True, "sources": []}
+            matched = scan_diff(diff, config=base_cfg, package_name="demo", seen_urls={})
+        finally:
+            config_module.load_config = saved
+            shutil.rmtree(base, ignore_errors=True)
+
+        if not matched.ioc_matches:
+            problems.append("the known-bad domain produced no IOC match")
+        if matched.final_score != base_fact.final_score:
+            problems.append(
+                f"IOC match changed the score {base_fact.final_score} -> "
+                f"{matched.final_score}"
+            )
+        for e in matched.score_breakdown:
+            if "ioc" in (e.rule_id or "").lower():
+                problems.append(f"an IOC entry appeared in score_breakdown: {e.rule_id}")
+    return Gate("IOC matches never contribute to the score", not problems, problems)
+
+
+def gate_ioc_expired_is_never_silent() -> Gate:
+    """An expired IOC is reported as expired, not silently dropped or flagged.
+
+    ``active_iocs`` excludes expired entries from matching by default, so a
+    stale indicator does not keep flagging forever; but it must remain
+    retrievable and labelled expired, so a reviewer is never told an
+    indicator was clean when it had merely lapsed.
+    """
+    import shutil
+
+    import trustsight.db as db
+    import trustsight.ioc_baseline as ioc
+    from calibration_gates import shipped_config
+
+    problems: list[str] = []
+    with shipped_config():
+        db.init_db()
+        base = _seed_ioc_baseline(source="stale-feed", expires_at="2000-01-01T00:00:00Z")
+        try:
+            default = ioc.active_iocs(source="stale-feed")
+            if default:
+                problems.append("an expired IOC still matched by default")
+            including = ioc.active_iocs(source="stale-feed", expired=True)
+            if not including:
+                problems.append("an expired IOC could not be retrieved even with expired=True")
+            for e in including:
+                if not ioc._is_expired(e.expires_at):
+                    problems.append("expired retrieval returned a non-expired entry")
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+    return Gate("an expired IOC is never silent", not problems, problems)
+
+
+def gate_ioc_not_in_config_layer() -> Gate:
+    """Config separation: IOCs are state, not evaluation logic.
+
+    The shipped rules/patterns/thresholds config carries no ``ioc`` table.
+    IOCs are observations about the world and live in the baseline layer
+    (A13); letting them into the rule config would make an override or a
+    weight able to reach them, which is exactly what the IOC gate forbids.
+    """
+    import tomllib
+
+    from trustsight.config import DEFAULT_PATTERNS, DEFAULT_RULES, DEFAULT_THRESHOLDS
+
+    problems: list[str] = []
+    for name, blob in (
+        ("rules", DEFAULT_RULES),
+        ("patterns", DEFAULT_PATTERNS),
+        ("thresholds", DEFAULT_THRESHOLDS),
+    ):
+        try:
+            data = tomllib.loads(blob)
+        except tomllib.TOMLDecodeError as exc:
+            problems.append(f"{name} config does not parse: {exc}")
+            continue
+        for key in data:
+            if "ioc" in str(key).lower():
+                problems.append(f"{name} config carries an ioc-shaped key: {key}")
+    return Gate("IOCs are not in the rule config layer", not problems, problems)
+
+
+def gate_seed_hash_is_deterministic() -> Gate:
+    """Reproducibility: same input and salt always produce the same hash.
+
+    The seed is only reproducible, and a lookup only lands, if hashing is a
+    pure function of (salt, value).  A salt change must change the hash, or
+    the per-seed salt would not be defeating precomputed tables.
+    """
+    from trustsight.seed_build import _hash_value
+
+    problems: list[str] = []
+    salt_a, salt_b = "a" * 64, "b" * 64
+    v = "alice@example.com"
+    if _hash_value(v, salt_a) != _hash_value(v, salt_a):
+        problems.append("hashing the same value twice gave different results")
+    if _hash_value(v, salt_a) == _hash_value(v, salt_b):
+        problems.append("a different salt produced the same hash")
+    if _hash_value("a@x", salt_a) == _hash_value("b@x", salt_a):
+        problems.append("two different values collided under one salt")
+    return Gate("the seed hash is deterministic", not problems, problems)
 
 
 def gate_every_producer_accounts_for_coverage() -> Gate:
@@ -895,14 +1174,67 @@ def gate_a_baseline_supplies_state_not_rules() -> Gate:
     return Gate("a baseline supplies state, not rules", not problems, problems)
 
 
+def _demo_fact(score: int = 0):
+    """A small, real fact for the gates that assert on a rendered report."""
+    from trustsight.analysis import scan_diff
+
+    fact = scan_diff(
+        "diff --git a/PKGBUILD b/PKGBUILD\n--- a/PKGBUILD\n+++ b/PKGBUILD\n"
+        "@@ -1 +1 @@\n-pkgver=1\n+pkgver=2\n",
+        package_name="demo",
+    )
+    if score:
+        fact.final_score = score
+        fact.risk = "High"
+    return fact
+
+
+def _render_inspect_text(fact, **kwargs) -> str:
+    """The plain inspect render, captured as text."""
+    from trustsight.cli import inspect as inspect_cli
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        inspect_cli._inspect_plain(fact, **kwargs)
+    return buffer.getvalue()
+
+
+# What the analysis package may import from a module that can reach the
+# network.  None of these takes a URL: they are keyed by package name or
+# commit id, so no value parsed out of a PKGBUILD can become a request.
+# Reaching the network at all requires naming a package, and the host is
+# then the A3 constant.
+_ANALYSIS_FETCH_ALLOWED = {
+    "clone_or_fetch",
+    "get_head_commit",
+    "get_maintainer_from_commit",
+    "get_pkgbuild_at_commit",
+    "get_pkgver_from_head",
+    "last_fetch_time",
+    # Local only, despite living in discovery.py next to the RPC: compares
+    # two version strings via pacman's vercmp or pyalpm and opens no socket.
+    "_vercmp",
+}
+
+
 def gate_source_urls_are_never_fetched() -> Gate:
     """Nothing derived from a PKGBUILD reaches a network call.
 
-    Checked structurally: the analysis package, where ``source=`` URLs are
-    parsed and classified, imports no transport at all.
+    Checked structurally, in two parts, because the analysis package is not
+    transport-free: ``analysis/pipeline.py`` imports ``fetcher`` and calls
+    ``clone_or_fetch`` to obtain the package's own AUR repository.  What
+    holds is narrower and is what A2 actually promises.
+
+    First, no raw transport library is imported, so the analysis package
+    cannot open a connection of its own.  Second, everything it does import
+    from a fetch module is on the name-keyed allowlist above: those take a
+    package name or a commit id, never a URL, so a ``source=`` entry has
+    nowhere to go.  Widening the allowlist with a URL-taking helper is the
+    change that would reintroduce SSRF, and it fails here.
     """
     hits: list[str] = []
     banned = {"urllib.request", "http.client", "socket", "requests", "httpx", "ftplib"}
+    fetch_modules = {"fetcher", "discovery", "full_aur.fetch", "full_aur.metadata"}
     for path in sorted((SRC / "analysis").rglob("*.py")):
         tree = ast.parse(path.read_text())
         for node in ast.walk(tree):
@@ -910,9 +1242,92 @@ def gate_source_urls_are_never_fetched() -> Gate:
                 for alias in node.names:
                     if alias.name in banned:
                         hits.append(f"{_rel(path)}:{node.lineno} {alias.name}")
-            elif isinstance(node, ast.ImportFrom) and node.module in banned:
-                hits.append(f"{_rel(path)}:{node.lineno} {node.module}")
+            elif isinstance(node, ast.ImportFrom):
+                if node.module in banned:
+                    hits.append(f"{_rel(path)}:{node.lineno} {node.module}")
+                    continue
+                # Relative imports inside the package: ".."-prefixed module
+                # names arrive as the bare tail, e.g. "fetcher".
+                if (node.module or "").lstrip(".") in fetch_modules:
+                    for alias in node.names:
+                        if alias.name not in _ANALYSIS_FETCH_ALLOWED:
+                            hits.append(
+                                f"{_rel(path)}:{node.lineno} "
+                                f"{node.module}.{alias.name} is not name-keyed"
+                            )
     return Gate("declared source URLs are never fetched", not hits, hits)
+
+
+def gate_every_json_report_carries_the_fingerprint() -> Gate:
+    """B1: every machine-readable report says which instrument made it.
+
+    Run rather than read, because the claim is about what a consumer
+    receives.  `review --json` built its own dict and carried it, while
+    `inspect --json` went through `display._fact_to_dict`, which did not, so
+    the guarantee was true of one command and false of the other.
+    """
+    from trustsight.cli.display import _fact_to_dict
+    from trustsight.config import config_fingerprint
+    from trustsight.schema import fact_to_dict
+
+    fact = _demo_fact()
+    expected = config_fingerprint()
+    missing = [
+        name for name, data in (
+            ("schema.fact_to_dict", fact_to_dict(fact)),
+            ("display._fact_to_dict", _fact_to_dict(fact)),
+        )
+        if data.get("config_fingerprint") != expected
+    ]
+    return Gate("every JSON report carries the fingerprint", not missing, missing)
+
+
+def gate_suppression_is_never_hidden_by_a_flag() -> Gate:
+    """B5: a suppression is in the report whatever flags were passed.
+
+    `review --json` emitted `suppressed_rules` only under `--verbose`, so
+    the default machine-readable output made a switched-off rule look
+    exactly like one that never matched.  Asserted against the source of the
+    JSON body: the key must not sit under a verbosity branch.
+    """
+    path = SRC / "cli" / "review.py"
+    tree = ast.parse(path.read_text())
+    hits: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test)
+        if "verbose" not in test and "quiet" not in test:
+            continue
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.Constant) and inner.value == "suppressed_rules":
+                hits.append(f"{_rel(path)}:{inner.lineno} under `if {test}`")
+    return Gate("suppression is never hidden by a flag", not hits, hits)
+
+
+def gate_the_default_output_is_not_headline_shaped() -> Gate:
+    """The score is available on request, never volunteered.
+
+    One of the guarantees in the opening list, and the only one with no
+    structural check: the default render leads with evidence, and the number
+    appears when `--score` or `--risk` asks for it.  A render that starts
+    printing a band by default turns the tool into the verdict machine the
+    thesis says it is not.
+    """
+    fact = _demo_fact(score=72)
+    hits: list[str] = []
+    for label, kwargs in (
+        ("default", {}),
+        ("--score", {"show_score": True}),
+        ("--risk", {"show_risk": True}),
+    ):
+        text = _render_inspect_text(fact, **kwargs)
+        leads = ("Score" in text) or ("/100" in text)
+        if label == "default" and leads:
+            hits.append("default inspect render volunteers the score")
+        if label == "--score" and not leads:
+            hits.append("--score does not show the score")
+    return Gate("the default output is not headline-shaped", not hits, hits)
 
 
 _ATX_PUNCT_RE = re.compile(r"[^\w\s-]")
@@ -1065,7 +1480,7 @@ def gate_flag_threshold_is_derived() -> Gate:
         problems.append("security.md does not state the measured benign p95")
     if "malicious 5th percentile" not in doc:
         problems.append("security.md does not state the measured malicious p5")
-    stale = f"threshold is the 95th percentile"
+    stale = "threshold is the 95th percentile"
     if stale in doc:
         problems.append("security.md still claims 20 is the benign 95th percentile")
     return Gate("the flag threshold is derived, not copied", not problems,
@@ -1498,6 +1913,9 @@ def run_gates() -> list[Gate]:
         gate_no_archive_extraction(),
         gate_sql_is_parameterised(),
         gate_source_urls_are_never_fetched(),
+        gate_every_json_report_carries_the_fingerprint(),
+        gate_suppression_is_never_hidden_by_a_flag(),
+        gate_the_default_output_is_not_headline_shaped(),
         gate_version_args_are_shape_checked(),
         gate_terminal_output_is_inert(),
         gate_rendering_is_data_driven(),
@@ -1511,6 +1929,12 @@ def run_gates() -> list[Gate]:
         gate_fatal_rules_cannot_be_removed(),
         gate_fatal_findings_cannot_be_suppressed(),
         gate_seed_cannot_rewrite_the_database(),
+        gate_hashed_maintainers_protect_privacy(),
+        gate_ioc_match_carries_source(),
+        gate_ioc_no_score_contribution(),
+        gate_ioc_expired_is_never_silent(),
+        gate_ioc_not_in_config_layer(),
+        gate_seed_hash_is_deterministic(),
         gate_reserved_names_are_refused_everywhere(),
         gate_a_baseline_supplies_state_not_rules(),
         gate_result_reports_what_changed(),

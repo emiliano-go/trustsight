@@ -1,0 +1,71 @@
+name: False positive / missed detection
+description: TrustSight flagged a benign update, or did not flag one it should have. Detection tuning and rule requests go here.
+title: "[Detection]: "
+labels: ["detection"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        TrustSight is an evidence tool with [published limits](https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/what-trustsight-cannot-see.md).
+        "It missed something" is usually a rule request, not a vulnerability,
+        and "it flagged a normal update" is calibration feedback. Both are
+        welcome here.
+
+        If the miss lets a package **execute code on the reviewing machine**
+        or breach an invariant in [Part A/B](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md),
+        that is a security issue: report it privately, not here.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which is it?
+      options:
+        - False positive (benign update flagged / scored too high)
+        - Missed detection (a suspicious update scored too low or UNFLAGGED)
+        - New rule request (a pattern TrustSight should recognise)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: TrustSight version
+      description: Output of `trustsight --version`.
+      placeholder: "trustsight 0.11.0"
+    validations:
+      required: true
+  - type: input
+    id: package
+    attributes:
+      label: Package (if applicable)
+      description: The AUR package name, if this is about a real one.
+    validations:
+      required: false
+  - type: textarea
+    id: pkgbuild
+    attributes:
+      label: PKGBUILD or diff
+      description: >
+        The recipe or the diff that produced the wrong verdict. This is the
+        single most useful thing you can attach; a description alone is rarely
+        actionable.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: verdict
+    attributes:
+      label: What TrustSight reported
+      description: >
+        The verdict, score, and any rules that fired (or did not). Please paste
+        `trustsight inspect <pkg> --json` output when you can.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+      description: >
+        For a false positive, why the update is benign. For a miss, what a
+        reviewer should have been warned about and where in the recipe it is.
+    validations:
+      required: true

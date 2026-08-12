@@ -1,0 +1,83 @@
+name: Bug report
+description: Something in TrustSight crashes, errors, or behaves incorrectly (not a security vulnerability, not a detection request).
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug.
+
+        **Not the right place for two things:**
+        - **A security vulnerability** (code execution, an unexpected network
+          host, terminal escape injection, a resource-exhaustion crash, an
+          integrity breach): do **not** open a public issue. Report it
+          privately, see the security link on the new-issue page or
+          [How to report](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md#how-to-report).
+        - **"It flagged a benign package" or "it missed a bad one"**: that is
+          usually a detection request, not a bug. Use the
+          *False positive / missed detection* template instead.
+  - type: input
+    id: version
+    attributes:
+      label: TrustSight version
+      description: Output of `trustsight --version`.
+      placeholder: "trustsight 0.11.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How installed
+      options:
+        - pip / PyPI
+        - AUR / makepkg (packaging/aur)
+        - git clone (from source)
+        - other
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      description: Output of `python --version`. TrustSight supports 3.11+.
+      placeholder: "Python 3.12.4"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did TrustSight do that it should not have?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: >
+        The exact command(s) you ran. A PKGBUILD or a diff that triggers the
+        issue is worth far more than a description. If it is package-specific,
+        name the package or attach the PKGBUILD.
+      placeholder: |
+        1. `trustsight inspect some-package`
+        2. ...
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output / traceback
+      description: >
+        Paste the full output or traceback. Prefer the machine-readable form
+        (`--json`) when the bug is about a report's contents.
+      render: text
+    validations:
+      required: false

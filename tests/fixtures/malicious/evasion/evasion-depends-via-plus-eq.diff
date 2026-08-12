@@ -1,0 +1,6 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,3 @@
+ pkgname=demo
+ pkgver=1.0
++depends+=('evil-pkg' 'evil-pkg2')

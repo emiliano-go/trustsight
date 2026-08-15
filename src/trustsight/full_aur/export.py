@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from ..bounded_io import read_file_capped
 from ..db import (
     get_connection,
     save_pkgbuild_snapshot,
@@ -155,6 +156,11 @@ def verify_artifact(canonical_bytes: bytes, signature: bytes, pubkey: bytes) -> 
 #: pinned key file is not a key, whatever it is.
 _ED25519_PUBKEY_BYTES = 32
 
+#: Ceiling on a baseline artifact as it sits on disk, applied before the
+#: gzip cap and before the signature check.  A corpus baseline is profiles
+#: and snapshots for the AUR; this is well above a real one.
+MAX_ARTIFACT_BYTES = 512 * 1024 * 1024
+
 
 def _load_trusted_pubkey(path: Path) -> bytes:
     """The pinned distribution key, or a refusal that says which failure it is.
@@ -191,7 +197,11 @@ def _read_artifact(path: Path) -> tuple[dict, Optional[bytes]]:
     """
     from .metadata import gunzip_capped
 
-    raw = path.read_bytes()
+    # The decompression below is capped; this is the read that feeds it.
+    # Without a bound here the whole compressed artifact is materialised
+    # before ``gunzip_capped`` ever sees it, so the cap guards the
+    # expansion and nothing guards the file.
+    raw = read_file_capped(path, MAX_ARTIFACT_BYTES, f"baseline artifact {path.name}")
     try:
         text = gunzip_capped(raw).decode("utf-8")
     except OSError:  # not gzip - a plain JSON artifact

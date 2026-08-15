@@ -15,6 +15,49 @@ MAX_GENERATED_DIFF_BYTES = 5 * 1024 * 1024
 MAX_COMPANION_BYTES = 65536
 MAX_COMPANION_FILES = 256
 MAX_DIFF_PATH_BYTES = 4096
+
+#: Filtered patches whose text is retained.  The byte cap bounds how much
+#: text is kept; this bounds how many patches are *visited*, because a
+#: repository is free to contain a hundred thousand ``.install`` files and
+#: the filter accepts every one of them.
+MAX_DIFF_PATCHES = 256
+
+#: File paths retained in a summary.  ``files_changed`` and ``file_changes``
+#: walk every delta regardless of the text cap, so without this a wide
+#: repository sets the size of a stored ``fact_json``.
+MAX_DIFF_SUMMARY_FILES = 4096
+
+#: One patch's text, read before it is joined.  ``patch.text`` materialises
+#: the whole patch, so a bound applied after that call is a bound on what is
+#: *kept* rather than on what is *allocated* - the same distinction A4 draws
+#: for a tar member's declared size.
+MAX_PATCH_BYTES = 1024 * 1024
+
+#: The largest side of a delta whose patch text will be requested at all.
+#:
+#: ``MAX_PATCH_BYTES`` bounds what is *kept* from ``patch.text``, but that
+#: attribute has already allocated the whole patch by the time it returns, so
+#: on its own it is a bound on retention rather than on memory. The delta
+#: carries each side's file size before any text is produced, and a patch is
+#: at most the changed lines plus context - so a file small on both sides
+#: cannot yield a large patch. Checking the declared sizes first is the only
+#: bound available *before* the allocation.
+MAX_PATCH_SOURCE_BYTES = 2 * 1024 * 1024
+
+#: Bytes of the PKGBUILD read to drive companion discovery.  The blob is
+#: attacker-authored, and ``blob.data`` materialises all of it, so the bound
+#: has to precede the read rather than the decode.
+MAX_PKG_BUILD_BYTES = 5 * 1024 * 1024
+
+#: Top-level tree entries inspected while looking for companions.  The
+#: per-file cap is applied to the *selected* set, so without this the walk
+#: that builds that set is itself unbounded.
+MAX_COMPANION_TREE_ENTRIES = 4096
+
+#: A referenced basename.  A name past this is not a filename an ordinary
+#: recipe uses, and retaining it would put attacker-chosen bytes of arbitrary
+#: length into a rendered hunk header.
+MAX_COMPANION_NAME_BYTES = 256
 MAX_URLS_PER_SIDE = 4096
 MAX_URL_TOKEN_BYTES = 8192
 MAX_DIFF_BYTES = 5 * 1024 * 1024
@@ -80,61 +123,166 @@ _DELTA_STATUS_MAP = {
 }
 
 
-def generate_diff(
+def _delta_side_size(side) -> int:
+    """One side's declared size, or 0 when libgit2 does not report it.
+
+    A missing or nonsensical size is treated as 0 rather than as unbounded:
+    the byte caps downstream still apply, and refusing to read a patch whose
+    size libgit2 declined to state would drop ordinary deltas.
+    """
+    size = getattr(side, "size", 0)
+    if not isinstance(size, int) or isinstance(size, bool) or size < 0:
+        return 0
+    return size
+
+
+def _is_metadata_path(path: str) -> bool:
+    """Whether a delta path is one the analysis reads."""
+    return (path in ("PKGBUILD", ".SRCINFO")
+            or path.endswith(".install"))
+
+
+def _bounded_path(path: str) -> str:
+    """A path bounded for retention in a summary."""
+    encoded = path.encode("utf-8", errors="replace")
+    if len(encoded) <= MAX_DIFF_PATH_BYTES:
+        return path
+    return encoded[:MAX_DIFF_PATH_BYTES].decode("utf-8", errors="ignore")
+
+
+def generate_diff_bounded(
     repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3,
     max_bytes: int | None = None,
-) -> tuple[str, DiffSummary]:
-    """Generate a unified diff between two commits."""
+) -> tuple[str, DiffSummary, bool]:
+    """Generate a unified diff, and say whether anything was dropped.
+
+    The third value is the truncation flag, and it is the reason this helper
+    exists rather than the two-value form alone. A caller that re-derives
+    truncation by measuring the returned text cannot see a patch this
+    function *declined to retain*: the assembled text is then at or under the
+    cap, measuring it reports "complete", and content has been skipped with
+    no coverage gap recorded. That is the silent-skip B2 forbids, so the flag
+    travels rather than being inferred.
+
+    Three bounds apply, and each is on what gets *allocated* rather than on
+    what survives:
+
+    * ``MAX_PATCH_BYTES`` - ``patch.text`` materialises a whole patch, so a
+      cap applied afterwards bounds only what is kept. A patch over this
+      limit contributes its bounded prefix and sets truncation.
+    * ``MAX_DIFF_PATCHES`` - the metadata filter accepts every ``.install``
+      file, and a repository may contain any number of them.
+    * ``MAX_DIFF_SUMMARY_FILES`` - the summary walks every delta regardless
+      of the text cap, so a wide repository would otherwise choose the size
+      of a stored ``fact_json``.
+
+    Policy omission is not truncation. Dropping a ``.png`` because the filter
+    does not read it leaves nothing unexamined; dropping a ``.install``
+    because a cap was reached does. Only the second sets the flag.
+    """
     old_commit = repo.get(old_oid)
     new_commit = repo.get(new_oid)
     if old_commit is None or new_commit is None:
-        return "", DiffSummary()
+        return "", DiffSummary(), False
+
+    if max_bytes is None:
+        max_bytes = MAX_GENERATED_DIFF_BYTES
+    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
+        raise ValueError("max_bytes must be a positive integer")
+    max_bytes = min(max_bytes, MAX_GENERATED_DIFF_BYTES)
+
     diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
 
-    filtered_patches = []
+    filtered_patches: list[str] = []
     generated_bytes = 0
+    truncated = False
+
     for patch in diff:
         delta = patch.delta
-        path = delta.new_file.path
-        old_path = delta.old_file.path
-        if (path in ("PKGBUILD", ".SRCINFO") or path.endswith(".install")
-                or old_path in ("PKGBUILD", ".SRCINFO") or old_path.endswith(".install")):
-            text = patch.text
-            if max_bytes is not None:
-                if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 1:
-                    raise ValueError("max_bytes must be a positive integer")
-                max_bytes = min(max_bytes, MAX_GENERATED_DIFF_BYTES)
-                remaining = max_bytes - generated_bytes
-                if remaining <= 0:
-                    break
-                text, _ = truncate_diff(text, remaining)
-                generated_bytes += len(text.encode("utf-8", errors="replace"))
-            filtered_patches.append(text)
+        if not (_is_metadata_path(delta.new_file.path)
+                or _is_metadata_path(delta.old_file.path)):
+            continue
+        if len(filtered_patches) >= MAX_DIFF_PATCHES:
+            truncated = True
+            break
+        remaining = max_bytes - generated_bytes
+        if remaining <= 0:
+            truncated = True
+            break
+
+        # Before `patch.text`, not after: that attribute materialises the
+        # whole patch, so every later cap bounds retention rather than
+        # allocation. The delta knows both file sizes already.
+        declared = max(_delta_side_size(delta.old_file),
+                       _delta_side_size(delta.new_file))
+        if declared > MAX_PATCH_SOURCE_BYTES:
+            # Skipped rather than fatal: one oversized `.install` must not
+            # stop the PKGBUILD beside it being read.
+            truncated = True
+            continue
+
+        text = patch.text or ""
+        # One bound, not two: the per-patch ceiling and what the running
+        # total can still accept are both byte limits on the same string, and
+        # truncating twice encodes it twice for no additional safety.
+        text, cut = truncate_diff(text, min(MAX_PATCH_BYTES, remaining))
+        if cut:
+            truncated = True
+        generated_bytes += len(text.encode("utf-8", errors="replace"))
+        filtered_patches.append(text)
 
     unified = "\n".join(filtered_patches)
     lines_added = diff.stats.insertions
     lines_removed = diff.stats.deletions
-    files_changed = sorted({
-        delta.new_file.path if delta.status != GIT_DELTA_DELETED else delta.old_file.path
-        for delta in diff.deltas
-    })
 
-    file_changes = []
+    seen: set[str] = set()
+    file_changes: list[dict] = []
+    summary_full = False
     for delta in diff.deltas:
+        if len(seen) >= MAX_DIFF_SUMMARY_FILES:
+            summary_full = True
+            break
         status = _DELTA_STATUS_MAP.get(delta.status, "modified")
-        path = delta.new_file.path if delta.status != GIT_DELTA_DELETED else delta.old_file.path
+        path = _bounded_path(
+            delta.new_file.path if delta.status != GIT_DELTA_DELETED
+            else delta.old_file.path
+        )
+        if path in seen:
+            continue
+        seen.add(path)
         if path not in (".SRCINFO", ".gitignore"):
             file_changes.append({"path": path, "status": status})
+
+    # A summary cut short hides which files moved, which is content the
+    # reader would otherwise have seen.
+    if summary_full:
+        truncated = True
 
     file_changes.sort(key=lambda item: (item["path"], item["status"]))
     summary = DiffSummary(
         lines_added=lines_added,
         lines_removed=lines_removed,
-        files_changed=files_changed,
+        files_changed=sorted(seen),
         file_changes=file_changes,
     )
 
-    return unified, summary
+    return unified, summary, truncated
+
+
+def generate_diff(
+    repo: pygit2.Repository, old_oid: str, new_oid: str, context_lines: int = 3,
+    max_bytes: int | None = None,
+) -> tuple[str, DiffSummary]:
+    """Two-value form, for callers that do not consume the truncation flag.
+
+    Kept so existing callers and tests are unaffected. New code should use
+    :func:`generate_diff_bounded`, because dropping the flag is exactly how a
+    skipped patch becomes invisible.
+    """
+    text, summary, _truncated = generate_diff_bounded(
+        repo, old_oid, new_oid, context_lines, max_bytes
+    )
+    return text, summary
 
 
 _VCS_SOURCE_RE = re.compile(
@@ -435,15 +583,41 @@ def _companion_names(tree, pkgbuild_text: str) -> list[str]:
     """
     declared = local_source_names(pkgbuild_text)
     names: list[str] = []
+    inspected = 0
     for entry in tree:
+        # The walk is bounded, not just the selection: a tree is free to hold
+        # any number of entries, and the per-file cap applies to what was
+        # already chosen.
+        if inspected >= MAX_COMPANION_TREE_ENTRIES:
+            break
+        inspected += 1
         if getattr(entry, "type_str", None) != "blob":
             continue
         name = entry.name
+        if not _is_safe_companion_name(name):
+            continue
         if name in _COMPANION_SKIP or name.endswith(".install"):
             continue
         if name in declared or name in pkgbuild_text:
             names.append(name)
     return names
+
+
+def _is_safe_companion_name(name: str) -> bool:
+    """Whether *name* is a plain, bounded, top-level filename.
+
+    The scanner reads top-level blobs, so anything carrying path structure is
+    not a name it can have produced honestly. Rejecting these here keeps an
+    absolute path or a traversal component out of a rendered hunk header,
+    where it would name a file the reader does not have.
+    """
+    if not name or len(name.encode("utf-8", errors="replace")) > MAX_COMPANION_NAME_BYTES:
+        return False
+    if name in (".", ".."):
+        return False
+    if name.startswith("/") or "/" in name or "\\" in name:
+        return False
+    return "\x00" not in name
 
 
 def companion_source_hunks(
@@ -468,7 +642,14 @@ def companion_source_hunks(
     if pkgbuild is None:
         return ""
     try:
-        pkgbuild_text = repo[pkgbuild.id].data.decode("utf-8", errors="replace")
+        blob = repo[pkgbuild.id]
+        # Size before data: `blob.data` materialises the whole blob, so a
+        # check afterwards bounds what is kept rather than what is read.
+        if getattr(blob, "size", 0) > MAX_PKG_BUILD_BYTES:
+            return ""
+        pkgbuild_text = blob.data[:MAX_PKG_BUILD_BYTES].decode(
+            "utf-8", errors="replace"
+        )
     except (KeyError, TypeError, ValueError):
         return ""
 

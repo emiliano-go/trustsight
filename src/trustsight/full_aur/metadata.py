@@ -21,7 +21,21 @@ _METADATA_URL = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
 # Ceiling on anything gunzipped from the network or from an imported
 # artifact.  The real dump is ~250 MB of JSON; a gzip member is free to
 # claim far more, and decompressing it to find out is the whole attack.
-MAX_DECOMPRESSED_BYTES = 1024 * 1024 * 1024
+#
+# Chosen against the *parsed* size, not the wire size, which is the part
+# that was previously missed. `json.loads` turns a byte string into Python
+# objects at roughly a 6x amplification for dump-shaped data - many small
+# dicts and short strings - so a 1 GiB ceiling permitted about 6 GiB of
+# live objects and would take most machines out of memory. At 512 MiB the
+# worst case is ~3 GiB, which is twice what today's legitimate dump already
+# costs to parse, so there is room for the AUR to grow without the ceiling
+# becoming the thing that decides how much RAM this process uses.
+MAX_DECOMPRESSED_BYTES = 512 * 1024 * 1024
+
+#: Measured amplification from serialised JSON to live Python objects for
+#: dump-shaped data. Documented so the ceiling above can be re-derived
+#: rather than guessed at if the shape changes.
+JSON_OBJECT_AMPLIFICATION = 6
 
 # A stalled connection is a hang with no upper bound, and this fetch sits
 # on the default `review` path, so it is the one that would hang.  The

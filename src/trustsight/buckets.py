@@ -165,6 +165,38 @@ def _prepare(domain_config: dict) -> tuple[frozenset, frozenset, frozenset]:
     )
 
 
+#: A hostname's real limits, from DNS: 253 bytes total, 127 labels, 63 bytes
+#: per label. A `source=` URL is attacker-written, and nothing past these is
+#: a hostname anyone can resolve - but classification walked every label and
+#: computed every parent domain, which is quadratic in label count. One
+#: 8 KiB host of dots cost 421 ms, and the extraction cap allows 4,096 URLs
+#: per side, so a single package could spend half an hour here. A14 says no
+#: package-controlled input decides how much CPU this process uses.
+MAX_HOST_BYTES = 253
+MAX_HOST_LABELS = 127
+
+
+def _bounded_host(domain: str) -> str:
+    """*domain* truncated to what DNS permits.
+
+    Truncating rather than refusing: an over-length host still classifies,
+    it simply classifies on the part that could be real. The alternative -
+    returning early - would let a padded host skip the homograph check.
+    """
+    # Kept from the *right*. The registrable domain is the rightmost labels,
+    # and it is the part every classification decision reads; truncating from
+    # the left would throw it away and turn `a.a....example.com` into a host
+    # with no recognisable suffix at all.
+    labels = domain.split(".")
+    if len(labels) > MAX_HOST_LABELS:
+        labels = labels[-MAX_HOST_LABELS:]
+        domain = ".".join(labels)
+    while len(domain) > MAX_HOST_BYTES and len(labels) > 1:
+        labels = labels[1:]
+        domain = ".".join(labels)
+    return domain[-MAX_HOST_BYTES:] if len(domain) > MAX_HOST_BYTES else domain
+
+
 def _parent_domains(domain: str):
     """Yield *domain* and each of its parent domains.
 
@@ -191,7 +223,7 @@ def _classify_prepared(
 ) -> tuple[str, str]:
     """Classify *url* against already-prepared domain sets."""
     parsed = urlparse(url)
-    domain = parsed.netloc.lower()
+    domain = _bounded_host(parsed.netloc.lower())
 
     if has_homograph(domain):
         return "homograph_attack", domain

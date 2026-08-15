@@ -26,13 +26,16 @@ from collections import Counter, defaultdict
 from contextlib import contextmanager
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
 import trustsight.config as config_module
 import trustsight.db as db_module
 from trustsight.analysis import scan_diff
 from trustsight.config import ensure_default_configs, load_config
 from trustsight.rules import load_rules
 
-FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
+FIXTURES = ROOT / "tests" / "fixtures"
 
 # Score-breakdown entries that are not rules: bucket, novelty and evidence
 # modifiers.  They have their own baselines and no fire-rate gate.
@@ -53,6 +56,12 @@ CLASS_C_RULES = frozenset({"R083", "R094", "R095", "R096", "R097", "R098", "R102
 CLASS_D_RULES = frozenset({
     "R090", "R092", "R093", "R100", "R101", "R105", "R107", "R108", "R110",
     "R111", "R112", "R125", "R126",
+    # R141 needs a recorded prior AUR orphan observation and R143 composes
+    # it, so both are stateful and must be silent on the stateless path.
+    # R142 is deliberately absent: it reads the diff alone, so it has a real
+    # benign fire rate (11.5% on the locked corpus) and belongs to the
+    # fire-rate gate rather than this one.
+    "R141", "R143",
 })
 
 

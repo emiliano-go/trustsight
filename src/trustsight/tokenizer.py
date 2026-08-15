@@ -469,7 +469,13 @@ def join_line_continuations(lines: list[str]) -> list[str]:
         this_marker = line[0] if line[:1] in ("+", "-") else ""
         body = line[1:] if this_marker else line
         if parts is not None and this_marker == marker:
-            parts.append(" " + body.strip())
+            # Verbatim, with no separator inserted.  A backslash-newline is
+            # *removed* by the shell, it is not whitespace: `cur\` + `l ...`
+            # is `curl ...`, and joining with a space produced `cur l ...`,
+            # which splits a command name into two words and defeats every
+            # rule that matches it. Indentation on the continuation line
+            # still separates arguments, because it is kept as written.
+            parts.append(body)
         else:
             if parts is not None:
                 out.append(marker + flush())
@@ -742,7 +748,11 @@ def _joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
         this_marker = line[0] if line[:1] in ("+", "-") else ""
         body = line[1:] if this_marker else line
         if parts is not None and this_marker == marker:
-            parts.append(" " + body.strip())
+            # Verbatim, exactly as `join_line_continuations` does: a
+            # backslash-newline is removed by the shell rather than being
+            # whitespace. These two joiners must agree, or the rule path and
+            # the coverage path read different text from the same diff.
+            parts.append(body)
         else:
             if parts is not None:
                 out.append((start_index, marker + flush()))

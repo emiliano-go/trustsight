@@ -100,8 +100,64 @@ def _apply_network_timeouts() -> None:
         _NETWORK_TIMEOUTS_APPLIED = True
 
 
+#: Bytes one clone or fetch may pull. The deadline below bounds how *long*
+#: a transfer runs, which on a fast link is not a bound on how much arrives:
+#: 120 seconds is gigabytes, written straight to the cache directory. An AUR
+#: repository holds a recipe and occasionally a patch, so a few MiB is the
+#: honest size and this is two orders of magnitude above it.
+MAX_TRANSFER_BYTES = 256 * 1024 * 1024
+
+#: Bytes every transfer in this process may pull between them. The per-repo
+#: cap alone is not a disk bound, because the dependency walk multiplies it
+#: by `depth.MAX_DEPTH_NODES` (200) - a ceiling that was chosen when a node
+#: cost a recipe-sized clone, not a quarter-gigabyte one. A full-depth run
+#: over real packages moves a few hundred MiB, so this leaves ~10x headroom
+#: while keeping the worst case off the same order as a disk.
+MAX_TOTAL_TRANSFER_BYTES = 2 * 1024 * 1024 * 1024
+
+_transfer_lock = threading.Lock()
+_transferred_bytes = 0
+
+
+class _TransferTooLargeError(_TimeoutError):
+    """A transfer exceeded its byte budget.
+
+    Deliberately a `_TimeoutError` subclass: every call site already treats
+    that as "this fetch did not complete", and an oversized transfer means
+    the same thing. A separate exception type would be a second path for
+    callers to handle, and one of them would forget.
+    """
+
+
+def reset_transfer_budget() -> None:
+    """Return the process-wide budget to full.
+
+    For tests and for long-lived hosts that run more than one analysis; a
+    single CLI invocation never needs it.
+    """
+    global _transferred_bytes
+    with _transfer_lock:
+        _transferred_bytes = 0
+
+
+def _charge_transfer(received: int, previous: int) -> None:
+    """Charge the delta since this transfer's last progress callback."""
+    global _transferred_bytes
+    delta = received - previous
+    if delta <= 0:
+        return
+    with _transfer_lock:
+        _transferred_bytes += delta
+        total = _transferred_bytes
+    if total > MAX_TOTAL_TRANSFER_BYTES:
+        raise _TransferTooLargeError(
+            f"transfers exceeded the {MAX_TOTAL_TRANSFER_BYTES} byte budget "
+            f"for this run"
+        )
+
+
 class _DeadlineCallbacks(pygit2.RemoteCallbacks):
-    """Abort a transfer that runs past *seconds*.
+    """Abort a transfer that runs past *seconds* or past its byte budget.
 
     libgit2 invokes these callbacks as data arrives, so raising from one
     cancels the operation.  Unlike SIGALRM this works on any thread, which
@@ -112,6 +168,7 @@ class _DeadlineCallbacks(pygit2.RemoteCallbacks):
         super().__init__()
         self._deadline = time.monotonic() + seconds
         self._seconds = seconds
+        self._received = 0
 
     def _check(self):
         if time.monotonic() > self._deadline:
@@ -121,9 +178,40 @@ class _DeadlineCallbacks(pygit2.RemoteCallbacks):
 
     def transfer_progress(self, stats):
         self._check()
+        received = getattr(stats, "received_bytes", 0) or 0
+        if received > MAX_TRANSFER_BYTES:
+            raise _TransferTooLargeError(
+                f"transfer exceeded {MAX_TRANSFER_BYTES} bytes"
+            )
+        _charge_transfer(received, self._received)
+        self._received = received
 
     def sideband_progress(self, string):
         self._check()
+
+
+#: Commits any single history walk will visit. Repository history is
+#: attacker-authored: a package can carry a million commits as easily as
+#: ten, and every walk that ran to exhaustion turned that into unbounded
+#: work. Walks are newest-first, so a bound keeps the commits that carry
+#: signal and drops the tail no rule reads.
+MAX_HISTORY_COMMITS = 5_000
+
+
+def walk_bounded(repo: pygit2.Repository, head, *, sort=None, limit=None):
+    """Yield at most *limit* commits from *head*, newest first.
+
+    One implementation rather than a counter at each call site: the review
+    notes name "a control applied at one of several equivalent call sites"
+    as the recurring failure here, and unbounded walks were spread across
+    three modules.
+    """
+    cap = MAX_HISTORY_COMMITS if limit is None else limit
+    walker = repo.walk(head) if sort is None else repo.walk(head, sort)
+    for seen, commit in enumerate(walker, start=1):
+        yield commit
+        if seen >= cap:
+            return
 
 
 def _head_commit_id(repo: pygit2.Repository) -> str:
@@ -263,27 +351,6 @@ def clone_or_fetch(
         )
     _record_fetch(repo)
     return repo
-
-
-def get_commit_for_version(
-    repo: pygit2.Repository, version: str
-) -> Optional[str]:
-    """Find the commit whose PKGBUILD has the given *version*, or None."""
-    head = _head_commit_id(repo)
-    if not head:
-        return None
-    for commit in repo.walk(head, pygit2.GIT_SORT_TIME):
-        try:
-            blob = repo[commit.tree]["PKGBUILD"]
-            pkgbuild = blob.data.decode()
-            match = re.search(
-                r'^pkgver\s*=\s*["\']?([^\s"\']+)', pkgbuild, re.MULTILINE
-            )
-            if match and match.group(1) == version:
-                return str(commit.id)
-        except (KeyError, AttributeError):
-            pass
-    return None
 
 
 def get_head_commit(repo: pygit2.Repository) -> str:

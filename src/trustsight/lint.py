@@ -25,6 +25,7 @@ from .regex_safety import (
     BACKTRACK_REPS as _BACKTRACK_REPS,
     backtracking_risk,
     has_nested_quantifier,
+    is_superlinear,
 )
 
 VALID_SEVERITIES = frozenset({"FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"})
@@ -247,6 +248,13 @@ def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
             f"pattern took {elapsed * 1000:.0f}ms on a {_BACKTRACK_REPS}-character "
             f"adversarial input; cost grows exponentially, so a crafted "
             f"PKGBUILD line could hang the scan",
+        ))
+    elif is_superlinear(compiled):
+        findings.append(LintFinding(
+            rid, SEVERITY_ERROR, "backtracking",
+            "pattern cost grows faster than its input; it is cheap on a short "
+            "line and expensive on a long one, so a crafted PKGBUILD line "
+            "could stall the scan without ever looking slow in a test",
         ))
 
     return findings, compiled

@@ -14,6 +14,8 @@ from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
+from ..bounded_io import ReadTooLarge, read_capped
+
 log = logging.getLogger(__name__)
 
 _CGIT_URL = "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD"
@@ -86,6 +88,13 @@ MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 # millions of members is a memory bomb even when only 64 bytes of each are
 # read; the members are walked lazily instead, and the walk stops here.
 MAX_TAR_MEMBERS = 10_000
+
+# MAX_RESPONSE_BYTES caps the *compressed* body.  A member is read out of
+# the decompressed stream, and gzip on compressible content runs to roughly
+# a thousand to one, so 32 MiB on the wire is tens of gigabytes of member
+# to allocate.  The member's declared size is the attacker's number, so it
+# is not the bound; this is.  A PKGBUILD past this is not a PKGBUILD.
+MAX_TAR_MEMBER_BYTES = 8 * 1024 * 1024
 
 
 def _http_get(url: str) -> Optional[bytes]:
@@ -191,7 +200,13 @@ def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     content = tf.extractfile(member)
     if content is None:
         return None
-    return content.read().decode("utf-8", errors="replace")
+    # ReadTooLarge propagates: a refusal is not "no PKGBUILD found", and
+    # collapsing the two would let a bound that dropped content read as an
+    # ordinary empty snapshot.  The callers turn it into a coverage gap.
+    raw = read_capped(
+        content, MAX_TAR_MEMBER_BYTES, f"PKGBUILD member of the {name} snapshot"
+    )
+    return raw.decode("utf-8", errors="replace")
 
 
 def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
@@ -204,6 +219,12 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
     try:
         tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
         return _pkgbuild_from_tarfile(tf, name)
+    except ReadTooLarge as e:
+        # A bound dropped content.  This entry point has no result object to
+        # hang a gap on, so the refusal is at least logged loudly; the
+        # gap-carrying path is fetch_pkgbuild_with_tree.
+        log.warning("snapshot for %s refused: %s", name, e)
+        return None
     except Exception as e:
         log.warning("error extracting snapshot for %s: %s", name, e)
         return None
@@ -236,8 +257,8 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
 
 def fetch_pkgbuild_with_tree(
     name: str,
-) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict]]:
-    """PKGBUILD text, the snapshot tree manifest, and an R122 finding.
+) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict], bool]:
+    """PKGBUILD text, the tree manifest, an R122 finding, and a refusal flag.
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
     same committed file tree the git path does (R118-tree).  The tarball is
@@ -249,25 +270,38 @@ def fetch_pkgbuild_with_tree(
     the corpus side is the one place AUR content is downloaded, so it is
     also where the archive container is inspected.  A trailer anomaly is
     returned as a stamped finding; a clean archive returns None.
+
+    The fourth element says the snapshot was **refused by a read bound**, as
+    opposed to being absent or malformed.  The two fall back to the same
+    place, so without the distinction a bound that dropped content would be
+    indistinguishable from a package that simply has no snapshot - and A14
+    requires the bound to be visible as a bound.  The caller turns it into
+    the ``snapshot_refused`` coverage gap.
     """
     from ..analysis.archives import check_archive_trailer
 
     url = f"{_SNAPSHOT_URL}/{quote(name, safe='')}.tar.gz"
     body = _http_get(url)
+    refused = False
     if body is not None:
         try:
             tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
             pkgbuild = _pkgbuild_from_tarfile(tf, name)
             manifest = _snapshot_manifest(tf)
             if pkgbuild is not None:
-                return pkgbuild, manifest, check_archive_trailer(body)
+                return pkgbuild, manifest, check_archive_trailer(body), False
+        except ReadTooLarge as e:
+            # Not benign, and not silent: warning level, and the flag rides
+            # out to the result so the analysis cannot read as complete.
+            log.warning("snapshot for %s refused: %s", name, e)
+            refused = True
         except Exception as e:
             # Benign: a missing or empty snapshot tarball just means we fall
             # back to the cgit text fetch below.  Debug, not warning, so a
             # bootstrap of tens of thousands of packages does not spam the
             # progress bar with one line per VCS/-bin package.
             log.debug("snapshot tarball for %s unusable: %s", name, e)
-    return fetch_pkgbuild(name), None, None
+    return fetch_pkgbuild(name), None, None, refused
 
 
 def default_resume_path() -> Path:

@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Optional
 
+from .bounded_io import read_capped, read_file_capped
 from .config import DATA_DIR
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,14 @@ log = logging.getLogger(__name__)
 # path, so the ceiling is what stops an arbitrary .gz from filling the disk.
 MAX_SEED_BYTES = 2 * 1024 * 1024 * 1024
 MAX_SEED_MEMBERS = 100_000
+
+# Ceiling on one member of a seed archive.  ``_extract_v2_archive`` already
+# refuses an archive whose members sum past MAX_SEED_BYTES, so this is a
+# tightening rather than a hole being closed: without it a single member is
+# free to use the whole 2 GiB budget in one buffer before it is written.
+# Per-member is also the bound that stays meaningful if the total is ever
+# raised.
+MAX_SEED_MEMBER_BYTES = 256 * 1024 * 1024
 
 
 def get_db_path() -> Path:
@@ -302,7 +311,14 @@ def init_db():
 # so an install predating one of these keeps the old layout and every
 # write to the new column fails with "no such column".
 _ADDED_COLUMNS = {
-    "packages": {"current_maintainer": "TEXT DEFAULT ''"},
+    "packages": {
+        "current_maintainer": "TEXT DEFAULT ''",
+        # R141: whether the AUR reported this package as orphaned the last
+        # time we asked.  -1 means "never asked", which is not the same as
+        # "was not orphaned": an adoption can only be claimed against a
+        # recorded prior observation, never against an absence of one.
+        "aur_orphaned": "INTEGER DEFAULT -1",
+    },
 }
 
 
@@ -583,6 +599,38 @@ def update_package_maintainer(name: str, maintainer: str):
         conn.execute(
             "UPDATE packages SET current_maintainer = ? WHERE name = ?",
             (maintainer, name),
+        )
+        conn.commit()
+
+
+def get_aur_orphan_state(name: str) -> int:
+    """The last recorded AUR orphan state: 1 orphaned, 0 maintained, -1 unknown.
+
+    -1 is load-bearing.  R141 claims "this package was adopted", and that
+    claim needs a prior observation showing it orphaned; a database that has
+    never asked must not let "no record" read as "was maintained" or as
+    "was orphaned".
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT aur_orphaned FROM packages WHERE name = ?", (name,)
+        ).fetchone()
+    if row is None or row["aur_orphaned"] is None:
+        return -1
+    return int(row["aur_orphaned"])
+
+
+def update_aur_orphan_state(name: str, orphaned: Optional[bool]) -> None:
+    """Record whether the AUR currently reports *name* as orphaned.
+
+    ``None`` means the metadata was unavailable this run, which is recorded
+    as unknown rather than as either state: guessing here would manufacture
+    an adoption or hide one.
+    """
+    value = -1 if orphaned is None else int(bool(orphaned))
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE packages SET aur_orphaned = ? WHERE name = ?", (value, name)
         )
         conn.commit()
 
@@ -963,11 +1011,11 @@ def import_seed(seed_path: Path) -> dict:
             # Legacy .db.gz seed: decompress to a single sqlite file.
             temp_file = _decompress_sqlite_seed(path)
             result = _import_sqlite_seed(
-                temp_file, origin, hashlib.sha256(path.read_bytes()).hexdigest()
+                temp_file, origin, _seed_file_digest(path)
             )
         elif path.suffix == ".db":
             result = _import_sqlite_seed(
-                path, origin, hashlib.sha256(path.read_bytes()).hexdigest()
+                path, origin, _seed_file_digest(path)
             )
         else:
             raise ValueError(f"unrecognised seed format: {path}")
@@ -980,6 +1028,18 @@ def import_seed(seed_path: Path) -> dict:
             temp_file.unlink(missing_ok=True)
 
 
+def _seed_file_digest(path: Path) -> str:
+    """SHA-256 of a seed file, read under the seed bound.
+
+    A12 records the digest of what was imported.  Hashing is not analysis,
+    but it still materialises the file, so it is bounded like every other
+    read of an operator-supplied artifact.
+    """
+    return hashlib.sha256(
+        read_file_capped(path, MAX_SEED_BYTES, f"seed file {path.name}")
+    ).hexdigest()
+
+
 def _digest_seed_dir(seed_dir: Path) -> str:
     """Return a deterministic digest of a v2 seed directory's contents."""
     h = hashlib.sha256()
@@ -987,7 +1047,11 @@ def _digest_seed_dir(seed_dir: Path) -> str:
         if item.is_file():
             h.update(item.relative_to(seed_dir).as_posix().encode("utf-8"))
             h.update(b"\x00")
-            h.update(item.read_bytes())
+            h.update(
+                read_file_capped(
+                    item, MAX_SEED_MEMBER_BYTES, f"seed file {item.name}"
+                )
+            )
             h.update(b"\x00")
     return h.hexdigest()
 
@@ -1033,7 +1097,18 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 fobj = tf.extractfile(member)
                 if fobj is not None:
-                    target.write_bytes(fobj.read())
+                    # The ``total`` check above bounds the archive; this
+                    # bounds any one member of it, so a single member
+                    # cannot hold the whole budget in memory at once.
+                    # Refusal propagates: a hostile archive aborts the
+                    # import rather than filling a disk.
+                    target.write_bytes(
+                        read_capped(
+                            fobj,
+                            MAX_SEED_MEMBER_BYTES,
+                            f"seed archive member {member.name!r}",
+                        )
+                    )
     candidate = dest / "trustsight-seed-v2"
     if candidate.exists():
         return candidate

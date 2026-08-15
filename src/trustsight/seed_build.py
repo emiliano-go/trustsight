@@ -12,8 +12,20 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .bounded_io import read_file_capped
+
 DEFAULT_HASH_ALGORITHM = "sha256"
 SEED_FORMAT_VERSION = "2.0.0"
+
+# Ceiling on the provenance file copied into a seed.  It is a short JSON
+# record of how the seed was built; the bound is here because every read of
+# a path an operator supplied is bounded, not because this one is risky.
+MAX_PROVENANCE_BYTES = 4 * 1024 * 1024
+
+# Ceiling on the raw maintainer records a seed is built from.  The real
+# input is ~36k records scraped from AUR git history; this is well above
+# that and well below what would exhaust the builder.
+MAX_RAW_MAINTAINERS_BYTES = 512 * 1024 * 1024
 
 
 def _generate_salt() -> str:
@@ -161,7 +173,11 @@ def build_seed(
 
     if provenance is not None:
         prov_dst = seed_dir / "seed-provenance.json"
-        prov_dst.write_bytes(Path(provenance).read_bytes())
+        prov_dst.write_bytes(
+            read_file_capped(
+                Path(provenance), MAX_PROVENANCE_BYTES, "seed provenance file"
+            )
+        )
 
     return {
         **meta,
@@ -172,7 +188,9 @@ def build_seed(
 
 def _read_raw_maintainers(path: Path) -> list[dict]:
     """Read raw maintainer records from a JSON array or JSONL file."""
-    text = path.read_text(encoding="utf-8")
+    text = read_file_capped(
+        path, MAX_RAW_MAINTAINERS_BYTES, "raw maintainer records"
+    ).decode("utf-8")
     if text.strip().startswith("["):
         return json.loads(text)
     records = []

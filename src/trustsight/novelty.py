@@ -15,10 +15,16 @@ from .db import (
 from .deps import normalize_dependency
 from .schema import NoveltyContext
 
-_VERSION_RE = re.compile(r"\d+(?:\.\d+){1,}")
+# Bounded and possessive, both for cost rather than for meaning. `\d+`
+# followed by a group needing `.` is quadratic under `search`: on a long
+# digit run every start position consumes to the end before failing, and
+# an 8192-byte line - the `rules.MAX_RULE_LINE_BYTES` ceiling - took 3.2
+# seconds. Version components are not 32 digits long and versions are not
+# 9 components deep, so bounding costs nothing real and this drops to
+# 2.2ms.
+_VERSION_RE = re.compile(r"\d{1,32}+(?:\.\d{1,32}+){1,8}")
 _HASH_RE = re.compile(r"(?<=[./])[a-f0-9]{7,40}(?=[./]|$)", re.IGNORECASE)
 _DATE_RE = re.compile(r"\d{4}[-_]\d{2}[-_]\d{2}")
-_TRAILING_RE = re.compile(r"/+$")
 
 
 def normalize_url(url: str) -> str:
@@ -31,7 +37,12 @@ def normalize_url(url: str) -> str:
     n = _VERSION_RE.sub("0", n)
     n = _HASH_RE.sub("HASH", n)
     n = _DATE_RE.sub("DATE", n)
-    n = _TRAILING_RE.sub("", n)
+    # `rstrip`, not `/+$`: the regex was quadratic on a run of
+    # slashes - it matched them all, failed the anchor, and gave
+    # one back at a time, costing 596ms on an 8 KiB line. The
+    # string method is the same operation in linear time and
+    # cannot backtrack at all.
+    n = n.rstrip("/")
     return n
 
 

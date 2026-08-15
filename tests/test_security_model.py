@@ -336,11 +336,18 @@ def test_cold_start_inconclusive_end_to_end():
 
 
 def test_the_json_report_keeps_the_bare_band_and_carries_the_label():
-    """risk stays a bare band; the qualified string rides risk_label."""
-    from trustsight.cli.display import _fact_to_dict
+    """risk stays a bare band; the qualified string rides risk_label.
+
+    Both ride the score group (B11), so this asks for them the way a
+    consumer does rather than reading a per-command helper.
+    """
+    from trustsight.reporting import evaluate_fact, report_body
     from trustsight.schema import NoveltyContext
 
-    gapped = _fact_to_dict(PackageFact(
+    def _body(fact):
+        return report_body(evaluate_fact(fact), include_score=True)
+
+    gapped = _body(PackageFact(
         package_name="demo", final_score=10, risk="Inconclusive",
         coverage_gaps=[DIFF_TRUNCATED],
     ))
@@ -348,7 +355,7 @@ def test_the_json_report_keeps_the_bare_band_and_carries_the_label():
     assert gapped["risk_label"] == "Inconclusive (diff truncated: payload may be hidden)"
     assert gapped["coverage_gaps"] == [DIFF_TRUNCATED]
 
-    cold = _fact_to_dict(PackageFact(
+    cold = _body(PackageFact(
         package_name="demo", final_score=25, risk="Inconclusive",
         novelty_context=NoveltyContext(observation_count=3),
     ))
@@ -895,15 +902,20 @@ def test_the_report_carries_the_fingerprint():
 def test_inspect_json_carries_the_fingerprint_too():
     """B1 says *every* machine-readable report, not the ones that happened to.
 
-    `inspect --json` goes through display._fact_to_dict, which omitted the
+    `inspect --json` went through a helper of its own that omitted the
     fingerprint while review --json and fact_to_dict carried it, so the
-    guarantee was true of two paths out of three.
+    guarantee was true of two paths out of three.  All three JSON surfaces
+    now render through `report_body` (B11), so the fingerprint is checked
+    there, with and without the score.
     """
-    from trustsight.cli.display import _fact_to_dict
     from trustsight.config import config_fingerprint
+    from trustsight.reporting import evaluate_fact, report_body
 
     fact = scan_diff(HEADER + "+pkgver=2\n", package_name="demo")
-    assert _fact_to_dict(fact)["config_fingerprint"] == config_fingerprint()
+    evaluated = evaluate_fact(fact)
+    expected = config_fingerprint()
+    assert report_body(evaluated)["config_fingerprint"] == expected
+    assert report_body(evaluated, include_score=True)["config_fingerprint"] == expected
 
 
 def test_a_suppression_survives_the_default_json(tmp_path, monkeypatch):

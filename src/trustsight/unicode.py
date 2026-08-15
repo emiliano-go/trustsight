@@ -9,14 +9,52 @@ import unicodedata
 # Codepoints that require ASCII context (legitimate inside non-Latin scripts).
 _CONTEXTUAL_CF = frozenset({0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0xFEFF})
 
-# Build unconditional Cf set (all Cf chars minus contextual ones).
-_UNCONDITIONAL_CF: list[int] = []
-for cp in range(0x110000):
-    try:
-        if unicodedata.category(chr(cp)) == 'Cf' and cp not in _CONTEXTUAL_CF:
-            _UNCONDITIONAL_CF.append(cp)
-    except ValueError:
-        pass
+# Built on first use, not at import.
+#
+# The scan walks all 1,114,112 code points asking `unicodedata` for each
+# one's category, which costs about 360 ms. Paying that at import made every
+# CLI invocation pay it - `--version` and `--help` included - because
+# `cli.inspect` imports `describe_fatal_codepoints` at module level. The
+# derivation is kept rather than replaced by a literal, because deriving it
+# is what makes a format-control codepoint added in a future Unicode version
+# covered automatically; only *when* it runs has changed.
+
+
+def _build_unconditional_cf() -> list[int]:
+    """All Cf code points except the ones that need ASCII context."""
+    found: list[int] = []
+    for cp in range(0x110000):
+        try:
+            if unicodedata.category(chr(cp)) == "Cf" and cp not in _CONTEXTUAL_CF:
+                found.append(cp)
+        except ValueError:
+            pass
+    return found
+
+
+#: Names derived from the Cf scan.  Resolved by ``__getattr__`` on first
+#: access and cached in the module globals, so ``from .unicode import
+#: COMBINED`` and ``unicode.COMBINED`` both keep working unchanged.
+_LAZY = frozenset({
+    "_UNCONDITIONAL_CF", "_COMBINED_PATTERN", "COMBINED", "UNCONDITIONAL",
+    "R013_UNCONDITIONAL_PATTERN",
+})
+
+
+def __getattr__(name: str):
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    codepoints = _build_unconditional_cf()
+    pattern = "[" + "".join(f"\\U{cp:08X}" for cp in codepoints) + "]"
+    values = {
+        "_UNCONDITIONAL_CF": codepoints,
+        "_COMBINED_PATTERN": pattern,
+        "COMBINED": re.compile(pattern + r"|[\u200b-\u200f\ufeff]"),
+        "UNCONDITIONAL": re.compile(pattern),
+        "R013_UNCONDITIONAL_PATTERN": pattern,
+    }
+    globals().update(values)
+    return values[name]
 
 # Bidirectional text overrides (U+202A-U+202E)
 BIDI_OVERRIDES = re.compile(
@@ -67,26 +105,17 @@ TAG_CHARS = re.compile(
     '\U000e007e\U000e007f]'
 )
 
-_COMBINED_PATTERN = "[" + "".join(f"\\U{cp:08X}" for cp in _UNCONDITIONAL_CF) + "]"
-COMBINED = re.compile(
-    _COMBINED_PATTERN + r"|[\u200b-\u200f\ufeff]"
-)
-
 ANSI_ESCAPE = re.compile(r'\x1b\[[\d;]*[A-Za-z]|\x1b[\W_]')
 
 # Codepoints that are only ever deceptive, whatever their neighbours.
 # Zero-width joiners are deliberately excluded: they are mandatory in
 # Malayalam, Lao and Devanagari, so R013 gates those on ASCII context.
-UNCONDITIONAL = re.compile(_COMBINED_PATTERN)
-
 # Zero-width and directional marks: deceptive between ASCII, legitimate
 # inside non-Latin script runs.
 CONTEXTUAL = re.compile('[\u200b-\u200f\ufeff]')
 
 # Export the generated unconditional Cf pattern for use by config.py.
 # This replaces the hardcoded codepoint enumeration in the R013 TOML rule.
-R013_UNCONDITIONAL_PATTERN = _COMBINED_PATTERN
-
 
 def strip_ansi(text: str) -> str:
     """Remove ANSI escape sequences from *text*."""
@@ -95,13 +124,17 @@ def strip_ansi(text: str) -> str:
 
 def has_fatal_codepoints(text: str) -> bool:
     """Check if text contains any fatal Unicode codepoints."""
-    return bool(COMBINED.search(text))
+    from . import unicode as _self
+
+    return bool(_self.COMBINED.search(text))
 
 
 def describe_fatal_codepoints(text: str) -> list[tuple[int, str]]:
     """Return a list of (position, name) pairs for each fatal codepoint."""
     matches = []
-    for m in COMBINED.finditer(text):
+    from . import unicode as _self
+
+    for m in _self.COMBINED.finditer(text):
         cp = ord(m.group())
         start = m.start()
         if 0x202a <= cp <= 0x202e:

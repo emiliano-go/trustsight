@@ -5,7 +5,12 @@ import logging
 from .config import load_rules
 from .findings import stamp
 from .tokenizer import join_line_continuations
-from .regex_safety import BACKTRACK_BUDGET_S, backtracking_risk, has_nested_quantifier
+from .regex_safety import (
+    BACKTRACK_BUDGET_S,
+    backtracking_risk,
+    has_nested_quantifier,
+    is_superlinear,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -70,6 +75,38 @@ _pattern_cache: dict[str, "re.Pattern | None"] = {}
 # matching something no reviewer would read either.
 MAX_RULE_LINE_BYTES = 8192
 
+#: Lines the rule engine will read from one diff.
+#:
+#: `MAX_RULE_LINE_BYTES` bounds how long a line may be; this bounds how many
+#: there are, which was the missing half. Matching costs about 0.46 ms per
+#: line, so the 5 MiB byte cap alone permitted ~1.3 million short lines and
+#: roughly ten minutes of CPU for a single package - multiplied again by
+#: `depth.MAX_DEPTH_NODES` on a full-depth run.
+#:
+#: 20,000 is five times the largest diff in the 3,739-diff locked benign
+#: corpus (3,839 lines; p99.9 is 2,117), so it truncates nothing real while
+#: holding the worst case near nine seconds.
+MAX_SCANNED_LINES = 20_000
+
+
+def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]:
+    """Cut *diff_text* to :data:`MAX_SCANNED_LINES`, reporting whether it cut.
+
+    A function rather than four lines inlined at each analysis entry point.
+    The byte cap that sits next to this one was originally written on the
+    git path alone, which left every other caller unbounded, and the same
+    mistake is available here: `analyze_package` and `scan_diff` are
+    parallel implementations that both tokenize and both match.
+    """
+    lines = diff_text.split("\n")
+    if len(lines) <= MAX_SCANNED_LINES:
+        return diff_text, False
+    _log.warning(
+        "diff for %s holds %d lines; matching the first %d",
+        package_name or "<unnamed>", len(lines), MAX_SCANNED_LINES,
+    )
+    return "\n".join(lines[:MAX_SCANNED_LINES]), True
+
 
 def _compiled(pattern: str):
     """Return the compiled form of *pattern*, or None if it is invalid."""
@@ -82,12 +119,98 @@ def _compiled(pattern: str):
     except re.error:
         compiled = None
     if compiled is not None and (
-        has_nested_quantifier(pattern) or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+        has_nested_quantifier(pattern)
+        or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+        # Growth as well as absolute cost: a quadratic pattern with a small
+        # constant sits under the budget at the probe length and still
+        # costs seconds at a full line.
+        or is_superlinear(compiled)
     ):
         _log.warning("refusing regex pattern with excessive backtracking risk")
         compiled = None
     _pattern_cache[pattern] = compiled
     return compiled
+
+
+def find_line_in_diff(
+    diff_text: str, pattern: str, prefix: str = r"\+"
+) -> int | None:
+    r"""The 1-based line number of the first ``+``/``-`` line matching *pattern*.
+
+    *pattern* is regex syntax on purpose: callers pass things like
+    ``SKIP|NONE`` and ``sha256sums\s*=\s*\(``. Callers that mean a literal
+    escape it first.
+
+    The subtlety is what happens when escaping was forgotten, or when a
+    caller forwards package text. This used to compile the pattern
+    unescaped, fall back to escaping only on ``re.error``, and run whatever
+    compiled against every line - so a string that is *valid* regex was
+    executed as one, and this is the single place in the program where a
+    pattern is built at runtime rather than audited by
+    ``scripts/regex_audit.py``. A supplied ``(a+)+$`` cost 5.6 seconds
+    against one 24-character line, doubling every two characters.
+
+    So a dynamic pattern is held to the same standard as a shipped one: if
+    it backtracks, it is treated as the literal text it probably was.
+    """
+    def _compile(body: str):
+        return re.compile(r"^" + prefix + r".*" + body, re.IGNORECASE)
+
+    try:
+        compiled = _compile(pattern)
+        if (
+            has_nested_quantifier(pattern)
+            or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+            or is_superlinear(compiled)
+        ):
+            _log.warning(
+                "refusing dynamic line pattern with excessive backtracking "
+                "risk; matching it literally instead"
+            )
+            compiled = _compile(re.escape(pattern))
+    except re.error:
+        # An escaped fragment sliced mid-escape leaves a trailing backslash.
+        compiled = _compile(re.escape(pattern))
+
+    for index, line in enumerate(diff_text.splitlines()):
+        if compiled.search(line):
+            return index + 1
+    return None
+
+
+#: Rules whose pattern is built at runtime rather than written in the TOML.
+GENERATED_PATTERN_RULES = ("R013", "R047", "R048")
+
+
+def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
+    """Fill in the patterns that are generated rather than declared.
+
+    R013 is assembled from Unicode data and R047/R048 from config, so their
+    TOML entries carry a placeholder and the real pattern only exists once
+    this has run.
+
+    A function rather than a loop inside `apply_rules` so that
+    `scripts/regex_audit.py` can audit what actually runs. Those three
+    patterns were invisible to all three of the audit's collection
+    strategies at once: not a TOML literal, not `re.compile("literal")` in
+    the source, and not a module-level `re.Pattern`. R013 is the FATAL
+    homoglyph rule, and R047/R048 are built from operator config, so a
+    config edit could have slowed the scan with no gate to catch it.
+    """
+    for rule in rules:
+        if rule.get("id") == "R013":
+            from .unicode import R013_UNCONDITIONAL_PATTERN
+            rule["pattern"] = (
+                R013_UNCONDITIONAL_PATTERN
+                + r"|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])"
+            )
+        elif rule.get("id") == "R047":
+            from .config import _standard_port_pattern
+            rule["pattern"] = _standard_port_pattern()
+        elif rule.get("id") == "R048":
+            from .config import _free_registrar_tld_pattern
+            rule["pattern"] = _free_registrar_tld_pattern()
+    return rules
 
 
 def clamp(line: str) -> str:
@@ -281,21 +404,7 @@ def apply_rules(
     """
     if rules is None:
         rules = list(load_rules())
-    # R013, R047, R048 patterns are dynamically generated from config or
-    # Unicode data rather than hardcoded in the TOML file.
-    for rule in rules:
-        if rule["id"] == "R013":
-            from .unicode import R013_UNCONDITIONAL_PATTERN
-            rule["pattern"] = (
-                R013_UNCONDITIONAL_PATTERN
-                + r"|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])"
-            )
-        elif rule["id"] == "R047":
-            from .config import _standard_port_pattern
-            rule["pattern"] = _standard_port_pattern()
-        elif rule["id"] == "R048":
-            from .config import _free_registrar_tld_pattern
-            rule["pattern"] = _free_registrar_tld_pattern()
+    resolve_generated_patterns(rules)
 
     triggered = []
     # Both maps are built from the unclamped lines: context classification

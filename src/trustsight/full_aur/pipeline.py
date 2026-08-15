@@ -324,6 +324,7 @@ def run_baseline_build(
     sign_key: Optional[str] = None,
     json_output: bool = False,
     bootstrap: bool = False,
+    depth: Optional[int] = None,
 ) -> CycleResult:
     """Bootstrap or update the full-AUR corpus.
 
@@ -419,7 +420,7 @@ def run_baseline_build(
     def _fetch_one(name):
         meta = new_meta.get(name)
         if meta is None:
-            return (None, None, None)
+            return (None, None, None, False)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
     def _store(name, fetched) -> str:
@@ -432,7 +433,7 @@ def run_baseline_build(
         if is_reserved_name(name):
             log.warning("skipping reserved package name %r", name)
             return "reserved"
-        new_pkgbuild, tree_manifest, trailer_finding = fetched
+        new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
             return "fetch_failed"
@@ -455,6 +456,8 @@ def run_baseline_build(
             ),
             tree_manifest=tree_manifest,
             archive_trailer_finding=trailer_finding,
+            snapshot_refused=snapshot_refused,
+            depth=depth,
         )
         save_pkgbuild_snapshot(
             package_name=name,
@@ -602,6 +605,7 @@ def run_watch(
     cycles: int = 0,
     json_output: bool = False,
     sleep: Callable[[float], None] = time.sleep,
+    depth: Optional[int] = None,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted (plan §6.4).
 
@@ -631,7 +635,7 @@ def run_watch(
             # still bounds the total, so a persistently broken cycle cannot
             # spin forever either.
             try:
-                result = run_baseline_build(json_output=json_output)
+                result = run_baseline_build(json_output=json_output, depth=depth)
             except Exception as exc:
                 attempts += 1
                 _log(f"Cycle failed ({exc}); retrying in {delay}s")

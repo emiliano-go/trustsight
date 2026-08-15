@@ -166,14 +166,14 @@ def test_api_rejects_invalid_text_types(ts):
 def test_api_methods_return_dataclasses_and_not_rendered_text(ts, monkeypatch):
     from trustsight.full_aur.pipeline import CycleResult
 
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact(name))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact(name))
     monkeypatch.setattr(
         "trustsight.review.discover_packages",
         lambda **kwargs: ([{"name": "alpha", "current_version": "1.0"}], 1),
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False: [{
+        lambda entries, cb=None, verbose=False, depth=None: [{
             "package": "alpha", "old_version": "1.0", "new_version": "1.1",
             "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",
             "findings": [], "file_changes": [], "changes": [], "coverage_gaps": [],
@@ -200,14 +200,14 @@ def test_api_methods_return_dataclasses_and_not_rendered_text(ts, monkeypatch):
 def test_api_methods_do_not_render_to_stdout_or_stderr(ts, monkeypatch, capsys):
     from trustsight.full_aur.pipeline import CycleResult
 
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact(name))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact(name))
     monkeypatch.setattr(
         "trustsight.review.discover_packages",
         lambda **kwargs: ([{"name": "alpha", "current_version": "1.0"}], 1),
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False: [{
+        lambda entries, cb=None, verbose=False, depth=None: [{
             "package": "alpha", "old_version": "1.0", "new_version": "1.1",
             "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",
             "findings": [], "file_changes": [], "changes": [], "coverage_gaps": [],
@@ -236,7 +236,7 @@ def test_inspect_returns_a_report_built_from_the_analysis(ts, monkeypatch):
         ScoreEntry(rule_id="R001", severity="CRITICAL", weight=40,
                    reason="curl piped to bash", file="PKGBUILD", line=12),
     ])
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: fact)
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: fact)
 
     report = ts.inspect("alpha", check_aur=False)
 
@@ -263,7 +263,7 @@ def test_inspect_accepts_a_package_known_only_locally(ts, monkeypatch):
     """A package dropped from the AUR is still analysable from history."""
     monkeypatch.setattr("trustsight.discovery.get_aur_package_info", lambda names: {})
     monkeypatch.setattr("trustsight.db.get_package", lambda name: {"id": 1})
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact("gone"))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("gone"))
 
     assert ts.inspect("gone").package == "gone"
 
@@ -272,7 +272,7 @@ def test_the_verdict_always_directs_the_reader_to_review(ts, monkeypatch):
     """B9: no result may read as permission to skip looking at the diff."""
     from trustsight.verdict import DIRECTIONS
 
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact("quiet"))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("quiet"))
     report = ts.inspect("quiet", check_aur=False)
     assert any(report.verdict.endswith(d) for d in DIRECTIONS), report.verdict
 
@@ -283,7 +283,7 @@ def test_coverage_gaps_qualify_the_verdict_and_the_report(ts, monkeypatch):
                  diff_truncated=True,
                  coverage_gaps=["diff_truncated"],
                  risk="Inconclusive")
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: fact)
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: fact)
 
     report = ts.inspect("truncated", check_aur=False)
 
@@ -299,7 +299,7 @@ def test_the_band_is_the_analysis_band_not_one_derived_from_the_score(ts, monkey
     from trustsight.scoring import risk_level
 
     fact = _fact("cold", score=4, coverage_gaps=["diff_truncated"], risk="Inconclusive")
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: fact)
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: fact)
 
     report = ts.inspect("cold", check_aur=False)
     assert report.risk == "Inconclusive"
@@ -397,7 +397,7 @@ def test_suppressed_rules_are_reported_even_though_they_scored_nothing(ts, monke
         {"rule_id": "R010", "severity": "LOW", "override_reason": "known good",
          "override_package": "overridden"},
     ])
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: fact)
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: fact)
 
     report = ts.inspect("overridden", check_aur=False)
     assert [s.rule_id for s in report.suppressed] == ["R010"]
@@ -407,31 +407,50 @@ def test_suppressed_rules_are_reported_even_though_they_scored_nothing(ts, monke
 def test_flagged_matches_the_threshold_the_cli_counts(ts, monkeypatch):
     monkeypatch.setattr(
         "trustsight.analysis.analyze_package",
-        lambda name: _fact(name, score=FLAG_THRESHOLD),
+        lambda name, **_kw: _fact(name, score=FLAG_THRESHOLD),
     )
     assert ts.inspect("edge", check_aur=False).flagged is False
 
     monkeypatch.setattr(
         "trustsight.analysis.analyze_package",
-        lambda name: _fact(name, score=FLAG_THRESHOLD + 1),
+        lambda name, **_kw: _fact(name, score=FLAG_THRESHOLD + 1),
     )
     assert ts.inspect("over", check_aur=False).flagged is True
 
 
 def test_a_report_serialises_to_the_documented_json(ts, monkeypatch):
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact("json-pkg"))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("json-pkg"))
 
-    data = ts.inspect("json-pkg", check_aur=False).to_dict()
+    report = ts.inspect("json-pkg", check_aur=False)
+    data = report.to_dict()
 
-    assert data["package_name"] == "json-pkg"
+    # The CLI's naming, because this is the CLI's body (B11).
+    assert data["package"] == "json-pkg"
     assert data["config_fingerprint"].startswith("sha256:")
-    assert "score_breakdown" in data
-    json.loads(ts.inspect("json-pkg", check_aur=False).to_json())
+
+    # The aggregate numbers are available on request, never volunteered.
+    assert "score" not in data
+    assert "risk" not in data
+    assert "score_breakdown" not in data
+    scored = report.to_dict(include_score=True)
+    assert scored["score"] == report.score
+    assert scored["risk"] == report.risk
+    assert "score_breakdown" in report.to_dict(verbose=True)
+
+    # Attribute access is the caller naming the field, so it always works.
+    assert isinstance(report.score, int)
+
+    # The serialised PackageFact is still reachable, under its own name and
+    # in its own (storage) naming.
+    assert report.raw["package_name"] == "json-pkg"
+    assert "final_score" in report.raw
+
+    json.loads(report.to_json())
 
 
 def test_the_report_carries_the_config_fingerprint(ts, monkeypatch):
     """B1: two results are only comparable under the same instrument."""
-    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name: _fact("fp"))
+    monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("fp"))
     report = ts.inspect("fp", check_aur=False)
     assert report.config_fingerprint == ts.config_fingerprint
 
@@ -446,7 +465,7 @@ def _stub_review(monkeypatch, rows, discovered=None, total=3):
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False: rows,
+        lambda entries, cb=None, verbose=False, depth=None: rows,
     )
 
 
@@ -506,7 +525,7 @@ def test_review_of_an_explicit_list_skips_discovery(ts, monkeypatch):
     monkeypatch.setattr("trustsight.review.discover_packages", no_discovery)
     seen = {}
 
-    def batch(entries, cb=None, verbose=False):
+    def batch(entries, cb=None, verbose=False, depth=None):
         seen["entries"] = entries
         return []
 
@@ -519,7 +538,7 @@ def test_review_of_an_explicit_list_skips_discovery(ts, monkeypatch):
 def test_review_honours_the_limit(ts, monkeypatch):
     seen = {}
 
-    def batch(entries, cb=None, verbose=False):
+    def batch(entries, cb=None, verbose=False, depth=None):
         seen["count"] = len(entries)
         return []
 
@@ -534,7 +553,7 @@ def test_review_honours_the_limit(ts, monkeypatch):
 
 
 def test_review_reports_progress_through_the_hook(ts, monkeypatch):
-    def batch(entries, cb=None, verbose=False):
+    def batch(entries, cb=None, verbose=False, depth=None):
         cb(1, 2, "Fetching alpha")
         cb(-1, 0, "Reviewing packages...")
         return []

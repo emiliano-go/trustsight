@@ -306,6 +306,14 @@ maintainer_first_in_package = 15
 enabled = false
 threshold = 80
 
+[depth]
+# How far into a package's AUR dependency closure to analyse.  0 disables
+# it, 1 (the default) analyses direct AUR dependencies, n analyses n levels,
+# and -1 walks every level there is - bounded by depth.MAX_DEPTH_LEVELS and
+# depth.MAX_DEPTH_NODES, because the dependency graph is written by the
+# party under review.  Overridden per run by --depth.
+levels = 1
+
 [diff]
 max_context_lines = 3
 max_diff_bytes = 5242880

@@ -1,0 +1,14 @@
+{
+  "X002-resolved-variable.diff": {
+    "max_score": 0,
+    "must_fire": []
+  },
+  "X002-sed-with-pipe-separator.diff": {
+    "max_score": 0,
+    "must_fire": []
+  },
+  "X005-defers-to-r077.diff": {
+    "max_score": 0,
+    "must_fire": []
+  }
+}

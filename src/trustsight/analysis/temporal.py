@@ -3,6 +3,7 @@ import time
 import pygit2
 
 from ..db import get_package
+from ..fetcher import walk_bounded
 from ..findings import stamp
 
 
@@ -35,12 +36,11 @@ def _package_is_new(repo, head_commit, pkg_name=None):
         if pkg_name and get_package(pkg_name):
             return None
 
+        # 100 rather than the default: this only asks whether the *root*
+        # commit is recent, and a package with more history than that is
+        # not new by any reading.
         root_age = None
-        count = 0
-        for c in repo.walk(head_commit):
-            count += 1
-            if count > 100:
-                return None
+        for c in walk_bounded(repo, head_commit, limit=100):
             if not c.parents:
                 root_age = (time.time() - c.commit_time) / 86400
                 break

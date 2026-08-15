@@ -29,7 +29,7 @@ from ..db import (
 )
 from ..lint import SEVERITY_ERROR, lint_rules
 from ..override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides, remove_override
-from ..unicode import strip_ansi
+from ..safe_text import clean
 from .display import (
     HAS_RICH,
     SIMPLE_HEAD,
@@ -232,9 +232,14 @@ def override_list(
         table.add_column("Scope")
         table.add_column("Reason", overflow="fold")
         table.add_column("Added", style="dim")
+        from rich.text import Text
         for o in overrides:
-            table.add_row(o.rule_id, o.package or "all packages",
-                          strip_ansi(o.reason), o.created_at)
+            # `Text`, not a bare string: Rich reads markup in a plain str,
+            # so a `[green]` in the value recolours the row and an
+            # unbalanced tag aborts the render of everything after it.
+            table.add_row(Text(clean(o.rule_id)),
+                          Text(clean(o.package or "all packages")),
+                          Text(clean(o.reason)), Text(clean(o.created_at)))
         console().print(table)
         console().print(
             f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
@@ -242,7 +247,8 @@ def override_list(
         )
     else:
         for o in overrides:
-            print(f"{o.rule_id:<8} {o.package or 'all':<20} {strip_ansi(o.reason)}")
+            print(f"{clean(o.rule_id):<8} {clean(o.package or 'all'):<20} "
+                  f"{clean(o.reason)}")
 
 
 @override_app.command("add")
@@ -318,8 +324,14 @@ def override_wizard(
         table.add_column("Rule", style="cyan")
         table.add_column("Severity")
         table.add_column("Reason", overflow="fold")
+        from rich.text import Text
         for i, e in enumerate(available, 1):
-            table.add_row(str(i), e.rule_id, e.severity, strip_ansi(e.reason))
+            # `e.reason` carries package-controlled text: a tree member
+            # name, a quoted diff fragment. The weaker `unicode` helper
+            # used here before leaves C1 control bytes, BEL and newlines
+            # behind, and \x9b2J is the 8-bit spelling of "clear screen".
+            table.add_row(Text(str(i)), Text(clean(e.rule_id)),
+                          Text(clean(e.severity)), Text(clean(e.reason)))
         con.print(table)
 
         if already_suppressed:
@@ -754,7 +766,9 @@ def register_commands(app: typer.Typer):
                 table.add_column("Message")
                 for f in findings:
                     style = "red" if f.level == SEVERITY_ERROR else "yellow"
-                    table.add_row(f.rule_id, Text(f.level, style=style), f.check, f.message)
+                    table.add_row(Text(clean(f.rule_id)),
+                                  Text(f.level, style=style),
+                                  Text(clean(f.check)), Text(clean(f.message)))
                 con.print(table)
                 con.print(
                     f"\n{len(rules)} rules checked: "

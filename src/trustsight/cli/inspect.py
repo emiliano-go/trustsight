@@ -4,6 +4,7 @@ import typer
 
 from ..analysis import analyze_package
 from ..config import ensure_default_configs, load_config
+from ..coverage import GAP_REASONS
 from ..db import (
     init_db,
     maybe_auto_import_seed,
@@ -17,9 +18,11 @@ from ..scoring import (
 from ..safe_text import clean, safe_markup
 from ..unicode import describe_fatal_codepoints
 from .display import (
+    DEPTH_TRUNCATED_NOTE,
     HAS_RICH,
+    dependency_cards_rich,
+    dependency_lines_plain,
     RISK_COLORS,
-    _fact_to_dict,
     _print_colored,
     _severity_text,
     _weight_text,
@@ -41,6 +44,13 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
 
     rows: list[tuple[str, str]] = []
     rows.append(("Version", version_transition(fact)))
+
+    # B2: the gap is shown whether or not a band is.  It used to ride the
+    # band label alone, and the default output withholds the band, so
+    # `inspect` with no flags said nothing at all about a partial read -
+    # the one light that must never be suppressible.
+    for gap in fact.coverage_gaps:
+        rows.append(("Not vetted", f"[yellow]{safe_markup(GAP_REASONS.get(gap, gap))}[/]"))
 
     if fact.first_seen:
         rows.append(("Status", "[yellow]First analysis.[] No prior history for this package."))
@@ -150,6 +160,14 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
             text = f"  [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}"
             inside.add_row("", Text(text))
 
+    if getattr(fact, "dependencies", None):
+        inside.add_row("", "")
+        inside.add_row("[underline]Dependencies[/]", "")
+        for card in dependency_cards_rich(fact.dependencies, show_score=show_score):
+            inside.add_row("", card)
+        if getattr(fact, "depth_truncated", False):
+            inside.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
+
     if fact.suppressed_rules:
         inside.add_row("", "")
         inside.add_row("[yellow]Suppressed by override[/]", "")
@@ -191,6 +209,8 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     print(f"TrustSight Inspect: {clean(fact.package_name)}")
     print(f"  Version: {clean(version_transition(fact))}")
     print(f"  Status: {clean(_status_text(fact))}")
+    for gap in fact.coverage_gaps:
+        print(f"  [Not fully vetted: {clean(GAP_REASONS.get(gap, gap))}.]")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.maintainer_changed:
@@ -198,6 +218,14 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     cs = fact.source_changes.checksum_behavior
     if cs and cs != "unchanged":
         print(f"  Checksum: {clean(cs)}")
+    # B7: what moved, whether or not a rule matched.  The Rich render has
+    # this section and the plain one did not, so a terminal without Rich
+    # could not tell "nothing fired and nothing changed" from "nothing
+    # fired and a great deal changed".
+    if fact.changes:
+        print("  What changed:")
+        for entry in fact.changes:
+            print(f"    {clean(entry)}")
     if fact.diff_summary.file_changes:
         print("  Files changed:")
         for fc in fact.diff_summary.file_changes:
@@ -225,6 +253,12 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             expired = " [EXPIRED]" if m.expired else ""
             line = f" line {m.line}" if m.line is not None else ""
             print(f"    [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}")
+    for line in dependency_lines_plain(getattr(fact, "dependencies", ()),
+                                       show_score=show_score):
+        print(line)
+    if getattr(fact, "depth_truncated", False):
+        print(f"  [{DEPTH_TRUNCATED_NOTE}]")
+
     if fact.suppressed_rules:
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
@@ -243,6 +277,11 @@ def register_commands(app: typer.Typer):
         score: bool = typer.Option(False, "--score", help="Show aggregate trust score"),
         risk: bool = typer.Option(False, "--risk", help="Show risk level"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+        depth: int = typer.Option(
+            None, "--depth",
+            help="AUR dependency levels to analyse: 0 off, 1 default, n levels, "
+                 "-1 every level (bounded).",
+        ),
     ):
         """Show a detailed analysis of a single package."""
         _show_score = score
@@ -266,7 +305,7 @@ def register_commands(app: typer.Typer):
                 raise typer.Exit(code=2)
 
         try:
-            fact = analyze_package(package)
+            fact = analyze_package(package, depth=depth)
         except Exception as exc:
             msg = f"Analysis of '{package}' failed: {exc}"
             if json_output:
@@ -275,18 +314,18 @@ def register_commands(app: typer.Typer):
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
         if json_output:
-            data = _fact_to_dict(fact)
-            if verbose:
-                data["score_breakdown"] = [
-                    {
-                        "rule_id": e.rule_id,
-                        "severity": e.severity,
-                        "weight": e.weight,
-                        "template": e.template,
-                        "evidence": e.evidence,
-                    }
-                    for e in fact.score_breakdown
-                ]
+            from ..reporting import evaluate_fact, report_body
+
+            # The same body `review --json` and the API emit.  This path used
+            # to build its own dict, which always carried `score`, `risk` and
+            # `risk_label` regardless of the flags - so `inspect --json`
+            # volunteered the number the CLI is documented to withhold, and
+            # disagreed with `review --json` on the same run.
+            data = report_body(
+                evaluate_fact(fact),
+                include_score=_show_score or _show_risk,
+                verbose=verbose,
+            )
             typer.echo(json.dumps(data, indent=2))
             return
 

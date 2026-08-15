@@ -14,15 +14,17 @@ from ..db import (
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
+    get_aur_orphan_state,
+    update_aur_orphan_state,
     update_package_version,
     upsert_package,
 )
 from ..differ import (
+    generate_diff_bounded,
     companion_source_hunks,
     detect_gpg_verification_removed,
     detect_verification_evidence,
     extract_urls_from_diff,
-    generate_diff,
     map_diff_lines,
     truncate_diff,
 )
@@ -32,6 +34,7 @@ from ..fetcher import (
     get_maintainer_from_commit,
     get_pkgbuild_at_commit,
     get_pkgver_from_head,
+    walk_bounded,
 )
 from ..findings import stamp
 from ..novelty import (
@@ -41,7 +44,14 @@ from ..novelty import (
 )
 from ..deps import extract_dependency_changes
 from ..override import filter_triggered_rules
-from ..rules import apply_rules, clamp_text, get_raw_diff_lines
+from ..rules import (
+    apply_rules,
+    clamp_diff_lines,
+    clamp_text,
+    get_raw_diff_lines,
+)
+from .adoption import adoption_findings
+from .buildfetch import has_unpinned_build_deps
 from ..coverage import (
     fail_closed,
     gaps_from,
@@ -111,12 +121,36 @@ def _collect_tree_files(repo, commit_oid: str, max_file_bytes: int = 512 * 1024,
     return files
 
 
+def _walk_dependencies(pkg_name, depth, config, seen):
+    """Analyse the AUR dependency closure of *pkg_name*.
+
+    A dependency is analysed by ``analyze_package`` with ``depth=0``: the
+    walk owns the level counting, so a child must not start a walk of its
+    own or the closure would be traversed once per node.
+    """
+    from ..depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
+
+    resolved = resolve_depth(depth, config)
+    if resolved == 0:
+        return DepthResult()
+    return walk_dependencies(
+        pkg_name,
+        depth=resolved,
+        metadata=default_metadata(),
+        analyse=lambda name: analyze_package(name, depth=0),
+        already_seen=seen,
+    )
+
+
 def analyze_package(
     pkg_name: str,
     old_commit: str = "",
     new_version: str = "",
     installed_version: str | None = None,
     upstream_mtime: int | None = None,
+    aur_orphaned: bool | None = None,
+    depth: int | None = None,
+    _depth_seen: set | None = None,
 ) -> PackageFact:
     _ensure_init()
     config = load_config()
@@ -147,7 +181,7 @@ def analyze_package(
                 old_commit = stored_commit
             elif head_commit:
                 try:
-                    for c in repo.walk(head_commit):
+                    for c in walk_bounded(repo, head_commit):
                         if not c.parents:
                             old_commit = str(c.id)
                             break
@@ -158,9 +192,13 @@ def analyze_package(
         else:
             return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
 
-    diff_text, diff_summary = generate_diff(
+    # The generator's own truncation has to travel: a patch it declined to
+    # retain leaves the assembled text at or under the cap, so measuring the
+    # text below would report "complete" while content had been skipped.
+    diff_text, diff_summary, generated_truncated = generate_diff_bounded(
         repo, old_commit, head_commit,
         config.get("diff", {}).get("max_context_lines", 3),
+        max_bytes=config.get("diff", {}).get("max_diff_bytes", 5_242_880),
     )
 
     # A local source=() companion file is build input the recipe copies into
@@ -173,9 +211,12 @@ def analyze_package(
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
-    diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
+    diff_text, combined_truncated = truncate_diff(diff_text, max_bytes)
+    # Either half truncating means part of the change was not read.
+    diff_truncated = combined_truncated or generated_truncated
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
+    diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
 
     source_changes = extract_urls_from_diff(diff_text)
 
@@ -253,11 +294,30 @@ def analyze_package(
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
 
+    # R141 compares the *previous* recorded AUR state against the current
+    # one, so the read has to happen before update_aur_orphan_state below.
+    was_orphaned = get_aur_orphan_state(pkg_name)
+
     takeover = _check_untrusted_maintainer_takeover(
         maintainer_changed, new_maintainer
     )
     if takeover:
         triggered_rules.append(takeover)
+
+    # R141/R142/R143.  Emitted before the meta annotations so R143 is in the
+    # breakdown any composition or coverage logic downstream reads.
+    adoption_findings(
+        diff_text,
+        package_name=pkg_name,
+        was_orphaned=was_orphaned,
+        currently_maintained=bool(new_maintainer) or aur_orphaned is False,
+        add=lambda rid, name, severity, category, match, **params: (
+            triggered_rules.append(stamp({
+                "rule_id": rid, "name": name, "severity": severity,
+                "category": category, "match": match, "params": params,
+            }))
+        ),
+    )
 
     triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
@@ -277,7 +337,10 @@ def analyze_package(
     if head_commit:
         try:
             count_24h = 0
-            for c in repo.walk(head_commit):
+            # Bounded because history is attacker-authored, and free to
+            # bound because the walk is newest-first: a burst inside 24h
+            # lives in the newest commits or it is not a burst.
+            for c in walk_bounded(repo, head_commit):
                 if (time.time() - c.commit_time) / 3600 <= 24:
                     count_24h += 1
                 if count_24h >= 3:
@@ -294,12 +357,20 @@ def analyze_package(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
+    # Before scoring, because a truncated walk has to reach `gaps_from`:
+    # the band downgrade is decided once inside calculate_score and carried
+    # on the fact, so a gap appended afterwards would never fail closed.
+    depth_result = _walk_dependencies(pkg_name, depth, config, _depth_seen)
+
     gaps = gaps_from(
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        deps_not_scanned=depth_result.truncated,
     )
 
     score, breakdown, risk = calculate_score(
@@ -332,6 +403,9 @@ def analyze_package(
         maintainer_changed=maintainer_changed,
         previous_maintainer=old_maintainer,
         current_maintainer=new_maintainer,
+        dependencies=list(depth_result.reports),
+        depth_truncated=depth_result.truncated,
+        depth_note=depth_result.reason,
         diff_summary=diff_summary,
         source_changes=source_changes,
         source_buckets=source_buckets,
@@ -344,6 +418,7 @@ def analyze_package(
         suppressed_rules=suppressed_rules,
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,
@@ -370,6 +445,8 @@ def analyze_package(
     update_package_version(pkg_name, head_version)
     if new_maintainer:
         update_package_maintainer(pkg_name, new_maintainer)
+    update_aur_orphan_state(pkg_name, aur_orphaned)
+
 
     dependency_changes = extract_dependency_changes(diff_text, pkg_name)
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
@@ -403,6 +480,10 @@ def scan_diff(
         log.warning("diff for %s exceeds %d bytes; truncating", package_name, max_bytes)
         diff_text = diff_bytes[:max_bytes].decode("utf-8", errors="replace")
 
+    # The byte cap is not a bound on work: matching costs per *line*, so a
+    # diff of many short lines stays under 5 MiB while taking minutes.
+    diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
+
     source_changes = extract_urls_from_diff(diff_text)
 
     source_buckets = classify_urls(source_changes.added_urls)
@@ -432,6 +513,24 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+
+    # R142 only.  was_orphaned=-1 means "no recorded observation", so R141
+    # and R143 are structurally silent here: the stateless path has no AUR
+    # history to claim an adoption against, and a rule that fires without
+    # its state is the cold-start failure the calibration gates catch.
+    adoption_findings(
+        diff_text,
+        package_name=package_name or "",
+        was_orphaned=-1,
+        currently_maintained=False,
+        add=lambda rid, name, severity, category, match, **params: (
+            triggered_rules.append(stamp({
+                "rule_id": rid, "name": name, "severity": severity,
+                "category": category, "match": match, "params": params,
+            }))
+        ),
+    )
+
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
@@ -475,10 +574,12 @@ def scan_diff(
     unresolved_sources = unresolved_source_lines(diff_text)
     gaps = gaps_from(
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        unpinned_build_deps=has_unpinned_build_deps(diff_text),
     )
 
     score, breakdown, risk = calculate_score(
@@ -509,6 +610,7 @@ def scan_diff(
         execution_changes=exec_changes,
         novelty_context=novelty,
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,

@@ -148,7 +148,7 @@ def test_find_line_in_diff_survives_a_lone_trailing_backslash():
     (end of pattern)`` when the corpus rebuild changed which hunk a
     long source_url line lands in).
     """
-    from trustsight.analysis.delivery import _find_line_in_diff
+    from trustsight.rules import find_line_in_diff
 
     fragment = "https://example.invalid/very/long/source/url/path/with/dots.and.more"
     sliced = re.escape(fragment)[:60]
@@ -156,9 +156,9 @@ def test_find_line_in_diff_survives_a_lone_trailing_backslash():
         sliced = sliced[:-1]
 
     diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n+source=(\"https://example.invalid/full/source/url\")\n"
-    assert _find_line_in_diff(diff, sliced) is None
+    assert find_line_in_diff(diff, sliced) is None
 
-    assert _find_line_in_diff(diff, "full/source/url") == 3
+    assert find_line_in_diff(diff, "full/source/url") == 3
 
 
 # --- R120: reconstructed-executable payload ---

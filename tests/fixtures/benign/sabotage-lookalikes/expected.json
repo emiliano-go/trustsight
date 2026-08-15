@@ -1,0 +1,10 @@
+{
+  "S002-clears-srcdir.diff": {
+    "max_score": 0,
+    "must_fire": []
+  },
+  "S006-disables-own-service.diff": {
+    "max_score": 0,
+    "must_fire": []
+  }
+}

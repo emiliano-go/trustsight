@@ -37,13 +37,44 @@ def test_calculate_score_empty():
 
 
 def test_calculate_score_one_rule():
+    """One CRITICAL scores 40 and reads High, not the Medium 40 implies.
+
+    CRITICAL weighs 40 and the High band opens at 51, so arithmetic alone
+    can never lift a single CRITICAL above Medium. The floor in
+    ``_floor_for_critical`` is what stops a lone `curl | bash` - or a lone
+    fork bomb - reading as a medium situation.
+    """
     triggered = [{"rule_id": "R001", "severity": "CRITICAL", "name": "Remote Exec", "match": "curl | bash"}]
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), SHARED_CONFIG)
     assert score == 40
     assert len(breakdown) == 1
     assert breakdown[0].rule_id == "R001"
     assert breakdown[0].weight == 40
+    assert risk_level(score) == "Medium"      # what the number alone says
+    assert level == "High"                    # what the severity requires
+
+
+def test_a_high_finding_is_not_floored():
+    """The floor is CRITICAL-only: HIGH keeps the band its weight earns."""
+    triggered = [{"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip",
+                  "match": "sha256sums=SKIP"}]
+    score, _breakdown, level = calculate_score(
+        triggered, {}, NoveltyContext(observation_count=999), SHARED_CONFIG)
+    assert score == 25
     assert level == "Medium"
+
+
+def test_the_floor_never_lowers_a_band():
+    """A CRITICAL inside a diff that already scored Critical stays Critical."""
+    triggered = [
+        {"rule_id": "R001", "severity": "CRITICAL", "name": "a", "match": "x"},
+        {"rule_id": "R002", "severity": "CRITICAL", "name": "b", "match": "y"},
+        {"rule_id": "R003", "severity": "CRITICAL", "name": "c", "match": "z"},
+    ]
+    score, _breakdown, level = calculate_score(
+        triggered, {}, NoveltyContext(observation_count=999), SHARED_CONFIG)
+    assert score > 80
+    assert level == "Critical"
 
 
 def test_calculate_score_multiple_rules():
@@ -355,3 +386,44 @@ def test_maintainer_novelty_remains_the_strongest_signal():
     weights = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
     assert weights["maintainer_first_in_package"] > weights["url_first_globally"]
     assert weights["url_first_globally"] > weights["url_first_in_package"]
+
+
+def test_a_fatal_finding_names_itself_in_the_label():
+    """B4's FATAL is structurally special; the band alone cannot say so.
+
+    A FATAL caps the score at 100, so it arrives as `Critical` - and so does
+    a score that merely accumulated to 81. The distinction rides
+    `risk_label` rather than a new band, because `risk` is a closed enum
+    consumers gate on and the severity is in `score_breakdown` either way.
+    """
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.scoring import verdict_label, verdict_level
+
+    fatal = PackageFact(
+        package_name="d", final_score=100, risk="Critical",
+        score_breakdown=[ScoreEntry(rule_id="R013", severity="FATAL",
+                                    weight=0, reason="unicode deception")],
+    )
+    assert verdict_level(fatal) == "Critical"          # the enum is unchanged
+    assert verdict_label(fatal) == "Critical (FATAL: R013)"
+
+    # An accumulated Critical with no FATAL reads exactly as before.
+    plain = PackageFact(package_name="d", final_score=90, risk="Critical")
+    assert verdict_label(plain) == "Critical"
+
+
+def test_a_fatal_label_still_carries_the_coverage_gap():
+    """Naming the FATAL must not displace B2's qualifier."""
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.coverage import INCOMPLETE_SUFFIX
+    from trustsight.scoring import verdict_label
+
+    fact = PackageFact(
+        package_name="d", final_score=100, risk="Critical",
+        coverage_gaps=["diff_truncated"],
+        score_breakdown=[ScoreEntry(rule_id="R012", severity="FATAL",
+                                    weight=0, reason="injection")],
+    )
+    label = verdict_label(fact)
+    assert "FATAL: R012" in label
+    assert label.endswith(INCOMPLETE_SUFFIX)

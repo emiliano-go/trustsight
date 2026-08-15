@@ -1,7 +1,9 @@
 import logging
 import sys
 
-from ..scoring import risk_level, verdict_label, verdict_level
+from ..coverage import GAP_REASONS
+from ..safe_text import clean
+from ..scoring import risk_level
 
 # Fact-to-text helpers live in ``verdict`` so the review engine and the API
 # can render a version line without importing anything CLI-shaped.  They are
@@ -103,74 +105,6 @@ def _score_text(score: int, risk: str | None = None) -> "Text":
     return Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
 
 
-def _fact_to_dict(fact):
-    from ..config import config_fingerprint
-    from ..ioc_baseline import IocMatch
-
-    def _ioc_match_dict(m: IocMatch) -> dict:
-        return {
-            "type": m.type,
-            "value": m.value,
-            "source": m.source,
-            "confidence": m.confidence,
-            "provenance": m.provenance,
-            "campaign": m.campaign,
-            "added": m.added,
-            "surface": m.surface,
-            "line": m.line,
-            "expired": m.expired,
-        }
-
-    data = {
-        # B1: which instrument produced this.  Every machine-readable report
-        # carries it, so two operators comparing results can tell at a glance
-        # whether they are running the same rules, thresholds and overrides.
-        # `review --json` and schema.fact_to_dict carried it and this one did
-        # not, which made the guarantee true of some reports and not others.
-        "config_fingerprint": config_fingerprint(),
-        "package": fact.package_name,
-        "old_version": fact.old_version,
-        "new_version": fact.new_version,
-        # Machine consumers need the same caveat the table shows: the two
-        # versions above are not always comparable (plan §13).
-        "version_comparison": getattr(fact, "version_comparison", ""),
-        "score": fact.final_score,
-        "risk": verdict_level(fact),
-        "risk_label": verdict_label(fact),
-        "coverage_gaps": list(getattr(fact, "coverage_gaps", [])),
-        "first_seen": fact.first_seen,
-        "maintainer_changed": fact.maintainer_changed,
-        "checksum_behavior": fact.source_changes.checksum_behavior if hasattr(fact.source_changes, "checksum_behavior") else None,
-        "score_breakdown": [
-            {
-                "rule_id": e.rule_id,
-                "severity": e.severity,
-                "weight": e.weight,
-                "reason": e.reason,
-                "template": e.template,
-                "evidence": e.evidence,
-                "file": e.file,
-                "line": e.line,
-            }
-            for e in fact.score_breakdown
-        ],
-        "suppressed_rules": fact.suppressed_rules,
-    }
-    if fact.maintainer_changed:
-        data["previous_maintainer"] = fact.previous_maintainer
-        data["current_maintainer"] = fact.current_maintainer
-    if fact.source_changes.added_urls:
-        data["added_urls"] = [
-            {"url": url, "bucket": fact.source_buckets.get(url, "unknown")}
-            for url in fact.source_changes.added_urls
-        ]
-    if fact.execution_changes.resolved_commands:
-        data["resolved_commands"] = fact.execution_changes.resolved_commands[:50]
-    if fact.ioc_matches:
-        data["ioc_matches"] = [_ioc_match_dict(m) for m in fact.ioc_matches]
-    return data
-
-
 def _fmt_bytes(n: int) -> str:
     for unit in ("B", "KB", "MB", "GB"):
         if n < 1024:
@@ -188,3 +122,102 @@ def _print_colored(msg: str, color: str = "", stderr: bool = False):
     else:
         kwargs = {"file": sys.stderr} if stderr else {}
         print(msg, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Dependency mini-cards.
+#
+# A dependency is a full analysis with its own score and band, so it gets its
+# own card - nested inside the parent's, indented by depth. Both a Rich and a
+# plain form live here rather than in each command, because B11 requires the
+# same information on every surface and four copies of this is four chances
+# to drop a field from one of them.
+# ---------------------------------------------------------------------------
+
+#: Shown when the walk stopped early, so a short list cannot read as a
+#: complete closure.
+DEPTH_TRUNCATED_NOTE = "dependency walk cut short; part of the closure was not analysed"
+
+
+def _dep_fields(dep):
+    """``(name, depth, score, risk_label, findings, gaps, failed, error)``.
+
+    Accepts a ``DependencyReport`` or the plain dict a JSON body carries, so
+    a renderer fed either shape shows the same thing.
+    """
+    if isinstance(dep, dict):
+        get = dep.get
+    else:
+        def get(key, default=None):
+            return getattr(dep, key, default)
+    return (
+        str(get("name", "") or ""),
+        int(get("depth", 0) or 0),
+        int(get("score", 0) or 0),
+        str(get("risk_label", "") or get("risk", "") or ""),
+        int(get("finding_count", 0) or 0),
+        list(get("coverage_gaps", ()) or ()),
+        bool(get("failed", False)),
+        str(get("error", "") or ""),
+    )
+
+
+def dependency_cards_rich(dependencies, *, show_score=False):
+    """A Rich renderable holding one mini-card per analysed dependency."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    from ..scoring import FLAG_THRESHOLD
+
+    cards = []
+    for dep in dependencies:
+        name, depth, score, label, findings, gaps, failed, error = _dep_fields(dep)
+        inner = Table.grid(padding=(0, 1))
+        inner.add_column(style="dim", justify="right", no_wrap=True)
+        inner.add_column()
+
+        if failed:
+            inner.add_row("Status", Text(f"NOT vetted: {clean(error)}", style="yellow"))
+        else:
+            inner.add_row("Findings", Text(str(findings)))
+            if show_score:
+                inner.add_row("Score", Text(f"{score}/100 ({clean(label)})"))
+            elif label:
+                inner.add_row("Risk", Text(f"({clean(label)})"))
+        for gap in gaps:
+            inner.add_row("Not vetted", Text(clean(GAP_REASONS.get(gap, gap)), style="yellow"))
+
+        border = "yellow" if failed else (
+            "red" if score > FLAG_THRESHOLD else "blue")
+        cards.append(Panel(
+            inner,
+            title=Text(f"L{depth}  {clean(name)}"),
+            border_style=border,
+            padding=(0, 1),
+        ))
+    return cards
+
+
+def dependency_lines_plain(dependencies, *, show_score=False):
+    """The same information, as indented plain-text lines."""
+    from ..scoring import FLAG_THRESHOLD
+
+    out = []
+    for dep in dependencies:
+        name, depth, score, label, findings, gaps, failed, error = _dep_fields(dep)
+        indent = "  " * (depth + 1)
+        if failed:
+            out.append(f"{indent}[dep L{depth}] {clean(name)}: NOT vetted ({clean(error)})")
+            continue
+        head = f"{indent}[dep L{depth}] {clean(name)}: {findings} finding(s)"
+        if show_score:
+            head += f", {score}/100 ({clean(label)})"
+        elif label:
+            head += f" ({clean(label)})"
+        if score > FLAG_THRESHOLD:
+            head += "  <- flagged"
+        out.append(head)
+        for gap in gaps:
+            out.append(f"{indent}  [Not fully vetted: {clean(GAP_REASONS.get(gap, gap))}.]")
+    return out

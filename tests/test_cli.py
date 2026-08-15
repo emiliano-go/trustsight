@@ -326,7 +326,7 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
         )
         result = CliRunner().invoke(app, ["inspect", "testpkg"])
         assert result.exit_code == 0, result.stdout
-        mock_analyze.assert_called_once_with("testpkg")
+        mock_analyze.assert_called_once_with("testpkg", depth=None)
 
 
 # --- batch orchestration ---
@@ -496,7 +496,7 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
     monkeypatch.setattr(
         cli.review, "_analyze_outdated_batch",
-        lambda pkgs, cb=None, verbose=False: [
+        lambda pkgs, cb=None, verbose=False, depth=None: [
             {"package": "ok", "score": 5, "risk": "Low", "verdict": "fine",
              "first_seen": False},
             {"package": "bad", "score": None, "risk": "Error", "failed": True,

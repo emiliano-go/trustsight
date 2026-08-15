@@ -89,6 +89,7 @@ class PackageFact:
     # padding a diff past the cap and appending the payload otherwise
     # turns a High into a Low.
     diff_truncated: bool = False
+    scan_truncated: bool = False
 
     recent_commit_burst: bool = False
 
@@ -136,6 +137,15 @@ class PackageFact:
 
     # IOC Federation baseline matches (v0.12.0).  Context only; no score.
     ioc_matches: list["IocMatch"] = field(default_factory=list)
+
+    #: Analysed AUR dependencies, each a full analysis in its own right with
+    #: its own score and band.  Never folded into this package's score: see
+    #: `depth.py` and B1 on why depth must not move a number.
+    dependencies: list = field(default_factory=list)
+    #: The dependency walk stopped before the closure was exhausted, which
+    #: drives the ``deps_not_scanned`` coverage gap.
+    depth_truncated: bool = False
+    depth_note: str = ""
 
 
 def fact_to_dict(fact: PackageFact) -> dict:
@@ -196,6 +206,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
         "diff_truncated": fact.diff_truncated,
+        "scan_truncated": fact.scan_truncated,
         "tree_analyzed": fact.tree_analyzed,
         "changes": fact.changes,
         "dependency_changes": {k: sorted(v) for k, v in fact.dependency_changes.items()},
@@ -219,6 +230,10 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "final_score": fact.final_score,
         "adapter": fact.adapter,
         "ioc_matches": [_ioc_match_dict(m) for m in fact.ioc_matches],
+        "dependencies": [
+            d.to_dict() if hasattr(d, "to_dict") else dict(d)
+            for d in fact.dependencies
+        ],
     }
 
 

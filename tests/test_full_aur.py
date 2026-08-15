@@ -86,11 +86,12 @@ def test_fetch_pkgbuild_with_tree_extracts_manifest():
         "icon.png": b"\x89PNG\r\n\x1a\n" + b"\x00" * 8,
     })
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
     assert trailer_finding is None
+    assert refused is False
     heads = dict(manifest)
     assert "demo/PKGBUILD" in heads
     assert heads["demo/evil"] == elf
@@ -102,11 +103,12 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
     from trustsight.full_aur import fetch as F
 
     with patch.object(F, "_http_get", side_effect=[None, b"pkgname=demo\n"]):
-        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\n"
     assert manifest is None
     assert trailer_finding is None
+    assert refused is False  # absent, not refused
 
 
 def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
@@ -115,7 +117,7 @@ def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
 
     body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
     with patch.object(F, "_http_get", return_value=body):
-        text, manifest, trailer_finding = F.fetch_pkgbuild_with_tree("demo")
+        text, manifest, trailer_finding, refused = F.fetch_pkgbuild_with_tree("demo")
 
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None

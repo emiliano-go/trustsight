@@ -120,6 +120,12 @@ _RC_BASENAME_RE = re.compile(
     r"\.cshrc|\.tcshrc|\.config|\.gitconfig|\.netrc|\.ssh)$"
 )
 
+#: pacman runs these as root.
+_INSTALL_SCRIPTLETS = (
+    "post_install", "post_upgrade", "pre_install",
+    "pre_upgrade", "pre_remove", "post_remove",
+)
+
 _WW_DIR_RE = re.compile(r"^/(?:tmp|var/tmp|dev/shm)(?:/|$)")
 _WW_CD_RE = re.compile(r"\bcd\s+/(?:tmp|var/tmp|dev/shm)\b")
 _MKTEMP_RE = re.compile(r"\bmktemp\b")
@@ -173,7 +179,14 @@ def _home_rc_findings(diff_text, config, add) -> None:
                 continue
             base = os.path.basename(t_clean)
             if _HOME_PREFIX_RE.search(t_clean) or _RC_BASENAME_RE.match(base):
-                add("R077", "Write To User Home Or RC", "HIGH", "persistence",
+                # An install scriptlet runs as root during the pacman
+                # transaction, so a write into a user's home from there is a
+                # different act from the same write during build: nothing a
+                # package installs belongs in somebody's home directory, and
+                # root reaching into it is categorical rather than suspicious.
+                in_scriptlet = enclosing[i] in _INSTALL_SCRIPTLETS
+                severity = "CRITICAL" if in_scriptlet else "HIGH"
+                add("R077", "Write To User Home Or RC", severity, "persistence",
                     f"{enclosing[i]}() writes into the user's home/rc: {t}",
                     line=i + 1, position=enclosing[i], path=t)
                 return

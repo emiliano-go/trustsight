@@ -27,6 +27,21 @@ log = logging.getLogger(__name__)
 ProgressCallback = Callable[[int, int, str], None]
 
 
+def _orphan_state(aur: Optional[dict]) -> Optional[bool]:
+    """Whether the AUR reports this package orphaned, or None if unknown.
+
+    The RPC omits ``Maintainer`` or sets it null for an orphan.  A missing
+    metadata entry is None rather than False, because "we could not ask" and
+    "it has a maintainer" are different facts and R141 needs to tell them
+    apart.
+    """
+    if not aur:
+        return None
+    if "Maintainer" not in aur:
+        return None
+    return not aur.get("Maintainer")
+
+
 def discover_packages(
     repos: Optional[list[str]] = None,
     include_foreign: bool = False,
@@ -75,15 +90,21 @@ def discover_packages(
             latest_ver = aur.get("Version", "") if aur else ""
             if all_packages and aur is None and not show_unmatched:
                 continue
+            # R141: the AUR reports Maintainer=null for an orphan, and an
+            # adoption is the June 2026 campaign's entry point.  Absent
+            # metadata stays None: unknown is not "maintained".
+            orphaned = _orphan_state(aur)
             if all_packages:
                 pkg["latest_version"] = latest_ver or pkg["current_version"]
                 if aur and isinstance(aur.get("LastModified"), int):
                     pkg["last_modified"] = aur["LastModified"]
+                pkg["aur_orphaned"] = orphaned
                 outdated.append(pkg)
             elif latest_ver and _vercmp(pkg["current_version"], latest_ver) < 0:
                 pkg["latest_version"] = latest_ver
                 if isinstance(aur.get("LastModified"), int):
                     pkg["last_modified"] = aur["LastModified"]
+                pkg["aur_orphaned"] = orphaned
                 outdated.append(pkg)
 
         return outdated, total_installed
@@ -212,6 +233,7 @@ def analyze_outdated_batch(
     pkgs: list[dict],
     progress_callback: Optional[ProgressCallback] = None,
     verbose: bool = False,
+    depth: Optional[int] = None,
 ) -> list[dict]:
     """Prefetch, analyse and summarise *pkgs*, one result dict per package.
 
@@ -221,13 +243,26 @@ def analyze_outdated_batch(
     """
     hints = prefetch(pkgs, progress_callback)
 
+    # One visited set for the whole batch, so a dependency shared by many
+    # installed packages costs one clone and one analysis rather than twenty.
+    depth_seen: set[str] = set()
+
     if progress_callback:
         progress_callback(-1, 0, "Reviewing packages...")
 
     def _pipeline_one(entry):
         name = entry["name"]
         try:
-            fact = analyze_package(name, installed_version=entry.get("current_version"), upstream_mtime=hints.get(name))
+            fact = analyze_package(
+                name,
+                installed_version=entry.get("current_version"),
+                upstream_mtime=hints.get(name),
+                aur_orphaned=entry.get("aur_orphaned"),
+                depth=depth,
+                # Shared across roots: one dependency is analysed once even
+                # when twenty installed packages all need it.
+                _depth_seen=depth_seen,
+            )
         except Exception as exc:
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
             return ("fail", entry, None, None, exc)

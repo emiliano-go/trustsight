@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from ..analysis.base import _aggregate_pinning, _has_install_hook
+from ..analysis.buildfetch import has_unpinned_build_deps
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
 from ..analysis.structural import _structural_findings
@@ -143,6 +144,85 @@ def _temporal_findings(
     return findings
 
 
+def _corpus_dependency_fact(name: str):
+    """A dependency's result, preferring what the corpus already computed.
+
+    On the corpus path every package is analysed in its own right during the
+    same cycle, so re-running the pipeline for a dependency would compute a
+    number the database already holds. The stored profile is therefore the
+    first source, the stored PKGBUILD snapshot the fallback, and a package
+    with neither is reported as not vetted rather than fetched: the bootstrap
+    owns its own fetch order, and re-entering it from inside one package's
+    analysis would both fight that ordering and turn a corpus pass into an
+    unbounded crawl.
+    """
+    from ..db import get_package_profile, get_pkgbuild_snapshot
+
+    profile = get_package_profile(name)
+    if profile and profile.get("last_score") is not None:
+        return _StoredFact(
+            final_score=int(profile["last_score"] or 0),
+            risk=str(profile.get("last_risk") or ""),
+        )
+
+    row = get_pkgbuild_snapshot(name)
+    if not row or not row["pkgbuild_text"]:
+        raise LookupError(f"no stored result or PKGBUILD for {name}")
+    return analyze_package_text(
+        pkg_name=name,
+        old_pkgbuild=None,
+        new_pkgbuild=row["pkgbuild_text"],
+        maintainer="",
+        temporal=TemporalContext(source="corpus_depth"),
+        depth=0,
+    )
+
+
+class _StoredFact:
+    """The shape ``walk_dependencies`` reads, from a stored profile.
+
+    A profile records the score and band, not the breakdown, so
+    ``score_breakdown`` is empty and ``finding_count`` reads 0. The score and
+    band are what a dependency card shows; the reader following the card runs
+    ``inspect`` on the dependency for its findings.
+    """
+
+    __slots__ = ("final_score", "risk", "score_breakdown", "coverage_gaps")
+
+    def __init__(self, final_score: int, risk: str):
+        self.final_score = final_score
+        self.risk = risk
+        self.score_breakdown = ()
+        self.coverage_gaps = ()
+
+
+def _walk_corpus_dependencies(pkg_name, depth, config, seen):
+    """The dependency closure, from results the corpus already has.
+
+    ``seen`` is deliberately **not** shared across the packages of a corpus
+    cycle. On the review path sharing it is a clear win: a handful of roots,
+    each dependency cloned and analysed once. On the corpus path every
+    package is a root, so a shared set would hand each dependency to
+    whichever parent happened to be processed first and leave every other
+    parent reporting an empty closure - an arbitrary attribution that reads
+    as "this package has no AUR dependencies". Lookups are cheap enough that
+    per-package walks are the right trade here.
+    """
+    from ..depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
+
+    resolved = resolve_depth(depth, config)
+    if resolved == 0:
+        return DepthResult()
+
+    return walk_dependencies(
+        pkg_name,
+        depth=resolved,
+        metadata=default_metadata(),
+        analyse=_corpus_dependency_fact,
+        already_seen=set(seen) if seen else None,
+    )
+
+
 def analyze_package_text(
     pkg_name: str,
     old_pkgbuild: Optional[str],
@@ -152,6 +232,9 @@ def analyze_package_text(
     srcinfo: Optional[str] = None,
     tree_manifest: Optional[list[tuple[str, bytes]]] = None,
     archive_trailer_finding: Optional[dict] = None,
+    snapshot_refused: bool = False,
+    depth: int | None = None,
+    _depth_seen: set | None = None,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -174,11 +257,26 @@ def analyze_package_text(
             ``check_archive_trailer`` on the snapshot tarball bytes, when
             one was produced.  Surfaced exactly like the R118-tree scan
             results, so the corpus path reports what the archive carried.
+        depth:  AUR dependency levels to analyse, as on the review path.
+            The corpus walk is cheaper than the review one: the metadata
+            snapshot already holds every dependency edge, and a dependency's
+            PKGBUILD is usually the stored snapshot rather than a fetch. A
+            dependency with no stored text is reported as not vetted rather
+            than fetched, because a corpus cycle already decides its own
+            fetch order and re-entering it here would fight that.
+        snapshot_refused:  the snapshot archive was refused by a read bound
+            rather than being absent, so the missing tree is a bound that
+            dropped content and not a package without a tarball.  Recorded
+            as the ``snapshot_refused`` coverage gap.
 
     Returns:
         A fully-scored PackageFact.
     """
     config = load_config()
+    # Before either producer builds a fact: a truncated walk has to reach
+    # `gaps_from`, because the band downgrade is decided inside
+    # calculate_score and carried on the fact rather than re-derived.
+    depth_result = _walk_corpus_dependencies(pkg_name, depth, config, _depth_seen)
     old_maintainer: Optional[str] = None
 
     new_version = _extract_pkgver(new_pkgbuild)
@@ -231,7 +329,11 @@ def analyze_package_text(
                     "params": {"pkg_name": pkg_name, "squatted": squatted},
                 }))
 
-        gaps = gaps_from(tree_analyzed=bool(tree_manifest))
+        gaps = gaps_from(
+            tree_analyzed=bool(tree_manifest),
+            snapshot_refused=snapshot_refused,
+            deps_not_scanned=depth_result.truncated,
+        )
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config, coverage_gaps=gaps
         )
@@ -246,6 +348,9 @@ def analyze_package_text(
             temporal_source=temporal.source,
             tree_analyzed=bool(tree_manifest),
             coverage_gaps=gaps,
+            dependencies=list(depth_result.reports),
+            depth_truncated=depth_result.truncated,
+            depth_note=depth_result.reason,
             risk=risk,
             score_breakdown=breakdown,
             final_score=score,
@@ -390,6 +495,9 @@ def analyze_package_text(
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        snapshot_refused=snapshot_refused,
+        unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        deps_not_scanned=depth_result.truncated,
     )
 
     score, breakdown, risk = calculate_score(
@@ -419,6 +527,9 @@ def analyze_package_text(
         diff_truncated=diff_truncated,
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,
+        dependencies=list(depth_result.reports),
+        depth_truncated=depth_result.truncated,
+        depth_note=depth_result.reason,
         unresolved_sources=unresolved_sources,
         risk=risk,
         temporal_source=temporal.source,

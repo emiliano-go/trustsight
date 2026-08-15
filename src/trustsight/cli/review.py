@@ -27,7 +27,10 @@ from ..review import (  # noqa: F401
     is_trivial_update as _is_trivial_update,
 )
 from .display import (
+    DEPTH_TRUNCATED_NOTE,
     HAS_RICH,
+    dependency_cards_rich,
+    dependency_lines_plain,
     RISK_COLORS,
     _print_colored,
     console,
@@ -100,7 +103,7 @@ def _version_cell(result: dict) -> str:
 
 
 
-def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False):
+def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None):
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
 
     has_progress = HAS_RICH and not json_output and not quiet
@@ -129,69 +132,33 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 else:
                     progress.update(task, description=description, refresh=True)
 
-            results = _analyze_outdated_batch(limited, on_progress, verbose)
+            results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth)
             progress.update(task, visible=False)
     elif json_output:
         def on_progress(_current, total, description):
             import json as _json
             print(_json.dumps({"event": "progress", "current": _current, "total": total, "phase": description}), file=sys.stderr)
-        results = _analyze_outdated_batch(limited, on_progress, verbose)
+        results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth)
     else:
-        results = _analyze_outdated_batch(limited, None, verbose)
+        results = _analyze_outdated_batch(limited, None, verbose, depth=depth)
 
     if json_output:
         from ..config import config_fingerprint
+        from ..reporting import report_body
 
         fingerprint = config_fingerprint()
         json_results = []
         for r in results:
-            jr = {
-                "package": r["package"],
-                "old_version": r["old_version"],
-                "new_version": r["new_version"],
-                "findings": [
-                    {"rule_id": f["rule_id"], "file": f["file"], "line": f["line"], "description": f["description"]}
-                    for f in r.get("findings", [])
-                ],
-                "file_changes": r.get("file_changes", []),
-                "verdict": r["verdict"],
-                "first_seen": r.get("first_seen", False),
-                "is_trivial": r.get("is_trivial", False),
-                # Explicit failed flag: a consumer gating on `findings == []`
-                # must be able to tell "clean" from "not vetted".
-                "failed": r.get("failed", False),
-                # Always present, with or without --score: a consumer
-                # gating on the score must be able to see that the score
-                # describes an incomplete analysis.
-                # B7: what moved, whether or not a rule matched.  A
-                # consumer reading only `findings` is unaffected.
-                "changes": r.get("changes", []),
-                "coverage_gaps": r.get("coverage_gaps", []),
-                "config_fingerprint": fingerprint,
-                # B5: unconditional.  Hiding a suppression behind --verbose
-                # makes a switched-off rule look the same as one that never
-                # matched, to exactly the consumer least able to tell.
-                "suppressed_rules": r.get("suppressed_rules", []),
-                "ioc_matches": [
-                    {
-                        "type": m.type,
-                        "value": m.value,
-                        "source": m.source,
-                        "confidence": m.confidence,
-                        "provenance": m.provenance,
-                        "campaign": m.campaign,
-                        "added": m.added,
-                        "surface": m.surface,
-                        "line": m.line,
-                        "expired": m.expired,
-                    }
-                    for m in r.get("ioc_matches", [])
-                ],
-            }
-            if show_score or show_risk:
-                jr["score"] = r.get("score")
-                jr["risk"] = r.get("risk")
-                jr["risk_label"] = r.get("risk_label")
+            row = dict(r)
+            row.setdefault("config_fingerprint", fingerprint)
+            # One body for every JSON surface: this path, `inspect --json`
+            # and the API's `to_dict()` all render through `report_body`, so
+            # a key cannot exist on one and be missing from another.
+            jr = report_body(
+                row,
+                include_score=show_score or show_risk,
+                verbose=verbose,
+            )
             if verbose:
                 jr["triggered_rules"] = r.get("triggered_rules", [])
             json_results.append(jr)
@@ -208,78 +175,102 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     if HAS_RICH and not json_output:
         _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose)
     else:
-        for r in results:
-            if r.get("failed"):
-                typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
-                if r.get("aur_note"):
-                    typer.echo(f"  {clean(r['aur_note'])}")
-                typer.echo(f"  {clean(r['verdict'])}")
-                typer.echo()
-                continue
+        _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose)
 
+
+def _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose):
+    """The review render for a terminal without Rich.
+
+    Extracted from ``_run_analysis_loop`` so it can be exercised: a renderer
+    that cannot be called without a CLI invocation cannot be gated, and an
+    ungateable path is where the dropped field will be.  See
+    ``docs/contributing/security-review.md``.
+    """
+    for r in results:
+        if r.get("failed"):
             typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
-
-            findings = r.get("findings", [])
-            file_changes = r.get("file_changes", [])
-            is_trivial = r.get("is_trivial", False)
-
-            if r.get("first_seen"):
-                typer.echo("  First analysis. No prior history for this package.")
-            elif is_trivial:
-                typer.echo("  Only pkgver and sha256sums changed. Review the diff before building.")
-            else:
-                typer.echo("  The update is not trivial. Review it.")
-                for f in findings:
-                    file_part = f.get("file", "")
-                    line = f.get("line")
-                    desc = f.get("description", "")
-                    if line is not None:
-                        typer.echo(f"  {clean(file_part)} line {line}   {clean(desc)}")
-                    else:
-                        typer.echo(f"  {clean(file_part)}           {clean(desc)}")
-                if file_changes:
-                    for fc in file_changes:
-                        status = fc.get("status", "")
-                        path = fc.get("path", "")
-                        prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
-                        typer.echo(f"  {prefix} {clean(path)}")
-
-            if show_score and not r.get("failed"):
-                risk = r.get("risk_label") or r.get("risk", "")
-                score_val = r.get("score", 0)
-                typer.echo(f"  Score: {score_val}/100 ({risk})")
-            elif show_risk and not r.get("failed"):
-                label = r.get("risk_label") or r.get("risk", "")
-                typer.echo(f"  Risk: ({label})")
-
-            for entry in r.get("changes", []):
-                typer.echo(f"  ~ {clean(entry)}")
-            for m in r.get("ioc_matches", []):
-                expired = " [EXPIRED]" if m.expired else ""
-                line = f" line {m.line}" if m.line is not None else ""
-                typer.echo(
-                    f"  [IOC] [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
-                    f"{line} ({clean(m.surface)}){expired}"
-                )
-            for gap in r.get("coverage_gaps", []):
-                typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
-
+            if r.get("aur_note"):
+                typer.echo(f"  {clean(r['aur_note'])}")
+            typer.echo(f"  {clean(r['verdict'])}")
             typer.echo()
+            continue
 
-        flagged = sum(1 for r in results if (r["score"] or 0) > 20)
-        failed = sum(1 for r in results if r.get("failed"))
-        reviewed = len(results) - failed
-        if all_packages and total_installed:
-            caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
+        typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
+
+        findings = r.get("findings", [])
+        file_changes = r.get("file_changes", [])
+        is_trivial = r.get("is_trivial", False)
+
+        if r.get("first_seen"):
+            typer.echo("  First analysis. No prior history for this package.")
+        elif is_trivial:
+            typer.echo("  Only pkgver and sha256sums changed. Review the diff before building.")
         else:
-            caption = f"{reviewed} package(s) needing update and reviewed"
-            if total_installed:
-                caption += f" out of {total_installed} installed"
-        if show_score and flagged:
-            caption += f", {flagged} above the 20-point UNFLAGGED threshold"
-        if failed:
-            caption += f", {failed} could NOT be vetted"
-        typer.echo(caption)
+            typer.echo("  The update is not trivial. Review it.")
+            for f in findings:
+                file_part = f.get("file", "")
+                line = f.get("line")
+                desc = f.get("description", "")
+                if line is not None:
+                    typer.echo(f"  {clean(file_part)} line {line}   {clean(desc)}")
+                else:
+                    typer.echo(f"  {clean(file_part)}           {clean(desc)}")
+            if file_changes:
+                for fc in file_changes:
+                    status = fc.get("status", "")
+                    path = fc.get("path", "")
+                    prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
+                    typer.echo(f"  {prefix} {clean(path)}")
+
+        if show_score and not r.get("failed"):
+            risk = r.get("risk_label") or r.get("risk", "")
+            score_val = r.get("score", 0)
+            typer.echo(f"  Score: {score_val}/100 ({risk})")
+        elif show_risk and not r.get("failed"):
+            label = r.get("risk_label") or r.get("risk", "")
+            typer.echo(f"  Risk: ({label})")
+
+        for entry in r.get("changes", []):
+            typer.echo(f"  ~ {clean(entry)}")
+        for line in dependency_lines_plain(r.get("dependencies", []),
+                                           show_score=show_score):
+            typer.echo(line)
+        if r.get("depth_truncated"):
+            typer.echo(f"  [{DEPTH_TRUNCATED_NOTE}]")
+
+        # B5, same omission as the Rich render above: visible on screen, not
+        # only in the JSON body.
+        for entry in r.get("suppressed_rules", []):
+            typer.echo(
+                f"  [Suppressed: {clean(entry.get('rule_id', ''))} "
+                f"{clean(entry.get('override_reason', ''))}]"
+            )
+        for m in r.get("ioc_matches", []):
+            expired = " [EXPIRED]" if m.expired else ""
+            line = f" line {m.line}" if m.line is not None else ""
+            typer.echo(
+                f"  [IOC] [{clean(m.source)}] {clean(m.type)}={clean(m.value)}"
+                f"{line} ({clean(m.surface)}){expired}"
+            )
+        for gap in r.get("coverage_gaps", []):
+            typer.echo(f"  [Not fully vetted: {GAP_REASONS.get(gap, gap)}.]")
+
+        typer.echo()
+
+    flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+    failed = sum(1 for r in results if r.get("failed"))
+    reviewed = len(results) - failed
+    if all_packages and total_installed:
+        caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
+    else:
+        caption = f"{reviewed} package(s) needing update and reviewed"
+        if total_installed:
+            caption += f" out of {total_installed} installed"
+    if show_score and flagged:
+        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
+    if failed:
+        caption += f", {failed} could NOT be vetted"
+    typer.echo(caption)
 
 
 def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose):
@@ -341,6 +332,30 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             for entry in changes[1:]:
                 table.add_row("", Text(clean(entry)))
 
+        # Dependency mini-cards: each is its own analysis, so it gets its
+        # own card nested in this one rather than a line in this package's
+        # finding list.
+        deps = r.get("dependencies", [])
+        if deps:
+            table.add_row("", "")
+            table.add_row("Dependencies", "")
+            for card in dependency_cards_rich(deps, show_score=show_score):
+                table.add_row("", card)
+            if r.get("depth_truncated"):
+                table.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
+
+        # B5: a suppression a reader cannot see is one they cannot audit.
+        # This render carried it in the JSON body and nowhere on screen, so
+        # a rule switched off by an override looked, to anyone reading the
+        # terminal, exactly like one that never matched.
+        suppressed = r.get("suppressed_rules", [])
+        if suppressed:
+            table.add_row("Suppressed", "")
+            for entry in suppressed:
+                rule_id = entry.get("rule_id", "")
+                reason = entry.get("override_reason", "")
+                table.add_row("", Text(f"  {clean(rule_id)}  {clean(reason)}"))
+
         ioc_matches = r.get("ioc_matches", [])
         if ioc_matches:
             table.add_row("IOC matches", "")
@@ -397,6 +412,11 @@ def register_commands(app: typer.Typer):
         all_repos: bool = typer.Option(False, "--all-repos", help="Auto-detect all local repos from pacman.conf (excludes official repos)"),
         all_packages: bool = typer.Option(False, "--all", help="Review all installed AUR packages, not just outdated ones"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+        depth: int = typer.Option(
+            None, "--depth",
+            help="AUR dependency levels to analyse: 0 off, 1 default, n levels, "
+                 "-1 every level (bounded).",
+        ),
     ):
         """Review AUR packages for suspicious updates."""
         has_progress = HAS_RICH and not json_output and not quiet
@@ -528,7 +548,7 @@ def register_commands(app: typer.Typer):
                 init_progress.stop()
                 init_progress = None
 
-            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk)
+            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth)
         finally:
             if init_progress is not None:
                 init_progress.stop()

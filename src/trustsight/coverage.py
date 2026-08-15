@@ -2,7 +2,7 @@
 
 A score answers "what did the evidence say".  It cannot answer "was there
 evidence I never saw", and the two read identically in a report unless the
-second one is stated.  Three things make a run partial:
+second one is stated.  These things make a run partial:
 
 * the diff was larger than the configured cap, so only its prefix was
   examined (padding a diff past the cap and appending the payload is a
@@ -13,7 +13,15 @@ second one is stated.  Three things make a run partial:
   actually fetch is not in the text being analysed;
 * a command substitution sits at the top level of the recipe, where makepkg
   executes it while *sourcing* the file for metadata, so part of the recipe
-  runs before any rule reads it and its result is not in the text either.
+  runs before any rule reads it and its result is not in the text either;
+* the snapshot archive was refused by a read bound, so the committed file
+  tree was not examined and the PKGBUILD came from the text endpoint
+  instead;
+* a build step resolves dependencies from a package registry, so what the
+  build will fetch and run is chosen at build time by a service this
+  analysis never contacts.  This is the June 2026 AUR campaign's shape: the
+  upstream source was untouched and only the recipe was poisoned, so a
+  reader looking at source URLs and checksums saw nothing wrong.
 
 Every one of those is recorded as a *gap*.  A gap does not add points: it
 is not evidence of wrongdoing, and inventing a score for it would corrupt
@@ -27,10 +35,14 @@ import re
 # The gap identifiers.  These are part of the report schema and the
 # security gates assert on them, so they are values, not prose.
 DIFF_TRUNCATED = "diff_truncated"
+SCAN_TRUNCATED = "scan_truncated"
 LINE_TRUNCATED = "line_truncated"
 TREE_NOT_ANALYZED = "tree_not_analyzed"
 UNRESOLVED_SOURCE = "unresolved_source"
 UNRESOLVED_PARSE_TIME = "unresolved_parse_time"
+SNAPSHOT_REFUSED = "snapshot_refused"
+UNPINNED_BUILD_DEPS = "unpinned_build_deps"
+DEPS_NOT_SCANNED = "deps_not_scanned"
 
 GAPS = (
     DIFF_TRUNCATED,
@@ -38,11 +50,18 @@ GAPS = (
     TREE_NOT_ANALYZED,
     UNRESOLVED_SOURCE,
     UNRESOLVED_PARSE_TIME,
+    SNAPSHOT_REFUSED,
+    UNPINNED_BUILD_DEPS,
+    DEPS_NOT_SCANNED,
 )
 
 GAP_REASONS = {
     DIFF_TRUNCATED: (
         "the diff exceeded the size cap, so only its first bytes were examined"
+    ),
+    SCAN_TRUNCATED: (
+        "the diff held more lines than the matching limit, so its last lines "
+        "were not matched against any rule"
     ),
     LINE_TRUNCATED: (
         "a line was longer than the matching limit, so its tail was not "
@@ -59,6 +78,19 @@ GAP_REASONS = {
     UNRESOLVED_PARSE_TIME: (
         "a command substitution runs when the recipe is parsed, so its "
         "result is not in the analysed text"
+    ),
+    SNAPSHOT_REFUSED: (
+        "the snapshot archive exceeded a read bound and was refused, so the "
+        "committed file tree was not examined"
+    ),
+    UNPINNED_BUILD_DEPS: (
+        "a build step resolves dependencies from a package registry, so the "
+        "code the build will fetch and execute is not in the analysed text "
+        "and no checksum in this recipe covers it"
+    ),
+    DEPS_NOT_SCANNED: (
+        "the AUR dependency walk stopped before the closure was exhausted, so "
+        "some packages this build will pull in were never analysed"
     ),
 }
 
@@ -205,15 +237,25 @@ def oversized_lines(lines: list[str]) -> int:
 
 def gaps_from(
     diff_truncated: bool = False,
+    scan_truncated: bool = False,
     tree_analyzed: bool = True,
     unresolved_sources: list[str] | None = None,
     long_lines: int = 0,
     parse_time_substitutions: list[str] | None = None,
+    snapshot_refused: bool = False,
+    unpinned_build_deps: bool = False,
+    deps_not_scanned: bool = False,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
     if diff_truncated:
         gaps.append(DIFF_TRUNCATED)
+    # Distinct from DIFF_TRUNCATED rather than folded into it: both mean
+    # content was dropped, but they point at different dials. A reader who
+    # saw only "the diff was truncated" would raise `diff.max_diff_bytes`
+    # and find it changed nothing, because the line count was the bound.
+    if scan_truncated:
+        gaps.append(SCAN_TRUNCATED)
     if long_lines:
         gaps.append(LINE_TRUNCATED)
     if not tree_analyzed:
@@ -222,6 +264,20 @@ def gaps_from(
         gaps.append(UNRESOLVED_SOURCE)
     if parse_time_substitutions:
         gaps.append(UNRESOLVED_PARSE_TIME)
+    # Reported alongside TREE_NOT_ANALYZED rather than instead of it: that
+    # gap says the tree was not examined, and this one says a bound is why.
+    # A14 requires a bound that drops content to be visible *as a bound*,
+    # and "the manifest was unavailable" would read as an absent snapshot.
+    if snapshot_refused:
+        gaps.append(SNAPSHOT_REFUSED)
+    if unpinned_build_deps:
+        gaps.append(UNPINNED_BUILD_DEPS)
+    # Only a walk cut short by a ceiling, or one that could not analyse a
+    # dependency, is a gap.  Asking for depth 1 and getting depth 1 is a
+    # complete answer to the question the operator asked, even though a
+    # level 2 exists.
+    if deps_not_scanned:
+        gaps.append(DEPS_NOT_SCANNED)
     return gaps
 
 
@@ -257,6 +313,15 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     UNRESOLVED_PARSE_TIME: (
         "code runs at parse time: recipe not statically analyzable"
+    ),
+    SNAPSHOT_REFUSED: (
+        "snapshot refused by a read bound: file tree not examined"
+    ),
+    UNPINNED_BUILD_DEPS: (
+        "build fetches unpinned dependencies: what will execute is unknown"
+    ),
+    DEPS_NOT_SCANNED: (
+        "dependency walk cut short: part of the closure was never analysed"
     ),
 }
 

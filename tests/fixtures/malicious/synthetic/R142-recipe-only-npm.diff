@@ -1,0 +1,21 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,12 +1,16 @@
+ pkgname=some-trusted-tool
+ pkgver=2.4.1
+-pkgrel=3
++pkgrel=4
+ arch=('x86_64')
+ source=("https://github.com/upstream/some-trusted-tool/archive/v$pkgver.tar.gz")
+ sha256sums=('a3f5c1d9e7b2486f0c1d5a9e3b7f2c8d4e6a1b9f3c7d2e8a4b6f1c9d3e7a2b8f')
++makedepends=('npm' 'nodejs')
++
++prepare() {
++  cd "$srcdir"
++  npm install atomic-lockfile lockfile-js js-digest
++}
++
+ build() {
+   cd "$pkgname-$pkgver"
+   make
+ }

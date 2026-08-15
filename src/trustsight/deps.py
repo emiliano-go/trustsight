@@ -8,6 +8,7 @@ instead of going through :func:`~trustsight.rules.apply_rules`.
 """
 
 import re
+from functools import lru_cache
 
 from .config import DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_VARIANT_SUFFIXES, load_naming
 from .tokenizer import resolve_added_lines
@@ -48,8 +49,20 @@ def _is_package_name(token: str) -> bool:
     return bool(_PACKAGE_NAME_RE.match(normalize_dependency(token)))
 
 
+#: Entries retained by the comment-stripping cache.  The keys are
+#: attacker-controlled lines, so the cache is a bounded constant rather than
+#: an unbounded memo: A14 applies to memory a rule pass accumulates just as
+#: much as to memory it reads.
+_STRIP_COMMENT_CACHE = 8192
+
+
+@lru_cache(maxsize=_STRIP_COMMENT_CACHE)
 def _strip_comment(body: str) -> str:
     """Drop an unquoted ``#`` comment and everything after it.
+
+    Memoised because it is pure and called repeatedly on the same lines:
+    the rule modules each strip comments independently, which came to
+    roughly thirty calls per diff line and 7% of a large scan.
 
     Maintainers annotate dependency arrays freely::
 

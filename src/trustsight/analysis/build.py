@@ -121,8 +121,13 @@ _ENV_SUBVERSION_MED_RE = re.compile(
 # inside single quotes is literal, not executed.  That single test excludes
 # the plan's must-not-fire surface - optdepends names, path segments and
 # echo strings - all of which place `sudo` at an argument position.
+# One `\s*`, not two. `\A\s*` followed by `\s*` lets the engine split a
+# whitespace run between them in as many ways as the run is long, which is
+# quadratic: 8192 leading spaces took 1.1 seconds. Collapsing the pair is
+# behaviour-preserving - both spellings mean "start of line, optional
+# whitespace, sudo" - and costs 0.6ms.
 _SUDO_CMD_START_RE = re.compile(
-    r"(?:\A\s*|[;&|]|\$\()\s*sudo(?=[\s)&|`;]|$)",
+    r"(?:\A|[;&|]|\$\()\s*sudo(?=[\s)&|`;]|$)",
     re.IGNORECASE,
 )
 

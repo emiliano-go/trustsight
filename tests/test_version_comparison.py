@@ -222,10 +222,10 @@ def test_review_row_keeps_the_arrow_for_a_real_update():
 
 def test_json_output_carries_the_comparison():
     """A machine consumer needs the caveat the table shows."""
-    from trustsight.cli.display import _fact_to_dict
+    from trustsight.reporting import evaluate_fact, report_body
 
-    data = _fact_to_dict(_fact(
+    data = report_body(evaluate_fact(_fact(
         old_version="1:1.0-1", new_version="0.9",
         version_comparison=COMPARISON_INCONCLUSIVE,
-    ))
+    )))
     assert data["version_comparison"] == COMPARISON_INCONCLUSIVE

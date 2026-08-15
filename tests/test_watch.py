@@ -101,7 +101,7 @@ def test_watch_passes_json_output_through(monkeypatch):
         lambda **kwargs: seen.update(kwargs) or CycleResult(),
     )
     run_watch(interval=60, cycles=1, json_output=True, sleep=lambda _: None)
-    assert seen == {"json_output": True}
+    assert seen == {"json_output": True, "depth": None}
 
 
 # --- alert deduplication ---
@@ -156,7 +156,7 @@ def fake_aur(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: state["meta"])
     monkeypatch.setattr(
         pipeline, "fetch_pkgbuild_with_tree",
-        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None),
+        lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None, False),
     )
     monkeypatch.setattr(pipeline, "save_resume_state", lambda *a, **k: None)
     monkeypatch.setattr(pipeline, "clear_resume_state", lambda *a, **k: None)

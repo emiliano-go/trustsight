@@ -53,6 +53,7 @@ class RuleCategory(StrEnum):
     COUNT_BASED = "count-based"
     CORPUS_BEHAVIORAL = "corpus-behavioral"
     CROSSFIRE = "crossfire"
+    SABOTAGE = "sabotage"
 
     @property
     def doc_page(self) -> str:
@@ -72,7 +73,7 @@ class RuleCategory(StrEnum):
     @property
     def implemented(self) -> bool:
         """False for a category that is specified but ships no rules yet."""
-        return self is not RuleCategory.CROSSFIRE
+        return True
 
 
 _TITLES: dict[RuleCategory, str] = {
@@ -89,6 +90,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.COUNT_BASED: "Count-Based",
     RuleCategory.CORPUS_BEHAVIORAL: "Corpus Behavioral",
     RuleCategory.CROSSFIRE: "Crossfire",
+    RuleCategory.SABOTAGE: "Sabotage",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -140,8 +142,13 @@ _SUMMARIES: dict[RuleCategory, str] = {
         "silent without prior observations."
     ),
     RuleCategory.CROSSFIRE: (
-        "Proposed: signals that only exist when two packages are compared "
-        "against each other rather than against the corpus."
+        "The evasion technique itself, not the payload it hides: a rule here "
+        "fires on how a thing was written rather than on what it does."
+    ),
+    RuleCategory.SABOTAGE: (
+        "A payload aimed at the operator's machine rather than at getting "
+        "something out of it: resource exhaustion, deletion, permission "
+        "sabotage, service disruption, resource theft."
     ),
 }
 
@@ -230,6 +237,24 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "R088": _C.STAGING_AND_RECON,
     "R128": _C.STAGING_AND_RECON,
     "R140": _C.STAGING_AND_RECON,
+    "R141": _C.MAINTAINER_AND_METADATA,
+    "R142": _C.INTEGRITY,
+    "R143": _C.MAINTAINER_AND_METADATA,
+    "X001": _C.CROSSFIRE,
+    "X002": _C.CROSSFIRE,
+    "X003": _C.CROSSFIRE,
+    "X004": _C.CROSSFIRE,
+    "X005": _C.CROSSFIRE,
+    "X006": _C.CROSSFIRE,
+    "X007": _C.CROSSFIRE,
+    "S001": _C.SABOTAGE,
+    "S002": _C.SABOTAGE,
+    "S003": _C.SABOTAGE,
+    "S004": _C.SABOTAGE,
+    "S005": _C.SABOTAGE,
+    "S006": _C.SABOTAGE,
+    "S007": _C.SABOTAGE,
+    "S008": _C.SABOTAGE,
     # -- integrity and verification ------------------------------------
     "R004": _C.INTEGRITY,
     "R005": _C.INTEGRITY,

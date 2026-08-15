@@ -122,6 +122,12 @@ expected scope of an install hook; foreign package managers are not.
 
 Fire rate: 1 of 3246 (0.03 %), a legitimate log path written from `post_upgrade`.
 
+The severity is contextual. A write into a user's home during `build()` is
+HIGH; the same write from an **install scriptlet** is CRITICAL, because pacman
+runs scriptlets as root during the transaction. Nothing a package installs
+belongs in somebody's home directory, and root reaching into one is
+categorical rather than suspicious.
+
 ### R085: Systemd ExecStart From Runtime-Writable Path {#r085}
 
 - **Severity:** HIGH (weight 25)

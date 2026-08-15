@@ -297,3 +297,35 @@ FORTIFY_SOURCE.
 
 Dropping a hardening flag is the weightier direction, because it removes a
 mitigation the package had.
+
+### R142: Recipe Changed Without Upstream {#r142}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `integrity`
+- **Condition:** A dependency array changed **and** a build function changed, while `source=`, every `*sums=` array and `pkgver` did not.
+
+The June 2026 AUR campaign did not touch the upstream software. It edited the
+build recipe and nothing else, so a reviewer reading source URLs and checksums
+- the fields that usually carry a supply-chain change - saw a package whose
+upstream was provably identical to the version they already trusted.
+
+R142 names that shape directly: the recipe moved and upstream did not. The
+conjunction is what makes it specific. Any edit to `source=`, a checksum array
+or `pkgver` means the package points at different upstream bytes, which is an
+ordinary update however much else changed with it, and R142 stays silent.
+
+Both halves of the recipe have to move, and that is measured rather than
+assumed. Against the 3,739-diff locked benign corpus: `deps or build` fires on
+11.53%, `deps only` on 4.36%, `build only` on 5.75%, and `deps and build` on
+**1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
+times the noise for no additional detection - the campaign changed both,
+because a new build dependency is useless without a build step that invokes
+it. The conjunction also keeps R142 off two neighbours: a dependency added
+with no build change is a packaging fix, and a build function edited with no
+dependency change is [R060](../rules/system.md#r060), which is INFO precisely
+because it fires on 21.4% of benign diffs.
+
+It is MEDIUM because the shape is not exclusively malicious: a dependency
+correction that also adjusts a build step is an ordinary packaging change.
+What is unusual is a recipe-only change on a package that was *just adopted*
+and whose build now fetches unpinned code, which is [R143](maintainer-and-metadata.md#r143).

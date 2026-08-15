@@ -8,6 +8,8 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | R-series  | R004-R005, R060-R131 | `analysis/*.py` | No               | Code-emitted detection      |
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
 | C-series  | C001-C007   | `analysis/*.py`  | No                | Structural / multi-condition |
+| S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
+| X-series  | X001-X007   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 
 ## R-series rules (TOML)
 
@@ -33,6 +35,20 @@ severity = "CRITICAL"
 category = "network"
 match_target = "raw_line"
 ```
+
+## S-series rules (code)
+
+S-series rules live in `analysis/sabotage.py` and describe a payload aimed at
+the operator's machine rather than at getting something out of it: resource
+exhaustion, deletion, permission sabotage, service disruption, resource theft.
+They are code-emitted and cannot be disabled.
+
+The series exists separately because the family's calibration problem is
+unlike the rest of the ruleset's. Its commands are not rare in a PKGBUILD -
+`rm -rf` appears in most recipes - so each rule is written against a
+*distinction* rather than a command: the build sandbox is not the system, a
+mention is not an invocation, and a package's own service is not the system's.
+See [the sabotage reference](../reference/rules/sabotage.md).
 
 ## C-series rules (code)
 

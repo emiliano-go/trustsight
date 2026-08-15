@@ -36,7 +36,7 @@ PROGRAMMATIC_RULES = ["R004", "R005", "C001", "C002", "C003",
 NON_RULE_PAGES = {"index.md", "system.md"}
 
 # A rule section, as opposed to the prose headings that share the level.
-_RULE_SECTION_RE = re.compile(r"^### ([RCD]\d{3}):", re.M)
+_RULE_SECTION_RE = re.compile(r"^### ([RCDSX]\d{3}):", re.M)
 
 
 def _rule_page(rule_id: str) -> Path:

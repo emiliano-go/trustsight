@@ -994,6 +994,78 @@ See [R125: Introduction Rate Deviation](corpus-behavioral.md#r125).
 
 See [R126: Adopt-then-Modify](maintainer-and-metadata.md#r126).
 
+### R141 {#r141}
+
+See [R141: Adopted From Orphan](maintainer-and-metadata.md#r141).
+
+### R142 {#r142}
+
+See [R142: Recipe Changed Without Upstream](integrity.md#r142).
+
+### R143 {#r143}
+
+See [R143: Adopted, Recipe Rewritten, Unpinned Fetch](maintainer-and-metadata.md#r143).
+
+### X001 {#x001}
+
+See [X001: Encoded Payload Decoded To A Shell](crossfire.md#x001).
+
+### X002 {#x002}
+
+See [X002: Non-Literal Executable Name](crossfire.md#x002).
+
+### X003 {#x003}
+
+See [X003: Obfuscated Command Argument](crossfire.md#x003).
+
+### X004 {#x004}
+
+See [X004: Build Output Suppressed](crossfire.md#x004).
+
+### X005 {#x005}
+
+See [X005: Home Reached By An Alternative Spelling](crossfire.md#x005).
+
+### X006 {#x006}
+
+See [X006: Source Points Somewhere Unexpected](crossfire.md#x006).
+
+### X007 {#x007}
+
+See [X007: Multiple Evasion Techniques](crossfire.md#x007).
+
+### S001 {#s001}
+
+See [S001: Recursive Self-Spawn](sabotage.md#s001).
+
+### S002 {#s002}
+
+See [S002: Recursive Deletion Outside The Build Tree](sabotage.md#s002).
+
+### S003 {#s003}
+
+See [S003: Raw Block Device Write](sabotage.md#s003).
+
+### S004 {#s004}
+
+See [S004: Secure Deletion Of User Data](sabotage.md#s004).
+
+### S005 {#s005}
+
+See [S005: Permission Change On A System Path](sabotage.md#s005).
+
+### S006 {#s006}
+
+See [S006: System Service Disruption](sabotage.md#s006).
+
+### S007 {#s007}
+
+See [S007: Cryptocurrency Miner](sabotage.md#s007).
+
+### S008 {#s008}
+
+See [S008: Shell History Or Log Destruction](sabotage.md#s008).
+
 
 ---
 

@@ -132,3 +132,56 @@ R126 is the exception to the novelty ceiling described in
 fires on the **first** package of a campaign, from the maintainer field and
 commit times alone, before any payload shape exists to recognise. Adoption
 without a version change is quiet, and so is a change outside the window.
+
+### R141: Adopted From Orphan {#r141}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `maintainer`
+- **Condition:** The AUR reported this package as orphaned on a previous run, and now reports a maintainer.
+
+This is R126's property on the **single-package path**. R092, R093, R107, R111
+and R126 all describe adoption, and every one of them needs a `full-aur`
+cycle: somebody running `trustsight review` over their installed packages saw
+none of them, and those are the people the June 2026 campaign hit. R141 needs
+only the AUR metadata the review path already fetches.
+
+The comparison is against a *recorded* prior observation. `aur_orphaned` is
+tri-state (1 orphaned, 0 maintained, -1 never asked), and R141 requires 1: a
+database that has never seen this package says nothing, because "no record"
+is not evidence of adoption. Metadata that was unavailable on a run is
+recorded as unknown rather than as either state, so a failed RPC cannot
+manufacture an adoption or erase one.
+
+Adoption is not by itself wrongdoing - packages are adopted honestly every
+week, which is why this is MEDIUM. Its weight is in the
+[R143](#r143) composition.
+
+### R143: Adopted, Recipe Rewritten, Unpinned Fetch {#r143}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `takeover`
+- **Condition:** All three of [R141](#r141) (adopted from orphan), [R142](integrity.md#r142) (recipe changed without upstream) and a build-time registry resolution (the `unpinned_build_deps` coverage gap's trigger) hold for the same diff.
+
+This is the June 2026 campaign's chain in one rule, and it exists because none
+of its three members can carry the weight alone.
+
+Adoption is ordinary. A recipe-only change is ordinary. `npm install` inside
+`prepare()` is so ordinary that R081 is deliberately scoped away from build
+functions and a calibration gate keeps it there - the attack worked *because*
+its build step looked like every other Node package's. Each part is under the
+30 % benign fire-rate ceiling only by being mild.
+
+Together they are not ordinary. A package that was orphaned last week, has a
+new maintainer this week, whose upstream is byte-identical, and whose build
+now resolves dependencies from a registry, is describing the attack chain
+rather than resembling it. Scoring the conjunction is what lets the finding
+clear the flag threshold without any single member spending fire rate it does
+not have - the same reasoning [R082](count-based.md#r082) and
+[R117](obfuscation.md#r117) use.
+
+R143 does not replace the `unpinned_build_deps` coverage gap. The gap fires
+whenever the build resolves from a registry, whether or not the other two
+conditions hold, because the analysis genuinely could not see what will run.
+R143 is a finding about this change; the gap is a statement about what was
+never examined, and [B2](../../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+keeps them separate.

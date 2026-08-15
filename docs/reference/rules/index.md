@@ -32,14 +32,15 @@ generated from it by `scripts/build_rules_index.py`.
 | [Deception and Anti-Analysis](deception.md) | `deception` | 5 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 13 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 8 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 21 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Integrity and Verification](integrity.md) | `integrity` | 22 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
-| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 11 | Who owns the package, or a long-stable declared property, changed. |
+| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 3 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 2 | Distinct kinds of finding co-occurred; the combination is the signal, and the points are already scored elsewhere. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 0 | Proposed: signals that only exist when two packages are compared against each other rather than against the corpus. |
+| [Crossfire](crossfire.md) | `crossfire` | 7 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 <!-- /generated: legend -->
 
 Crossfire ships nothing yet. It is listed because the category is defined
@@ -202,6 +203,24 @@ is deliberately non-contiguous; see
 | [R138](fetch-and-execution.md#r138) | Downloaded Source File Executed | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [R139](install-and-persist.md#r139) | Service ExecStart Targets Undeclared Binary | HIGH | [Install and Persistence](install-and-persist.md) |
 | [R140](staging-and-recon.md#r140) | PATH Injection With Undeclared Directory | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
+| [R141](maintainer-and-metadata.md#r141) | Adopted From Orphan | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [R142](integrity.md#r142) | Recipe Changed Without Upstream | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R143](maintainer-and-metadata.md#r143) | Adopted, Recipe Rewritten, Unpinned Fetch | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [S001](sabotage.md#s001) | Recursive Self-Spawn | CRITICAL | [Sabotage](sabotage.md) |
+| [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | CRITICAL | [Sabotage](sabotage.md) |
+| [S003](sabotage.md#s003) | Raw Block Device Write | CRITICAL | [Sabotage](sabotage.md) |
+| [S004](sabotage.md#s004) | Secure Deletion Of User Data | HIGH | [Sabotage](sabotage.md) |
+| [S005](sabotage.md#s005) | Permission Change On A System Path | HIGH | [Sabotage](sabotage.md) |
+| [S006](sabotage.md#s006) | System Service Disruption | HIGH | [Sabotage](sabotage.md) |
+| [S007](sabotage.md#s007) | Cryptocurrency Miner | HIGH | [Sabotage](sabotage.md) |
+| [S008](sabotage.md#s008) | Shell History Or Log Destruction | MEDIUM | [Sabotage](sabotage.md) |
+| [X001](crossfire.md#x001) | Encoded Payload Decoded To A Shell | CRITICAL | [Crossfire](crossfire.md) |
+| [X002](crossfire.md#x002) | Non-Literal Executable Name | CRITICAL | [Crossfire](crossfire.md) |
+| [X003](crossfire.md#x003) | Obfuscated Command Argument | HIGH | [Crossfire](crossfire.md) |
+| [X004](crossfire.md#x004) | Build Output Suppressed | MEDIUM | [Crossfire](crossfire.md) |
+| [X005](crossfire.md#x005) | Home Reached By An Alternative Spelling | HIGH | [Crossfire](crossfire.md) |
+| [X006](crossfire.md#x006) | Source Points Somewhere Unexpected | HIGH | [Crossfire](crossfire.md) |
+| [X007](crossfire.md#x007) | Multiple Evasion Techniques | CRITICAL | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001` to `P007`) are not detections

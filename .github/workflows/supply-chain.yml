@@ -1,0 +1,109 @@
+name: Supply chain
+
+# The dependency boundary, made observable.
+#
+# `docs/security.md` takes "the dependencies are trusted" as an assumption
+# rather than defending it: `pygit2`, `rich`, `typer`, `tldextract`,
+# `cryptography`, Python and SQLite are third-party or substrate code this
+# project consumes and does not audit.  That is a legitimate boundary, but
+# without instrumentation the project cannot tell *when* the assumption
+# stops holding - which is the same failure the tool itself refuses, a gauge
+# reading zero because nothing is wrong being indistinguishable from one
+# that was never wired.
+#
+# So this job reports, and deliberately does not gate.  Two reasons, and
+# both are the model's own logic:
+#
+#  1. A blocking advisory check makes the build depend on a remote feed.
+#     Every other workflow installs `--locked` precisely so that no job
+#     that certifies an invariant resolves anything at run time; a gate
+#     whose verdict arrives over the network would undo that.
+#  2. An advisory is evidence, not a verdict.  Whether a given CVE matters
+#     for a static analyser that never runs a PKGBUILD is a judgement a
+#     person makes - the same detection-versus-authorization split the tool
+#     applies to its own output.
+#
+# `continue-on-error` is therefore load-bearing, not laziness. Read the
+# artifacts; decide what they are worth.
+
+on:
+  schedule:
+    # Weekly. Advisory data changes on its own schedule, not on pushes.
+    - cron: "0 6 * * 1"
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/supply-chain.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      # The exact closure the lock pins, hashes included.  Everything below
+      # reads this file rather than an installed environment, so the report
+      # describes what a release would ship and not what a runner happened
+      # to resolve.
+      - name: Export the locked dependency set
+        run: uv export --locked --no-emit-project --all-extras -o requirements.txt
+
+      # Tool versions are pinned. A reporting job may resolve live without
+      # touching an invariant, but an unpinned tool is still a moving part
+      # in a report someone is meant to compare against last week's.
+      - name: Known advisories against the locked set
+        id: audit
+        continue-on-error: true
+        run: |
+          uvx --from pip-audit==2.10.1 pip-audit \
+            --requirement requirements.txt \
+            --format json \
+            --output pip-audit.json \
+            --progress-spinner off
+          uvx --from pip-audit==2.10.1 pip-audit \
+            --requirement requirements.txt \
+            --progress-spinner off
+
+      - name: SBOM (CycloneDX)
+        continue-on-error: true
+        run: |
+          uvx --from cyclonedx-bom==7.3.1 cyclonedx-py requirements \
+            requirements.txt \
+            --of JSON \
+            --output-reproducible \
+            -o sbom.cdx.json
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: supply-chain
+          path: |
+            requirements.txt
+            pip-audit.json
+            sbom.cdx.json
+          if-no-files-found: warn
+
+      # A findings count in the summary, so the report is visible without
+      # downloading an artifact. Still not a gate: it never fails the job.
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "## Supply chain report"
+            echo
+            if [ "${{ steps.audit.outcome }}" = "success" ]; then
+              echo "No known advisories against the locked dependency set."
+            else
+              echo "**pip-audit reported findings or could not run.**"
+              echo "This does not fail the build; read the log and the artifact and decide."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

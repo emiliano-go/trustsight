@@ -761,7 +761,7 @@ wheels = [
 
 [[package]]
 name = "trustsight"
-version = "0.11.0"
+version = "0.13.1"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
@@ -783,7 +783,7 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography" },
+    { name = "cryptography", specifier = ">=42.0" },
     { name = "pygit2", specifier = ">=1.14" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "rich", specifier = ">=13.0" },

@@ -45,8 +45,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install
-        run: pip install -e ".[dev]"
+        run: uv sync --locked --extra dev --python 3.12
 
       # The seed step below reads the AUR git mirror, which build_corpus
       # reconstructs from the lockfile.  Keyed on the lock, as in the
@@ -62,7 +63,7 @@ jobs:
 
       - name: Reconstruct corpus from lock
         run: |
-          python scripts/build_corpus.py --from-manifest \
+          uv run python scripts/build_corpus.py --from-manifest \
             --manifest tests/fixtures/corpus.lock \
             --out /tmp/benign-corpus
 
@@ -95,9 +96,9 @@ jobs:
         if: steps.check_seed.outputs.seed_exists == 'false'
         shell: bash
         run: |
-          python scripts/generate_seed.py --out /tmp/seed.db \
+          uv run python scripts/generate_seed.py --out /tmp/seed.db \
             --provenance-out /tmp/seed-provenance.json
-          python - <<'EOF'
+          uv run python - <<'EOF'
           import json
           import sqlite3
           conn = sqlite3.connect("/tmp/seed.db")
@@ -109,7 +110,7 @@ jobs:
                       continue
                   fh.write(json.dumps({"name": name, "package_count": count or 0}) + "\n")
           EOF
-          python scripts/build_hashed_seed.py /tmp/maintainers.jsonl \
+          uv run python scripts/build_hashed_seed.py /tmp/maintainers.jsonl \
             --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json
 
       - name: Write the distribution signing key
@@ -142,7 +143,7 @@ jobs:
             echo "Nothing to build: seed already on the release and no IOC inputs."
             exit 0
           fi
-          python scripts/build_release_baselines.py \
+          uv run python scripts/build_release_baselines.py \
             --out /tmp/baselines \
             --sign-key /tmp/sign-key.pem \
             "${SEED_ARGS[@]}" \

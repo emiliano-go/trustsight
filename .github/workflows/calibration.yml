@@ -16,8 +16,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install
-        run: pip install -e ".[dev]"
+        run: uv sync --locked --extra dev --python 3.12
 
       # The corpus is not committed (*.diff is gitignored), so the checkout
       # has no diffs to score.  Rebuild the exact corpus named by the lock,
@@ -25,12 +26,12 @@ jobs:
       # gates can run.
       - name: Reconstruct corpus from lock
         run: |
-          python scripts/build_corpus.py --from-manifest \
+          uv run python scripts/build_corpus.py --from-manifest \
             --manifest tests/fixtures/corpus.lock \
             --out tests/fixtures/benign-corpus
 
       - name: Run the calibration gates over the whole corpus
-        run: python scripts/calibration_gates.py --json gates.json
+        run: uv run python scripts/calibration_gates.py --json gates.json
 
       - name: Upload gate results
         if: always()

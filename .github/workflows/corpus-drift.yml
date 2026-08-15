@@ -16,8 +16,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install
-        run: pip install -e ".[dev]"
+        run: uv sync --locked --extra dev --python 3.12
 
       # Unlike mirror-check, this job caches the fetched AUR objects: it is
       # measuring rule drift, not mirror availability, so re-fetching the
@@ -32,13 +33,13 @@ jobs:
 
       - name: Reconstruct corpus from lock
         run: |
-          python scripts/build_corpus.py --from-manifest \
+          uv run python scripts/build_corpus.py --from-manifest \
             --manifest tests/fixtures/corpus.lock \
             --out tests/fixtures/benign-corpus
 
       - name: Compute current baseline
         run: |
-          python scripts/rebaseline.py \
+          uv run python scripts/rebaseline.py \
             --corpus tests/fixtures/benign-corpus \
             --manifest tests/fixtures/corpus.lock \
             --baseline /tmp/baseline-current.json

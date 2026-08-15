@@ -11,6 +11,8 @@ from pathlib import Path
 
 import typer
 
+from ..safe_text import clean
+
 from ..config import ensure_default_configs, load_config
 from ..db import init_db
 from ..ioc_baseline import (
@@ -84,10 +86,12 @@ def ioc_sources(
         table.add_column("Kind", style="dim")
         table.add_column("Name")
         table.add_column("Status")
+        from rich.text import Text
         for source in configured:
-            table.add_row("configured", source, "enabled" if enabled else "disabled")
+            table.add_row("configured", Text(clean(source)),
+                          "enabled" if enabled else "disabled")
         for source in imported:
-            table.add_row("imported", source, "")
+            table.add_row("imported", Text(clean(source)), "")
         for feed in feeds:
             table.add_row(
                 "feed",
@@ -345,6 +349,7 @@ def ioc_list(
         table.add_column("Value")
         table.add_column("Source")
         table.add_column("Confidence", style="dim")
+        from rich.text import Text
         for e in entries:
             label = f"{e.type}"
             value = e.value
@@ -352,7 +357,14 @@ def ioc_list(
                 from ..ioc_baseline import _is_expired
                 if _is_expired(e.expires_at):
                     value += " [EXPIRED]"
-            table.add_row(label, value, e.source, e.confidence or "-")
+            # Every field here comes from an imported baseline, and IOC
+            # federation means third parties supply them by design. Passed
+            # as bare strings, Rich reads them as markup: a value holding
+            # `[/]` raises MarkupError and aborts the whole table, so one
+            # hostile indicator makes `ioc list` unusable.
+            table.add_row(Text(clean(label)), Text(clean(value)),
+                          Text(clean(e.source)),
+                          Text(clean(e.confidence or "-")))
         console().print(table)
     else:
         for e in entries:

@@ -19,6 +19,7 @@ from ..ioc_baseline import (
     match_hash,
     match_package,
 )
+from .buildfetch import registry_install_names
 from .ioc import _added_bodies, _digests_in, _hosts_in
 
 _CHECKSUM_ARRAY_RE = re.compile(
@@ -130,6 +131,18 @@ def ioc_baseline_matches(
             for m in match_package(name):
                 if source_allowed(m.source):
                     add(m, field, _find_line(diff_text, name))
+
+    # Names a build step installs from a registry.  A `package` indicator
+    # otherwise reaches only the AUR package name, pkgbase and the
+    # dependency arrays, and the June 2026 campaign named its payload in
+    # none of those: `atomic-lockfile` appeared solely as an argument to
+    # `npm install` inside prepare(), so a curator's list naming it would
+    # have matched nothing at all.
+    for _fn, command, name in registry_install_names(scan_text):
+        for m in match_package(name):
+            if source_allowed(m.source):
+                add(m, "build_install", _find_line(diff_text, name) or
+                    _find_line(diff_text, command[:40]))
 
     # Domains and hashes from visible text.
     want_domains = bool(active_iocs(source=None, expired=False))

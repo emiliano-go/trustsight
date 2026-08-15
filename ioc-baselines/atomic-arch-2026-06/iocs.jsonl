@@ -1,0 +1,3 @@
+{"added":"2026-06-01T00:00:00Z","campaign":"atomic-arch-2026-06","confidence":"confirmed","expires_at":"2027-06-30T00:00:00Z","provenance":"Sonatype-2026-003775","source":"local-unverified","type":"package","value":"atomic-lockfile"}
+{"added":"2026-06-01T00:00:00Z","campaign":"atomic-arch-2026-06","confidence":"confirmed","expires_at":"2027-06-30T00:00:00Z","provenance":"Sonatype-2026-003775","source":"local-unverified","type":"package","value":"js-digest"}
+{"added":"2026-06-01T00:00:00Z","campaign":"atomic-arch-2026-06","confidence":"confirmed","expires_at":"2027-06-30T00:00:00Z","provenance":"Sonatype-2026-003775","source":"local-unverified","type":"package","value":"lockfile-js"}

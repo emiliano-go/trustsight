@@ -1,0 +1,35 @@
+[
+  {
+    "type": "package",
+    "value": "atomic-lockfile",
+    "confidence": "confirmed",
+    "provenance": "Sonatype-2026-003775",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "npm package added as a build dependency by hijacked AUR packages; carried the 'deps' Rust credential-harvesting binary. Created solely to carry the payload."
+  },
+  {
+    "type": "package",
+    "value": "lockfile-js",
+    "confidence": "confirmed",
+    "provenance": "Sonatype-2026-003775",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "npm package added as a build dependency by hijacked AUR packages; carried the 'deps' Rust credential-harvesting binary. Created solely to carry the payload."
+  },
+  {
+    "type": "package",
+    "value": "js-digest",
+    "confidence": "confirmed",
+    "provenance": "Sonatype-2026-003775",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "npm package added as a build dependency by hijacked AUR packages; carried the 'deps' Rust credential-harvesting binary. Created solely to carry the payload."
+  }
+]

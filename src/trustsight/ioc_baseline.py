@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .bounded_io import read_file_capped
 from .db import get_connection
 
 import sqlite3
@@ -38,6 +39,17 @@ try:
 except Exception:  # pragma: no cover - defensive import guard
     _HAS_CRYPTO = False
 
+
+# Ceiling on one baseline file, applied before the signature check that
+# reads it.  A federated indicator set is a list of domains, hashes and
+# package names; anything at this scale is not one.
+MAX_BASELINE_BYTES = 256 * 1024 * 1024
+
+#: Indicators parsed from one baseline. The byte cap bounds the file; this
+#: bounds the objects it becomes, which is the larger number: 256 MiB of
+#: JSONL is millions of `IocEntry` instances, and a curated indicator set is
+#: thousands.
+MAX_BASELINE_ENTRIES = 100_000
 
 _IOC_TYPES = frozenset({"domain", "hash", "package"})
 
@@ -171,7 +183,10 @@ def _tldextract(host: str):
 def _load_text(path: Path) -> bytes:
     if not path.exists():
         raise FileNotFoundError(f"Baseline file not found: {path}")
-    return path.read_bytes()
+    # Bounded before the signature is checked, because the signature is
+    # computed over these bytes: verification cannot run until they are
+    # read, so the bound has to sit in front of it, not behind.
+    return read_file_capped(path, MAX_BASELINE_BYTES, f"IOC baseline {path.name}")
 
 
 def _load_manifest(path: Path) -> BaselineManifest:
@@ -213,6 +228,12 @@ def _load_iocs(path: Path) -> list[IocEntry]:
     entries: list[IocEntry] = []
     seen: set[tuple[str, str, str]] = set()
     for lineno, line in enumerate(text.splitlines(), start=1):
+        if len(entries) >= MAX_BASELINE_ENTRIES:
+            log.warning(
+                "iocs.jsonl: stopping at %d entries; the rest were not read",
+                MAX_BASELINE_ENTRIES,
+            )
+            break
         line = line.strip()
         if not line:
             continue

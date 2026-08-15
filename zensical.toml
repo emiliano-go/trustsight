@@ -1,7 +1,7 @@
 [project]
 site_name = "trustsight"
 site_description = "Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify."
-site_url = "https://trustsight.emiliano-go.com/"
+site_url = "https://docs.trustsight.org/"
 docs_dir = "docs"
 site_dir = "site"
 
@@ -111,6 +111,7 @@ name = "trustsight on PyPI"
 "Install and Persistence" = "reference/rules/install-and-persist.md"
 "Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"
 "Integrity and Verification" = "reference/rules/integrity.md"
+"Sabotage" = "reference/rules/sabotage.md"
 "Naming and Dependencies" = "reference/rules/naming-and-dependency.md"
 "Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"
 "Temporal Context" = "reference/rules/temporal.md"
@@ -130,6 +131,7 @@ name = "trustsight on PyPI"
 "What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
 "Seed Provenance" = "explanation/seed-provenance.md"
 "Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
+"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"
 
 [[project.nav]]
 "Contributing" = "contributing/index.md"
@@ -156,11 +158,11 @@ tables = {}
 admonition = {}
 toc = { permalink = true }
 "seoslug.contrib.zensical" = {
-  canonical_host = "trustsight.emiliano-go.com",
-  public_base_url = "https://trustsight.emiliano-go.com/",
+  canonical_host = "docs.trustsight.org",
+  public_base_url = "https://docs.trustsight.org/",
   site_name = "trustsight",
   title_template = "{title} - TrustSight",
-  default_og_image = "https://trustsight.emiliano-go.com/assets/images/trustsight-banner.png",
+  default_og_image = "https://docs.trustsight.org/assets/images/trustsight-banner.png",
   publisher_name = "Emiliano Gandini Outeda",
   locale = "en_US",
   twitter_site = "@emiliano_go_",

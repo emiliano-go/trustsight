@@ -76,7 +76,8 @@ Worth knowing when you are relying on one:
 
 **Structural, enumerate the whole source:** `no interpreter or shell execution`,
 `network confined to the fetch modules`, `one network host, declared`,
-`every request has a timeout`, `archives are never extracted to disk`,
+`every request has a timeout`, `no path-based archive extraction`,
+`every stream read is bounded`,
 `SQL is parameterised`, `declared source URLs are never fetched`,
 `every result declares its coverage`, `a baseline supplies state, not rules`,
 `doc cross-references resolve`, `critical paths are synchronised`, and
@@ -85,6 +86,14 @@ Worth knowing when you are relying on one:
 **Behavioural, loop over every known site:** `terminal output is inert` (four
 renderers), `reserved names are refused by every writer` (three writers),
 `FATAL rules cannot be switched off` (every shipped FATAL rule).
+
+**Structural, over a named set of modules:** `artifact reads are bounded before
+verification` walks `_ARTIFACT_MODULES` - the modules that read a seed, a
+baseline or an indicator set. It enumerates exhaustively *within* those
+modules, so a new bare read in one of them fails, but a new module that loads
+an artifact has to be added to the list. That is the weak seam in this gate,
+and it is the reason `every stream read is bounded` is scoped to the whole
+source instead: prefer the wider scope where the property allows it.
 
 **Behavioural, single path, because the property is about one function:**
 `expansion is bounded and never indirect`, `incomplete coverage fails closed`,

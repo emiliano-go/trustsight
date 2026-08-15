@@ -78,7 +78,55 @@ This command:
 
 ---
 
+## 4. Dependencies are reviewed too
+
+An AUR package's `depends` and `makedepends` can name other AUR packages, and
+`makepkg` builds those on your machine in the same run. So by default
+TrustSight also analyses the package's direct AUR dependencies, and each one
+appears as a mini-card nested inside its parent's card:
+
+```
+╭─ some-trusted-tool 2.4.1 → 2.4.2 ─────────────────────────╮
+│  Status  The update is not trivial. Review it.            │
+│                                                           │
+│  Dependencies                                             │
+│           ╭──────── L1  libhelper ────────╮               │
+│           │  Findings  2                  │               │
+│           │      Risk  (High)             │               │
+│           ╰───────────────────────────────╯               │
+╰───────────────────────────────────────────────────────────╯
+```
+
+Each dependency is a full analysis in its own right - its own findings, its own
+score, its own band. A dependency's risk is never folded into its parent's
+score, so a `High` on a mini-card is a statement about *that* package, and the
+parent's number still means what it meant before.
+
+Control how far it goes:
+
+```bash
+trustsight inspect some-pkg --depth 0    # this package only
+trustsight inspect some-pkg --depth 2    # two levels down
+trustsight review --depth -1             # the whole closure
+```
+
+`-1` walks every level, bounded at 8 levels and 200 dependencies per run -
+the dependency graph is written by the party under review, so it does not get
+to decide how much work your machine does. If a walk stops early you are told:
+the result carries a `deps_not_scanned` coverage gap and cannot report as
+unflagged. A walk that finished the depth you asked for is not a gap.
+
+To make a different depth permanent, put it in `config.toml`:
+
+```toml
+[depth]
+levels = 2
+```
+
+---
+
 ## Next steps
 
+- Read the [depth reference](../reference/configuration.md#depth) for the ceilings and the gap semantics.
 - Learn to [read a full report](reading-a-report.md): understand every section of the inspect output.
 - See [guides](../guides/index.md) for real workflows: CI integration, alerting, batch review.

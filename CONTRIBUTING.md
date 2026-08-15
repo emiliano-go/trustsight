@@ -11,7 +11,7 @@ git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+uv sync --extra dev
 pytest
 ruff check
 python scripts/security_gates.py

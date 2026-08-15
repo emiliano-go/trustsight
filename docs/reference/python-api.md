@@ -20,7 +20,13 @@ Public: everything exported from `trustsight.api`, re-exported at the package ro
 
 Internal: everything else under `trustsight.`, including `schema.PackageFact`, `db`, `analysis`, `full_aur`, `rules` and `scoring`. Those change shape between releases without notice. If you find yourself importing one of them, the API is missing something; open an issue rather than pinning to an internal.
 
-Every result object has `to_dict()`, which returns the same JSON body the corresponding `--json` flag emits, so a consumer written against the [report schema](report-schema.md) works unchanged.
+Every result object has `to_dict()`, which returns the same JSON body the corresponding `--json` flag emits, so a consumer written against the [report schema](report-schema.md) works unchanged. That is an enforced invariant, not a convention: `the API and CLI emit the same JSON body` compares the two bodies key by key on every push.
+
+The defaults match the CLI's too. `score`, `risk` and `risk_label` are **withheld** unless you ask, exactly as the CLI withholds them without `--score` or `--risk`; `to_dict(include_score=True)` is this API's spelling of that flag, and `to_dict(verbose=True)` of `--verbose`, which adds `score_breakdown`. Everything else - `findings`, `changes`, `coverage_gaps`, `suppressed_rules`, `verdict` - is in the default body, because withholding the number must not withhold the evidence.
+
+Reading an attribute is a different act from serialising. `report.score` is always populated: naming the field *is* the request. What `to_dict()` will not do is volunteer the number to a caller who only asked to serialise the result.
+
+`Report.raw` is the serialised `PackageFact` as stored in the database. It uses the storage naming (`package_name`, `final_score`) and always carries the score, so reach for it when you want the internal record rather than the report.
 
 ---
 
@@ -56,6 +62,34 @@ if not result.complete:
 ```
 
 ---
+
+## Dependencies on a `Report`
+
+`Report.dependencies` is a tuple of analysed AUR dependencies, each carrying
+`name`, `depth`, `score`, `risk`, `risk_label`, `finding_count`,
+`coverage_gaps`, `via`, `parent`, `failed` and `error`, plus a `flagged`
+property and `to_dict()`.
+
+Each dependency is a **full analysis in its own right** - its own score, its
+own band, its own row in the database. None of it is folded into the parent's
+`score`, and that is deliberate rather than cautious: `depth` is not part of
+the config fingerprint, so a parent score that moved with `depth` would break
+[B1](../security.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for
+anyone comparing two runs.
+
+```python
+report = ts.inspect("some-package", depth=2)
+
+for dep in report.flagged_dependencies:
+    print(f"L{dep.depth} {dep.name}: {dep.score}/100 ({dep.risk})")
+
+if report.depth_truncated:
+    print("the walk stopped early; part of the closure was not analysed")
+```
+
+`Report.depth_truncated` says the walk stopped before the closure was
+exhausted, which also puts `deps_not_scanned` in `coverage_gaps` and so
+forbids an unflagged result.
 
 ## `TrustSight`
 
@@ -102,13 +136,15 @@ Database and corpus health. What `trustsight status` reports, plus the config di
 
 ## Analysis
 
-### `inspect(package, *, check_aur=True) -> Report`
+### `inspect(package, *, check_aur=True, depth=None) -> Report`
 
 Analyse one package. Equivalent to `trustsight inspect`.
 
 Fetches the package's AUR git repository, diffs it against the last state this database saw, runs every rule, and records the run as an observation. That last part is what makes the *next* call's novelty signals mean anything.
 
 Raises `PackageNotFound` when the name is in neither the AUR nor the local database. Pass `check_aur=False` to skip the RPC round trip when you already know the package exists.
+
+`depth` controls how far into the package's AUR dependency closure the analysis goes: `0` off, `1` (the default) direct dependencies, `n` levels, `-1` every level. `None` uses `[depth] levels` from the config. See [`[depth]`](configuration.md#depth) for the bounds.
 
 ### `analyze_text(package, new_pkgbuild, old_pkgbuild=None, *, maintainer="", srcinfo=None, last_modified=None, first_submitted=None, previous_modified=None) -> Report`
 
@@ -124,7 +160,7 @@ report = ts.analyze_text(
 )
 ```
 
-### `review(...) -> ReviewResult`
+### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None) -> ReviewResult`
 
 Review installed AUR packages. Equivalent to `trustsight review`.
 
@@ -237,7 +273,7 @@ The analysis of one package.
 | `old_version`, `new_version` | `str` | From `inspect`, the pair the diff was taken over. From `review`, the installed version and the version the AUR advertises. |
 | `old_commit`, `new_commit` | `str` | AUR git commits bounding the diff. |
 | `score` | `int` | 0-100. Never derive the band from it. |
-| `risk` | `str` | The band the analysis supports: `Low`, `Medium`, `High`, `Critical` or `Inconclusive`. |
+| `risk` | `str` | The band the analysis supports: `Low`, `Medium`, `High`, `Critical` or `Inconclusive`. A closed set - a FATAL finding reports as `Critical` and names itself in `risk_label` rather than adding a member. Not a pure function of `score`: a CRITICAL finding floors the band at `High`, and a cold database or a coverage gap can lower it to `Inconclusive`. |
 | `risk_label` | `str` | `risk`, qualified in prose when coverage was incomplete. |
 | `verdict` | `str` | Plain-English summary. Always ends with a direction to review. |
 | `findings` | `tuple[Finding, ...]` | Rules that fired with positive weight, plus every FATAL and CRITICAL. |

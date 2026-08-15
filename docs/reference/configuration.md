@@ -152,6 +152,34 @@ baseline is imported.
 | `asset` | string | Optional asset prefix override.  Defaults to `name`; the assets fetched are `baseline-ioc-<prefix>-manifest.json` and `baseline-ioc-<prefix>-iocs.jsonl`. |
 | `enabled` | bool | Whether the feed is active. |
 
+### `[depth]`
+
+```toml
+[depth]
+levels = 1
+```
+
+How far into a package's AUR dependency closure to analyse. `0` disables it,
+`1` (the default) analyses direct AUR dependencies, `n` analyses `n` levels,
+and `-1` walks every level there is.
+
+`-1` is bounded, and it has to be: the dependency graph is written by the
+party under review, so an unbounded walk would let a crafted recipe decide
+how many repositories this machine clones. The ceilings are
+`depth.MAX_DEPTH_LEVELS` (8) and `depth.MAX_DEPTH_NODES` (200 dependencies
+per run), and a walk cut short by either records the `deps_not_scanned`
+coverage gap. A walk that *completed* is not a gap: asking for depth 1 and
+getting depth 1 answers the question that was asked.
+
+Each dependency is analysed exactly as a package - its own score, its own
+band, its own row in the database. Nothing is folded into the parent's score,
+because `depth` is deliberately absent from the config fingerprint and a
+score that moved with `--depth` would break
+[B1](../security.md#b1-a-score-is-a-sum-of-matched-evidence-nothing-more)
+for anyone comparing two runs.
+
+Overridden per run by `--depth`.
+
 ### `[deep]`
 
 !!! note "Reserved, not implemented"

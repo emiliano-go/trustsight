@@ -1,6 +1,6 @@
 # Report Schema
 
-The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core analysis result. It is serialised to JSON via `fact_to_dict()` (`src/trustsight/schema.py`) for database storage and display in `trustsight inspect` and `trustsight history --score-breakdown`.
+The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core analysis result. It is serialised to JSON via `fact_to_dict()` (`src/trustsight/schema.py`) for database storage and for `trustsight history --score-breakdown`. The **report** bodies that `review --json`, `inspect --json` and the Python API's `to_dict()` emit are a different, shared shape, built by `reporting.report_body`: same keys on all three, with the score group withheld unless asked for. See [B11](../security.md#b11-every-surface-reports-the-same-thing).
 
 ---
 
@@ -52,6 +52,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "first_seen": bool,
   "recent_commit_burst": bool,
   "diff_truncated": bool,
+  "scan_truncated": bool,
   "tree_analyzed": bool,
   "config_fingerprint": "sha256:...",
   "changes": ["string"],
@@ -106,7 +107,8 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
-| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"unresolved_source"` and `"unresolved_parse_time"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
+| `scan_truncated` | `bool` | `true` when the diff held more lines than `rules.MAX_SCANNED_LINES` and only its first lines were matched. Distinct from `diff_truncated` because they name different caps: rule matching costs per line, so a diff of many short lines stays under `[diff] max_diff_bytes` and is still cut here. A reader who saw only `diff_truncated` would raise the byte limit and find it changed nothing. |
+| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"unpinned_build_deps"` and `"deps_not_scanned"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
@@ -202,14 +204,43 @@ There are two JSON shapes, and they are not the same object.
 
 - `schema.fact_to_dict()` produces the stored `PackageFact`, documented above.
   It is what goes into `fact_json` and into an exported baseline.
-- The CLI's report JSON (`trustsight review --json`, `trustsight inspect
-  --json`) is a presentation view of the same analysis. It carries `package`,
-  `score`, `risk`, `risk_label`, `verdict`, `findings`, `changes`,
-  `coverage_gaps`, `file_changes`, `is_trivial`, `aur_note`, and
-  `version_comparison`.
+- The **report body** (`trustsight review --json`, `trustsight inspect
+  --json`, and the Python API's `Report.to_dict()`) is a presentation view of
+  the same analysis, built by `reporting.report_body`. All three surfaces
+  return the same keys with the same values for the same result, which
+  [B11](../security.md#b11-every-surface-reports-the-same-thing) requires and
+  the `the API and CLI emit the same JSON body` gate enforces.
+
+  Always present (`reporting.REPORT_KEYS`): `package`, `old_version`,
+  `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
+  `findings`, `file_changes`, `changes`, `coverage_gaps`, `suppressed_rules`,
+  `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `failed`,
+  `dependencies`, `depth_truncated`, `config_fingerprint`.
+
+  On request only:
+
+  | Keys | Asked for by |
+  |---|---|
+  | `score`, `risk`, `risk_label` (`SCORE_KEYS`) | `--score` / `--risk`, or `to_dict(include_score=True)` |
+  | `score_breakdown` (`VERBOSE_KEYS`) | `--verbose`, or `to_dict(verbose=True)` |
+
+  Withholding the score withholds nothing else: the evidence keys are in the
+  default body on every surface. A finding in the default body carries no
+  `weight` - a weight is score arithmetic and travels with the breakdown.
+
+  `dependencies` is one entry per analysed AUR dependency, each with `name`,
+  `depth`, `score`, `risk`, `risk_label`, `finding_count`, `coverage_gaps`,
+  `via`, `parent`, `failed` and `error`. Each is a full analysis in its own
+  right; a dependency's score is never folded into the parent's. See
+  [`[depth]`](configuration.md#depth). `depth_truncated` says the walk stopped
+  before the closure was exhausted, which also raises `deps_not_scanned`.
 
 `risk` is the bare band (`"Low"`, `"Medium"`, `"High"`, `"Critical"` or
-`"Inconclusive"`). `risk_label` is the same band qualified for a person: a
+`"Inconclusive"`). It is a **closed set**: a FATAL finding does not
+add a member, it reports as `Critical` and names itself in `risk_label`
+(`Critical (FATAL: R013)`). A CRITICAL finding also floors the band at `High`
+regardless of the score, so `risk` is not a pure function of `score` - see
+[the band rules](../security.md#the-programme). `risk_label` is the same band qualified for a person: a
 coverage gap appends ` (incomplete analysis)` to an elevated band, and an
 `Inconclusive` names its cause: the gap(s) behind it, e.g.
 `Inconclusive (diff truncated: payload may be hidden)`, or the cold start,

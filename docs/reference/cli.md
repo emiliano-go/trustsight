@@ -29,7 +29,7 @@ The help output also documents `trustsight config show`, `trustsight config set 
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N]
 ```
 
 ### Flags
@@ -41,6 +41,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verb
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
 | `--score` | flag | `false` | Show aggregate trust score for each package. |
 | `--risk` | flag | `false` | Show risk level; colours the panel border by risk. |
+| `--depth` | `int` | `[depth] levels` (1) | AUR dependency levels to analyse. `0` disables it, `1` analyses direct AUR dependencies, `n` analyses `n` levels, and `-1` walks every level there is - bounded by `depth.MAX_DEPTH_LEVELS` (8) and `depth.MAX_DEPTH_NODES` (200), because the dependency graph is written by the party under review. A walk cut short by either ceiling records the `deps_not_scanned` coverage gap. |
 | `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
@@ -101,6 +102,7 @@ trustsight inspect <package>
 | `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
 | `--score` | Show aggregate trust score with weight contribution breakdown. |
 | `--risk` | Show risk level with per-rule severity labels. Implies a coloured border in rich mode. |
+| `--depth` | AUR dependency levels to analyse: `0` off, `1` (default) direct dependencies, `n` levels, `-1` every level (bounded). Each dependency is analysed as a package in its own right, with its own score and band, shown as a mini-card inside the package's card. |
 
 ### Output
 

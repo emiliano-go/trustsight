@@ -23,7 +23,7 @@ source .venv/bin/activate
 ## Install development dependencies
 
 ```bash
-pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
 This installs the package in editable mode along with `pytest`, `ruff`, and other dev tooling.

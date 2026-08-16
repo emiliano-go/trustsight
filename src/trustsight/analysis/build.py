@@ -16,6 +16,7 @@ from ..tokenizer import (
     resolve_added_lines,
 )
 from .base import _experimental_enabled, mask_to_recipe
+from ..tokenizer import split_lines
 
 
 _CRITICAL_FUNCTIONS = ("build", "prepare", "check", "package")
@@ -155,7 +156,7 @@ def _added_line_number(diff_text: str, fragment: str) -> int | None:
     *fragment* (a tiny local analogue of delivery's ``_find_line``, kept
     here because ``delivery`` imports this module)."""
     pattern = re.compile(r"\+.*" + re.escape(fragment[:60]), re.IGNORECASE)
-    for i, line in enumerate(diff_text.splitlines()):
+    for i, line in enumerate(split_lines(diff_text)):
         if pattern.search(line):
             return i + 1
     return None
@@ -251,7 +252,7 @@ _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
 
 def _indirect_expansion_findings(diff_text, config, add) -> None:
     """A command or shell is reached through indirect expansion (R132)."""
-    for line in join_line_continuations(diff_text.splitlines()):
+    for line in join_line_continuations(split_lines(diff_text)):
         if not line.startswith("+") or line.startswith("+++"):
             continue
         body = _strip_comment(line[1:])
@@ -395,7 +396,7 @@ def _build_findings(diff_text, config, add) -> None:
         # markers, so counting on resolved text would miss the campaign.
         # The composed HIGH requires the reconstructed line to reveal an
         # executable action (R117 composition).
-        raw_lines = join_line_continuations(diff_text.splitlines())
+        raw_lines = join_line_continuations(split_lines(diff_text))
         indicators = _obfuscation_indicators(config)
         density = _obfuscation_density_threshold(config)
         action_re = _reconstructs_to_action_re(config)
@@ -449,7 +450,7 @@ def _reconstruction_findings(diff_text, config, add) -> None:
     too, and as the inconclusive case - unreconstructable input is never
     read as clean (plan §3.1).
     """
-    raw_lines = join_line_continuations(diff_text.splitlines())
+    raw_lines = join_line_continuations(split_lines(diff_text))
     for line in raw_lines:
         if not line.startswith("+") or line.startswith("+++"):
             continue
@@ -525,7 +526,7 @@ def _build_flag_findings(diff_text, config, add) -> None:
     because it is scoped to build functions and which also runs at parse
     time, before any build step.
     """
-    lines = mask_to_recipe(join_line_continuations(diff_text.splitlines()))
+    lines = mask_to_recipe(join_line_continuations(split_lines(diff_text)))
     enclosing = _classify_enclosing_function(lines)
     for i, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):

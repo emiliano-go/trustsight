@@ -20,9 +20,10 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `installer`
-- **Pattern:** `\+.*\.install.*`
+- **Pattern:** `^\+.*\.install`
 - **Scope:** All lines (no function-body restriction)
 - **Description:** Fires when a `.install` file is added or modified in the diff. Install scripts run with root privileges and are a common vector for persistent backdoors.
+- **Note:** The pattern was `\+.*\.install.*` before 0.13.2. Unanchored, it is quadratic (the search retries at every offset and the wildcard rescans the line from each), which the compile-time safety check now refuses, and a refused pattern stops matching silently. On an added line, where the diff marker sits at position 0, the anchored form matches exactly the same text. An installation written before 0.13.2 still holds the old pattern: `trustsight lint` reports it as an ERROR and `trustsight config sync-rules --update` replaces it.
 
 ### R017: Setuid/Setgid Permission {#r017}
 

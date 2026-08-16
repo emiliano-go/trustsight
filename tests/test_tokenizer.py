@@ -1,3 +1,5 @@
+import pytest
+
 from trustsight.tokenizer import resolve_added_lines, tokenize_and_resolve
 
 
@@ -391,6 +393,62 @@ def test_reconstruct_empty_quote_concat_double():
     r, fully = reconstruct_literals('b""u""n add')
     assert r == "bun add"
     assert fully
+
+
+def test_reconstruct_removes_an_intra_word_escape():
+    """``c\\url`` is ``curl``: bash drops a backslash before a plain letter.
+
+    This is the sibling of the empty-quote concatenation above, and it was
+    the one the tokenizer did not fold. The backslash survived resolution,
+    the name never reconstructed, and every rule that reads a command name
+    - R001 among them - saw nothing. It reached no rule at all.
+    """
+    from trustsight.tokenizer import reconstruct_literals
+
+    assert reconstruct_literals(r"c\url -fsSL https://e.example")[0] == (
+        "curl -fsSL https://e.example"
+    )
+    assert reconstruct_literals(r"w\get -qO- https://e.example")[0] == (
+        "wget -qO- https://e.example"
+    )
+    assert reconstruct_literals(r"/bin\/sh -c x")[0] == "/bin/sh -c x"
+
+
+@pytest.mark.parametrize("text", [
+    # An escaped pipe is a literal `|`, not a pipeline. Unescaping it would
+    # build a pipe-to-shell out of a command that runs nothing of the sort.
+    r"curl x \| sh",
+    # An escaped space holds one word together; removing it splits the word.
+    r"cp file\ name.txt /tmp/x",
+    # `\$` is what stops an expansion, and `\\` is a literal backslash.
+    r"echo \$HOME",
+    r"printf 'a\\b'",
+])
+def test_reconstruct_keeps_the_escapes_that_mean_something(text):
+    """Bash drops every backslash; this drops only the meaningless ones.
+
+    Going further would not be more faithful, it would invent syntax the
+    line did not have - and hand the rules a pipeline that does not exist.
+    """
+    from trustsight.tokenizer import reconstruct_literals
+
+    assert "\\" in reconstruct_literals(text)[0]
+
+
+def test_reconstruct_leaves_escapes_inside_quotes_alone():
+    """A quoted span is appended whole, which is what keeps `printf` intact.
+
+    `printf '\\x63\\x75\\x72\\x6c'` needs its escapes to reach the ANSI-C
+    decoder, and a backslash inside single quotes is literal in bash.
+    """
+    from trustsight.tokenizer import reconstruct_literals
+
+    # The quotes themselves are removable here, as they always were; what
+    # matters is that the escapes inside them survive it.
+    assert reconstruct_literals(r"wine 'C:\Users\x\app.exe'")[0] == (
+        r"wine C:\Users\x\app.exe"
+    )
+    assert reconstruct_literals(r"$(printf '\x62\x75\x6e') add")[0] == "bun add"
 
 
 def test_reconstruct_printf_format():

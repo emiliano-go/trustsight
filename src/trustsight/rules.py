@@ -4,7 +4,7 @@ import logging
 
 from .config import load_rules
 from .findings import stamp
-from .tokenizer import join_line_continuations
+from .tokenizer import join_line_continuations, split_lines  # noqa: F401
 from .regex_safety import (
     BACKTRACK_BUDGET_S,
     backtracking_risk,
@@ -48,13 +48,43 @@ _MESSAGE_LINE_RE = re.compile(
 _COMMAND_CHAIN_RE = re.compile(r"[;&|]|\$\(|`")
 
 # Track function body boundaries for position-aware scoring.
-_FUNCTION_OPEN_RE = re.compile(r"^\s*\w+\s*\(\s*\)\s*\{")
+#
+# The name class is makepkg's, not Python's.  A split package declares
+# `package_$pkgname()`, and a pkgname may hold `@ . _ + -`, so
+# `package_google-chrome-bin() {` is an ordinary AUR shape.  `\w+` does not
+# match a hyphen, so those headers matched *neither* expression: the
+# function was never opened, its body classified as `other`, and every rule
+# carrying a `function_body` or named scope skipped the whole region.
+# Renaming `package` to `package_x-bin` was a one-word way out of them.
+_FUNCTION_NAME_CLASS = r"[A-Za-z0-9_@.+][A-Za-z0-9_@.+-]*"
+_FUNCTION_OPEN_RE = re.compile(rf"^\s*{_FUNCTION_NAME_CLASS}\s*\(\s*\)\s*\{{")
 _FUNCTION_CLOSE_RE = re.compile(r"^\s*\}")
 
 # Same shape, but capturing the name so a rule can scope itself to one
 # function.  "curl in build()" is routine; "curl in pkgver()" is not, and
 # a plain function_body scope cannot tell them apart.
-_FUNCTION_NAME_RE = re.compile(r"^(\w+)\s*\(\s*\)\s*\{")
+_FUNCTION_NAME_RE = re.compile(rf"^({_FUNCTION_NAME_CLASS})\s*\(\s*\)\s*\{{")
+
+
+def _starts_a_new_file(line: str, previous: str) -> bool:
+    """True when *line* begins a new file's section of the diff.
+
+    A hunk shows part of a file, not all of it, so a `package() {` whose
+    closing brace falls outside the hunk leaves the brace counter raised.
+    It used to stay raised for the remainder of the diff, which placed
+    every *subsequent file* inside that function: in the benign corpus a
+    `.desktop` file's translated `Name[be]=` lines and a README's Spanish
+    prose were both classified as `package()` body and scanned as shell.
+    They are the bulk of what the crossfire family fired on.
+
+    ``diff --git`` is unambiguous.  The ``---``/``+++`` pair is accepted
+    too, for diffs generated without it, but only as a pair: a removed
+    source line reading ``-- x`` appears in a diff as ``--- x``, and
+    treating that alone as a header would reset scope on package content.
+    """
+    if line.startswith("diff --git "):
+        return True
+    return line.startswith("+++ ") and previous.startswith("--- ")
 
 
 # Compiled rule patterns, keyed by pattern text.  re's own cache is bounded
@@ -126,7 +156,13 @@ def _compiled(pattern: str):
         # costs seconds at a full line.
         or is_superlinear(compiled)
     ):
-        _log.warning("refusing regex pattern with excessive backtracking risk")
+        # Named, truncated: a refused pattern stops matching silently, and
+        # "some rule died" is not something an operator can act on.
+        # `trustsight lint` reports the same condition as an ERROR.
+        _log.warning(
+            "refusing regex pattern with excessive backtracking risk: %.80s",
+            pattern,
+        )
         compiled = None
     _pattern_cache[pattern] = compiled
     return compiled
@@ -172,7 +208,7 @@ def find_line_in_diff(
         # An escaped fragment sliced mid-escape leaves a trailing backslash.
         compiled = _compile(re.escape(pattern))
 
-    for index, line in enumerate(diff_text.splitlines()):
+    for index, line in enumerate(split_lines(diff_text)):
         if compiled.search(line):
             return index + 1
     return None
@@ -284,7 +320,14 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
     """
     contexts: dict[int, str] = {}
     depth = 0
+    previous = ""
     for i, line in enumerate(lines):
+        if _starts_a_new_file(line, previous):
+            depth = 0
+            contexts[i] = "other"
+            previous = line
+            continue
+        previous = line
         stripped = line.lstrip("+").lstrip()
         if _is_message_line(line):
             contexts[i] = "message"
@@ -347,7 +390,13 @@ def _enclosing_function_map(lines: list[str]) -> dict[int, str]:
     """
     enclosing: dict[int, str] = {}
     stack: list[str] = []
+    previous = ""
     for i, line in enumerate(lines):
+        if _starts_a_new_file(line, previous):
+            stack.clear()
+            previous = line
+            continue
+        previous = line
         stripped = line.lstrip("+").lstrip()
         match = _FUNCTION_NAME_RE.search(stripped)
         if stack:
@@ -492,7 +541,7 @@ def apply_rules(
 def get_raw_diff_lines(diff_text: str) -> list[str]:
     """Return non-empty diff lines with continuations joined."""
     lines = []
-    for line in join_line_continuations(diff_text.splitlines()):
+    for line in join_line_continuations(split_lines(diff_text)):
         stripped = line.strip()
         if stripped:
             lines.append(stripped)

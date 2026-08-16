@@ -59,37 +59,58 @@ small, but noise rather than signal.
 
 ## Measured before weighted
 
-Every rule here was run against the 3,739-diff locked benign corpus before it
-was given a severity:
+Every rule here was run against the locked benign corpus before it was given a
+severity. The figures below are the corpus as `tests/fixtures/corpus.lock`
+records it today - **3,246** diffs, generated 2026-07-16:
 
 | Rule | Benign diffs | Rate |
 |---|---|---|
 | X001 | 0 | 0.000% |
-| X002 | 26 | 0.695% |
+| X002 | 0 | 0.000% |
 | X003 | 0 | 0.000% |
 | X004 | 0 | 0.000% |
 | X005 | 0 | 0.000% |
 | X006 | 0 | 0.000% |
 | X007 | 0 | 0.000% |
 
-The ceiling is 30%. These sit two orders of magnitude under it, which is what
-makes CRITICAL affordable here: legitimate recipes do not assemble command
-names out of parts.
+The ceiling is 30%. The whole family is now at zero, which is what makes
+CRITICAL affordable here: legitimate recipes do not assemble command names out
+of parts.
 
-X002's 26 are worth naming rather than rounding away. Most are plain variables
-used as commands - `$DKMS add -m ...` - where the assignment lives outside the
-diff, so the tokenizer cannot see that the name reduces to a literal. A
-variable that *does* resolve is suppressed already. The rest are
-`eval "$(cmd)"`, which is genuinely dynamic execution: R039 is documented for
-that shape but does not fire on it, so X002 is covering rather than
-duplicating.
+X002 read 0.695% when the family shipped (26 diffs, against a corpus of 3,739
+at the time) and 0.678% on today's locked set. The number is worth keeping in
+view because of what closing it turned up. The hits were not marginal calls
+about which shape counts as evasion. Every one was a rule looking in the wrong
+place:
 
-That makes the rate an artifact of reading a diff rather than a property of the
-rule. On whole-file input - the shape a first-seen package presents, where the
-assignment is visible - the same `$DKMS` recipe is silent and `${A[0]}` still
-fires. X002 is therefore *more* accurate on the first-seen path than the 0.374%
-suggests, and the number above should be read as the worst case rather than the
-expected one.
+- **Function scope leaked across files.** A hunk shows part of a file, so a
+  `package() {` whose closing brace fell outside it left the brace counter
+  raised for the rest of the diff, putting every *following file* inside that
+  function. A `.desktop` file's translated `Name[be]=` line was read as shell
+  and matched the homoglyph shape - Cyrillic in a translation impersonates
+  nothing. Seven diffs. Fixed in the shared classifier, so every scoped rule
+  gets the correction.
+- **A modified continuation tail lost its head.** The joiner joins lines
+  carrying the same diff marker; editing the tail of a `\`-continued command
+  separates the halves with the removed version, so the `+` line arrived alone
+  and its first word - an argument - read as a command name.
+- **`eval` was scored twice.** R039 already claims eval-of-dynamic-content.
+  Treating `eval` as a wrapper walked into its argument and drew a second
+  CRITICAL on the same bytes, which is the thing this family says it never
+  does.
+- **A variable naming a *directory* is not a hidden command.**
+  `"$srcdir/calibre-release/calibre-debug"` spells its executable out; only the
+  path prefix came from a variable. The shape matched it because the variable
+  name was allowed to match a prefix of itself.
+- **`CMD=$(which x)` names its executable literally**, one line up, where every
+  payload rule reads it. Exempted as the discovery idiom - not assignment in
+  general, since `CMD=$(printf '\x63\x75\x72\x6c')` assembles a name that
+  appears nowhere and stays an evasion.
+
+None of those made the rule stricter about what counts as an evasion; the
+bypasses closed in the same pass ([below](#evasions-closed)) made it looser
+about where it looks. Rate and recall moved in opposite directions,
+which is the only combination worth having.
 
 ---
 
@@ -97,16 +118,20 @@ expected one.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `evasion`
-- **Condition:** A hex or octal escape blob, a reversed hex dump (`xxd -r`, `od -An`, `hexdump`), an ANSI-C `$'...'` blob, or a `tr` rotation, piped into a shell or handed to `eval`, inside an executing scope.
+- **Condition:** A hex or octal escape blob, a reversed hex dump (`xxd -r`, `od -An`, `hexdump`), a non-base64 decoder (`base32 -d`, `basenc`, `openssl enc -d`, `uudecode`), an ANSI-C `$'...'` blob, or a `tr` rotation, piped into a shell or handed to `eval`, inside an executing scope.
 
 Base64 is deliberately absent - R003 and R043 claim it. What is left is every
 other encoding, and the Atomic Arch second wave used hex.
+
+The decoder list is the rule's whole surface, so a decoder missing from it is a
+one-word bypass. `base32 -d`, `openssl enc -d` and `uudecode` decode the same
+payload into the same shell and were claimed by nobody until they were added.
 
 ### X002: Non-Literal Executable Name {#x002}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `evasion`
-- **Condition:** A word in command position that is not a literal: a variable (`$cmd`, `${A[0]}`, `${!ref}`), a substitution (`$(...)`, backticks), an intra-word quote break (`c"u"rl`), an ANSI-C string (`$'\x63...'`), a brace expansion (`cur{l,}`), or a character that impersonates ASCII (`сurl`).
+- **Condition:** A word in command position that is not a literal: a variable (`$cmd`, `${A[0]}`, `${!ref}`, `${c//X/}`), a substitution (`$(...)`, backticks), an intra-word quote break (`c"u"rl`), an ANSI-C string (`$'\x63...'`), a brace expansion (`cur{l,}`), or a character that impersonates ASCII (`сurl`).
 
 The rule that pays for the family. Every tokenizer bypass found so far works by
 assembling a command name the parser cannot read, so all of them produce this
@@ -129,10 +154,65 @@ than guessed:
 
 The scan walks *past* prefixes rather than reading the first token, because a
 command word is not always first. An assignment (`FOO=1 ${A[0]}`), a wrapper
-(`env`, `exec`, `sudo`, `nohup`, `timeout 5`), a redirect (`>out ${A[0]}`) and
-a subshell opener (`( ${A[0]} )`) each displace it, and every one of them
-defeated an earlier version of this rule. They are pinned as regressions in
+(`env`, `exec`, `sudo`, `nohup`, `timeout 5`), a conditional keyword
+(`if ${A[0]}; then`), a redirect (`>out ${A[0]}`) and a subshell opener
+(`( ${A[0]} )`) each displace it, and every one of them defeated an earlier
+version of this rule. They are pinned as regressions in
 `tests/test_crossfire.py`.
+
+`eval` is deliberately *not* a wrapper here, though it runs another command
+like the rest: R039 already claims eval-of-dynamic-content, and this family
+never scores bytes another rule scores - the same reason X008 does not exist
+beside R013.
+
+## Evasions closed {#evasions-closed}
+
+Ten, in the pass that took the family to zero, plus one closed in the
+tokenizer instead ([below](#the-one-that-was-fixed-in-the-tokenizer-instead)).
+Each defeated the shipped rule and is now a regression test:
+
+| Evasion | Rule | Why it worked |
+|---|---|---|
+| `package_libfoo() { ... }` | all | A **split package**. makepkg calls `package_$pkgname()` for each name in a split recipe, and the scope gate was an allowlist of the five standard function names. |
+| `package_google-chrome-bin()` | all | Worse than the above: a pkgname may hold a hyphen, and the shared classifier's `\w+` does not match one, so the function never opened at all and its body classified as `other` - invisible to every rule with a scope, not just this family. |
+| `_helper() { ... }`, called from `build()` | all | An ordinary helper. The name is the author's to choose, which is the whole problem with matching on it. |
+| a payload at **top level** | all | Top-level code runs when makepkg *sources* the recipe, before any build step. The gate only read inside functions. |
+| `if ${A[0]} x; then` | X002 | A conditional keyword takes a command and tests its status. The scan stopped at the keyword. |
+| `elif`, `while`, `until` | X002 | Same shape, three more keywords. |
+| `set +o xtrace` | X004 | The long spelling of `set +x`. The pattern required the `x` to end the option cluster. |
+| `base32 -d \| sh` | X001 | Not `base64`, so R003 and R043 did not claim it, and the decoder list did not carry it. |
+| `openssl enc -d \| sh` | X001 | As above. |
+| `uudecode \| sh` | X001 | As above. |
+| `cp payload /home/alice` | X005 | Every alias pattern required a trailing separator. |
+| `cp payload /root` | X005 | As above. |
+| `cp payload ~alice` | X005 | As above. |
+
+### The one that was fixed in the tokenizer instead
+
+`c\url` is `curl` to the shell, which drops a backslash before an ordinary
+character. The tokenizer did not, so the name never reconstructed and **no rule
+saw it at all** - not R001, not anything. It was the only bypass in this family
+that reached nothing.
+
+It was closed here first, as an `escaped-character` shape, and then closed
+properly: `tokenizer._ESCAPE_REMOVABLE` now drops the escape during quote
+removal, so every rule that reads a command name sees through it rather than
+only this one. The shape was retired in the same change, because with the name
+resolved it would score one command twice - the same reason `curl""`, which
+always folded, never had a shape either.
+
+That is the progression this family's [own warning](#what-this-family-is-not) asks
+for: crossfire is not a substitute for fixing the tokenizer, and a shape
+retired because the tokenizer caught up is the arrangement working. Both halves
+are pinned in `test_an_escaped_name_is_the_tokenizer_s_now`, so a fold that
+silently stopped working cannot leave the payload uncovered.
+
+The escapes that *mean* something are deliberately left alone. `\|` is a
+literal pipe, not a pipeline: unescaping it would build a pipe-to-shell out of
+`curl x \| sh`, which runs nothing of the sort. `\ ` holds one word together,
+`\$` is what stops an expansion, and `\\` is a literal backslash. Bash removes
+every backslash; going that far here would not be more faithful, it would
+invent syntax the line did not have.
 
 ### X003: Obfuscated Command Argument {#x003}
 
@@ -147,7 +227,7 @@ without saying so.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `evasion`
-- **Condition:** `TERM=dumb`, `set +x`, or `exec >/dev/null` / `exec 2>&-` inside an executing scope.
+- **Condition:** `TERM=dumb`, `set +x` or `set +o xtrace`, or `exec >/dev/null` / `exec 2>&-` inside an executing scope.
 
 MEDIUM because hiding output is weak evidence alone: its value is
 compositional, in X007. Bare `2>/dev/null` is excluded as noise.
@@ -156,7 +236,7 @@ compositional, in X007. Bare `2>/dev/null` is excluded as noise.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `evasion`
-- **Condition:** A write command or redirect whose target reaches a home directory by a spelling [R077](install-and-persist.md#r077) does not match: `/home/alice/...`, `/home/$USER/...`, `~alice/...`, `/root/...`, `${HOME:-/home/alice}/...`, or a traversal that names `home` or `root`.
+- **Condition:** A write command or redirect whose target reaches a home directory by a spelling [R077](install-and-persist.md#r077) does not match: `/home/alice`, `/home/$USER/...`, `~alice`, `/root`, `${HOME:-/home/alice}/...`, or a traversal that names `home` or `root`. The trailing separator is optional - `cp payload /home/alice` writes into the same directory as `/home/alice/` did.
 
 R077 matches a target that *starts with* `~/` or `$HOME/`. That is the obvious
 spelling, and the obvious spelling is the one an attacker will not use. Every

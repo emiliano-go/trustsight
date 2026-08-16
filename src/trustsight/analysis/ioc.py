@@ -28,6 +28,7 @@ from ..deps import extract_dependency_changes
 from ..iocs import load_indicators
 from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls
+from ..tokenizer import split_lines
 
 # A URL's authority, and separately a bare host token (``curl evil.example``
 # carries no scheme).  Both are only ever used to produce a candidate for an
@@ -64,7 +65,7 @@ def as_added(text: str) -> str:
     variable resolution - read the file, without a second code path that
     could disagree with the diff one.
     """
-    return "\n".join("+" + line for line in text.splitlines())
+    return "\n".join("+" + line for line in split_lines(text))
 
 
 def _hosts_in(body: str):
@@ -91,7 +92,7 @@ def _digests_in(body: str):
 def _line_of(diff_text: str, needle: str) -> int | None:
     """1-based diff line carrying *needle* on an added line."""
     lowered = needle.lower()
-    for i, line in enumerate(diff_text.splitlines()):
+    for i, line in enumerate(split_lines(diff_text)):
         if line.startswith("+") and not line.startswith("+++"):
             if lowered in line.lower():
                 return i + 1

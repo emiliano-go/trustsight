@@ -6,6 +6,7 @@ from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
+from ..tokenizer import split_lines
 
 _initialized = False
 
@@ -26,7 +27,7 @@ def _rarities_of(deps: list[str]) -> list[float]:
 def _pkgver_changed_in_diff(diff_text: str) -> bool:
     old_val: str | None = None
     new_val: str | None = None
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("-pkgver="):
             old_val = line.removeprefix("-pkgver=").strip().strip("'\"")
         elif line.startswith("+pkgver="):

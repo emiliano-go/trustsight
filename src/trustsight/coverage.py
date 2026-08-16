@@ -31,6 +31,7 @@ the codebase allowed to turn coverage into a verdict.
 """
 
 import re
+from .tokenizer import split_lines
 
 # The gap identifiers.  These are part of the report schema and the
 # security gates assert on them, so they are values, not prose.
@@ -129,7 +130,7 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
     """
     found: list[str] = []
     in_source_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
             continue
         # A removal cannot introduce an unresolved source; context ("  ")
@@ -180,7 +181,7 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
     found: list[str] = []
     depth = 0
     in_source_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
             continue
         # Removals belong to the old file; context and added lines make up

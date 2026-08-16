@@ -44,11 +44,72 @@ from ..rules import clamp_text, join_line_continuations
 
 #: Functions makepkg runs, plus the scriptlets pacman runs as root. A
 #: technique only matters where something executes.
+#:
+#: Kept for documentation and for the split-package prefix below; the gate
+#: itself is :func:`_executes`, because this list was an allowlist and an
+#: allowlist of function names is a rename away from empty.
 _EXECUTING_SCOPES = (
     "prepare", "build", "check", "package", "pkgver",
     "post_install", "post_upgrade", "pre_install",
     "pre_upgrade", "pre_remove", "post_remove",
 )
+
+
+#: Files whose every line is shell: the recipe, pacman's scriptlets, and any
+#: shell companion the recipe ships. A `.patch` is excluded even though it
+#: contains shell-looking text - the text is a payload for `patch`, and the
+#: rules that read a patch are R063's, not these.
+_SHELL_FILE_RE = re.compile(
+    r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh))$", re.IGNORECASE
+)
+
+_DIFF_TARGET_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
+
+
+def _file_at_line(lines: list[str]) -> dict[int, str]:
+    """``{line_index: path}`` from the diff's own ``+++`` headers.
+
+    Which file a hunk belongs to decides whether its lines are shell at
+    all. Without it the only available gate was "inside a function makepkg
+    calls", which is both too narrow (top-level code runs when makepkg
+    *sources* the recipe) and too broad (a `.desktop` file's lines are not
+    shell in any scope).
+    """
+    files: dict[int, str] = {}
+    current = None
+    for index, line in enumerate(lines):
+        match = _DIFF_TARGET_RE.match(line)
+        if match:
+            current = match.group(1).strip()
+            continue
+        if current is not None:
+            files[index] = current
+    return files
+
+
+def _executes(function: str | None) -> bool:
+    """Whether code inside *function* runs during a build or install.
+
+    The answer for a PKGBUILD is "yes, wherever it is", and the allowlist
+    that used to decide this said no to three shapes that all run:
+
+    * ``package_libfoo()`` - a **split package**. makepkg calls
+      ``package_$pkgname()`` for each name in a split recipe, so renaming
+      ``package`` to ``package_libfoo`` moved a payload out of range of
+      every rule in this family. It is the most common function shape in
+      the AUR after the five standard ones.
+    * ``_helper()`` - an ordinary helper, called from ``build()``. The name
+      is the author's to choose, which is the whole problem with matching
+      on it.
+    * anything else a recipe defines and calls.
+
+    A function that is *never called* is dead code, and treating dead code
+    as executing costs a finding on a package that was already writing
+    evasion-shaped shell into a function it does not run. That trade is
+    the right way round: the alternative is a rule whose scope the author
+    chooses.
+    """
+    return function is not None
 
 _CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)\s*"
 
@@ -71,6 +132,11 @@ X001_RE = re.compile(
     r"(?:\\x[0-9a-fA-F]{2}|\\[0-7]{3})[^\n|;&]{0,200}\|\s*(?:" + _SHELL + r")|"
     # A hex dump reversed and piped into a shell.
     r"\b(?:xxd\s+-r|od\s+-An|hexdump)\b[^\n|;&]{0,200}\|\s*(?:" + _SHELL + r")|"
+    # The decoders that are not `base64`. R003 and R043 claim that one
+    # spelling; `base32 -d`, `openssl enc -d` and `uudecode` decode the same
+    # payload into the same shell and were claimed by nobody.
+    r"\b(?:base32\s+-d|basenc\s+--\w+\s+-d|uudecode|openssl\s+enc\b[^\n|;&]{0,80}\s-d)\b"
+    r"[^\n|;&]{0,200}\|\s*(?:" + _SHELL + r")|"
     # An ANSI-C quoted blob executed via eval or a shell.
     r"\b(?:eval|" + _SHELL + r")\s+\$'(?:\\x[0-9a-fA-F]{2}|\\[0-7]{3}){3,}|"
     # tr-based rotation (ROT13 and friends) fed to a shell.
@@ -110,7 +176,37 @@ _CONFUSABLE_CHARS = _confusable_class()
 
 X002_SHAPES = (
     # ${A[0]}, $cmd, ${!ref} - a variable in command position.
-    ("variable", re.compile(r"^[\"']?\$\{?!?[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\}?")),
+    #
+    # The word must *be* the variable, or continue into more name
+    # characters (`${D}url` assembles a name). A `/` after it means the
+    # variable named a directory and the executable is spelled out:
+    # `"$srcdir/calibre-release/calibre-debug"` hides nothing, and matching
+    # it made X002 fire CRITICAL on ordinary in-tree test invocations.
+    # Three spellings, because a `/` means opposite things on the two
+    # sides of a brace.
+    #
+    # Inside `${...}` it is parameter expansion, and any operator there is
+    # assembling a name: `${c//X/}` turns `XurlX` into `curl`, which is a
+    # bypass this family has to hold. Outside, it is a path separator, and
+    # `"$srcdir/calibre-release/calibre-debug"` names its executable in
+    # plain text - the directory came from a variable and nothing is
+    # hidden. Matching that made X002 fire CRITICAL on ordinary in-tree
+    # test invocations.
+    #
+    # The `(?![A-Za-z0-9_])` on the bare form is load-bearing: without it
+    # the name could match a *prefix* and the "continues into more name
+    # characters" alternative would match the rest of its own name, so
+    # `"${pkgdir}/etc/x.conf"` read as `${pkgdi}` + `r`.
+    ("variable", re.compile(
+        # ${!ref} - indirect expansion is assembly by definition.
+        r"^[\"']?\$\{!"
+        # ${A[0]}, ${c//X/}, ${c,,}, ${a[@]:0:1} - an operator inside.
+        # The name is maximal here too, or `${srcdir}/x` matches as
+        # `${srcdi` + `r` + `}`, which is the same prefix backtrack again.
+        r"|^[\"']?\$\{[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])[^}\s]+\}"
+        # $cmd, ${cmd}, ${D}url - the word is the variable, or grows a name.
+        r"|^[\"']?\$\{?[A-Za-z_][A-Za-z0-9_]*(?![A-Za-z0-9_])\}?"
+        r"(?:[\"']?$|[A-Za-z0-9_.-])")),
     # $(...) or `...` producing the command name.
     ("substitution", re.compile(r"^[\"']?(?:\$\(|`)")),
     # c"u"rl, c'u'rl - quotes inside a word the shell then joins.
@@ -126,6 +222,20 @@ X002_SHAPES = (
     # impersonates nothing and names no command. The curated map from
     # `buckets` is the same one R013b uses for domains.
     ("homoglyph", re.compile(r"^[^\s]{0,60}[" + _CONFUSABLE_CHARS + r"]")),
+    # There is deliberately no `escaped-character` shape for `c\url`.
+    #
+    # It was added here first, because the tokenizer kept the backslash and
+    # the name never reconstructed - so that spelling reached no rule at
+    # all, R001 included, and this family was the only thing standing under
+    # it. The tokenizer now removes the escape
+    # (`tokenizer._ESCAPE_REMOVABLE`), which is the actual fix: every rule
+    # that reads a command name sees `curl` again, not just this one.
+    #
+    # With the name resolved, claiming it here would score one command
+    # twice - the same reason `curl""` has no shape either, and the same
+    # reason X008 does not exist beside R013. This module's own warning is
+    # that it must not become an excuse to stop fixing the tokenizer; a
+    # shape retired because the tokenizer caught up is that working.
 )
 
 _FIRST_WORD_RE = re.compile(r"^\s*([^\s;&|<>]+)")
@@ -161,7 +271,12 @@ X003_SHAPES = (
 
 X004_SHAPES = (
     ("term-dumb", re.compile(r"\bTERM\s*=\s*dumb\b")),
-    ("trace-off", re.compile(_CMD + r"set\s+\+[a-z]*x(?=\s|;|$)", re.MULTILINE)),
+    # `set +x` and its long spelling. `set +o xtrace` is the same
+    # instruction and used to walk past the short form's pattern, which
+    # required the `x` to end the option cluster.
+    ("trace-off", re.compile(
+        _CMD + r"set\s+(?:\+[a-z]*x(?=\s|;|$)|\+o\s+(?:xtrace|verbose)\b)",
+        re.MULTILINE)),
     ("stderr-detached", re.compile(r"\bexec\s+\d?>\s*(?:/dev/null|&-)")),
 )
 
@@ -190,11 +305,18 @@ _HOME_ALIASES = (
     # A literal home path, with a real or variable username.
     # `/home//alice/` reaches the same directory; a single slash in the
     # pattern was an evasion.
-    ("literal-home", re.compile(r"(?:^|[\s\"'=])/home/+(?:\$\{?\w+\}?|[A-Za-z0-9._-]+)/")),
+    #
+    # The trailing slash is optional, and that was an evasion too: `cp
+    # payload /home/alice` writes into the same directory as `/home/alice/`
+    # and every one of these patterns required the separator. The path must
+    # still *end* there - a bare `/home` with nothing after it names the
+    # parent of all homes, which packaging touches legitimately.
+    ("literal-home", re.compile(
+        r"(?:^|[\s\"'=])/home/+(?:\$\{?\w+\}?|[A-Za-z0-9._-]+)(?:/|[\s\"']|$)")),
     # Tilde-user expansion: ~alice/ is $HOME for alice, and dodges `^~/`.
-    ("tilde-user", re.compile(r"(?:^|[\s\"'=])~[A-Za-z0-9._-]+/")),
+    ("tilde-user", re.compile(r"(?:^|[\s\"'=])~[A-Za-z0-9._-]+(?:/|[\s\"']|$)")),
     # root's home.
-    ("root-home", re.compile(r"(?:^|[\s\"'=])/root/")),
+    ("root-home", re.compile(r"(?:^|[\s\"'=])/root(?:/|[\s\"']|$)")),
     # A default-value expansion that names a home path if HOME is unset.
     ("home-default", re.compile(r"\$\{HOME[:-][=+-][^}]{0,80}\}")),
     # Traversal that explicitly aims at a home directory.
@@ -244,8 +366,6 @@ def _home_alias_hit(body: str):
 # two forms that are never legitimate in a source array.
 # ---------------------------------------------------------------------------
 
-_SOURCE_FIELD_RE = re.compile(r"^\s*(?:source|patches|_?url)\w*\s*(?:\+)?=", re.IGNORECASE)
-
 X006_SHAPES = (
     ("url-shortener", re.compile(
         r"https?://(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|is\.gd|ow\.ly|rb\.gy|"
@@ -277,6 +397,21 @@ def _split_commands(body: str) -> list[str]:
         elif ch in "'\"":
             quote = ch
             current.append(ch)
+        elif ch == "[" and body[index:index + 2] == "[[":
+            # `[[ -n "$a" && "$a" != "$b" ]]` is one test, not two commands.
+            # Splitting on the `&&` handed the second half to the scan with
+            # `"$a"` in first position, and a conditional that mentions a
+            # variable is most of the shell ever written. The guard at the
+            # top of the loop only sees a part that *begins* with `[[`.
+            depth += 1
+            current.append(body[index:index + 2])
+            index += 2
+            continue
+        elif ch == "]" and body[index:index + 2] == "]]":
+            depth = max(0, depth - 1)
+            current.append(body[index:index + 2])
+            index += 2
+            continue
         elif ch == "(":
             depth += 1
             current.append(ch)
@@ -303,10 +438,24 @@ def _split_commands(body: str) -> list[str]:
 #: Commands that run another command, so the *next* word is the real one.
 #: An attacker who writes `env ${A[0]} ...` has still routed the name through
 #: an array; the wrapper only moves it one token to the right.
+#:
+#: ``eval`` is deliberately absent. It runs another command like the rest,
+#: but R039 already claims eval-of-dynamic-content, and this family's own
+#: rule is that it never scores bytes another rule scores - the reason X008
+#: does not exist beside R013. Treating it as a wrapper made X002 fire a
+#: second CRITICAL on `eval "$(updpkgsrcs ...)"`, which was both benign and
+#: already R039's.
+#:
+#: ``if``/``elif``/``while``/``until`` are here for the opposite reason:
+#: each takes a *command* whose exit status it tests, so `if ${A[0]} x;
+#: then` runs the array-routed name exactly as `${A[0]} x` does, and the
+#: scan used to stop at the keyword and never look. ``for`` is not here -
+#: the word after it is a loop variable, not a command.
 _WRAPPERS = frozenset({
     "env", "exec", "sudo", "doas", "nohup", "command", "builtin", "time",
     "nice", "ionice", "timeout", "xargs", "setsid", "stdbuf", "unbuffer",
-    "script", "eval", "then", "else", "do", "!",
+    "script", "then", "else", "do", "!",
+    "if", "elif", "while", "until",
 })
 
 #: A redirection can precede the command: `>out ${A[0]} x`.
@@ -317,6 +466,22 @@ _EVALUATION_RE = re.compile(r"^(?:\(\(|\[\[|\[\s|test\s)")
 
 #: A number is an argument to a wrapper (`timeout 5 cmd`), not a command.
 _NUMERIC_RE = re.compile(r"^\d+$")
+
+
+def _opens_a_value(token: str) -> bool:
+    """True when *token* leaves a quote or a substitution unclosed.
+
+    `FOO=1 cmd` is an environment prefix and the scan must walk past it to
+    reach `cmd`. `outmsg=$(eval "$(...)" 2>&1)` is not: everything after the
+    first token is the assignment's *value*, and reading on found the `$(`
+    inside it and called it a command name. The two are told apart by
+    whether the token closes what it opened.
+    """
+    return bool(
+        token.count('"') % 2
+        or token.count("'") % 2
+        or token.count("(") > token.count(")")
+    )
 
 
 def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
@@ -347,11 +512,20 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
         if _EVALUATION_RE.match(part.lstrip()):
             continue
         seen_wrapper = False
+        wrapper = ""
         for token in part.split():
+            if token.startswith("(("):
+                # `if (( $(vercmp $2 x) >= 0 ))` - arithmetic. The check at
+                # the top of the loop catches it when the part *begins*
+                # there; after a wrapper it does not, and the `$(` inside
+                # read as a command name.
+                break
             word = token.lstrip("({")
             if not word:
                 continue
             if _ASSIGNMENT_RE.match(word):
+                if _opens_a_value(word):
+                    break
                 continue
             if _REDIRECT_RE.match(word) or _NUMERIC_RE.match(word):
                 continue
@@ -362,9 +536,18 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
                 # it is just a flag, and the scan goes on.
                 if not seen_wrapper:
                     break
+                # ...unless the flag turns the wrapper into a *lookup*.
+                # `command -v "$cmd"` asks where `$cmd` is, and runs
+                # nothing; reading its argument as a command name fired on
+                # the ordinary dependency-check idiom.
+                if wrapper == "command" and word in ("-v", "-V"):
+                    break
+                if wrapper == "type" and word in ("-p", "-P", "-a"):
+                    break
                 continue
             if word.strip("\"'") in _WRAPPERS:
                 seen_wrapper = True
+                wrapper = word.strip("\"'")
                 continue
             bare = _PLAIN_VAR_RE.match(word)
             if bare and bare.group(1) in resolvable:
@@ -377,6 +560,166 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
 #: subscript or a nameref is deliberately not this shape.
 _PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
 
+#: `DKMS=$(which dkms)` then `$DKMS add ...`: a PATH lookup names its
+#: executable *literally* inside the substitution, so the command is not
+#: hidden from anything - it is spelled out one line up, and every payload
+#: rule reads that line. The tokenizer cannot fold it, so the name stayed
+#: unresolvable and X002 fired CRITICAL on it; it was the whole of the rule's
+#: remaining benign-corpus rate outside `eval`.
+#:
+#: Narrow on purpose. It exempts the discovery idiom, not assignment in
+#: general: `CMD=$(printf '\x63\x75\x72\x6c')` assembles a name that appears
+#: nowhere, and stays an evasion.
+_PATH_LOOKUP_ASSIGN_RE = re.compile(
+    r"^\s*([A-Za-z_][A-Za-z0-9_]*)=[\"']?\$\(\s*"
+    r"(?:which|type\s+-p|command\s+-v)\s+[A-Za-z0-9_.+-]+\s*\)",
+)
+
+
+def _path_lookup_names(lines: list[str]) -> set[str]:
+    """Variables assigned the result of a PATH lookup."""
+    names = set()
+    for line in lines:
+        match = _PATH_LOOKUP_ASSIGN_RE.match(line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+#: `depends=(`, `source+=(`, `_arr[0]=(` - an assignment opening an array
+#: literal.  A bare `(` is a subshell, whose contents *are* commands, so the
+#: two are told apart by what precedes the paren rather than by the paren.
+_ARRAY_ASSIGN_OPEN_RE = re.compile(
+    r"^\s*[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\+?=\s*\("
+)
+
+
+def _quote_open_at_end(text: str, quote: str | None) -> str | None:
+    """The quote character still open when *text* ends, or None.
+
+    Carried across lines, because a quoted string is allowed to span them::
+
+        eval "package_$i()
+          $(declare -f _package_x11 | tail +2)"
+
+    The second line is the middle of a string. Read on its own it starts
+    with `$(`, which is a command substitution in first position - and
+    that is exactly what a rule looking for an assembled command name is
+    hunting for. The difference is that this one is inside quotes somebody
+    else opened.
+    """
+    index = 0
+    while index < len(text):
+        ch = text[index]
+        if quote == "'":
+            if ch == "'":
+                quote = None
+        elif quote == '"':
+            if ch == "\\":
+                index += 1
+            elif ch == '"':
+                quote = None
+        elif ch == "\\":
+            index += 1
+        elif ch in "'\"":
+            quote = ch
+        index += 1
+    return quote
+
+
+def _unquoted_paren_delta(text: str) -> int:
+    """``(`` minus ``)`` outside quotes, so a paren in a string does not count.
+
+    ``sed 's/(/x/'`` inside an array would otherwise leave the depth
+    counter raised for the rest of the file.
+    """
+    depth = 0
+    quote = None
+    for ch in text:
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "'\"":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+    return depth
+
+
+def _continuation_lines(raw_lines: list[str], joined_count: int) -> set[int]:
+    """Joined-line indices whose command position belongs to an earlier line.
+
+    ``join_line_continuations`` rejoins a backslash-continued command, but
+    only across lines carrying the *same* diff marker. Editing the tail of
+    one separates the halves with the removed version::
+
+         httpdirfs "${_opts[@]}" \\
+           --dl-seg-size 1 --single-file-mode \\
+        -   "${_iso_url}" "${_http_mount}" > /dev/null
+        +   "${_iso_url}" "${_http_mount}"
+
+    The head is context and the tail is an addition, so the join never
+    happens: the ``+`` line arrives alone and its first word - an argument
+    to a command two lines up - reads as a command name. Every remaining
+    benign-corpus hit on X002 was this shape.
+
+    Removed lines are skipped when deciding what precedes a line, which is
+    what reconnects the two halves. This is the same reasoning as the
+    leading-flag rule in :func:`_command_words`: a line that continues
+    another has no command position at all, so there is nothing on it for
+    X002 to read. And it is not a way through: the continued command is the
+    one on the head line, so a payload on the tail is an *argument* to it,
+    which this rule has never claimed.
+
+    Measured on the raw lines, because the joiner strips the backslash the
+    measurement depends on, then mapped onto joined positions through
+    ``_joined_indexed`` - the same pairing the rule path uses.
+    """
+    from ..tokenizer import _joined_indexed
+
+    carried_raw: set[int] = set()
+    pending = False
+    array_depth = 0
+    test_depth = 0
+    quote: str | None = None
+    for index, line in enumerate(raw_lines):
+        if line.startswith("-"):
+            # Including `---`: a file header is not part of any command.
+            continue
+        raw_body = line[1:] if line[:1] in "+ " else line
+        # A `#` inside an open string is not a comment.
+        body = raw_body if quote else _strip_comment(raw_body)
+        if pending or array_depth > 0 or test_depth > 0 or quote:
+            carried_raw.add(index)
+        # `if ! [[` on one line and the condition on the next: the
+        # condition is not a command, and read alone its first word is
+        # whatever the test compares.
+        test_depth = max(0, test_depth + body.count("[[") - body.count("]]"))
+        quote = _quote_open_at_end(body, quote)
+        # An array literal spanning lines: `depends=(` then a line per
+        # entry. Those entries are data, and one of them - `"${_depends[@]}"`
+        # in a split package - read as a command word the moment split
+        # packages came into scope. The opening line is an assignment and
+        # is skipped anyway; what needed tracking is everything up to the
+        # closing paren.
+        if array_depth > 0 or _ARRAY_ASSIGN_OPEN_RE.match(body):
+            array_depth = max(0, array_depth + _unquoted_paren_delta(body))
+        stripped = body.rstrip()
+        # A trailing backslash continues the line, unless it is itself
+        # escaped (`printf 'x\\\\'`).
+        pending = stripped.endswith("\\") and not stripped.endswith("\\\\")
+
+    if not carried_raw:
+        return set()
+    pairs = _joined_indexed(raw_lines)
+    if len(pairs) != joined_count:
+        # The two joiners are documented to agree; if they ever do not,
+        # drop the refinement rather than silence a line at the wrong index.
+        return set()
+    return {j for j, (raw_index, _text) in enumerate(pairs) if raw_index in carried_raw}
+
 
 def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]]:
     """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
@@ -385,21 +728,25 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     without re-deriving them, and so a caller can ask "what evasion is in
     this diff" without going through the scorer.
     """
-    lines = join_line_continuations(clamp_text(diff_text).splitlines())
+    raw_lines = clamp_text(diff_text).splitlines()
+    lines = join_line_continuations(raw_lines)
     from ..rules import _classify_enclosing_function
     from ..tokenizer import _variable_table
 
     enclosing = _classify_enclosing_function(lines)
+    files = _file_at_line(lines)
     # Names the tokenizer reduced to a literal value. A command word that
     # resolves is not an evasion; one that does not is the whole point.
+    readable = [
+        ln[1:] for ln in lines
+        if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
+    ]
     try:
-        var_table, _array_table = _variable_table([
-            ln[1:] for ln in lines
-            if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
-        ])
-        resolvable = frozenset(var_table)
+        var_table, _array_table = _variable_table(readable)
+        resolvable = frozenset(var_table) | _path_lookup_names(readable)
     except Exception:
-        resolvable = frozenset()
+        resolvable = frozenset(_path_lookup_names(readable))
+    carried = _continuation_lines(raw_lines, len(lines))
     found: dict[str, list[tuple[int, str, str]]] = {}
 
     def record(rule_id, line_no, shape, quoted):
@@ -415,17 +762,28 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if not body.strip():
             continue
         line_no = index + 1
-        executing = enclosing.get(index) in _EXECUTING_SCOPES
-
-        # X006 reads the source array, which lives outside any function.
-        if _SOURCE_FIELD_RE.match(body) or "source=" in body or "patches=" in body:
-            for shape, pattern in X006_SHAPES:
-                if pattern.search(body):
-                    record("X006", line_no, shape, body.strip())
+        # Which file the line is in decides whether it is shell; the
+        # function it sits in no longer decides anything, because
+        # *top-level* code runs when makepkg sources the recipe - before
+        # any build step, and before any rule that reads a function body.
+        # A diff with no `+++` header (a fragment handed straight to
+        # `scan_diff`) keeps the old function gate rather than losing
+        # detection: unknown fails toward looking.
+        path = files.get(index)
+        if path is None:
+            executing = _executes(enclosing.get(index))
         else:
-            for shape, pattern in X006_SHAPES:
-                if pattern.search(body):
-                    record("X006", line_no, shape, body.strip())
+            executing = bool(_SHELL_FILE_RE.search(path))
+
+        # X006 is checked on every line, not only a `source=` one: the two
+        # shapes it carries - a URL shortener and a raw-IP host - are never
+        # legitimate anywhere in a recipe, and a fetch inside `build()` is
+        # the same fact as one in the source array. This was written as an
+        # if/else whose branches were identical, so the source-field test
+        # decided nothing; it is stated once instead.
+        for shape, pattern in X006_SHAPES:
+            if pattern.search(body):
+                record("X006", line_no, shape, body.strip())
 
         if not executing:
             continue
@@ -433,11 +791,15 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if X001_RE.search(body):
             record("X001", line_no, "decode-to-shell", body.strip())
 
-        for word in _command_words(body, resolvable):
-            for shape, pattern in X002_SHAPES:
-                if pattern.match(word):
-                    record("X002", line_no, shape, body.strip())
-                    break
+        # X002 is the one position-sensitive rule here, so it is the one
+        # that must stand down on a line whose command position lives
+        # further up. The rest match on content and are unaffected.
+        if index not in carried:
+            for word in _command_words(body, resolvable):
+                for shape, pattern in X002_SHAPES:
+                    if pattern.match(word):
+                        record("X002", line_no, shape, body.strip())
+                        break
 
         for shape, pattern in X003_SHAPES:
             if pattern.search(body):

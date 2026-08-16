@@ -35,6 +35,7 @@ from .persistence import _persistence_findings
 from .version import _epoch_findings
 from ..findings import stamp
 from ..rules import find_line_in_diff
+from ..tokenizer import split_lines
 
 _BINARY_ARTIFACT_RE = re.compile(
     r"\.(?:bin|exe|elf|so|dll|dylib|appimage|deb|rpm|apk|msi|jar|run)"
@@ -88,7 +89,7 @@ def _signing_key_findings(diff_text: str, add) -> None:
     removed_keys: set[str] = set()
     had_keys_before = False
     in_added = in_removed = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         side = line[0] if line[:1] in ("+", "-", " ") else " "

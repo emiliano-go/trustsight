@@ -35,6 +35,7 @@ from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls, mask_to_recipe
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from .delivery import _find_line
+from ..tokenizer import split_lines
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
@@ -53,7 +54,7 @@ def _source_url_tokens(diff_text):
     """Yield ``(scheme, url)`` for every scheme:// token on an added source
     line (array or scalar / .SRCINFO form)."""
     in_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith("-"):
@@ -177,7 +178,7 @@ def _git_refs_by_side(diff_text: str) -> dict[str, dict[str, set[tuple[str, str]
     """Map ``side -> repo -> {(ref_kind, ref_value)}`` for every git source
     token in the diff, where side is ``+``, ``-`` or ``" "`` (context)."""
     sides: dict[str, dict[str, set[tuple[str, str]]]] = {"+": {}, "-": {}, " ": {}}
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@", "diff ", "index ")):
             continue
         side = line[0] if line[:1] in ("+", "-", " ") else " "
@@ -195,7 +196,7 @@ def _pin_vars_by_side(diff_text: str) -> dict[str, dict[str, tuple[str, str]]]:
     """Map ``side -> variable -> (digest, trailing comment)`` for pin
     assignments on changed lines."""
     sides: dict[str, dict[str, tuple[str, str]]] = {"+": {}, "-": {}}
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---")) or line[:1] not in ("+", "-"):
             continue
         match = _PIN_VAR_RE.match(line[1:])
@@ -267,7 +268,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
 
     if any(
         _VERSION_TOKEN_RE.match(line[1:])
-        for line in diff_text.splitlines()
+        for line in split_lines(diff_text)
         if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))
     ):
         return

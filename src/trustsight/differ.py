@@ -4,6 +4,7 @@ import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
 from .schema import DiffSummary, SourceChanges
+from .tokenizer import split_lines
 
 _HUNK_HEADER_RE = re.compile(
     r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@"
@@ -83,7 +84,7 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     produce entries; header lines are not mapped.
     """
     mapping: dict[int, tuple[str, int]] = {}
-    lines = diff_text.splitlines()
+    lines = split_lines(diff_text)
     current_file = "PKGBUILD"
     new_lineno = 0
     in_hunk = False
@@ -307,7 +308,7 @@ def is_skip_justified(diff_text: str) -> str:
     Returns a short reason string (truthy) or ``""`` (falsy).
     """
     for reason, check in _SKIP_JUSTIFICATION_CHECKS:
-        if any(check(line) for line in diff_text.splitlines()):
+        if any(check(line) for line in split_lines(diff_text)):
             return reason
     return ""
 
@@ -327,7 +328,7 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     added_urls: set[str] = set()
     removed_urls: set[str] = set()
 
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("+") and "http" in line:
             for u in _URL_TOKEN_RE.findall(line):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
@@ -372,7 +373,7 @@ def _added_checksum_arrays(diff_text: str) -> list[tuple[str, str]]:
         cur_var = None
         cur_content = []
 
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("-", "+++", "---", "@@")):
             continue
         if not line.startswith("+"):
@@ -440,7 +441,7 @@ def detect_checksum_removed(diff_text: str) -> bool:
     """
     removed = False
     added = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("-") and _CHECKSUM_LINE_RE.search(line):
             removed = True
         elif line.startswith("+") and _CHECKSUM_LINE_RE.search(line):
@@ -466,7 +467,7 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     skip = "-" if side == "after" else "+"
     urls: set[str] = set()
     in_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith(skip):
@@ -496,7 +497,7 @@ def source_array_has_command_substitution(diff_text: str) -> bool:
     just the single line the substitution shares with ``source=``.
     """
     in_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         if _SOURCE_CMD_SUBST_RE.search(line):
@@ -537,7 +538,7 @@ def local_source_names(pkgbuild_text: str) -> set[str]:
     """
     names: set[str] = set()
     in_array = False
-    for raw in pkgbuild_text.splitlines():
+    for raw in split_lines(pkgbuild_text):
         line = raw.strip()
         if not in_array:
             if not _SOURCE_ARRAY_START_RE.match(line):
@@ -672,7 +673,7 @@ def companion_source_hunks(
             continue
         text = data.decode("utf-8", errors="replace")
         lines: list[str] = []
-        for ln in text.splitlines():
+        for ln in split_lines(text):
             if used + len(ln) + 1 > max_bytes:
                 break
             lines.append(ln)
@@ -708,7 +709,7 @@ def _post_diff_lines(diff_text: str) -> list[str]:
     diff prefix stripped.
     """
     out: list[str] = []
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith("-"):
@@ -727,7 +728,7 @@ def _has_checksum_in_post_diff(diff_text: str) -> bool:
 def detect_gpg_verification_removed(diff_text: str) -> bool:
     """Detect whether GPG verification was removed in a diff."""
     had_content = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith("-") and _VALIDPGPKEYS_WITH_CONTENT_RE.search(line):
             had_content = True
             break

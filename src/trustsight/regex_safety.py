@@ -64,6 +64,27 @@ _CLASS_SAMPLES = (
 _CHAR_CLASS_RE = re.compile(r"\[\^?((?:[^\]\\]|\\.){1,64})\]")
 _ESCAPE_RE = re.compile(r"\\([dwsS])")
 
+#: Syntax that must not be mined for literals. A ``:`` from ``(?:``, a digit
+#: from ``{1,64}`` or a ``^`` from a class body is punctuation the engine
+#: consumes as grammar, and probing with it means probing with a character
+#: the pattern cannot match - the same "wrong alphabet" failure the derived
+#: probes exist to remove.
+_SYNTAX_RE = re.compile(
+    r"\[\^?(?:[^\]\\]|\\.){0,64}\]"     # class bodies: mined separately
+    r"|\((?:\?(?:P?<[^>]{0,32}>|[:=!#]|<[=!]|[aiLmsux]{1,6}[:)]))?"  # group openers
+    r"|\{\d{0,8}(?:,\d{0,8})?\}"        # counted quantifiers
+    r"|\\[dwsSbBAZzGnrtfv0-9]"          # class escapes and non-literal escapes
+)
+
+#: Characters the engine reads as grammar rather than input.
+_METACHARACTERS = frozenset(".^$*+?()[]{}|\\")
+
+#: Probed when a pattern yields no alphabet of its own. It is a fallback,
+#: not a measurement: a pattern whose alphabet cannot be derived is unknown
+#: rather than safe, so the fallback is several characters wide instead of
+#: one, and ``growth_ratio`` says so where it uses it.
+_FALLBACK_ALPHABET = ("a", "1", " ", "/")
+
 #: Distinct alphabets probed per pattern, and probe shapes per alphabet.
 #: Both are capped because this runs at rule-compile time.
 _MAX_DERIVED_ALPHABETS = 4
@@ -99,12 +120,31 @@ def _representatives(pattern: str) -> list[str]:
             literal = next((c for c in body if c.isalnum()), "")
             add(literal)
 
-    # Literal alphanumerics in the pattern itself, for shapes like ``(x|x)*``
+    # Literals in the pattern itself, for shapes like ``(x|x)*`` or ``/+$``
     # where no class appears at all.
-    for char in pattern:
-        if char.isalnum():
+    #
+    # This used to take the first *alphanumeric* character and stop. A
+    # pattern whose only consumable literal is punctuation - ``/+$`` is the
+    # reported one - therefore derived no alphabet at all, fell back to
+    # probing with ``a``, which ``/`` can never match, and measured zero on
+    # every probe. Zero is then indistinguishable from fast, so a quadratic
+    # pattern scored safe. Punctuation is input like any other character;
+    # what it must not be is *syntax*, which is what ``_SYNTAX_RE`` strips
+    # before this scan.
+    consumable = _SYNTAX_RE.sub(" ", pattern)
+    escaped = False
+    for char in consumable:
+        if escaped:
+            # ``\.`` and friends: the escape made a metacharacter literal.
             add(char)
-            break
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char in _METACHARACTERS or char.isspace():
+            continue
+        add(char)
 
     return found[:_MAX_DERIVED_ALPHABETS]
 
@@ -209,7 +249,11 @@ def growth_ratio(compiled: re.Pattern) -> float:
     Shape is the more durable signal, and measuring it needs two lengths.
     """
     worst = 0.0
-    alphabets = _representatives(compiled.pattern) or ["a"]
+    # ``or _FALLBACK_ALPHABET``: a pattern with no derivable alphabet has
+    # not been measured, and an unmeasured pattern is unknown rather than
+    # safe. Several characters are tried instead of one so the fallback has
+    # some chance of being input the pattern can actually consume.
+    alphabets = _representatives(compiled.pattern) or list(_FALLBACK_ALPHABET)
     for char in alphabets[:2]:
         short = _time_search(compiled, char * (LONG_PROBE_LEN // 4) + "!")
         long = _time_search(compiled, char * LONG_PROBE_LEN + "!")

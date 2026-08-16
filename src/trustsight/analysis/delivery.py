@@ -32,6 +32,7 @@ from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from ..rules import find_line_in_diff
+from ..tokenizer import split_lines
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
@@ -148,7 +149,7 @@ def _payload_name(data: bytes) -> str | None:
         return None
     if _PIPE_TO_SHELL_RE.search(text):
         return "shell script"
-    first = next((ln.strip() for ln in text.splitlines() if ln.strip()), "")
+    first = next((ln.strip() for ln in split_lines(text) if ln.strip()), "")
     if _SHELL_LEAD_TOKEN_RE.match(first):
         return "shell script"
     return None
@@ -394,7 +395,7 @@ def _declared_source_basenames(diff_text: str) -> set[str]:
 
     basenames: set[str] = set()
     in_array = False
-    for line in diff_text.splitlines():
+    for line in split_lines(diff_text):
         if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith("-"):

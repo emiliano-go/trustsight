@@ -22,6 +22,7 @@ reports ``no AUR change`` rather than a change.
 import re
 
 from ..tokenizer import resolve_added_lines
+from ..tokenizer import split_lines
 
 # ---------------------------------------------------------------------------
 # Full-version parsing (plan §13.2)
@@ -82,6 +83,51 @@ def parse_version(text: str | None) -> Version | None:
     return Version(epoch, match.group("pkgver"), match.group("pkgrel"), text.strip())
 
 
+# The three scalars that make up a pacman version, read off the PKGBUILD
+# rather than off ``pkgver=`` alone.  Each value must be literal and must
+# end the line: ``pkgver=$_commit`` names a value this tool cannot know, and
+# a version it cannot know must not be assembled into one it presents.
+_PKGVER_ASSIGN_RE = re.compile(
+    r"^\s*pkgver\s*=\s*[\"']?([A-Za-z0-9._+~]+)[\"']?\s*(?:#.*)?$", re.MULTILINE
+)
+_PKGREL_ASSIGN_RE = re.compile(
+    r"^\s*pkgrel\s*=\s*[\"']?([A-Za-z0-9._+~]+)[\"']?\s*(?:#.*)?$", re.MULTILINE
+)
+
+
+def full_version_from_pkgbuild(text: str) -> str:
+    """Assemble ``[epoch:]pkgver[-pkgrel]`` from a PKGBUILD's own fields.
+
+    Reading ``pkgver=`` alone and calling the result "the AUR version" is
+    what produced the reported line
+
+        1:1.93.1.r7967.caea422f-2 installed / AUR pkgver 1.93.1.r7966.7ccbff5e
+
+    for a package whose PKGBUILD declares ``epoch=1`` and ``pkgrel=2``.  The
+    two sides were not the same kind of object, so the maintainer read the
+    missing ``1:`` as the epoch being lost - which it was.
+
+    It is not only display.  :func:`compare_installed_to_aur` compares
+    epochs first and parses an absent one as 0, so an installed ``1:2.0-1``
+    against a declared ``epoch=1 pkgver=2.1`` used to come out as
+    *installed ahead*: a real update, reported as a backwards move.
+
+    Returns ``""`` when there is no literal ``pkgver=`` to build on, which
+    leaves the caller's existing fallbacks in charge rather than inventing
+    a version.  ``epoch=0`` is omitted, as pacman itself renders it.
+    """
+    if not text:
+        return ""
+    pkgver = _PKGVER_ASSIGN_RE.search(text)
+    if not pkgver:
+        return ""
+    epoch = _EPOCH_ASSIGN_RE.search(text)
+    pkgrel = _PKGREL_ASSIGN_RE.search(text)
+    prefix = f"{epoch.group(1)}:" if epoch and epoch.group(1) != "0" else ""
+    suffix = f"-{pkgrel.group(1)}" if pkgrel else ""
+    return f"{prefix}{pkgver.group(1)}{suffix}"
+
+
 def vercmp(a: str, b: str) -> int:
     """Compare two version strings the way pacman does (-1 / 0 / 1)."""
     from ..discovery import _vercmp
@@ -128,9 +174,15 @@ def compare_installed_to_aur(
     Returns one of the ``COMPARISON_*`` constants.  ``inconclusive`` covers
     every case where the two sides are not the same kind of object: a VCS
     package (whose real pkgver only exists after a build), an unparseable
-    version, or a missing side.  Only the pkgver components are compared -
-    pkgrel is a packaging revision the AUR side does not carry, and epoch
-    is compared first because that is what it is for.
+    version, or a missing side.
+
+    When both sides are full versions they are compared as full versions,
+    pkgrel included, which is what pacman and every AUR helper do: an AUR
+    ``pkgrel`` bump is a rebuild users are meant to take.  That branch was
+    unreachable until ``full_version_from_pkgbuild`` started supplying the
+    declared ``epoch`` and ``pkgrel``; before it, the AUR side was always a
+    bare pkgver.  A bare side still compares by epoch and pkgver alone,
+    because a pkgrel that was never declared cannot be a difference.
     """
     if is_vcs:
         return COMPARISON_INCONCLUSIVE
@@ -151,9 +203,12 @@ def compare_installed_to_aur(
         return COMPARISON_BEHIND
     return COMPARISON_SAME
 
+# MULTILINE so the same expression serves both readers: ``_epoch_introduced``
+# searches one diff line at a time, ``full_version_from_pkgbuild`` searches a
+# whole file.
 _EPOCH_ASSIGN_RE = re.compile(
     r"^\s*epoch\s*=\s*['\"]?(\d+)['\"]?",
-    re.IGNORECASE,
+    re.IGNORECASE | re.MULTILINE,
 )
 
 
@@ -166,7 +221,7 @@ def _epoch_introduced(diff_text: str) -> tuple[bool, str | None]:
     side, the diff introduced the field.  An unchanged ``epoch=`` is not part
     of any hunk and never surfaces here.
     """
-    had_epoch = any(re.match(r"\s*-\s*epoch\s*=", line) for line in diff_text.splitlines())
+    had_epoch = any(re.match(r"\s*-\s*epoch\s*=", line) for line in split_lines(diff_text))
     if had_epoch:
         return False, None
     for line in resolve_added_lines(diff_text):
@@ -195,7 +250,7 @@ def _epoch_findings(diff_text: str, config, add) -> None:
         line=next(
             (
                 i
-                for i, line in enumerate(diff_text.splitlines(), 1)
+                for i, line in enumerate(split_lines(diff_text), 1)
                 if line.startswith("+") and _EPOCH_ASSIGN_RE.search(line[1:])
             ),
             None,

@@ -52,8 +52,11 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     for gap in fact.coverage_gaps:
         rows.append(("Not vetted", f"[yellow]{safe_markup(GAP_REASONS.get(gap, gap))}[/]"))
 
-    if fact.first_seen:
-        rows.append(("Status", "[yellow]First analysis.[] No prior history for this package."))
+    # No first-seen row here: the Status row at the foot of the panel is
+    # unconditional and `_status_text` returns the same sentence, so this
+    # printed it twice.  It also closed its markup with `[]` rather than
+    # `[/]`, which Rich renders literally - the report showed
+    # "First analysis.[] No prior history for this package."
     if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
         rows.append(("Lines", f"[green]+{fact.diff_summary.lines_added}[/] [red]-{fact.diff_summary.lines_removed}[/]"))
     if fact.maintainer_changed:
@@ -163,7 +166,8 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     if getattr(fact, "dependencies", None):
         inside.add_row("", "")
         inside.add_row("[underline]Dependencies[/]", "")
-        for card in dependency_cards_rich(fact.dependencies, show_score=show_score):
+        for card in dependency_cards_rich(fact.dependencies, show_score=show_score,
+                                   show_risk=show_risk):
             inside.add_row("", card)
         if getattr(fact, "depth_truncated", False):
             inside.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
@@ -181,7 +185,7 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("", f"[dim]sum: {total:+d}, clamped to {fact.final_score}/100[/]")
     elif show_risk:
         inside.add_row("", "")
-        inside.add_row("[bold]Risk[/]", f"({label})")
+        inside.add_row("[bold]Risk[/]", Text(clean(label)))
 
     inside.add_row("", "")
     inside.add_row("[bold]Status[/]", _status_text(fact))
@@ -215,6 +219,10 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.maintainer_changed:
         print(f"  Maintainer changed: {clean(fact.previous_maintainer)} -> {clean(fact.current_maintainer)}")
+    elif fact.current_maintainer:
+        print(f"  Maintainer: {clean(fact.current_maintainer)}")
+    if fact.diff_summary.lines_added or fact.diff_summary.lines_removed:
+        print(f"  Lines: +{fact.diff_summary.lines_added} -{fact.diff_summary.lines_removed}")
     cs = fact.source_changes.checksum_behavior
     if cs and cs != "unchanged":
         print(f"  Checksum: {clean(cs)}")
@@ -237,6 +245,17 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  Source URLs added:")
         for url in fact.source_changes.added_urls:
             print(f"    {clean(url)} ({fact.source_buckets.get(url, 'unknown')})")
+    # The reconstructed command text - the deobfuscated `curl` a rule
+    # matched on. The Rich panel has always shown it and this renderer
+    # showed none of it, so the evidence behind a finding was visible only
+    # if Rich happened to be installed.
+    if fact.execution_changes.resolved_commands:
+        print("  Resolved commands:")
+        for cmd in fact.execution_changes.resolved_commands[:20]:
+            print(f"    {clean(cmd.strip())}")
+        extra = len(fact.execution_changes.resolved_commands) - 20
+        if extra > 0:
+            print(f"    ... {extra} more")
     if fact.score_breakdown:
         print("  Rules Triggered:")
         for e in fact.score_breakdown:
@@ -254,7 +273,8 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             line = f" line {m.line}" if m.line is not None else ""
             print(f"    [{clean(m.source)}] {clean(m.type)}={clean(m.value)}{line} ({clean(m.surface)}){expired}")
     for line in dependency_lines_plain(getattr(fact, "dependencies", ()),
-                                       show_score=show_score):
+                                       show_score=show_score,
+                                       show_risk=show_risk):
         print(line)
     if getattr(fact, "depth_truncated", False):
         print(f"  [{DEPTH_TRUNCATED_NOTE}]")

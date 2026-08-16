@@ -70,13 +70,29 @@ def summarise(fact, diff_text: str = "") -> list[str]:
             entries.append(moved)
     if old and new and old != new:
         if getattr(fact, "version_comparison", "") == COMPARISON_INCONCLUSIVE:
-            entries.append(f"pkgver {old} installed / {new} in the AUR (not comparable)")
+            from .verdict import inconclusive_reason
+
+            entries.append(
+                f"pkgver {old} installed / {new} in the AUR "
+                f"(not comparable: {inconclusive_reason(fact)})"
+            )
         else:
             entries.append(f"pkgver {old} -> {new}")
 
+    # Two of the three values already begin with the word "checksum", so
+    # prefixing every one of them produced "checksums checksum added or
+    # changed".  Each is spelled out here instead of being derived from the
+    # identifier, because the identifier is a key and this is a sentence.
+    _CHECKSUM_WORDING = {
+        "checksum_added_or_changed": "checksums added or changed",
+        "checksum_array_emptied": "checksums emptied",
+        "changed_from_sha256_to_skip": "checksums changed from sha256 to SKIP",
+    }
     behaviour = getattr(fact.source_changes, "checksum_behavior", "")
     if behaviour and behaviour != "unchanged":
-        entries.append(f"checksums {behaviour.replace('_', ' ')}")
+        entries.append(
+            _CHECKSUM_WORDING.get(behaviour, f"checksums {behaviour.replace('_', ' ')}")
+        )
 
     if fact.maintainer_changed:
         entries.append(

@@ -26,23 +26,24 @@ The help output also documents `trustsight config show`, `trustsight config set 
 
 ## trustsight review
 
-Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print a summary table.
+Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print one panel per package with a summary line.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps]
 ```
 
 ### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--limit` | `int` | `0` | Maximum number of outdated packages to review. `0` means unlimited. |
+| `--limit` | `int` | `[limits] default_review_limit` (0) | Maximum number of outdated packages to review. `0` means unlimited, which is the shipped default: a review that stops early has not looked at the rest. When the limit does cut the list, the summary names how many went unread rather than reporting the smaller number as the whole. |
 | `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
 | `--score` | flag | `false` | Show aggregate trust score for each package. |
 | `--risk` | flag | `false` | Show risk level; colours the panel border by risk. |
 | `--depth` | `int` | `[depth] levels` (1) | AUR dependency levels to analyse. `0` disables it, `1` analyses direct AUR dependencies, `n` analyses `n` levels, and `-1` walks every level there is - bounded by `depth.MAX_DEPTH_LEVELS` (8) and `depth.MAX_DEPTH_NODES` (200), because the dependency graph is written by the party under review. A walk cut short by either ceiling records the `deps_not_scanned` coverage gap. |
 | `--all` | flag | `false` | Review all installed AUR packages, not just outdated ones. |
+| `--deps` | flag | `false` | Review the AUR **dependencies** of the discovered packages instead of the packages themselves. Each dependency is reviewed as a package in its own right, and reports a **Required by** section naming the packages in the reviewed set that declare it. Honours `--depth`, which here means levels *of dependencies to review* rather than levels below each one: `--deps --depth 2` reviews direct dependencies and their dependencies. The roots are not reviewed - they are what you get without the flag. Bounded by the same `depth.MAX_DEPTH_LEVELS` and `depth.MAX_DEPTH_NODES` ceilings, and a closure cut short says so. |
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
@@ -59,6 +60,8 @@ trustsight review --repo aur           # Packages from the aur repo only
 trustsight review --repo aur --repo testing --foreign
                                        # aur + testing repos + foreign
 trustsight review --all-repos          # All local repos, no foreign
+trustsight review --deps               # The dependencies, not the packages
+trustsight review --deps --depth 2     # ...and their dependencies too
 trustsight review --all-repos --foreign
                                        # All local repos + foreign
 ```
@@ -68,10 +71,12 @@ trustsight review --all-repos --foreign
 Discovery uses a local AUR metadata snapshot by default:
 
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
-2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded; subsequent runs reuse it.
+2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded and the run stops there, since there is nothing to compare against yet. Later runs reuse the snapshot until it is older than `[discovery] metadata_ttl_minutes` (default 60), then refetch it: the version a review compares against is the snapshot's, so a snapshot left to age reports a machine with pending updates as fully current. A refresh that cannot reach the AUR keeps the snapshot on disk and warns that a package updated since then will not be reported.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
 4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the R-series detection rules (R001-R131) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
-5. Prints a table with columns: **Package**, **Risk Score**, **Verdict**.
+5. Prints one panel per package, and a summary line counting what needed review separately from what was read.
+
+With `--deps` the subject changes: step 3's outdated set becomes the *roots* of a dependency closure walked to `--depth`, and it is the dependencies that are analysed and printed, each naming the packages that require it.
 
 If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.
 
@@ -109,35 +114,58 @@ trustsight inspect <package>
 When [rich](https://github.com/Textualize/rich) is available:
 
 ```
-TrustSight Inspect: <package>
-      Version  <old> → <new>
-       Lines  +<N> / -<N>
-  Maintainer  <current maintainer>
-   Checksum  <behaviour>
-     Status  <verdict text>
-
-  Files changed
-    + PKGBUILD
-    ~ .SRCINFO
-
-  Rules Triggered
-  <rule_id>  <reason>
-
-  Suppressed by override
-  <rule_id>  <override_reason>
-
-  Source URLs Added
-    [<bucket>]  <url>
-
-  Resolved Commands
-    <command>
-
-      Status  <verdict text>
+╭───────────────────── TrustSight Inspect: example-pkg ──────────────────────╮
+│                Version  1.4.2-1 -> 1.5.0-2                                 │
+│             Not vetted  the diff exceeded the size cap, so only its first  │
+│                         bytes were examined                                │
+│                  Lines  +6 -2                                              │
+│             Maintainer  Jane Doe <jane@example.org>                        │
+│               Checksum  checksum_added_or_changed                          │
+│                                                                            │
+│           What changed                                                     │
+│                           pkgver 1.4.2-1 -> 1.5.0-2                        │
+│                           checksums added or changed                       │
+│                           source host added: example.invalid               │
+│                                                                            │
+│          Files changed                                                     │
+│                           ~ PKGBUILD                                       │
+│                           ~ .SRCINFO                                       │
+│                                                                            │
+│      Source URLs added                                                     │
+│                           [unknown] https://example.invalid/p.tar.gz       │
+│                                                                            │
+│      Resolved commands                                                     │
+│                           curl -fsSL https://example.invalid/p.tar.gz      │
+│                                                                            │
+│        Rules Triggered                                                     │
+│                         R001 Remote Script Execution                       │
+│                                                                            │
+│           Dependencies                                                     │
+│                         ╭──────────────── L1  libhelper ─────────────────╮ │
+│                         │ Findings 2                                     │ │
+│                         ╰────────────────────────────────────────────────╯ │
+│                                                                            │
+│ Suppressed by override                                                     │
+│                           R099  known                                      │
+│                                                                            │
+│                 Status  The update is not trivial. Review it.              │
+╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
-The `--score` flag shows per-rule weights (`+40`) and a `Score: N/100 (risk)` row with weight sum at the bottom. The `--risk` flag shows per-rule severities (`CRITICAL`) and a `Risk: (level)` row. Without either flag, rules are shown by ID and reason only with a blue border. When both are given, Score row takes priority (it already includes the risk level).
+Sections appear only when they have content. `Status` is printed once, at the
+foot of the panel.
 
-Plain-text fallback prints a condensed subset of the same information.
+The `--score` flag shows per-rule weights (`+40`) and a `Score  N/100 (risk)`
+row with the weight sum beneath it. The `--risk` flag shows per-rule severities
+(`CRITICAL`) and a `Risk  <level>` row, and colours the border by band. Without
+either flag the band is withheld everywhere, dependency cards included, and the
+border is blue. When both are given the Score row wins, since it already names
+the band.
+
+The plain-text fallback carries the **same sections** in the same order. It is
+not a condensed subset: a field on one renderer and not the other is a
+difference in information, which
+[B11](../security.md#b11-every-surface-reports-the-same-thing) forbids.
 
 ### Database
 

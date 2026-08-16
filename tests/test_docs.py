@@ -228,6 +228,98 @@ def test_no_documented_command_is_missing_from_the_cli():
     assert missing == [], f"documented but not implemented: {missing}"
 
 
+# --- rendered samples -----------------------------------------------------
+#
+# Every terminal sample in the docs was hand-written once and then drifted.
+# The quickstart showed a three-column `Package / Risk Score / Verdict` table
+# the tool had stopped rendering, with a score column it withholds by default;
+# `reading-a-report.md` showed an `inspect` output that said 55/100 in one line
+# and computed 60 two lines later; and the README's 30-second example carried a
+# doubled rule id and `checksums checksum added or changed` verbatim - which is
+# where the bug report about those defects came from. A sample nobody can check
+# is a claim nobody can check.
+
+
+DOC_SOURCES = sorted((ROOT / "docs").rglob("*.md")) + [ROOT / "README.md"]
+
+
+def _split_panels(block):
+    """Slice a rendered block into top-level panels, keeping nested cards."""
+    panels, current = [], []
+    depth = 0
+    for line in block.splitlines():
+        if line.startswith("\u256d"):
+            depth += 1
+        current.append(line)
+        if line.startswith("\u2570"):
+            depth -= 1
+            if depth == 0:
+                panels.append("\n".join(current))
+                current = []
+    return panels or [block]
+
+
+def _rendered_blocks():
+    """Fenced blocks that are terminal output rather than a shell command."""
+    for path in DOC_SOURCES:
+        if path.name == "changelog.md" or not path.exists():
+            continue
+        text = path.read_text()
+        for match in re.finditer(r"```[a-z]*\n(.*?)```", text, re.S):
+            block = match.group(1)
+            if "\u256d" in block or "TrustSight Inspect" in block:
+                yield path, text[: match.start()].count("\n") + 1, block
+
+
+@pytest.mark.parametrize("check", ["rule id once", "no empty markup",
+                                   "status once", "band withheld"])
+def test_no_rendered_sample_shows_a_fixed_defect(check):
+    """Each of these was in a doc sample after it was fixed in the code."""
+    offenders = []
+    for path, line, block in _rendered_blocks():
+        where = f"{path.name}:{line}"
+        if check == "rule id once":
+            for rule in set(re.findall(r"\[(R\d{3})\]", block)):
+                if block.count(f"[{rule}]") > block.count(f"line") + 1:
+                    continue
+            # A finding line naming its rule twice: `... [R001]  ... [R001]`
+            if re.search(r"\[(R\d{3})\][^\n]*\[\1\]", block):
+                offenders.append(f"{where} names a rule twice on one line")
+        elif check == "no empty markup":
+            if "[]" in block:
+                offenders.append(f"{where} contains a literal `[]`")
+        elif check == "status once":
+            # Status is printed once per panel; a multi-panel review block
+            # legitimately shows one row per package.
+            for panel in _split_panels(block):
+                if panel.count("Status") > 1:
+                    offenders.append(f"{where} shows Status more than once")
+        elif check == "band withheld":
+            # A dependency card showing a band inside a panel that shows no
+            # Score and no Risk row of its own.
+            if "Findings" in block and "Risk" in block:
+                if "Score" not in block and not re.search(r"^\W*Risk\s", block, re.M):
+                    offenders.append(f"{where} shows a dependency band with no flag")
+    assert offenders == [], offenders
+
+
+def test_the_docs_do_not_describe_the_plain_renderer_as_reduced():
+    """Both renderers carry the same sections; saying otherwise invites the
+    drop this project keeps finding. Negated references ("it is *not* a
+    condensed subset") assert the same invariant and are fine."""
+    offenders = []
+    for path in DOC_SOURCES:
+        if path.name == "changelog.md" or not path.exists():
+            continue
+        text = path.read_text()
+        for phrase in ("condensed subset", "reduced subset", "subset of the same"):
+            for match in re.finditer(phrase, text):
+                if re.search(r"\bnot\b\s+\w+\s*\Z", text[: match.start()], re.M | re.S):
+                    continue
+                offenders.append(f"{path.name}: {phrase!r}")
+    assert offenders == [], offenders
+
+
 # --- prose conventions ----------------------------------------------------
 
 # Standard punctuation only.  An em dash, an en dash and a spaced "--" all

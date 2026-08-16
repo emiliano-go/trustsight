@@ -80,7 +80,11 @@ from .composition import _meta_annotations
 from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import _structural_findings
-from .version import compare_installed_to_aur, is_vcs_package
+from .version import (
+    compare_installed_to_aur,
+    full_version_from_pkgbuild,
+    is_vcs_package,
+)
 from .temporal import _package_is_new, _recent_update, _stale_revival
 
 log = logging.getLogger(__name__)
@@ -163,7 +167,21 @@ def analyze_package(
         head_commit = get_head_commit(repo)
     except pygit2.GitError:
         head_commit = ""
-    head_version = get_pkgver_from_head(repo) or new_version
+    # Read once, here, rather than after the two fresh-analysis returns
+    # below: the declared version and the VCS question are both answered
+    # from this text, and both are needed on every path out of this
+    # function.  It used to be read further down, which is how the first
+    # analysis of a package ended up with no version comparison at all.
+    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit) if head_commit else ""
+
+    # The full `[epoch:]pkgver-pkgrel` the recipe declares, not the bare
+    # `pkgver=` line.  `get_pkgver_from_head` remains the fallback for a
+    # repository whose HEAD tree cannot be read at all.
+    head_version = (
+        full_version_from_pkgbuild(head_pkgbuild)
+        or get_pkgver_from_head(repo)
+        or new_version
+    )
 
     if not head_version:
         head_version = new_version
@@ -171,7 +189,7 @@ def analyze_package(
     package_id = upsert_package(pkg_name, head_version)
 
     if not head_commit:
-        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild)
 
     if not old_commit:
         last = get_last_analysis(package_id)
@@ -190,7 +208,7 @@ def analyze_package(
                 if not old_commit:
                     old_commit = head_commit
         else:
-            return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version)
+            return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild)
 
     # The generator's own truncation has to travel: a patch it declined to
     # retain leaves the assembled text at or under the cap, so measuring the
@@ -250,7 +268,6 @@ def analyze_package(
         line_map=line_map,
         resolved_indices=resolved_indices,
     )
-    head_pkgbuild = get_pkgbuild_at_commit(repo, head_commit)
     tree_manifest = _collect_tree_files(repo, head_commit)
     triggered_rules.extend(
         _structural_findings(
@@ -658,8 +675,31 @@ def analyze_package_text(
 
 def _make_fresh_analysis(
     pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
-    installed_version: str = "",
+    installed_version: str = "", head_pkgbuild: str = "",
 ) -> PackageFact:
+    """A first analysis: no prior commit to diff against.
+
+    "No diff" is not "nothing to report", and this path kept confusing the
+    two. Twice now a field has been computed here and then left off the
+    fact, so the same package read differently depending on whether it had
+    been analysed before:
+
+    * ``version_comparison`` was unset, so a first ``inspect`` of a VCS
+      package rendered the very arrow the incremental path had been fixed
+      to suppress - ``1:1.93.1.r7967.caea422f-2 -> 1.93.1.r7966.7ccbff5e``,
+      an update pointing at an older commit.
+    * ``triggered_rules`` were found, written to the database, and then
+      dropped: the fact carried an empty ``score_breakdown`` and a
+      hardcoded score of 0. A first-seen package shipping a committed ELF
+      binary - R118, the Atomic Arch delivery pattern - reported **Low,
+      score 0, no findings**, with the finding sitting in the database the
+      whole time. First-seen is the case with the least prior evidence, so
+      it is the last one that should be reported clean without looking.
+
+    Everything knowable without a diff is therefore decided here: the
+    findings and the score that follows from them, the maintainer, and the
+    IOC matches against the recipe as it stands.
+    """
     novelty = build_novelty_context([], package_id)
     triggered_rules: list[dict] = []
     recent = _recent_update(repo, commit)
@@ -679,19 +719,34 @@ def _make_fresh_analysis(
     # analysis of an empty repository examined nothing and reported a bare
     # "Low".  It is the same coverage accounting as every other producer.
     gaps = gaps_from(tree_analyzed=bool(tree_manifest))
+    # The same scorer the incremental path uses, on the findings this path
+    # actually made.  Novelty is empty and stays empty - "first seen" means
+    # the novelty tier has nothing to say, not that the rules did not fire -
+    # and the band downgrade for a coverage gap is decided inside
+    # `calculate_score`, so it is not applied a second time here.
+    score, breakdown, risk = calculate_score(
+        triggered_rules, {}, novelty, config, coverage_gaps=gaps,
+    )
     fact = PackageFact(
         package_name=pkg_name,
         old_version=installed_version,
         new_version=version,
+        version_comparison=compare_installed_to_aur(
+            installed_version, version,
+            is_vcs=is_vcs_package(pkg_name, head_pkgbuild),
+        ),
         new_commit=commit,
+        current_maintainer=get_maintainer_from_commit(repo, commit) or "" if commit else "",
         diff_summary=DiffSummary(),
         novelty_context=novelty,
         first_seen=True,
         temporal_source="git_commit",
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,
-        risk=fail_closed(risk_level(0), gaps, []),
-        final_score=0,
+        ioc_matches=ioc_baseline_matches("", pkg_name, current_text=head_pkgbuild),
+        score_breakdown=breakdown,
+        risk=risk,
+        final_score=score,
     )
     with_changes(fact)
     insert_analysis(
@@ -700,7 +755,10 @@ def _make_fresh_analysis(
         new_version=version,
         old_commit="",
         new_commit=commit,
-        final_score=0,
+        # The stored score is the reported one. It was hardcoded to 0 while
+        # the rules that fired went into the same row, so the history said
+        # "clean" about an analysis that had found something.
+        final_score=score,
         raw_diff="",
         fact_json=json.dumps(fact_to_dict(fact)),
         triggered_rules=triggered_rules,

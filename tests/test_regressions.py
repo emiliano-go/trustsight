@@ -294,6 +294,91 @@ def test_analyze_package_tolerates_a_repo_with_no_head(isolated, monkeypatch):
     assert fact.new_commit == ""
 
 
+def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
+    """The findings went into the database and not into the report.
+
+    `_make_fresh_analysis` computed `triggered_rules` - the recency check,
+    the new-package check, and the committed-tree scan - handed them to
+    `insert_analysis`, and then built the fact with a hardcoded score of 0
+    and no breakdown. A first-seen package shipping an ELF binary in its git
+    tree (R118, the Atomic Arch delivery shape) reported **Low, score 0, no
+    findings**, with the finding sitting in the row it had just written.
+
+    First-seen is the case with the least prior evidence about a package,
+    so it is the last one that should be reported clean without looking.
+    The corpus path in `full_aur/analyze.py` had scored its own first-seen
+    facts all along; this one had drifted.
+    """
+    import trustsight.analysis.pipeline as pipeline
+    from trustsight.config import load_config
+    from trustsight.reporting import evaluate_fact
+    from trustsight.schema import NoveltyContext
+
+    monkeypatch.setattr(pipeline, "_recent_update", lambda repo, commit: {
+        "rule_id": "R065", "name": "Very Recent Update", "severity": "MEDIUM",
+        "category": "temporal", "reason": "updated 2h ago", "weight": 10})
+    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(
+        pipeline, "_collect_tree_files",
+        lambda repo, commit: [("payload.bin", b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56)],
+    )
+    monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
+    monkeypatch.setattr(pipeline, "insert_analysis", lambda **kw: kw)
+    monkeypatch.setattr(pipeline, "update_package_version", lambda *a, **k: None)
+    monkeypatch.setattr(
+        pipeline, "get_maintainer_from_commit", lambda repo, commit: "M <m@example.org>")
+
+    fact = pipeline._make_fresh_analysis(
+        "demo", "1.0", "abc123", 1, object(), load_config(),
+        installed_version="0.9", head_pkgbuild="pkgver=1.0\n",
+    )
+
+    fired = {e.rule_id for e in fact.score_breakdown}
+    assert {"R065", "R118"} <= fired, "the findings this path made were dropped"
+    assert fact.final_score > 0, "a scored finding must move the score"
+    assert fact.risk != "Low"
+    assert fact.current_maintainer == "M <m@example.org>"
+    assert [f["rule_id"] for f in evaluate_fact(fact)["findings"]], (
+        "the report body must carry the findings too"
+    )
+
+
+def test_a_first_analysis_decides_the_version_comparison(isolated, monkeypatch):
+    """The fresh path used to leave `version_comparison` unset.
+
+    Reported from `inspect oolite-git`: the first run rendered
+    `1:1.93.1.r7967.caea422f-2 -> 1.93.1.r7966.7ccbff5e`, an arrow pointing
+    at an older commit, and the second run - now that a prior analysis
+    existed - correctly said "not comparable". The suppression had been
+    added to the incremental path only, so whether a downgrade was drawn as
+    an update depended on how many times the package had been inspected.
+    """
+    import pygit2
+
+    import trustsight.analysis.pipeline as pipeline
+    from trustsight.analysis.version import COMPARISON_INCONCLUSIVE
+    from trustsight.verdict import version_transition
+
+    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: object())
+    monkeypatch.setattr(
+        pipeline, "get_head_commit",
+        lambda repo: (_ for _ in ()).throw(pygit2.GitError("could not resolve HEAD")),
+    )
+    monkeypatch.setattr(
+        pipeline, "get_pkgver_from_head", lambda repo: "1.93.1.r7966.7ccbff5e",
+    )
+    monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+
+    fact = pipeline.analyze_package(
+        "oolite-git", installed_version="1:1.93.1.r7967.caea422f-2",
+    )
+
+    # No PKGBUILD to read, so the -git suffix is the only evidence there is.
+    assert fact.version_comparison == COMPARISON_INCONCLUSIVE
+    assert "->" not in version_transition(fact)
+
+
 # ---------------------------------------------------------------------------
 # b9a332b - inspect / verdict behaviour on first analyses and empty diffs
 #
@@ -369,15 +454,29 @@ def test_inspect_omits_the_lines_row_on_a_zero_diff(monkeypatch):
 
 
 def test_packaging_is_export_ignore_from_archives():
-    """The release tarball (git archive) may not carry packaging/ at all."""
+    """The release tarball (git archive) may not carry packaging/ at all.
+
+    Only answerable from a git checkout.  `check()` runs this suite from
+    inside the extracted tarball, where there is no repository to archive
+    and the tree is owned by a different user than the one makepkg builds
+    as, so git refuses with "detected dubious ownership" and the assertion
+    below fails for a reason that says nothing about packaging/.
+    """
     import io
     import tarfile
+
+    if not (_REPO_ROOT / ".git").exists():
+        pytest.skip("not a git checkout (running from a release archive)")
 
     result = subprocess.run(
         ["git", "archive", "--format=tar", "HEAD"],
         cwd=str(_REPO_ROOT), capture_output=True, timeout=120,
     )
-    assert result.returncode == 0, result.stderr.decode()
+    if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace")
+        if "dubious ownership" in stderr:
+            pytest.skip(f"git refuses to read this checkout: {stderr.strip()}")
+        raise AssertionError(stderr)
     with tarfile.open(fileobj=io.BytesIO(result.stdout)) as tf:
         members = {m.name for m in tf.getmembers()}
     assert not any(name.startswith("packaging/") for name in members), (

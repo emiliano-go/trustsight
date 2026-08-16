@@ -427,7 +427,7 @@ Rules that legitimately cannot report a location (maintainer, temporal, graph, c
 No rendered output states or implies that reading the diff is unnecessary, **including when nothing fired**. The trivial case states a fact, it does not issue a clearance:
 
 ```
-some-pkg 1.2.3 -> 1.2.4
+some-pkg 1.2.3-1 -> 1.2.4-2
   Only pkgver and sha256sums changed.
   Review the diff before building.
 ```

@@ -40,6 +40,27 @@ def display_version(v: str | None) -> str:
     return v
 
 
+def inconclusive_reason(fact) -> str:
+    """Why the two versions were not compared, in the reader's terms.
+
+    "Not comparable" without a reason is what sent the second report on
+    this line: a maintainer whose recipe declares ``epoch=1`` read the
+    missing epoch on the AUR side as the cause, and reasonably so.  The
+    epoch was a real defect, but it is not why the comparison was declined.
+
+    There are exactly two causes, and they are told apart without a new
+    fact field: if both sides parse as versions, the only remaining reason
+    :func:`compare_installed_to_aur` refuses is that the package computes
+    its version in ``pkgver()``.  Anything else means a side could not be
+    read as a version at all.
+    """
+    from .analysis.version import parse_version
+
+    if parse_version(fact.old_version) and parse_version(fact.new_version):
+        return "pkgver() computes the version at build time"
+    return "a version could not be resolved"
+
+
 def version_transition(fact) -> str:
     """Render the version line for *fact* without implying a false update.
 
@@ -47,8 +68,8 @@ def version_transition(fact) -> str:
     the right-hand side is newer.  For a VCS package that claim is wrong in
     both halves: the installed value is a full version built from whatever
     the upstream repository held at build time, and the AUR side is the
-    placeholder ``pkgver=`` line, which is routinely *behind*.  Rendering
-    that as an arrow reported a downgrade as an update.
+    ``pkgver=`` the maintainer's own last build produced, which is routinely
+    *behind*.  Rendering that as an arrow reported a downgrade as an update.
     """
     from .analysis.version import COMPARISON_INCONCLUSIVE, COMPARISON_SAME
 
@@ -56,7 +77,10 @@ def version_transition(fact) -> str:
     new = display_version(fact.new_version)
     comparison = getattr(fact, "version_comparison", "")
     if comparison == COMPARISON_INCONCLUSIVE and fact.old_version and fact.new_version:
-        return f"{old} installed / AUR pkgver {new} (not comparable)"
+        return (
+            f"{old} installed / {new} declared in the AUR "
+            f"(not comparable: {inconclusive_reason(fact)})"
+        )
     if comparison == COMPARISON_SAME:
         return old
     return f"{old} -> {new}"
@@ -78,10 +102,16 @@ def no_aur_change_note(fact) -> str | None:
         f"(commit {fact.new_commit[:8]})."
     )
     if getattr(fact, "version_comparison", "") == COMPARISON_INCONCLUSIVE:
-        note += (
-            "  Your installed version differs because this is a VCS package "
-            "rebuilt locally."
-        )
+        from .analysis.version import parse_version
+
+        if parse_version(fact.old_version) and parse_version(fact.new_version):
+            note += (
+                "  Your installed version differs because pkgver() computes "
+                "the version at build time, so the AUR text records whatever "
+                "the last build produced."
+            )
+        else:
+            note += "  The two versions could not be compared."
     return note
 
 

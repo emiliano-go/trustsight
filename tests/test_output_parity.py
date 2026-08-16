@@ -33,7 +33,13 @@ import trustsight.cli.review as review_cli
 from trustsight.api import _report_from_fact
 from trustsight.coverage import GAP_REASONS
 from trustsight.reporting import evaluate_fact, report_body
-from trustsight.schema import DiffSummary, PackageFact, ScoreEntry
+from trustsight.schema import (
+    DiffSummary,
+    ExecutionChanges,
+    PackageFact,
+    ScoreEntry,
+    SourceChanges,
+)
 
 # Short, unmistakable tokens: each one either survives a render intact or is
 # genuinely missing.  A long sentence would only prove the terminal wraps.
@@ -45,6 +51,9 @@ FILE = "PKGBUILD"
 CHANGE = "PKGBUILD modified"
 SUPPRESSED = "R099"
 GAP = "diff_truncated"
+COMMAND = "curlpipe-cmd"
+MAINTAINER = "Parity Maintainer"
+URL = "https://parity.invalid/p.tar.gz"
 
 
 def _fact() -> PackageFact:
@@ -52,6 +61,14 @@ def _fact() -> PackageFact:
         package_name=PKG,
         old_version=OLD,
         new_version=NEW,
+        current_maintainer=MAINTAINER,
+        # The reconstructed command text a rule matched on. Left out of this
+        # fixture, it was left out of the plain renderer too: the evidence
+        # behind a finding was visible only where Rich happened to be
+        # installed, and nothing here noticed.
+        execution_changes=ExecutionChanges(resolved_commands=[COMMAND]),
+        source_changes=SourceChanges(added_urls=[URL]),
+        source_buckets={URL: "unknown"},
         diff_summary=DiffSummary(
             lines_added=1,
             lines_removed=0,
@@ -172,6 +189,113 @@ def test_every_terminal_render_shows_the_evidence(token, what):
 
     for name, out in _terminal_renders(_fact()).items():
         assert token in out, f"{name} does not show {what} ({token!r})"
+
+
+@pytest.mark.parametrize("token,what", [
+    (COMMAND, "the resolved command a rule matched on"),
+    (MAINTAINER, "who maintains the package"),
+    (URL, "the source URL that was added"),
+    (FILE, "the file that changed"),
+    (SUPPRESSED, "the suppressed rule"),
+])
+def test_the_two_terminal_renderers_show_the_same_sections(token, what):
+    """Rich and plain differ in form, never in what they report.
+
+    These are the sections the JSON body does not carry as keys of its own,
+    so the test above cannot reach them: they exist only on the terminal,
+    and only a render-against-render comparison can tell whether both
+    renderers have them.
+
+    That is not hypothetical. `_inspect_plain` had no "Resolved commands"
+    section at all, so the reconstructed command text behind a finding -
+    the deobfuscated `curl` a rule matched - was visible only where Rich
+    happened to be installed. It went unnoticed because the fixture here
+    never populated `execution_changes`, which is the same shape of gap one
+    level up: a renderer that is exercised with an empty section is not
+    exercised.
+    """
+    fact = _fact()
+    rich = _rich(lambda: inspect_cli._inspect_rich(fact))
+    plain = _plain(lambda: inspect_cli._inspect_plain(fact))
+
+    assert token in rich, f"inspect rich does not show {what} ({token!r})"
+    assert token in plain, f"inspect plain does not show {what} ({token!r})"
+
+
+def test_verbose_review_gives_the_full_report_on_both_renderers():
+    """`--verbose` is a request for detail, not for detail-if-Rich-is-there.
+
+    The Rich path has always handed off to the inspect panel for a verbose
+    row. The plain path did not, so asking for more returned the same
+    summary.
+    """
+    fact = _fact()
+    row = _row(fact)
+    row["_verbose_fact"] = fact
+
+    plain = _plain(lambda: review_cli._render_results_plain(
+        [row], 1, False, False, False, True))
+    summary = _plain(lambda: review_cli._render_results_plain(
+        [row], 1, False, False, False, False))
+
+    assert COMMAND in plain, "verbose plain review dropped the resolved command"
+    assert COMMAND not in summary, "the summary was supposed to stay a summary"
+
+
+def test_a_finding_names_its_rule_once():
+    """Reported from a real `review` panel.
+
+    `verdict._render` already ends every description with `[R001]`, and the
+    Rich renderer added a second copy in front of it, so each finding read
+
+        PKGBUILD line 4 [R001]  Remote Script Execution: ... [R001]
+
+    The plain renderer added none, so the two disagreed about the same
+    finding - which is the difference in *information* B11 forbids, in the
+    form that is easiest to miss because both look plausible alone.
+    """
+    fact = _fact()
+    for name, out in _terminal_renders(fact).items():
+        assert out.count(RULE) == 1, f"{name} names the rule {out.count(RULE)} times"
+
+
+def test_a_finding_with_no_file_does_not_open_with_a_gap():
+    """An aggregate entry (`SOURCE_BUCKET`) has no file or line.
+
+    The line was built as `f"{file}{suffix}  {desc}"`, so with an empty
+    filename it opened with a stray space where the path would have been.
+    """
+    from trustsight.cli.review import _finding_line
+
+    assert _finding_line({"description": "d", "rule_id": "SOURCE_BUCKET"}) == "d"
+    assert _finding_line(
+        {"file": "PKGBUILD", "line": 4, "description": "d"}
+    ) == "PKGBUILD line 4  d"
+
+
+def test_a_dependency_card_withholds_the_band_like_everything_else():
+    """Reported from a real `review` panel: `Risk (High)` with no flag.
+
+    Every other surface withholds the band unless `--score` or `--risk`
+    asked for it. The dependency card showed it whenever it was known, and
+    `--risk` changed nothing either way, because the flag was never passed
+    down to the card at all.
+    """
+    from trustsight.cli.display import dependency_cards_rich, dependency_lines_plain
+
+    dep = [{"name": "libhelper", "depth": 1, "score": 55, "risk": "High",
+            "finding_count": 2, "coverage_gaps": []}]
+
+    def rendered(**flags):
+        return _rich(lambda: display._console.print(
+            *dependency_cards_rich(dep, **flags)))
+
+    assert "High" not in rendered()
+    assert "High" in rendered(show_risk=True)
+    assert "55/100" in rendered(show_score=True)
+
+    assert "High" not in " ".join(dependency_lines_plain(dep))
+    assert "High" in " ".join(dependency_lines_plain(dep, show_risk=True))
 
 
 def test_every_terminal_render_shows_the_coverage_gap():

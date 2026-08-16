@@ -19,6 +19,7 @@ import ast
 import io
 import pathlib
 import re
+from unittest.mock import patch
 
 import pytest
 from rich.console import Console
@@ -124,6 +125,34 @@ def test_every_ioc_render_value_is_wrapped():
             if isinstance(arg, (ast.Name, ast.Attribute)):
                 unwrapped.append(f"ioc.py:{node.lineno} {ast.unparse(arg)}")
     assert not unwrapped, f"unwrapped values reach a Rich table: {unwrapped}"
+
+
+def test_a_first_analysis_panel_closes_its_markup_and_says_status_once():
+    """Reported from a user's `inspect oolite-git` output.
+
+    The panel printed `First analysis.[] No prior history for this package.`
+    - `[]` is not a Rich close tag, so it rendered literally and the yellow
+    was never closed - and then printed the same sentence again in the
+    Status row at the foot of the panel, which is emitted unconditionally.
+    """
+    from trustsight.cli import inspect as inspect_cli
+    from trustsight.schema import PackageFact
+
+    fact = PackageFact(
+        package_name="oolite-git",
+        old_version="1:1.93.1.r7967.caea422f-2",
+        new_version="1:1.93.1.r7966.7ccbff5e-2",
+        first_seen=True,
+    )
+
+    con = Console(record=True, width=200, force_terminal=False, no_color=True)
+    with patch.object(inspect_cli, "console", lambda: con):
+        inspect_cli._inspect_rich(fact)
+    out = con.export_text()
+
+    assert "[]" not in out
+    assert out.count("First analysis.") == 1
+    assert sum(1 for line in out.splitlines() if "Status" in line) == 1
 
 
 def test_a_hostile_finding_reason_survives_rendering_intact():

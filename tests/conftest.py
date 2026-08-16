@@ -13,7 +13,7 @@ SHARED_RULES = [
     {"id": "R005", "name": "Checksum Emptied", "pattern": r"sha256sums\s*=\s*\(\s*\)", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
     # R006 is now a structural rule (src/trustsight/analysis/structural.py):
     # fires on http:// added sources when no checksum was also added.
-    {"id": "R007", "name": "Install File Modification", "pattern": r"\+.*\.install.*", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
+    {"id": "R007", "name": "Install File Modification", "pattern": r"^\+.*\.install", "severity": "MEDIUM", "category": "installer", "match_target": "raw_line"},
     {"id": "R008", "name": "Unexpected File Download", "pattern": r"\b(python|ruby|perl)\s+-c\s+https?://", "severity": "HIGH", "category": "network_execution", "match_target": "resolved"},
     # R009 is now a code rule (src/trustsight/analysis/build.py).
     {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},

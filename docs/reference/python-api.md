@@ -87,6 +87,17 @@ if report.depth_truncated:
     print("the walk stopped early; part of the closure was not analysed")
 ```
 
+`Report.required_by` is the reverse of `Report.dependencies`: the packages in
+the reviewed set that declare this one. It is populated by
+`TrustSight.review(deps=True)` - and by `trustsight review --deps` on the CLI -
+and is empty otherwise.
+
+```python
+result = ts.review(deps=True, depth=2)
+for report in result.reports:
+    print(report.package, "is required by", ", ".join(report.required_by))
+```
+
 `Report.depth_truncated` says the walk stopped before the closure was
 exhausted, which also puts `deps_not_scanned` in `coverage_gaps` and so
 forbids an unflagged result.
@@ -160,7 +171,7 @@ report = ts.analyze_text(
 )
 ```
 
-### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None) -> ReviewResult`
+### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False) -> ReviewResult`
 
 Review installed AUR packages. Equivalent to `trustsight review`.
 
@@ -175,6 +186,8 @@ review(
     all_packages: bool = False,
     on_progress: Callable[[Progress], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
+    depth: int | None = None,
+    deps: bool = False,
 ) -> ReviewResult
 ```
 
@@ -190,6 +203,8 @@ With no arguments this discovers installed foreign packages, works out which hav
 | `all_packages` | Review every discovered package, not only the ones with a newer AUR version. |
 | `on_progress` | Called with a `Progress` for each tick. |
 | `on_warning` | Called with a string for each non-fatal discovery problem. |
+| `depth` | AUR dependency levels to analyse. See below. |
+| `deps` | Review the AUR *dependencies* of the discovered packages instead of the packages themselves, as `trustsight review --deps` does. Each report then carries `required_by`. `depth` becomes the number of dependency *levels to review*: `deps=True, depth=2` reviews direct dependencies and theirs. The discovered packages are not reviewed - that is what you get without it. |
 
 The first call on a machine with no local AUR metadata snapshot downloads one and returns `metadata_bootstrapped=True` with no reports. There was no prior snapshot to diff against, so there is no delta to report yet. Call again.
 

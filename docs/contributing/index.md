@@ -15,6 +15,9 @@ below applies to work on the tool itself.
   rule changes
 - [Publishing Baselines](publishing-baselines.md): the maintainer workflow for
   building, signing, verifying, and publishing the corpus and IOC baselines
+- [Releasing](releasing.md): how a version reaches users, why the source
+  tarball is built here rather than taken from GitHub, and the ordering rule
+  that keeps the recorded checksum correct
 - [Reviewing a Security Control](security-review.md): how to scope a gate so it
   covers the entry point an attacker reaches, and the failure mode that keeps
   recurring
@@ -66,7 +69,7 @@ benign corpus and real case reports are the arguments that matter.
 
 | Metric             | Value                           |
 |--------------------|---------------------------------|
-| Tests              | 1,535 (43 files)                |
+| Tests              | 2,043 (48 files)                |
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |

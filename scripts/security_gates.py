@@ -2884,7 +2884,7 @@ def gate_ci_installs_from_the_lock() -> Gate:
 
 def gate_critical_paths_are_synchronised() -> Gate:
     """Keep CODEOWNERS, CI signature checks and contributor policy aligned."""
-    from scripts.critical_paths import CRITICAL_PATHS
+    from scripts.critical_paths import ARCHIVE_EXCLUDED_PATHS, CRITICAL_PATHS
 
     name = "critical paths are synchronised"
     problems = []
@@ -2894,6 +2894,13 @@ def gate_critical_paths_are_synchronised() -> Gate:
     if not codeowners.exists() or not workflow.exists() or not contributing.exists():
         return Gate(name, False, "required policy file missing")
 
+    # The policy half of this gate (CODEOWNERS, the signature workflow, the
+    # contributor guidance) is checked everywhere.  The "the file is really
+    # there" half cannot be, because `.gitattributes` deliberately keeps
+    # some of these paths out of the release tarball, and check() runs the
+    # suite from inside that tarball.
+    from_archive = not (ROOT / "packaging").exists()
+
     owned = {
         line.split()[0].lstrip("/")
         for line in codeowners.read_text().splitlines()
@@ -2902,7 +2909,11 @@ def gate_critical_paths_are_synchronised() -> Gate:
     workflow_text = workflow.read_text()
     missing_owners = sorted(path for path in CRITICAL_PATHS if path not in owned)
     missing_workflow = [] if "scripts.critical_paths import CRITICAL_PATHS" in workflow_text else sorted(CRITICAL_PATHS)
-    missing_files = sorted(path for path in CRITICAL_PATHS if not (ROOT / path).exists())
+    missing_files = sorted(
+        path for path in CRITICAL_PATHS
+        if not (ROOT / path).exists()
+        and not (from_archive and path in ARCHIVE_EXCLUDED_PATHS)
+    )
     if missing_owners:
         problems.append(f"missing CODEOWNERS entries: {missing_owners}")
     if missing_workflow:

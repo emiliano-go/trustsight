@@ -9,6 +9,7 @@ import tomllib
 
 PKGBUILD_DIR = Path(__file__).resolve().parent.parent / "packaging" / "aur"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+SRCINFO = PKGBUILD_DIR / ".SRCINFO"
 
 _PKGBUILD_NEEDS_MAKEPKG = pytest.mark.skipif(
     not shutil.which("makepkg"),
@@ -136,6 +137,105 @@ def test_pkgbuild_version_matches_pyproject():
     assert _pkgver_from_pkgbuild() == _version_from_pyproject(), (
         f"PKGBUILD pkgver ({_pkgver_from_pkgbuild()}) "
         f"!= pyproject.toml version ({_version_from_pyproject()})"
+    )
+
+
+def _srcinfo_field(name: str) -> str | None:
+    """Read a top-level `key = value` field from .SRCINFO."""
+    m = re.search(rf"^\s*{re.escape(name)} = (\S+)\s*$", SRCINFO.read_text(), re.M)
+    return m.group(1) if m else None
+
+
+@pytest.mark.skipif(not SRCINFO.exists(), reason=".SRCINFO not present")
+def test_srcinfo_version_matches_pkgbuild():
+    """.SRCINFO is what the AUR reads, and it is a generated file that is
+    committed, so nothing forces it to agree with the PKGBUILD beside it.
+
+    `release-pkgbuild.yml` regenerates it on every tag, but the version-bump
+    commit that precedes the tag edits both by hand. A .SRCINFO left on the
+    previous version advertises the wrong package to the AUR for the whole
+    release window, and neither makepkg nor any other test notices.
+    """
+    assert _srcinfo_field("pkgver") == _pkgver_from_pkgbuild(), (
+        f".SRCINFO pkgver ({_srcinfo_field('pkgver')}) "
+        f"!= PKGBUILD pkgver ({_pkgver_from_pkgbuild()})"
+    )
+    assert _srcinfo_field("pkgver") == _version_from_pyproject()
+    assert _srcinfo_field("pkgname") == "trustsight"
+
+
+@pytest.mark.skipif(not SRCINFO.exists(), reason=".SRCINFO not present")
+def test_srcinfo_source_and_checksum_match_pkgbuild():
+    """.SRCINFO carries the *expanded* source line, so it can go stale in a
+    way the pkgver field does not show.
+
+    v0.13.1 shipped `pkgver = 0.13.1` beside
+    `source = trustsight-0.13.0.tar.gz::.../v0.13.0.tar.gz`: the version
+    field had been bumped by hand and the expanded line had not, because the
+    workflow that regenerates this file never ran.
+    """
+    version = _pkgver_from_pkgbuild()
+    source = _srcinfo_field("source")
+    assert source is not None, ".SRCINFO declares no source"
+    assert f"trustsight-{version}.tar.gz" in source, (
+        f".SRCINFO source line does not name {version}: {source}"
+    )
+    assert f"/v{version}/" in source, (
+        f".SRCINFO source line does not point at the v{version} release: {source}"
+    )
+
+    recorded = re.search(r"^sha256sums=\('(.*)'\)$", _pkgbuild_text(), re.M)
+    assert recorded, "PKGBUILD records no sha256sums"
+    assert _srcinfo_field("sha256sums") == recorded.group(1)
+
+
+def test_source_is_a_release_asset_not_a_generated_archive():
+    """GitHub generates `/archive/refs/tags/` tarballs on demand and does not
+    guarantee their bytes; the gzip settings behind them changed in 2023 and
+    invalidated recorded checksums across every distribution at once.
+
+    A release asset is an immutable blob. Reverting to the generated archive
+    would reintroduce that exposure silently, since it looks identical right
+    up until the day the bytes move.
+    """
+    source = re.search(r"^source=\((.*)\)$", _pkgbuild_text(), re.M)
+    assert source, "PKGBUILD declares no source"
+    assert "/releases/download/" in source.group(1), (
+        f"source must be a release asset, got: {source.group(1)}"
+    )
+    assert "/archive/refs/tags/" not in source.group(1), (
+        "source points at GitHub's generated archive, whose bytes are not "
+        "guaranteed stable"
+    )
+
+
+@pytest.mark.skipif(
+    not (Path(__file__).resolve().parent.parent / ".git").exists(),
+    reason="not a git checkout (running from a release archive)",
+)
+def test_recorded_checksum_matches_a_freshly_built_tarball():
+    """The checksum in the PKGBUILD must describe the tarball this tree
+    produces.
+
+    This is the test that makes the v0.13.1 report impossible to repeat. The
+    tarball is deterministic and `packaging/` is export-ignored from it, so
+    the value can be checked here rather than after a tag, which is what
+    made the old ordering fragile: it recorded the checksum in a second
+    commit, and when that commit failed the branch stayed broken.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from build_release_tarball import build
+
+    recorded = re.search(r"^sha256sums=\('(.*)'\)$", _pkgbuild_text(), re.M)
+    assert recorded, "PKGBUILD records no sha256sums"
+
+    _, digest = build("WORKTREE", _pkgver_from_pkgbuild())
+    assert digest == recorded.group(1), (
+        f"PKGBUILD records {recorded.group(1)} but this tree builds "
+        f"{digest}; rerun scripts/build_release_tarball.py and update the "
+        f"PKGBUILD before tagging"
     )
 
 

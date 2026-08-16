@@ -3,34 +3,77 @@
 Files for the `trustsight` AUR package. TrustSight audits its own updates, so
 this PKGBUILD is held to the standard the tool enforces.
 
+## Where the tarball comes from
+
+`source=` points at a **release asset**, not at GitHub's
+`/archive/refs/tags/` tarball. Two reasons, both of which have cost a release:
+
+- GitHub generates the archive tarball on demand and does not guarantee its
+  bytes. The gzip settings behind it have changed before and invalidated
+  recorded checksums across every distribution at once. A release asset is an
+  immutable blob; nobody regenerates it.
+- The archive cannot exist until the tag does, so its checksum could only be
+  recorded *after* tagging, by a second commit. Between those two commits the
+  PKGBUILD named a new `pkgver` beside the previous release's checksum, and
+  when that repair commit failed in v0.13.1 the branch stayed broken until a
+  user reported it.
+
+The asset is built by `scripts/build_release_tarball.py`, which is
+deterministic: mtimes, uid/gid and member order are normalised, gzip is given
+no timestamp, and the output depends only on the paths and contents that
+`git archive` selects. Because `packaging/` is `export-ignore`d, writing the
+checksum into this PKGBUILD cannot change the tarball that checksum
+describes. That is what makes a pre-tag checksum possible at all.
+
+`sha256sums` is never `SKIP`. TrustSight reports a disabled checksum as R004
+at HIGH severity, and shipping a package that trips its own rule would be
+indefensible.
+
 ## Release checklist
 
-The version here must match `pyproject.toml`. Steps that cannot be done ahead
-of the release are marked.
+Every step happens **before** the tag. Nothing is repaired afterwards.
 
-1. Confirm `pkgver` matches `version` in `pyproject.toml`.
-2. **After the release tag is pushed**, download the tarball and replace
-   the placeholder checksum with the real hash:
+1. Land all content changes, including `version` in `pyproject.toml`. The
+   version is inside the tarball, so it must be final before the next step.
+
+2. Build the tarball and read its checksum:
+
+   ```bash
+   python scripts/build_release_tarball.py
+   # dist/trustsight-<ver>.tar.gz
+   # sha256 <hash>
+   ```
+
+3. Record that hash here and regenerate the metadata. This commit touches
+   only `packaging/`, so it cannot change the hash from step 2:
 
    ```bash
    cd packaging/aur
-   updpkgsums          # replaces the placeholder sha256sum
+   sed -i "s/^sha256sums=.*/sha256sums=('<hash>')/" PKGBUILD
    makepkg --printsrcinfo > .SRCINFO
    ```
 
-   The placeholder is a zeroed sha256 rather than `SKIP` on purpose: TrustSight
-   reports a disabled checksum as R004 at HIGH severity, and shipping a package
-   that trips its own rule would be indefensible. A zeroed checksum fails loudly
-   at build time; `SKIP` fails silently at review time.
-
-3. Verify the built package:
+4. Verify locally before publishing anything:
 
    ```bash
    makepkg -si
    trustsight --help
    ```
 
-4. Push to the AUR repository.
+5. Tag, push, and publish the release **with the tarball attached**:
+
+   ```bash
+   git tag -a v<ver> -m "v<ver>"
+   git push origin master && git push origin v<ver>
+   gh release create v<ver> --title v<ver> \
+     --notes-file <notes> dist/trustsight-<ver>.tar.gz
+   ```
+
+   The asset must be the file from step 2. `release-pkgbuild.yml` rebuilds
+   the tarball from the tag and fails the release if it does not match both
+   the recorded checksum and the published asset.
+
+6. Push to the AUR repository.
 
 ## Dogfooding check
 

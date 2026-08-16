@@ -1,175 +1,127 @@
-name: Update PKGBUILD on release
+name: Verify the release artifact
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing tag to (re)generate the PKGBUILD for, e.g. v0.5.0"
+        description: "Existing tag to verify, e.g. v0.13.2"
         required: true
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-pkgbuild
+  group: release-verify
   cancel-in-progress: false
 
-# The checksum is written to the PKGBUILD on the default branch, never back
-# onto the tag.  GitHub generates the source tarball from whatever tree the
-# tag points at, so amending the tag would change the tarball and invalidate
-# the checksum that had just been computed.  Leaving the tag fixed keeps the
-# tarball, and therefore the checksum, stable forever.
+# This workflow used to compute the source checksum after the tag and commit
+# it back to the default branch, because GitHub's on-demand
+# `/archive/refs/tags/` tarball cannot exist until the tag does.  That design
+# had two faults and both reached users.
 #
-# The PKGBUILD inside the tagged tarball still carries the previous release's
-# checksum. That is harmless: nobody builds from the copy inside the tarball.
-# Users clone the default branch, and the AUR gets its own copy.
+# The window: between the version-bump commit and the commit that repaired
+# the checksum, the default branch advertised a new pkgver alongside the
+# previous release's checksum.  Anyone building from the branch or the AUR in
+# that interval got a mismatch.
 #
-# The work is split across two jobs on purpose.  Only makepkg needs Arch, and
-# doing git work inside the container failed with "fatal: not in a git
-# directory" even though actions/checkout had initialised the repository
-# normally.  Generating metadata in the container and committing from the
-# host runner keeps each tool where it is known to work.
+# The dependency on repair: the commit job needed the build job, so any
+# failure upstream of it left the branch in that broken state permanently.
+# In v0.13.1 that is exactly what happened, and the mismatch was reported by
+# a user rather than caught here.
+#
+# The release tarball is now built by scripts/build_release_tarball.py, which
+# is deterministic and depends only on the paths and contents git archive
+# selects.  packaging/ is export-ignored, so writing the checksum into the
+# PKGBUILD cannot change the tarball that checksum describes.  The checksum
+# is therefore known before the tag exists and ships in the same commit as
+# the version bump, and the artifact is uploaded to the release rather than
+# generated on demand by GitHub.
+#
+# Nothing here writes to the repository.  This workflow only proves that what
+# was published matches what the PKGBUILD claims.
 jobs:
-  build-metadata:
-    name: Compute checksum and metadata
+  verify:
+    name: Verify the published tarball
     runs-on: ubuntu-latest
     container: archlinux:latest
-    outputs:
-      version: ${{ steps.tag.outputs.version }}
-      tag: ${{ steps.tag.outputs.tag }}
-      sha256: ${{ steps.checksum.outputs.sha256 }}
     steps:
       # git is required so that actions/checkout performs a real checkout:
       # the container's fallback downloads the source archive, which honours
       # .gitattributes export-ignore and therefore omits packaging/.
       - name: Install tooling
-        run: pacman -Syu --noconfirm --needed base-devel git
+        run: pacman -Syu --noconfirm --needed base-devel git python
 
       - name: Resolve tag
         id: tag
         run: |
           set -eu
-          tag="${{ github.event.inputs.tag || github.ref_name }}"
+          tag="${{ github.event.inputs.tag || github.event.release.tag_name }}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
-      # Only the PKGBUILD is read here, so this checkout never needs to be a
-      # usable git repository.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ steps.tag.outputs.tag }}
+          fetch-depth: 0
 
-      - name: Compute checksum of the release tarball
-        id: checksum
+      - name: Rebuild the tarball from the tag
+        id: rebuild
         run: |
           set -eu
-          tag='${{ steps.tag.outputs.tag }}'
-          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${tag}.tar.gz"
-          # The archive is generated on demand, so a fresh tag can 404 briefly.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sha=$(python scripts/build_release_tarball.py \
+                  --rev "${{ steps.tag.outputs.tag }}" --print-sha256)
+          echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
+          echo "Rebuilt tarball sha256: ${sha}"
+
+      # The point of the whole design: the recorded checksum was committed
+      # before the tag, so this can be asserted immediately and never needs
+      # a repair commit.
+      - name: The PKGBUILD must already record that checksum
+        run: |
+          set -eu
+          recorded=$(sed -n "s/^sha256sums=('\(.*\)')$/\1/p" packaging/aur/PKGBUILD)
+          rebuilt='${{ steps.rebuild.outputs.sha256 }}'
+          if [ "$recorded" != "$rebuilt" ]; then
+            echo "::error::PKGBUILD records ${recorded} but the tag rebuilds to ${rebuilt}"
+            exit 1
+          fi
+          echo "PKGBUILD matches the tag: ${recorded}"
+
+      - name: The published asset must be those exact bytes
+        run: |
+          set -eu
+          version='${{ steps.tag.outputs.version }}'
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.tag.outputs.tag }}/trustsight-${version}.tar.gz"
           for attempt in 1 2 3 4 5; do
-            if curl -fsSL "$url" -o /tmp/source.tar.gz; then
+            if curl -fsSL "$url" -o /tmp/asset.tar.gz; then
               break
             fi
             if [ "$attempt" = 5 ]; then
-              echo "::error::${url} still unavailable after 5 attempts"
+              echo "::error::${url} is not downloadable; was the tarball attached to the release?"
               exit 1
             fi
             sleep 10
           done
-          sha256=$(sha256sum /tmp/source.tar.gz | cut -d' ' -f1)
-          echo "sha256=${sha256}" >> "$GITHUB_OUTPUT"
-          echo "Tarball sha256: ${sha256}"
+          actual=$(sha256sum /tmp/asset.tar.gz | cut -d' ' -f1)
+          if [ "$actual" != '${{ steps.rebuild.outputs.sha256 }}' ]; then
+            echo "::error::published asset is ${actual}, expected ${{ steps.rebuild.outputs.sha256 }}"
+            exit 1
+          fi
+          echo "Published asset matches: ${actual}"
 
-      - name: Update PKGBUILD
-        working-directory: packaging/aur
+      - name: Build and install from the published tarball
         run: |
           set -eu
-          version='${{ steps.tag.outputs.version }}'
-          sha256='${{ steps.checksum.outputs.sha256 }}'
-
-          sed -i \
-            -e "s/^pkgver=.*/pkgver=${version}/" \
-            -e "s/^pkgrel=.*/pkgrel=1/" \
-            -e "s/^sha256sums=(.*)$/sha256sums=('${sha256}')/" \
-            PKGBUILD
-
-          grep -q "^pkgver=${version}$" PKGBUILD
-          grep -q "^sha256sums=('${sha256}')$" PKGBUILD
-
-      - name: Verify the recorded checksum actually validates
-        working-directory: packaging/aur
-        run: |
-          set -eu
-          # makepkg refuses to run as root, and this is the step that would
-          # catch a wrong checksum before it reaches a user.
           useradd -m builder
-          chown -R builder:builder .
-          su builder -c "makepkg --verifysource --noconfirm"
-
-      # pkgbuild.yml is what normally runs check() against a release tarball,
-      # but it never sees this release.  The commit that makes its assertion
-      # possible is the one pushed at the end of this workflow, and GitHub
-      # does not trigger workflows from a GITHUB_TOKEN push.  Without this
-      # step the "check() runs against the shipped artifact" guarantee added
-      # in v0.12.1 first holds on the next unrelated push, which is after
-      # users can already install the release.
-      - name: Build and install from the release tarball
-        working-directory: packaging/aur
-        run: |
-          set -eu
-          pacman -S --noconfirm --needed sudo
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          cd "$GITHUB_WORKSPACE/packaging/aur"
           # No --nocheck: check() runs the shipped test suite from the
           # release archive, which is the build every user will do.
-          su builder -c "makepkg -si --noconfirm"
-          trustsight --version
+          su builder -c "cd '$PWD' && makepkg -si --noconfirm"
 
-      - name: Regenerate .SRCINFO
-        working-directory: packaging/aur
-        run: |
-          set -eu
-          su builder -c "makepkg --printsrcinfo" > .SRCINFO
-          grep -q "pkgver = ${{ steps.tag.outputs.version }}" .SRCINFO
-
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: pkgbuild-metadata
-          path: |
-            packaging/aur/PKGBUILD
-            packaging/aur/.SRCINFO
-          # .SRCINFO is a dotfile, and upload-artifact skips hidden files
-          # unless told otherwise.
-          include-hidden-files: true
-          if-no-files-found: error
-
-  commit:
-    name: Commit to the default branch
-    needs: build-metadata
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: pkgbuild-metadata
-          path: packaging/aur
-
-      - name: Commit
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packaging/aur/PKGBUILD packaging/aur/.SRCINFO
-          if git diff --cached --quiet; then
-            echo "PKGBUILD already up to date; nothing to commit."
-            exit 0
-          fi
-          git commit -m "packaging: set checksum for ${{ needs.build-metadata.outputs.tag }}
-
-          Generated from the ${{ needs.build-metadata.outputs.tag }} source
-          tarball by .github/workflows/release-pkgbuild.yml."
-          git push origin HEAD:${{ github.event.repository.default_branch }}
+      - name: Verify installation
+        run: trustsight --version

@@ -16,8 +16,8 @@ jobs:
           allow-prereleases: true
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - run: uv sync --locked --extra dev --python ${{ matrix.python }}
-      - run: uv run python scripts/verify_fixtures.py
-      - run: uv run pytest tests/
+      - run: uv run --extra dev python scripts/verify_fixtures.py
+      - run: uv run --extra dev pytest tests/
 
   # The malicious .diff bodies are committed source (fixture-reproducibility
   # fallback). Regenerating them must be a no-op: if any generator drifts from

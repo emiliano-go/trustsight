@@ -203,9 +203,13 @@ def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path):
     assert check_maintainer_novelty("Mallory", pkg_id) is True
     assert check_maintainer_novelty("Mallory", pkg_id) is False
 
-    # After seeding, hashed per-package records are used.
+    # After seeding, hashed per-package records are used.  Importing a seed
+    # is what retires the plaintext table the two calls above just wrote to,
+    # so the migration warning is the expected accompaniment, not noise: a
+    # rename of a user's table must announce itself.
     seed_dir = _build_v2_seed(tmp_path)
-    import_seed(seed_dir)
+    with pytest.warns(UserWarning, match="Plaintext maintainers table detected"):
+        import_seed(seed_dir)
     pkg2 = upsert_package("other", "1.0")
     assert check_maintainer_novelty("Alice Example", pkg2) is True
     assert check_maintainer_novelty("Alice Example", pkg2) is False
@@ -289,7 +293,12 @@ def test_seed_cli_migrate_from_legacy_table(tmp_path, monkeypatch):
         )
         conn.commit()
 
-    result = CliRunner().invoke(app, ["seed", "migrate", "--from-backup"])
+    # The legacy row inserted above makes the next connection migrate, so
+    # the command warns on the way through.  Asserted rather than filtered:
+    # a migration that stopped announcing itself would be a silent rename of
+    # the user's table.
+    with pytest.warns(UserWarning, match="Plaintext maintainers table detected"):
+        result = CliRunner().invoke(app, ["seed", "migrate", "--from-backup"])
     assert result.exit_code == 0, result.output
     assert is_maintainer_globally_novel("Legacy Maintainer") is False
 

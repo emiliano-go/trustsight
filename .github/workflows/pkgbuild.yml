@@ -68,8 +68,12 @@ jobs:
           set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/v${pkgver}.tar.gz"
-          # The archive is generated on demand, so a fresh tag can 404 briefly.
+          # The release asset, not GitHub's on-demand /archive/refs/tags/
+          # tarball: assets are immutable blobs, so a recorded checksum
+          # cannot be invalidated by GitHub regenerating the archive.
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${pkgver}/trustsight-${pkgver}.tar.gz"
+          # The asset is attached when the release is published, which is a
+          # moment after the tag is pushed, so a fresh tag can 404 briefly.
           for attempt in 1 2 3 4 5; do
             if curl -fsSL "$url" -o "trustsight-${pkgver}.tar.gz"; then
               break

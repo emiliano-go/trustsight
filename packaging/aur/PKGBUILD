@@ -1,7 +1,7 @@
 # Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
 
 pkgname=trustsight
-pkgver=0.13.1
+pkgver=0.13.2
 pkgrel=1
 pkgdesc='A CLI tool to vet AUR package updates before install'
 arch=('any')
@@ -25,9 +25,9 @@ makedepends=(
 optdepends=(
   'pyalpm: native version comparison (faster discovery)'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 
-sha256sums=('f083582794221eede5e9fcf89363c30c36bd9adb61399211ad60882d3510751d')
+sha256sums=('606e10d99060b54da1f63b8732fcbe0110c592fa86adfb1d387485723636a4d4')
 
 build() {
   cd "$pkgname-$pkgver"

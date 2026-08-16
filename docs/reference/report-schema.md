@@ -58,6 +58,22 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "changes": ["string"],
   "coverage_gaps": ["string"],
   "unresolved_sources": ["string"],
+  "dependency_changes": {"added": ["string"], "removed": ["string"]},
+  "dependencies": [
+    {
+      "name": "string",
+      "depth": int,
+      "score": int,
+      "risk": "string",
+      "risk_label": "string",
+      "finding_count": int,
+      "coverage_gaps": ["string"],
+      "via": "string",
+      "parent": "string",
+      "failed": bool,
+      "error": "string"
+    }
+  ],
   "risk": "string",
   "adapter": "string",
   "suppressed_rules": [
@@ -215,7 +231,7 @@ There are two JSON shapes, and they are not the same object.
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `suppressed_rules`,
   `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `failed`,
-  `dependencies`, `depth_truncated`, `config_fingerprint`.
+  `dependencies`, `depth_truncated`, `required_by`, `config_fingerprint`.
 
   On request only:
 
@@ -234,6 +250,14 @@ There are two JSON shapes, and they are not the same object.
   right; a dependency's score is never folded into the parent's. See
   [`[depth]`](configuration.md#depth). `depth_truncated` says the walk stopped
   before the closure was exhausted, which also raises `deps_not_scanned`.
+
+  `required_by` is the reverse relationship: the packages in the reviewed set
+  that declare *this* package as a dependency. It is populated by
+  [`review --deps`](cli.md#trustsight-review) and `TrustSight.review(deps=True)`,
+  where the subject of the report is a dependency and the useful question is
+  who needs it. Empty on an ordinary review, where the subject is the thing
+  that was asked for - the key is always present so a consumer never has to
+  special-case its absence.
 
 `risk` is the bare band (`"Low"`, `"Medium"`, `"High"`, `"Critical"` or
 `"Inconclusive"`). It is a **closed set**: a FATAL finding does not

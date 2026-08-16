@@ -23,38 +23,55 @@ trustsight review
 This command:
 
 1. Collects installed package names and versions from your system (foreign via `pacman -Qm`, or from local repos via `--repo`/`--all-repos`),
-2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run; subsequent runs reuse it),
+2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run, and refetches it once it is more than an hour old),
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
 5. Applies detection rules (R001-R131) and context rules (C001-C007, D001-D004),
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
 8. Calculates a deterministic score from 0-100,
-9. Prints a summary table.
+9. Prints one panel per package, and a summary line.
 
 ## 3. Read the output
 
 ```
-                               TrustSight Review
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ Package                  ┃ Risk Score ┃ Verdict                                   ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│ some-app-bin             │      0/100 │ Version bump. No structural changes.      │
-│ sketchy-package          │     55/100 │ Checksum disabled (R004). New domain:     │
-│                          │            │ sketchy-cdn.example.com (unknown).        │
-│ first-run-pkg            │     25/100 │ New source URL first seen globally         │
-│                          │            │ (novelty), no strong structural signals.   │
-│ unknown-pkg              │     22/100 │ Source URL added from unknown domain.      │
-└──────────────────────────┴────────────┴───────────────────────────────────────────┘
+╭───────────────────────────── some-app-bin ─────────────────────────────╮
+│  Version  3.1.0-1 → 3.1.1-2                                            │
+│  Status   Only pkgver and sha256sums changed. Review the diff before   │
+│           building.                                                    │
+│  Changed  pkgver 3.1.0-1 -> 3.1.1-2                                    │
+│           checksums added or changed                                   │
+╰────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────── sketchy-package ────────────────────────────╮
+│  Version  0.9.2-1 → 1.0.0-2                                            │
+│  Status   The update is not trivial. Review it.                        │
+│           PKGBUILD line 12  Checksum Disabled: sha256sums=('SKIP')     │
+│           [R004]                                                       │
+│           Source URL classified as unknown                             │
+│           (https://sketchy-cdn.example.com/p.tar.gz) [SOURCE_BUCKET]   │
+│  Changed  pkgver 0.9.2-1 -> 1.0.0-2                                    │
+│           source host added: sketchy-cdn.example.com                   │
+╰────────────────────────────────────────────────────────────────────────╯
+2 package(s) needing update and reviewed out of 12 installed
 ```
 
-### Columns
+### What a panel says
 
-| Column | Meaning |
+| Row | Meaning |
 |--------|---------|
-| **Package** | Name of the AUR package with a newer version available |
-| **Score** | Deterministic risk score from 0 to 100. Higher = more risk signals fired. |
-| **Verdict** | Plain-English summary. Template-based, fully deterministic. |
+| **Version** | Installed version against what the AUR advertises. For a VCS package the two are not comparable and the row says so rather than drawing an arrow. |
+| **Status** | The verdict, then one line per finding: the file, the line and the rule that produced it. |
+| **Changed** | What moved in the recipe, whether or not a rule matched it. |
+| **Required by** | Only under [`--deps`](#reviewing-the-dependencies-themselves): the packages that declare this one. |
+
+The summary line counts what needed review separately from what was read, so a
+run cut short by `--limit` says how many it left unread rather than reporting
+the smaller number as the whole.
+
+**There is no score column by default.** The default output is evidence - the
+finding, the file, the line - because a number invites a glance where the
+evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
+`--risk` for the band alone.
 
 ### What the scores mean in context
 
@@ -86,21 +103,56 @@ TrustSight also analyses the package's direct AUR dependencies, and each one
 appears as a mini-card nested inside its parent's card:
 
 ```
-╭─ some-trusted-tool 2.4.1 → 2.4.2 ─────────────────────────╮
-│  Status  The update is not trivial. Review it.            │
-│                                                           │
-│  Dependencies                                             │
-│           ╭──────── L1  libhelper ────────╮               │
-│           │  Findings  2                  │               │
-│           │      Risk  (High)             │               │
-│           ╰───────────────────────────────╯               │
-╰───────────────────────────────────────────────────────────╯
+╭──────────────────── some-trusted-tool ─────────────────────╮
+│  Version       2.4.1-1 → 2.4.2-2                           │
+│  Status        The update is not trivial. Review it.       │
+│                PKGBUILD line 17  Install hook performs a   │
+│                privileged operation [R062]                 │
+│  Changed       pkgver 2.4.1-1 -> 2.4.2-2                   │
+│                                                            │
+│  Dependencies                                              │
+│                ╭──────────── L1  libhelper ─────────────╮  │
+│                │ Findings 2                             │  │
+│                ╰────────────────────────────────────────╯  │
+╰────────────────────────────────────────────────────────────╯
+1 package(s) needing update and reviewed out of 1 installed
+Tip: those dependencies are summarised, not reviewed.
+`trustsight review --deps` reviews each as a package in its
+own right and names what requires it; add `--depth n` for
+deeper levels.
 ```
 
 Each dependency is a full analysis in its own right - its own findings, its own
 score, its own band. A dependency's risk is never folded into its parent's
-score, so a `High` on a mini-card is a statement about *that* package, and the
-parent's number still means what it meant before.
+score, so the card is a pointer, not a component of the parent's number. The
+band is withheld here like everywhere else until you pass `--score` or
+`--risk`; with `--risk` the card gains a `Risk  High` line.
+
+### Reviewing the dependencies themselves
+
+The card is a summary. To make the dependencies the subject - each with its own
+panel, findings and verdict - use `--deps`:
+
+```bash
+trustsight review --deps            # the direct dependencies
+trustsight review --deps --depth 2  # and theirs
+```
+
+Each one then reports **Required by**: the packages in the reviewed set that
+declare it. A dependency three packages need is the one to read first.
+
+```
+╭──────────────────────────── libhelper ─────────────────────────────╮
+│  Version      0.8.1-1 → 0.9.0-2                                    │
+│  Status       The update is not trivial. Review it.                │
+│               PKGBUILD line 8  Install hook performs a privileged  │
+│               operation [R062]                                     │
+│  Changed      pkgver 0.8.1-1 -> 0.9.0-2                            │
+│  Required by  some-trusted-tool                                    │
+│               sketchy-pkg                                          │
+╰────────────────────────────────────────────────────────────────────╯
+2 AUR dependencies reviewed for 3 installed package(s)
+```
 
 Control how far it goes:
 

@@ -319,7 +319,15 @@ max_context_lines = 3
 max_diff_bytes = 5242880
 
 [limits]
-default_review_limit = 20
+# How many packages `trustsight review` reads when no --limit is given.
+# 0 means all of them, which is the default because a review that stops
+# early has not looked at the rest, and this tool does not report on what
+# it did not read.  Any other value is honoured and the packages left over
+# are named in the summary rather than dropped quietly.
+#
+# This key shipped set to 20 and was never read by anything: the flag's own
+# default (0) won every time, so the documented setting did nothing.
+default_review_limit = 0
 # Seconds libgit2 may spend connecting to, and waiting for data from, the
 # AUR before it aborts a clone/fetch.  These are enforced inside libgit2's
 # transport; without them a silently stalled connection hangs a worker
@@ -380,6 +388,12 @@ show_unmatched = true
 # within this window reuses cached version data instead of re-querying
 # the AUR server.  Set to 0 to disable caching entirely.
 cache_ttl_minutes = 60
+# Minutes before the offline AUR metadata snapshot is refetched.  A
+# snapshot older than this reports every installed package as current,
+# so `review` downloads a fresh dump (~60 MB) before comparing.  Set to
+# 0 to never refresh automatically, which means version comparisons are
+# only as current as the last snapshot on disk.
+metadata_ttl_minutes = 60
 
 [rules]
 # Run rules marked experimental in rules.toml.  The R039+ set is now
@@ -468,7 +482,13 @@ match_target = "resolved"
 [[rules]]
 id = "R007"
 name = "Install File Modification"
-pattern = '\\+.*\\.install.*'
+# Anchored, and with no trailing wildcard.  Unanchored, the previous form
+# was quadratic: the search retries at every offset and the wildcard
+# rescans the line from each one.  A raw line is capped at
+# MAX_RULE_LINE_BYTES, where that cost is measurable.  On an added line -
+# the only line this is aimed at, since a diff marker sits at position 0 -
+# the anchored form matches exactly the same text.
+pattern = '^\\+.*\\.install'
 severity = "MEDIUM"
 category = "installer"
 match_target = "raw_line"
@@ -1313,6 +1333,12 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     # where the payload always lives - were filtered out before matching.
     # It caught 3 of 22 injection fixtures.
     "R012": {r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)"},
+    # Pre-0.13.2: quadratic, and therefore refused by the compile-time
+    # safety check once the probe alphabet could see a punctuation-only
+    # literal.  A refused pattern does not raise - the rule silently stops
+    # matching - so an install-file modification would go unreported on
+    # every installation still holding the old text.
+    "R007": {r"\+.*\.install.*"},
 }
 
 

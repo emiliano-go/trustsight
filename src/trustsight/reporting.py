@@ -91,6 +91,11 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "ioc_matches": list(fact.ioc_matches),
         "dependencies": list(getattr(fact, "dependencies", ())),
         "depth_truncated": bool(getattr(fact, "depth_truncated", False)),
+        # `review --deps` reverses the relationship this report describes:
+        # the subject is a dependency and the interesting fact is which
+        # packages require it. Empty on an ordinary review, where the
+        # subject is the thing that was asked for.
+        "required_by": list(raw.get("required_by", ())),
         "config_fingerprint": raw.get("config_fingerprint", ""),
         "raw": raw,
         "fact": fact,
@@ -122,6 +127,7 @@ REPORT_KEYS = (
     "failed",
     "dependencies",
     "depth_truncated",
+    "required_by",
     "config_fingerprint",
 )
 
@@ -218,6 +224,7 @@ def report_body(
             for d in evaluated.get("dependencies", ())
         ],
         "depth_truncated": bool(evaluated.get("depth_truncated", False)),
+        "required_by": [str(n) for n in evaluated.get("required_by", ())],
         "config_fingerprint": evaluated.get("config_fingerprint", ""),
     }
     if include_score:
@@ -265,6 +272,7 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "findings": findings,
         "suppressed_rules": list(row.get("suppressed_rules", ())),
         "changes": list(row.get("changes", ())),
+        "required_by": list(row.get("required_by", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
         "file_changes": list(row.get("file_changes", ())),
         "first_seen": row.get("first_seen", False),

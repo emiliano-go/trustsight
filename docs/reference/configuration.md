@@ -209,6 +209,9 @@ Controls which packages are scanned when no `--repo`/`--foreign`/`--all-repos` f
 | `default_repos` | array of strings | `[]` | List of repository names to scan by default when no CLI flags are given. |
 | `include_foreign` | bool | `false` | Whether to also include foreign packages (`pacman -Qm`) when `default_repos` is non-empty or `all_repos` is true. When all defaults are empty/false, foreign packages are scanned as a fallback. |
 | `all_repos` | bool | `false` | If true, automatically detect all local repositories from `/etc/pacman.conf` (excluding official repos) and use them as the default scope. `default_repos` are added to the auto-detected list. |
+| `show_unmatched` | bool | `true` | With `--all`, include installed packages that are absent from the AUR metadata snapshot (orphaned, very new, removed from the AUR). Set to false to skip them. |
+| `cache_ttl_minutes` | int | `60` | Minutes an AUR RPC response is cached for. Applies to the RPC fallback path, not to the metadata snapshot. `0` disables the cache. |
+| `metadata_ttl_minutes` | int | `60` | Minutes the offline AUR metadata snapshot is used before `review` refetches it (~60 MB). A snapshot past this age would report every installed package as current, so refreshing it is what keeps "no outdated packages" a fact rather than an artefact of age. `0` never refreshes automatically: comparisons stay as current as the snapshot on disk, which is the right setting only for an offline machine. If the refresh fails, the old snapshot is used and `review` warns that a newer package may go unreported. |
 
 If none of these settings are explicitly configured, the tool scans foreign packages only (backward-compatible default).
 
@@ -216,7 +219,7 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `default_review_limit` | int | `20` | Default `--limit` for `trustsight review` when not explicitly provided. |
+| `default_review_limit` | int | `0` | How many packages `trustsight review` reads when `--limit` is not given. `0` means all of them, which is the default because a review that stops early has not looked at the rest. Any other value is honoured, and the packages left unread are named in the summary rather than dropped quietly. An explicit `--limit 0` always wins over this. Before 0.13.2 the key shipped as `20` and was never read: the flag's own default won every time, so setting it did nothing. |
 | `network_connect_timeout` | int | `10` | Seconds libgit2 may spend connecting to the AUR before aborting a clone/fetch. |
 | `network_transfer_timeout` | int | `30` | Seconds libgit2 may wait for data on an established connection. Without it a silently stalled connection hangs a fetch indefinitely. |
 | `prefetch_timeout` | int | `120` | Seconds `trustsight review` waits for the whole prefetch batch. Whatever has not arrived is abandoned and fetched again during analysis. |

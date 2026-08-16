@@ -174,7 +174,7 @@ Output:
 
 ```
 TrustSight Inspect: sketchy-package
-  Version: 1.0 → 1.1
+  Version: 1.0-1 → 1.1-2
   Score: 55/100 (Medium)
 
   Diff Summary

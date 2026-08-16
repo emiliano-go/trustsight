@@ -57,6 +57,7 @@ from ..schema import (
 )
 from ..tokenizer import tokenize_and_resolve_indexed
 from .properties import extract_properties, update_properties
+from ..tokenizer import split_lines
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
 def _diff_summary(diff_text: str) -> DiffSummary:
     if not diff_text:
         return DiffSummary()
-    lines = diff_text.splitlines()
+    lines = split_lines(diff_text)
     return DiffSummary(
         lines_added=sum(1 for line in lines if line.startswith("+")),
         lines_removed=sum(1 for line in lines if line.startswith("-")),
@@ -344,6 +345,11 @@ def analyze_package_text(
             new_version=new_version,
             novelty_context=novelty,
             suppressed_rules=suppressed_rules,
+            # Known here and recorded two lines below by
+            # `update_package_maintainer`, so leaving it off the fact meant
+            # a first-seen corpus entry reported no maintainer while the
+            # database had one.  The incremental path below carries it.
+            current_maintainer=maintainer,
             first_seen=True,
             temporal_source=temporal.source,
             tree_analyzed=bool(tree_manifest),

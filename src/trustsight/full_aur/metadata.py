@@ -48,6 +48,14 @@ HTTP_TIMEOUT = 300
 # the same reason full_aur/fetch.py caps its own reads.
 MAX_RESPONSE_BYTES = 512 * 1024 * 1024
 
+# How long a saved snapshot may be compared against before it is refetched.
+# The AUR regenerates the dump every few minutes, so an old snapshot does not
+# report "no data" - it reports every installed package as current, which is
+# the one wrong answer this tool must never give quietly.  An hour matches
+# ``[discovery] cache_ttl_minutes``, which bounds the RPC fallback the same
+# way; it is overridable as ``[discovery] metadata_ttl_minutes``.
+DEFAULT_TTL_MINUTES = 60
+
 
 class ResponseTooLarge(Exception):
     """Raised when the metadata response exceeds MAX_RESPONSE_BYTES."""
@@ -158,9 +166,37 @@ def save_metadata(metadata: dict, path: Path | None = None) -> Path:
 
 def load_metadata(path: Path | None = None) -> dict | None:
     """Load a previously saved metadata snapshot, or return None."""
+    snapshot = load_snapshot(path)
+    return None if snapshot is None else snapshot[0]
+
+
+def load_snapshot(path: Path | None = None) -> tuple[dict, int | None] | None:
+    """Load a snapshot as ``(packages, snapshot_time)``, or None if absent.
+
+    ``load_metadata`` drops the timestamp, which is how a snapshot could be
+    read forever without anyone asking how old it was.  A caller that
+    compares installed versions against it needs both halves.
+
+    ``snapshot_time`` is None for a file written before it was recorded, or
+    one whose value is not an integer; callers treat that as "unknown age",
+    which for a TTL check means stale.
+    """
     path = path or default_metadata_path()
     if not path.exists():
         return None
     with open(path) as f:
         data = json.load(f)
-    return data.get("packages", {})
+    stamp = data.get("snapshot_time")
+    return data.get("packages", {}), stamp if isinstance(stamp, int) else None
+
+
+def snapshot_age_seconds(snapshot_time: int | None, now: float | None = None) -> float | None:
+    """Age of a snapshot in seconds, or None when it cannot be determined.
+
+    A timestamp in the future (a clock that moved backwards, a copied
+    snapshot) reads as age 0 rather than negative, so a nonsensical stamp
+    can never look *fresher* than a real one in a comparison.
+    """
+    if snapshot_time is None:
+        return None
+    return max(0.0, (time.time() if now is None else now) - snapshot_time)

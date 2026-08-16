@@ -12,6 +12,7 @@ from functools import lru_cache
 
 from .config import DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_VARIANT_SUFFIXES, load_naming
 from .tokenizer import resolve_added_lines
+from .tokenizer import split_lines
 
 DEP_FIELDS = (
     "depends", "makedepends", "optdepends", "checkdepends",
@@ -268,7 +269,7 @@ def extract_dependency_changes(
     # Resolved so that depends=("$_pkgname-x11") is compared by its real
     # name where the value is known; positions are preserved.
     after = _side_names(resolve_added_lines(diff_text), "+")
-    before = _side_names(diff_text.splitlines(), "-")
+    before = _side_names(split_lines(diff_text), "-")
 
     added: dict[str, set[str]] = {}
     for f in DEP_FIELDS:

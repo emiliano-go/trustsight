@@ -25,6 +25,7 @@ from ..review import (  # noqa: F401
     prefetch_deadline as _prefetch_deadline,
     verdict_for as _verdict_for,
     is_trivial_update as _is_trivial_update,
+    dependency_entries as _dependency_entries,
 )
 from .display import (
     DEPTH_TRUNCATED_NOTE,
@@ -96,15 +97,33 @@ def _version_cell(result: dict) -> str:
     old = display_version(result.get("old_version"))
     new = display_version(result.get("new_version"))
     if result.get("version_comparison") == COMPARISON_INCONCLUSIVE:
-        return f"{old} installed / AUR pkgver {new} (not comparable)"
+        from ..schema import PackageFact
+        from ..verdict import inconclusive_reason
+
+        # No "AUR pkgver": the AUR side is its declared version when one can
+        # be read, and no bare pkgver phrase survives anyway.  The review
+        # row and the inspect version line must name the same cause, or the
+        # same comparison disagrees with itself between the two surfaces.
+        reason = inconclusive_reason(PackageFact(
+            old_version=result.get("old_version"),
+            new_version=result.get("new_version"),
+            coverage_gaps=result.get("coverage_gaps") or [],
+        ))
+        return f"{old} installed / {new} declared in the AUR (not comparable: {reason})"
     return f"{old}  \u2192  {new}"
 
 
 
 
 
-def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None):
+def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None, required_by=None, deps_only=False):
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
+    # How many needed reviewing, as opposed to how many were reviewed. The
+    # caption used to report the second number under the first one's name:
+    # `--limit 5` against 40 outdated packages printed "5 package(s) needing
+    # update and reviewed", which is not what the tool found and not what it
+    # did. The 35 it skipped went unmentioned.
+    outdated_total = len(outdated_pkgs)
 
     has_progress = HAS_RICH and not json_output and not quiet
 
@@ -142,6 +161,14 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     else:
         results = _analyze_outdated_batch(limited, None, verbose, depth=depth)
 
+    # `--deps` reverses the question the report answers: not "what does
+    # this package pull in" but "who pulls this one in". The edge list is
+    # attached to the row so every surface carries it - the JSON body
+    # included, since a field on the terminal and not in the JSON is the
+    # difference in information B11 forbids.
+    for result in results:
+        result["required_by"] = list((required_by or {}).get(result.get("package"), ()))
+
     if json_output:
         from ..config import config_fingerprint
         from ..reporting import report_body
@@ -173,12 +200,88 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
         return
 
     if HAS_RICH and not json_output:
-        _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose)
+        _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
     else:
-        _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose)
+        _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
 
 
-def _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose):
+def _summary_caption(reviewed, failed, flagged, total_installed, all_packages,
+                     outdated_total, show_score, deps_only=False) -> str:
+    """The one-line summary, counting what was found separately from what
+    was read.
+
+    These used to be the same number. `--limit 5` against 40 outdated
+    packages printed "5 package(s) needing update and reviewed": the count
+    of packages *needing an update* was silently replaced by the count of
+    packages the limit allowed through, and the 35 skipped were never
+    mentioned. A review that stops early is a coverage gap, and this tool's
+    rule for a coverage gap is that it is stated rather than absorbed.
+    """
+    if deps_only:
+        # The subject is not "packages needing an update" here, and saying
+        # so would misreport both what was reviewed and what it was
+        # reviewed out of.
+        caption = f"{reviewed} AUR dependenc{'y' if reviewed == 1 else 'ies'} reviewed"
+        if total_installed:
+            caption += f" for {total_installed} installed package(s)"
+    elif all_packages and total_installed:
+        caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
+    else:
+        caption = f"{reviewed} package(s) needing update and reviewed"
+        if total_installed:
+            caption += f" out of {total_installed} installed"
+    skipped = max(0, outdated_total - (reviewed + failed))
+    if skipped:
+        caption += (
+            f"; {skipped} more needed review and were NOT read "
+            f"(--limit); pass --limit 0 for all of them"
+        )
+    if show_score and flagged:
+        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
+    if failed:
+        caption += f", {failed} could NOT be vetted"
+    return caption
+
+
+def _finding_line(finding: dict) -> str:
+    """One finding as `file line N  description`, for either renderer.
+
+    The rule id is not added here: the description already carries it, and
+    the two renderers previously disagreed about that - the Rich one
+    printed it twice and the plain one once. A finding with no file (an
+    aggregate such as `SOURCE_BUCKET`) used to open with a stray space
+    where the filename would have been.
+    """
+    file_part = clean(finding.get("file", "") or "")
+    line = finding.get("line")
+    desc = clean(finding.get("description", ""))
+    where = f"{file_part} line {line}" if file_part and line is not None else file_part
+    return f"{where}  {desc}" if where else desc
+
+
+#: Shown once under an ordinary review, and only when there is something for
+#: it to point at. A dependency was analysed and summarised in a card, but
+#: the card is a summary: `--deps` reviews each one as a package in its own
+#: right and says which packages require it. Suppressed under `--deps`
+#: itself (already there), under `--json` (a document, not a conversation),
+#: and when nothing reported a dependency (advice about an empty set).
+_DEPS_HINT = (
+    "Tip: those dependencies are summarised, not reviewed. "
+    "`trustsight review --deps` reviews each as a package in its own right "
+    "and names what requires it; add `--depth n` for deeper levels."
+)
+
+
+def _deps_hint(results, deps_only: bool) -> str:
+    """The `--deps` recommendation, or "" when it would be noise."""
+    if deps_only:
+        return ""
+    if not any(r.get("dependencies") for r in results):
+        return ""
+    return _DEPS_HINT
+
+
+def _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total=0, deps_only=False):
     """The review render for a terminal without Rich.
 
     Extracted from ``_run_analysis_loop`` so it can be exercised: a renderer
@@ -195,6 +298,18 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
             typer.echo()
             continue
 
+        # `--verbose` means the full report, on both renderers. The Rich
+        # path has always handed off to the inspect panel here; this one
+        # did not, so asking for more detail without Rich installed
+        # silently returned the same summary - the drop this function's
+        # docstring exists to prevent.
+        if verbose and r.get("_verbose_fact"):
+            from .inspect import _inspect_plain
+
+            _inspect_plain(r["_verbose_fact"], verbose=verbose,
+                           show_score=show_score, show_risk=show_risk)
+            continue
+
         typer.echo(f"{clean(r['package'])} {_version_cell(r)}")
 
         findings = r.get("findings", [])
@@ -208,13 +323,7 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         else:
             typer.echo("  The update is not trivial. Review it.")
             for f in findings:
-                file_part = f.get("file", "")
-                line = f.get("line")
-                desc = f.get("description", "")
-                if line is not None:
-                    typer.echo(f"  {clean(file_part)} line {line}   {clean(desc)}")
-                else:
-                    typer.echo(f"  {clean(file_part)}           {clean(desc)}")
+                typer.echo(f"  {_finding_line(f)}")
             if file_changes:
                 for fc in file_changes:
                     status = fc.get("status", "")
@@ -228,12 +337,16 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
             typer.echo(f"  Score: {score_val}/100 ({risk})")
         elif show_risk and not r.get("failed"):
             label = r.get("risk_label") or r.get("risk", "")
-            typer.echo(f"  Risk: ({label})")
+            typer.echo(f"  Risk: {label}")
 
         for entry in r.get("changes", []):
             typer.echo(f"  ~ {clean(entry)}")
+        required_by_names = r.get("required_by") or []
+        if required_by_names:
+            typer.echo(f"  Required by: {clean(', '.join(required_by_names))}")
         for line in dependency_lines_plain(r.get("dependencies", []),
-                                           show_score=show_score):
+                                           show_score=show_score,
+                                           show_risk=show_risk):
             typer.echo(line)
         if r.get("depth_truncated"):
             typer.echo(f"  [{DEPTH_TRUNCATED_NOTE}]")
@@ -260,20 +373,17 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
     flagged = sum(1 for r in results if (r["score"] or 0) > 20)
     failed = sum(1 for r in results if r.get("failed"))
     reviewed = len(results) - failed
-    if all_packages and total_installed:
-        caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
-    else:
-        caption = f"{reviewed} package(s) needing update and reviewed"
-        if total_installed:
-            caption += f" out of {total_installed} installed"
-    if show_score and flagged:
-        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
-    if failed:
-        caption += f", {failed} could NOT be vetted"
+    caption = _summary_caption(
+        reviewed, failed, flagged, total_installed, all_packages,
+        outdated_total, show_score, deps_only,
+    )
     typer.echo(caption)
+    hint = _deps_hint(results, deps_only)
+    if hint:
+        typer.echo(hint)
 
 
-def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose):
+def _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total=0, deps_only=False):
     from rich.panel import Panel
     from rich.text import Text
 
@@ -306,15 +416,14 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         else:
             table.add_row("Status", "The update is not trivial. Review it.")
             for f in r.get("findings", []):
-                file_part = f.get("file", "")
-                line = f.get("line")
-                rule_id = f.get("rule_id", "")
-                desc = f.get("description", "")
-                suffix = f" [{clean(rule_id)}]" if rule_id else ""
-                if line is not None:
-                    table.add_row("", Text(f"{clean(file_part)} line {line}{suffix}  {clean(desc)}"))
-                else:
-                    table.add_row("", Text(f"{clean(file_part)}{suffix}  {clean(desc)}"))
+                # The description already ends with `[R001]` - `verdict._render`
+                # puts it there, and the JSON body and the plain renderer both
+                # carry it that way. Adding a second copy in front printed
+                # every finding as
+                #   `PKGBUILD line 4 [R001]  Remote Script Execution: ... [R001]`
+                # and made this renderer disagree with the plain one about the
+                # same finding.
+                table.add_row("", Text(clean(_finding_line(f))))
 
         file_changes = r.get("file_changes", [])
         if file_changes:
@@ -332,6 +441,14 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             for entry in changes[1:]:
                 table.add_row("", Text(clean(entry)))
 
+        # `--deps`: the subject of this panel is a dependency, so the
+        # relationship worth naming is the reverse one. A dependency nobody
+        # in the reviewed set requires is not what was asked for; one that
+        # three packages require is the reason to read it first.
+        required_by_names = r.get("required_by") or []
+        for position, name in enumerate(required_by_names):
+            table.add_row("Required by" if position == 0 else "", Text(clean(name)))
+
         # Dependency mini-cards: each is its own analysis, so it gets its
         # own card nested in this one rather than a line in this package's
         # finding list.
@@ -339,7 +456,8 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         if deps:
             table.add_row("", "")
             table.add_row("Dependencies", "")
-            for card in dependency_cards_rich(deps, show_score=show_score):
+            for card in dependency_cards_rich(deps, show_score=show_score,
+                                       show_risk=show_risk):
                 table.add_row("", card)
             if r.get("depth_truncated"):
                 table.add_row("", Text(DEPTH_TRUNCATED_NOTE, style="yellow"))
@@ -378,7 +496,7 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         if show_score and not r.get("failed"):
             table.add_row("Score", f"{score_val}/100 ({label})")
         elif show_risk and not r.get("failed"):
-            table.add_row("Risk", f"({label})")
+            table.add_row("Risk", clean(label))
 
         panel = Panel(table, title=Text(clean(r["package"])), border_style=border)
         con.print(panel)
@@ -386,23 +504,23 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
     flagged = sum(1 for r in results if (r["score"] or 0) > 20)
     failed = sum(1 for r in results if r.get("failed"))
     reviewed = len(results) - failed
-    if all_packages and total_installed:
-        caption = f"{reviewed} package(s) reviewed out of {total_installed} installed"
-    else:
-        caption = f"{reviewed} package(s) needing update and reviewed"
-        if total_installed:
-            caption += f" out of {total_installed} installed"
-    if show_score and flagged:
-        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
-    if failed:
-        caption += f", {failed} could NOT be vetted"
+    caption = _summary_caption(
+        reviewed, failed, flagged, total_installed, all_packages,
+        outdated_total, show_score, deps_only,
+    )
     con.print(caption)
+    hint = _deps_hint(results, deps_only)
+    if hint:
+        con.print(f"[dim]{hint}[/]")
 
 
 def register_commands(app: typer.Typer):
     @app.command()
     def review(
-        limit: int = typer.Option(0, "--limit", help="Max packages to review (0 = unlimited)"),
+        limit: int = typer.Option(
+            None, "--limit",
+            help="Max packages to review (0 = unlimited; default from "
+                 "[limits] default_review_limit)"),
         verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules per package"),
         quiet: bool = typer.Option(False, "--quiet", help="Suppress progress output"),
         score: bool = typer.Option(False, "--score", help="Show aggregate trust score"),
@@ -416,6 +534,12 @@ def register_commands(app: typer.Typer):
             None, "--depth",
             help="AUR dependency levels to analyse: 0 off, 1 default, n levels, "
                  "-1 every level (bounded).",
+        ),
+        deps_only: bool = typer.Option(
+            False, "--deps",
+            help="Review the AUR dependencies of the discovered packages "
+                 "instead of the packages themselves. Honours --depth, and "
+                 "each dependency reports which packages require it.",
         ),
     ):
         """Review AUR packages for suspicious updates."""
@@ -464,6 +588,15 @@ def register_commands(app: typer.Typer):
                 print()
 
             _step("Discovering packages...")
+            # The configured default applies only when the flag is absent.
+            # `--limit 0` is an explicit request for all of them and must
+            # not be overridden by a config value, which is why the option
+            # defaults to None rather than to 0.
+            if limit is None:
+                try:
+                    limit = int(config.get("limits", {}).get("default_review_limit", 0))
+                except (TypeError, ValueError):
+                    limit = 0
             effective_limit = limit
 
             if limit < 0:
@@ -548,7 +681,29 @@ def register_commands(app: typer.Typer):
                 init_progress.stop()
                 init_progress = None
 
-            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth)
+            required_by = {}
+            if deps_only:
+                changed_installed, required_by, closure_note = _dependency_entries(
+                    changed_installed, depth, config, _warn,
+                )
+                if closure_note and not json_output:
+                    _print_colored(closure_note, "yellow")
+                if not changed_installed:
+                    if json_output:
+                        typer.echo(json.dumps([]))
+                    else:
+                        _print_colored(
+                            "No AUR dependencies found for the discovered packages.",
+                            "green",
+                        )
+                    return
+                # The dependencies are the subject now, so their own closure
+                # is not walked again underneath them: `--deps --depth 2`
+                # means two levels of dependencies to review, not two levels
+                # below each of them.
+                depth = 0
+
+            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only)
         finally:
             if init_progress is not None:
                 init_progress.stop()

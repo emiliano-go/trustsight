@@ -250,6 +250,15 @@ class Report:
     depth_truncated: bool = False
     """The dependency walk stopped before the closure was exhausted."""
 
+    required_by: tuple = ()
+    """Packages in the reviewed set that declare this one as a dependency.
+
+    The reverse of :attr:`dependencies`, and populated by
+    ``review --deps``, where the subject of the report is a dependency and
+    the useful question is who needs it. Empty on an ordinary review, where
+    the subject is the thing that was asked for.
+    """
+
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
     _evaluated: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -684,6 +693,7 @@ def _report_from_fact(fact) -> Report:
         dependency_changes={k: sorted(v) for k, v in fact.dependency_changes.items()},
         dependencies=tuple(getattr(fact, "dependencies", ())),
         depth_truncated=bool(getattr(fact, "depth_truncated", False)),
+        required_by=tuple(raw.get("required_by", ()) if raw else ()),
         first_seen=fact.first_seen,
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
@@ -715,10 +725,15 @@ def _report_from_result(row: dict) -> Report:
         evaluated["old_version"] = row.get("old_version", "")
         evaluated["new_version"] = row.get("new_version", "")
         evaluated["failed"] = bool(row.get("failed", False))
+        # `--deps` is a property of the run, not of the fact: the fact knows
+        # what this package depends on, and the row knows who depends on it.
+        evaluated["required_by"] = list(row.get("required_by", ()))
+        raw["required_by"] = list(row.get("required_by", ()))
         return replace(
             report,
             old_version=row.get("old_version", ""),
             new_version=row.get("new_version", ""),
+            required_by=tuple(row.get("required_by", ())),
             _raw=raw,
             _evaluated=evaluated,
         )
@@ -745,6 +760,7 @@ def _report_from_result(row: dict) -> Report:
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
         version_comparison=evaluated["version_comparison"],
+        required_by=tuple(evaluated.get("required_by", ())),
         _raw=raw,
         _evaluated=_body_source(evaluated, row=row),
     )
@@ -982,6 +998,7 @@ class TrustSight:
         on_progress: Optional[ProgressHook] = None,
         on_warning: Optional[Callable[[str], None]] = None,
         depth: Optional[int] = None,
+        deps: bool = False,
     ) -> ReviewResult:
         """Review installed AUR packages: what ``trustsight review`` does.
 
@@ -1001,8 +1018,13 @@ class TrustSight:
         :param all_repos: auto-detect local repos from ``pacman.conf``.
         :param all_packages: review every discovered package, not only the
             ones with a newer AUR version.
+        :param deps: review the AUR *dependencies* of the discovered
+            packages instead of the packages themselves, as
+            ``review --deps`` does.  Each report then carries
+            :attr:`Report.required_by`.  Honours *depth* as the number of
+            dependency levels to review.
         """
-        from .review import analyze_outdated_batch, discover_packages
+        from .review import analyze_outdated_batch, dependency_entries, discover_packages
 
         _validate_limit(limit, name="limit", maximum=MAX_API_PACKAGES)
         if packages is not None:
@@ -1037,6 +1059,15 @@ class TrustSight:
                 return ReviewResult(metadata_bootstrapped=True)
             entries = discovered
 
+        required_by: dict[str, list[str]] = {}
+        if deps:
+            entries, required_by, _note = dependency_entries(
+                entries, depth, self.config(), on_warning
+            )
+            # The dependencies are the subject now, so their own closure is
+            # not walked again underneath them.
+            depth = 0
+
         if limit:
             entries = entries[:limit]
         if not entries:
@@ -1046,6 +1077,12 @@ class TrustSight:
         # lets a review report carry everything an inspect report does.
         rows = analyze_outdated_batch(entries, _hook(on_progress), verbose=True,
                                       depth=depth)
+
+        # Same field on every surface: the CLI attaches this to the row it
+        # renders and serialises, so the API attaches it to the row it turns
+        # into a Report.
+        for row in rows:
+            row["required_by"] = list(required_by.get(row.get("package"), ()))
 
         reports, failures = [], []
         for row in rows:

@@ -42,6 +42,86 @@ def _orphan_state(aur: Optional[dict]) -> Optional[bool]:
     return not aur.get("Maintainer")
 
 
+def metadata_ttl_minutes() -> int:
+    """Minutes a metadata snapshot may be used before it is refetched.
+
+    ``0`` (or a negative or unparsable value) disables the refresh, which is
+    the pre-0.13.2 behaviour: the snapshot is used for as long as it exists.
+    """
+    from .full_aur.metadata import DEFAULT_TTL_MINUTES
+
+    cfg = load_config().get("discovery", {})
+    try:
+        configured = int(cfg.get("metadata_ttl_minutes", DEFAULT_TTL_MINUTES))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, configured)
+
+
+def _humanised_age(seconds: Optional[float]) -> str:
+    if seconds is None:
+        return "of unknown age"
+    if seconds < 3600:
+        return f"{int(seconds // 60)} minutes old"
+    if seconds < 172800:
+        return f"{int(seconds // 3600)} hours old"
+    return f"{int(seconds // 86400)} days old"
+
+
+def _refreshed_metadata(meta, snapshot_time, meta_path, on_download, on_notice, on_warn):
+    """Return *meta*, refetched first if the snapshot has gone stale.
+
+    A stale snapshot is not a degraded answer, it is a wrong one: every
+    installed package resolves to the version the snapshot recorded, so a
+    machine with pending AUR updates is told it has none.  The snapshot was
+    downloaded once on first run and then reused forever, so this was every
+    installation's steady state rather than an edge case.
+
+    A refresh that fails keeps the old snapshot and warns, because the
+    alternative - reporting nothing - is the same silent lie.
+    """
+    from .full_aur.metadata import fetch_metadata, save_metadata, snapshot_age_seconds
+
+    ttl = metadata_ttl_minutes()
+    if not ttl:
+        return meta
+
+    age = snapshot_age_seconds(snapshot_time)
+    if age is not None and age < ttl * 60:
+        return meta
+
+    if on_notice:
+        on_notice(f"AUR metadata snapshot is {_humanised_age(age)}; refreshing.")
+
+    try:
+        fresh = fetch_metadata(on_progress=on_download) if on_download else fetch_metadata()
+    except Exception as exc:
+        # debug, not warning: an unreachable AUR is an ordinary condition,
+        # and the handler prints a traceback at warning level - which would
+        # bury the one line the user needs under a stack from urllib.
+        log.debug("metadata refresh failed", exc_info=True)
+        if on_warn:
+            on_warn(
+                f"could not refresh the AUR metadata snapshot ({exc}); the "
+                f"snapshot in use is {_humanised_age(age)}, so a package "
+                "updated since then will not be reported as outdated."
+            )
+        return meta
+
+    if not fresh:
+        # An empty dump would overwrite a usable snapshot with nothing and
+        # then report every package as unknown.  Keep what works.
+        if on_warn:
+            on_warn(
+                "the AUR metadata refresh returned no packages; keeping the "
+                f"snapshot from {_humanised_age(age)}."
+            )
+        return meta
+
+    save_metadata(fresh, path=meta_path)
+    return fresh
+
+
 def discover_packages(
     repos: Optional[list[str]] = None,
     include_foreign: bool = False,
@@ -63,12 +143,17 @@ def discover_packages(
     """
     repos = repos or []
     try:
-        from .full_aur.metadata import fetch_metadata, load_metadata, save_metadata
+        from .full_aur.metadata import (
+            fetch_metadata,
+            load_snapshot,
+            save_metadata,
+            snapshot_age_seconds,
+        )
         from .discovery import _vercmp
 
         meta_path = CONFIG_DIR / "full-aur-meta.json"
-        meta = load_metadata(path=meta_path)
-        if meta is None:
+        snapshot = load_snapshot(path=meta_path)
+        if snapshot is None:
             meta = fetch_metadata(on_progress=on_download) if on_download else fetch_metadata()
             save_metadata(meta, path=meta_path)
             if on_notice:
@@ -76,6 +161,11 @@ def discover_packages(
                     "Downloaded AUR metadata snapshot. Run again to review changes."
                 )
             return None, 0
+
+        meta, snapshot_time = snapshot
+        meta = _refreshed_metadata(
+            meta, snapshot_time, meta_path, on_download, on_notice, on_warn
+        )
 
         installed = get_installed_packages(
             repos, include_foreign, all_repos, all_packages, on_warn=on_warn
@@ -156,6 +246,57 @@ def get_installed_packages(
         sources.update(get_installed_foreign())
 
     return [{"name": name, "current_version": ver} for name, ver in sources]
+
+
+def dependency_entries(discovered, depth, config=None, on_warn=None):
+    """Turn the discovered packages into the dependency set to review.
+
+    Returns ``(entries, required_by, note)``. The roots are dropped: the
+    request was for their dependencies, and a package that is both a root
+    and somebody's dependency is already being reviewed under its own name.
+
+    The closure is walked over metadata only - no analysis - so the cost of
+    deciding *what* to review stays proportional to the graph rather than to
+    the number of recipes in it.
+
+    It lives here rather than in the CLI because the API offers the same
+    review, and a field the API can carry (``Report.required_by``) but never
+    populate is a field that does nothing.
+    """
+    config = config if config is not None else load_config()
+    from .depth import default_metadata, dependency_closure, resolve_depth
+
+    roots = [entry["name"] for entry in discovered]
+    resolved = resolve_depth(depth, config)
+    if resolved == 0:
+        # `--deps --depth 0` asks for the dependencies of nothing.
+        return [], {}, ""
+
+    try:
+        closure = dependency_closure(
+            roots, depth=resolved, metadata=default_metadata()
+        )
+    except Exception as exc:  # metadata unavailable, RPC down
+        log.warning("dependency closure failed", exc_info=True)
+        if on_warn:
+            on_warn(f"could not resolve the dependency closure ({exc})")
+        return [], {}, ""
+
+    installed = {}
+    try:
+        installed = {
+            pkg["name"]: pkg.get("current_version", "")
+            for pkg in get_installed_packages(include_foreign=True)
+        }
+    except Exception:
+        log.debug("installed lookup failed for --deps", exc_info=True)
+
+    entries = [
+        {"name": name, "current_version": installed.get(name, "")}
+        for name in closure.names
+    ]
+    note = closure.reason if closure.truncated else ""
+    return entries, dict(closure.dependents), note
 
 
 def default_workers() -> int:

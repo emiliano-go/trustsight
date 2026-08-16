@@ -236,6 +236,90 @@ def walk_dependencies(
     return result
 
 
+@dataclass
+class DependencyClosure:
+    """The dependency graph of a set of roots, before anything is analysed.
+
+    ``walk_dependencies`` answers "what does this one package pull in", and
+    its shared ``already_seen`` means a dependency twenty packages need is
+    analysed once and attributed to whichever root reached it first. That is
+    the right trade for a per-package report and the wrong one for a
+    dependency-first view, where the interesting question is the reverse:
+    *who* needs this. So the edges are collected separately from the
+    analysis, and every edge is kept.
+    """
+
+    #: Dependency name -> the level it was first reached at (1 = direct).
+    levels: dict[str, int] = field(default_factory=dict)
+    #: Dependency name -> the packages that declare it, in discovery order.
+    dependents: dict[str, list[str]] = field(default_factory=dict)
+    truncated: bool = False
+    reason: str = ""
+
+    @property
+    def names(self) -> list[str]:
+        """Dependencies, shallowest first, then alphabetically."""
+        return sorted(self.levels, key=lambda n: (self.levels[n], n))
+
+
+def dependency_closure(
+    roots: Iterable[str], *, depth: int, metadata: MetadataProvider
+) -> DependencyClosure:
+    """Every AUR dependency of *roots*, with who depends on what.
+
+    Bounded by the same two ceilings as :func:`walk_dependencies`, for the
+    same reason: the graph is written by the party under review, so it does
+    not get to decide how many packages this run analyses.
+    """
+    closure = DependencyClosure()
+    if depth == 0:
+        return closure
+
+    roots = list(roots)
+    root_set = set(roots)
+    frontier: list[str] = list(roots)
+    visited: set[str] = set(roots)
+    level = 1
+
+    while frontier and _wanted(level, depth):
+        nxt: list[str] = []
+        for parent in frontier:
+            for name, _via, _p in _aur_children(parent, metadata, set()):
+                # A root is not reported as its own dependency, but the edge
+                # is still real and worth recording: "libfoo is required by
+                # bar" is true whether or not bar is also being reviewed.
+                dependents = closure.dependents.setdefault(name, [])
+                if parent not in dependents:
+                    dependents.append(parent)
+                if name in root_set or name in visited:
+                    continue
+                if len(closure.levels) >= MAX_DEPTH_NODES:
+                    closure.truncated = True
+                    closure.reason = (
+                        f"stopped after {MAX_DEPTH_NODES} dependencies; the "
+                        "closure is larger than one run analyses"
+                    )
+                    return closure
+                visited.add(name)
+                closure.levels[name] = level
+                nxt.append(name)
+        frontier = nxt
+        level += 1
+
+    if frontier and depth == -1 and level > MAX_DEPTH_LEVELS:
+        closure.truncated = True
+        closure.reason = (
+            f"stopped at {MAX_DEPTH_LEVELS} levels; the closure is deeper "
+            "than one run walks"
+        )
+    # Edges into a root are recorded above but a root is never a dependency
+    # here, so drop the entries nothing will report.
+    for name in list(closure.dependents):
+        if name not in closure.levels:
+            del closure.dependents[name]
+    return closure
+
+
 def _aur_children(
     name: str, metadata: MetadataProvider, seen: set[str]
 ) -> Iterable[tuple[str, str, str]]:

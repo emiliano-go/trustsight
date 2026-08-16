@@ -162,8 +162,15 @@ def _dep_fields(dep):
     )
 
 
-def dependency_cards_rich(dependencies, *, show_score=False):
-    """A Rich renderable holding one mini-card per analysed dependency."""
+def dependency_cards_rich(dependencies, *, show_score=False, show_risk=False):
+    """A Rich renderable holding one mini-card per analysed dependency.
+
+    The band is withheld unless it was asked for, like everywhere else. It
+    used to be shown whenever it was known, so a plain `review` that
+    withheld the band on the package itself printed `Risk (High)` for its
+    dependency - and `--risk` changed nothing, because the flag was never
+    passed down here at all.
+    """
     from rich.panel import Panel
     from rich.table import Table
     from rich.text import Text
@@ -183,8 +190,10 @@ def dependency_cards_rich(dependencies, *, show_score=False):
             inner.add_row("Findings", Text(str(findings)))
             if show_score:
                 inner.add_row("Score", Text(f"{score}/100 ({clean(label)})"))
-            elif label:
-                inner.add_row("Risk", Text(f"({clean(label)})"))
+            elif show_risk and label:
+                # No parentheses: they belong to the score line, where they
+                # qualify a number. Alone they read as an aside.
+                inner.add_row("Risk", Text(clean(label)))
         for gap in gaps:
             inner.add_row("Not vetted", Text(clean(GAP_REASONS.get(gap, gap)), style="yellow"))
 
@@ -199,7 +208,7 @@ def dependency_cards_rich(dependencies, *, show_score=False):
     return cards
 
 
-def dependency_lines_plain(dependencies, *, show_score=False):
+def dependency_lines_plain(dependencies, *, show_score=False, show_risk=False):
     """The same information, as indented plain-text lines."""
     from ..scoring import FLAG_THRESHOLD
 
@@ -213,8 +222,8 @@ def dependency_lines_plain(dependencies, *, show_score=False):
         head = f"{indent}[dep L{depth}] {clean(name)}: {findings} finding(s)"
         if show_score:
             head += f", {score}/100 ({clean(label)})"
-        elif label:
-            head += f" ({clean(label)})"
+        elif show_risk and label:
+            head += f", {clean(label)}"
         if score > FLAG_THRESHOLD:
             head += "  <- flagged"
         out.append(head)

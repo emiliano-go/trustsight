@@ -36,6 +36,7 @@ Every object carries:
 | `first_seen` | `true` when there is no prior history for this package. |
 | `is_trivial` | `true` when only `pkgver` and checksums moved. |
 | `coverage_gaps` | What the run could **not** examine. Always present. |
+| `required_by` | Under [`--deps`](../reference/cli.md#trustsight-review), the packages that declare this one. Empty otherwise, and always present, so a gate never has to test for the key. |
 
 `score`, `risk` and `risk_label` are added when `--score` or `--risk` is passed.
 `risk` is the bare band; `risk_label` is the same band qualified when the run was

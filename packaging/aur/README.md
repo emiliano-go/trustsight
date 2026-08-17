@@ -103,7 +103,7 @@ No AUR dependencies are required.
 The novelty seed is no longer bundled inside the wheel; it is distributed as
 the signed `baseline-seed.tar.gz` release asset. `trustsight seed fetch` fetches
 and verifies it explicitly. The only automatic release-channel fetch is the
-first seed import performed by `trustsight inspect` when `seed.auto_import` is
-enabled; `trustsight ioc update` is the other eligible release-fetch command.
-Analysis itself never fetches release assets. On a machine without network
-access, an eligible seed import starts from a cold database.
+first seed import performed by `trustsight review` or `trustsight inspect`
+when `seed.auto_import` is enabled; `trustsight ioc update` is the other
+eligible release-fetch command. On a machine without network access, an
+eligible seed import starts from a cold database.

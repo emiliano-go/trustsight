@@ -1,8 +1,24 @@
-name: Publish to PyPI
+name: Release software
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Software tag to create, e.g. v0.13.2
+        required: true
+        type: string
+      target:
+        description: Commit, branch, or SHA to release
+        default: master
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: software-release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
   classify:
@@ -13,7 +29,7 @@ jobs:
     steps:
       - id: tag
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ inputs.tag }}
         run: |
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "is_software_release=true" >> "$GITHUB_OUTPUT"
@@ -21,42 +37,129 @@ jobs:
             echo "is_software_release=false" >> "$GITHUB_OUTPUT"
           fi
 
-  build:
-    name: Build distribution
+  preflight:
+    name: Build and verify release artifacts
     needs: classify
     if: needs.classify.outputs.is_software_release == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.head.outputs.sha }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Build package
-        run: uv build
-
-      - name: Upload distributions
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: dist
-          path: dist/
+          ref: ${{ inputs.target }}
+          fetch-depth: 0
+
+      - id: head
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      - run: uv sync --locked --extra dev --python 3.12
+      - run: uv run pytest
+      - run: uv build --out-dir dist
+      - run: uv run --with twine twine check dist/*
+
+      - name: Build the deterministic AUR source archive
+        id: release_tar
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          version="${TAG#v}"
+          path="release/trustsight-${version}.tar.gz"
+          uv run python scripts/build_release_tarball.py \
+            --rev "$GITHUB_SHA" \
+            --output "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Verify versions, artifact metadata, and checksums
+        run: |
+          uv run python scripts/verify_release.py \
+            --tag "${{ inputs.tag }}" \
+            --dist dist \
+            --release-tarball "${{ steps.release_tar.outputs.path }}" \
+            --write-checksums release/SHA256SUMS
+
+      - name: Smoke test wheel and source distribution
+        run: |
+          uv run --isolated --with dist/*.whl trustsight --version
+          uv build --wheel --out-dir rebuilt dist/*.tar.gz
+          uv run --isolated --with rebuilt/*.whl trustsight --version
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-assets
+          path: |
+            dist/
+            release/
+            packaging/aur/
+          include-hidden-files: true
+
+  aur:
+    name: Build the AUR package
+    needs: [classify, preflight]
+    if: needs.classify.outputs.is_software_release == 'true'
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed base-devel python python-build python-installer python-wheel python-hatchling python-pytest python-pygit2 python-tldextract python-rich python-typer python-cryptography
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: release-assets
+          path: artifacts
+
+      - name: Build, test, and install the package users receive
+        run: |
+          set -eu
+          useradd -m builder
+          mkdir -p /tmp/srcdest /tmp/pkgbuild
+          cp artifacts/release/*.tar.gz /tmp/srcdest/
+          cp artifacts/packaging/aur/PKGBUILD artifacts/packaging/aur/.SRCINFO /tmp/pkgbuild/
+          chown -R builder:builder /tmp/srcdest /tmp/pkgbuild
+          su builder -c 'cd /tmp/pkgbuild && SRCDEST=/tmp/srcdest makepkg -si --noconfirm'
+          trustsight --version
 
   publish:
-    name: Publish to PyPI
-    needs: [classify, build]
+    name: Publish verified release
+    needs: [classify, preflight, aur]
     if: needs.classify.outputs.is_software_release == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
       url: https://pypi.org/project/trustsight
     permissions:
+      contents: write
       id-token: write
     steps:
-      - name: Download distributions
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: dist
-          path: dist/
+          name: release-assets
+          path: artifacts
+
+      - name: Create a private draft and upload verified assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          TARGET: ${{ needs.preflight.outputs.target }}
+        run: |
+          set -eu
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::release $TAG already exists"
+            exit 1
+          fi
+          gh release create "$TAG" --target "$TARGET" --draft --generate-notes --title "$TAG"
+          gh release upload "$TAG" artifacts/release/* artifacts/dist/*.whl
+          mkdir /tmp/release-assets
+          gh release download "$TAG" --dir /tmp/release-assets
+          (cd /tmp/release-assets && sha256sum --check SHA256SUMS)
+
+      - name: Publish the complete GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ inputs.tag }}" --draft=false
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: artifacts/dist/

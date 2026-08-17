@@ -27,7 +27,7 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 uv run pytest
 ```
 
-The current checkout collects **2,613 tests**; the exact count changes as coverage is added.
+Run `uv run pytest` for the current test count; it changes as coverage is added.
 
 ### Run a single test
 

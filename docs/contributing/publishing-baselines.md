@@ -227,26 +227,19 @@ assets are named `baseline-ioc-<source>-<incident>-manifest.json` and
 equal to `<source>-<incident>` and `url` pointing at the release channel;
 see [configuration](../reference/configuration.md#baselinesiocfeeds).
 
-## Dispatch test (manual verification)
+## Prepare a baseline release
 
-To prove the automated pipeline end to end without publishing anything, run
-the release workflow manually:
+Create a draft `baseline-<date>` release, attach the required
+`baseline-corpus.tar.zst`, then run the release workflow against that draft:
 
 ```bash
-gh workflow run baselines.yml
+gh workflow run baselines.yml -f tag=baseline-2026-08-17
 ```
 
-Expected output:
-
-- `Check for existing seed`: passes (there is no release to inspect on manual
-  dispatch, so the job reports the seed as missing).
-- `Download the required corpus baseline`: exits 1 because manual dispatch
-  has no release-event tag (**by design**).
-
-Manual dispatch is therefore only a check that the workflow reaches its
-required-release guard. It does not build a fallback seed, write the signing
-key, sign assets, or upload anything. Run it from a published `baseline-*`
-release to exercise the build and signing path.
+The workflow refuses a missing corpus baseline, never overwrites an existing
+asset, and uploads signatures with the complete baseline family. Verify the
+assets on the draft, then publish it manually. This avoids exposing a channel
+where clients can observe incomplete or replaced baseline assets.
 
 ## Key compromise and rotation
 

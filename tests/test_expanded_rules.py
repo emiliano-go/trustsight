@@ -189,6 +189,9 @@ def test_r052_ignores_skel_dotfile_in_pkgdir():
     '+  chmod 4755 "$pkgdir/usr/bin/tool"',
     '+  chmod 2755 "$pkgdir/usr/bin/tool"',
     '+  chmod u+s "$pkgdir/usr/bin/tool"',
+    '+  chmod --mode=4755 "$pkgdir/usr/bin/tool"',
+    '+  chmod --mode 4755 "$pkgdir/usr/bin/tool"',
+    '+  chmod -- 4755 "$pkgdir/usr/bin/tool"',
 ])
 def test_r053_setuid_inside_package_root(line):
     assert fires("R053", [line])
@@ -199,6 +202,10 @@ def test_r053_setuid_inside_package_root(line):
 @pytest.mark.parametrize("line", [
     '+  chmod u+s "/usr/bin/mullvad-exclude"',
     "+  chmod 4755 /usr/local/bin/helper",
+    '+  chmod --mode=4755 /usr/local/bin/helper',
+    '+  chmod --mode 4755 /usr/local/bin/helper',
+    '+  chmod -- 4755 /usr/local/bin/helper',
+    '+  chmod 4755 -- /usr/local/bin/helper',
 ])
 def test_r059_setuid_outside_package_root(line):
     """An absolute path is the live filesystem, not the staged package."""

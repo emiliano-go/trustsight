@@ -66,6 +66,24 @@ def test_review_profiles_are_validated_and_change_the_fingerprint(monkeypatch):
     assert config_module.config_fingerprint() != quiet_fingerprint
 
 
+def test_rule_suppression_changes_the_fingerprint(monkeypatch):
+    import trustsight.config as config_module
+
+    rule = {
+        "id": "R017",
+        "pattern": "chmod.*\\+s",
+        "severity": "HIGH",
+        "category": "privilege",
+        "exclude_if_matches": ["R053"],
+    }
+    monkeypatch.setattr(config_module, "load_config", lambda: {})
+    monkeypatch.setattr(config_module, "load_thresholds", lambda: {})
+    monkeypatch.setattr(config_module, "load_rules", lambda: [rule])
+    first = config_module.config_fingerprint()
+    rule["exclude_if_matches"] = ["R059"]
+    assert config_module.config_fingerprint() != first
+
+
 def test_load_config_bucket_weights(tmp_path, monkeypatch):
     cfg_dir = tmp_path / ".config" / "trustsight"
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)

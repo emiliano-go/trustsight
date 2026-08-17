@@ -46,7 +46,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `privilege`
-- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:[2467][0-7]{3}\b|[ugoa]*\+s\b)\s+(?!["\x27]?/)`
+- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+(?!["\x27]?/)|\s+(?!--\s)(?!["\x27]?/))`
 - **Description:** Setuid or setgid applied to a path being staged into the package. Detects both octal (`4755`, `2755`) and symbolic (`u+s`) forms; ordinary modes such as `644`, `755` and `+x` do not match. Chromium's sandbox helper legitimately requires `4755`, so this fires on essentially every Electron package. Measured across the benign corpus, MEDIUM changes **no** package's risk band; the evidence stays visible in the tiered breakdown without reclassifying routine updates. At HIGH it would have reclassified every Electron package as Medium.
 
 ### R059: Setuid Or Setgid Bit Set Outside Package Root {#r059}
@@ -54,7 +54,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `privilege`
-- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:[2467][0-7]{3}\b|[ugoa]*\+s\b)\s+["\x27]?/`
+- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+["\x27]?/|\s+(?!--\s)["\x27]?/)`
 - **Description:** The same operation against an absolute path. This touches the live filesystem rather than `$pkgdir`, so it is a privilege change on the build host and not packaging. Split from R053 because the two are materially different: `chmod u+s "$pkgdir/opt/x/chrome-sandbox"` is ordinary Electron packaging, while `chmod u+s "/usr/bin/helper"` is not.
 
 ### R054: Persistence Unit Outside Package Root {#r054}

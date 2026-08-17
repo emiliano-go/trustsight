@@ -760,7 +760,7 @@ name = "Setuid Or Setgid Bit Set In Package Root"
 # package; measured across the benign corpus it changes no package's
 # risk band at MEDIUM, which keeps the evidence visible without
 # reclassifying ordinary updates.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+(?!["\\x27]?/)'
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+(?!["\\x27]?/)|\\s+(?!--\\s)(?!["\\x27]?/))'
 severity = "MEDIUM"
 category = "privilege"
 match_target = "raw_line"
@@ -773,7 +773,7 @@ name = "Setuid Or Setgid Bit Set Outside Package Root"
 # The same operation against an absolute path touches the live
 # filesystem rather than $pkgdir, so it is a privilege change on the
 # build host and not packaging.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b)\\s+["\\x27]?/'
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+["\\x27]?/|\\s+(?!--\\s)["\\x27]?/)'
 severity = "HIGH"
 category = "privilege"
 match_target = "raw_line"
@@ -1692,7 +1692,7 @@ def config_fingerprint() -> str:
             k: rule.get(k) for k in
             ("id", "pattern", "severity", "category", "match_target",
              "scope", "added_only", "include_comments", "experimental",
-             "enabled", "weight_override")
+              "enabled", "weight_override", "exclude_if_matches")
         }
 
     config = load_config()

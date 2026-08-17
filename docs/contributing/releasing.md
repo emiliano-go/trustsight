@@ -78,24 +78,29 @@ In outline, and note that every step happens **before** the tag:
 3. Record it in `packaging/aur/PKGBUILD`, regenerate `.SRCINFO`. This commit
    touches only `packaging/`, so it cannot move the checksum from step 2.
 4. Build locally with `makepkg -si`.
-5. Tag, push, and publish the release with the tarball from step 2 attached.
+5. Push the final commit, then dispatch `Release software` with the intended
+   `vX.Y.Z` tag and commit. It builds the artifacts, verifies their metadata,
+   test-installs the wheel and sdist, builds the Arch package, creates a draft
+   release, verifies its checksum manifest, then publishes GitHub and PyPI.
 
 Nothing is repaired afterwards. There is no post-tag step that can fail and
 leave the branch inconsistent, which was the whole defect.
 
 ## What CI proves
 
-`release-pkgbuild.yml` runs on a published release and only verifies; it never
-writes to the repository. It rebuilds the tarball from the tag, asserts the
-PKGBUILD already records that checksum, asserts the published asset is those
-exact bytes, then builds and installs it with `check()` enabled so the shipped
-test suite runs against the artifact users will actually get.
+`publishing.yml` is manually dispatched before a software release exists. It
+requires the proposed tag to match `pyproject.toml`, `PKGBUILD`, `.SRCINFO`,
+wheel metadata, and sdist metadata; runs the complete test suite, `twine
+check`, isolated wheel/sdist smoke installs, and the Arch package `check()`.
+Only then does it create a private draft, upload the source archive and
+SHA-256 manifest, verify the uploaded bytes, and publish GitHub followed by
+PyPI. `release-pkgbuild.yml` remains a manual, post-publication audit.
 
 `pkgbuild.yml` runs on every push and pull request. It builds the deterministic
 tarball from the checked-out tree, verifies the PKGBUILD checksum against it,
 and installs from that artifact with `check()` enabled. It does not wait for or
-download a published release asset; release publication is verified separately
-by `release-pkgbuild.yml`.
+download a published release asset; the release workflow performs the
+additional artifact checks before publication.
 
 ## When check() runs from the tarball
 

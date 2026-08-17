@@ -1,8 +1,6 @@
 name: Verify the release artifact
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -53,7 +51,7 @@ jobs:
       - name: Resolve tag
         id: tag
         env:
-          TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+          TAG: ${{ github.event.inputs.tag }}
         run: |
           if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "is_software_release=true" >> "$GITHUB_OUTPUT"

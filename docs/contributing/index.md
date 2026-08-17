@@ -73,7 +73,7 @@ benign corpus and real case reports are the arguments that matter.
 
 | Metric             | Value                           |
 |--------------------|---------------------------------|
-| Tests              | 2,613 (current checkout)        |
+| Tests              | Run `uv run pytest` for the current checkout |
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |

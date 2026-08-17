@@ -81,7 +81,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight includes 2,613 collected tests with a zero-rate of **68.3%** (benign packages scoring 0). After tuning, re-run:
+TrustSight's current test suite has a zero-rate of **68.3%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 pytest tests/

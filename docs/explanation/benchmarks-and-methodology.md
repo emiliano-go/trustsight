@@ -1,5 +1,19 @@
 # Benchmarks and Methodology
 
+## Scope of this evaluation
+
+These results are regression measurements, not an independent efficacy study.
+The malicious side consists of **self-authored, labelled fixtures**: historical
+cases represented as fixtures plus holdout, evasion, synthetic, and campaign
+fixtures maintained in this repository. Labels express what each fixture is
+intended to exercise; they do not establish prevalence, real-world recall, or
+adversarially independent performance. The benign side is a locked,
+point-in-time AUR-derived corpus. Its measurements describe that snapshot and
+the shipped configuration, not all AUR updates or future traffic.
+
+An external blinded evaluation is the route for evidence beyond this internal
+regression suite; see [Blinded Evaluation](../contributing/blinded-evaluation.md).
+
 ## How separation is measured: per-class, not pooled
 
 The lesson that made the evaluation converge.
@@ -36,7 +50,7 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| Malicious recall | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled attack is rejected. The committed corpus is 175 fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. |
+| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 175 self-authored fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
 | Separation | benign p95 stays below malicious p5 (strict) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
 | Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
 | Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
@@ -52,18 +66,19 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the 3,739-diff locked corpus (point-in-time; re-derive with `scripts/rebaseline.py` when scoring changes):
+Measured against the 3,739-diff locked corpus (a point-in-time snapshot; re-derive with `scripts/rebaseline.py` when scoring changes):
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
 | Benign zero-rate | 68.3% | no minimum; fire-rate cap controls FPs |
 | Ruleset trigger rate | 31.7% | benign diffs that fire at least one non-INFO rule |
-| Malicious recall | 100% | 100% of labelled fixtures |
+| Benign flag rate | 13.1% | about **1 in 8** benign corpus diffs exceed the 20-point threshold |
+| Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 35 | < CRITICAL p5 (margin: 25) |
 | Tests | 2,609 (current checkout) | n/a |
 
-The numbers are not aspirational; they are the measured state of the current rule set and scoring model. A change that moves any metric past its gate is rejected in CI.
+The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 
 ## Reproducible methodology
 
@@ -86,7 +101,7 @@ The per-stratum requirement prevents the benchmark from optimizing for easy clas
 
 Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.3% zero-rate means 68.3% of benign diffs score 0. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.3% zero-rate means 68.3% of benign diffs score 0, while **13.1% exceed the 20-point threshold**: roughly one reviewer workload item per eight benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

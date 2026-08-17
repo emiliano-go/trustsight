@@ -54,6 +54,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
     from .coverage import describe as describe_coverage
     from .schema import fact_to_dict
     from .scoring import verdict_label, verdict_level
+    from .review_policy import review_policy
     from .verdict import fallback_verdict
 
     findings = finding_rows(fact)
@@ -63,9 +64,12 @@ def evaluate_fact(fact) -> dict[str, Any]:
         verdict = f"{coverage_note} {verdict}"
 
     raw = fact_to_dict(fact)
+    policy = review_policy()
     raw.update({
         "verdict": verdict,
         "risk_label": verdict_label(fact),
+        "review_profile": policy.name,
+        "review_threshold": policy.threshold,
         "version_comparison": fact.version_comparison,
     })
     return {
@@ -77,6 +81,9 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "score": fact.final_score,
         "risk": verdict_level(fact),
         "risk_label": verdict_label(fact),
+        "review_profile": policy.name,
+        "review_threshold": policy.threshold,
+        "flagged": policy.flagged(fact.final_score),
         "verdict": verdict,
         "findings": findings,
         "suppressed_rules": suppressed_rows(fact),
@@ -129,6 +136,9 @@ REPORT_KEYS = (
     "depth_truncated",
     "required_by",
     "config_fingerprint",
+    "review_profile",
+    "review_threshold",
+    "flagged",
 )
 
 #: The aggregate verdict numbers.  Withheld unless the caller asks, because
@@ -188,6 +198,9 @@ def report_body(
     arithmetic behind them is verbose.  Presentation may differ between a
     terminal and a dict; *information* may not.
     """
+    from .review_policy import review_policy
+
+    policy = review_policy()
     findings = [
         {field: finding.get(field) for field in _FINDING_FIELDS}
         for finding in evaluated.get("findings", ())
@@ -226,6 +239,9 @@ def report_body(
         "depth_truncated": bool(evaluated.get("depth_truncated", False)),
         "required_by": [str(n) for n in evaluated.get("required_by", ())],
         "config_fingerprint": evaluated.get("config_fingerprint", ""),
+        "review_profile": evaluated.get("review_profile", policy.name),
+        "review_threshold": evaluated.get("review_threshold", policy.threshold),
+        "flagged": bool(evaluated.get("flagged", False)),
     }
     if include_score:
         body["score"] = evaluated.get("score", 0)
@@ -259,6 +275,9 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "score_breakdown": findings,
         "suppressed_rules": list(row.get("suppressed_rules", ())),
     }
+    from .review_policy import review_policy
+
+    policy = review_policy()
     return {
         "package": row["package"],
         "old_version": row.get("old_version", ""),
@@ -284,6 +303,9 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "dependencies": list(row.get("dependencies", ())),
         "depth_truncated": bool(row.get("depth_truncated", False)),
         "config_fingerprint": row.get("config_fingerprint", ""),
+        "review_profile": policy.name,
+        "review_threshold": policy.threshold,
+        "flagged": policy.flagged(row.get("score") or 0),
         "raw": raw,
         "fact": None,
     }

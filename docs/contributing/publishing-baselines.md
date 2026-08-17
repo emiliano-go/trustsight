@@ -248,12 +248,37 @@ required-release guard. It does not build a fallback seed, write the signing
 key, sign assets, or upload anything. Run it from a published `baseline-*`
 release to exercise the build and signing path.
 
-## Rotation and hygiene
+## Key compromise and rotation
+
+The one pinned distribution key is a centralized trust anchor for every
+release-channel seed, corpus baseline, and transport signature. There is no
+in-band revocation mechanism: an existing build accepts any artifact that
+verifies under its pinned key. A suspected compromise must therefore be handled
+as a release incident, not by silently replacing an asset.
+
+1. Immediately disable or replace `BASELINE_SIGNING_KEY` and stop publishing
+   baseline assets under the suspected key.
+2. Generate a replacement Ed25519 key outside the repository and update the
+   pinned public key and fingerprint in a software release.
+3. Publish an incident notice naming the affected key fingerprint, affected
+   baseline tags and time window, and the replacement release users must
+   install. Do not claim that old clients can reject the compromised key.
+4. After the replacement software release is available, build and publish a
+   complete baseline family signed by the replacement key. Verify it on a
+   throwaway database using that release before publication.
+5. Operators upgrade before fetching further baselines, preserve affected tags
+   and recorded artifact digests for investigation, and re-import replacement
+   priors when the old state is no longer trusted.
+
+Routine rotation follows the same compatibility boundary: ship and announce the
+new pinned public key first, then publish assets signed by it. Old releases
+cannot verify new-key assets, so maintainers must retain the old signing path
+until supported users have upgraded or explicitly end that support.
+
+## Hygiene
 
 - The private key is held by the maintainer only (and, for automated
-  signing, the `BASELINE_SIGNING_KEY` Actions secret). Rotation means cutting
-  a release that pins a new public key in `baseline_pubkey.pem`; there is no
-  in-band revocation.
+  signing, the `BASELINE_SIGNING_KEY` Actions secret).
 - Never commit the PEM or raw private key. Delete the raw key after signing.
 - A baseline supplies **state, not rules** (A13): it cannot change a rule, a
   pattern, a weight, or a threshold, and importing one you did not build is an

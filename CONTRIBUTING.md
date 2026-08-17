@@ -27,6 +27,12 @@ TRUSTSIGHT_FULL_CALIBRATION=1 uv run pytest tests/test_calibration_gates.py
 The benign corpus is gitignored, so a fresh checkout must reconstruct the
 locked corpus before the full calibration run.
 
+The committed calibration set is a locked, point-in-time benign corpus and
+self-authored labelled fixtures. It is a regression suite, not an independent
+performance study. For externally held labels, use the
+[blinded-evaluation intake](docs/contributing/blinded-evaluation.md) rather
+than adding the material to fixtures before evaluation.
+
 All required checks should pass before a pull request is reviewed.
 
 ## Signed Commits

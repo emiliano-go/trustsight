@@ -4,9 +4,8 @@ from .schema import NoveltyContext, ScoreEntry
 
 _MATURITY_THRESHOLD = 50
 
-# The UNFLAGGED ceiling.  Measured, not chosen: it is the 95th percentile of
-# the benign corpus.  risk_level() and every consumer read this rather than
-# repeating 20.
+# The Low-band ceiling. Measured, not chosen: it is the 95th percentile of
+# the benign corpus. Review workload policy is intentionally separate.
 FLAG_THRESHOLD = 20
 
 # B10.  Verification and hardening signals are *declared* by the recipe and

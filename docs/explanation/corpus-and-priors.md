@@ -1,8 +1,14 @@
 # Corpus and Priors
 
-TrustSight uses an AUR-derived seed for URL, maintainer, and dependency
-history. Source buckets are separate: they are static configured domain lists,
-not corpus-derived frequency classifications.
+TrustSight can use an AUR-derived seed for URL, maintainer, and dependency
+history. These corpus/state features are **optional context signals**, not a
+requirement for structural detection: without a seed or local history, the tool
+runs cold, keeps the relevant novelty and dependency signals silent or
+downweights them, and reports the resulting limitation where applicable. This
+avoids treating every first-seen value as suspicious while preserving useful
+context for operators who choose to import or accumulate it. Source buckets are
+separate: they are static configured domain lists, not corpus-derived frequency
+classifications.
 
 ## How the snapshot is built
 
@@ -95,17 +101,22 @@ their bucket remains the result of the static domain classifier.
 
 ## The live corpus: cycles, the adoption feed, and watch mode
 
-The bundled snapshot is the prior. `trustsight full-aur` is how a local
-installation keeps its own corpus current, and it does more than refresh the
-priors.
+The bundled snapshot is an optional prior. `trustsight full-aur` is an optional
+operator-run feature for installations that want to keep local corpus context
+current; it is not required for ordinary package review, and it does more than
+refresh priors.
 
 Each run is one **cycle**: fetch the AUR metadata dump, diff it against the
 stored snapshot, analyse the PKGBUILDs of everything added or changed, then run
 the Class D corpus sweep across the whole delta. The sweep is the part that
 cannot be done per package. It asks who adopted ten packages this week, which
-unrelated packages started sharing a source repository, whether the corpus-wide
-introduction rate jumped, and it reports one finding per cluster with the
-members attached rather than repeating itself once per member.
+unrelated packages started sharing a source repository, and whether the
+corpus-wide introduction rate jumped; it reports one finding per cluster with
+the members attached rather than repeating itself once per member. These are
+**campaign-shape** observations about coordinated timing, ownership, and shared
+metadata. They do not reveal, download, or inspect an upstream registry payload:
+if a build step resolves a package from npm, PyPI, or another registry at build
+time, the bytes the registry serves remain outside TrustSight's visibility.
 
 Every cycle is also written to the **adoption feed**, a row per package per
 cycle in `cycle_events` recording whether it was added, modified or removed and

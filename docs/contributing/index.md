@@ -13,6 +13,8 @@ below applies to work on the tool itself.
   fixture guidelines, fire-rate gate
 - [Re-baselining](re-baselining.md): when and how to re-baseline after config or
   rule changes
+- [Blinded Evaluation](blinded-evaluation.md): submit externally held labelled
+  material without exposing labels to rule authors before evaluation
 - [Publishing Baselines](publishing-baselines.md): the maintainer workflow for
   building, signing, verifying, and publishing the corpus and IOC baselines
 - [Releasing](releasing.md): how a version reaches users, why the source

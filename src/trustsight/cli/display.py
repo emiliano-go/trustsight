@@ -175,8 +175,9 @@ def dependency_cards_rich(dependencies, *, show_score=False, show_risk=False):
     from rich.table import Table
     from rich.text import Text
 
-    from ..scoring import FLAG_THRESHOLD
+    from ..review_policy import review_policy
 
+    policy = review_policy()
     cards = []
     for dep in dependencies:
         name, depth, score, label, findings, gaps, failed, error = _dep_fields(dep)
@@ -198,7 +199,7 @@ def dependency_cards_rich(dependencies, *, show_score=False, show_risk=False):
             inner.add_row("Not vetted", Text(clean(GAP_REASONS.get(gap, gap)), style="yellow"))
 
         border = "yellow" if failed else (
-            "red" if score > FLAG_THRESHOLD else "blue")
+            "red" if policy.flagged(score) else "blue")
         cards.append(Panel(
             inner,
             title=Text(f"L{depth}  {clean(name)}"),
@@ -210,8 +211,9 @@ def dependency_cards_rich(dependencies, *, show_score=False, show_risk=False):
 
 def dependency_lines_plain(dependencies, *, show_score=False, show_risk=False):
     """The same information, as indented plain-text lines."""
-    from ..scoring import FLAG_THRESHOLD
+    from ..review_policy import review_policy
 
+    policy = review_policy()
     out = []
     for dep in dependencies:
         name, depth, score, label, findings, gaps, failed, error = _dep_fields(dep)
@@ -224,7 +226,7 @@ def dependency_lines_plain(dependencies, *, show_score=False, show_risk=False):
             head += f", {score}/100 ({clean(label)})"
         elif show_risk and label:
             head += f", {clean(label)}"
-        if score > FLAG_THRESHOLD:
+        if policy.flagged(score):
             head += "  <- flagged"
         out.append(head)
         for gap in gaps:

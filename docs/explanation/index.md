@@ -40,7 +40,7 @@ The top-level position is not ignored, it is a separate claim: [R129](../referen
 
 **History signals (Tier C)** compare new URLs and maintainers against the local database. A URL that has never been observed before in any package is globally novel; one never seen for this specific package is locally novel. Novelty is definitionally meaningless on first run, so its contribution is maturity-gated (see step 3).
 
-**Verification signals (Tier D)** inspect the end-state PKGBUILD for cryptographic metadata: checksum arrays, PGP key declarations, and GPG verify calls. These are computed over the resolved end-state, not the diff delta, because what matters is the protection in place when the package is installed, not whether that protection was added or removed in this particular update.
+**Verification signals (Tier D)** inspect the statically visible post-diff PKGBUILD text for cryptographic metadata: checksum arrays, PGP key declarations, and GPG verify calls. They are declarations, not database-backed or remote verification: TrustSight does not establish that the declared protection is valid.
 
 ### 3. Score
 
@@ -144,7 +144,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- **2,609 tests**, **68.3% zero-rate** on the 3,739-diff locked corpus, **100% malicious recall** (all labelled fixtures).
+- **2,613 tests**, **68.3% zero-rate** on the 3,739-diff locked corpus, **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

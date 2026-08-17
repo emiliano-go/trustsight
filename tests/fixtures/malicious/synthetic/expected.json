@@ -1015,12 +1015,18 @@
     "must_fire": [
       "R059"
     ],
+    "must_not_fire": [
+      "R017"
+    ],
     "relabelled": "R017 -> R059"
   },
   "R017-chmod-suid.diff": {
     "min_score": 25,
     "must_fire": [
       "R059"
+    ],
+    "must_not_fire": [
+      "R017"
     ],
     "relabelled": "R017 -> R059"
   },

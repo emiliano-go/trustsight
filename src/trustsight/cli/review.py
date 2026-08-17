@@ -82,11 +82,6 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
         if progress is not None:
             progress.stop()
 
-    if json_output and discovered[0] is None:
-        typer.echo(json.dumps({
-            "status": "metadata_downloaded",
-            "message": "AUR metadata snapshot downloaded; run again to review changes.",
-        }))
     return discovered
 
 
@@ -663,8 +658,11 @@ def register_commands(app: typer.Typer):
 
             if changed_installed is None:
                 if json_output:
-                    typer.echo(json.dumps({"error": "package discovery failed"}))
-                    raise typer.Exit(code=2)
+                    # A first metadata download has no baseline to compare, not
+                    # a discovery failure. Keep the review JSON list shape in
+                    # sync with ReviewResult(metadata_bootstrapped=True).
+                    typer.echo(json.dumps([]))
+                    return
                 return
             if not changed_installed:
                 if json_output:

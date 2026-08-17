@@ -22,7 +22,7 @@ TrustSight has several rule families. Only the non-FATAL rules defined in `rules
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
 | **R-series** (119 rules) | `rules.toml` + code | TOML-defined non-FATAL subset only | Detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` can set `enabled` and `weight_override` only for rules that have a TOML definition. Code-emitted R rules do not read these controls. |
-| **C-series** (C001-C007) | Code only | No | Structural invariants : domain classification, checksum coherence, dependency graph anomalies. These cannot be disabled through `rules.toml`. |
+| **C-series** (C001-C007) | Code only | No | Structural invariants : checksum/source coherence and related diff anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.
 

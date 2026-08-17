@@ -486,6 +486,7 @@ def apply_rules(
         (i, ln) for i, ln in _to_pairs(raw_diff_lines)
         if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
     ]
+    rules_by_id = {rule["id"]: rule for rule in rules}
 
     for rule in rules:
         if rule.get("enabled") is False:
@@ -524,6 +525,23 @@ def apply_rules(
         for idx, item in candidates:
             if compiled.search(item):
                 if rule_scope and not _scope_matches(rule_scope, idx, ctx_map, fn_map):
+                    continue
+                # A generic rule may defer to a more precise rule on the
+                # same command.  This preserves one finding per operation
+                # without making evaluation order part of the rule contract.
+                if any(
+                    (other := rules_by_id.get(other_id))
+                    and other.get("enabled") is not False
+                    and (not other.get("experimental") or include_experimental)
+                    and other.get("match_target", "raw_line") == match_target
+                    and (other_compiled := _compiled(other["pattern"]))
+                    and other_compiled.search(item)
+                    and (
+                        not other.get("scope")
+                        or _scope_matches(other["scope"], idx, ctx_map, fn_map)
+                    )
+                    for other_id in rule.get("exclude_if_matches", [])
+                ):
                     continue
                 finding = {
                     "rule_id": rule["id"],

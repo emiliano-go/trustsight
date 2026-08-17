@@ -81,13 +81,12 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
 ## Dogfooding check
 
 Scoring this PKGBUILD through TrustSight's own pipeline should yield 0/100 with
-only credit signals:
+only declared-practice findings:
 
 ```
 score: 0/100
-  -10 INFO  SOURCE_BUCKET  Trusted forge modifier (capped at -20)
-   -5 INFO  PINNING        Source pinning: checksum_pinned (-5)
-  -10 INFO  VERIFICATION   Verification evidence: checksum_present (-10)
+    0 INFO  P007  source hosted on a trusted forge over HTTPS
+    0 INFO  P001  checksums declared for all non-VCS sources
 ```
 
 If a change here introduces a rule firing, that is a signal about the change,
@@ -97,7 +96,8 @@ not about the tool.
 
 `python-pygit2`, `python-rich`, `python-tldextract`, and
 `python-cryptography` are all in the `extra` repository.
-`pyalpm` (optional) is in the `community` repository (formerly AUR).
+`pyalpm` is optional; install the distribution package that provides it when
+native version comparison is desired.
 No AUR dependencies are required.
 
 The novelty seed is no longer bundled inside the wheel; it is distributed as

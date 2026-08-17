@@ -84,8 +84,8 @@ historical_fixtures = [
 +  ln -sf /usr/bin/elevate /usr/lib/systemd/system-sleep/elevate
 +}
 """,
-        "must_fire": ["R017", "R018"],
-        "must_not_fire": [],
+        "must_fire": ["R059", "R018"],
+        "must_not_fire": ["R017"],
     },
 ]
 

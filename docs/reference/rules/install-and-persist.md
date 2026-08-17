@@ -23,7 +23,7 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `^\+.*\.install`
 - **Scope:** All lines (no function-body restriction)
 - **Description:** Fires when a `.install` file is added or modified in the diff. Install scripts run with root privileges and are a common vector for persistent backdoors.
-- **Note:** The pattern was `\+.*\.install.*` before 0.13.2. Unanchored, it is quadratic (the search retries at every offset and the wildcard rescans the line from each), which the compile-time safety check now refuses, and a refused pattern stops matching silently. On an added line, where the diff marker sits at position 0, the anchored form matches exactly the same text. An installation written before 0.13.2 still holds the old pattern: `trustsight lint` reports it as an ERROR and `trustsight config sync-rules --update` replaces it.
+- **Note:** The pattern was `\+.*\.install.*` before 0.13.2. The anchored form bounds the search to an added diff line and matches the same intended file paths. `trustsight config sync-rules --update` replaces the superseded pattern in an unmodified local rule file.
 
 ### R017: Setuid/Setgid Permission {#r017}
 
@@ -31,7 +31,7 @@ severity weights and the reserved identifier ranges.
 - **Severity:** HIGH (weight 25)
 - **Category:** `privilege`
 - **Pattern:** `chmod.*\+s`
-- **Description:** Detects `chmod` setting the setuid or setgid bit (`chmod +s`, `chmod 4755`, `chmod 2755`). A setuid binary runs with its owner's privileges, the shape of many local-privilege-escalation backdoors. Complements the dedicated R053 setuid rules in the expanded set, which target the pure permission pattern; this form catches the `chmod` command line itself.
+- **Description:** Detects symbolic `chmod ... +s` commands that set a setuid or setgid bit. A setuid binary runs with its owner's privileges, the shape of many local-privilege-escalation backdoors. R053 and R059 own the target-specific symbolic and octal forms, so R017 defers to them rather than scoring one command twice.
 
 ### R052: Dotfile Written To User Profile {#r052}
 

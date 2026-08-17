@@ -73,11 +73,11 @@ The composition rules that narrow this ceiling are grounded in real events. R089
 
 The corpus prior is only as good as the corpus. Three failure modes exist:
 
-1. **A new legitimate domain that appears in exactly one package is classified as `unknown` and penalized.** This is a false positive. It resolves as the corpus accumulates observations of the domain, but on first encounter it is indistinguishable from a malicious single-use domain.
+1. **A new legitimate domain that appears in exactly one package is classified as `unknown` and penalized.** This is a false positive. Source buckets are static configuration, so corpus observations do not change it; an operator must deliberately classify the domain if that is appropriate.
 
 2. **A compromised domain that is already well-established in the corpus is classified as `trusted_forge` or `official` and not penalized.** If an attacker compromises a popular GitHub repository and pushes a malicious PKGBUILD from that repository, the source bucket classifier sees `github.com` (trusted) and does not add a penalty. The structural rules would need to catch the malicious commands directly.
 
-3. **Corpus regeneration lag.** Between weekly regenerations, new legitimate domains might be penalized as `unknown`. This resolves automatically at the next regeneration but can produce false positives for up to a week.
+3. **Configuration lag.** A legitimate domain remains `unknown` until the configured source-bucket lists are updated. Corpus regeneration cannot promote it, by design.
 
 ## What INCONCLUSIVE means
 

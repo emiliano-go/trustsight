@@ -30,7 +30,8 @@ Look for patterns:
 
 - **R009/R010/R011** (command-structure rules): these now fire only in `function_body` context. If they are still over-firing, the package may use unconventional but legitimate helper functions.
 - **R004** (checksum removal): some AUR packages legitimately skip checksums for binary blobs.
-- **R005** (new source URL): a vendor may have changed their CDN, causing every package from that vendor to fire.
+- **R005** (checksum array emptied): inspect why a recipe changed `sha256sums` to an empty array.
+- **R006** (insecure download protocol): inspect an added `http://` source and whether the same change added or updated checksum backing.
 
 ### Scope constraints already applied
 
@@ -80,7 +81,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight includes 2,599 collected tests with a zero-rate of **68.3%** (benign packages scoring 0). After tuning, re-run:
+TrustSight includes 2,613 collected tests with a zero-rate of **68.3%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 pytest tests/

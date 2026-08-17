@@ -203,15 +203,15 @@ add("R016-makedepends-added",
 add("R016-optdepends-added",
     header() + "optdepends=('evil-pkg: for the malicious feature')\n")
 
-# ── R059: chmod +s ───────────────────────────────────────────────────────────
+# ── R059: target-specific chmod +s ───────────────────────────────────────────
 
 add("R017-chmod-suid",
     header() + "chmod +s /usr/bin/elevate\n",
-    must_fire=["R059"], min_score=25)
+    must_fire=["R059"], must_not_fire=["R017"], min_score=25)
 
 add("R017-chmod-sgid",
     header() + "chmod g+s /usr/bin/elevate\n",
-    must_fire=["R059"], min_score=25)
+    must_fire=["R059"], must_not_fire=["R017"], min_score=25)
 
 # ── R128: build function writes outside $pkgdir ──────────────────────────────
 

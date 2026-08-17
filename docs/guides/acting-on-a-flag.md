@@ -24,8 +24,8 @@ This shows:
 Every rule in the output references the line(s) that triggered it. Cross-reference with the diff:
 
 - **R004 (checksum removal)**: look for `sha256sums=('SKIP')` or a `source=` entry without a matching checksum.
-- **R005 (new source URL)**: find the added URL in the diff. Check the domain classification in the [evidence tiers](../reference/evidence-tiers.md#tier-b-priors-context).
-- **R006 (domain change)**: compare old and new source domains.
+- **R005 (checksum array emptied)**: find the `sha256sums=()` change and establish why checksum coverage was removed.
+- **R006 (insecure download protocol)**: inspect an added `http://` source URL and whether the same diff added or changed checksum backing.
 - **R012/R013 (FATAL)**: unicode confusables or prompt injection: do not install.
 
 ## Step 3: Act by severity tier
@@ -53,6 +53,7 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 **A coverage gap**, at any score and any maturity, when the run could not examine the whole change. The report names which gap:
 
 - `diff_truncated`: the diff was larger than the size cap, so only its prefix was read.
+- `scan_truncated`: the diff had more than `rules.MAX_SCANNED_LINES` lines, so only its first lines were matched. This is independent of the byte cap.
 - `line_truncated`: a single line was longer than the matching limit, so its tail was never matched against any rule.
 - `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read.
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.

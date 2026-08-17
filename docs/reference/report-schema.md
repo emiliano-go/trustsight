@@ -234,7 +234,7 @@ There are two JSON shapes, and they are not the same object.
   Always present (`reporting.REPORT_KEYS`): `package`, `old_version`,
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `suppressed_rules`,
-  `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `failed`,
+  `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `dependencies`, `depth_truncated`, `required_by`, `config_fingerprint`.
 
   On request only:

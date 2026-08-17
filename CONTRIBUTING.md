@@ -9,19 +9,23 @@ If you only want to use the tool, start with the README and the getting started 
 ```bash
 git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
-python -m venv .venv
-source .venv/bin/activate
-uv sync --extra dev
-pytest
-ruff check
-python scripts/security_gates.py
+uv sync --locked --extra dev
+uv run pytest
+uv run ruff check
+uv run python scripts/security_gates.py
 ```
 
 If you change rules, scoring, tokenizer behavior, or calibration fixtures, also run:
 
 ```bash
-TRUSTSIGHT_FULL_CALIBRATION=1 pytest tests/test_calibration_gates.py
+uv run python scripts/build_corpus.py --from-manifest \
+  --manifest tests/fixtures/corpus.lock \
+  --out tests/fixtures/benign-corpus
+TRUSTSIGHT_FULL_CALIBRATION=1 uv run pytest tests/test_calibration_gates.py
 ```
+
+The benign corpus is gitignored, so a fresh checkout must reconstruct the
+locked corpus before the full calibration run.
 
 All required checks should pass before a pull request is reviewed.
 

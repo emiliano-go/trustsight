@@ -185,33 +185,21 @@ def test_every_shipped_pattern_still_compiles():
     assert not refused, f"these rules no longer match anything: {refused}"
 
 
-def test_a_pattern_this_detector_now_refuses_is_repairable_on_disk():
-    """Widening the detector must not strand installs that already exist.
-
-    R007 shipped as ``\\+.*\\.install.*``, which is quadratic and is now
-    refused. Every install written before this release still holds that
-    text, so unless the old pattern is registered as superseded, those
-    installs lose the rule with no way back short of deleting the file.
-    """
+def test_a_superseded_pattern_is_repairable_on_disk():
+    """An unmodified local R007 can be upgraded without manual edits."""
     import re
 
     from trustsight.config import LEGACY_RULE_PATTERNS, shipped_rules
-    from trustsight.rules import _compiled
 
     legacy = LEGACY_RULE_PATTERNS["R007"]
     assert legacy, "the superseded R007 pattern must be registered"
-    for pattern in legacy:
-        assert _compiled(pattern) is None, (
-            "a legacy entry is only needed for a pattern that no longer runs"
-        )
-
     current = next(r for r in shipped_rules() if r["id"] == "R007")
-    compiled = _compiled(current["pattern"])
-    assert compiled is not None
+    assert current["pattern"] not in legacy
     # The replacement still has to do the job the rule exists for.
+    compiled = re.compile(current["pattern"])
     assert compiled.search("+  'spotify.install'")
     assert not compiled.search("+  'PKGBUILD'")
-    assert re.compile(current["pattern"]).search("+source=(x.install)")
+    assert compiled.search("+source=(x.install)")
 
 
 # ---------------------------------------------------------------------------

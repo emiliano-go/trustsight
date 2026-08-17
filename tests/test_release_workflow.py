@@ -63,8 +63,8 @@ def test_pypi_publishing_only_runs_for_software_tags():
 
     assert SOFTWARE_TAG_PATTERN in text
     assert "needs: classify" in text
-    assert text.count("if: needs.classify.outputs.is_software_release == 'true'") == 2
-    assert "needs: [classify, build]" in text
+    assert text.count("if: needs.classify.outputs.is_software_release == 'true'") == 3
+    assert "needs: [classify, preflight, aur]" in text
 
 
 def test_pkgbuild_verifies_the_pre_tag_deterministic_tarball_on_every_run():

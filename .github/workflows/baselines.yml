@@ -1,9 +1,11 @@
 name: Release Baselines
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
+      tag:
+        description: Existing draft baseline tag to complete, e.g. baseline-2026-08-17
+        required: true
+        type: string
       ioc_source:
         description: Curator name recorded in the IOC baseline manifests
         default: emiliano-go
@@ -11,7 +13,7 @@ on:
 permissions:
   contents: write
 
-# Builds and uploads the ``baseline-*`` release assets for a published
+# Builds and uploads the ``baseline-*`` release assets for a draft
 # *baseline* release (tag ``baseline-<date>``): the hashed novelty seed, the
 # curated IOC baseline pairs, and the summary manifest.  Every asset ships
 # with a detached ``.sig`` under the distribution key held in the
@@ -19,9 +21,9 @@ permissions:
 # signature does not verify against the pinned key shipped in the package
 # (see docs/reference/baseline-keys.md).
 #
-# Software releases (vX.Y.Z) never carry baseline assets; the job guard
-# below skips them so a publish cannot clobber or rebuild the channel.  The
-# canonical seed is maintainer-built from the full AUR mirror and uploaded
+# Software releases (vX.Y.Z) never carry baseline assets. The caller selects
+# the draft baseline tag explicitly, so it cannot clobber the software channel.
+# The canonical seed is maintainer-built from the full AUR mirror and uploaded
 # to the channel release; CI rebuilds a lock-derived fallback only when
 # ``baseline-seed.tar.gz`` is missing, and never overwrites an uploaded
 # seed.  The corpus baseline is exported by the maintainer from an
@@ -32,14 +34,11 @@ permissions:
 jobs:
   baselines:
     runs-on: ubuntu-latest
-    # The channel is released as ``baseline-<date>``; the seed fallback is
+    # The channel is prepared as ``baseline-<date>``; the seed fallback is
     # rebuilt from the cached lockfile mirror, and the seed build needs the
     # AUR git mirror, which only a maintainer machine has in full (or a
     # cache warmed manually), so a cold CI mirror fails the job loudly and
     # the maintainer uploads the verified assets instead.
-    if: >-
-      github.event_name == 'workflow_dispatch'
-      || startsWith(github.event.release.tag_name, 'baseline-')
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -81,7 +80,7 @@ jobs:
         shell: bash
         run: |
           seed_exists=false
-          if gh release view "${{ github.ref_name }}" --json assets \
+          if gh release view "${{ inputs.tag }}" --json assets \
               -q '.assets[].name' 2>/dev/null | grep -qx 'baseline-seed.tar.gz'; then
             seed_exists=true
           fi
@@ -90,11 +89,7 @@ jobs:
       - name: Download the required corpus baseline
         shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG" ]; then
-            echo "No release event tag; a baseline release is required." >&2
-            exit 1
-          fi
+          TAG="${{ inputs.tag }}"
           mkdir -p /tmp/release-assets
           gh release download "$TAG" --pattern baseline-corpus.tar.zst --dir /tmp/release-assets
           test -s /tmp/release-assets/baseline-corpus.tar.zst
@@ -104,7 +99,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p /tmp/release-assets
-          gh release download "${{ github.event.release.tag_name }}" \
+          gh release download "${{ inputs.tag }}" \
             --pattern baseline-seed.tar.gz --dir /tmp/release-assets
           test -s /tmp/release-assets/baseline-seed.tar.gz
 
@@ -164,9 +159,4 @@ jobs:
 
       - name: Upload baseline-* assets to the release
         run: |
-          TAG="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG" ]; then
-            echo "No release event tag; run this workflow from a published release or upload manually." >&2
-            exit 1
-          fi
-          gh release upload "$TAG" /tmp/baselines/baseline-* --clobber
+          gh release upload "${{ inputs.tag }}" /tmp/baselines/baseline-*

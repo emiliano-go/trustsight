@@ -71,7 +71,7 @@ The interaction is additive, not multiplicative. Each signal contributes indepen
 
 A cold database is no longer the usual state. TrustSight can fetch and import a
 verified novelty seed on first run. The current seed records 179,956 normalized
-source URLs, 35,903 maintainers, and 209,909 dependency names, plus a bootstrap
+source URLs, about 35,903 maintainers, and 209,909 dependency names, plus a bootstrap
 observation count. Maturity uses the greater of that seed count and the local
 analysis count, not a per-package count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
 

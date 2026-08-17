@@ -18,9 +18,12 @@ See [installation](installation.md) for details.
 
 ```bash
 trustsight review
+# The first run downloads the AUR metadata snapshot and exits successfully.
+trustsight review
 ```
 
-This command:
+The first command bootstraps the local metadata snapshot and returns no reports.
+The second and later commands:
 
 1. Collects installed package names and versions from your system (foreign via `pacman -Qm`, or from local repos via `--repo`/`--all-repos`),
 2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run, and refetches it once it is more than an hour old),

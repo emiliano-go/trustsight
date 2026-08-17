@@ -23,7 +23,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The current checkout collects **2,613 tests**.
+**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 

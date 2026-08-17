@@ -453,6 +453,59 @@ def test_quiet_profile_changes_flagged_not_the_risk_band_or_score(ts, monkeypatc
     assert data["flagged"] is False
 
 
+@pytest.mark.parametrize(("profile", "score", "threshold", "flagged"), [
+    ("strict", 10, 10, False),
+    ("strict", 20, 10, True),
+    ("default", 20, 20, False),
+    ("default", 40, 20, True),
+    ("quiet", 40, 40, False),
+    ("quiet", 41, 40, True),
+])
+def test_review_profiles_match_between_api_and_cli(
+    ts, monkeypatch, profile, score, threshold, flagged,
+):
+    """Both entry points apply the selected workload policy identically."""
+    from typer.testing import CliRunner
+
+    from trustsight.cli import app
+    from trustsight.reporting import evaluate_fact
+
+    config = {"review": {"profile": profile}}
+    fact = _fact("profile-edge", score=score, risk="Medium")
+
+    def batch(entries, *_args, **kwargs):
+        row = evaluate_fact(fact)
+        if kwargs.get("verbose"):
+            row["_verbose_fact"] = fact
+        return [row for _entry in entries]
+
+    monkeypatch.setattr("trustsight.review_policy.load_config", lambda: config)
+    monkeypatch.setattr("trustsight.review.analyze_outdated_batch", batch)
+    api_report = ts.review(packages=["profile-edge"]).reports[0].to_dict(
+        include_score=True)
+
+    monkeypatch.setattr("trustsight.cli.review.ensure_default_configs", lambda: None)
+    monkeypatch.setattr("trustsight.cli.review.init_db", lambda: None)
+    monkeypatch.setattr("trustsight.cli.review.maybe_auto_import_seed", lambda **_kw: None)
+    monkeypatch.setattr("trustsight.cli.review.load_config", lambda: config)
+    monkeypatch.setattr(
+        "trustsight.cli.review._discover_packages",
+        lambda *_args, **_kwargs: ([{"name": "profile-edge", "current_version": "1.0"}], 1),
+    )
+    monkeypatch.setattr("trustsight.cli.review._analyze_outdated_batch", batch)
+    result = CliRunner().invoke(app, ["review", "--json", "--quiet", "--score"])
+    assert result.exit_code == 0, result.output
+    cli_report = json.loads(result.output)[0]
+
+    for report in (api_report, cli_report):
+        assert report["review_profile"] == profile
+        assert report["review_threshold"] == threshold
+        assert report["flagged"] is flagged
+        assert report["score"] == score
+        assert report["risk"] == "Medium"
+    assert cli_report == api_report
+
+
 def test_a_report_serialises_to_the_documented_json(ts, monkeypatch):
     monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("json-pkg"))
 

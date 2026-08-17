@@ -125,8 +125,8 @@ the build, never part of the hashed content, and it is what lets a third
 party reproduce the seed and compare their record against the published one.
 
 The release workflow [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml)
-runs this pipeline on the channel release (a `baseline-<date>` tag, published
-after the software release it serves; see the
+runs this pipeline against a draft channel release (a `baseline-<date>` tag,
+published only after its complete asset family is verified; see the
 [publishing guide](../contributing/publishing-baselines.md)). The canonical
 seed is built by the maintainer from the full AUR mirror; CI rebuilds only
 when the release has no `baseline-seed.tar.gz` yet, from a mirror
@@ -136,7 +136,7 @@ than the canonical full-mirror seed, and never overwrites an uploaded one.
 The gap is not cosmetic. The lock is a calibration corpus, not a sample of
 the AUR: a seed built from the lock (3,246 packages) contains about 137
 distinct maintainers, while the canonical seed built from the full AUR
-mirror (about 116,000 package branches) contains about 35,587. Shipping the
+mirror (about 116,000 package branches) contains about 35,903. Shipping the
 lock-derived seed would reduce novelty coverage by 99.6%, flagging
 experienced maintainers as new on every package outside the lock. That is
 why the canonical seed is always the one a fresh install fetches, and why

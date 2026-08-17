@@ -1597,7 +1597,7 @@
   copied into the archive by `build_hashed_seed.py --provenance`, so anyone
   can reproduce the seed and diff their record against the published one. A
   manual workflow run doubles as a pipeline test; see
-  [publishing baselines](contributing/publishing-baselines.md#dispatch-test-manual-verification).
+   [publishing baselines](contributing/publishing-baselines.md#prepare-a-baseline-release).
 - **Release tarballs no longer carry `packaging/`.** `export-ignore` keeps
   the PKGBUILD out of the GitHub source tarball, so the release artifact can
   no longer disagree with itself. The CI side of the checksum contract is

@@ -100,8 +100,15 @@ synthetic repositories in each state.
 ## When check() runs from the tarball
 
 The suite runs from inside the extracted archive during `makepkg`, where
-`packaging/` and `.git` are both absent. Tests that need either must skip
-rather than fail. Two did not, and they took down the v0.13.1 release:
+`packaging/` and `.git` are both absent. Tests that require either explicitly
+skip there rather than fail. The exclusions are narrow: the whole PKGBUILD test
+module skips when `packaging/aur/PKGBUILD` is absent; the checksum-rebuild and
+archive-membership tests skip when there is no Git checkout; and the critical
+paths gate skips only `ARCHIVE_EXCLUDED_PATHS` from its existence assertion.
+The package `check()` command also excludes `tests/test_fetcher.py` and
+`tests/test_rebaseline.py`; those modules require repository/network fixtures
+that are not part of the shipped archive test environment.
+Two missing exclusions took down the v0.13.1 release:
 
 - `scripts/critical_paths.py` lists `ARCHIVE_EXCLUDED_PATHS`, the critical
   paths `export-ignore` legitimately removes. The `critical paths are

@@ -14,7 +14,7 @@ trustsight review
 
 Most packages score **0**. A clean version bump, checksums updated, no structural changes, known domains, produces no risk signals.
 
-Some packages may score **5-15** on their first few appearances. This is novelty weight: the first time a source URL is observed globally, the [novelty evidence tier](../reference/evidence-tiers.md) (tier C) contributes a small score. The [maturity gate](../explanation/cold-start-and-maturity.md) scales this contribution up to full weight over 50 observations.
+Some packages may score **5-15** from novelty. This includes a source URL first observed globally. The [maturity gate](../explanation/cold-start-and-maturity.md) uses the database-wide effective observation count and scales this contribution up to full weight over 50 observations.
 
 A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **UNFLAGGED** on every row; that is normal. Proceed with your update.
 
@@ -25,7 +25,7 @@ A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **U
 | **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or a rule in the [R-series](../reference/rules/index.md) matched. |
 | **41-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
 | **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules/system.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
-| **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the package has fewer than 25 recorded analyses, which is where maturity crosses 0.5 (see [cold start](../explanation/cold-start-and-maturity.md)), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
+| **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the database-wide maturity is below 0.5 (fewer than 25 effective observations), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
 
 > **Practical threshold:** score **25+** warrants attention. **40+** means skip the update and inspect first.
 
@@ -68,8 +68,8 @@ See the [report schema](../reference/report-schema.md) for the full scoring brea
 
 ## Exit codes
 
-- **0**: all packages UNFLAGGED
-- **1**: one or more packages FLAGGED
-- **2**: error (e.g. network failure, malformed config)
+- **0**: analysis completed. This says nothing about whether a package was flagged.
+- **2**: analysis could not run or complete, such as a network failure or malformed config.
+- **130**: interrupted with `Ctrl+C`.
 
-When scripting, check the exit code to decide whether to proceed with `yay -Syu`. For finer-grained control, parse the score table or use the future JSON output mode. See [using TrustSight in CI](using-in-ci.md).
+A FLAGGED or INCONCLUSIVE result still exits `0`: the exit code answers whether the tool ran, not whether a package is safe. When scripting, run `trustsight review --score --json` and gate on scores plus `coverage_gaps`; do not gate on the TrustSight exit code. See [exit codes](../reference/exit-codes.md) and [using TrustSight in CI](using-in-ci.md).

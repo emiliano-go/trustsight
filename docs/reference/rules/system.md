@@ -73,7 +73,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R140, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R-series (through R143), S001-S008, X001-X007, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -266,7 +266,7 @@ Configured in `config.toml` `[severity_weights]`:
 
 ### FATAL rules {#fatal-rules}
 
-R012 and R013 are FATAL. They contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`.
+R012 and R013 are shipped FATAL rules. R106 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; R106's severity is derived from the signed/local indicator confidence tier.
 
 ---
 
@@ -450,7 +450,7 @@ See [R061: Hidden Network Fetch In Build](fetch-and-execution.md#r061).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-Measured against the 3246-diff benign corpus with a 209,909-name dependency corpus. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below are historical measurements against the 3,246-diff benign corpus with a 209,909-name dependency corpus. The current aggregate calibration baseline is 3,739 diffs; the rows are retained with their source corpus because the per-rule hit counts have not been regenerated as a complete table. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -994,6 +994,12 @@ See [R125: Introduction Rate Deviation](corpus-behavioral.md#r125).
 
 See [R126: Adopt-then-Modify](maintainer-and-metadata.md#r126).
 
+## Additional Per-Package Rules {#additional-per-package-rules}
+
+R141-R143 are per-package findings, not Class D corpus findings. S001-S008
+and X001-X007 are the sabotage and crossfire families; their category pages
+are authoritative for their conditions and severities.
+
 ### R141 {#r141}
 
 See [R141: Adopted From Orphan](maintainer-and-metadata.md#r141).
@@ -1103,13 +1109,13 @@ Measured against the TrustSight test corpus.
 
 !!! warning "Two rows predate a ruleset expansion"
 
-    The recall rows above were measured while `observation_count` was never populated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and before the R039+ expanded rules or C004-C007 shipped. The three distribution rows below are re-measured by the calibration gates against the current 3,246-diff corpus on every push.
+    The recall rows above were measured while `observation_count` was never populated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and before the R039+ expanded rules or C004-C007 shipped. The three distribution rows below are re-measured by the calibration gates against the current 3,739-diff corpus on every push.
 
 | Rule | Recall | Notes |
 |------|--------|-------|
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 69.1 % | Percentage of benign diffs scoring 0. |
-| Benign p95 | 45 | 95th percentile score on benign corpus. |
+| Benign zero-rate | 68.3 % | Percentage of benign diffs scoring 0. |
+| Benign p95 | 35 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

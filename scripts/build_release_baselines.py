@@ -43,6 +43,7 @@ import json
 import shutil
 import sys
 import tarfile
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -100,6 +101,13 @@ def build_seed_asset(seed_v2_dir: Path, out_dir: Path, private_key, assets: list
     write_signed_asset(out_dir, name, path.read_bytes(), private_key, assets)
 
 
+def copy_seed_asset(seed_archive: Path, out_dir: Path, private_key, assets: list[dict]):
+    """Preserve a maintainer-built seed while adding its release signature."""
+    write_signed_asset(
+        out_dir, "baseline-seed.tar.gz", seed_archive.read_bytes(), private_key, assets
+    )
+
+
 def build_ioc_assets(args, out_dir: Path, private_key, assets: list[dict]):
     """Build and sign one manifest/iocs pair per --ioc input.
 
@@ -113,13 +121,14 @@ def build_ioc_assets(args, out_dir: Path, private_key, assets: list[dict]):
         if not isinstance(rows, list):
             raise SystemExit(f"{ioc_file}: input must be a JSON array of IOC entries")
         entries = _normalise_entries(rows, source)
-        tmp = Path(shutil.mkdtemp(prefix="baseline-ioc-"))
+        tmp = Path(tempfile.mkdtemp(prefix="baseline-ioc-"))
         try:
             build_ioc(entries, source, tmp, incident, 30, curator_key)
             name = f"baseline-ioc-{source}-{incident or 'incident'}"
             for part, filename in (("manifest", "manifest.json"), ("iocs", "iocs.jsonl")):
                 data = (tmp / filename).read_bytes()
-                write_signed_asset(out_dir, f"{name}-{part}.json", data, private_key, assets)
+                suffix = "jsonl" if part == "iocs" else "json"
+                write_signed_asset(out_dir, f"{name}-{part}.{suffix}", data, private_key, assets)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -130,8 +139,11 @@ def main() -> int:
                         help="Output directory for the baseline-* assets (default: dist/)")
     parser.add_argument("--sign-key", required=True, type=Path,
                         help="ed25519 private key: PEM or raw 32-byte file (distribution key)")
-    parser.add_argument("--seed-v2-dir", type=Path, default=None,
-                        help="Directory containing trustsight-seed-v2/ to repackage")
+    seed_group = parser.add_mutually_exclusive_group()
+    seed_group.add_argument("--seed-v2-dir", type=Path, default=None,
+                            help="Directory containing trustsight-seed-v2/ to repackage")
+    seed_group.add_argument("--seed-archive", type=Path, default=None,
+                            help="Existing canonical baseline-seed.tar.gz to re-sign")
     parser.add_argument("--ioc", type=Path, action="append", default=[],
                         help="Curated IOC JSON input file (repeatable)")
     parser.add_argument("--ioc-source", action="append", default=[],
@@ -149,8 +161,8 @@ def main() -> int:
 
     out_dir = args.out
     out_dir.mkdir(parents=True, exist_ok=True)
-    if not args.seed_v2_dir and not args.ioc and not args.corpus:
-        parser.error("nothing to build: pass --seed-v2-dir, --ioc, or --corpus")
+    if not args.seed_v2_dir and not args.seed_archive and not args.ioc and not args.corpus:
+        parser.error("nothing to build: pass a seed, --ioc, or --corpus")
 
     private_key = _load_ed25519_private(args.sign_key)
     pubkey_hex = private_key.public_key().public_bytes_raw().hex()
@@ -159,6 +171,8 @@ def main() -> int:
     print(f"Building release baselines into {out_dir}")
     if args.seed_v2_dir:
         build_seed_asset(args.seed_v2_dir, out_dir, private_key, assets)
+    if args.seed_archive:
+        copy_seed_asset(args.seed_archive, out_dir, private_key, assets)
     if args.ioc:
         build_ioc_assets(args, out_dir, private_key, assets)
     if args.corpus:
@@ -171,8 +185,12 @@ def main() -> int:
         "distribution_pubkey": pubkey_hex,
         "assets": assets,
     }
-    (out_dir / BASELINE_MANIFEST).write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    write_signed_asset(
+        out_dir,
+        BASELINE_MANIFEST,
+        (json.dumps(manifest, indent=2) + "\n").encode("utf-8"),
+        private_key,
+        [],
     )
     print(f"Wrote {BASELINE_MANIFEST} with {len(assets)} asset(s).")
     return 0

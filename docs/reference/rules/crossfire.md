@@ -61,7 +61,7 @@ small, but noise rather than signal.
 
 Every rule here was run against the locked benign corpus before it was given a
 severity. The figures below are the corpus as `tests/fixtures/corpus.lock`
-records it today - **3,246** diffs, generated 2026-07-16:
+records it in the historical baseline - **3,246** diffs, generated 2026-07-16. The current aggregate calibration baseline is 3,739 diffs; this page's legacy per-rule measurement is retained for traceability:
 
 | Rule | Benign diffs | Rate |
 |---|---|---|

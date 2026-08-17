@@ -77,6 +77,35 @@ def test_load_rules_has_required_keys(tmp_path, monkeypatch):
         assert rule["severity"] in ("FATAL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO")
 
 
+def test_per_rule_controls_apply_to_toml_defined_rules(tmp_path, monkeypatch):
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    cfg._toml_cache.clear()
+    (tmp_path / "rules.toml").write_text(
+        '[[rules]]\nid = "R900"\nname = "Test"\npattern = "test"\n'
+        'severity = "LOW"\ncategory = "test"\nmatch_target = "raw_line"\n'
+    )
+    (tmp_path / "config.toml").write_text(
+        "[rules.R900]\nenabled = false\nweight_override = 17\n"
+    )
+
+    rule = cfg.load_rules()[0]
+    assert rule["enabled"] is False
+    assert rule["weight_override"] == 17
+
+
+def test_disabled_toml_rule_does_not_match():
+    from trustsight.rules import apply_rules
+
+    rules = [{
+        "id": "R900", "name": "Test", "pattern": "payload",
+        "severity": "LOW", "category": "test", "match_target": "raw_line",
+        "enabled": False,
+    }]
+    assert apply_rules([], ["+payload"], rules) == []
+
+
 def test_load_domains_creates_default(tmp_path, monkeypatch):
     cfg_dir = tmp_path / ".config" / "trustsight"
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)

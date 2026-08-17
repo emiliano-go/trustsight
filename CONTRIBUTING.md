@@ -27,7 +27,9 @@ All required checks should pass before a pull request is reviewed.
 
 ## Signed Commits
 
-GPG-signed commits are required for changes to security-critical paths: the tokenizer, scoring, config, database, security gates, CI workflows, packaging, and baseline keys. The `CODEOWNERS` file and the `verify-commit-sigs` workflow enforce this.
+For pull requests to `master` that change one of the exact paths in
+`scripts/critical_paths.py`, every commit in the pull request range must have a
+verified GPG signature. The `verify-commit-sigs` workflow enforces this policy.
 
 For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required.
 
@@ -67,7 +69,8 @@ These areas affect the project's published security claims. A change here usuall
 
 ## Security Critical Paths
 
-Changes to the paths listed in `scripts/critical_paths.py` require careful review and GPG-signed commits:
+The following exact paths are the critical-path set checked by the pull-request
+signature workflow:
 
 | File | Why it matters |
 |---|---|
@@ -88,7 +91,7 @@ If you are unsure whether a change touches one of these paths, ask first.
 ## Getting Help
 
 - Architecture questions: open a GitHub Discussion
-- Rule design: read the rule-writing and security-review guides under `docs/contributing/`
+- Rule design: read the [writing-a-rule](docs/contributing/writing-a-rule.md) and security-review guides
 - Corpus re-baselining: follow the re-baselining guide under `docs/contributing/`
 - Security disclosures: use `docs/security.md`
 

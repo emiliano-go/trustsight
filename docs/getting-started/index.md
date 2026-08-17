@@ -8,7 +8,7 @@ The fastest path from zero to your first `trustsight review`. Follow these pages
 
 -   [**Installation**](installation.md)
 
-    Install TrustSight via pip, AUR, or from source.
+    Build the PKGBUILD included in this repository. TrustSight is not published in the AUR.
 
 -   [**Quickstart**](quickstart.md)
 

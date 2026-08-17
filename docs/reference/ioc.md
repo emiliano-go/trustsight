@@ -71,9 +71,10 @@ dropped with a warning; the rest import.
 
 `signature` is a detached Ed25519 signature over the canonical
 `manifest.json` (with the `signature` field emptied) concatenated with
-`iocs.jsonl` byte-for-byte. Verification uses the `public_key` in the
-manifest. An unsigned baseline imports only with `--allow-unsigned`, which is
-for a baseline you built and trust locally.
+`iocs.jsonl` byte-for-byte. Verification uses the `public_key` carried in the
+manifest; IOC curator keys are not pinned in configuration. An unsigned
+baseline imports only with `--allow-unsigned`, which is for a baseline you
+built and trust locally.
 
 ---
 

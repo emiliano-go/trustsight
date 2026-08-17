@@ -45,20 +45,20 @@ Rules R009, R010, and R011 were scoped to `function_body` context in a previous 
 **Demote severity** (preferred):
 
 ```toml
-# rules.toml
+# config.toml
 [rules.R004]
-enabled = true
-severity = "LOW"   # was HIGH; still fires, but contributes less score
+weight_override = 5  # was HIGH/25; still fires, but contributes less score
 ```
 
 **Disable the rule:**
 
 ```toml
-[rules.R009]
+# config.toml
+[rules.R007]
 enabled = false
 ```
 
-Only disable a rule if you are certain the pattern it detects is never malicious in your context. Revisit this decision periodically; the threat landscape changes.
+Only disable a TOML-defined, non-FATAL rule if you are certain the pattern it detects is never malicious in your context. Revisit this decision periodically; the threat landscape changes.
 
 **Constrain scope** (where supported):
 
@@ -80,7 +80,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight includes 1,535 tests with a zero-rate of **69.1%** (benign packages scoring 0). After tuning, re-run:
+TrustSight includes 2,599 collected tests with a zero-rate of **68.3%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 pytest tests/
@@ -92,13 +92,13 @@ Ensure CRITICAL recall stays at **100%**: every known malicious pattern must sti
 |--------|-------|
 | CRITICAL recall | 100% |
 | CRITICAL p5 | 60 |
-| Benign p95 | 45 |
+| Benign p95 | 35 |
 
 If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Restore the rule and find another approach.
 
 ## When not to tune
 
-- **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the maturity gate accumulates observations.
+- **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the database-wide maturity gate accumulates observations.
 - **C-series rules** (C001-C007) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
 - **INCONCLUSIVE** verdicts from a cold database are not rule false positives. Let the maturity gate accumulate 50 observations before judging.
 

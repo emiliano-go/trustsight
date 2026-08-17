@@ -39,6 +39,30 @@ def test_a_deliberate_exit_code_passes_through_unchanged():
     assert excinfo.value.exit_code == 3
 
 
+def test_an_interrupt_exits_130_with_a_short_message(capsys):
+    def _interrupt() -> None:
+        raise KeyboardInterrupt
+
+    with patch("trustsight.cli.app.app", _interrupt):
+        with pytest.raises(typer.Exit) as excinfo:
+            main()
+    assert excinfo.value.exit_code == 130
+    assert capsys.readouterr().err == "Interrupted.\n"
+
+
+def test_db_check_json_exits_nonzero_for_a_corrupt_database(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    (tmp_path / "trustsight.db").write_text("not a sqlite database")
+
+    result = runner.invoke(app, ["db", "check", "--json"])
+
+    assert result.exit_code == 2
+    assert '"status": "corrupt"' in result.output
+
+
 def test_inspect_not_found_is_an_error_for_scripting(tmp_path, monkeypatch):
     """`inspect` on a package that exists nowhere exits 2, not 1: nothing
     useful was produced, and the documented contract has no exit 1."""

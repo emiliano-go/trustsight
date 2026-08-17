@@ -29,14 +29,14 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 **Structural signals (Tier A)** come from rule matching. Two match targets exist because PKGBUILDs have two surfaces:
 
-- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R006, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
+- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
 - **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (R004, R005, R007, R009, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions. R009 (sudo) was later moved out of the TOML ruleset entirely, because "inside a function body" still admitted `optdepends` names and `echo` strings; it is now a code rule that requires `sudo` at a command position.
 
 The top-level position is not ignored, it is a separate claim: [R129](../reference/rules/fetch-and-execution.md#r129) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
 
-**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: a bundled domain list assigns each URL to a bucket (trusted_forge, official, self_hosted, raw_hosting, unknown, or homograph). No network calls are made at analysis time; the domain list is pre-computed from the corpus.
+**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. No network calls are made at analysis time.
 
 **History signals (Tier C)** compare new URLs and maintainers against the local database. A URL that has never been observed before in any package is globally novel; one never seen for this specific package is locally novel. Novelty is definitionally meaningless on first run, so its contribution is maturity-gated (see step 3).
 
@@ -129,12 +129,12 @@ The score maps to a verdict class:
 | 21+ | FLAGGED | Signals warrant review before updating |
 | Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change; requires manual review |
 
-The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 45; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 15-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
+The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 35; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 25-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
 
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
 1. **Cold database.** The score is in the Medium band (21 to 50), maturity is below 0.5 (fewer than 25 recorded analyses; novelty reaches full weight at 50), and no HIGH, CRITICAL or FATAL finding fired. Novelty is the only thing holding the score up, and novelty is not trustworthy on a cold database.
-2. **Incomplete coverage.** The run recorded a coverage gap (`diff_truncated`, `line_truncated`, `tree_not_analyzed` or `unresolved_source`) and no HIGH or worse finding fired. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
+2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, or `deps_not_scanned`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
 
 In both cases a HIGH, CRITICAL or FATAL finding keeps its own band: an analysis that found something does not get to hide it behind "inconclusive".
 
@@ -144,8 +144,8 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- **1,535 tests**, **69.1% zero-rate** on the 3,246-diff locked corpus, **100% malicious recall** (all labelled fixtures).
-- **CRITICAL p5 = 60**, **benign p95 = 45**: the gap that matters.
+- **2,609 tests**, **68.3% zero-rate** on the 3,739-diff locked corpus, **100% malicious recall** (all labelled fixtures).
+- **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).
 

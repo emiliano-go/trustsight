@@ -70,15 +70,13 @@ The ceiling of sandbox analysis is "observed clean in this specific execution." 
 ## Security model
 
 
-## When to use the sandbox
+## If the sandbox is ever implemented
 
 | Situation | Use sandbox? |
 |-----------|-------------|
-| Routine version bump, UNFLAGGED verdict | No : static analysis is sufficient |
-| FLAGGED, MEDIUM score, novelty only | Optional : inspect first, sandbox if uncertain |
-| FLAGGED, HIGH or CRITICAL | Yes : especially if the diff contains new commands or obfuscation |
-| FATAL rule (R012/R013) | Sandbox is not useful : do not install. Prompt injection cannot be safely executed. |
-| INCONCLUSIVE, cold database | Consider sandbox : it adds runtime evidence the static model lacks |
+| Routine version bump, UNFLAGGED verdict | Not available; use static analysis and read the diff. |
+| FLAGGED or INCONCLUSIVE | Not available; use `trustsight inspect` and manual review. |
+| FATAL rule (R012/R013) | Do not install. Prompt injection and Unicode deception cannot be safely executed. |
 
 ## See also
 

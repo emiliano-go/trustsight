@@ -18,6 +18,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "current_maintainer": "string",
   "diff_summary": {
     "files_changed": ["string"],
+    "file_changes": [{"path": "string", "status": "modified"}],
     "lines_added": int,
     "lines_removed": int
   },
@@ -43,6 +44,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "severity": "string",
       "weight": int,
       "reason": "string",
+      "params": {},
       "template": "string",
       "evidence": {},
       "file": "string",
@@ -137,6 +139,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | Field | Type | Description |
 |-------|------|-------------|
 | `files_changed` | `list[string]` | File paths touched in the diff (filtered to `PKGBUILD`, `.SRCINFO`, `*.install`). |
+| `file_changes` | `list[dict]` | File-change rows, each with `path` and `status` (`added`, `removed`, or `modified`). |
 | `lines_added` | `int` | Total insertion count from `pygit2.Diff.stats.insertions`. |
 | `lines_removed` | `int` | Total deletion count from `pygit2.Diff.stats.deletions`. |
 
@@ -154,7 +157,7 @@ Extracted by `generate_diff()` in `src/trustsight/differ.py`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `<url>` | `string` | Each added URL maps to its bucket classification: `"trusted_forge"`, `"official"`, `"self_hosted"`, `"raw_hosting"`, `"unknown"`, or `"homograph_attack"`. |
+| `<url>` | `string` | Each added URL maps to its bucket classification: `"trusted_forge"`, `"official"`, `"raw_hosting"`, `"unknown"`, or `"homograph_attack"`. |
 
 Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 
@@ -163,7 +166,7 @@ Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `resolved_commands` | `list[string]` | Fully resolved command strings after tokenization and variable expansion. Each is a single command extracted from the diff. |
-| `suspicious_patterns_detected` | `list[string]` | Rule IDs (`R001`-`R013`, `R039`-`R082`, `C001`-`C007`, `D001`-`D004`) that fired during analysis. |
+| `suspicious_patterns_detected` | `list[string]` | Rule IDs from the published R/C/D/S/X families that fired during analysis. |
 | `unresolved_patterns` | `list[string]` | Strings anywhere in the diff that the tokenizer could not fully resolve. Diagnostic only: nothing reads this field to decide a verdict. The subset that affects a verdict is the `source=` case, reported as the `unresolved_source` coverage gap and quoted in `unresolved_sources`. |
 
 Resolution performed by `tokenize_and_resolve()` in `src/trustsight/tokenizer.py`.
@@ -186,10 +189,11 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier: `R001`-`R013`, `R039`-`R131`, `C001`-`C007`, `D001`-`D004`, `P001`-`P007` (declared practice, always weight 0), `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published R/C/D/S/X catalog, `P001`-`P007` (declared practice, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. Truncated to 80 characters in CLI display; full string in JSON. |
+| `params` | `dict` | Parameters retained by the score entry for rendering or storage. |
 | `template` | `string` | The render string for this finding, with `{placeholders}` filled from `evidence`. Output is rendered from the template, so a finding says the same thing everywhere it appears. |
 | `evidence` | `dict` | The declared facts that triggered the rule, plus the raw matched text as `match`. This is what the finding is *about*, as opposed to prose describing it. |
 | `file` | `string` | The file the finding is in: `PKGBUILD`, `.SRCINFO`, `<name>.install`, or another path. |
@@ -210,7 +214,7 @@ The sum of all `weight` values, floored at 0 and capped at 100, equals `final_sc
 
 ## Database storage
 
-The `PackageFact` JSON is stored in the `analyses` table under the `fact_json` column (TEXT, JSON). Triggered rules are stored in a separate `triggered_rules` table keyed by analysis ID. See `insert_analysis()` in `src/trustsight/analysis/pipeline.py`.
+The `PackageFact` JSON is stored in the `analysis_history` table under the `fact_json` column (TEXT containing JSON). Triggered rules are stored in the separate `triggered_rules` table keyed by `analysis_history.id`. See `insert_analysis()` in `src/trustsight/analysis/pipeline.py`.
 
 ---
 
@@ -258,6 +262,12 @@ There are two JSON shapes, and they are not the same object.
   who needs it. Empty on an ordinary review, where the subject is the thing
   that was asked for - the key is always present so a consumer never has to
   special-case its absence.
+
+  `ReviewResult.to_dict()` and `trustsight review --json` serialize a **list**
+  of these report bodies, not a wrapper object. A review can complete its
+  command successfully while containing failed rows: those rows set `failed`
+  to `true` and state that the package was not vetted. A consumer must check
+  that field rather than treating an empty finding list as a clean result.
 
 `risk` is the bare band (`"Low"`, `"Medium"`, `"High"`, `"Critical"` or
 `"Inconclusive"`). It is a **closed set**: a FATAL finding does not

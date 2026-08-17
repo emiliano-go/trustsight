@@ -15,8 +15,8 @@ The benign corpus includes package updates that are not perfectly clean: routine
 The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
 
 - **CRITICAL** p5 = 60
-- **Benign** p95 = 45
-- Gap = +15 points
+- **Benign** p95 = 35
+- Gap = +25 points
 
 Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
 
@@ -26,7 +26,7 @@ Absolute p95 on either class is not useful in isolation. A tool that scores ever
 
 The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
 
-If the CRITICAL p5 is 60 and the benign p95 is 45, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 15-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
+If the CRITICAL p5 is 60 and the benign p95 is 35, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 25-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
 
 The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
 
@@ -36,7 +36,7 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| Malicious recall | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled attack is rejected. The committed corpus is 164 fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. |
+| Malicious recall | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled attack is rejected. The committed corpus is 175 fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. |
 | Separation | benign p95 stays below malicious p5 (strict) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
 | Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
 | Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
@@ -52,16 +52,16 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the 3,246-diff locked corpus (point-in-time; re-derive with `scripts/rebaseline.py` when scoring changes):
+Measured against the 3,739-diff locked corpus (point-in-time; re-derive with `scripts/rebaseline.py` when scoring changes):
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 69.1% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 30.9% | benign diffs that fire at least one non-INFO rule |
+| Benign zero-rate | 68.3% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 31.7% | benign diffs that fire at least one non-INFO rule |
 | Malicious recall | 100% | 100% of labelled fixtures |
 | CRITICAL p5 | 60 | > benign p95 |
-| Benign p95 | 45 | < CRITICAL p5 (margin: 15) |
-| Tests | 1,535 (43 files) | n/a |
+| Benign p95 | 35 | < CRITICAL p5 (margin: 25) |
+| Tests | 2,609 (current checkout) | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model. A change that moves any metric past its gate is rejected in CI.
 
@@ -86,7 +86,7 @@ The per-stratum requirement prevents the benchmark from optimizing for easy clas
 
 Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 69.1% zero-rate means 69.1% of benign diffs score 0. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.3% zero-rate means 68.3% of benign diffs score 0. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

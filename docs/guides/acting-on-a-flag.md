@@ -16,7 +16,7 @@ This shows:
 
 - The **diff summary**: every line added, removed, or changed between the installed and candidate PKGBUILD.
 - **Resolved commands**: the expanded `source=()`, `sha256sums=()`, `validpgpkeys=()`, etc., as they would execute during the build.
-- **Triggered rules**: which [R-series](../reference/rules/index.md) and [C-series](../reference/rules/system.md#c-series) rules fired, with the specific lines that matched.
+- **Triggered rules**: which published R/C/D/S/X rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 
 ## Step 2: Trace the score to specific PKGBUILD lines
@@ -46,7 +46,7 @@ Every rule in the output references the line(s) that triggered it. Cross-referen
 
 - The score sits in the **25-50** range (Medium).
 - No HIGH, CRITICAL, or FATAL signals fired.
-- The database is **cold**: fewer than 25 recorded analyses for this package, so maturity is below 0.5 and novelty weight is not at full strength. Novelty reaches full weight at 50.
+- The database is **cold**: fewer than 25 effective observations across the database, so maturity is below 0.5 and novelty weight is not at full strength. Novelty reaches full weight at 50.
 
 The verdict is telling you: "I see some novelty but I don't have enough history to judge it. You need to look yourself." See [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
@@ -76,5 +76,5 @@ After investigation you may decide a rule is over-firing on your package set. Se
 ## See also
 
 - [Auditing before update](auditing-before-update.md): the review workflow.
-- [Rules reference (R001-R131)](../reference/rules/index.md): what each rule detects.
+- [Rules reference](../reference/rules/index.md): what each published rule detects.
 - [Evidence tiers](../reference/evidence-tiers.md): how evidence is weighted.

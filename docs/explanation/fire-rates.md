@@ -8,7 +8,7 @@ Fire rates measure the false-positive rate of each rule: how often it fires on a
 fire_rate = hits / n_diffs
 ```
 
-Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). A fire rate of `0.15 %` means the rule fired on 5 diffs out of 3246; it is very unlikely to trigger on a benign update.
+Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,739-diff locked corpus; individual historical hit counts are labelled with their source corpus.
 
 Fire rates are **false-positive rates**: every diff in the benign corpus is a real package update that passed its maintainer's review. A hit is a rule that fired on ordinary packaging, not on malice.
 
@@ -28,7 +28,7 @@ Fire rates are measured against the one locked corpus:
 
 | Corpus | Diffs | Packages | What it covers |
 |--------|-------|----------|----------------|
-| Benign (lock) | 3,246 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
+| Benign (lock) | 3,739 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
 
 The corpus is pinned by `corpus.lock` and regenerated deterministically from
 the AUR git mirror (CI rebuilds it before the calibration gates; a local
@@ -37,7 +37,7 @@ Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-me
 
 ## Core rules (R001-R013)
 
-Measured against the 3,246-diff locked corpus.
+The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|
@@ -46,7 +46,7 @@ Measured against the 3,246-diff locked corpus.
 | R003 | Base64 Decode and Execute | CRITICAL | ~0 % | |
 | R004 | Checksum Disabled | HIGH/INFO | <1 % | Corpus-dependent |
 | R005 | Checksum Emptied | HIGH | ~0 % | |
-| R006 | Insecure Download Protocol | MEDIUM | 0.00 % | Requires pipe after tar.gz on same resolved line |
+| R006 | Insecure Download Protocol | LOW | Not yet published | Added `http://` source without newly added checksum backing; programmatic, diff-aware rule |
 | R007 | Install File Modification | MEDIUM | <2 % | |
 | R008 | Unexpected File Download | HIGH | ~0 % | |
 | R009 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |
@@ -63,12 +63,12 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 
 | Measure | Value |
 |---------|-------|
-| benign corpus size | 3,246 diffs |
+| benign corpus size | 3,739 diffs |
 | benign median | 0 |
-| benign 95th percentile | 45 |
-| benign diffs scoring 0 | 69.1% |
-| benign diffs above the 20-point threshold | 16.3% |
-| percentile at which 20 sits | 83.7th |
+| benign 95th percentile | 35 |
+| benign diffs scoring 0 | 68.3% |
+| benign diffs above the 20-point threshold | 13.1% |
+| percentile at which 20 sits | 86.9th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 40 |
 
@@ -80,7 +80,7 @@ malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
 in the same commit.
 
-Calibrated against the 3,246-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+Calibrated against the current 3,739-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|

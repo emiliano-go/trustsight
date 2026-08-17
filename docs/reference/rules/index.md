@@ -1,8 +1,9 @@
 # Rules Reference
 
-TrustSight uses rules to detect structural signals in PKGBUILD diffs. Each
-rule contributes to the final score based on its severity weight, match
-target, and scope.
+TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
+inventory includes the R-series through R143, sabotage rules S001-S008, and
+crossfire rules X001-X007; each contributes according to its severity weight,
+match target, and scope.
 
 This page is the map. [The rule system reference](system.md) explains how
 the engine works and holds everything that is not an individual rule: the
@@ -43,10 +44,9 @@ generated from it by `scripts/build_rules_index.py`.
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 <!-- /generated: legend -->
 
-Crossfire ships nothing yet. It is listed because the category is defined
-and reserved, not because rules exist under it; see
-[crossfire.md](crossfire.md) for what it is for and why nothing is
-implemented.
+Crossfire is the anti-evasion family introduced in the current ruleset. Its
+seven rules detect tokenizer defeat and command reconstruction; see
+[crossfire.md](crossfire.md) for the family boundary and rule descriptions.
 
 ## Reading a rule entry
 
@@ -62,7 +62,7 @@ Each entry states the same facts in the same order:
 - **Pattern** or **Condition**: what makes the rule fire. Quoted patterns
   are checked against the shipped `rules.toml` on every test run, so a
   pattern here cannot drift from the one that runs.
-- **Fire rate**, where measured: hits on the 3,246-diff benign corpus.
+- **Fire rate**, where measured: hits on the current 3,739-diff benign corpus, unless a page explicitly identifies a historical measurement.
   These are false-positive rates. The full table is in
   [measured fire rates](system.md#experimental-fire-rates).
 
@@ -91,7 +91,7 @@ is deliberately non-contiguous; see
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | CRITICAL | [Obfuscation](obfuscation.md) |
 | [R004](integrity.md#r004) | Checksum Disabled | HIGH | [Integrity and Verification](integrity.md) |
 | [R005](integrity.md#r005) | Checksum Emptied | HIGH | [Integrity and Verification](integrity.md) |
-| [R006](fetch-and-execution.md#r006) | Insecure Download Protocol | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [R006](fetch-and-execution.md#r006) | Insecure Download Protocol | LOW | [Fetch and Execution](fetch-and-execution.md) |
 | [R007](install-and-persist.md#r007) | Install File Modification | MEDIUM | [Install and Persistence](install-and-persist.md) |
 | [R008](fetch-and-execution.md#r008) | Unexpected File Download | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [R009](fetch-and-execution.md#r009) | Privilege Escalation | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
@@ -99,7 +99,7 @@ is deliberately non-contiguous; see
 | [R011](fetch-and-execution.md#r011) | Uses wget in PKGBUILD | LOW | [Fetch and Execution](fetch-and-execution.md) |
 | [R012](deception.md#r012) | Prompt Injection Detection | FATAL | [Deception and Anti-Analysis](deception.md) |
 | [R013](deception.md#r013) | Unicode Bidi Override | FATAL | [Deception and Anti-Analysis](deception.md) |
-| [R014](integrity.md#r014) | validpgpkeys Added | HIGH | [Integrity and Verification](integrity.md) |
+| [R014](integrity.md#r014) | Retired (no active rule) | - | [Integrity and Verification](integrity.md) |
 | [R016](naming-and-dependency.md#r016) | New Make/Opt/Check Dependency | INFO | [Naming and Dependencies](naming-and-dependency.md) |
 | [R017](install-and-persist.md#r017) | Setuid/Setgid Permission | HIGH | [Install and Persistence](install-and-persist.md) |
 | [R018](staging-and-recon.md#r018) | Symlink Redirect | MEDIUM | [Staging and Reconnaissance](staging-and-recon.md) |

@@ -323,7 +323,9 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
 
 _ONION_HOST_RE = re.compile(r"\b[a-z0-9-]+\.(?:onion|i2p)\b", re.IGNORECASE)
 _DOH_QUERY_RE = re.compile(r"https?://[^\s'\"\)]*dns-query", re.IGNORECASE)
-_DOH_HOST_RE = re.compile(r"https?://([a-z0-9.-]+)/", re.IGNORECASE)
+# DNS hostnames are at most 253 characters; bounding this avoids unbounded
+# backtracking when a URL-like prefix has no path separator.
+_DOH_HOST_RE = re.compile(r"https?://([a-z0-9.-]{1,253})/", re.IGNORECASE)
 
 
 def _covert_clients(config) -> list[re.Pattern]:

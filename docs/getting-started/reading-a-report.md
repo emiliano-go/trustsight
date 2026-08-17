@@ -9,7 +9,7 @@ A misread verdict is worse than no verdict. This page explains exactly what ever
 A **score** is a measurement of how many risk signals fired during analysis and how much those signals weigh. It is **not** a probability of malice, and it is **not** a guarantee of safety.
 
 - A package scoring **0** has no detectable risk signals. That does not mean it is safe: only that nothing in the diff triggered a rule. Attackers can use subtle techniques that leave no trace in PKGBUILD structure. See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
-- A package scoring **100** has one or more FATAL signals (R012 prompt injection or R013 unicode bidi override) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
+- A package scoring **100** has one or more FATAL signals (R012 prompt injection, R013 unicode bidi override, or a confirmed IOC match) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
 
 The scoring is **deterministic**: same diff, same config, same database state → same score, every time.
 
@@ -23,9 +23,9 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**69.1 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **45**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The test suite covers **1,535 tests** across all modules.
+**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The current checkout collects **2,599 tests**.
 
-The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 83.7th, so about **16 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### FLAGGED (score > 20)
 
@@ -46,11 +46,11 @@ One or more risk signals fired. The severity category (Medium / High / Critical)
 
 ### INCONCLUSIVE
 
-The score is in the Medium range (21-50), but **every contributing signal came from novelty** and the **observation database is cold** (shallower than 50 prior runs). The tool is telling you it does not have enough data.
+The score is in the Medium range (21-50), maturity is below 0.5 (fewer than 25 effective observations), and no HIGH, CRITICAL, or FATAL finding fired. The tool is telling you that weak signals, including novelty, are not yet mature enough to support that band. Any coverage gap can also produce INCONCLUSIVE unless a HIGH-or-worse finding stands on its own.
 
 INCONCLUSIVE is **not** UNFLAGGED. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
-The maturity gate scales novelty weights by `observation_count / 50`. At zero observations, novelty contributes zero weight. At 49, it contributes ~98 %. After 50, all novelty signals are at full weight. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
+The maturity gate scales novelty weights by the database-wide effective observation count divided by 50. At zero observations, novelty contributes zero weight. At 49, it contributes ~98 %. After 50, all novelty signals are at full weight. A signed seed can supply the bootstrap count, and analyses of any packages increase the same global history. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
 ---
 
@@ -58,7 +58,7 @@ The maturity gate scales novelty weights by `observation_count / 50`. At zero ob
 
 The score breakdown in `trustsight inspect` groups signals into four evidence tiers. Each tier represents a fundamentally different kind of information:
 
-### Tier A : Structural (rules R001-R131 + C001-C007)
+### Tier A : Structural (R/C/D/S/X rules)
 
 Pattern-matched from the PKGBUILD diff. These are direct, observable facts about what the build script does:
 
@@ -78,24 +78,23 @@ Tier A signals are the strongest evidence. CRITICAL recall is **100 %**: every C
 
 R012's low recall is intentional. It is a tripwire: when it fires, you know something is almost certainly malicious. When it does not, nothing can be concluded. Attackers have too many ways to rephrase injection payloads.
 
-Rules span **R001-R131** (detection rules) and **C001-C007** (context rules for checksum and source-integrity heuristics). C-rules range from INFO to CRITICAL severity depending on the specific finding.
+Rules span the R-series detection rules, C-series structural rules, D-series dependency rules, S-series sabotage rules, and X-series crossfire rules. The complete inventory, including reserved gaps and declared-practice P-series findings, is maintained in the [rules reference](../reference/rules/index.md).
 
 ### Tier B : Priors / Context (source bucket classification)
 
-Every new source URL in the diff is classified into a domain bucket. These are priors based on domain reputation:
+Every new source URL in the diff is classified from its host into a bucket. These are priors based on host/domain reputation:
 
 | Bucket | Modifier | Examples |
 |--------|----------|---------|
 | Trusted forge | 0 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | Official | 0 | python.org, kernel.org, nginx.org, archlinux.org |
-| Self-hosted | +10 | Custom domains under the maintainer's control |
 | Raw hosting | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | Unknown | +20 | Any domain not in the allowlist |
 | Homograph attack | +30 | Visually confusable characters (githab.com with Cyrillic letters) |
 
 A trusted forge adds nothing and subtracts nothing. It is reported separately as the declared-practice finding `P007`.
 
-Tier B signals are weaker than Tier A. An unknown domain alone does not prove malice : many legitimate projects self-host.
+Tier B signals are weaker than Tier A. Classification uses static configured lists and a homograph check, not a corpus reputation model. An unknown domain alone does not prove malice : many legitimate projects use domains outside the lists.
 
 ### Tier C : History / Novelty (first-seen tracking)
 
@@ -107,7 +106,7 @@ Tracks whether URLs and maintainers have been seen before, both globally and per
 | URL first seen in this package | +5 | × maturity multiplier |
 | Maintainer first seen for this package | +15 | × maturity multiplier |
 
-All novelty signals are **maturity-gated** by the number of prior observations of this package. A completely fresh database produces zero novelty weight. This prevents false-positive floods on first run.
+All novelty signals are **maturity-gated** by the database-wide effective observation count, not a package-specific history. A completely fresh database produces zero novelty weight. This prevents false-positive floods on a cold start.
 
 ### Tier D : Verification (declared, never scored)
 
@@ -140,7 +139,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier. R001-R131 are detection rules; C001-C007 are context rules; P001-P007 are declared-practice findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
+| `R004` | Rule identifier from the published R/C/D/S/X catalog; P001-P007 are declared-practice findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 
@@ -175,7 +174,7 @@ Output:
 ```
 TrustSight Inspect: sketchy-package
   Version: 1.0-1 → 1.1-2
-  Score: 55/100 (Medium)
+  Score: 53/100 (High)
 
   Diff Summary
   Files changed: PKGBUILD
@@ -189,15 +188,15 @@ TrustSight Inspect: sketchy-package
   Score Breakdown
   +25 HIGH   R004  Checksum Disabled: sha256sums=SKIP (no justification found)
   +20 MEDIUM SOURCE_BUCKET  Source URL classified as unknown
-  +15 HIGH   NOVELTY  Source URL first seen globally (maturity=0.80)
+  +8 HIGH    NOVELTY  Source URL first seen globally (maturity=0.80)
     0 INFO   P002  validpgpkeys declared
 
   Verdict
   Checksum set to SKIP without VCS/signature justification. New download
-  URL from sketchy-cdn.example.com : domain not seen before.
+  Source URL has not been observed before.
 ```
 
-**Interpretation**: The total is 25 + 20 + 15 = **60**. The checksum was disabled (Tier A, strong signal) without justification. The new source URL comes from an unknown domain (Tier B, moderate) and has never been seen before (Tier C, moderate : maturity at 80 % so near full weight). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 60, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
+**Interpretation**: The total is 25 + 20 + 8 = **53**. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 53, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
 
 ---
 

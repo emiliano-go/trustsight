@@ -286,7 +286,6 @@ INFO = 0
 [source_bucket_weights]
 trusted_forge = 0
 official = 0
-self_hosted = 10
 raw_hosting = 15
 unknown = 20
 homograph_attack = 30
@@ -1540,9 +1539,25 @@ def enforce_fatal_rules(rules: list[dict]) -> tuple[list[dict], list[str]]:
 
 
 def load_rules() -> list[dict]:
-    """Load rules from rules.toml, with the shipped FATAL set re-asserted."""
+    """Load rules from rules.toml, applying per-rule config.toml controls.
+
+    ``[rules.R001]`` controls apply only to rules defined in rules.toml.
+    Code-emitted rules have no TOML definition and intentionally keep their
+    own configuration paths.
+    """
     data = load_toml("rules.toml")
     rules, restored = enforce_fatal_rules(data.get("rules", []))
+    controls = load_config().get("rules", {})
+    for rule in rules:
+        control = controls.get(rule.get("id"), {})
+        if not isinstance(control, dict):
+            continue
+        for key in ("enabled", "weight_override"):
+            if key in control:
+                rule[key] = control[key]
+        if rule.get("severity") == "FATAL" and rule.get("enabled") is False:
+            rule["enabled"] = True
+            _log.warning("refusing to disable FATAL rule %s", rule["id"])
     if restored:
         _log.warning(
             "rules.toml is missing or has downgraded FATAL rule(s) %s; "
@@ -1651,7 +1666,8 @@ def config_fingerprint() -> str:
         return {
             k: rule.get(k) for k in
             ("id", "pattern", "severity", "category", "match_target",
-             "scope", "added_only", "include_comments", "experimental")
+             "scope", "added_only", "include_comments", "experimental",
+             "enabled", "weight_override")
         }
 
     config = load_config()

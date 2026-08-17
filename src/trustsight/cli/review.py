@@ -186,8 +186,6 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 include_score=show_score or show_risk,
                 verbose=verbose,
             )
-            if verbose:
-                jr["triggered_rules"] = r.get("triggered_rules", [])
             json_results.append(jr)
         typer.echo(json.dumps(json_results, indent=2))
         return

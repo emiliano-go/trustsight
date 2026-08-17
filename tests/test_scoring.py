@@ -54,6 +54,17 @@ def test_calculate_score_one_rule():
     assert level == "High"                    # what the severity requires
 
 
+def test_a_rule_weight_override_replaces_its_severity_weight():
+    triggered = [{
+        "rule_id": "R010", "severity": "LOW", "name": "curl",
+        "match": "curl", "weight_override": 17,
+    }]
+    score, breakdown, _level = calculate_score(
+        triggered, {}, NoveltyContext(observation_count=999), SHARED_CONFIG)
+    assert score == 17
+    assert breakdown[0].weight == 17
+
+
 def test_a_high_finding_is_not_floored():
     """The floor is CRITICAL-only: HIGH keeps the band its weight earns."""
     triggered = [{"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip",
@@ -137,20 +148,20 @@ def test_score_mixed_buckets():
 def test_score_novelty_url_first_globally():
     novelty = NoveltyContext(url_first_seen_globally=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, SHARED_CONFIG)
-    assert score == 15
+    assert score == 10
     assert any(e.rule_id == "NOVELTY" for e in breakdown)
 
 
 def test_score_novelty_url_first_in_package():
     novelty = NoveltyContext(url_first_seen_in_this_package=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, SHARED_CONFIG)
-    assert score == 10
+    assert score == 5
 
 
 def test_score_novelty_maintainer_first():
     novelty = NoveltyContext(maintainer_first_seen_for_this_package=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, SHARED_CONFIG)
-    assert score == 20
+    assert score == 15
 
 
 def test_score_novelty_all():
@@ -161,7 +172,7 @@ def test_score_novelty_all():
         observation_count=50,
     )
     score, breakdown, level = calculate_score([], {}, novelty, SHARED_CONFIG)
-    assert score == 45  # 10 + 15 + 20
+    assert score == 30  # 5 + 10 + 15
     assert level == "Medium"
 
 
@@ -351,8 +362,8 @@ def test_inconclusive_not_warm_db():
     score, breakdown, level = calculate_score(
         triggered, {"https://evil.com/x": "unknown"}, novelty, SHARED_CONFIG,
     )
-    # 5 (LOW) + 20 (unknown) + 15*0.6 (maturity=30/50) = 34 → Medium
-    assert score == 34
+    # 5 (LOW) + 20 (unknown) + 10*0.6 (maturity=30/50) = 31 → Medium
+    assert score == 31
     assert level == "Medium"
 
 

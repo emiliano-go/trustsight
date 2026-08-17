@@ -60,6 +60,9 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
    trustsight --help
    ```
 
+   `check()` runs the shipped suite but excludes `tests/test_fetcher.py` and
+   `tests/test_rebaseline.py`.
+
 5. Tag, push, and publish the release **with the tarball attached**:
 
    ```bash
@@ -98,7 +101,9 @@ not about the tool.
 No AUR dependencies are required.
 
 The novelty seed is no longer bundled inside the wheel; it is distributed as
-the signed `baseline-seed.tar.gz` release asset. On the first run the tool
-fetches and verifies it (mine with `trustsight seed fetch`), and on a
-machine without network access the first run simply starts from a cold
-database.
+the signed `baseline-seed.tar.gz` release asset. `trustsight seed fetch` fetches
+and verifies it explicitly. The only automatic release-channel fetch is the
+first seed import performed by `trustsight inspect` when `seed.auto_import` is
+enabled; `trustsight ioc update` is the other eligible release-fetch command.
+Analysis itself never fetches release assets. On a machine without network
+access, an eligible seed import starts from a cold database.

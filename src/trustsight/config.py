@@ -301,6 +301,17 @@ url_first_in_package = 5
 url_first_globally = 10
 maintainer_first_in_package = 15
 
+[review]
+# Controls which scored packages enter the review workload. This does not
+# change score arithmetic or risk bands. A package is flagged above its
+# selected profile's threshold.
+profile = "default"
+
+[review.profiles]
+default = 20
+quiet = 40
+strict = 10
+
 [deep]
 enabled = false
 threshold = 80
@@ -1691,6 +1702,9 @@ def config_fingerprint() -> str:
         "severity_weights": config.get("severity_weights", {}),
         "source_bucket_weights": config.get("source_bucket_weights", {}),
         "novelty_weights": config.get("novelty_weights", {}),
+        # The selected review policy changes which reports are flagged, even
+        # though it deliberately leaves score arithmetic unchanged.
+        "review_policy": _review_policy_material(config),
         "thresholds": load_thresholds(),
         "limits": config.get("limits", {}),
         "diff": config.get("diff", {}),
@@ -1707,3 +1721,11 @@ def config_fingerprint() -> str:
     canonical = json.dumps(material, sort_keys=True, separators=(",", ":"),
                            default=str).encode()
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+def _review_policy_material(config: dict) -> dict:
+    """Return the non-arithmetic policy fields covered by the fingerprint."""
+    from .review_policy import review_policy
+
+    policy = review_policy(config)
+    return {"name": policy.name, "threshold": policy.threshold}

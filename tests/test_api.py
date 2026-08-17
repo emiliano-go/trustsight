@@ -433,6 +433,26 @@ def test_flagged_matches_the_threshold_the_cli_counts(ts, monkeypatch):
     assert ts.inspect("over", check_aur=False).flagged is True
 
 
+def test_quiet_profile_changes_flagged_not_the_risk_band_or_score(ts, monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.analysis.analyze_package",
+        lambda name, **_kw: _fact(name, score=30, risk="Medium"),
+    )
+    monkeypatch.setattr(
+        "trustsight.review_policy.load_config",
+        lambda: {"review": {"profile": "quiet"}},
+    )
+
+    report = ts.inspect("quiet", check_aur=False)
+    assert report.score == 30
+    assert report.risk == "Medium"
+    assert report.flagged is False
+    data = report.to_dict()
+    assert data["review_profile"] == "quiet"
+    assert data["review_threshold"] == 40
+    assert data["flagged"] is False
+
+
 def test_a_report_serialises_to_the_documented_json(ts, monkeypatch):
     monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("json-pkg"))
 

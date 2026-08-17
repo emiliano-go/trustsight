@@ -37,8 +37,9 @@ which is the very channel TrustSight exists to audit; the trust anchor for
 the tool's priors was therefore the thing under review, and that was circular.
 
 The seed no longer lives in the package. It is built by the published
-scripts, signed by a key held out-of-band (never in the repository), and
-distributed through the release channel, which is not the AUR. At import time
+scripts, signed by the centralized distribution key held out-of-band (never in
+the repository), and distributed through the release channel, which is not the
+AUR. At import time
 the tool downloads the bounded artifact bytes, then verifies their detached
 ed25519 signature against a public key pinned in the source tree
 (`src/trustsight/full_aur/baseline_pubkey.pem`) before parsing or importing
@@ -47,6 +48,12 @@ as the corpus baseline
 ([A13](../security.md#the-invariants)) and the IOC baselines
 ([A13b](../security.md#the-invariants)), and the key's fingerprint is in
 [baseline keys](../reference/baseline-keys.md).
+
+The same pinned key authenticates all release-channel baseline assets. This
+centralizes trust: compromise of that key can authorize a hostile seed until an
+operator installs a software release pinning a replacement key; there is no
+in-band revocation for installed versions. The response and rotation procedure
+is in [Publishing Baselines](../contributing/publishing-baselines.md#key-compromise-and-rotation).
 
 On machines without a network connection the seed is simply absent: the
 first run degrades to cold start, which is the honest fallback for an

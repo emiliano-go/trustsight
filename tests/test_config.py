@@ -28,6 +28,42 @@ def test_load_config_creates_default(tmp_path, monkeypatch):
     # test_novelty_weights_keep_a_borderline_package_out_of_high.
     assert config["novelty_weights"]["url_first_globally"] == 10
     assert config["novelty_weights"]["maintainer_first_in_package"] == 15
+    assert config["review"]["profile"] == "default"
+    assert config["review"]["profiles"] == {"default": 20, "quiet": 40, "strict": 10}
+
+
+def test_review_profiles_are_validated_and_change_the_fingerprint(monkeypatch):
+    import trustsight.config as config_module
+    import trustsight.review_policy as policy_module
+
+    default = {"review": {"profile": "default"}}
+    quiet = {"review": {"profile": "quiet"}}
+    monkeypatch.setattr(policy_module, "load_config", lambda: default)
+    assert policy_module.review_policy().threshold == 20
+    assert policy_module.review_policy(quiet).threshold == 40
+    assert policy_module.review_policy({"review": {"profile": "strict"}}).threshold == 10
+
+    import pytest
+
+    with pytest.raises(ValueError, match="review.profile"):
+        policy_module.review_policy({"review": {"profile": "unknown"}})
+    with pytest.raises(ValueError, match=r"\[review\]"):
+        policy_module.review_policy({"review": "quiet"})
+    with pytest.raises(ValueError, match="threshold"):
+        policy_module.review_policy({"review": {"profiles": {"quiet": True}}})
+
+    monkeypatch.setattr(config_module, "load_rules", lambda: [])
+    monkeypatch.setattr(config_module, "load_thresholds", lambda: {})
+    monkeypatch.setattr(config_module, "load_config", lambda: default)
+    first = config_module.config_fingerprint()
+    monkeypatch.setattr(config_module, "load_config", lambda: quiet)
+    quiet_fingerprint = config_module.config_fingerprint()
+    assert quiet_fingerprint != first
+    monkeypatch.setattr(
+        config_module, "load_config",
+        lambda: {"review": {"profile": "quiet", "profiles": {"quiet": 35}}},
+    )
+    assert config_module.config_fingerprint() != quiet_fingerprint
 
 
 def test_load_config_bucket_weights(tmp_path, monkeypatch):

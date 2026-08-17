@@ -10,7 +10,7 @@ fire_rate = hits / n_diffs
 
 Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,739-diff locked corpus; individual historical hit counts are labelled with their source corpus.
 
-Fire rates are **false-positive rates**: every diff in the benign corpus is a real package update that passed its maintainer's review. A hit is a rule that fired on ordinary packaging, not on malice.
+Fire rates are **false-positive rates within this corpus**: every diff in the benign corpus is a real package update that passed its maintainer's review. A hit is a rule that fired on ordinary packaging, not on malice. They are point-in-time corpus measurements, not a claim about all AUR updates.
 
 ## The 30 % gate
 
@@ -52,7 +52,7 @@ The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retai
 | R009 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |
 | R010 | Uses curl in PKGBUILD | LOW | <2 % | |
 | R011 | Uses wget in PKGBUILD | LOW | <2 % | |
-| R012 | LLM Prompt Injection | FATAL | ~0 % | Tripwire; 17 % recall on malice corpus |
+| R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
 | R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs had zero-width joiners in localized text; fixed with ASCII-neighbour guard |
 
 ## Expanded rules (R039-R059)
@@ -79,6 +79,11 @@ gates assert only the property that matters for separation, `benign_p95 <
 malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
 in the same commit.
+
+The 13.1% threshold rate is the practical workload figure: on this locked
+benign corpus, about **1 in 8** updates would be flagged for review. It is more
+useful for capacity planning than the zero-rate, and must not be generalized
+beyond this corpus snapshot and configuration.
 
 Calibrated against the current 3,739-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 

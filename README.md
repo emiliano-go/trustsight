@@ -65,7 +65,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (about 180,000 known source URLs and 35,587 hashed maintainer identities, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
 | **Known-bad indicators** | Matches package URLs and strings against signed, federated IOC baselines from the release channel; reported in the IOC tier, outside the heuristic score |
 | **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
-| **Prompt injection** in package metadata | Pattern-matches common injection templates; primary defense is structural (R012) |
+| **Reviewer-directed instruction templates** in package metadata | Flags common reviewer-manipulation templates as a high-severity tripwire (R012); a match requires review, not an inference about author intent |
 | **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (R069) |
 | **Untrusted maintainer takeover** | A maintainer change to someone never seen before (R071) |
 | **Stale package revived** | A package with no updates for over a year suddenly gets one (R067) |
@@ -85,7 +85,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
 | **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
 
-The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. A clean score means no known risk signals fired, not that the package is safe. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/) for details.
+The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. The default review profile flags scores above 20; on the locked benign corpus that is about **1 in 8** review workload items. `quiet` and `strict` profiles change the queue without changing scores or bands. A clean score means no known risk signals fired, not that the package is safe. This is a point-in-time corpus measurement, not a universal false-positive rate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/) for details.
 
 ---
 
@@ -244,7 +244,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 145 documented rules across five scoring namespaces: 119 detection rules (R-series, part TOML-configurable and part code-emitted), 7 code-structure rules (C001-C007), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 7 crossfire anti-evasion rules (X001-X007). A sixth namespace, declared practice (P001-P007), reports at weight 0 and never scores. All of it is calibrated against a locked 3,739-diff benign corpus of real AUR updates, with 175 committed malicious fixtures on the other side.
+Signals come from 145 documented rules across five scoring namespaces: 119 detection rules (R-series, part TOML-configurable and part code-emitted), 7 code-structure rules (C001-C007), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 7 crossfire anti-evasion rules (X001-X007). A sixth namespace, declared practice (P001-P007), reports at weight 0 and never scores. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 

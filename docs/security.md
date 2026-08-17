@@ -4,11 +4,9 @@ description: What TrustSight is, what it claims, what it does not claim, and how
 
 # Security Model
 
-TrustSight is the **instrument panel, not the airworthiness certificate**.
+TrustSight is an **instrument, not a judge**. It reads AUR PKGBUILD diffs, applies published detection rules (the [rules reference](reference/rules/index.md) documents every shipped rule, pattern, and severity), and reports both findings and recorded gaps. It never decides whether a package is safe or authorizes an update; a person does. A quiet result means no monitored condition matched in the material examined, not that the package is safe.
 
-A quiet panel means no monitored condition tripped its threshold. It does not mean the aircraft is sound, and it does not authorize a takeoff: that is a decision the pilot makes. You abort the update or you authorize it, and nothing on this panel can do that for you. What a panel owes you is two things: every sensor it has reports honestly, and every sensor it does not have shows up as *missing* rather than dark. A gauge that reads zero because nothing is wrong and a gauge that reads zero because it was never wired are the same picture, and telling them apart is the entire job.
-
-So: an **instrument, not a judge**. TrustSight reads AUR PKGBUILD diffs, applies detection rules that are published in full (every shipped rule, its pattern and its severity, is in the [rules reference](reference/rules/index.md), and the code-emitted rules are in the open source), and reports what it found and what it could not see. It never decides whether a package is safe. A person does. That distinction - **input, not verdict** - is the foundation this page is built on, in four statements the rest of the document makes precise:
+That distinction, **input not verdict**, rests on four statements the rest of this page makes precise:
 
 - TrustSight reports on evidence, and on the absence of evidence.
 - Absence of evidence is never presented as proof of safety.
@@ -35,7 +33,11 @@ A package update is a moving target: new code, new URLs, new maintainers, new bu
 
 > **Parse** the PKGBUILD into a structured representation, **Analyse** it against pattern rules and context signals, **Score** the findings through an additive model, with declared practice reported at weight 0, **Classify** the result into a band, and **Report** the findings through a template, in the human-readable panel or the machine-readable JSON.
 
-The bands are `Low`, `Medium`, `High`, `Critical` and `Inconclusive`. This page says FLAGGED for anything above the 20-point threshold, UNFLAGGED for anything at or below it, and INCONCLUSIVE for the band of the same name; those are reading conventions for the prose, and `risk` in the JSON carries the band itself.
+The bands are `Low`, `Medium`, `High`, `Critical` and `Inconclusive`. The
+default `review` profile marks scores above 20 as flagged; `quiet` and `strict`
+profiles change that queue without changing arithmetic or bands. This page uses
+the default profile for workload figures. JSON carries the band in `risk` and
+the separate policy in `review_profile`, `review_threshold`, and `flagged`.
 
 **A band is not a pure function of the score, and two rules say so explicitly.** A cold database and a coverage gap both already override the arithmetic, and severity does too, in two places. First, **a CRITICAL finding floors the band at High**: CRITICAL weighs 40 and the High band opens at 51, so the sum alone can never lift a *single* CRITICAL above Medium, and a lone fork bomb or `rm -rf /` would read as a medium situation on arithmetic that says nothing about severity. The floor moves the band only - no score changes, so the calibrated separation between the benign and malicious score populations is untouched. Second, **a FATAL names itself in `risk_label`**: a FATAL caps the score at 100, so it arrives as `Critical` and so does a score that merely accumulated past 80, and those are different claims. `risk_label` reads `Critical (FATAL: R013)`. It rides the label rather than a new band because `risk` is a closed enum consumers gate on, and nothing is lost without one - the severity is in `score_breakdown` either way. Both are the shape [B4](#b4-fatal-cannot-be-switched-off) already establishes, where severity overrides arithmetic rather than adding to it.
 
@@ -89,7 +91,7 @@ What the tool promises, in one paragraph, is that its output is honest about the
 - **Isolated**: it never fetches a URL the package named, never executes package code, never extracts archives to disk, and never renders untrusted text unescaped.
 - **Locked**: FATAL rules cannot be turned off, and suppression is always visible.
 - **Configuration is visible, not silently mutable**: the operator may tune the instrument, but not without a trace. The config fingerprint (B1) captures the effective ruleset, thresholds and overrides; FATAL rules cannot be removed without the shipped-rule fallback and a logged warning (B4); and suppressed findings are always reported (B5). A local attacker with filesystem access can edit `rules.toml` or `overrides.toml`, because local permissions are a trusted assumption, but they cannot make the change invisible: the run then carries a different fingerprint, and any suppressed or downgraded rule shows in the output. The model separates operator intent from silent tampering by observability, not by prevention.
-- **Calibrated**: what the gates enforce is *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that the 20-point threshold sits at any particular percentile. Fire rates against a published benign corpus are measured; the threshold is a separate, evidence-backed decision (see the calibration table in B2).
+- **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 13.1% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
 
 Each of these stops being a promise the moment the machine breaks it. The gates in [Part C](#part-c-the-enforcement-map) are what turn them from sentences into structural commitments.
 
@@ -97,9 +99,9 @@ Each of these stops being a promise the moment the machine breaks it. The gates 
 
 An UNFLAGGED result means "no published rule matched the evidence that was actually examined". That is a statement about *detection* alone. It is not the same as "no attack is possible", and it is not, on its own, an instruction to update.
 
-This is the danger edge because it is where the panel is easiest to misread. An alarm you cannot see is as bad as no alarm at all, so the one light that must never be suppressible is the "I did not watch that" light. Everything in [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete) exists to keep that light lit.
+This is the easiest claim to misread. An unknown that is not visible is indistinguishable from a clean result, so incomplete analysis must always be reported. Everything in [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete) enforces that rule.
 
-A quiet panel still shows the readings. TrustSight reports what changed even when no rule matched, because a panel that goes blank when all is well is indistinguishable from one that has been switched off.
+TrustSight reports what changed even when no rule matched. Otherwise, "nothing fired" would be indistinguishable from "nothing happened".
 
 Concretely, an UNFLAGGED result does **not** claim:
 
@@ -254,7 +256,9 @@ The bundled seed's trust anchor is the package it ships in, and that anchor is c
 
 **A13. A baseline supplies state, not rules.** A corpus baseline is a larger version of the same trust decision. It is signature-verified against a pinned public key, its metadata snapshot rides outside the signed payload and is re-hashed against the signed hash on import (so a validly-signed artifact cannot be re-published with someone else's AUR metadata attached), and an unsigned import requires `--allow-unsigned` and is logged as local-only.
 
-**A distribution key is pinned (v0.12.0), so signed import works.** The shipped `full_aur/baseline_pubkey.pem` holds the 32 raw bytes of the release ed25519 public key, whose identity is recorded in [baseline keys](reference/baseline-keys.md). A baseline built and signed with the maintainer's private key (`trustsight full-aur --export <artifact> --sign <key>`) imports and verifies against it; a baseline you built yourself but did not sign still imports with `--allow-unsigned`. A build that ever ships a non-key file in that path refuses with a distinct `NoTrustedKeyError` that says the build pins no key, rather than the signature error that would accuse a valid artifact of being forged. The private key never enters the repository. The baseline release workflow receives it through the `BASELINE_SIGNING_KEY` CI secret to sign release assets; rotation means a release that pins a new public key.
+**A distribution key is pinned (v0.12.0), so signed import works.** The shipped `full_aur/baseline_pubkey.pem` holds the 32 raw bytes of the release Ed25519 public key, whose identity is recorded in [baseline keys](reference/baseline-keys.md). This is a centralized trust anchor: every release-channel seed, corpus baseline, and transport signature is accepted because it verifies under this one pinned key. A baseline built and signed with the maintainer's private key (`trustsight full-aur --export <artifact> --sign <key>`) imports and verifies against it; a baseline you built yourself but did not sign still imports with `--allow-unsigned`. A build that ever ships a non-key file in that path refuses with a distinct `NoTrustedKeyError` that says the build pins no key, rather than the signature error that would accuse a valid artifact of being forged. The private key never enters the repository. The baseline release workflow receives it through the `BASELINE_SIGNING_KEY` CI secret to sign release assets.
+
+**Key compromise and rotation.** There is no in-band revocation: a compromised current key can sign artifacts that existing releases will accept until operators install a release that pins a replacement public key. On suspected compromise, maintainers must immediately disable or replace `BASELINE_SIGNING_KEY`, stop publishing baseline assets under the old key, generate a replacement key, ship and announce a software release containing its public key and fingerprint, then publish a newly signed baseline family only after users can verify that release. Operators should upgrade to that release before fetching more baselines, retain the affected baseline tag and imported `seed_sha256` for investigation, and re-import a replacement baseline if the prior is no longer trusted. The detailed maintainer procedure is in [Publishing Baselines](contributing/publishing-baselines.md#key-compromise-and-rotation).
 
 The bound matters more than the signature, because a signature says who built the artifact, not that the contents are honest. A baseline writes exactly three things: package profiles, PKGBUILD snapshots, and the metadata snapshot. It cannot change a rule, a pattern, a severity, a weight or a threshold, and it executes nothing. So the worst thing a hostile-but-validly-signed baseline can do is A12's attack at corpus scale: supply a prior that makes the present look unexceptional, reducing novelty and longitudinal signals across many packages at once. What it cannot do is make a rule stop matching. Import a baseline from a corpus you would trust.
 

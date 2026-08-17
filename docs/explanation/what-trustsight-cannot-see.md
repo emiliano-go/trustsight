@@ -47,6 +47,18 @@ This narrows the gap; it does not close it:
 
 The D-series is enabled by default since v0.7.0; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
 
+## Registry-payload gap
+
+Campaign and corpus rules can identify a **shape**: coordinated package
+adoptions, synchronized metadata changes, or several packages converging on a
+shared source reference. That context can make a reviewer look harder, but it
+does not make registry content visible. TrustSight never downloads or executes
+the bytes that npm, PyPI, Cargo, or another registry returns to an unpinned
+build-time dependency. It therefore cannot determine whether that payload is
+malicious, whether a registry served different bytes to different users, or
+whether a lockfile accurately represents what was installed. `unpinned_build_deps`
+is reported as a coverage gap for this reason.
+
 ## Deliberately-unremarkable PKGBUILDs
 
 A malicious PKGBUILD that contains no detectable patterns (no `curl`, no `base64`, no checksum changes, no new URLs, no untrusted source buckets) will score 0. The tool detects *patterns associated with compromise*, not compromise itself. An attacker who knows the rule set can craft a PKGBUILD that evades all signals.
@@ -71,7 +83,10 @@ The composition rules that narrow this ceiling are grounded in real events. R089
 
 ## The limits of corpus-based detection
 
-The corpus prior is only as good as the corpus. Three failure modes exist:
+The corpus prior is optional and only as good as the corpus. Structural rules
+continue to run without it; novelty, dependency-history, and longitudinal
+signals are deliberately silent or reduced rather than treating an empty state
+as evidence. When an operator uses it, three failure modes exist:
 
 1. **A new legitimate domain that appears in exactly one package is classified as `unknown` and penalized.** This is a false positive. Source buckets are static configuration, so corpus observations do not change it; an operator must deliberately classify the domain if that is appropriate.
 

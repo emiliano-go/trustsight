@@ -69,7 +69,8 @@ __all__ = [
 # band becomes when the analysis could not support one.
 RISK_LEVELS = ("Low", "Medium", "High", "Critical")
 
-# Above this score the CLI counts a package as flagged in its summary line.
+# Compatibility alias for the Low-band ceiling.  Review workload uses
+# review_policy.review_policy(), which may select a different threshold.
 FLAG_THRESHOLD = 20
 MAX_API_PACKAGES = 10_000
 MAX_API_HISTORY = 10_000
@@ -236,6 +237,8 @@ class Report:
     version_comparison: str = ""
     """How the installed version relates to the AUR pkgver, or "" if nothing compared them."""
     adapter: str = "git"
+    review_profile: str = "default"
+    review_threshold: int = 20
     config_fingerprint: str = ""
     """Which rules, weights and overrides produced this.  Results are only
     comparable across runs with the same fingerprint."""
@@ -264,8 +267,8 @@ class Report:
 
     @property
     def flagged(self) -> bool:
-        """True when the score clears the threshold the CLI summary counts."""
-        return self.score > FLAG_THRESHOLD
+        """True when the score enters this report's configured review workload."""
+        return self.score > self.review_threshold
 
     @property
     def flagged_dependencies(self) -> tuple:
@@ -673,6 +676,9 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "diff_truncated": report.diff_truncated,
         "failed": False,
         "config_fingerprint": report.config_fingerprint,
+        "review_profile": report.review_profile,
+        "review_threshold": report.review_threshold,
+        "flagged": report.flagged,
         "raw": dict(report._raw),
     }
 
@@ -716,6 +722,8 @@ def _report_from_fact(fact) -> Report:
         tree_analyzed=fact.tree_analyzed,
         version_comparison=evaluated["version_comparison"],
         adapter=fact.adapter,
+        review_profile=evaluated["review_profile"],
+        review_threshold=evaluated["review_threshold"],
         config_fingerprint=evaluated["config_fingerprint"],
         _raw=raw,
         _evaluated=_body_source(evaluated, row=None),
@@ -777,6 +785,8 @@ def _report_from_result(row: dict) -> Report:
         diff_truncated=evaluated["diff_truncated"],
         version_comparison=evaluated["version_comparison"],
         required_by=tuple(evaluated.get("required_by", ())),
+        review_profile=evaluated["review_profile"],
+        review_threshold=evaluated["review_threshold"],
         _raw=raw,
         _evaluated=_body_source(evaluated, row=row),
     )

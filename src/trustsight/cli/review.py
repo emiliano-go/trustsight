@@ -230,7 +230,10 @@ def _summary_caption(reviewed, failed, flagged, total_installed, all_packages,
             f"(--limit); pass --limit 0 for all of them"
         )
     if show_score and flagged:
-        caption += f", {flagged} above the 20-point UNFLAGGED threshold"
+        from ..review_policy import review_policy
+
+        policy = review_policy()
+        caption += f", {flagged} above the {policy.threshold}-point {policy.name} review threshold"
     if failed:
         caption += f", {failed} could NOT be vetted"
     return caption
@@ -363,7 +366,9 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
 
         typer.echo()
 
-    flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+    from ..review_policy import review_policy
+    policy = review_policy()
+    flagged = sum(1 for r in results if policy.flagged(r["score"] or 0))
     failed = sum(1 for r in results if r.get("failed"))
     reviewed = len(results) - failed
     caption = _summary_caption(
@@ -494,7 +499,9 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
         panel = Panel(table, title=Text(clean(r["package"])), border_style=border)
         con.print(panel)
 
-    flagged = sum(1 for r in results if (r["score"] or 0) > 20)
+    from ..review_policy import review_policy
+    policy = review_policy()
+    flagged = sum(1 for r in results if policy.flagged(r["score"] or 0))
     failed = sum(1 for r in results if r.get("failed"))
     reviewed = len(results) - failed
     caption = _summary_caption(

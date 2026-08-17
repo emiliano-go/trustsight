@@ -106,9 +106,9 @@ class DependencyReport:
 
     @property
     def flagged(self) -> bool:
-        from .scoring import FLAG_THRESHOLD
+        from .review_policy import review_policy
 
-        return self.score > FLAG_THRESHOLD
+        return review_policy().flagged(self.score)
 
     def to_dict(self) -> dict:
         return {

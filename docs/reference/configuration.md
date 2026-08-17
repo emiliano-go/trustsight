@@ -54,6 +54,32 @@ Raw weights for Tier C novelty signals. These are multiplied by the maturity mul
 | `url_first_globally` | int | `10` | Raw weight for a URL never seen before in any package in the corpus. |
 | `maintainer_first_in_package` | int | `15` | Raw weight for a maintainer never seen before for this package. |
 
+### `[review]`
+
+Controls the review workload, not score arithmetic or risk bands. A report is
+`flagged` when its score is above the selected profile's threshold. JSON records
+the profile, effective threshold, and flag; the configuration fingerprint covers
+the selected policy too.
+
+| Profile | Default threshold | Intended use |
+|---------|-------------------|--------------|
+| `default` | `20` | Historical behavior; about 13.1% of locked benign-corpus diffs enter the review queue. |
+| `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
+| `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
+
+```toml
+[review]
+profile = "quiet"
+
+# Optional local changes to the three published workload choices.
+[review.profiles]
+quiet = 45
+```
+
+Only `default`, `quiet`, and `strict` are accepted. Thresholds must be integers
+from 0 through 100. Changing a profile does not change a score, risk band, or
+calibration result; it changes only the reports marked for review.
+
 ### Removed: `[verification_evidence]` and `[pinning_weights]`
 
 Both sections applied negative weights for declared checksums, PGP keys, GPG
@@ -119,7 +145,7 @@ A config written before this section existed still gets these defaults: `load_co
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `D001` | bool | `true` | Fire when a dependency name is added that has never been observed anywhere in the AUR. Requires a seeded `dependency_names` table; with no seed the rule stays silent rather than flagging everything. |
+| `D001` | bool | `true` | Optional corpus-context signal: fire when a dependency name is added that has never been observed anywhere in the AUR. Requires a seeded `dependency_names` table; with no seed the rule stays silent rather than flagging everything. This avoids measuring an empty database rather than an unusual dependency. |
 | `D002` | bool | `true` | Fire when a novel dependency name is within one or two edits of a popular one (`openss1` for `openssl`). Refines D001: a name is only compared once D001 has found it globally unknown. |
 | `D003` | bool | `true` | Fire when `makedepends` gains a network-capable tool (`curl`, `git`, `python-requests`, …), meaning the build can now fetch code that no checksum covers. |
 | `R060` | bool | `true` | Report that the diff modifies `build()`, `prepare()`, `check()`, or `package()`. INFO severity, so it carries weight 0 and cannot move a score: it fires on 21.4% of benign diffs and exists as reviewer context. On by default for that reason. |
@@ -133,12 +159,13 @@ A config written before this section existed still gets these defaults: `load_co
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `auto_import` | bool | `true` | On an eligible first CLI `review` or `inspect`, import the novelty seed when the database has neither a seed nor analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the fetch verifies it and skips silently when offline or verification fails. Other commands do not fetch it automatically. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
+| `auto_import` | bool | `true` | On an eligible first CLI `review` or `inspect`, optionally import the novelty seed when the database has neither a seed nor analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the fetch verifies it and skips silently when offline or verification fails. Set this to `false` to use structural detection without seeded context. Other commands do not fetch it automatically. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
 
 ### `[baselines]`
 
-Container for federated baseline sources.  Currently only the IOC baseline
-stage is implemented.
+Container for optional federated baseline sources. Currently only the IOC
+baseline stage is implemented. Baselines add attributed context; they never
+replace local structural detection or alter rules, weights, or thresholds.
 
 #### `[baselines.ioc]`
 

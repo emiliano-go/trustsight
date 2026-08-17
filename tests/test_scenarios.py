@@ -241,7 +241,7 @@ def test_subtle_maintainer_change():
 +sha256sums=('abc123...')"""
     r = _run_pipeline(diff, novelty_maintainer=True)
     assert r["score"] >= 10
-    assert r["score"] <= 30  # maintainer novelty (20) + forge(-10) = 10
+    assert r["score"] <= 30  # maintainer novelty is the only scoring signal.
 
 
 def test_subtle_install_file_infection():
@@ -279,20 +279,20 @@ def test_subtle_nothing_wrong_but_all_new():
         novelty_urls=["https://github.com/new-project/repo/releases/download/v1.0.0/pkg.tar.gz"],
         novelty_maintainer=True,
     )
-    # forge(-10) + novelty_first_global(15) + novelty_first_pkg(10) + maintainer_first(20) = 35
+    # Trusted-forge membership is reported at weight 0; novelty supplies the score.
     assert r["score"] >= 25
     assert r["level"] in ("Medium",)
 
 
 def test_subtle_checksum_emptied_with_forge_url():
     """On a trusted forge, checksum array is emptied.
-    Score: forge(-10) + R005(25) = 15, Medium."""
+    Forge membership is declared at weight 0; R005 supplies the score."""
     diff = """-sha256sums=('abc123...')
 +sha256sums=()
 +source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")"""
     r = _run_pipeline(diff)
     assert any(t["rule_id"] == "R005" for t in r["triggered_rules"])
-    assert r["score"] <= 25  # forge(-10) + R005(25) = 15
+    assert r["score"] <= 25  # R005 is the only scoring signal.
 
 
 def test_subtle_second_malicious_source_array_entry():
@@ -311,17 +311,18 @@ def test_subtle_dependency_injection():
     diff = """-depends=('python' 'glibc')
 +depends=('python' 'glibc' 'malicious-dep')"""
     r = _run_pipeline(diff)
-    # No direct rule for dependency injection, but this test documents the gap
-    assert r["score"] == 0  # No rules fire - this is a blind spot
+    # Dependency-specific rules handle selected structural cases; this fixture
+    # documents the remaining gap for an otherwise ordinary added name.
+    assert r["score"] == 0
 
 
 def test_subtle_protocol_downgrade():
-    """HTTPS → HTTP downgrade on same domain. No direct rule for this."""
+    """HTTPS → HTTP downgrade on the same domain."""
     diff = """-source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")
 +source=("http://github.com/trusted/project/archive/v2.0.0.tar.gz")"""
     r = _run_pipeline(diff)
-    # This is a blind spot - there's no rule for protocol downgrade
-    assert r["score"] <= 10  # forge(-10) = 0
+    # R006 checks added HTTP sources without changed checksum backing.
+    assert r["score"] <= 10
 
 
 def test_benign_desktop_file_update():

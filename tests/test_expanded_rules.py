@@ -32,6 +32,16 @@ def fires(rule_id: str, lines: list[str]) -> bool:
     return bool(apply_rules(resolved, lines, [rule], include_experimental=True))
 
 
+def fired_rule_ids(lines: list[str]) -> set[str]:
+    resolved = [ln[1:] for ln in lines if ln.startswith("+")]
+    return {
+        finding["rule_id"]
+        for finding in apply_rules(
+            resolved, lines, list(RULES.values()), include_experimental=True
+        )
+    }
+
+
 # --- Execution and obfuscation ---
 
 @pytest.mark.parametrize("line", [
@@ -183,6 +193,7 @@ def test_r052_ignores_skel_dotfile_in_pkgdir():
 def test_r053_setuid_inside_package_root(line):
     assert fires("R053", [line])
     assert not fires("R059", [line])
+    assert "R017" not in fired_rule_ids([line])
 
 
 @pytest.mark.parametrize("line", [
@@ -193,6 +204,11 @@ def test_r059_setuid_outside_package_root(line):
     """An absolute path is the live filesystem, not the staged package."""
     assert fires("R059", [line])
     assert not fires("R053", [line])
+    assert "R017" not in fired_rule_ids([line])
+
+
+def test_r017_catches_generic_setid_chmod_without_target_classification():
+    assert "R017" in fired_rule_ids(["+  chmod +s"])
 
 
 @pytest.mark.parametrize("mode", ["644", "755", "600", "640", "664", "+x"])

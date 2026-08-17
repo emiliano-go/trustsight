@@ -40,8 +40,15 @@ Returns 0 only when SQLite reports `ok`. A corrupt database, including in
 
 ### `trustsight history`
 
-Exit code 2 if the database cannot be opened. Exits 0 even if no history is found
-for the requested package: an empty result is not an error.
+Exit code 2 if the database cannot be opened, the package has never been
+analysed, or the limit is negative. An existing package with no retained rows
+returns 0 and an empty result.
+
+### `trustsight lint-rules`
+
+Returns 0 when linting completes without errors, including when warnings or
+missing/superseded shipped-rule notices are reported. Returns 2 for lint errors
+or a nonexistent `--file` path.
 
 ### `trustsight full-aur`
 

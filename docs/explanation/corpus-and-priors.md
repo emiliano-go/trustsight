@@ -8,7 +8,7 @@ not corpus-derived frequency classifications.
 
 1. **Mirror pull**: a full AUR mirror is pulled via rsync over the AUR archive (approximately 89k packages).
 2. **Diff extraction**: PKGBUILDs and related files (`.install`, `.patch`, systemd service files) are extracted for every package.
-3. **URL extraction**: every `source=` entry, `url=`, and `validpgpkeys=` value is extracted and normalized across the entire corpus.
+3. **Observation extraction**: source URLs, maintainer identities, and dependency names are extracted and normalized for the seed's novelty and dependency history.
 4. **Seed packaging**: the resulting observations are hashed where required and
    packaged as a signed seed.
 

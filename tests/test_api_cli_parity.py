@@ -84,6 +84,13 @@ def test_review_result_uses_the_cli_json_list_shape():
     ) == [report.to_dict(include_score=True, verbose=True)]
 
 
+def test_metadata_bootstrap_uses_the_empty_review_json_list_shape():
+    result = ReviewResult(metadata_bootstrapped=True)
+
+    assert result.metadata_bootstrapped is True
+    assert result.to_dict() == []
+
+
 def test_the_score_is_withheld_until_it_is_asked_for():
     """The default body is evidence; the number is available on request."""
     from trustsight.reporting import SCORE_KEYS, report_body

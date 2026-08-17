@@ -81,3 +81,18 @@ def test_inspect_not_found_is_an_error_for_scripting(tmp_path, monkeypatch):
 
     result = runner.invoke(app, ["inspect", "pkg-that-nowhere-exists"])
     assert result.exit_code == 2
+
+
+def test_review_json_first_metadata_bootstrap_is_an_empty_success(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    monkeypatch.setattr(
+        "trustsight.cli.review._discover_packages", lambda **kwargs: (None, 0)
+    )
+
+    result = runner.invoke(app, ["review", "--json"])
+
+    assert result.exit_code == 0
+    assert result.stdout == "[]\n"

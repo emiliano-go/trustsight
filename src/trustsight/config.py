@@ -770,6 +770,20 @@ scope = ["function_body", "other"]
 added_only = true
 
 [[rules]]
+id = "R017"
+name = "Setuid/Setgid Permission"
+# R053/R059 provide the more useful package-root versus live-filesystem
+# finding when a target is present.  This generic form remains the fallback
+# for an otherwise unclassified chmod command.
+pattern = 'chmod.*\\+s'
+severity = "HIGH"
+category = "privilege"
+match_target = "raw_line"
+scope = ["function_body", "other"]
+added_only = true
+exclude_if_matches = ["R053", "R059"]
+
+[[rules]]
 id = "R054"
 name = "Persistence Unit Outside Package Root"
 # The path anchor used to be [\\s"'] alone, which only reaches the

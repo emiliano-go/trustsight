@@ -23,7 +23,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The current checkout collects **2,599 tests**.
+**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). The current checkout collects **2,613 tests**.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
@@ -110,7 +110,7 @@ All novelty signals are **maturity-gated** by the database-wide effective observ
 
 ### Tier D : Verification (declared, never scored)
 
-When the post-diff PKGBUILD declares structural integrity protections, they are reported as weight-0 findings in the `P` namespace. They do not move the score in either direction:
+When the statically visible post-diff PKGBUILD text declares structural integrity protections, they are reported as weight-0 findings in the `P` namespace. They do not move the score in either direction:
 
 | Evidence | Finding | Weight |
 |----------|---------|--------|
@@ -121,7 +121,7 @@ When the post-diff PKGBUILD declares structural integrity protections, they are 
 
 TrustSight never fetches, so it cannot confirm that a declared key signs anything or that a pinned commit holds what it claims, and adding any of these costs an attacker nothing. They are reported so *you* can check them, which is something you can do and the tool cannot. See [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
-Verification evidence is computed over the resolved end-state of the PKGBUILD, not over the diff delta. A checksum that was already present and unchanged still counts.
+Verification evidence is computed from the static post-diff text available to the analysis, not from database history or a fetched artifact. It records a declaration only; it does not establish that an unchanged checksum, key, signature, or pin is valid.
 
 ---
 

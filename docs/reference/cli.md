@@ -187,7 +187,7 @@ The analysis result (`PackageFact` serialised to JSON, triggered rules, raw diff
 Show analysis history for a package.
 
 ```
-trustsight history <package> [--limit N] [--score-breakdown]
+trustsight history <package> [--limit N] [--score-breakdown] [--json]
 ```
 
 ### Arguments
@@ -200,12 +200,13 @@ trustsight history <package> [--limit N] [--score-breakdown]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--limit` | `int` | `20` | Maximum number of history entries to display. |
+| `--limit` | `int` | `20` | Maximum number of history entries to display. `0` means all entries; a negative value is an error. |
 | `--score-breakdown` | flag | `false` | When set, print the score breakdown for the latest (most recent) history entry. |
+| `--json` | flag | `false` | Emit history rows as JSON. With `--score-breakdown`, the latest row includes `triggered_rules` when rules were recorded. |
 
 ### Output
 
-Table with columns: **Date**, **Old**, **→ New**, **Score**, **Risk**.
+Table with columns: **Date**, **Old**, **→ New**, **Score**, **Risk**. Stored risk preserves an incomplete or cold-start qualification rather than being recomputed from the numeric score.
 
 If `--score-breakdown` is set, the triggered rules for the latest entry are printed below the table.
 
@@ -507,7 +508,7 @@ trustsight db backup [--output PATH]
 Check `rules.toml` for rules that are unreachable, over-broad, or malformed.
 
 ```
-trustsight lint-rules [--file PATH]
+trustsight lint-rules [--file PATH] [--json]
 ```
 
 A malformed rule fails silently at runtime. An empty pattern matches every line, and at FATAL severity forces every package to score 100. A pattern that only matches comment text can never fire, because the engine strips comments before matching. Neither failure is visible without a corpus.
@@ -517,6 +518,7 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 | Flag | Description |
 |------|-------------|
 | `--file PATH` | Lint a specific rules TOML file instead of `~/.config/trustsight/rules.toml`. Use in CI to check the ruleset in the repository. |
+| `--json` | Output the source, counts, findings, and any missing or superseded shipped-rule notices as JSON. |
 
 ### Checks
 
@@ -549,8 +551,7 @@ Backtracking is measured rather than guessed. Static nested-quantifier heuristic
 | Code | Meaning |
 |------|---------|
 | `0` | No errors (warnings may be present). |
-| `1` | At least one error. |
-| `2` | `--file` path does not exist. |
+| `2` | At least one error, or the `--file` path does not exist. |
 
 ---
 

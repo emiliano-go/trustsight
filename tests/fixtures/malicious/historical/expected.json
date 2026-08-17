@@ -27,7 +27,9 @@
       "R060",
       "R128"
     ],
-    "must_not_fire": [],
+    "must_not_fire": [
+      "R017"
+    ],
     "relabelled": "R017 -> R059 (setuid bit), R018 -> R128 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)"
   },
   "libjpeg-turbo-skid.diff": {

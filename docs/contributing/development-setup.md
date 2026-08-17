@@ -4,7 +4,7 @@
 
 - Python 3.11 or later
 - `git`
-- `pip`
+- [uv](https://docs.astral.sh/uv/)
 
 ## Clone the repository
 
@@ -13,17 +13,10 @@ git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
 ```
 
-## Create a virtual environment
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate
-```
-
 ## Install development dependencies
 
 ```bash
-uv sync --extra dev
+uv sync --locked --extra dev
 ```
 
 This installs the package in editable mode along with `pytest`, `ruff`, and other dev tooling.
@@ -31,21 +24,21 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 ## Run the test suite
 
 ```bash
-pytest
+uv run pytest
 ```
 
-The current checkout collects **2,599 tests**; the exact count changes as coverage is added.
+The current checkout collects **2,613 tests**; the exact count changes as coverage is added.
 
 ### Run a single test
 
 ```bash
-pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run pytest tests/test_rules.py::test_r001_curl_bash -v
 ```
 
 ## Lint the codebase
 
 ```bash
-ruff check src/ tests/
+uv run ruff check src/ tests/
 ```
 
 ## Run evaluation locally
@@ -53,13 +46,13 @@ ruff check src/ tests/
 Evaluation recomputes the baseline against the pinned corpus:
 
 ```bash
-python scripts/rebaseline.py
+uv run python scripts/rebaseline.py
 ```
 
 The corpus is gitignored, so rebuild it from the lock first:
 
 ```bash
-python scripts/build_corpus.py --from-manifest \
+uv run python scripts/build_corpus.py --from-manifest \
   --manifest tests/fixtures/corpus.lock \
   --out tests/fixtures/benign-corpus
 ```

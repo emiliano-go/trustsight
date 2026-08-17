@@ -91,11 +91,11 @@ PKGBUILD already records that checksum, asserts the published asset is those
 exact bytes, then builds and installs it with `check()` enabled so the shipped
 test suite runs against the artifact users will actually get.
 
-`pkgbuild.yml` runs on every push and repeats the checksum assertion against
-the published asset. It skips while a release is in flight, because the tag or
-the asset may not exist yet; the conditions are described in
-`tests/test_release_workflow.py`, which runs the shipped gate script against
-synthetic repositories in each state.
+`pkgbuild.yml` runs on every push and pull request. It builds the deterministic
+tarball from the checked-out tree, verifies the PKGBUILD checksum against it,
+and installs from that artifact with `check()` enabled. It does not wait for or
+download a published release asset; release publication is verified separately
+by `release-pkgbuild.yml`.
 
 ## When check() runs from the tarball
 

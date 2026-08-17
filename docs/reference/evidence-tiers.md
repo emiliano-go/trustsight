@@ -138,7 +138,8 @@ The same downgrade is applied, at any maturity, when the analysis recorded a cov
 
 ## Tier D : Verification
 
-Structural integrity protections declared in the resolved (post-diff) PKGBUILD.
+Structural integrity protections declared in the statically visible post-diff
+PKGBUILD text.
 They are **reported, never scored**: each is emitted as a weight-0 finding in
 the `P` namespace. See
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited) for why
@@ -165,7 +166,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 
 ### Availability
 
-**Available cold.** Computed from the diff text alone. Contributes nothing to the score in either direction, so it is available and reported from the first run, with no maturity gate and no cold-start caveat.
+**Available cold.** Computed from static post-diff text alone, not from database history or a fetched artifact. Contributes nothing to the score in either direction, so it is available and reported from the first run, with no maturity gate and no cold-start caveat.
 
 ---
 

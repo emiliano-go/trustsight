@@ -5,7 +5,7 @@
 | Path | Purpose |
 |------|---------|
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
-| `~/.config/trustsight/rules.toml` | R-series rule definitions (R001-R013 core and R014, R016-R025, R039-R059 shipped by default; R060+ are code-emitted). |
+| `~/.config/trustsight/rules.toml` | Definitions for the TOML-defined R-series subset. Per-rule `enabled` and `weight_override` controls live in `config.toml`. |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
 | `~/.config/trustsight/iocs.toml` | R106 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
@@ -38,7 +38,6 @@ Map each severity level to its numeric contribution to the base score. FATAL rul
 |-----|------|---------|--------|
 | `trusted_forge` | int | `0` | Well-known forges (github.com, gitlab.com, etc.). Neutral: hosting on a forge is a declared fact reported as `P007`, never a credit (B10). |
 | `official` | int | `0` | Official project domains (kernel.org, python.org, etc.). No score change. |
-| `self_hosted` | int | `10` | Domain controlled by the maintainer. |
 | `raw_hosting` | int | `15` | Raw/paste hosting (raw.githubusercontent.com, pastebin.com, etc.). |
 | `unknown` | int | `20` | Domain not in any allowlist. |
 | `homograph_attack` | int | `30` | Domain contains visually confusable non-ASCII characters (Cyrillic homoglyphs, etc.). |
@@ -96,6 +95,22 @@ emitted, not a score.
 |-----|------|---------|-------------|
 | `experimental` | bool | `false` | Run rules marked `experimental = true` in `rules.toml`. The R039 to R059 set is calibrated and runs unconditionally; this gates future additions whose false-positive rate has not been measured. |
 
+#### `[rules.R###]`
+
+Per-rule controls belong in `config.toml`, keyed by the rule ID:
+
+```toml
+[rules.R007]
+enabled = false
+weight_override = 15
+```
+
+`enabled` and `weight_override` apply only to rules defined in `rules.toml` and
+only have an effective scoring use for non-FATAL rules. A FATAL rule cannot be
+disabled and always hard-stops the score at 100. Code-emitted rules have no TOML
+definition, so `[rules.R###]` does not affect them; use their documented
+dedicated settings where available, such as `[experimental_rules]`.
+
 ### `[experimental_rules]`
 
 Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true` since v0.7.0 after corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
@@ -118,7 +133,7 @@ A config written before this section existed still gets these defaults: `load_co
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `auto_import` | bool | `true` | Import the novelty seed the first time TrustSight runs against a database that has neither a seed nor any analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the first run fetches and verifies it (silently skipping when offline or the download fails verification). See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
+| `auto_import` | bool | `true` | On an eligible first CLI `review` or `inspect`, import the novelty seed when the database has neither a seed nor analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the fetch verifies it and skips silently when offline or verification fails. Other commands do not fetch it automatically. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
 
 ### `[baselines]`
 
@@ -199,6 +214,7 @@ Deep analysis mode: reserved.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `max_context_lines` | int | `3` | Number of context lines in git diffs passed to `pygit2.Diff`. |
+| `max_diff_bytes` | int | `5242880` | Maximum UTF-8 byte prefix analysed from one diff (5 MiB). A larger diff sets `diff_truncated` and the `diff_truncated` coverage gap; the score describes only that prefix. This is independent of the `rules.MAX_SCANNED_LINES` line cap, which can set `scan_truncated` even when the byte cap was not reached. |
 
 ### `[discovery]`
 
@@ -233,7 +249,7 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 ## The pattern and threshold files
 
 `config.toml` holds weights and limits. The lists a rule matches against live
-in four sibling files, so a rule can be retuned without touching code. Each is
+in sibling files, so a rule can be retuned without touching code. Each is
 written on first run and never rewritten, so an edited file is always kept.
 
 ### `hosts.toml`
@@ -248,6 +264,12 @@ written on first run and never rewritten, so an edited file is always kept.
 | `covert_egress_endpoints` | R123 | DNS-over-HTTPS endpoints. |
 | `covert_egress_clients` | R123 | Tunnelling and proxy clients, matched only at a command position. |
 
+For the overlapping settings, `hosts.toml` has precedence: `standard_ports`
+overrides `[ports] standard`, and `free_registrar_tlds` overrides `[domains]
+free_registrar_tlds`. An empty sibling list falls back to the corresponding
+`config.toml` value and then the shipped default. The other host lists are read
+directly by their named rules; they do not merge with a generic host setting.
+
 ### `patterns.toml`
 
 | Key | Rules | Contents |
@@ -261,6 +283,11 @@ written on first run and never rewritten, so an edited file is always kept.
 | `network_tools` | D003 | Package names that grant a build network access. |
 | `security_relevant_flags` | R094, R131 | Hardening flags whose appearance or disappearance changes the mitigation set. |
 | `security_relevant_libraries` | R095 | Libraries whose vendoring bypasses distribution security updates. |
+
+These lists are consumed directly by their named rules. `network_tools` is the
+exception with a legacy fallback: D003 reads `patterns.toml` first, then
+`[tools] network_makedepends` in `config.toml`, then the shipped default. There
+is no general precedence rule across sibling files.
 
 ### `naming.toml`
 

@@ -26,7 +26,7 @@ This command:
 2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run, and refetches it once it is more than an hour old),
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
-5. Applies detection rules (R001-R131) and context rules (C001-C007, D001-D004),
+5. Applies the published R-series detection, C-series structural, D-series dependency, S-series sabotage, and X-series crossfire rules,
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
 8. Calculates a deterministic score from 0-100,
@@ -83,7 +83,7 @@ evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
 
 ### Key teaching moments
 
-**"Novelty inactive on first run"**: The first time you run `trustsight review`, many packages may show novelty-based scores. The maturity gate scales novelty signals by `observation_count / 50`. At zero observations, novelty weight is 0. Scores only reflect novelty fully after 50 analyses of that package. Learn more at [cold start and maturity](../explanation/cold-start-and-maturity.md).
+**"Novelty inactive on a cold database"**: The maturity gate scales novelty signals by the database-wide effective observation count divided by 50. At zero observations, novelty weight is 0; at 50, it reaches full weight. A verified seed normally warms an eligible first CLI `review` or `inspect`; without it, the database starts cold. Analyses of any packages contribute to the same global maturity count. Learn more at [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
 **Most packages score 0**: The vast majority of AUR updates are clean version bumps. If every package scores high, check your database state or look for systematic issues.
 

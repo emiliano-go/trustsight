@@ -10,37 +10,34 @@ TrustSight exposes two configuration files. Together they control which rules fi
 
 | File | Purpose |
 |------|---------|
-| `rules.toml` | Enable/disable individual rules, adjust severity weights, set scope constraints |
+| `rules.toml` | Definitions for the TOML-defined R-series subset: pattern, severity, target, and scope |
 | `config.toml` | Global scoring parameters: `severity_weights`, `source_bucket_weights`, `novelty_weights` |
 
 Both files live in the TrustSight config directory and are read automatically on every run.
 
 ## Rule namespaces
 
-TrustSight has two rule namespaces:
+TrustSight has several rule families. Only the non-FATAL rules defined in `rules.toml` accept the per-rule controls described below.
 
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
-| **R-series** (R001-R131) | `rules.toml` + code | Yes (TOML-defined subset) | Detection rules : PKGBUILD pattern matching. Users can enable, disable, and re-weight the TOML-defined set (R001-R013, R014, R016-R025, R039-R059); R060+ are code-emitted and not TOML-configurable. |
+| **R-series** (119 rules) | `rules.toml` + code | TOML-defined non-FATAL subset only | Detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` can set `enabled` and `weight_override` only for rules that have a TOML definition. Code-emitted R rules do not read these controls. |
 | **C-series** (C001-C007) | Code only | No | Structural invariants : domain classification, checksum coherence, dependency graph anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.
 
-## Adjusting severity weights in rules.toml
+## Per-rule controls in config.toml
 
 ```toml
-[rules.R004]
+[rules.R007]
 enabled = true
-severity = "HIGH"        # default: HIGH
 weight_override = 15     # default severity weight
 
-[rules.R009]
-enabled = true
-severity = "MEDIUM"
-scope = "function_body"  # only fire inside function bodies
+[rules.R010]
+enabled = false
 ```
 
-Changing a rule's severity or weight directly changes the score. Always re-run benchmarks after editing `rules.toml`.
+`enabled` and `weight_override` are read from `config.toml`; they do not change a rule's TOML definition. FATAL rules cannot be disabled, and their score hard-stops at 100, so a weight override has no effect. Code-emitted rules have their own configuration paths where provided, such as `[experimental_rules]`; `[rules.R###]` does not control them. Always re-run benchmarks after changing an effective weight.
 
 ## Adjusting scoring parameters in config.toml
 
@@ -81,11 +78,11 @@ After editing `rules.toml` or `config.toml`:
 
 > **Changing weights changes scores.** A small adjustment to `MEDIUM` from 10 to 12 shifts every package that fires a MEDIUM rule. Always validate against your package set before committing config changes.
 
-> **C-series rules are not configurable in `rules.toml`.** If you need to adjust their contribution, modify the corresponding evidence tier weight in `config.toml`. Their logic is structural and cannot be disabled without forking the codebase.
+> **Only TOML-defined non-FATAL rules accept `[rules.R###]` controls.** C-series and code-emitted rules cannot be disabled or reweighted that way. Their logic is structural or programmatic and requires the documented dedicated setting, if one exists, or a code change.
 
 ## See also
 
 - [Config reference](../reference/configuration.md): full schema for both files.
-- [Rules reference (R001-R131)](../reference/rules/index.md): per-rule defaults.
+- [Rules reference](../reference/rules/index.md): per-rule defaults across the complete R/C/D/S/X catalog.
 - [Tuning false positives](tuning-false-positives.md): how to fix rules that over-fire on your packages.
 - [Running the sandbox](running-the-sandbox.md): isolated build execution.

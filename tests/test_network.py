@@ -90,6 +90,16 @@ def test_r123_fires_on_configured_doh_endpoint():
     assert "R123" in ids('+build() {\n+  curl https://cloudflare-dns.com/dns-query\n+}\n')
 
 
+def test_r123_fires_on_a_maximum_length_doh_hostname():
+    host = "a" * 249 + ".com"
+    config = {"hosts": {"covert_egress_endpoints": [host]}}
+    diff_text = f'+curl https://{host}/query\n'
+    findings = _structural_findings(
+        diff_text, extract_urls_from_diff(diff_text), {}, config=config
+    )
+    assert "R123" in {finding["rule_id"] for finding in findings}
+
+
 def test_r123_fires_on_proxychains_in_build():
     assert "R123" in ids('+build() {\n+  proxychains curl https://x/y\n+}\n')
 

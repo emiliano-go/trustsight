@@ -14,11 +14,12 @@ release asset in the TrustSight repository, named with the `baseline-`
 prefix, and **a baseline release ships the whole family**:
 
 - `baseline-seed.tar.gz` (the v2 hashed novelty seed) plus `.sig`;
-- `baseline-ioc-<source>-<incident>-manifest.json` and
+- `baseline-ioc-<source>-<incident>-manifest.json` and the newline-delimited
   `baseline-ioc-<source>-<incident>-iocs.jsonl`, one pair per curated IOC
-  input, each with its `.sig`;
+  input, each with its detached `.sig`;
 - `baseline-corpus.tar.zst` (the corpus baseline) plus `.sig`;
-- `baseline-manifest.json` (per-asset SHA-256, size and signature).
+- `baseline-manifest.json` (per-asset SHA-256, size and signature) plus its
+  detached `.sig`.
 
 **Two release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
 and carry the program and its release notes, never baseline assets. Channel
@@ -42,6 +43,12 @@ and the corpus artifact, signs every asset's exact bytes with the distribution
 key, self-verifies every signature with the program's own verifier, and writes
 the manifest. Every asset also gets a detached `.sig` sibling under the same
 key; the tool refuses any download whose signature does not verify.
+
+A publishable **full baseline family** requires the seed and
+`baseline-corpus.tar.zst`; it also includes a signed IOC `.jsonl`/manifest pair
+for every curated IOC input. The baseline workflow refuses to proceed without
+the corpus asset. It uses the canonical seed already attached to the channel
+release, or builds the documented fallback when that asset is absent.
 
 The seed and IOC assets are built and uploaded **automatically** by
 [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml),
@@ -76,6 +83,9 @@ Actions secret `BASELINE_SIGNING_KEY` (a PEM file); for local signing keep a
 raw 32-byte file and delete it afterwards, as the corpus-baseline example
 below shows. The secret and a locally held key are the same key: assets must
 verify against the key pinned in the release's source tree.
+
+`BASELINE_SIGNING_KEY` is required for the CI workflow: it writes the secret to
+a temporary PEM file and fails before publishing if the secret is unset.
 
 ## The corpus baseline
 
@@ -228,20 +238,15 @@ gh workflow run baselines.yml
 
 Expected output:
 
-- `Check for existing seed`: passes (no release to inspect on manual
-  dispatch, so the job reports the seed as missing)
-- `Build the hashed seed`: runs (lock-derived fallback from the cached
-  mirror)
-- `Write the distribution signing key`: passes (secret live)
-- `Build and sign the baseline-* assets`: runs and signs the fallback seed
-- `Upload baseline-* assets to the release`: exits 1 on missing release tag
-  (**by design**)
+- `Check for existing seed`: passes (there is no release to inspect on manual
+  dispatch, so the job reports the seed as missing).
+- `Download the required corpus baseline`: exits 1 because manual dispatch
+  has no release-event tag (**by design**).
 
-The upload step failing on a manual run is not a regression: there is no
-release to upload to, and `gh release upload` requires a tag. What matters
-is that everything before it passed, which proves the secret, the seed
-pipeline and the signing path are all live. If the workflow fails at any
-step before the upload, fix it before publishing the next channel release.
+Manual dispatch is therefore only a check that the workflow reaches its
+required-release guard. It does not build a fallback seed, write the signing
+key, sign assets, or upload anything. Run it from a published `baseline-*`
+release to exercise the build and signing path.
 
 ## Rotation and hygiene
 

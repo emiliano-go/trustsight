@@ -15,6 +15,7 @@ this guide uses throughout.
 |------|---------|
 | **0** | The analysis completed. Says nothing about what was found. |
 | **2** | The analysis could not run or could not complete. |
+| **130** | The process was interrupted with `Ctrl+C`. |
 
 **Do not gate on the exit code.** A flagged package still exits 0; see
 [exit codes](../reference/exit-codes.md). Gate on the JSON, which is the
@@ -25,7 +26,7 @@ contract this guide uses throughout.
 `trustsight review --json` writes a **list**, one object per package, to stdout.
 Progress events go to stderr, so a pipeline only has to read stdout.
 
-Every object carries:
+Every object carries the report fields below. The list can contain successful rows and rows with `failed: true`: a failed row is an explicit NOT VETTED result, not an omitted package.
 
 | Field | Meaning |
 |-------|---------|
@@ -36,6 +37,7 @@ Every object carries:
 | `first_seen` | `true` when there is no prior history for this package. |
 | `is_trivial` | `true` when only `pkgver` and checksums moved. |
 | `coverage_gaps` | What the run could **not** examine. Always present. |
+| `failed` | `true` when this package could not be vetted. Do not treat an empty `findings` list on such a row as clean. |
 | `required_by` | Under [`--deps`](../reference/cli.md#trustsight-review), the packages that declare this one. Empty otherwise, and always present, so a gate never has to test for the key. |
 
 `score`, `risk` and `risk_label` are added when `--score` or `--risk` is passed.
@@ -111,11 +113,11 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 | Class | Metric | Value |
 |-------|--------|-------|
 | CRITICAL | p5 (5th percentile) | **60** |
-| Benign | p95 (95th percentile) | **45** |
-| Zero-rate (benign scored 0) | percentage | **69.1%** |
-| Test count | total | **1,535** |
+| Benign | p95 (95th percentile) | **35** |
+| Zero-rate (benign scored 0) | percentage | **68.3%** |
+| Test count | total | **2,599** |
 
-**The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (45), the classifier achieves clean separation with no overlap.
+**The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (35), the classifier achieves clean separation with no overlap.
 
 To set up your own gate:
 

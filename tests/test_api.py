@@ -193,8 +193,22 @@ def test_api_methods_return_dataclasses_and_not_rendered_text(ts, monkeypatch):
     assert isinstance(review, ReviewResult)
     assert isinstance(cycle, CycleReport)
     assert isinstance(report.to_dict(), dict)
-    assert isinstance(review.to_dict(), dict)
+    assert isinstance(review.to_dict(), list)
     assert isinstance(cycle.to_dict(), dict)
+
+
+def test_refresh_corpus_forwards_bootstrap(ts, monkeypatch):
+    from trustsight.full_aur.pipeline import CycleResult
+
+    calls = []
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: calls.append(kwargs) or CycleResult(),
+    )
+
+    ts.refresh_corpus(bootstrap=True)
+
+    assert calls == [{"bootstrap": True, "resume": False, "export_path": None, "sign_key": None}]
 
 
 def test_api_methods_do_not_render_to_stdout_or_stderr(ts, monkeypatch, capsys):
@@ -363,7 +377,7 @@ def test_review_result_and_cycle_report_serialize_to_json(ts):
         config_fingerprint=ts.config_fingerprint,
     )
 
-    assert json.loads(json.dumps(review.to_dict()))["total_installed"] == 1
+    assert json.loads(json.dumps(review.to_dict()))[0]["package"] == "alpha"
     assert json.loads(json.dumps(cycle.to_dict()))["cluster_findings"][0]["rule_id"] == "D001"
     assert json.loads(json.dumps(pivot.to_dict()))["type"] == "domain"
     assert json.loads(json.dumps(status.to_dict()))["database_path"] == str(ts.database_path)
@@ -389,7 +403,8 @@ def test_review_api_preserves_engine_failures_and_serializes_them(ts, monkeypatc
     assert result.failures[0].package == "broken"
     assert result.failures[0].error_type == "ValueError"
     payload = json.loads(json.dumps(result.to_dict()))
-    assert payload["failures"][0]["package"] == "broken"
+    assert payload[0]["package"] == "broken"
+    assert payload[0]["failed"] is True
 
 
 def test_suppressed_rules_are_reported_even_though_they_scored_nothing(ts, monkeypatch):

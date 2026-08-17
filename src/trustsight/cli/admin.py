@@ -454,6 +454,8 @@ def db_check(
             "status": "ok" if not errors else "corrupt",
             "errors": errors,
         }, indent=2))
+        if errors:
+            raise typer.Exit(code=2)
         return
 
     if not errors:

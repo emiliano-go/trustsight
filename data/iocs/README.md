@@ -48,9 +48,10 @@ an untrusted source and signed automatically.
        --sign <ed25519-private-key>
    ```
 
-   The build self-verifies against the real importer, so a produced directory
-   is guaranteed to import. Publish `ioc-baselines/<incident>/` and pin the
-   curator's public key in `[baselines.ioc]` config.
+    The build self-verifies against the real importer, so a produced directory
+    is guaranteed to import. Publish `ioc-baselines/<incident>/`; the
+    curator's public key is carried by its manifest, not pinned in
+    `[baselines.ioc]` configuration.
 
 4. Verify on a clean database:
 

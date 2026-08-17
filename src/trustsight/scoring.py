@@ -255,7 +255,9 @@ def calculate_score(
                 )
             )
             continue
-        weight = severity_weights.get(rule["severity"], 0)
+        weight = rule.get("weight_override", severity_weights.get(rule["severity"], 0))
+        if not isinstance(weight, int):
+            weight = severity_weights.get(rule["severity"], 0)
         base += weight
         breakdown.append(
             ScoreEntry(

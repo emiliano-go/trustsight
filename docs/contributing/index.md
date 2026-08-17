@@ -54,7 +54,9 @@ Tokenizer and regex changes require hostile-input tests. Run the deterministic t
 
 ## Signed Commits
 
-GPG-signed commits are required for changes to security-critical paths: the tokenizer, scoring, config, database, security gates, CI workflows, packaging, and baseline keys. The `CODEOWNERS` file and the `verify-commit-sigs` workflow enforce this.
+For pull requests to `master` that change one of the exact paths in
+`scripts/critical_paths.py`, every commit in the pull request range must have a
+verified GPG signature. The `verify-commit-sigs` workflow enforces this policy.
 
 For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required.
 
@@ -69,10 +71,10 @@ benign corpus and real case reports are the arguments that matter.
 
 | Metric             | Value                           |
 |--------------------|---------------------------------|
-| Tests              | 2,043 (48 files)                |
+| Tests              | 2,599 (current checkout)        |
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |
-| Rules              | R001-R140 (R133-R135 not implemented), P001-P007, C001-C007, D001-D004 |
+| Rules              | 145 scoring rules across R/C/D/S/X, plus P001-P007 declared practice |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |

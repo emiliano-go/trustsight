@@ -24,9 +24,10 @@ permissions:
 # canonical seed is maintainer-built from the full AUR mirror and uploaded
 # to the channel release; CI rebuilds a lock-derived fallback only when
 # ``baseline-seed.tar.gz`` is missing, and never overwrites an uploaded
-# seed.  The corpus baseline (baseline-corpus-<tag>.tar.zst) is exported by
-# the maintainer from an incrementally grown full-aur database and uploaded
-# separately; see docs/contributing/publishing-baselines.md.
+# seed.  The corpus baseline is exported by the maintainer from an
+# incrementally grown full-aur database and attached before publication; this
+# workflow adds its transport signature and will not publish an incomplete
+# baseline family.
 
 jobs:
   baselines:
@@ -85,12 +86,27 @@ jobs:
             seed_exists=true
           fi
           echo "seed_exists=$seed_exists" >> "$GITHUB_OUTPUT"
-          if [ "$seed_exists" = "false" ] \
-              || ls data/iocs/*.json 2>/dev/null | grep -qv 'example.json$'; then
-            echo "needs_build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "needs_build=false" >> "$GITHUB_OUTPUT"
+
+      - name: Download the required corpus baseline
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            echo "No release event tag; a baseline release is required." >&2
+            exit 1
           fi
+          mkdir -p /tmp/release-assets
+          gh release download "$TAG" --pattern baseline-corpus.tar.zst --dir /tmp/release-assets
+          test -s /tmp/release-assets/baseline-corpus.tar.zst
+
+      - name: Download the canonical seed when present
+        if: steps.check_seed.outputs.seed_exists == 'true'
+        shell: bash
+        run: |
+          mkdir -p /tmp/release-assets
+          gh release download "${{ github.event.release.tag_name }}" \
+            --pattern baseline-seed.tar.gz --dir /tmp/release-assets
+          test -s /tmp/release-assets/baseline-seed.tar.gz
 
       - name: Build the hashed seed
         if: steps.check_seed.outputs.seed_exists == 'false'
@@ -114,7 +130,6 @@ jobs:
             --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json
 
       - name: Write the distribution signing key
-        if: steps.check_seed.outputs.needs_build == 'true'
         env:
           BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
         run: |
@@ -125,12 +140,13 @@ jobs:
           printf '%s' "$BASELINE_SIGNING_KEY" > /tmp/sign-key.pem
 
       - name: Build and sign the baseline-* assets
-        if: steps.check_seed.outputs.needs_build == 'true'
         shell: bash
         run: |
           SEED_ARGS=()
           if [ -d /tmp/seed-v2 ]; then
             SEED_ARGS=(--seed-v2-dir /tmp/seed-v2)
+          else
+            SEED_ARGS=(--seed-archive /tmp/release-assets/baseline-seed.tar.gz)
           fi
           IOC_ARGS=()
           for f in data/iocs/*.json; do
@@ -139,22 +155,15 @@ jobs:
             incident="${base%.json}"
             IOC_ARGS+=(--ioc "$f" --ioc-source "${{ inputs.ioc_source || 'emiliano-go' }}" --ioc-incident "$incident")
           done
-          if [ ${#SEED_ARGS[@]} -eq 0 ] && [ ${#IOC_ARGS[@]} -eq 0 ]; then
-            echo "Nothing to build: seed already on the release and no IOC inputs."
-            exit 0
-          fi
           uv run python scripts/build_release_baselines.py \
             --out /tmp/baselines \
             --sign-key /tmp/sign-key.pem \
+            --corpus /tmp/release-assets/baseline-corpus.tar.zst \
             "${SEED_ARGS[@]}" \
             "${IOC_ARGS[@]}"
 
       - name: Upload baseline-* assets to the release
         run: |
-          if [ ! -d /tmp/baselines ] || [ -z "$(ls -A /tmp/baselines 2>/dev/null)" ]; then
-            echo "Nothing built; no upload needed."
-            exit 0
-          fi
           TAG="${{ github.event.release.tag_name }}"
           if [ -z "$TAG" ]; then
             echo "No release event tag; run this workflow from a published release or upload manually." >&2

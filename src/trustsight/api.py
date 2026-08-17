@@ -369,13 +369,29 @@ class ReviewResult:
     def __len__(self) -> int:
         return len(self.reports)
 
-    def to_dict(self) -> dict:
-        return {
-            "reports": [r.to_dict() for r in self.reports],
-            "failures": [f.to_dict() for f in self.failures],
-            "total_installed": self.total_installed,
-            "metadata_bootstrapped": self.metadata_bootstrapped,
-        }
+    def to_dict(
+        self, *, include_score: bool = False, verbose: bool = False,
+    ) -> list[dict]:
+        """The JSON list ``trustsight review --json`` writes.
+
+        ``include_score=True`` corresponds to ``--score`` or ``--risk``;
+        ``verbose=True`` corresponds to ``--verbose``.
+        """
+        from .reporting import report_body
+
+        failures = [report_body({
+            "package": failure.package,
+            "old_version": failure.old_version,
+            "new_version": failure.new_version,
+            "verdict": (
+                f"Analysis failed ({failure.error_type}): this package was NOT vetted."
+            ),
+            "failed": True,
+        }, include_score=include_score, verbose=verbose) for failure in self.failures]
+        return [
+            report.to_dict(include_score=include_score, verbose=verbose)
+            for report in self.reports
+        ] + failures
 
 
 @dataclass(frozen=True)
@@ -1108,6 +1124,7 @@ class TrustSight:
     def refresh_corpus(
         self,
         *,
+        bootstrap: bool = False,
         resume: bool = False,
         export_path: Optional[str] = None,
         sign_key: Optional[str] = None,
@@ -1116,15 +1133,15 @@ class TrustSight:
 
         Refreshes the AUR metadata snapshot, analyses what changed since
         the stored copy, runs the corpus-wide sweep and records the
-        adoption feed.  The first run has no prior snapshot and therefore
-        processes the whole AUR, which takes hours; ``resume=True``
-        continues one that was interrupted.
+        adoption feed. ``bootstrap=True`` permits the initial whole-AUR
+        build when no snapshot exists; it takes hours. ``resume=True``
+        continues an interrupted build.
         """
         from .full_aur.pipeline import run_baseline_build
 
         self._ensure_ready()
         return _cycle_report(run_baseline_build(
-            resume=resume, export_path=export_path, sign_key=sign_key,
+            bootstrap=bootstrap, resume=resume, export_path=export_path, sign_key=sign_key,
         ))
 
     def watch(

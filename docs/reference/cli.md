@@ -14,13 +14,13 @@ Global entry point defined in the `src/trustsight/cli/` package.
 |------|-------------|
 | `-h`, `--help` | Show help message, including config subcommands and usage examples. |
 | `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
-| `--json` | Output in JSON format instead of the default rich/plain text. Available on all commands. |
+| `--json` | Output JSON on commands that expose this option. It is a command option, not a global flag. |
 
 The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
 
 ## Interrupt handling
 
-`Ctrl+C` during any operation prints `Interrupted.` and exits with code 130 instead of dumping an SSL/httpx traceback.
+`Ctrl+C` during any operation prints `Interrupted.` to stderr and exits with code 130 instead of dumping an SSL/httpx traceback.
 
 ---
 
@@ -37,7 +37,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verb
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--limit` | `int` | `[limits] default_review_limit` (0) | Maximum number of outdated packages to review. `0` means unlimited, which is the shipped default: a review that stops early has not looked at the rest. When the limit does cut the list, the summary names how many went unread rather than reporting the smaller number as the whole. |
-| `--verbose` | flag | `false` | Show triggered rules per package in an additional column. |
+| `--verbose` | flag | `false` | Render the full per-package inspection detail, including the complete declared-practice group. With `--json`, add `score_breakdown`; it does not imply `--score` or `--risk`. |
 | `--quiet` | flag | `false` | Suppress the progress bar during analysis. |
 | `--score` | flag | `false` | Show aggregate trust score for each package. |
 | `--risk` | flag | `false` | Show risk level; colours the panel border by risk. |
@@ -73,7 +73,7 @@ Discovery uses a local AUR metadata snapshot by default:
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded and the run stops there, since there is nothing to compare against yet. Later runs reuse the snapshot until it is older than `[discovery] metadata_ttl_minutes` (default 60), then refetch it: the version a review compares against is the snapshot's, so a snapshot left to age reports a machine with pending updates as fully current. A refresh that cannot reach the AUR keeps the snapshot on disk and warns that a package updated since then will not be reported.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the R-series detection rules (R001-R131) and code-structure rules (C001-C007), classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the published R/C/D/S/X rule families, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints one panel per package, and a summary line counting what needed review separately from what was read.
 
 With `--deps` the subject changes: step 3's outdated set becomes the *roots* of a dependency closure walked to `--depth`, and it is the dependencies that are analysed and printed, each naming the packages that require it.
@@ -83,6 +83,12 @@ If the metadata snapshot is unavailable or corrupt, the tool falls back to the A
 ### Output
 
 Uses [rich](https://github.com/Textualize/rich) tables when available; falls back to plain text.
+
+With `--json`, `review` writes a JSON list of report bodies to stdout. Progress
+events go to stderr. The default body includes findings, changes, coverage,
+suppressed rules, and the verdict, but withholds `score`, `risk`, and
+`risk_label`; pass `--score` or `--risk` to include them. `--verbose` adds
+`score_breakdown`.
 
 ---
 
@@ -104,12 +110,15 @@ trustsight inspect <package>
 
 | Flag | Description |
 |------|-------------|
-| `--verbose` | Show triggered rules and score breakdown (already shown by default in rich mode; primarily useful with `--json` to include breakdown data). |
+| `--verbose` | Include the full declared-practice group in terminal output and `score_breakdown` in JSON. It does not imply `--score` or `--risk`. |
 | `--score` | Show aggregate trust score with weight contribution breakdown. |
 | `--risk` | Show risk level with per-rule severity labels. Implies a coloured border in rich mode. |
 | `--depth` | AUR dependency levels to analyse: `0` off, `1` (default) direct dependencies, `n` levels, `-1` every level (bounded). Each dependency is analysed as a package in its own right, with its own score and band, shown as a mini-card inside the package's card. |
 
 ### Output
+
+With `--json`, `inspect` writes one report body to stdout. Its optional score
+and verbose fields follow the same rules as `review --json`.
 
 When [rich](https://github.com/Textualize/rich) is available:
 
@@ -390,7 +399,7 @@ Import the novelty seed database, so a fresh install is not cold.
 trustsight seed-db [--import] [--file PATH] [--force]
 ```
 
-On an empty database every source URL looks first-seen and `maturity()` returns 0, which gates tier C off entirely and downgrades every Medium verdict to INCONCLUSIVE. The seed supplies both halves of what maturity is really asking about: a body of known AUR source URLs, and a bootstrap observation count.
+On an empty database every source URL looks first-seen and `maturity()` returns 0, which gates tier C off entirely and downgrades every Medium verdict to INCONCLUSIVE. Maturity is global to the database, not per package. The seed supplies both halves of what maturity is really asking about: a body of known AUR source URLs, and a bootstrap observation count.
 
 The seed no longer ships inside the package. It is published as the signed
 `baseline-seed.tar.gz` release asset (v2 hashed format) and fetched with
@@ -412,10 +421,11 @@ uses, so a routine version bump matches a seeded entry.
 
 ### Automatic import
 
-`trustsight review` and `trustsight inspect` attempt the verified
-release-channel seed on first use when the database has no seed **and** no
-analysis history; on a machine without network, or when the download fails
-verification, the attempt is silently skipped and the run starts cold.
+Only `trustsight review` and `trustsight inspect` attempt the verified
+release-channel seed, and only when the database has no seed **and** no
+analysis history. Other commands never trigger that fetch. On a machine without
+network, or when the download fails verification, the attempt is silently
+skipped and the run starts cold.
 Disable with:
 
 ```toml
@@ -480,7 +490,7 @@ trustsight db backup [--output PATH]
 
 | Subcommand | Description |
 |------------|-------------|
-| `check` | Run `PRAGMA integrity_check` on the database. Exits 0 on success, 1 if corruption is detected. |
+| `check` | Run `PRAGMA integrity_check` on the database. Exits 0 on success and 2 if corruption is detected, including with `--json`. |
 | `vacuum` | Reclaim disk space by rebuilding the database file. Prompts for confirmation unless `--force` is passed. |
 | `backup` | Create a safe online backup via `sqlite3.backup()`. No need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. |
 

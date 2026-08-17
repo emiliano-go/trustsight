@@ -108,9 +108,9 @@ forbids an unflagged result.
 TrustSight(*, auto_import_seed: bool | None = None)
 ```
 
-Construction does no I/O. The config directory, the database and the bundled observation seed are prepared on the first call that needs them.
+Construction does no I/O. The config directory and database are prepared on the first call that needs them. The API may import a bundled seed when a build supplies one, but it does not fetch the release-channel seed automatically; that network fetch is limited to eligible CLI `review` and `inspect` commands.
 
-`auto_import_seed` defaults to `None`, which follows `seed.auto_import` in `config.toml`, the same as the CLI. Pass `False` to run against a cold database deliberately. A cold database makes every novelty signal meaningless, and TrustSight reports the band as `Inconclusive` rather than pretending otherwise; see [cold start and maturity](../explanation/cold-start-and-maturity.md).
+`auto_import_seed` defaults to `None`, which follows `seed.auto_import` in `config.toml`. Pass `False` to run against a cold database deliberately. A cold database makes every novelty signal meaningless, and TrustSight reports the band as `Inconclusive` rather than pretending otherwise; maturity is database-wide, not per package. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
 ### API input limits
 
@@ -220,11 +220,11 @@ for report in result:
 
 ## Corpus
 
-### `refresh_corpus(*, resume=False, export_path=None, sign_key=None) -> CycleReport`
+### `refresh_corpus(*, bootstrap=False, resume=False, export_path=None, sign_key=None) -> CycleReport`
 
 Run one full-AUR corpus cycle. Equivalent to `trustsight full-aur`.
 
-Refreshes the AUR metadata snapshot, analyses what changed since the stored copy, runs the corpus-wide sweep and records the adoption feed. The first run has no prior snapshot and therefore processes the whole AUR, which takes hours; `resume=True` continues one that was interrupted.
+Refreshes the AUR metadata snapshot, analyses what changed since the stored copy, runs the corpus-wide sweep and records the adoption feed. With no prior snapshot, `bootstrap=False` refuses the whole-AUR scrape; pass `bootstrap=True` to permit the initial bootstrap, which takes hours. `resume=True` continues an interrupted build.
 
 ### `watch(*, interval=None, cycles=0, sleep=time.sleep) -> Iterator[CycleReport]`
 
@@ -326,7 +326,7 @@ Derived properties: `flagged` (score above the 20-point threshold), `fully_vette
 
 ### `ReviewResult`
 
-`reports`, `failures`, `total_installed`, `metadata_bootstrapped`. Iterating the result iterates `reports`. Derived: `complete` (no failures), `flagged` (the reports above the threshold).
+`reports`, `failures`, `total_installed`, `metadata_bootstrapped`. Iterating the result iterates `reports`. Derived: `complete` (no failures), `flagged` (the reports above the threshold). `to_dict()` returns a flat list, not an object: successful report rows first, followed by failed rows with `failed: true`. Failure details remain available on `failures`; the list row's verdict states that the package was not vetted.
 
 ### `FailedPackage`
 

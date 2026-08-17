@@ -18,7 +18,11 @@ You install TrustSight for the first time and run `trustsight review`. Your pack
 
 Without a maturity gate, all three would get novelty penalties for their source URLs being "first-seen". The kernel package's kernel.org URLs would be flagged as novel, even though they are among the most well-established sources in the AUR. The obscure package's unknown-domain URLs would receive the same weight as the kernel's. The novelty signal would be noise.
 
-With the maturity gate, none of these novelty signals contribute until the database accumulates observations. The first-run score is computed from structural rules (tier A) and domain classification (tier B) only, which correctly flags the obscure package's unknown domain without penalizing the kernel's trusted forge sources.
+With the maturity gate, none of these novelty signals contribute until the
+effective observation count is positive. Without an imported seed, the first
+run is computed from structural rules (tier A) and domain classification (tier
+B) only, which correctly flags the obscure package's unknown domain without
+penalizing the kernel's trusted forge sources.
 
 ## Maturity gate
 
@@ -65,7 +69,11 @@ The interaction is additive, not multiplicative. Each signal contributes indepen
 
 ## The seed database
 
-A cold database is no longer the default state. TrustSight ships a novelty seed built from the AUR git mirror (178,491 normalised source URLs, 35,903 maintainers) and imports it on first run, which supplies both halves of what maturity is asking about: a body of known source URLs, and a bootstrap observation count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
+A cold database is no longer the usual state. TrustSight can fetch and import a
+verified novelty seed on first run. The current seed records 179,956 normalized
+source URLs, 35,903 maintainers, and 209,909 dependency names, plus a bootstrap
+observation count. Maturity uses the greater of that seed count and the local
+analysis count, not a per-package count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
 
 Measured against the AUR mirror, the seed recognises **86%** of the source URLs in a package's most recent update. That figure falls off for older updates (62% mid-history, 20% for the oldest commit in a 30-commit window) because the seed is a snapshot of current `.SRCINFO` state, and historical versions used paths that no longer exist. Since a review always concerns the newest update, 86% is the number that matters in practice; corpus replays over deep history understate it.
 
@@ -93,8 +101,13 @@ Maintainer tracking is per-package: a maintainer who maintains 100 packages will
 
 ## What the user sees
 
-On first run, the report includes the notice: *"novelty inactive"*. First-run scores are computed from structural signals (A) and priors (B) only. History signals (C) contribute nothing until the corpus matures.
+Without a seed, first-run scores are computed from structural signals (A) and
+priors (B) only. History signals (C) contribute nothing until the effective
+observation count rises. With a verified seed, Tier C may already be mature on
+the first local run.
 
 This means first-run scores are conservative; they catch structural threats (curl|bash, homograph domains) but will not flag a package solely because it has never been seen before. As the corpus accumulates observations, novelty signals phase in automatically.
 
-The database warms up as you run `trustsight review`. Each run records the current state of every outdated package. After approximately 50 total observations across all packages, novelty reaches full weight.
+The database warms up as you run `trustsight review`. Each run records the
+current state of every outdated package. Novelty reaches full weight once the
+effective observation count reaches 50.

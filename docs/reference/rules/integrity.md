@@ -36,11 +36,10 @@ severity weights and the reserved identifier ranges.
 
 ### R014: validpgpkeys Added {#r014}
 
-- **Target:** `raw_line`
-- **Severity:** HIGH (weight 25)
-- **Category:** `integrity`
-- **Pattern:** `validpgpkeys\s*=`
-- **Description:** Fires when a `validpgpkeys=` declaration appears in the diff. Declaring PGP key fingerprints is normally a *protective* act, so this rule does not score on its own; it exists to keep the declaration filter in `rules.py` honest (an excluded filter entry must never become a scored finding). The declared-practice counterpart is `P002`, which reports the declaration at weight 0.
+R014 is retained as a documentation anchor for a retired rule. It is not in the
+shipped ruleset and emits no finding. A post-diff `validpgpkeys` declaration is
+reported as `P002` at weight 0; changes to an existing signing-key set are
+handled by R130, and removal is handled by R069.
 
 ### R019: Suspicious Environment Variable {#r019}
 

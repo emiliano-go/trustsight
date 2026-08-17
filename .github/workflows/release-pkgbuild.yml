@@ -42,8 +42,31 @@ concurrency:
 # Nothing here writes to the repository.  This workflow only proves that what
 # was published matches what the PKGBUILD claims.
 jobs:
+  classify:
+    name: Classify release tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.tag.outputs.version }}
+      is_software_release: ${{ steps.tag.outputs.is_software_release }}
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+        run: |
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "is_software_release=true" >> "$GITHUB_OUTPUT"
+            echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_software_release=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Verify the published tarball
+    needs: classify
+    if: needs.classify.outputs.is_software_release == 'true'
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
@@ -53,17 +76,9 @@ jobs:
       - name: Install tooling
         run: pacman -Syu --noconfirm --needed base-devel git python
 
-      - name: Resolve tag
-        id: tag
-        run: |
-          set -eu
-          tag="${{ github.event.inputs.tag || github.event.release.tag_name }}"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ steps.tag.outputs.tag }}
+          ref: ${{ needs.classify.outputs.tag }}
           fetch-depth: 0
 
       - name: Rebuild the tarball from the tag
@@ -72,7 +87,7 @@ jobs:
           set -eu
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           sha=$(python scripts/build_release_tarball.py \
-                  --rev "${{ steps.tag.outputs.tag }}" --print-sha256)
+                  --rev "${{ needs.classify.outputs.tag }}" --print-sha256)
           echo "sha256=${sha}" >> "$GITHUB_OUTPUT"
           echo "Rebuilt tarball sha256: ${sha}"
 
@@ -93,8 +108,8 @@ jobs:
       - name: The published asset must be those exact bytes
         run: |
           set -eu
-          version='${{ steps.tag.outputs.version }}'
-          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ steps.tag.outputs.tag }}/trustsight-${version}.tar.gz"
+          version='${{ needs.classify.outputs.version }}'
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ needs.classify.outputs.tag }}/trustsight-${version}.tar.gz"
           for attempt in 1 2 3 4 5; do
             if curl -fsSL "$url" -o /tmp/asset.tar.gz; then
               break

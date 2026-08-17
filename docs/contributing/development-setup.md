@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Python 3.12 or later
+- Python 3.11 or later
 - `git`
 - `pip`
 
@@ -16,7 +16,7 @@ cd trustsight
 ## Create a virtual environment
 
 ```bash
-python3.12 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -34,7 +34,7 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 pytest
 ```
 
-Expect **734 tests passing** across **19 test files**.
+The current checkout collects **2,599 tests**; the exact count changes as coverage is added.
 
 ### Run a single test
 

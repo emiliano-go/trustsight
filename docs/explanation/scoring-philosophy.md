@@ -9,11 +9,11 @@ Signals are grouped into four tiers:
 | Tier | Basis | Availability | Example |
 |------|-------|-------------|---------|
 | **A : Structural** | Static analysis of the PKGBUILD | Always, no corpus needed | `curl \| bash`, base64 decode, variable source URL |
-| **B : Priors** | Corpus classification of URLs | Always (corpus is bundled/primed) | `trusted_forge`, `official`, `unknown`, `homograph` |
+| **B : Priors** | Static source-host classification | Always, no corpus needed | `trusted_forge`, `official`, `raw_hosting`, `unknown`, `homograph_attack` |
 | **C : History/Novelty** | Observation counts across corpus | Requires warm corpus (≥50 observations for full weight) | URL first seen globally, first seen in this package, new maintainer |
 | **D : Verification** | Declared integrity metadata | Always | Checksum declared, PGP key declared, GPG signature source |
 
-Structural signals (A) are always weighted; they don't depend on any external data. Context signals (B) depend on corpus coverage but work from first run because the domain list is pre-built. History signals (C) require observation; they are definitionally meaningless on run one. Verification signals (D) are reported at weight 0: they are claims the recipe makes, not facts the tool confirms.
+Structural signals (A) are always weighted; they don't depend on external data. Context signals (B) are configured static lists and a homograph check, not corpus-derived reputation. History signals (C) require observation; they are definitionally meaningless on run one. Verification signals (D) are reported at weight 0: they are claims the recipe makes, not facts the tool confirms.
 
 ## Why verification is declared, never scored
 
@@ -82,8 +82,12 @@ Source bucket classification only ever adds:
 |--------|--------|-----------|
 | `trusted_forge` | 0 | GitHub, GitLab : neutral, reported as `P007` |
 | `official` | 0 | Upstream official domains : neutral |
+| `raw_hosting` | +15 | Configured raw-content host : requires scrutiny |
 | `unknown` | +20 | Unrecognised domain : requires scrutiny |
-| `homograph` | +30 | Visually confusable domain : high risk |
+| `homograph_attack` | +30 | Visually confusable domain : high risk |
+
+These are static configured buckets, not corpus-frequency classes; there is no
+`self_hosted` bucket.
 
 ## Why popularity/votes are never a positive signal
 
@@ -95,7 +99,10 @@ Same lesson. A change of maintainer is a flag for investigation; it means the pa
 
 ## Why weights are derived from corpus frequency, not asserted
 
-R006 (certain source-array patterns) was originally classified as HIGH/25. Corpus analysis showed it fires on >30% of all AUR packages; it's a census, not a signal. It was demoted to LOW/5. Every weight is validated against corpus frequency. A rule that fires on most packages is not signalling anything useful.
+Every scored rule is validated against corpus frequency. A rule that fires on
+most packages is not signalling anything useful. R006 is LOW because it makes
+the narrow, diff-aware claim that a newly added plain-HTTP source lacks newly
+declared checksum backing, not because it matches a broad source-array shape.
 
 ## Rule design decisions
 

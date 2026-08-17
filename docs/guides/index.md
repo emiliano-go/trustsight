@@ -15,12 +15,12 @@ These pages cover common tasks you'll perform with TrustSight. Each guide is foc
 | [Acting on a Flag](acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE : what to do next. |
 | [Configuring Rules and Weights](configuring-rules-and-weights.md) | You need to edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](tuning-false-positives.md) | A rule is firing too often on your package set : how to identify and fix it. |
-| [Running the Sandbox](running-the-sandbox.md) | You want to sandbox a PKGBUILD's build and install scripts before approving them (aspirational). |
+| [Running the Sandbox (aspirational)](running-the-sandbox.md) | You want to read the rejected, not-yet-implemented sandbox design. |
 
 ## Reference
 
 - [CLI reference](../reference/cli.md)
-- [Rules reference (R001-R131)](../reference/rules/index.md)
+- [Rules reference (complete R/C/D/S/X catalog)](../reference/rules/index.md)
 - [Code rules reference (C001-C007)](../reference/rules/system.md#c-series)
 - [Config reference](../reference/configuration.md)
 - [Evidence tiers](../reference/evidence-tiers.md)

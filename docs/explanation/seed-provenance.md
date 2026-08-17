@@ -13,13 +13,13 @@ imported into the user's database on first run (or manually with
 format**: a `trustsight-seed-v2/` directory of salted SHA-256 hashes, not a
 SQLite file with plaintext values. Its three kinds of prior knowledge are:
 
-- **source URLs** (about 180,000, normalised), with first-seen timestamps
+- **source URLs** (179,956, normalised), with first-seen timestamps
   and use counts;
 - **hashed maintainers**: salted hashes of maintainer names and emails, with
   package counts and first-seen timestamps, so no plaintext identity leaves
   the machine that builds the seed (invariant [P1](../security.md#the-invariants));
-- **dependency names**: every dependency, package name and `provides` alias,
-  with observation counts.
+- **dependency names**: 209,909 dependency names, package names and `provides`
+  aliases, with observation counts.
 
 It exists because a cold database makes novelty meaningless: with an empty
 `source_urls` table every URL, including github.com, is globally novel, and
@@ -39,10 +39,11 @@ the tool's priors was therefore the thing under review, and that was circular.
 The seed no longer lives in the package. It is built by the published
 scripts, signed by a key held out-of-band (never in the repository), and
 distributed through the release channel, which is not the AUR. At import time
-the tool verifies the artifact's detached ed25519 signature against a public
-key pinned in the source tree (`src/trustsight/full_aur/baseline_pubkey.pem`)
-before it reads a byte; a download that does not verify is refused, never
-imported. That is the same trust shape as the corpus baseline
+the tool downloads the bounded artifact bytes, then verifies their detached
+ed25519 signature against a public key pinned in the source tree
+(`src/trustsight/full_aur/baseline_pubkey.pem`) before parsing or importing
+them; a download that does not verify is refused. That is the same trust shape
+as the corpus baseline
 ([A13](../security.md#the-invariants)) and the IOC baselines
 ([A13b](../security.md#the-invariants)), and the key's fingerprint is in
 [baseline keys](../reference/baseline-keys.md).

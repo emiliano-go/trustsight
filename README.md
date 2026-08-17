@@ -42,7 +42,7 @@ Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `p
 
 The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
 
-Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On first use the tool downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. See [installation](https://docs.trustsight.org/getting-started/installation/) for details.
+Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On an eligible first `review` or `inspect`, the CLI downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. Other commands do not fetch it automatically. See [installation](https://docs.trustsight.org/getting-started/installation/) for details.
 
 ---
 
@@ -233,7 +233,7 @@ for cycle in ts.watch(interval=1800):     # full-aur --watch, as a generator
         print(rule_id, package)
 ```
 
-Two rules carry over from the CLI. Use `report.risk`, never a band re-derived from `report.score`: an analysis that could not read the whole change reports `Inconclusive` regardless of the number. And check `result.failures`, because a package that could not be analysed is a result, not an absence.
+Two rules carry over from the CLI. Use `report.risk`, never a band re-derived from `report.score`: an analysis that could not read the whole change reports `Inconclusive` regardless of the number. And check `result.failures`, because a package that could not be analysed is a result, not an absence. `result.to_dict()` follows `review --json`: it is one flat list containing successful report rows and failed rows marked `failed: true`.
 
 ---
 

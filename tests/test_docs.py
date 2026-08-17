@@ -241,6 +241,23 @@ def test_no_documented_command_is_missing_from_the_cli():
 
 
 DOC_SOURCES = sorted((ROOT / "docs").rglob("*.md")) + [ROOT / "README.md"]
+WRITING_A_RULE_MD = ROOT / "docs" / "contributing" / "writing-a-rule.md"
+
+
+def test_writing_a_rule_local_links_resolve():
+    """Examples for rule documentation must not point outside the docs tree."""
+    text = WRITING_A_RULE_MD.read_text()
+    broken = []
+    for target in re.findall(r"\[[^]]+\]\(([^)]+)\)", text):
+        path, _, fragment = target.partition("#")
+        if not path:
+            continue
+        destination = WRITING_A_RULE_MD.parent / path
+        if not destination.is_file():
+            broken.append(f"{target}: file does not exist")
+        elif fragment and f"{{#{fragment}}}" not in destination.read_text():
+            broken.append(f"{target}: anchor does not exist")
+    assert broken == []
 
 
 def _split_panels(block):
@@ -280,7 +297,7 @@ def test_no_rendered_sample_shows_a_fixed_defect(check):
         where = f"{path.name}:{line}"
         if check == "rule id once":
             for rule in set(re.findall(r"\[(R\d{3})\]", block)):
-                if block.count(f"[{rule}]") > block.count(f"line") + 1:
+                if block.count(f"[{rule}]") > block.count("line") + 1:
                     continue
             # A finding line naming its rule twice: `... [R001]  ... [R001]`
             if re.search(r"\[(R\d{3})\][^\n]*\[\1\]", block):

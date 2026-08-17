@@ -488,6 +488,8 @@ def apply_rules(
     ]
 
     for rule in rules:
+        if rule.get("enabled") is False:
+            continue
         if rule.get("experimental") and not include_experimental:
             continue
         # R009 is a code rule (analysis/build.py).  A stale rules.toml from
@@ -530,6 +532,8 @@ def apply_rules(
                     "category": rule["category"],
                     "match": item[:100],
                 }
+                if "weight_override" in rule:
+                    finding["weight_override"] = rule["weight_override"]
                 if line_map and idx in line_map:
                     finding["file"], finding["line"] = line_map[idx]
                 triggered.append(stamp(finding, f"{rule['name']}: {{match}}"))

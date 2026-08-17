@@ -45,8 +45,9 @@ cadence and `seed fetch --tag` for pinning.
 
 Every asset ships with a detached `.sig` sibling: the raw 64-byte Ed25519
 signature over the **exact asset bytes**, under the pinned distribution key.
-The tool verifies that signature before it reads the payload, so a download
-that does not verify is refused (`ReleaseSignatureError`), never imported.
+The bounded asset bytes must be downloaded before that signature can be
+verified; verification then happens before the payload is parsed, imported, or
+used. A download that does not verify is refused (`ReleaseSignatureError`).
 `scripts/build_release_baselines.py` assembles and signs the family, and
 self-verifies every signature with the program's own verifier before it
 writes, so it cannot emit a release the tool would refuse.
@@ -88,18 +89,16 @@ valid artifact as forged. Distribution signing of the released `.tar.zst` bytes
 (the detached `.sig` sibling) is a second, transport-level check on top of the
 artifact's own internal signature.
 
-## IOC federation baselines (A13b): per-source keys in config
+## IOC federation baselines (A13b): manifest-carried per-source keys
 
-IOC baselines are **not** verified against the repo-pinned key. Each IOC baseline
-carries its curator's public key in its own `manifest.json`, and the operator
-pins the public key they trust for each feed in configuration (see
-[`[baselines.ioc]`](configuration.md#baselinesioc) and the
-[IOC federation reference](ioc.md)). This is what keeps IOC matches attributable
-per curator and lets one curator's key rotate without touching another's. The
-maintainer may use the same ed25519 keypair as the corpus baseline above, but the
-two verification paths are independent (and a released IOC pair additionally
-carries the distribution signature of the pinned repo key, checked before the
-curator's own signature is consulted).
+IOC baselines are **not** verified against the repo-pinned corpus key at import.
+Each IOC baseline carries its curator's public key in its own `manifest.json`;
+the importer verifies that manifest and its `iocs.jsonl` against the carried
+key. The key is therefore manifest-carried, not configuration-pinned. This keeps
+matches attributable per curator and lets one curator rotate a key without
+changing another baseline. A released IOC pair additionally carries a
+distribution signature under the pinned repo key, checked before the curator's
+own signature is consulted.
 
 ## Not the PGP disclosure key
 

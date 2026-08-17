@@ -35,11 +35,11 @@ severity weights and the reserved identifier ranges.
 
 ### R006: Insecure Download Protocol {#r006}
 
-- **Target:** `resolved`
-- **Severity:** MEDIUM (weight 15)
-- **Category:** `network_execution`
-- **Pattern:** `https?://.*\.tar\.gz.*\|`
-- **Description:** Detects `tar.gz` piped to execution (e.g. `curl ... tar.gz | tar -x`). Originally classified as HIGH/25 and later reduced. This entry previously documented it as LOW/5 on the grounds of a fire rate above 30%, but the shipped rule is MEDIUM and it fires on **0.00%** of the 3,246-diff benign corpus; the pattern requires a pipe on the same resolved line, which is rarer than the earlier note assumed.
+- **Target:** programmatic (diff-aware)
+- **Severity:** LOW (weight 5)
+- **Category:** `integrity`
+- **Condition:** An added `http://` source URL has no added or changed checksum array.
+- **Description:** Plain HTTP permits a network attacker to replace a download in transit. Adding a checksum in the same diff supplies checksum backing and suppresses this rule; `sha256sums=('SKIP')` does not. The rule is intentionally about transport without newly declared integrity backing, not about pipes or archive suffixes.
 
 ### R008: Unexpected File Download {#r008}
 

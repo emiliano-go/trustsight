@@ -1,6 +1,6 @@
 """Parity checks for shared CLI and API evaluation semantics."""
 
-from trustsight.api import _report_from_fact, _report_from_result
+from trustsight.api import ReviewResult, _report_from_fact, _report_from_result
 from trustsight.reporting import evaluate_fact
 from trustsight.schema import DiffSummary, PackageFact, ScoreEntry
 
@@ -74,6 +74,14 @@ def test_every_json_surface_emits_the_same_body():
     assert set(cli) == set(api)
     assert cli == api
     assert set(REPORT_KEYS) == set(api)
+
+
+def test_review_result_uses_the_cli_json_list_shape():
+    report = _report_from_fact(_fact())
+    assert ReviewResult(reports=(report,)).to_dict() == [report.to_dict()]
+    assert ReviewResult(reports=(report,)).to_dict(
+        include_score=True, verbose=True,
+    ) == [report.to_dict(include_score=True, verbose=True)]
 
 
 def test_the_score_is_withheld_until_it_is_asked_for():

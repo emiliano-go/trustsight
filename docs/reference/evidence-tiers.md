@@ -17,7 +17,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Sources
 
-- R001-R131 rules firing against resolved command strings or raw diff lines.
+- R-series detection rules, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - R004/R005 checksum integrity rules (hard-coded, not TOML).
 - C001-C007 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.
@@ -49,7 +49,7 @@ Domain reputation classification for every new source URL in the diff.
 ### Sources
 
 - Source bucket assignment via `classify_url()` in `src/trustsight/buckets.py`.
-- Domain allowlists in `~/.config/trustsight/trusted_domains.toml`.
+- Static domain lists in `trusted_domains.toml`.
 
 ### Buckets
 
@@ -57,7 +57,6 @@ Domain reputation classification for every new source URL in the diff.
 |--------|----------|----------|
 | `trusted_forge` | 0 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | `official` | 0 | kernel.org, python.org, nginx.org, archlinux.org |
-| `self_hosted` | +10 | Custom domain under maintainer control |
 | `raw_hosting` | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | `unknown` | +20 | Domain not in any allowlist |
 | `homograph_attack` | +30 | Domain with Cyrillic homoglyphs (e.g. githab.com) |
@@ -68,7 +67,11 @@ attacker nothing, so it is reported as the weight-0 finding `P007` instead
 
 ### Availability
 
-**Available cold.** Domain classification depends only on the built-in allowlists and `tldextract`. No database or history needed. Always scored at full weight.
+**Available cold.** Domain classification is a static membership check over the
+configured raw-hosting, trusted-forge, and official-domain lists, plus the
+homograph check. It does not learn buckets from the corpus and has no
+`self_hosted` classifier. No database or history is needed. Always scored at
+full weight.
 
 ### Scope
 
@@ -112,14 +115,18 @@ maturity = min(1.0, observation_count / 50)
 | Observations | Multiplier | Effective weight (url_first_globally) |
 |--------------|------------|---------------------------------------|
 | 0 | 0.0 | 0 |
-| 10 | 0.2 | 3 |
-| 25 | 0.5 | 7 |
-| 49 | 0.98 | 14 |
-| 50+ | 1.0 | 15 |
+| 10 | 0.2 | 2 |
+| 25 | 0.5 | 5 |
+| 49 | 0.98 | 9 |
+| 50+ | 1.0 | 10 |
 
 ### Availability
 
-**Cold DB → zero contribution.** With no prior observations, all novelty weights multiply by 0. As the database warms up, novelty signals ramp linearly to full weight.
+**Cold DB → zero contribution.** With no real observations and no imported
+seed, all novelty weights multiply by 0. Maturity uses the greater of the
+local analysis count and the seed's bootstrap observation count, so a verified
+seed can make Tier C effective on the first local run. As that effective count
+warms, novelty signals ramp linearly to full weight.
 
 ### INCONCLUSIVE verdict
 
@@ -168,5 +175,5 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 |------|------|-------|-----------------|-----------|---------------------------|
 | A | Structural | Yes | No | Positive | 40 (CRITICAL) or 100 (FATAL) |
 | B | Priors/Context | Yes | No | Positive only | +30 (homograph); trusted forge is 0 |
-| C | History/Novelty | No : zero | Yes (×0→1) | Positive only | +20 (maintainer) |
+| C | History/Novelty | No : zero without a seed | Yes (×0→1) | Positive only | +15 (maintainer) |
 | D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P007`) |

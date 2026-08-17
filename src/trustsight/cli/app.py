@@ -68,6 +68,9 @@ def main() -> None:
         app()
     except typer.Exit:
         raise
+    except KeyboardInterrupt:
+        print("Interrupted.", file=sys.stderr)
+        raise typer.Exit(code=130)
     except Exception as exc:
         print(f"trustsight: error: {exc}", file=sys.stderr)
         raise typer.Exit(code=2)

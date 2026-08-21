@@ -2,6 +2,7 @@ import time
 
 import pygit2
 
+from ..coverage import note_stage_failure
 from ..db import get_package
 from ..fetcher import walk_bounded
 from ..findings import stamp
@@ -25,7 +26,7 @@ def _recent_update(repo, head_commit):
                 "params": {"detail": f"updated {int(hours_ago)}h ago (< 72h)"},
             })
     except (AttributeError, pygit2.GitError):
-        pass
+        note_stage_failure("temporal")
     return None
 
 
@@ -54,7 +55,7 @@ def _package_is_new(repo, head_commit, pkg_name=None):
                 "params": {"detail": f"first AUR commit {int(root_age)} days ago (< 30)"},
             })
     except (AttributeError, pygit2.GitError):
-        pass
+        note_stage_failure("temporal")
     return None
 
 
@@ -77,5 +78,5 @@ def _stale_revival(repo, old_commit, head_commit):
                 "params": {"detail": f"dormant {int(gap_days)} days, now has a new update (> 1 year)"},
             })
     except (AttributeError, pygit2.GitError):
-        pass
+        note_stage_failure("temporal")
     return None

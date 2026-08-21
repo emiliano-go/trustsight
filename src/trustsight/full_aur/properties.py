@@ -10,6 +10,8 @@ import hashlib
 import json
 import logging
 import re
+
+from ..tokenizer import split_lines
 from dataclasses import dataclass
 from typing import Any, Optional
 
@@ -116,6 +118,34 @@ _STOPWORDS = frozenset({
 })
 
 
+_METADATA_HOST_RE = re.compile(r"(?:https?|git\+https?|ftps?)://([^/\s\"')#]+)")
+
+
+def metadata_divergence(new_pkgbuild: str, srcinfo: Optional[str]) -> list[str]:
+    """Hosts `.SRCINFO` names that the PKGBUILD does not (R148).
+
+    `.SRCINFO` is *generated from* the PKGBUILD, and the analysis prefers
+    it wherever it is richer - structured `depends`, expanded sources. That
+    preference is trust: nothing compared the two, so a `.SRCINFO` naming a
+    source the recipe does not was believed, and an AUR helper resolving
+    dependencies from metadata while makepkg builds from the recipe reads
+    two different descriptions of the same package.
+
+    The comparison is by *host* rather than by URL. A PKGBUILD writes
+    `source=("$url/archive/v$pkgver.tar.gz")` and `.SRCINFO` carries the
+    expanded result, so comparing URLs would report every package in the
+    ecosystem; the host survives expansion because it comes from `url=` or
+    from a literal in the array either way. Measured across 50 real AUR
+    repositories, no package has a `.SRCINFO` host its PKGBUILD does not
+    also name.
+    """
+    if not srcinfo:
+        return []
+    in_recipe = set(_METADATA_HOST_RE.findall(new_pkgbuild))
+    in_metadata = set(_METADATA_HOST_RE.findall(srcinfo))
+    return sorted(host for host in in_metadata - in_recipe if host)
+
+
 def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict[str, Any]:
     """Extract tracked properties from a PKGBUILD (and optionally .SRCINFO).
 
@@ -138,13 +168,13 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     # depends: prefer .SRCINFO (structured), fall back to PKGBUILD regex
     depends: set[str] = set()
     if srcinfo:
-        for line in srcinfo.splitlines():
+        for line in split_lines(srcinfo):
             m = re.match(r"^\s*depends\s*=\s*['\"]?([^'\"\s<>=!~]+)", line)
             if m:
                 depends.add(m.group(1))
     else:
         in_depends = False
-        for line in new_pkgbuild.splitlines():
+        for line in split_lines(new_pkgbuild):
             stripped = line.strip()
             m = re.match(r"^\s*depends\s*=\s*\(([^)]*)\)", stripped)
             if m:
@@ -167,7 +197,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     hosts: set[str] = set()
     orgs: set[str] = set()
     in_source = False
-    for line in new_pkgbuild.splitlines():
+    for line in split_lines(new_pkgbuild):
         stripped = line.strip()
         m = re.match(r"^\s*source(?:_x86_64|_i686|_any)?\s*=\s*\(([^)]*)\)", stripped)
         if m:
@@ -198,12 +228,12 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     props["build_system_markers"] = frozenset(markers)
 
     # build_line_count
-    line_count = len(body.splitlines()) if body.strip() else 0
+    line_count = len(split_lines(body)) if body.strip() else 0
     props["build_line_count"] = _bucket_line_count(line_count)
 
     # configure_flags
     flags: set[str] = set()
-    for line in body.splitlines():
+    for line in split_lines(body):
         for m in _FLAG_RE.finditer(line):
             flags.add(m.group(1))
     props["configure_flags"] = frozenset(flags)
@@ -215,7 +245,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     # license: from .SRCINFO if available
     if srcinfo:
         licenses: set[str] = set()
-        for line in srcinfo.splitlines():
+        for line in split_lines(srcinfo):
             m = re.match(r"^\s*license\s*=\s*['\"]?([^'\"]+)", line)
             if m:
                 licenses.add(m.group(1))
@@ -271,7 +301,7 @@ def _build_function_bodies(pkgbuild: str) -> str:
     depth = 0
     lines: list[str] = []
     targets = ("build()", "prepare()", "package()")
-    for line in pkgbuild.splitlines():
+    for line in split_lines(pkgbuild):
         stripped = line.strip()
         if not in_func:
             if any(stripped.startswith(t) for t in targets):

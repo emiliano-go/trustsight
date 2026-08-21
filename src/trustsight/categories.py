@@ -54,6 +54,10 @@ class RuleCategory(StrEnum):
     CORPUS_BEHAVIORAL = "corpus-behavioral"
     CROSSFIRE = "crossfire"
     SABOTAGE = "sabotage"
+    #: The W series. Not a risk claim: a statement about what the analysis
+    #: could not verify, on a surface too common to price. See
+    #: `unverifiable.md` for why these carry no weight.
+    UNVERIFIABLE = "unverifiable"
 
     @property
     def doc_page(self) -> str:
@@ -91,6 +95,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.CORPUS_BEHAVIORAL: "Corpus Behavioral",
     RuleCategory.CROSSFIRE: "Crossfire",
     RuleCategory.SABOTAGE: "Sabotage",
+    RuleCategory.UNVERIFIABLE: "Unverifiable",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -149,6 +154,11 @@ _SUMMARIES: dict[RuleCategory, str] = {
         "A payload aimed at the operator's machine rather than at getting "
         "something out of it: resource exhaustion, deletion, permission "
         "sabotage, service disruption, resource theft."
+    ),
+    RuleCategory.UNVERIFIABLE: (
+        "Not a claim about the recipe but about the analysis: something the "
+        "package will run that this run could not read. Weight 0 always, "
+        "and always shown."
     ),
 }
 
@@ -240,6 +250,20 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "R141": _C.MAINTAINER_AND_METADATA,
     "R142": _C.INTEGRITY,
     "R143": _C.MAINTAINER_AND_METADATA,
+    "R144": _C.INSTALL_AND_PERSIST,
+    "R145": _C.INSTALL_AND_PERSIST,
+    "R146": _C.FETCH_AND_EXECUTION,
+    "R147": _C.INTEGRITY,
+    "R148": _C.INTEGRITY,
+    "R149": _C.INSTALL_AND_PERSIST,
+    "R150": _C.FETCH_AND_EXECUTION,
+    "R151": _C.INSTALL_AND_PERSIST,
+    "W001": _C.UNVERIFIABLE,
+    "W002": _C.UNVERIFIABLE,
+    "W003": _C.UNVERIFIABLE,
+    "W004": _C.UNVERIFIABLE,
+    "W005": _C.UNVERIFIABLE,
+    "W006": _C.UNVERIFIABLE,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,
@@ -247,6 +271,22 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "X005": _C.CROSSFIRE,
     "X006": _C.CROSSFIRE,
     "X007": _C.CROSSFIRE,
+    "X008": _C.CROSSFIRE,
+    "X009": _C.CROSSFIRE,
+    "X010": _C.CROSSFIRE,
+    "X011": _C.CROSSFIRE,
+    "X012": _C.CROSSFIRE,
+    "X013": _C.CROSSFIRE,
+    "X014": _C.CROSSFIRE,
+    "X015": _C.CROSSFIRE,
+    "X016": _C.CROSSFIRE,
+    "X017": _C.CROSSFIRE,
+    "X018": _C.CROSSFIRE,
+    "X019": _C.CROSSFIRE,
+    "X020": _C.CROSSFIRE,
+    "X021": _C.CROSSFIRE,
+    "X022": _C.CROSSFIRE,
+    "X023": _C.CROSSFIRE,
     "S001": _C.SABOTAGE,
     "S002": _C.SABOTAGE,
     "S003": _C.SABOTAGE,
@@ -277,6 +317,8 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "C003": _C.INTEGRITY,
     "C004": _C.INTEGRITY,
     "C005": _C.INTEGRITY,
+    "C008": _C.INTEGRITY,
+    "C009": _C.INTEGRITY,
     # -- naming and dependencies ---------------------------------------
     "R016": _C.NAMING_AND_DEPENDENCY,
     "R074": _C.NAMING_AND_DEPENDENCY,

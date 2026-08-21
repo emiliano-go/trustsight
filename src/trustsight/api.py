@@ -253,6 +253,18 @@ class Report:
     depth_truncated: bool = False
     """The dependency walk stopped before the closure was exhausted."""
 
+    ioc_matches: tuple = ()
+    """Signed-baseline indicator hits, reported outside the heuristic score.
+
+    In the JSON body since IOC federation shipped, and reachable here only
+    through ``to_dict()`` until now - which is the same asymmetry
+    ``required_by`` had: a caller gating on indicator hits had to serialise
+    the report to find them.
+    """
+
+    scan_truncated: bool = False
+    """The diff was clamped by line count before the rules read it."""
+
     required_by: tuple = ()
     """Packages in the reviewed set that declare this one as a dependency.
 
@@ -679,8 +691,24 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "review_profile": report.review_profile,
         "review_threshold": report.review_threshold,
         "flagged": report.flagged,
+        # `flagged: false` is not "this package is fine" - it is "the score
+        # this run produced did not reach the threshold", and when
+        # `coverage_gaps` is non-empty that score was computed from an
+        # incomplete read. The distinction is on `Report` as
+        # `fully_vetted`, and it was the one field a machine consumer could
+        # not see: a CI job parsing this dict got `score: 0`,
+        # `findings: []`, `flagged: false` and no way to tell a clean
+        # package from an unreadable one.
+        "fully_vetted": report.fully_vetted,
         "raw": dict(report._raw),
     }
+
+
+def _clean(value):
+    """`safe_text.clean`, preserving ``None`` and the empty string."""
+    from .safe_text import clean
+
+    return clean(value) if value else value
 
 
 def _report_from_fact(fact) -> Report:
@@ -709,13 +737,21 @@ def _report_from_fact(fact) -> Report:
         source_buckets=dict(fact.source_buckets),
         checksum_behavior=fact.source_changes.checksum_behavior,
         resolved_commands=tuple(fact.execution_changes.resolved_commands),
-        maintainer=fact.current_maintainer,
-        previous_maintainer=fact.previous_maintainer,
+        # Both are attacker-chosen strings that arrive from a PKGBUILD
+        # comment or an AUR record and leave through `Report`. The CLI
+        # renderer cleans what it prints, but an API consumer printing a
+        # maintainer name raw would render whatever escape sequence the
+        # name carries - and the fix belongs where the fact becomes a
+        # report, not in one of the things that reads it.
+        maintainer=_clean(fact.current_maintainer),
+        previous_maintainer=_clean(fact.previous_maintainer),
         maintainer_changed=fact.maintainer_changed,
         dependency_changes={k: sorted(v) for k, v in fact.dependency_changes.items()},
         dependencies=tuple(getattr(fact, "dependencies", ())),
         depth_truncated=bool(getattr(fact, "depth_truncated", False)),
         required_by=tuple(raw.get("required_by", ()) if raw else ()),
+        ioc_matches=tuple(getattr(fact, "ioc_matches", ()) or ()),
+        scan_truncated=bool(getattr(fact, "scan_truncated", False)),
         first_seen=fact.first_seen,
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
@@ -996,6 +1032,17 @@ class TrustSight:
         _validate_text(maintainer, name="maintainer", maximum=MAX_API_NAME_BYTES)
         if srcinfo is not None:
             _validate_text(srcinfo, name="srcinfo")
+        # The timestamps reached `TemporalContext` unchecked, so a caller
+        # passing a date string - the obvious mistake, since every other
+        # timestamp an AUR consumer holds is one - got a `TypeError` from
+        # deep inside the temporal rules rather than an answer about the
+        # argument they got wrong. Every other argument on this method is
+        # validated at the boundary; these were the exception.
+        for _name, _value in (("last_modified", last_modified),
+                              ("first_submitted", first_submitted),
+                              ("previous_modified", previous_modified)):
+            if _value is not None:
+                _validate_nonnegative(_value, name=_name)
         self._ensure_ready()
         fact = analyze_package_text(
             pkg_name=package,

@@ -34,7 +34,7 @@ LEGEND_END = "<!-- /generated: legend -->"
 TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
 
-HEADING = re.compile(r"^### ([RCDSX]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
+HEADING = re.compile(r"^### ([RCDSXW]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
 SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
 
 
@@ -68,7 +68,10 @@ def _severity(section: list[str]) -> str:
     what the full entry then qualifies.
     """
     for line in section:
-        if line.startswith("- **Severity:**"):
+        # Two spellings: the list form (`- **Severity:** HIGH (weight 25)`)
+        # and the reference form, where the severity opens the entry
+        # (`**HIGH** (weight 25) - category evasion`).
+        if line.startswith("- **Severity:**") or line.startswith("**"):
             found = SEVERITY.search(line)
             if found:
                 return found.group(1)
@@ -85,6 +88,53 @@ def _replace(text: str, start: str, end: str, body: str) -> str:
     if count != 1:
         raise SystemExit(f"marker {start} not found in {INDEX}")
     return updated
+
+
+PAGE_START = "<!-- generated: page-index -->"
+PAGE_END = "<!-- /generated: page-index -->"
+
+
+def _write_page_indexes(catalog) -> int:
+    """Put a rule list at the top of every category page.
+
+    A category page is a flat run of `###` sections, so its table of
+    contents is one long unstructured list and a reader looking for a
+    specific rule has to scroll. The list below is an `##` section, which
+    gives the page a second level, and it links straight to each anchor.
+    """
+    by_category: dict[RuleCategory, list] = {}
+    for rid, name, sev, cat, anchor in catalog:
+        by_category.setdefault(cat, []).append((rid, name, sev, anchor))
+
+    written = 0
+    for category, rules in by_category.items():
+        page = RULES_DIR / category.doc_page
+        if not page.exists():
+            continue
+        body = "\n".join(
+            f"| [{rid}](#{anchor}) | {name} | {sev} |" for rid, name, sev, anchor in rules
+        )
+        block = (
+            f"{PAGE_START}\n"
+            f"## Rules on this page\n\n"
+            f"| Rule | Name | Severity |\n|---|---|---|\n{body}\n"
+            f"{PAGE_END}"
+        )
+        text = page.read_text()
+        if PAGE_START in text:
+            pattern = re.compile(
+                rf"{re.escape(PAGE_START)}\n.*?\n{re.escape(PAGE_END)}", re.S
+            )
+            text = pattern.sub(lambda _: block, text, count=1)
+        else:
+            # Before the first rule section, after the page's prose.
+            first = text.find("\n### ")
+            if first == -1:
+                continue
+            text = text[:first] + "\n" + block + "\n" + text[first:]
+        page.write_text(text)
+        written += 1
+    return written
 
 
 def main() -> None:
@@ -105,8 +155,10 @@ def main() -> None:
     text = _replace(text, TABLE_START, TABLE_END, table)
     INDEX.write_text(text)
 
+    pages = _write_page_indexes(catalog)
+
     print(f"{INDEX.relative_to(ROOT)}: {len(catalog)} rules across "
-          f"{len(RuleCategory)} categories")
+          f"{len(RuleCategory)} categories; {pages} on-page indexes")
 
 
 if __name__ == "__main__":

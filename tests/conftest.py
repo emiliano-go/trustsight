@@ -6,7 +6,7 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 SHARED_RULES = [
-    {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
+    {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*(?<!\\)\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
     {"id": "R002", "name": "Wget Pipe to Shell", "pattern": r"wget.*\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},
     {"id": "R003", "name": "Base64 Decode and Execute", "pattern": r"base64.*\-d.*\|", "severity": "CRITICAL", "category": "obfuscation", "match_target": "resolved"},
     {"id": "R004", "name": "Checksum Disabled", "pattern": r"sha256sums\s*=\s*\(?\s*['\"]?(?:SKIP|NONE)['\"]?", "severity": "HIGH", "category": "integrity", "match_target": "raw_line"},
@@ -18,7 +18,11 @@ SHARED_RULES = [
     # R009 is now a code rule (src/trustsight/analysis/build.py).
     {"id": "R010", "name": "Uses curl in PKGBUILD", "pattern": r"\bcurl\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
     {"id": "R011", "name": "Uses wget in PKGBUILD", "pattern": r"\bwget\s", "severity": "LOW", "category": "network_usage", "match_target": "raw_line", "scope": ["function_body"]},
-    {"id": "R012", "name": "LLM Prompt Injection", "pattern": r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)", "severity": "FATAL", "category": "injection", "match_target": "resolved"},
+    # `include_comments` matches the shipped definition: R012's payload is
+    # aimed at whoever *reads* the file, and in practice that is always a
+    # comment. Without it here the fixture asserted a behaviour the shipped
+    # rule gets from a field the fixture did not carry.
+    {"id": "R012", "name": "LLM Prompt Injection", "pattern": r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)", "severity": "FATAL", "category": "injection", "match_target": "resolved", "include_comments": True},
     {"id": "R013", "name": "Unicode Bidi Override", "pattern": r"[\u202A-\u202E\u2066-\u2069\u200B-\u200D\uFEFF]", "severity": "FATAL", "category": "unicode", "match_target": "raw_line"},
 ]
 

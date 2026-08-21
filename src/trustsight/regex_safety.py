@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import time
 import re
+import time
+import warnings
 
 BACKTRACK_REPS = 22
 BACKTRACK_BUDGET_S = 0.02
@@ -61,7 +62,7 @@ _CLASS_SAMPLES = (
     (r"0-9", "1"), (r"a-z", "a"), (r"A-Z", "A"), (r"A-Za-z", "a"),
 )
 
-_CHAR_CLASS_RE = re.compile(r"\[\^?((?:[^\]\\]|\\.){1,64})\]")
+_CHAR_CLASS_RE = re.compile(r"\[(\^?)((?:[^\]\\]|\\.){1,64})\]")
 _ESCAPE_RE = re.compile(r"\\([dwsS])")
 
 #: Syntax that must not be mined for literals. A ``:`` from ``(?:``, a digit
@@ -91,6 +92,97 @@ _MAX_DERIVED_ALPHABETS = 4
 
 
 
+#: Tried in order against a character class to find one it accepts. Broad
+#: enough that a negated class - which excludes a few characters and admits
+#: everything else - is answered by the first or second candidate.
+_CLASS_CANDIDATES = ("a", "1", " ", "/", "-", "_", ".", ":", "x")
+
+
+def _class_representative(body: str, negated: bool) -> str:
+    r"""One character the class ``[body]`` accepts, or "" if none is found.
+
+    Asked of the compiled class rather than inferred from its text, because
+    inference read a *negated* class as a positive one. ``[^\s]+`` derived
+    ``" "`` - the single character it cannot match - and ``[^0-9]+`` derived
+    ``"1"``. A pattern probed with input it cannot consume measures zero
+    time, and zero is indistinguishable from fast, so every pattern driven
+    by a negated class was scored safe without ever being measured.
+
+    That is the same failure that let a quadratic ``/+$`` ship: the
+    alphabet, not the timing, is what the check rests on.
+    """
+    try:
+        with warnings.catch_warnings():
+            # A body holding `[` - `[[:space:]]`, `[\[\]]` - warns about a
+            # nested set when re-wrapped. The class means the same thing
+            # either way for the only question asked here, which is whether
+            # some character matches it.
+            warnings.simplefilter("ignore", FutureWarning)
+            compiled = re.compile(f"[{'^' if negated else ''}{body}]")
+    except re.error:
+        return ""
+    for candidate in _CLASS_CANDIDATES:
+        if compiled.match(candidate):
+            return candidate
+    # No ASCII candidate matched, so the class is non-ASCII: read a
+    # character out of the class's own text. R013 is the case that matters
+    # - it is FATAL, its body is `\u202A-\u202E` and friends, and every
+    # fixed probe in this module is ASCII, so both its risk and its growth
+    # were measured against input it cannot match. A FATAL rule whose cost
+    # is unmeasured is exactly the gap this module exists to close.
+    for candidate in _codepoints_in(body):
+        if compiled.match(candidate):
+            return candidate
+    return ""
+
+
+_ESCAPED_CODEPOINT_RE = re.compile(
+    r"\\u([0-9a-fA-F]{4})|\\U([0-9a-fA-F]{8})|\\x([0-9a-fA-F]{2})"
+)
+
+#: Single-letter escapes, which name a character without spelling its
+#: codepoint.  Without these `[\t\n\r\f\v]+` derived nothing: the scan
+#: for literals sees `t`, `n`, `r` - the letters, not the controls they
+#: stand for - and none of them matches the class.
+_ESCAPE_LETTERS = {
+    "t": "\t", "n": "\n", "r": "\r", "f": "\f", "v": "\v",
+    "a": "\a", "b": "\b", "0": "\0", "e": "\x1b",
+}
+
+
+def _codepoints_in(body: str) -> list[str]:
+    """Characters named by a class body, escapes decoded, in order.
+
+    A range start is enough: ``[\u202A-\u202E]`` is exercised by
+    ``\u202A``. Only a bounded prefix is read, because the body is
+    attacker-authored text like everything else here.
+    """
+    out: list[str] = []
+    index = 0
+    while index < len(body[:512]) - 1:
+        if body[index] == "\\" and body[index + 1] in _ESCAPE_LETTERS:
+            char = _ESCAPE_LETTERS[body[index + 1]]
+            if char not in out:
+                out.append(char)
+            index += 2
+            continue
+        index += 1
+    for match in _ESCAPED_CODEPOINT_RE.finditer(body[:512]):
+        digits = match.group(1) or match.group(2) or match.group(3)
+        try:
+            out.append(chr(int(digits, 16)))
+        except (ValueError, OverflowError):
+            continue
+        if len(out) >= 8:
+            return out
+    for char in body[:512]:
+        if char not in "\\-^[]" and char not in out:
+            out.append(char)
+            if len(out) >= 8:
+                break
+    return out
+
+
 def _representatives(pattern: str) -> list[str]:
     """Characters this pattern can actually consume, longest-repeat first.
 
@@ -104,21 +196,17 @@ def _representatives(pattern: str) -> list[str]:
         if char and char not in found:
             found.append(char)
 
-    for escape in _ESCAPE_RE.findall(pattern):
+    # Class bodies are removed first: an escape *inside* a class is the
+    # class's business, and reading `\s` out of `[^\s]` added a space -
+    # the one character that class excludes.
+    outside_classes = _CHAR_CLASS_RE.sub(" ", pattern)
+    for escape in _ESCAPE_RE.findall(outside_classes):
         for token, sample in _CLASS_SAMPLES:
             if token == "\\" + escape:
                 add(sample)
 
-    for body in _CHAR_CLASS_RE.findall(pattern):
-        matched = False
-        for token, sample in _CLASS_SAMPLES:
-            if token in body:
-                add(sample)
-                matched = True
-        if not matched:
-            # A literal set such as ``[xyz]``: any member exercises it.
-            literal = next((c for c in body if c.isalnum()), "")
-            add(literal)
+    for negation, body in _CHAR_CLASS_RE.findall(pattern):
+        add(_class_representative(body, bool(negation)))
 
     # Literals in the pattern itself, for shapes like ``(x|x)*`` or ``/+$``
     # where no class appears at all.

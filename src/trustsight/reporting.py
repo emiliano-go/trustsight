@@ -10,13 +10,35 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 
+#: Weight-0 findings that are shown anyway.
+#:
+#: The filter below keeps findings that carry score, which is right for a
+#: rule that claims a *line*: a weight-0 line-rule is a note about
+#: something already counted. These two are not about a line. R089 says
+#: the diff holds a staged attack chain and R117 says a line the reader is
+#: about to judge was reconstructed rather than read - each changes how
+#: every other finding should be read, and both were computed and then
+#: dropped before anyone saw them.
+#:
+#: Computing and hiding is the worst of the three options; the other two
+#: are to show them or to stop computing them.
+ALWAYS_SHOWN_ANNOTATIONS = frozenset({"R089", "R117"})
+
+
 def finding_rows(fact) -> list[dict]:
     """Return the findings exposed by the CLI and API for *fact*."""
     from .verdict import _render
 
     rows = []
     for entry in fact.score_breakdown:
-        if entry.weight > 0 or entry.severity in ("FATAL", "CRITICAL"):
+        if (entry.weight > 0
+                or entry.severity in ("FATAL", "CRITICAL")
+                or entry.rule_id in ALWAYS_SHOWN_ANNOTATIONS
+                # The W series is weight-0 by construction and useless
+                # unless shown: its whole content is "something ran that
+                # nobody read", which is a statement to a reader and not a
+                # component of any number.
+                or entry.rule_id.startswith("W")):
             rows.append({
                 "rule_id": entry.rule_id,
                 "file": entry.file,
@@ -132,6 +154,7 @@ REPORT_KEYS = (
     "diff_truncated",
     "scan_truncated",
     "failed",
+    "fully_vetted",
     "dependencies",
     "depth_truncated",
     "required_by",
@@ -230,6 +253,15 @@ def report_body(
         # A consumer gating on `findings == []` must be able to tell "clean"
         # from "not vetted".
         "failed": bool(evaluated.get("failed", False)),
+        # And from "vetted as far as it could be read". `failed` covers an
+        # analysis that *raised*; this covers one that finished having seen
+        # only part of the change. Both produce `findings: []` and a score
+        # of zero, and a CI job had no field distinguishing either from a
+        # package that is genuinely clean. It is derived from
+        # `coverage_gaps`, which was already here - but a consumer should
+        # not have to know that an empty list is the only safe reading of
+        # a verdict.
+        "fully_vetted": not evaluated.get("coverage_gaps", ()),
         # Each dependency is its own analysis with its own score, so these
         # are results and not a component of this package's number.
         "dependencies": [

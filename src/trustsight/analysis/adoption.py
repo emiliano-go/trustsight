@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 
+from ..tokenizer import split_lines
 from ..rules import clamp_text, join_line_continuations
 from .buildfetch import BUILD_FUNCTIONS, registry_resolutions
 
@@ -59,7 +60,7 @@ def _changed_kinds(diff_text: str) -> dict[str, bool]:
     one of each, and "the checksums did not move" has to mean neither side
     touched them.
     """
-    lines = join_line_continuations(clamp_text(diff_text).splitlines())
+    lines = join_line_continuations(split_lines(clamp_text(diff_text)))
     kinds = {
         "deps": False,
         "source": False,
@@ -115,7 +116,7 @@ def is_recipe_only_change(diff_text: str) -> bool:
 
     "The recipe gained capability" means a dependency array changed **and** a
     build function changed. Requiring both is what makes this specific, and
-    the numbers are the reason: against the 3,739-diff locked benign corpus,
+    the numbers are the reason: against the 3,246-diff locked benign corpus,
     ``deps or build`` fires on 11.53%, ``deps only`` on 4.36%, ``build only``
     on 5.75%, and ``deps and build`` on **1.42%**. The disjunction is under
     the 30% ceiling but it is eight times the noise for no extra detection -

@@ -869,3 +869,54 @@ def test_pivot_over_an_empty_corpus_says_nothing_was_searched(ts, monkeypatch):
         "confidence": None, "sources": [], "matches": [],
     })
     assert ts.pivot("x").searched is False
+
+
+# --- the API surface and the JSON body describe the same report ------------
+
+
+#: Body keys with no identically-named `Report` attribute, and why.
+#: Anything not listed here must be reachable both ways: `required_by`,
+#: `ioc_matches` and `scan_truncated` each shipped in the JSON and were
+#: unreachable on the object, so a caller who wanted them had to serialise
+#: the report to get at fields the report already held.
+_BODY_ONLY = {
+    # A failed analysis is a `FailedPackage`, never a Report, so the flag is
+    # constant here and the type carries the meaning instead.
+    "failed",
+    # Renamed on the object: `Report.suppressed` holds typed entries.
+    "suppressed_rules",
+    # The verbose body's shape for `Report.findings`.
+    "score_breakdown",
+}
+
+
+def test_every_json_body_key_is_reachable_on_the_report():
+    """Two ways to ask, one answer - including for keys added later.
+
+    `required_by` was in `to_dict()` and not on the object; so were
+    `ioc_matches` and `scan_truncated`. Each is a field the API can carry
+    but a caller cannot read without serialising, which is the same
+    "documented but unreachable" shape this project keeps finding.
+    """
+    import dataclasses
+
+    from trustsight.api import Report
+    from trustsight.reporting import REPORT_KEYS, SCORE_KEYS, VERBOSE_KEYS
+
+    fields = {f.name for f in dataclasses.fields(Report) if not f.name.startswith("_")}
+    fields |= {n for n in dir(Report) if not n.startswith("_")}
+    keys = set(REPORT_KEYS) | set(SCORE_KEYS) | set(VERBOSE_KEYS)
+
+    unreachable = sorted(keys - fields - _BODY_ONLY)
+    assert unreachable == [], (
+        f"in the JSON body but not on Report: {unreachable}"
+    )
+
+
+def test_the_body_only_exemptions_are_still_body_keys():
+    """An exemption for a key that no longer exists hides the next one."""
+    from trustsight.reporting import REPORT_KEYS, SCORE_KEYS, VERBOSE_KEYS
+
+    keys = set(REPORT_KEYS) | set(SCORE_KEYS) | set(VERBOSE_KEYS)
+    stale = sorted(_BODY_ONLY - keys)
+    assert stale == [], f"exemptions for keys that are no longer emitted: {stale}"

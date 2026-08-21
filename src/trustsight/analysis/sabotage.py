@@ -32,6 +32,7 @@ from __future__ import annotations
 import re
 
 from ..deps import _strip_comment
+from ..tokenizer import resolve_added_lines
 from ..rules import clamp_text, join_line_continuations
 
 # ---------------------------------------------------------------------------
@@ -64,7 +65,17 @@ _HOME_ALT = r"~|\$\{?HOME\}?|\$\{?XDG_[A-Z_]+\}?"
 # ``config.DEFAULT_PARSE_TIME_FETCH``, and the reason a quoted *argument*
 # still matches: only the command's own position is constrained, so
 # `rm -rf "$HOME"` is caught while `echo "rm -rf /"` is not.
-_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)\s*"
+#: A command position: the start of the subject, or just after a separator.
+#: The trailing whitespace is *horizontal* on purpose. It used to be `\s*`,
+#: which matches a newline, so on a subject holding many of them the engine
+#: re-scanned a run of newlines from every position - 8192 of them cost 2.4s
+#: in `_SHRED_HOME_RE` and 5.8s in `_HISTORY_WIPE_RE`, quadratic in the line
+#: length. Nothing reaches that today, because every caller matches one line
+#: at a time and a line holds no newline; it was a loaded gun in a prefix a
+#: dozen rules share, and it stayed invisible until the probe alphabet
+#: learned to include a newline. A command word follows spaces or tabs on
+#: its own line, and the newline boundary is already the lookbehind's job.
+_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)[ \t]*"
 
 
 
@@ -87,8 +98,27 @@ _FORK_BOMB_DEF_RE = re.compile(
     # every start position, which is 262k attempts across an 8 KiB line.
     # A name longer than 32 never matched anyway, so giving back the
     # characters buys nothing.
-    r"(?P<name>[:\w]{1,32}+)\s*\(\s*\)\s*\{[^}]{0,120}?"
-    r"(?P=name)\s*\|\s*(?P=name)[^}]{0,120}?&[^}]{0,120}?\}",
+    # The spans between the pieces are unbounded. `{0,120}` was a bypass for
+    # anyone willing to pad the body - `:(){ true; x40 :|:& };:` is the same
+    # fork bomb and read as clean - and the bound was there for backtracking
+    # safety, which a lookahead gives without a length. The assertions run
+    # once; the spans that follow are possessive and never give ground.
+    r"(?P<name>[:\w]{1,32}+)\s*\(\s*\)\s*\{"
+    # Two ways to double, and the pipe is only one of them. `:|:` is the
+    # classic, and `boom & boom &` is the same bomb written without a
+    # pipeline - the essential property is that the body reaches its own
+    # name more than once and backgrounds, not which operator joins the
+    # calls. Requiring the pipe made the second spelling read as clean.
+    #
+    # Both alternatives are single lookaheads over `[^}]`, so neither
+    # nests a quantifier inside a repeat.
+    r"(?=[^}]*(?P=name)\s*\|\s*(?P=name)"
+    # The first call may sit immediately after the brace, which the
+    # separator class cannot match because the brace is already consumed.
+    r"|\s*(?P=name)\b[^}]*[;&|]\s*(?P=name)\b"
+    r"|[^}]*[;&|{]\s*(?P=name)\b[^}]*[;&|]\s*(?P=name)\b)"
+    r"(?=[^}]*&)"
+    r"[^}]*+\}",
 )
 
 # A loop whose body backgrounds work with no bound: `while true; do x & done`.
@@ -109,7 +139,10 @@ _RM_RF_RE = re.compile(
     re.MULTILINE,
 )
 _RM_TARGET_SYSTEM_RE = re.compile(
-    _CMD + r"rm\s[^\n;&|]{0,200}?\s(?:--no-preserve-root\s+)?"
+    # Unbounded for the same reason: 201 characters of flags between `rm`
+    # and its target used to be enough to walk past this, and the target is
+    # what the rule is about.
+    _CMD + r"rm\s[^\n;&|]*?\s(?:--no-preserve-root\s+)?"
     r"[\"']?(?:" + _SYSTEM_PATH_ALT + r"|" + _HOME_ALT + r")[\"']?(?:\s|$|;|&)",
     re.MULTILINE,
 )
@@ -228,13 +261,61 @@ _HISTORY_WIPE_RE = re.compile(
 )
 
 
+#: A target that is *itself* inside the build tree. The distinction the
+#: line-wide stand-down could not draw: `rm -rf "$srcdir/.git" ~` clears a
+#: build directory and the operator's home in one command, and testing the
+#: whole line for a sandbox token silenced the second because of the first.
+#: One `$srcdir` token was a licence to delete anything alongside it.
+_SANDBOX_TARGET_RE = re.compile(
+    r"\A[\"']?(?:" + "|".join(_SANDBOX_VARS) + r")", re.IGNORECASE)
+
+_DANGEROUS_TARGET_RE = re.compile(
+    r"\A[\"']?(?:" + _SYSTEM_PATH_ALT + r"|" + _HOME_ALT + r")[\"']?\Z")
+
+
+def _rm_targets_outside_the_build_tree(body: str) -> str | None:
+    """The first `rm` argument that names the operator's system, or None.
+
+    Arguments are read one at a time so a sandbox path exempts itself and
+    nothing else. Flags are skipped; `--` ends them.
+    """
+    m = re.search(r"(?:\A|[;&|]|\$\()\s*rm\b", body)
+    if m is None:
+        return None
+    rest = body[m.end():]
+    # Stop at the end of this command: what a later command deletes is a
+    # separate question, asked again on its own.
+    rest = re.split(r"[;&|]", rest, maxsplit=1)[0]
+    flags_done = False
+    for arg in rest.split():
+        if not flags_done and arg == "--":
+            flags_done = True
+            continue
+        if not flags_done and arg.startswith("-"):
+            continue
+        flags_done = True
+        if _SANDBOX_TARGET_RE.match(arg):
+            continue
+        if _DANGEROUS_TARGET_RE.match(arg):
+            return arg
+    return None
+
+
 def _added_bodies(diff_text: str):
     """``(line_number, body)`` for each added line, comments stripped.
 
     Added only: a *removed* `rm -rf /` is a recipe being fixed, and reporting
     it as a finding would flag the cleanup rather than the damage.
+
+    Resolved, not raw. Every rule in this file read the literal text, so a
+    variable defeated all of them at once: `dd of="$D"`, `systemctl stop
+    "$U"`, `rm -rf "$T"`. The name is chosen by the attacker and the value
+    is right there in the diff - reading the text instead of the value made
+    the whole family a spelling test. The fetch and delivery rules resolve
+    for exactly this reason; the sabotage rules were the ones that did not.
     """
-    lines = join_line_continuations(clamp_text(diff_text).splitlines())
+    lines = resolve_added_lines(clamp_text(diff_text))
+    lines = join_line_continuations(lines)
     for index, line in enumerate(lines, start=1):
         if not line.startswith("+") or line.startswith("+++"):
             continue
@@ -270,9 +351,9 @@ def _sabotage_findings(diff_text, config, add) -> None:
 
         # The sandbox check is what keeps this off the ordinary case: almost
         # every PKGBUILD clears $srcdir or prunes $pkgdir.
-        if (_RM_RF_RE.search(body)
-                and _RM_TARGET_SYSTEM_RE.search(body)
-                and not _SANDBOX_RE.search(body)):
+        outside = (_rm_targets_outside_the_build_tree(body)
+                   if _RM_RF_RE.search(body) else None)
+        if outside is not None:
             once("S002", "Recursive Deletion Outside The Build Tree", "CRITICAL",
                  f"recursive delete aimed outside the build tree: {quoted}",
                  line_no, body=quoted)

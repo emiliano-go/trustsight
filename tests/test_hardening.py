@@ -590,8 +590,17 @@ def test_the_pkgbuild_blob_is_size_checked_before_data():
         name = "PKGBUILD"
         type_str = "blob"
 
+    class _Tree:
+        # `_top_level_blob` subscripts the tree by name.  A plain list does
+        # not support that, so this fixture used to return None there and
+        # the assertions below passed without the size check ever running.
+        def __getitem__(self, name):
+            if name == "PKGBUILD":
+                return _Entry()
+            raise KeyError(name)
+
     class _Commit:
-        tree = [_Entry()]
+        tree = _Tree()
 
     class _Repo:
         def get(self, _oid):
@@ -600,7 +609,7 @@ def test_the_pkgbuild_blob_is_size_checked_before_data():
         def __getitem__(self, _oid):
             return _Exploding()
 
-    assert differ.companion_source_hunks(_Repo(), "head") == ""
+    assert differ.companion_source_hunks(_Repo(), "head") == ("", True)
     assert not touched, "the oversized blob's data must never be read"
 
 

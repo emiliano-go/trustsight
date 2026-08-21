@@ -618,6 +618,33 @@ def _import_baseline_wrapped(path: str, json_output: bool, allow_unsigned: bool)
 
 # --- seed-db ---
 
+def _stale_rules_note(stale_patterns, missing, plain: bool = False) -> str:
+    """What a stale rules.toml costs, said plainly.
+
+    Not "your config is out of date": the consequence is that rules match
+    less than the shipped definitions do, so a quiet report is quiet for a
+    reason the reader cannot see from the report.
+    """
+    parts = []
+    if stale_patterns:
+        shown = ", ".join(stale_patterns[:8])
+        more = f" (+{len(stale_patterns) - 8} more)" if len(stale_patterns) > 8 else ""
+        parts.append(
+            f"{len(stale_patterns)} rule(s) match on an older pattern than this "
+            f"build ships: {shown}{more}. Those rules detect less here than "
+            f"their documentation describes."
+        )
+    if missing:
+        parts.append(
+            f"{len(missing)} shipped rule(s) are absent from your rules.toml: "
+            f"{', '.join(missing[:8])}."
+        )
+    parts.append("Run `trustsight config sync-rules --update` to reconcile "
+                 "(rules you have edited yourself are left alone).")
+    body = " ".join(parts)
+    return body if plain else f"\n[yellow]{body}[/]"
+
+
 def register_commands(app: typer.Typer):
     app.add_typer(config_app, name="config")
     app.add_typer(override_app, name="override")
@@ -821,6 +848,15 @@ def register_commands(app: typer.Typer):
         effective_obs = effective_observation_count()
         seed_obs = seed_observation_count()
         deps_loaded = dependency_table_populated()
+        # `rules.toml` is written once, at install time, and only ever gains
+        # rules.  A shipped *pattern* fix therefore never reaches an existing
+        # install, and the only place that said so was `config sync-rules` -
+        # a command nobody runs unprompted.  A stale file means this build
+        # detects less than its own documentation claims, which the reader
+        # has no way to discover from a quiet report.
+        drift = drifted_shipped_rules()
+        stale_patterns = sorted({r for r, field, _a, _s in drift if field == "pattern"})
+        missing = missing_shipped_rules()
 
         if json_output:
             typer.echo(json.dumps({
@@ -829,6 +865,8 @@ def register_commands(app: typer.Typer):
                 "effective_observations": effective_obs,
                 "seed_observations": seed_obs,
                 "dependency_corpus_loaded": deps_loaded,
+                "stale_rule_patterns": stale_patterns,
+                "missing_shipped_rules": missing,
             }, indent=2))
             return
 
@@ -848,13 +886,25 @@ def register_commands(app: typer.Typer):
                 "Dependency corpus",
                 Text("Loaded", style="green") if deps_loaded else Text("Not loaded", style="yellow"),
             )
+            table.add_row(
+                "Rule patterns",
+                Text("Up to date", style="green") if not stale_patterns
+                else Text(f"{len(stale_patterns)} stale", style="yellow"),
+            )
             con.print(table)
+            if stale_patterns or missing:
+                con.print(_stale_rules_note(stale_patterns, missing))
         else:
             print(f"Packages tracked      : {len(all_pkgs)}")
             print(f"Total analyses        : {total_analyses}")
             print(f"Effective observations: {effective_obs}")
             print(f"Seed observations     : {seed_obs}")
             print(f"Dependency corpus     : {'Loaded' if deps_loaded else 'Not loaded'}")
+            print("Rule patterns         : "
+                  + ("Up to date" if not stale_patterns
+                     else f"{len(stale_patterns)} stale"))
+            if stale_patterns or missing:
+                print(_stale_rules_note(stale_patterns, missing, plain=True))
 
     @app.command("full-aur")
     def full_aur_cmd(

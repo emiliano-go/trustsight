@@ -91,7 +91,7 @@ What the tool promises, in one paragraph, is that its output is honest about the
 - **Isolated**: it never fetches a URL the package named, never executes package code, never extracts archives to disk, and never renders untrusted text unescaped.
 - **Locked**: FATAL rules cannot be turned off, and suppression is always visible.
 - **Configuration is visible, not silently mutable**: the operator may tune the instrument, but not without a trace. The config fingerprint (B1) captures the effective ruleset, thresholds and overrides; FATAL rules cannot be removed without the shipped-rule fallback and a logged warning (B4); and suppressed findings are always reported (B5). A local attacker with filesystem access can edit `rules.toml` or `overrides.toml`, because local permissions are a trusted assumption, but they cannot make the change invisible: the run then carries a different fingerprint, and any suppressed or downgraded rule shows in the output. The model separates operator intent from silent tampering by observability, not by prevention.
-- **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 13.1% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
+- **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 11.9% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
 
 Each of these stops being a promise the moment the machine breaks it. The gates in [Part C](#part-c-the-enforcement-map) are what turn them from sentences into structural commitments.
 
@@ -322,7 +322,7 @@ The score is not a probability, not a confidence, and not a prediction. A score 
 
 ### B2. An unflagged verdict is never issued for an analysis that was incomplete
 
-Nine things make a run partial, and all nine are recorded as **coverage gaps** on the result:
+Eleven things make a run partial, and all eleven are recorded as **coverage gaps** on the result:
 
 | Gap | Meaning |
 |-----|---------|
@@ -330,11 +330,17 @@ Nine things make a run partial, and all nine are recorded as **coverage gaps** o
 | `scan_truncated` | The diff held more lines than `rules.MAX_SCANNED_LINES`, so only its first lines were matched. Separate from `diff_truncated` because the caps are separate: matching costs per line, so a diff of many short lines passes the byte cap and is still cut here (A5, A14). |
 | `line_truncated` | A logical line exceeded `rules.MAX_RULE_LINE_BYTES`, so its tail was not matched against any rule (A5). |
 | `tree_not_analyzed` | The repository file manifest was unavailable, so only the PKGBUILD was examined. |
+| `companion_truncated` | A committed file the recipe names - and copies into `$srcdir`, executes, sources or patches by path - was larger than `differ.MAX_COMPANION_BYTES`, or there were more of them than `MAX_COMPANION_FILES`, so its content was not matched against any rule (A5, A14). |
 | `unresolved_source` | A `source=` entry is computed at build time (including a `$(...)` on a continuation line of a multi-line `source=()` array), so the URL the build will actually fetch is not in the analysed text. |
 | `unresolved_parse_time` | A top-level command substitution runs while makepkg *sources* the PKGBUILD for metadata, so part of the recipe executes and produces a value before any rule reads it. |
 | `snapshot_refused` | The snapshot archive exceeded `full_aur.fetch.MAX_TAR_MEMBER_BYTES` and was refused, so the committed file tree was not examined and the PKGBUILD came from the text endpoint instead (A4, A14). |
 | `unpinned_build_deps` | A build function resolves dependencies from a package registry (`npm install`, `pip install`, `cargo fetch`, …), so the code the build will fetch and execute is not in the analysed text and no checksum in the recipe covers it. |
 | `deps_not_scanned` | The AUR dependency walk stopped before the closure was exhausted - a ceiling cut it short, or a dependency could not be analysed - so some packages this build will pull in were never read. |
+| `stage_degraded` | An analysis stage raised on this input and returned a neutral value, so the checks it performs did not run over all of the change. Recorded by `coverage.note_stage_failure` from the handler itself. |
+
+`companion_truncated` is separate from `diff_truncated` for the reason `scan_truncated` is: they point at different dials. A companion is read on its own budget, and a reader told only "the diff was truncated" would raise `max_diff_bytes` and find it changed nothing. The bound itself is not the interesting part - every bound drops content. What made this one a vulnerability rather than a limit was that it dropped content *and said nothing*, so a payload past 64 KiB in a committed `Makefile` scored identically to a package with no companions at all.
+
+`stage_degraded` covers the other kind of shortfall. The nine gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
 
 `deps_not_scanned` is the dependency walk's half of the same honesty. An AUR package's `depends` and `makedepends` can name other AUR packages, and `makepkg` builds those on the reviewer's machine in the same run, so a review that reads only the package you typed has read one recipe out of several that will execute. `--depth` decides how far the walk goes, and each dependency is analysed *as a package* - its own score, its own band, its own row in the database - never folded into the parent's number, because `depth` is deliberately absent from the config fingerprint and a score that moved with a flag would break [B1](#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for anyone comparing two runs.
 
@@ -368,15 +374,15 @@ Machine output keeps the two facts separate rather than in a sentence: `risk` is
 
 **Where the threshold comes from.** UNFLAGGED is at or below 20 points (`scoring.FLAG_THRESHOLD`). The number is stated here because a reader cannot otherwise tell whether it is measured or chosen, and the honest answer is: it was measured, then the measurement moved underneath it.
 
-Twenty was originally the 95th percentile of the benign corpus. It is not any more. Against the 3,739-diff corpus as currently calibrated:
+Twenty was originally the 95th percentile of the benign corpus. It is not any more. Against the locked 3,246-diff corpus as currently calibrated:
 
 | Measure | Value |
 |---------|-------|
 | benign median | 0 |
 | benign 95th percentile | 35 |
-| benign diffs scoring 0 | 68.3% |
-| benign diffs above 20 | 13.1% |
-| percentile that 20 now sits at | 86.9th |
+| benign diffs scoring 0 | 68.4% |
+| benign diffs above 20 | 11.9% |
+| percentile that 20 now sits at | 88.1th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 40 |
 

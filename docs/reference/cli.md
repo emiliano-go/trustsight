@@ -171,8 +171,8 @@ either flag the band is withheld everywhere, dependency cards included, and the
 border is blue. When both are given the Score row wins, since it already names
 the band.
 
-The plain-text fallback carries the **same sections** in the same order. It is
-not a condensed subset: a field on one renderer and not the other is a
+The plain-text fallback carries the **same sections** in the same order, and
+nothing is dropped from it: a field on one renderer and not the other is a
 difference in information, which
 [B11](../security.md#b11-every-surface-reports-the-same-thing) forbids.
 

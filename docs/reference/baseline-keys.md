@@ -71,11 +71,11 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key, load_pem_public_key,
 )
 
-# public: PEM -> the 32 raw bytes pinned in the repo
+## public: PEM -> the 32 raw bytes pinned in the repo
 pub = load_pem_public_key(Path("baseline_pubkey.pem").read_bytes())
 Path("src/trustsight/full_aur/baseline_pubkey.pem").write_bytes(pub.public_bytes_raw())
 
-# private (kept outside the repo): PEM -> the 32 raw bytes `--sign` expects
+## private (kept outside the repo): PEM -> the 32 raw bytes `--sign` expects
 priv = load_pem_private_key(Path("trustsight-release.pem").read_bytes(), password=None)
 Path("trustsight-release.raw").write_bytes(priv.private_bytes_raw())  # never commit this
 ```

@@ -16,6 +16,18 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R075](#r075-rule) | Dependency-Set Expansion | MEDIUM |
+| [R082](#r082) | Shell Obfuscation Density | MEDIUM |
+| [R092](#r092) | Mass Adoption | HIGH |
+| [R100](#r100) | Shared Source Repository | HIGH |
+| [R105](#r105) | Attribute Burst | MEDIUM |
+<!-- /generated: page-index -->
+
 ### R075: Dependency-Set Expansion {#r075-rule}
 
 - **Target:** programmatic (delta over dependency arrays × per-dep novelty)

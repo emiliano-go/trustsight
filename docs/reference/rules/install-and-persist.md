@@ -15,6 +15,30 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R007](#r007) | Install File Modification | MEDIUM |
+| [R017](#r017) | Setuid/Setgid Permission | HIGH |
+| [R052](#r052) | Dotfile Written To User Profile | HIGH |
+| [R053](#r053) | Setuid Or Setgid Bit Set In Package Root | MEDIUM |
+| [R054](#r054) | Persistence Unit Outside Package Root | HIGH |
+| [R059](#r059) | Setuid Or Setgid Bit Set Outside Package Root | HIGH |
+| [R062](#r062) | Install Hook Fetches Or Executes | HIGH |
+| [R068](#r068) | Install Hook Present | INFO |
+| [R077](#r077) | Write To User Home Or RC | HIGH |
+| [R081](#r081) | Foreign Package Manager In Install Hook | HIGH |
+| [R085](#r085) | Systemd ExecStart From Runtime-Writable Path | HIGH |
+| [R114](#r114) | Pacman Hook Installed | MEDIUM |
+| [R139](#r139) | Service ExecStart Targets Undeclared Binary | HIGH |
+| [R144](#r144) | Packaged File Points At A World-Writable Path | HIGH |
+| [R145](#r145) | Packaged File Names A Build-Only Path | HIGH |
+| [R149](#r149) | Committed Config Points At A Build-Only Path | HIGH |
+| [R151](#r151) | Boot Or Image Artifact Built From The Source Tree | HIGH |
+<!-- /generated: page-index -->
+
 ### R007: Install File Modification {#r007}
 
 - **Target:** `raw_line`
@@ -46,7 +70,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `privilege`
-- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+(?!["\x27]?/)|\s+(?!--\s)(?!["\x27]?/))`
+- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+(?!["\x27]?/)|\s+(?!--\s)(?!["\x27]?/))|\bsetcap\s+(?:-\S+\s+)*["\x27]?cap_\w+[^\s]*\s+(?!["\x27]?/)`
 - **Description:** Setuid or setgid applied to a path being staged into the package. Detects both octal (`4755`, `2755`) and symbolic (`u+s`) forms; ordinary modes such as `644`, `755` and `+x` do not match. Chromium's sandbox helper legitimately requires `4755`, so this fires on essentially every Electron package. Measured across the benign corpus, MEDIUM changes **no** package's risk band; the evidence stays visible in the tiered breakdown without reclassifying routine updates. At HIGH it would have reclassified every Electron package as Medium.
 
 ### R059: Setuid Or Setgid Bit Set Outside Package Root {#r059}
@@ -54,7 +78,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `privilege`
-- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+["\x27]?/|\s+(?!--\s)["\x27]?/)`
+- **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+["\x27]?/|\s+(?!--\s)["\x27]?/)|\bsetcap\s+(?:-\S+\s+)*["\x27]?cap_\w+[^\s]*\s+["\x27]?/`
 - **Description:** The same operation against an absolute path. This touches the live filesystem rather than `$pkgdir`, so it is a privilege change on the build host and not packaging. Split from R053 because the two are materially different: `chmod u+s "$pkgdir/opt/x/chrome-sandbox"` is ordinary Electron packaging, while `chmod u+s "/usr/bin/helper"` is not.
 
 ### R054: Persistence Unit Outside Package Root {#r054}
@@ -62,7 +86,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
-- **Pattern:** `(?:[\s"\x27]|\$\{?pkgdir\}?)(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/`
+- **Pattern:** `(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?:[\s"\x27]|\$\{?pkgdir\}?)(?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))`
 - **Description:** Detects a cron job or systemd unit written to a system path. A unit staged into `$pkgdir` is flagged too, in any quoting style (`"${pkgdir}"/usr/lib/...`, `"${pkgdir}/usr/lib/..."`, `$pkgdir/usr/lib/...`): pacman installs what the recipe staged, so all three produce the same persistent root-level unit. Writing to the live filesystem during a build is the worse case of the same finding.
 
 ### R062: Install Hook Fetches Or Executes {#r062}
@@ -163,3 +187,132 @@ heuristic). The installed executable must come from an `install` with an
 explicit `7xx` mode or no `-m` flag (install's default is 755). Such files
 arrive through the unseen source tarball, so their content cannot be audited.
 Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery.py`.
+
+### R144: Packaged File Points At A World-Writable Path {#r144}
+
+- **Target:** `raw_line`
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Pattern:** `^\+?(?=[^\n]*\$\{?pkgdir\}?)(?=[^\n]*(?:/tmp/|/var/tmp/|/dev/shm/))\S`
+- **Condition:** A line that both references `$pkgdir` and names a path under `/tmp`, `/var/tmp` or `/dev/shm`.
+
+A file staged into the package root that names a program under a
+world-writable directory. Those directories are writable by everyone, so
+whatever the config names can be replaced by any local user between the
+package being installed and the config being read - and the config is read
+as root for a unit, a PAM line or a cron entry.
+
+It is both halves at once: an attacker who ships this is arranging for their
+own planted file to run, and a maintainer who ships it by accident has handed
+the same lever to anyone with a shell on the machine. The target is never in
+the diff, which is why every rule that looks for a payload found nothing
+here - the observable is the *destination*, not the code.
+
+Order-free, because the recipe may write the config and then name the path or
+the reverse, and anchored at `^` so each lookahead runs once. Zero
+occurrences in the 3,246-diff benign corpus: a package pointing its own
+config at `/tmp` is not something the ecosystem does.
+
+### R145: Packaged File Names A Build-Only Path {#r145}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** Content written into `$pkgdir` - a heredoc body or a
+  `printf`/`echo`/`tee`/`cat` redirect - that names `$srcdir`,
+  `$startdir`, `$PWD`, `$BUILDDIR` or `$pkgdir`.
+
+The audit's largest silent family is a configuration file the recipe
+*generates* into the package root whose exec slot names a script: an i3
+`bindsym … exec`, a polybar `exec =`, a udev `RUN+=`, an acme `RELOADCMD=`,
+a mutt `macro … !bash`. Every rule that looks for execution reads the
+recipe's own commands, and none of these lines is a command the recipe
+runs - they are text, and what runs them is the user's session, later, on a
+different machine.
+
+What separates them from the ordinary case is not the exec slot, which is
+what those files are *for*: a `.desktop` with `Exec=/usr/bin/p` and a
+`bindsym $mod+d exec dmenu_run` are exactly right, and both stay silent. It
+is *which path* the slot names. `$srcdir`, `$startdir`, `$PWD` and
+`$BUILDDIR` exist only while the package is being built, in a directory
+pacman never ships and the user does not have. A shipped file naming one is
+either broken on arrival - it points at nothing - or it is aimed at a
+directory whoever wrote it expects to control at the moment it is read.
+
+Neither reading is packaging. The rule is about the *pairing* of a write
+into `$pkgdir` with content naming a build-only path, which is why it is not
+a line pattern: `install -Dm755 "$srcdir/x" "$pkgdir/usr/bin/x"` names both
+on one line and is the single most common line in the ecosystem. There
+`$srcdir` is an argument to a copy; here it is inside the bytes being
+written. The rule splits a single-line write at its redirect and reads only
+the content half, and for a heredoc it reads the body against the target
+named on the opener.
+
+Zero occurrences in the 3,246-diff benign corpus.
+
+### R149: Committed Config Points At A Build-Only Path {#r149}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** A committed `.service`, `.desktop`, `.rules`, `.conf` (and
+  the rest of the carrier set R146 reads) holding a directive that runs
+  something, whose value names `$srcdir`, `$startdir`, `$PWD`, `$BUILDDIR`
+  or `$pkgdir`.
+
+The symmetric half of [R145](#r145). That rule reads content the recipe
+*generates* into `$pkgdir`; this one reads content the recipe *committed*
+and then ships. The observable is identical and so is the reasoning: those
+directories exist only while the package is being built, so a shipped file
+naming one is either broken on arrival or aimed at a directory whoever wrote
+it expects to control when it is read.
+
+The value has to sit in a directive that runs something. A `.desktop` whose
+`Comment=` mentions a build path is a cosmetic mistake; an `Exec=` naming one
+is a command pointed at nothing.
+
+**How the directive is recognised.** The rule does not carry a list of
+exec-bearing keys. A shipped file that names a build directory is broken on
+arrival whatever field holds the path, so the test is inverted: fields that
+only *describe* are excluded, and those are few and stable - `Comment`,
+`Description`, `Name`, `Icon`, `URL`, `X-*`, and comment lines. A `.desktop`
+whose `Comment=` mentions the build tree is untidy; an `Exec=` naming one is
+a command aimed at nothing.
+
+The path, not the file extension, is the observable.
+`ExecStart=/usr/share/p/launcher.sh` names a script the package itself
+ships, and stays quiet.
+
+**Carriers** include build manifests (`build.ninja`, `Makefile`,
+`BUILD.bazel`, `*.mk`) for the same reason they include unit files: the
+engine runs what they say. `make` spells its variables `$(srcdir)` with
+parentheses, so an ordinary Makefile does not look like a build-only path.
+
+Measured across all thirty audited verticals in their committed form: thirty
+fire. Measured across 249 committed files in 81 real AUR repositories: none
+does.
+
+### R151: Boot Or Image Artifact Built From The Source Tree {#r151}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** `dracut`, `mkinitcpio`, `update-initramfs`,
+  `grub-mkconfig`, `grub-install`, `guestfish`, `virt-customize` or
+  `bootctl` invoked with an argument naming `$srcdir`, `$startdir`, `$PWD`
+  or `$pkgdir`.
+
+`dracut --include "$srcdir/x" /x` injects a path from the build tree into
+the initramfs, which runs before userspace exists and before any filesystem
+the user can inspect is mounted. `grub-mkconfig` writes the boot menu.
+`guestfish` and `virt-customize` edit a disk image's contents.
+
+A package may legitimately ship kernel modules or a bootloader, and those
+are `install`ed like any other file. *Generating* boot material during a
+build is different: the result captures the builder's machine, and any path
+from the source tree that goes into it is code that will run at the earliest
+moment there is.
+
+The build-only path is the observable, as it is for [R145](#r145) and
+[R149](#r149). A bare relative filename establishes no provenance - if it is
+declared or committed, R146 and R149 read it; if it is neither, it is the
+[W001](unverifiable.md#w001) boundary.
+
+None of these tools appear in the benign corpus with a build-tree argument.

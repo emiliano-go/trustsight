@@ -18,6 +18,62 @@ A sophisticated attack against an established package would:
 
 TrustSight would score this package 0 (UNFLAGGED) because nothing in the PKGBUILD changed except the version and checksum. The attack is invisible to PKGBUILD-level auditing. The defense against this class of attack is upstream signing and reproducible builds, not diff analysis.
 
+### What can be tracked instead
+
+The payload is out of reach, but the *carrier* has an identity, and that
+identity is in the diff even when its bytes are not. A checksum, a commit, a
+submodule gitlink, a Git-LFS object id and a committed binary's blob id all
+name content this analysis never reads - and a change to one of them, with no
+corresponding version change, is the observable form of "the code was
+replaced".
+
+That reading is what [R079](../reference/rules/integrity.md#r079) already
+applies to a git ref and [C001](../reference/rules/integrity.md#c001) to a
+checksum, and [C008](../reference/rules/integrity.md#c008) now applies it to
+the rest. The binary case needed no new reading at all: a git blob id *is* a
+content hash, so comparing two trees answers "did this file change" exactly,
+without opening either version. That matters because git emits no diff body
+for a binary, so before this the analysis reported the same thing whether a
+committed ELF had been replaced or left untouched.
+
+This does not close the gap - it changes what the gap costs. An attacker who
+swaps upstream content must now do it either under a new version, where the
+change is expected and the reader is looking, or under a stable one, where it
+is claimed. What remains genuinely invisible is a *first* analysis, which has
+no previous identity to compare against, and a legitimate upstream release
+that happens to contain a payload: no amount of tracking distinguishes that
+from an ordinary update.
+
+### The build driver is part of the tarball
+
+The same limit has a shape that looks less like "upstream was compromised" and more like an ordinary recipe. A tarball carries its own build files, and a PKGBUILD that runs `make` executes them:
+
+```bash
+source=("https://upstream.example/p-1.0.tar.gz")
+sha256sums=('...')
+build() {
+  cd "$srcdir/p-1.0"
+  make
+}
+```
+
+Every verb here is the most ordinary thing a PKGBUILD does. The code that runs is in the `Makefile` inside the tarball, which this analysis never downloads and never reads.
+
+It is not about `make` specifically. Every driver has this property - `cmake --build`, `ninja -C`, `autoreconf && ./configure`, `python setup.py build`, and equally `sh p-1.0/bootstrap.sh` or `perl p-1.0/Makefile.PL`. An execution is paired with a file this analysis can read only when that file is *individually declared* in `source=()` (R138) or *committed to the AUR repository* (R136). A script inside a declared tarball is neither: the tarball is declared as one entry, its contents are never read, and no rule knows the script exists.
+
+Nor is the answer to add the verbs. Measured against the 3,246-diff locked benign corpus, executing a path that is neither declared nor committed is what **half** of all packages do - `python setup.py build`, `bash ./autogen.sh`, `./configure` are the ordinary shape of building software. A rule over that would fire on the corpus more often than not, and a coverage gap over it would put most packages into Inconclusive permanently. Either would replace a precise instrument with a warning nobody can act on.
+
+There is a third option, and it is the one taken: **say it without pricing it.** `W001` reports that a build function runs a script whose content this analysis never read, and contributes nothing to the score, the risk band or the flagged decision. It is not a risk claim - it is a statement about what could not be checked, attached to the line it applies to, which is the same act as a coverage gap moved from the run to the line. See [Unverifiable](../reference/rules/unverifiable.md).
+
+That leaves the *documented* boundary narrower than it was. The excluded majority above - the standard entry points of an unpacked tree, `configure`, `setup.py`, `Makefile.PL`, `autogen.sh` - stays excluded, because naming them would put a note on most of the ecosystem while telling a reader nothing they do not already assume. What `W001` names is the remainder: an interpreter invoked on a specific file from the tree, or a `./` invocation, where nothing else in the ruleset could speak. That is 0.09% of the benign corpus. The tarball's *contents* remain unread - `W001` says that a script inside it ran, never what the script does.
+
+Two adjacent cases *are* covered, and the boundary between them is worth being precise about:
+
+- A `Makefile` **committed to the AUR repository** and not declared in `source=()` is code the maintainer added, not code that arrived with the tarball. `R136` fires on it (see [Fetch and Execution](../reference/rules/fetch-and-execution.md#r136)).
+- A source that is **not pinned** - `git+https://…#branch=main`, or a bare `git+` URL - means the content is chosen by upstream at build time rather than fixed by this recipe. That is reported as `P008`, a weight-0 declared fact.
+
+What is left is the checksum-pinned tarball. There the content *is* fixed by the recipe: changing it requires changing the checksum, and that change is in the diff. So the recipe-level analysis has real, if indirect, coverage - it can tell you the meal came from the same sealed tin, not what is in the tin.
+
 ## The parser boundary
 
 PKGBUILDs are shell scripts with structure. Not all structure is resolvable without execution. When the parser encounters:

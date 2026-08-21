@@ -153,16 +153,16 @@ weeks later will legitimately differ; equality is expected only against the
 same mirror state. Two checks cover the two failure modes:
 
 ```bash
-# 1. The release asset is signed by the pinned key (and is
-#    unique to this release: no other seed has this digest).
+## 1. The release asset is signed by the pinned key (and is
+##    unique to this release: no other seed has this digest).
 trustsight seed fetch --json   # "status: ok" means the signature verified
 
-# 2. It is the published script over the published input:
+## 2. It is the published script over the published input:
 python scripts/generate_seed.py --out /tmp/seed-audit.db \
   --provenance-out /tmp/seed-audit-provenance.json
-# compare maintainers with --src/trustsight/seed-audit against a fresh build
-# and diff your seed-provenance.json against the published one: same mirror
-# state must produce the same package, maintainer and observation counts.
+## compare maintainers with --src/trustsight/seed-audit against a fresh build
+## and diff your seed-provenance.json against the published one: same mirror
+## state must produce the same package, maintainer and observation counts.
 ```
 
 The schema itself is auditable in one read: it is the `SCHEMA` literal at the

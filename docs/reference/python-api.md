@@ -39,11 +39,11 @@ The CLI has two behaviours that exist to stop a report from reading better than 
 `Report.risk` is the band the analysis actually supports. It is **not** `risk_level(report.score)`. A run that could not read the whole change, or one against a database with no history to compare against, reports `Inconclusive` no matter what the score is.
 
 ```python
-# Correct
+## Correct
 if report.risk in ("High", "Critical"):
     ...
 
-# Wrong: re-deriving the band discards the coverage qualification
+## Wrong: re-deriving the band discards the coverage qualification
 if report.score > 50:
     ...
 ```

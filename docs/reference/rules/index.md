@@ -1,9 +1,14 @@
 # Rules Reference
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
-inventory includes the R-series through R143, sabotage rules S001-S008, and
-crossfire rules X001-X007; each contributes according to its severity weight,
-match target, and scope.
+inventory is the R-series through R151, sabotage rules S001-S008, crossfire
+rules X001-X023, integrity-change rules C001-C009, dependency rules
+D001-D004, declared-practice rules P001-P008, and unverifiable rules
+W001-W006.
+
+Each rule contributes according to its severity weight, match target and
+scope, except the P and W series, which are weight 0 and report rather than
+score.
 
 This page is the map. [The rule system reference](system.md) explains how
 the engine works and holds everything that is not an individual rule: the
@@ -28,20 +33,21 @@ generated from it by `scripts/build_rules_index.py`.
 | Category | Slug | Rules | What a rule here claims |
 |----------|------|-------|-------------------------|
 <!-- generated: legend -->
-| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 34 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
+| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 36 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 5 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
-| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 13 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
+| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 17 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 8 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 22 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Integrity and Verification](integrity.md) | `integrity` | 26 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 3 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 2 | Distinct kinds of finding co-occurred; the combination is the signal, and the points are already scored elsewhere. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 7 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 23 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
+| [Unverifiable](unverifiable.md) | `unverifiable` | 6 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -62,7 +68,7 @@ Each entry states the same facts in the same order:
 - **Pattern** or **Condition**: what makes the rule fire. Quoted patterns
   are checked against the shipped `rules.toml` on every test run, so a
   pattern here cannot drift from the one that runs.
-- **Fire rate**, where measured: hits on the current 3,739-diff benign corpus, unless a page explicitly identifies a historical measurement.
+- **Fire rate**, where measured: hits on the current 3,246-diff benign corpus, unless a page explicitly identifies a historical measurement.
   These are false-positive rates. The full table is in
   [measured fire rates](system.md#experimental-fire-rates).
 
@@ -82,6 +88,8 @@ is deliberately non-contiguous; see
 | [C005](integrity.md#c005) | Binary Artifact From Untrusted Source | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C006](maintainer-and-metadata.md#c006) | Maintainer Change With New Source Domain | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [C007](fetch-and-execution.md#c007) | Command Substitution In Source Array | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [C008](integrity.md#c008) | Unread Content Moved Under A Stable Version | HIGH | [Integrity and Verification](integrity.md) |
+| [C009](integrity.md#c009) | Unread Content Moved With The Version | INFO | [Integrity and Verification](integrity.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
@@ -99,7 +107,7 @@ is deliberately non-contiguous; see
 | [R011](fetch-and-execution.md#r011) | Uses wget in PKGBUILD | LOW | [Fetch and Execution](fetch-and-execution.md) |
 | [R012](deception.md#r012) | Prompt Injection Detection | FATAL | [Deception and Anti-Analysis](deception.md) |
 | [R013](deception.md#r013) | Unicode Bidi Override | FATAL | [Deception and Anti-Analysis](deception.md) |
-| [R014](integrity.md#r014) | Retired (no active rule) | - | [Integrity and Verification](integrity.md) |
+| [R014](integrity.md#r014) | validpgpkeys Added | MEDIUM | [Integrity and Verification](integrity.md) |
 | [R016](naming-and-dependency.md#r016) | New Make/Opt/Check Dependency | INFO | [Naming and Dependencies](naming-and-dependency.md) |
 | [R017](install-and-persist.md#r017) | Setuid/Setgid Permission | HIGH | [Install and Persistence](install-and-persist.md) |
 | [R018](staging-and-recon.md#r018) | Symlink Redirect | MEDIUM | [Staging and Reconnaissance](staging-and-recon.md) |
@@ -206,6 +214,14 @@ is deliberately non-contiguous; see
 | [R141](maintainer-and-metadata.md#r141) | Adopted From Orphan | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [R142](integrity.md#r142) | Recipe Changed Without Upstream | MEDIUM | [Integrity and Verification](integrity.md) |
 | [R143](maintainer-and-metadata.md#r143) | Adopted, Recipe Rewritten, Unpinned Fetch | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [R144](install-and-persist.md#r144) | Packaged File Points At A World-Writable Path | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R145](install-and-persist.md#r145) | Packaged File Names A Build-Only Path | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R146](fetch-and-execution.md#r146) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [R147](integrity.md#r147) | Checksum Array Shorter Than Source Array | HIGH | [Integrity and Verification](integrity.md) |
+| [R148](integrity.md#r148) | Metadata Names A Source The Recipe Does Not | HIGH | [Integrity and Verification](integrity.md) |
+| [R149](install-and-persist.md#r149) | Committed Config Points At A Build-Only Path | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R150](fetch-and-execution.md#r150) | Unread Script Executed During Packaging | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [R151](install-and-persist.md#r151) | Boot Or Image Artifact Built From The Source Tree | HIGH | [Install and Persistence](install-and-persist.md) |
 | [S001](sabotage.md#s001) | Recursive Self-Spawn | CRITICAL | [Sabotage](sabotage.md) |
 | [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | CRITICAL | [Sabotage](sabotage.md) |
 | [S003](sabotage.md#s003) | Raw Block Device Write | CRITICAL | [Sabotage](sabotage.md) |
@@ -214,15 +230,37 @@ is deliberately non-contiguous; see
 | [S006](sabotage.md#s006) | System Service Disruption | HIGH | [Sabotage](sabotage.md) |
 | [S007](sabotage.md#s007) | Cryptocurrency Miner | HIGH | [Sabotage](sabotage.md) |
 | [S008](sabotage.md#s008) | Shell History Or Log Destruction | MEDIUM | [Sabotage](sabotage.md) |
-| [X001](crossfire.md#x001) | Encoded Payload Decoded To A Shell | CRITICAL | [Crossfire](crossfire.md) |
+| [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | INFO | [Unverifiable](unverifiable.md) |
+| [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | INFO | [Unverifiable](unverifiable.md) |
+| [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | INFO | [Unverifiable](unverifiable.md) |
+| [W004](unverifiable.md#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | INFO | [Unverifiable](unverifiable.md) |
+| [W005](unverifiable.md#w005) | Build Runs A Target Whose Recipe Was Not Read | INFO | [Unverifiable](unverifiable.md) |
+| [W006](unverifiable.md#w006) | Generated File Names A Build-Only Path | INFO | [Unverifiable](unverifiable.md) |
+| [X001](crossfire.md#x001) | Encoded Payload Decoded And Executed | CRITICAL | [Crossfire](crossfire.md) |
 | [X002](crossfire.md#x002) | Non-Literal Executable Name | CRITICAL | [Crossfire](crossfire.md) |
 | [X003](crossfire.md#x003) | Obfuscated Command Argument | HIGH | [Crossfire](crossfire.md) |
 | [X004](crossfire.md#x004) | Build Output Suppressed | MEDIUM | [Crossfire](crossfire.md) |
 | [X005](crossfire.md#x005) | Home Reached By An Alternative Spelling | HIGH | [Crossfire](crossfire.md) |
 | [X006](crossfire.md#x006) | Source Points Somewhere Unexpected | HIGH | [Crossfire](crossfire.md) |
 | [X007](crossfire.md#x007) | Multiple Evasion Techniques | CRITICAL | [Crossfire](crossfire.md) |
+| [X008](crossfire.md#x008) | Whitespace A Shell Does Not Split On | MEDIUM | [Crossfire](crossfire.md) |
+| [X009](crossfire.md#x009) | Fetch Through An Uncatalogued Client | CRITICAL | [Crossfire](crossfire.md) |
+| [X010](crossfire.md#x010) | Interpreter One-Liner Reaches The Network | HIGH | [Crossfire](crossfire.md) |
+| [X011](crossfire.md#x011) | Package Manager Runs Fetched Code At Build Time | HIGH | [Crossfire](crossfire.md) |
+| [X012](crossfire.md#x012) | Build Toolchain Redirected Into The Source Tree | HIGH | [Crossfire](crossfire.md) |
+| [X013](crossfire.md#x013) | Fetch Redirected Or Trust Root Replaced | HIGH | [Crossfire](crossfire.md) |
+| [X014](crossfire.md#x014) | Environment Variable Names Code To Run | HIGH | [Crossfire](crossfire.md) |
+| [X015](crossfire.md#x015) | Work Scheduled To Run After The Build | HIGH | [Crossfire](crossfire.md) |
+| [X016](crossfire.md#x016) | Fetch Piped Into An Unrecognised Consumer | HIGH | [Crossfire](crossfire.md) |
+| [X017](crossfire.md#x017) | Tool Flag Or Builtin Carries A Command | HIGH | [Crossfire](crossfire.md) |
+| [X018](crossfire.md#x018) | Interpreter One-Liner Assembles A Name | HIGH | [Crossfire](crossfire.md) |
+| [X019](crossfire.md#x019) | Host Material Sent Or Packaged | HIGH | [Crossfire](crossfire.md) |
+| [X020](crossfire.md#x020) | Recipe Writes The Build Steps The Engine Runs | HIGH | [Crossfire](crossfire.md) |
+| [X021](crossfire.md#x021) | Executor Runs A File Chosen At Runtime | HIGH | [Crossfire](crossfire.md) |
+| [X022](crossfire.md#x022) | Generated Config Handed To The Tool That Reads It | HIGH | [Crossfire](crossfire.md) |
+| [X023](crossfire.md#x023) | Command Output Executed As A Script | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
-Weight-0 declared-practice findings (`P001` to `P007`) are not detections
+Weight-0 declared-practice findings (`P001` to `P008`) are not detections
 and have no category. They are documented in
 [the system reference](system.md#declared-practice).

@@ -16,6 +16,21 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R018](#r018) | Symlink Redirect | MEDIUM |
+| [R021](#r021) | Suspicious file write | HIGH |
+| [R058](#r058) | Write Outside Package Root | HIGH |
+| [R084](#r084) | World-Writable Staging | HIGH |
+| [R086](#r086) | Host Reconnaissance | INFO |
+| [R088](#r088) | Hidden Drop | HIGH |
+| [R128](#r128) | Build Writes Outside Staging Root | HIGH |
+| [R140](#r140) | PATH Injection With Undeclared Directory | HIGH |
+<!-- /generated: page-index -->
+
 ### R018: Symlink Redirect {#r018}
 
 - **Target:** `raw_line`

@@ -134,7 +134,7 @@ The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
 1. **Cold database.** The score is in the Medium band (21 to 50), maturity is below 0.5 (fewer than 25 recorded analyses; novelty reaches full weight at 50), and no HIGH, CRITICAL or FATAL finding fired. Novelty is the only thing holding the score up, and novelty is not trustworthy on a cold database.
-2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, or `deps_not_scanned`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
+2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `companion_truncated`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, `deps_not_scanned`, or `stage_degraded`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
 
 In both cases a HIGH, CRITICAL or FATAL finding keeps its own band: an analysis that found something does not get to hide it behind "inconclusive".
 
@@ -144,7 +144,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- The current test suite, **68.3% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
+- The current test suite, **68.4% zero-rate** on the 3,246-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

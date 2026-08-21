@@ -23,3 +23,6 @@ packaging/aur/pkg/
 packaging/aur/src/
 packaging/aur/*.tar.gz
 packaging/aur/*.pkg.tar.*
+
+# Local probe-corpus replay output (scratch, not shipped)
+/probe*.json

@@ -20,13 +20,29 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R003](#r003) | Base64 Decode and Execute | CRITICAL |
+| [R025](#r025) | Eval or Exec Usage | MEDIUM |
+| [R039](#r039) | Eval With Dynamic Content | CRITICAL |
+| [R040](#r040) | Shell -c With Dynamic Payload | CRITICAL |
+| [R043](#r043) | Base64 Blob Decode | CRITICAL |
+| [R045](#r045) | Binary Encoding Pipe | MEDIUM |
+| [R117](#r117) | Obfuscated Literal Reconstructed | INFO |
+| [R132](#r132) | Indirect Command Expansion | CRITICAL |
+<!-- /generated: page-index -->
+
 ### R003: Base64 Decode and Execute {#r003}
 
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
-- **Pattern:** `base64.*(?:\-d|\-\-decode).*\|`
+- **Pattern:** `base64.*(?:\-d|\-\-decode).*(?<!\\)\|`
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
 
 ### R025: Eval or Exec Usage {#r025}
 
@@ -50,7 +66,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
-- **Pattern:** `` \b(?:bash|sh|zsh|dash)\s+-c\s+(?:\$\(|`|\$\{|"[^"]*\$) ``
+- **Pattern:** `` \b(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh))\s+-c\s+(?:\$\(|`|\$\{|["\x27]?\$[A-Za-z_]|"[^"]*\$) ``
 - **Description:** Detects `sh -c` / `bash -c` whose argument contains a variable or substitution rather than a literal command.
 
 ### R043: Base64 Blob Decode {#r043}
@@ -66,8 +82,9 @@ severity weights and the reserved identifier ranges.
 - **Target:** `resolved`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `obfuscation`
-- **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*\|`
+- **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*(?<!\\)\|`
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
 
 ### R117: Obfuscated Literal Reconstructed {#r117}
 

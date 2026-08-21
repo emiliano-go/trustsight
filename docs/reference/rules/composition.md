@@ -15,6 +15,15 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R072](#r072) | Capability Density Anomaly | INFO |
+| [R089](#r089) | Attack-Chain Composition | INFO |
+<!-- /generated: page-index -->
+
 ### R072: Capability Density Anomaly {#r072}
 
 - **Target:** programmatic (existing `triggered_rules`, no new detection)

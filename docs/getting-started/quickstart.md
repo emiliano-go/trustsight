@@ -18,7 +18,7 @@ See [installation](installation.md) for details.
 
 ```bash
 trustsight review
-# The first run downloads the AUR metadata snapshot and exits successfully.
+## The first run downloads the AUR metadata snapshot and exits successfully.
 trustsight review
 ```
 

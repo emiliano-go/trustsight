@@ -23,7 +23,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**68.3 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
+**68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
@@ -166,37 +166,56 @@ Unresolved patterns are listed in the inspect output under "Unresolved Patterns.
 ## Putting it together: a worked example
 
 ```bash
-trustsight inspect sketchy-package
+trustsight inspect sketchy-package --score --risk
 ```
 
 Output:
 
 ```
-TrustSight Inspect: sketchy-package
-  Version: 1.0-1 → 1.1-2
-  Score: 53/100 (High)
-
-  Diff Summary
-  Files changed: PKGBUILD
-  Lines: +12/-6
-
-  Checksum behavior: changed_from_sha256_to_skip
-
-  Source URLs Added
-    https://sketchy-cdn.example.com/payload.tar.gz (unknown)
-
-  Score Breakdown
-  +25 HIGH   R004  Checksum Disabled: sha256sums=SKIP (no justification found)
-  +20 MEDIUM SOURCE_BUCKET  Source URL classified as unknown
-  +8 HIGH    NOVELTY  Source URL first seen globally (maturity=0.80)
-    0 INFO   P002  validpgpkeys declared
-
-  Verdict
-  Checksum set to SKIP without VCS/signature justification. New download
-  Source URL has not been observed before.
+╭─────────────────── TrustSight Inspect: sketchy-package ────────────────────╮
+│               Version  1.0-1 -> 1.1-2                                      │
+│                 Lines  +12 -6                                              │
+│              Checksum  changed_from_sha256_to_skip                         │
+│                                                                            │
+│          What changed                                                      │
+│                          pkgver 1.0-1 -> 1.1-2                             │
+│                          checksums changed from sha256 to SKIP             │
+│                          source host added: sketchy-cdn.example.com        │
+│                                                                            │
+│ Declared verification                                                      │
+│                          validpgpkeys declared                             │
+│                          TrustSight does not verify these claims. It       │
+│                        reports that the recipe makes them.                 │
+│                                                                            │
+│         Files changed                                                      │
+│                          ~ PKGBUILD                                        │
+│                                                                            │
+│     Source URLs added                                                      │
+│                          [unknown]                                         │
+│                        https://sketchy-cdn.example.com/payload.tar.gz      │
+│                                                                            │
+│       Rules Triggered                                                      │
+│                        R004 +25 HIGH Checksum Disabled:                    │
+│                        sha256sums=('SKIP')                                 │
+│                        SOURCE_BUCKET +20 MEDIUM Source URL classified as   │
+│                        unknown                                             │
+│                        (https://sketchy-cdn.example.com/payload.tar.gz)    │
+│                        NOVELTY +8 HIGH Source URL first seen globally      │
+│                        (maturity 0.80)                                     │
+│                                                                            │
+│                 Score  53/100  (High)                                      │
+│                        sum: +53, clamped to 53/100                         │
+│                                                                            │
+│                Status  The update is not trivial. Review it.               │
+╰────────────────────────────────────────────────────────────────────────────╯
 ```
 
-**Interpretation**: The total is 25 + 20 + 8 = **53**. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 53, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
+**Interpretation**: The total is 25 + 20 + 8 = **53**, and the panel shows the
+arithmetic under the score rather than asking you to trust it. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 53, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
+
+The weights and severities above appear because this run passed `--score` and
+`--risk`. Without them the same panel shows the findings and the verdict and no
+band at all.
 
 ---
 

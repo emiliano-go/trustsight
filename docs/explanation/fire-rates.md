@@ -8,7 +8,7 @@ Fire rates measure the false-positive rate of each rule: how often it fires on a
 fire_rate = hits / n_diffs
 ```
 
-Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,739-diff locked corpus; individual historical hit counts are labelled with their source corpus.
+Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,246-diff locked corpus; individual historical hit counts are labelled with their source corpus.
 
 Fire rates are **false-positive rates within this corpus**: every diff in the benign corpus is a real package update that passed its maintainer's review. A hit is a rule that fired on ordinary packaging, not on malice. They are point-in-time corpus measurements, not a claim about all AUR updates.
 
@@ -28,7 +28,7 @@ Fire rates are measured against the one locked corpus:
 
 | Corpus | Diffs | Packages | What it covers |
 |--------|-------|----------|----------------|
-| Benign (lock) | 3,739 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
+| Benign (lock) | 3,246 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
 
 The corpus is pinned by `corpus.lock` and regenerated deterministically from
 the AUR git mirror (CI rebuilds it before the calibration gates; a local
@@ -37,7 +37,7 @@ Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-me
 
 ## Core rules (R001-R013)
 
-The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
+The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|
@@ -63,10 +63,10 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 
 | Measure | Value |
 |---------|-------|
-| benign corpus size | 3,739 diffs |
+| benign corpus size | 3,246 diffs |
 | benign median | 0 |
 | benign 95th percentile | 35 |
-| benign diffs scoring 0 | 68.3% |
+| benign diffs scoring 0 | 68.4% |
 | benign diffs above the 20-point threshold | 13.1% |
 | percentile at which 20 sits | 86.9th |
 | malicious 5th percentile | 60 |
@@ -85,7 +85,7 @@ benign corpus, about **1 in 8** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.
 
-Calibrated against the current 3,739-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+Calibrated against the current 3,246-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|

@@ -68,87 +68,90 @@ name = "trustsight on PyPI"
 # ==============================================================================
 
 [[project.nav]]
-"Home" = "index.md"
+Overview = [
+  {Home = "index.md"},
+  {"Security Model" = "security.md"},
+  {Changelog = "changelog.md"},
+  {License = "license.md"},
+]
 
 [[project.nav]]
-"Getting Started" = "getting-started/index.md"
-
-[[project.nav.getting-started]]
-"Installation" = "getting-started/installation.md"
-"Quickstart" = "getting-started/quickstart.md"
-"Reading a Report" = "getting-started/reading-a-report.md"
-
-[[project.nav]]
-"Guides" = "guides/index.md"
-
-[[project.nav.guides]]
-"Auditing Before Update" = "guides/auditing-before-update.md"
-"Using in CI" = "guides/using-in-ci.md"
-"Acting on a Flag" = "guides/acting-on-a-flag.md"
-"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"
-"Tuning False Positives" = "guides/tuning-false-positives.md"
-"Running the Sandbox" = "guides/running-the-sandbox.md"
+"Get Started" = [
+  {Overview = "getting-started/index.md"},
+  {Installation = "getting-started/installation.md"},
+  {Quickstart = "getting-started/quickstart.md"},
+  {"Reading a Report" = "getting-started/reading-a-report.md"},
+]
 
 [[project.nav]]
-"Reference" = "reference/index.md"
-
-[[project.nav.reference]]
-"CLI Reference" = "reference/cli.md"
-"Python API" = "reference/python-api.md"
-"Rules Reference" = "reference/rules/index.md"
-"Configuration Reference" = "reference/configuration.md"
-"IOC Federation" = "reference/ioc.md"
-"Report Schema" = "reference/report-schema.md"
-"Baseline Keys" = "reference/baseline-keys.md"
-"Evidence Tiers" = "reference/evidence-tiers.md"
-"Exit Codes" = "reference/exit-codes.md"
-
-[[project.nav.rules]]
-"Rule System" = "reference/rules/system.md"
-"Fetch and Execution" = "reference/rules/fetch-and-execution.md"
-"Obfuscation" = "reference/rules/obfuscation.md"
-"Deception and Anti-Analysis" = "reference/rules/deception.md"
-"Install and Persistence" = "reference/rules/install-and-persist.md"
-"Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"
-"Integrity and Verification" = "reference/rules/integrity.md"
-"Sabotage" = "reference/rules/sabotage.md"
-"Naming and Dependencies" = "reference/rules/naming-and-dependency.md"
-"Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"
-"Temporal Context" = "reference/rules/temporal.md"
-"Composition" = "reference/rules/composition.md"
-"Count-Based" = "reference/rules/count-based.md"
-"Corpus Behavioral" = "reference/rules/corpus-behavioral.md"
-"Crossfire" = "reference/rules/crossfire.md"
+Guides = [
+  {Overview = "guides/index.md"},
+  {"Auditing Before Update" = "guides/auditing-before-update.md"},
+  {"Using in CI" = "guides/using-in-ci.md"},
+  {"Acting on a Flag" = "guides/acting-on-a-flag.md"},
+  {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},
+  {"Tuning False Positives" = "guides/tuning-false-positives.md"},
+  {"Running the Sandbox" = "guides/running-the-sandbox.md"},
+]
 
 [[project.nav]]
-"Explanation" = "explanation/index.md"
-
-[[project.nav.explanation]]
-"Scoring Philosophy" = "explanation/scoring-philosophy.md"
-"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"
-"Corpus and Priors" = "explanation/corpus-and-priors.md"
-"Fire Rates" = "explanation/fire-rates.md"
-"What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"
-"Seed Provenance" = "explanation/seed-provenance.md"
-"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"
-"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"
-
-[[project.nav]]
-"Contributing" = "contributing/index.md"
-
-[[project.nav.contributing]]
-"Development Setup" = "contributing/development-setup.md"
-"Writing a Rule" = "contributing/writing-a-rule.md"
-"Re-baselining" = "contributing/re-baselining.md"
-"Publishing Baselines" = "contributing/publishing-baselines.md"
-"Releasing" = "contributing/releasing.md"
-"Reviewing a Security Control" = "contributing/security-review.md"
+Rules = [
+  {"All Rules" = "reference/rules/index.md"},
+  {"Rule System" = "reference/rules/system.md"},
+  {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
+  {Crossfire = "reference/rules/crossfire.md"},
+  {Unverifiable = "reference/rules/unverifiable.md"},
+  {Obfuscation = "reference/rules/obfuscation.md"},
+  {"Deception and Anti-Analysis" = "reference/rules/deception.md"},
+  {"Install and Persistence" = "reference/rules/install-and-persist.md"},
+  {"Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"},
+  {"Integrity and Verification" = "reference/rules/integrity.md"},
+  {Sabotage = "reference/rules/sabotage.md"},
+  {"Naming and Dependencies" = "reference/rules/naming-and-dependency.md"},
+  {"Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"},
+  {"Temporal Context" = "reference/rules/temporal.md"},
+  {Composition = "reference/rules/composition.md"},
+  {"Count-Based" = "reference/rules/count-based.md"},
+  {"Corpus Behavioral" = "reference/rules/corpus-behavioral.md"},
+]
 
 [[project.nav]]
-"Changelog" = "changelog.md"
+Reference = [
+  {Overview = "reference/index.md"},
+  {"CLI Reference" = "reference/cli.md"},
+  {"Python API" = "reference/python-api.md"},
+  {"Configuration Reference" = "reference/configuration.md"},
+  {"Report Schema" = "reference/report-schema.md"},
+  {"Evidence Tiers" = "reference/evidence-tiers.md"},
+  {"Baseline Keys" = "reference/baseline-keys.md"},
+  {"IOC Federation" = "reference/ioc.md"},
+  {"Exit Codes" = "reference/exit-codes.md"},
+]
 
 [[project.nav]]
-"Security model" = "security.md"
+Explanation = [
+  {Overview = "explanation/index.md"},
+  {"Scoring Philosophy" = "explanation/scoring-philosophy.md"},
+  {"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"},
+  {"Corpus and Priors" = "explanation/corpus-and-priors.md"},
+  {"Fire Rates" = "explanation/fire-rates.md"},
+  {"What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"},
+  {"Seed Provenance" = "explanation/seed-provenance.md"},
+  {"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"},
+  {"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"},
+]
+
+[[project.nav]]
+Contributing = [
+  {Overview = "contributing/index.md"},
+  {"Development Setup" = "contributing/development-setup.md"},
+  {"Writing a Rule" = "contributing/writing-a-rule.md"},
+  {"Re-baselining" = "contributing/re-baselining.md"},
+  {"Publishing Baselines" = "contributing/publishing-baselines.md"},
+  {Releasing = "contributing/releasing.md"},
+  {"Reviewing a Security Control" = "contributing/security-review.md"},
+  {"Blinded Evaluation" = "contributing/blinded-evaluation.md"},
+]
 
 # ==============================================================================
 # Markdown extensions

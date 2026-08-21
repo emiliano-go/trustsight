@@ -99,8 +99,8 @@ changed packages, which is gentle on the AUR and captures exactly the churn the
 corpus-wide features care about.
 
 ```bash
-# Run periodically (cron or a systemd timer). Each cycle only fetches the delta,
-# is capped at [limits] corpus_max_per_cycle (default 2000), and resumes.
+## Run periodically (cron or a systemd timer). Each cycle only fetches the delta,
+## is capped at [limits] corpus_max_per_cycle (default 2000), and resumes.
 trustsight full-aur
 ```
 
@@ -207,10 +207,10 @@ entry is worse than none. The entry format and the curation workflow are in
 and [IOC federation](../reference/ioc.md).
 
 ```bash
-# Curate data/iocs/<incident>.json from primary sources. Provide it to the
-# release build script, which signs each manifest with the curator key
-# (--ioc-sign-key, defaulting to the distribution key) and adds the
-# distribution signature on top, or build the directory form yourself:
+## Curate data/iocs/<incident>.json from primary sources. Provide it to the
+## release build script, which signs each manifest with the curator key
+## (--ioc-sign-key, defaulting to the distribution key) and adds the
+## distribution signature on top, or build the directory form yourself:
 python scripts/build_ioc_baseline.py \
     --from-file data/iocs/<incident>.json \
     --source <curator> \

@@ -17,6 +17,39 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [C001](#c001) | Checksum Changed Without Source Change With Stable Version | HIGH |
+| [C002](#c002) | Checksum Updated With Version Bump | INFO |
+| [C003](#c003) | Source URL Changed Without Version Bump | INFO |
+| [C004](#c004) | Checksum Removed For Unchanged Source | CRITICAL |
+| [C005](#c005) | Binary Artifact From Untrusted Source | MEDIUM |
+| [C008](#c008) | Unread Content Moved Under A Stable Version | HIGH |
+| [C009](#c009) | Unread Content Moved With The Version | INFO |
+| [R004](#r004) | Checksum Disabled | HIGH |
+| [R005](#r005) | Checksum Emptied | HIGH |
+| [R014](#r014) | validpgpkeys Added | MEDIUM |
+| [R019](#r019) | Suspicious Environment Variable | MEDIUM |
+| [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
+| [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
+| [R063](#r063) | Patch Applied From Outside The Build Tree | HIGH |
+| [R064](#r064) | Source URL Downgraded To HTTP | MEDIUM |
+| [R069](#r069) | GPG Verification Removed | HIGH |
+| [R070](#r070) | Build Environment Subversion | HIGH |
+| [R079](#r079) | Moved Git Ref | HIGH |
+| [R094](#r094) | Security-Relevant Build Flag Change | HIGH |
+| [R118](#r118) | Embedded Binary In Tree | HIGH |
+| [R122](#r122) | Archive Trailer Anomaly | HIGH |
+| [R130](#r130) | Signing Key Set Changed | HIGH |
+| [R131](#r131) | Build Flags Weakened | HIGH |
+| [R142](#r142) | Recipe Changed Without Upstream | MEDIUM |
+| [R147](#r147) | Checksum Array Shorter Than Source Array | HIGH |
+| [R148](#r148) | Metadata Names A Source The Recipe Does Not | HIGH |
+<!-- /generated: page-index -->
+
 ### R004: Checksum Disabled {#r004}
 
 - **Target:** programmatic (not TOML-configurable)
@@ -78,6 +111,38 @@ handled by R130, and removal is handled by R069.
 - **Severity:** MEDIUM (weight 15)
 - **Condition:** An added source URL points at an executable artifact (`.bin`, `.exe`, `.elf`, `.so`, `.dll`, `.dylib`, `.AppImage`, `.deb`, `.rpm`, `.apk`, `.msi`, `.jar`, `.run`) **and** its bucket is neither `trusted_forge` nor `official`.
 - **Description:** A prebuilt binary cannot be reviewed from the PKGBUILD, so its provenance is the only available evidence. Restricted to untrusted buckets deliberately: `-bin` packages repackaging a GitHub release are a large fraction of the AUR and firing on all of them would make the rule pure noise.
+
+### C008: Unread Content Moved Under A Stable Version {#c008}
+
+- **Severity:** HIGH (weight 25)
+- **Condition:** A submodule gitlink or a Git-LFS object id changed, and `pkgver`/`pkgrel`/`epoch` did not.
+
+The [upstream-payload gap](../../explanation/what-trustsight-cannot-see.md)
+is real: a checksummed tarball's bytes are not in the diff, so a recipe can
+look untouched while the code it builds is replaced. What *is* in the diff is
+the carrier's **identity** - the checksum, the commit, the object id - and a
+change to that with no version change is the same event
+[R079](#r079) already claims for a git ref and
+[C001](#c001) for a checksum.
+
+Two carriers had no such claim. A submodule gitlink names code the repository
+does not contain; an LFS pointer names bytes that are not there either.
+Moving one is a content change with no content in the diff, which is exactly
+the shape that reads as "nothing happened".
+
+The version distinguishes the two readings, as it does for R079: an upstream
+bump moves the pointer *and* the version, while moving it under a stable
+version means anyone who already built this version gets different code than
+anyone who builds it now.
+
+### C009: Unread Content Moved With The Version {#c009}
+
+- **Severity:** INFO (weight 0)
+- **Condition:** The same carriers as [C008](#c008), moving alongside a version bump.
+
+The ordinary reading, reported so that the pair is visible rather than only
+the alarming half. A reader comparing two revisions can see that the bytes
+behind the pointer changed even though no content appears in the diff.
 
 ### R049: Compiler Plugin Or Loader Override {#r049}
 
@@ -314,7 +379,7 @@ or `pkgver` means the package points at different upstream bytes, which is an
 ordinary update however much else changed with it, and R142 stays silent.
 
 Both halves of the recipe have to move, and that is measured rather than
-assumed. Against the 3,739-diff locked benign corpus: `deps or build` fires on
+assumed. Against the 3,246-diff locked benign corpus: `deps or build` fires on
 11.53%, `deps only` on 4.36%, `build only` on 5.75%, and `deps and build` on
 **1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
 times the noise for no additional detection - the campaign changed both,
@@ -328,3 +393,50 @@ It is MEDIUM because the shape is not exclusively malicious: a dependency
 correction that also adjusts a build step is an ordinary packaging change.
 What is unusual is a recipe-only change on a package that was *just adopted*
 and whose build now fetches unpinned code, which is [R143](maintainer-and-metadata.md#r143).
+
+### R147: Checksum Array Shorter Than Source Array {#r147}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** A wholly-added `source=()` with more elements than a
+  wholly-added `*sums=()` in the same diff.
+
+makepkg pairs `source=()` with each `*sums=()` by position, and no rule
+looked at the two lengths together. A source slipped in beside a checksum
+list nobody recounted scored nothing but priors - the array declares
+verification for the entries it covers and says nothing about the one added
+past its end.
+
+**A diff shows a hunk, not a file.** An array that opens on a `+` line and
+continues through unchanged entries is only partly visible. The rule reads an
+array only when it opens *and* closes inside added lines with no context line
+between; anything else is not something the diff knows.
+
+**`name::url` is one source.** makepkg's rename form
+(`"$_pkgsrc"::"git+$url.git"`) is a single element. Elements are split on
+*unquoted* whitespace, not by a token pattern.
+
+Zero occurrences in the 3,246-diff benign corpus.
+
+### R148: Metadata Names A Source The Recipe Does Not {#r148}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** A URL host appearing in `.SRCINFO` that appears nowhere in
+  the PKGBUILD.
+
+`.SRCINFO` is *generated from* the PKGBUILD, and the analysis prefers it
+wherever it is richer - structured `depends`, expanded sources. That
+preference is trust, and nothing compared the two. A `.SRCINFO` naming a
+source the recipe does not was simply believed, and an AUR helper resolving
+dependencies from the metadata while makepkg builds from the recipe are
+reading two different descriptions of the same package.
+
+The comparison is by **host**, not by URL. A PKGBUILD writes
+`source=("$url/archive/v$pkgver.tar.gz")` and `.SRCINFO` carries the expanded
+result, so comparing URLs would report every package in the ecosystem. The
+host survives expansion because it comes from `url=` or from a literal in
+the array either way.
+
+Measured across 50 real AUR repositories, no package has a `.SRCINFO` host
+its PKGBUILD does not also name.

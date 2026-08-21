@@ -46,7 +46,7 @@ Rules R009, R010, and R011 were scoped to `function_body` context in a previous 
 **Demote severity** (preferred):
 
 ```toml
-# config.toml
+## config.toml
 [rules.R004]
 weight_override = 5  # was HIGH/25; still fires, but contributes less score
 ```
@@ -54,7 +54,7 @@ weight_override = 5  # was HIGH/25; still fires, but contributes less score
 **Disable the rule:**
 
 ```toml
-# config.toml
+## config.toml
 [rules.R007]
 enabled = false
 ```

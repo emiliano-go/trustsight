@@ -15,6 +15,20 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R073](#r073) | Accelerated Release Cadence | - |
+| [R093](#r093) | Orphan/Adoption Dependency | MEDIUM |
+| [R106](#r106) | Known Indicator of Compromise | FATAL |
+| [R107](#r107) | Transitive Exposure | INFO |
+| [R111](#r111) | Transitive Orphan Exposure | INFO |
+| [R112](#r112) | Dependency Centrality | INFO |
+| [R125](#r125) | Introduction Rate Deviation | MEDIUM |
+<!-- /generated: page-index -->
+
 ### R073: Accelerated Release Cadence {#r073}
 
 - **Target:** programmatic (git commit graph)

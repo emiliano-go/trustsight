@@ -66,13 +66,13 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the 3,739-diff locked corpus (a point-in-time snapshot; re-derive with `scripts/rebaseline.py` when scoring changes):
+Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,246** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 68.3% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 31.7% | benign diffs that fire at least one non-INFO rule |
-| Benign flag rate | 13.1% | about **1 in 8** benign corpus diffs exceed the 20-point threshold |
+| Benign zero-rate | 68.4% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 31.6% | benign diffs that fire at least one non-INFO rule |
+| Benign flag rate | 11.9% | about **1 in 8** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 35 | < CRITICAL p5 (margin: 25) |

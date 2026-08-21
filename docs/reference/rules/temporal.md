@@ -18,6 +18,16 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R065](#r065) | Very Recent Update | INFO |
+| [R066](#r066) | Brand New Package | INFO |
+| [R067](#r067) | Stale Package Revived | MEDIUM |
+<!-- /generated: page-index -->
+
 ### R065: Very Recent Update {#r065}
 
 - **Target:** programmatic (commit timestamp)

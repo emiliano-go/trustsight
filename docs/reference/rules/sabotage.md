@@ -44,12 +44,27 @@ So every rule here is written against a distinction rather than a command:
 - **A package's own service is not the system's.** Stopping a daemon before
   replacing its binary is standard packaging. Only *system* services count.
 
-Against the 3,739-diff locked benign corpus, every rule in this family fires
+Against the 3,246-diff locked benign corpus, every rule in this family fires
 on **zero** diffs. That is not a target that was aimed for; it is what the
 distinctions above produce, and it is the reason these can carry CRITICAL and
 HIGH weights without spending fire-rate budget the rest of the ruleset needs.
 
 ---
+
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [S001](#s001) | Recursive Self-Spawn | CRITICAL |
+| [S002](#s002) | Recursive Deletion Outside The Build Tree | CRITICAL |
+| [S003](#s003) | Raw Block Device Write | CRITICAL |
+| [S004](#s004) | Secure Deletion Of User Data | HIGH |
+| [S005](#s005) | Permission Change On A System Path | HIGH |
+| [S006](#s006) | System Service Disruption | HIGH |
+| [S007](#s007) | Cryptocurrency Miner | HIGH |
+| [S008](#s008) | Shell History Or Log Destruction | MEDIUM |
+<!-- /generated: page-index -->
 
 ### S001: Recursive Self-Spawn {#s001}
 

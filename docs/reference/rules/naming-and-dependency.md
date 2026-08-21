@@ -17,6 +17,23 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [D001](#d001) | Novel Dependency Added | HIGH |
+| [D002](#d002) | Typosquatted Dependency | HIGH |
+| [D003](#d003) | New Network-Using Makedepends | MEDIUM |
+| [D004](#d004) | Dependency Hijack Via Provides | HIGH |
+| [R016](#r016) | New Make/Opt/Check Dependency | INFO |
+| [R074](#r074-rule) | Package-Name Typosquat | HIGH |
+| [R095](#r095) | Dependency Vendored Into Source | HIGH |
+| [R101](#r101) | Name/Host Consensus Divergence | MEDIUM |
+| [R110](#r110) | Name/Repo Divergence | MEDIUM |
+| [R116](#r116) | Provides/Replaces Scope Expansion | HIGH |
+<!-- /generated: page-index -->
+
 ### R016: New Make/Opt/Check Dependency {#r016}
 
 - **Target:** `raw_line`

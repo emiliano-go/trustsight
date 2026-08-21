@@ -16,6 +16,27 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [C006](#c006) | Maintainer Change With New Source Domain | HIGH |
+| [R071](#r071) | Untrusted Maintainer Takeover | HIGH |
+| [R071](#r071-corpus) | Untrusted Maintainer Takeover (corpus path) | HIGH |
+| [R083](#r083) | Long-Stable Property Changed | MEDIUM |
+| [R090](#r090) | Ownership Transition | MEDIUM |
+| [R096](#r096) | Source Host Changed | MEDIUM |
+| [R097](#r097) | Version Scheme Changed | INFO |
+| [R098](#r098) | Package Description Changed | MEDIUM |
+| [R102](#r102) | Build System Changed | MEDIUM |
+| [R108](#r108) | Maintainer Baseline Deviation | MEDIUM |
+| [R115](#r115) | Epoch Introduced | MEDIUM |
+| [R126](#r126) | Adopt-then-Modify | MEDIUM |
+| [R141](#r141) | Adopted From Orphan | MEDIUM |
+| [R143](#r143) | Adopted, Recipe Rewritten, Unpinned Fetch | HIGH |
+<!-- /generated: page-index -->
+
 ### C006: Maintainer Change With New Source Domain {#c006}
 
 - **Severity:** HIGH (weight 25)

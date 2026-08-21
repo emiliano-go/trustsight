@@ -16,12 +16,24 @@ severity weights and the reserved identifier ranges.
 
 ---
 
+<!-- generated: page-index -->
+## Rules on this page
+
+| Rule | Name | Severity |
+|---|---|---|
+| [R012](#r012) | Prompt Injection Detection | FATAL |
+| [R013](#r013) | Unicode Bidi Override | FATAL |
+| [R023](#r023) | Strace detection attempt (TracerPid check) | CRITICAL |
+| [R024](#r024) | Strace log truncated (possible flood evasion) | HIGH |
+| [R119](#r119) | Anti-Analysis Check | HIGH |
+<!-- /generated: page-index -->
+
 ### R012: Prompt Injection Detection {#r012}
 
 - **Target:** `resolved`
 - **Severity:** FATAL (hard-stop at 100, weight 0)
 - **Category:** `injection`
-- **Pattern:** `` \b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\s+(?:\w+\s+){0,2}(?:instructions?|commands?|input|context|rules?|prompts?|guidelines?|checks?)|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b ``
+- **Pattern:** `\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b`
 - **Comments:** scanned (`include_comments`)
 - **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical 3,246-diff benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. Score hard-stops at 100 regardless of other signals.
 

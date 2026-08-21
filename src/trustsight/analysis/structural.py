@@ -1,6 +1,7 @@
 import re
 
 from ..differ import (
+    checksum_array_parity,
     detect_checksum_removed,
     is_skip_justified,
     source_array_has_command_substitution,
@@ -137,6 +138,66 @@ def _signing_key_findings(diff_text: str, add) -> None:
             detail=f"validpgpkeys introduced with {keys}")
 
 
+#: A git submodule's recorded commit.  A gitlink is how a repository names
+#: code it does not contain, and the diff shows the move as a one-line
+#: change with no content behind it.
+_SUBMODULE_COMMIT_RE = re.compile(r"^([+-])Subproject commit ([0-9a-f]{7,40})", re.M)
+
+#: A Git-LFS pointer.  The pointer file is committed text; the bytes it
+#: names are not in the repository at all, so the OID *is* the content's
+#: identity as far as any reader is concerned.
+_LFS_OID_RE = re.compile(r"^([+-])\s*oid\s+sha256:([0-9a-f]{16,64})", re.M)
+
+
+def _unread_carrier_findings(diff_text, pkgver_changed, add) -> None:
+    """Contents this analysis cannot read, whose identity changed (C008).
+
+    The upstream-payload gap is real and documented: a checksummed tarball's
+    bytes are not in the diff, so the recipe can look untouched while the
+    code it builds is replaced.  What *is* in the diff is the carrier's
+    identity - the checksum, the commit, the OID - and a change to that with
+    no version change is the same event R079 already claims for a git ref
+    and C001 for a checksum.
+
+    Two carriers had no such claim.  A submodule gitlink names code the
+    repository does not contain; an LFS pointer names bytes that are not
+    there either.  Moving one is a content change with no content in the
+    diff, which is precisely the shape that reads as "nothing happened".
+
+    The version distinguishes the two readings, as it does for R079: an
+    upstream bump moves the pointer *and* the version, and moving it while
+    the version stands still means anyone who already built this version
+    gets different code than anyone who builds it now.
+    """
+    for label, pattern, what in (
+        ("submodule", _SUBMODULE_COMMIT_RE, "a submodule commit"),
+        ("lfs", _LFS_OID_RE, "a Git-LFS object id"),
+    ):
+        before = {m.group(2) for m in pattern.finditer(diff_text)
+                  if m.group(1) == "-"}
+        after = {m.group(2) for m in pattern.finditer(diff_text)
+                 if m.group(1) == "+"}
+        moved = sorted(after - before)
+        if not (before and moved):
+            continue
+        old = sorted(before)[0][:12]
+        new = moved[0][:12]
+        if pkgver_changed:
+            add("C009", "Unread Content Moved With The Version", "INFO",
+                "integrity",
+                f"{what} moved from {old} to {new} alongside a version bump",
+                line=find_line_in_diff(diff_text, moved[0][:12]),
+                carrier=label, old_id=old, new_id=new)
+        else:
+            add("C008", "Unread Content Moved Under A Stable Version", "HIGH",
+                "integrity",
+                f"{what} moved from {old} to {new} while pkgver did not change; "
+                f"the bytes it names are not in this diff",
+                line=find_line_in_diff(diff_text, moved[0][:12]),
+                carrier=label, old_id=old, new_id=new)
+        return
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -184,6 +245,18 @@ def _structural_findings(
         add("R005", "Checksum Emptied", "HIGH", "integrity", cs_behavior,
             line=find_line_in_diff(diff_text, r"sha256sums\s*=\s*\(\s*\)"))
 
+    # R147 - makepkg pairs `source=()` with each `*sums=()` by position,
+    # and no rule looked at the two lengths together. A source slipped in
+    # beside a checksum list nobody recounted scored nothing but priors.
+    parity = checksum_array_parity(diff_text)
+    if parity is not None:
+        n_src, n_sum, var = parity
+        add("R147", "Checksum Array Shorter Than Source Array", "HIGH",
+            "integrity",
+            f"{n_src} sources declared against {n_sum} {var} entries",
+            line=find_line_in_diff(diff_text, r"source\s*=\s*\("),
+            sources=n_src, sums=n_sum, var=var)
+
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
         if not pkgver_changed:
             add("C001", "Checksum Changed Without Source Change With Stable Version",
@@ -200,6 +273,8 @@ def _structural_findings(
             f"URLs changed: {removed} -> {added}",
             line=find_line_in_diff(diff_text, r"source(?:_[a-z0-9_]+)?\s*=\s*\("),
             added=str(added), removed=str(removed))
+
+    _unread_carrier_findings(diff_text, pkgver_changed, add)
 
     if detect_checksum_removed(diff_text) and set(removed) == set(added):
         add("C004", "Checksum Removed For Unchanged Source", "CRITICAL", "integrity",
@@ -239,14 +314,17 @@ def _structural_findings(
     _crossfire_findings(diff_text, config or {}, add)
     _sabotage_findings(diff_text, config or {}, add)
     _dependency_findings(diff_text, package_name, config or {}, add)
-    _build_findings(diff_text, config or {}, add)
-    _sudo_findings(diff_text, config or {}, add)
+    _build_findings(diff_text, config or {}, add, current_text=current_text)
+    _sudo_findings(diff_text, config or {}, add, current_text=current_text)
     _build_flag_findings(diff_text, config or {}, add)
     _reconstruction_findings(diff_text, config or {}, add)
     _signing_key_findings(diff_text, add)
     _indirect_remote_execution_findings(diff_text, config or {}, add)
     _indirect_expansion_findings(diff_text, config or {}, add)
-    _delivery_findings(diff_text, config or {}, add, tree_manifest=tree_manifest)
+    _delivery_findings(
+        diff_text, config or {}, add, tree_manifest=tree_manifest,
+        current_text=current_text,
+    )
     _persistence_findings(diff_text, config or {}, add)
     _recon_findings(diff_text, config or {}, add)
     _exotic_protocol_findings(diff_text, config or {}, add)

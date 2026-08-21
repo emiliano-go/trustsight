@@ -33,6 +33,44 @@ def _generate_salt() -> str:
     return os.urandom(32).hex()
 
 
+#: Characters that are invisible but split a name into two identities.
+_ZERO_WIDTH = dict.fromkeys(
+    (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF, 0x00AD, 0x180E), None
+)
+
+#: Confusables folded to the ASCII letter they imitate.
+#:
+#: `Alice`, `alice`, `аlice` (Cyrillic а) and `ali<ZWSP>ce` are four
+#: identities to a hash of the raw text and one person to a reader. That
+#: split is not only an evasion: rotating the spelling means the
+#: longitudinal signals - maintainer stability, the observation floor -
+#: never accumulate, so an account can stay permanently new.
+#:
+#: Every step below is chosen to be a *no-op on ASCII*, because this is the
+#: hashing chokepoint the shipped seed corpus was built through: an
+#: existing plain-name entry has to keep hashing to the value already
+#: recorded, or every lookup against the seed would miss.
+_CONFUSABLE_FOLD = {
+    ord("\u0430"): "a", ord("\u0435"): "e", ord("\u043e"): "o",
+    ord("\u0440"): "p", ord("\u0441"): "c", ord("\u0445"): "x",
+    ord("\u0443"): "y", ord("\u0456"): "i", ord("\u04cf"): "l",
+    ord("\u0261"): "g", ord("\u03bf"): "o", ord("\u0391"): "a",
+    ord("\u0392"): "b", ord("\u0395"): "e", ord("\u039a"): "k",
+    ord("\u039c"): "m", ord("\u039d"): "n", ord("\u03a1"): "p",
+    ord("\u03a4"): "t", ord("\u0405"): "s", ord("\u04bb"): "h",
+}
+
+
+def _identity_key(value: str) -> str:
+    """The one spelling of an identity, for hashing and comparison."""
+    import unicodedata
+
+    text = unicodedata.normalize("NFKC", value)
+    text = text.translate(_ZERO_WIDTH)
+    text = text.translate(_CONFUSABLE_FOLD)
+    return text.strip().lower()
+
+
 def _hash_value(value: str, salt: str, algorithm: str = DEFAULT_HASH_ALGORITHM) -> str:
     """Return the salted hash of *value* as a hex string.
 
@@ -46,7 +84,7 @@ def _hash_value(value: str, salt: str, algorithm: str = DEFAULT_HASH_ALGORITHM) 
     """
     if algorithm != DEFAULT_HASH_ALGORITHM:
         raise ValueError(f"unsupported hash algorithm: {algorithm}")
-    normalized = value.strip().lower()
+    normalized = _identity_key(value)
     return hashlib.sha256(f"{salt}|{normalized}".encode("utf-8")).hexdigest()
 
 

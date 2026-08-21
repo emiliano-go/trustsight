@@ -3,13 +3,20 @@ import re
 from ..config import (
     DEFAULT_FOREIGN_PKG_MANAGERS,
     DEFAULT_OBFUSCATION_INDICATORS,
+    EXEC_WRAPPER as _EXEC_WRAPPER_RE,
+    NETWORK_CLIENT as _NETWORK_CLIENT,
+    SHELL_EXECUTOR as _SHELL_EXEC,
     load_patterns,
     load_thresholds,
 )
 from ..deps import _strip_comment
 from ..differ import extract_source_array_urls
 from ..novelty import normalize_url
-from ..rules import _classify_enclosing_function
+from ..rules import (
+    ScopeResolver,
+    _classify_enclosing_function,
+    _classify_line_context,
+)
 from ..tokenizer import (
     join_line_continuations,
     reconstruct_literals,
@@ -40,12 +47,162 @@ _UNTRUSTED_PATCH_RE = re.compile(
     re.IGNORECASE,
 )
 
-_NETWORK_FETCH_RE = re.compile(
-    r"(?:curl|wget|aria2c|git\s+clone|svn\s+(?:co|checkout)|"
-    r"python\s+-c\s+.*urllib|python\s+-m\s+http)\b[^|;&]*?"
-    r"(https?://[^\s|;&'\"\)]+)",
+# A network client, and separately the address it names.
+#
+# These were one regex: `CLIENT ... (ADDRESS)` with a lazy span between them.
+# That span is a quadratic search - on a line with a client and no address it
+# retried every split point looking for one - and the cost grew with the
+# address alternation until the safety audit refused the pattern outright.
+# Two anchored searches and a position comparison do the same job in one
+# pass each, and neither can backtrack into the other.
+#
+# The interpreter arm is not decoration: `curl` and `wget` are what a
+# reviewer greps for, so an author avoiding the grep reaches for the runtime
+# that is already a makedepend.  It listed only `python` and only `urllib`,
+# so `python3 -c` - the spelling every current recipe uses - matched
+# nothing, and neither did perl, ruby or node.
+_INTERPRETER_FETCH = (
+    r"python[23]?\s+-c\b[^|;&]*?"
+    r"(?:urllib|requests|httpx|http\.client|urlopen|urlretrieve)"
+    r"|python[23]?\s+-m\s+(?:http|urllib|pip)\b"
+    r"|perl\s+-[eE]\b[^|;&]*?(?:LWP|HTTP::|Net::HTTP|getstore|get\()"
+    r"|ruby\s+-e\b[^|;&]*?(?:Net::HTTP|open-uri|URI\.(?:parse|open))"
+    r"|node\s+-e\b[^|;&]*?(?:https?\.get|fetch\(|require\(['\"]https?)"
+)
+
+_FETCH_CLIENT_ONLY_RE = re.compile(
+    r"(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
     re.IGNORECASE,
 )
+
+#: A scheme-bearing address, anchored to the start of a token.
+#:
+#: `\A` is not decoration.  Used with `.match()` the anchor changes nothing,
+#: but the regex audit measures every module-level pattern with `.search()`
+#: on a hostile line - and unanchored, the leading character run is retried
+#: from every position, which measured 290 ms. A pattern whose safety
+#: depends on how the caller invokes it is a pattern one refactor away from
+#: being quadratic, so the anchor is written into it.
+_SCHEME_ADDRESS_RE = re.compile(
+    # `magnet:` and `ipfs:`/`ipns:` name content rather than a host, so
+    # they carry no `//` and matched nothing - the client was recognised
+    # and the fetch scored nothing because no address could be attributed
+    # to it. A content address is still an address: it says the bytes come
+    # from off the machine, which is the whole question.
+    r"\A(?:[a-z][a-z0-9+.-]*://[^\s|;&'\"\)]+"
+    r"|(?:magnet|ipfs|ipns|ed2k|bitcoin):[^\s|;&'\"\)]+)",
+    re.IGNORECASE,
+)
+
+#: The scp/ssh form - `git@evil.example:r.git`, `host:/path` - which names a
+#: remote with no scheme at all.  Requiring `http(s)://` left the whole ssh
+#: transport invisible, but searching for this shape *inside* a line is a
+#: quadratic scan: with no `@` present the engine retries the leading run
+#: from every position, and a full-length hostile line measured 304 ms.
+#: Anchored to a whole token instead, and the tokenizing is one pass.
+_SCP_ADDRESS_RE = re.compile(
+    # The user part is optional: `scp host:/x.sh dest` is the same remote
+    # read as `scp user@host:/x.sh dest`, and requiring `@` left the fetch
+    # unattributed while R137 paired the write with its execution.  The
+    # host must carry a dot, or every `make target:` reads as a remote.
+    r"\A(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+:\S+\Z"
+)
+
+
+#: A CVS root: `:pserver:user@host:/repo`.
+_CVS_ROOT_RE = re.compile(
+    r"\A:(?:pserver|ext|ssh|extssh|fork|local):[^\s]*[A-Za-z0-9.-]+:", re.IGNORECASE
+)
+
+
+#: Schemes that name content instead of a host.
+_CONTENT_ADDRESS_RE = re.compile(
+    r"\A(?:magnet|ipfs|ipns|ed2k|bitcoin):[^\s|;&'\"\)]+", re.IGNORECASE)
+
+
+def _address_in(text: str) -> str | None:
+    """The first remote address in *text*, scheme-bearing or scp-style.
+
+    Token-anchored for both forms.  Searching *inside* a line for either
+    shape is a quadratic scan - the leading character run is retried from
+    every position, and possessive quantifiers make that worse rather than
+    better, because each attempt then consumes to the end before failing.
+    A full-length hostile line measured 304 ms. Splitting on whitespace is
+    one pass and each anchored match is linear in its own token.
+    """
+    for token in text.split():
+        candidate = token.strip("\"'()<>,")
+        if not candidate:
+            continue
+        # The URL is not always the whole token: an interpreter one-liner
+        # writes `urlretrieve("https://...","x.sh")`, where the address sits
+        # inside a call.  `://` is a fixed marker, so finding it and walking
+        # back over the scheme is linear - unlike letting the regex retry
+        # its leading character run from every position.
+        # A content address has no `://` to find: `magnet:?xt=urn:btih:…`
+        # names bytes rather than a host. The marker walk below can never
+        # reach one, so it is tested first - anchored, so it costs one
+        # match per token.
+        content = _CONTENT_ADDRESS_RE.match(candidate)
+        if content:
+            return content.group(0)
+        marker = candidate.find("://")
+        while marker != -1:
+            start = marker
+            while start > 0 and (candidate[start - 1].isalnum()
+                                 or candidate[start - 1] in "+.-"):
+                start -= 1
+            scheme = _SCHEME_ADDRESS_RE.match(candidate[start:])
+            if scheme:
+                return scheme.group(0)
+            marker = candidate.find("://", marker + 3)
+        # No `@` precondition: the user part is optional, and requiring it
+        # here re-introduced the gap the regex above was widened to close.
+        if ":" in candidate and _SCP_ADDRESS_RE.match(candidate):
+            return candidate
+        # A CVS root names a remote in its own notation:
+        # `:pserver:user@host:/path`, `:ext:host:/path`.
+        if candidate.startswith(":") and _CVS_ROOT_RE.match(candidate):
+            return candidate
+    return None
+
+
+def fetch_addresses(body: str):
+    """Yield addresses on *body* that a network client on the same line names.
+
+    "Same command" is approximated by position: the client has to appear
+    before the address and no pipeline separator may sit between them, which
+    is the same boundary the single regex expressed with `[^|;&]`.
+    """
+    interpreter_re = re.compile(r"\A(?:python[23]?|perl|ruby|node|php|lua)\b",
+                                re.IGNORECASE)
+    for client in _FETCH_CLIENT_ONLY_RE.finditer(body):
+        tail = body[client.end():]
+        # A shell command ends at `;`, so the span from a client to its
+        # address must not cross one - but an interpreter's script is a
+        # *quoted argument*, and `python3 -c 'import urllib;urlopen(url)'`
+        # puts a semicolon between the client and the URL as a matter of
+        # Python syntax.  Cutting there dropped the address entirely.
+        separators = ("|", "&") if interpreter_re.match(client.group(0)) \
+            else ("|", ";", "&")
+        cut = len(tail)
+        for sep in separators:
+            found = tail.find(sep)
+            if found != -1:
+                cut = min(cut, found)
+        # The client match may itself contain the remote: `cvs -d ROOT
+        # checkout` puts the root *between* the verb and the command, so
+        # the matched text swallows it and looking only at the tail found
+        # nothing.
+        address = _address_in(client.group(0)) or _address_in(tail[:cut])
+        if address:
+            yield address
+
+
+def _network_fetch_url(body: str) -> str | None:
+    """The first address a network client on *body* fetches, if any."""
+    return next(iter(fetch_addresses(body)), None)
+
 
 def _foreign_pkg_re(config=None) -> re.Pattern:
     """Compile the R081 foreign-package-manager regex from patterns.toml."""
@@ -127,13 +284,23 @@ _ENV_SUBVERSION_MED_RE = re.compile(
 # quadratic: 8192 leading spaces took 1.1 seconds. Collapsing the pair is
 # behaviour-preserving - both spellings mean "start of line, optional
 # whitespace, sudo" - and costs 0.6ms.
+#
+# `sudo` was the whole rule, and it is one of four ways to say the same
+# thing. `doas` is the OpenBSD-derived replacement many Arch users install
+# instead; `pkexec` is polkit's and is present on every desktop; `run0` is
+# systemd's, shipped since v256. A recipe reaching for any of them is
+# reaching for root, and naming only the first meant the rule tested which
+# tool the writer preferred rather than what it does.
+_PRIVILEGE_TOOL = r"sudo|doas|pkexec|run0"
+
 _SUDO_CMD_START_RE = re.compile(
-    r"(?:\A|[;&|]|\$\()\s*sudo(?=[\s)&|`;]|$)",
+    r"(?:\A|[;&|]|\$\()\s*(?:" + _PRIVILEGE_TOOL + r")(?=[\s)&|`;]|$)",
     re.IGNORECASE,
 )
 
 # `` `sudo` `` - backtick command substitution (`` `sudo -n true` ``).
-_SUDO_BACKTICK_RE = re.compile(r"`\s*sudo\b", re.IGNORECASE)
+_SUDO_BACKTICK_RE = re.compile(
+    r"`\s*(?:" + _PRIVILEGE_TOOL + r")\b", re.IGNORECASE)
 
 
 def _backtick_sudo_executes(body: str) -> bool:
@@ -162,7 +329,22 @@ def _added_line_number(diff_text: str, fragment: str) -> int | None:
     return None
 
 
-def _sudo_findings(diff_text, config, add) -> None:
+def _recipe_lines(current_text: str | None) -> list[str] | None:
+    """The current PKGBUILD as diff-shaped lines, for the call graph.
+
+    A diff shows a hunk.  The ``build()`` that calls an added helper may sit
+    entirely outside it, in which case the call is invisible and the helper
+    resolves to no scope - the evasion would survive by being small.  The
+    graph is therefore built over the whole recipe where the caller has it,
+    while findings still come only from added lines.  Marked as context
+    (`" "`), never `"+"`, so nothing here can itself become a finding.
+    """
+    if not current_text:
+        return None
+    return [" " + ln for ln in split_lines(current_text)]
+
+
+def _sudo_findings(diff_text, config, add, current_text=None) -> None:
     """A build/install function executes ``sudo`` (R009, CRITICAL).
 
     Replaces the old ``\\bsudo\\b`` regex rule: that fired on any mention
@@ -172,13 +354,15 @@ def _sudo_findings(diff_text, config, add) -> None:
     """
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         body = _strip_comment(line[1:])
         if _SUDO_CMD_START_RE.search(body) or _backtick_sudo_executes(body):
             add("R009", "Privilege Escalation", "CRITICAL", "privilege",
-                f"{enclosing[i]}() runs sudo: {body.strip()[:80]}",
+                f"{scopes.label(i, _SCOPE_FUNCTIONS)}() escalates privilege: "
+                f"{body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 position=enclosing[i], body=body.strip()[:80])
             return
@@ -191,15 +375,28 @@ def _sudo_findings(diff_text, config, add) -> None:
 # (``bash <<< "$(curl ...)"``).  Each still executes remote code at build
 # time, so it must not be left at R010/R011's "uses curl/wget" LOW.
 _REMOTE_PROC_SUBST_RE = re.compile(
-    r"(?:\b(?:bash|sh|zsh|dash|source)\b|\.)\s*<\s*\(\s*(?:curl|wget)\b",
+    r"(?:\b(?:" + _SHELL_EXEC + r")\b|\bsource\b|\.)\s*<\s*\(\s*(?:curl|wget)\b",
     re.IGNORECASE,
 )
 _REMOTE_XARGS_SHELL_RE = re.compile(
-    r"\b(?:curl|wget)\b[^|;]*\|\s*xargs\s+(?:\S+\s+)*(?:bash|sh|zsh|dash)\b",
+    # The bar must be an operative pipe: an escaped one is an argument
+    # and starts no pipeline.  Same guard as R001-R003 and R045.
+    r"\b(?:curl|wget)\b[^|;]*(?<!\\)\|\s*xargs\s+(?:\S+\s+)*(?:"
+    + _SHELL_EXEC + r")\b",
+    re.IGNORECASE,
+)
+# A fetch piped into a command that *fans out* to a shell through an output
+# process substitution: `curl url | tee >(bash) >/dev/null`.  R001 looks for
+# a shell directly after the bar and finds `tee`; the input-side pattern
+# above looks for `<(curl ...)` and finds nothing.  The shell still runs the
+# fetched bytes.
+_REMOTE_PROC_SUBST_OUT_RE = re.compile(
+    r"\b(?:curl|wget|aria2c|axel)\b[^|;&]*(?<!\\)\|[^|;&]*>\(\s*"
+    r"(?:" + _EXEC_WRAPPER_RE + r")?(?:/(?:usr/)?bin/)?(?:" + _SHELL_EXEC + r")\b",
     re.IGNORECASE,
 )
 _REMOTE_HERESTRING_RE = re.compile(
-    r"\b(?:bash|sh|zsh|dash)\s+(?:<<<|<<)\s*[^\n]*(?:\$\{?\(|`|\$\{)",
+    r"\b(?:" + _SHELL_EXEC + r")\s+(?:<<<|<<)\s*[^\n]*(?:\$\{?\(|`|\$\{)",
     re.IGNORECASE,
 )
 
@@ -214,6 +411,13 @@ def _indirect_remote_execution_findings(diff_text, config, add) -> None:
             add("R127", "Remote Script Via Process Substitution", "CRITICAL",
                 "execution",
                 f"process substitution feeds a fetched script to a shell: {body.strip()[:80]}",
+                line=_added_line_number(diff_text, body.strip()[:30]),
+                body=body.strip()[:80])
+            return
+        if _REMOTE_PROC_SUBST_OUT_RE.search(body):
+            add("R127", "Remote Script Via Process Substitution", "CRITICAL",
+                "execution",
+                f"a fetch fans out to a shell through >(...): {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 body=body.strip()[:80])
             return
@@ -268,14 +472,22 @@ def _indirect_expansion_findings(diff_text, config, add) -> None:
         return
 
 
-def _build_findings(diff_text, config, add) -> None:
+def _build_findings(diff_text, config, add, current_text=None) -> None:
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
+    # An install hook that *prints* `sudo pacman -S ...` is telling the user
+    # what to run, not running it.  Both rules below read the line as a
+    # command, which was survivable while a helper named `_cowork_note` sat
+    # outside every hook scope; following calls puts it inside one, so the
+    # message context the rule engine already computes has to be consulted
+    # here too.
+    context = _classify_line_context(lines)
 
     high_found = False
     med_found = False
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
             continue
         body = _strip_comment(line)
         if _ENV_SUBVERSION_HIGH_RE.search(body):
@@ -317,7 +529,7 @@ def _build_findings(diff_text, config, add) -> None:
 
         declared = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
         for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+            if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
             # An upload to a paste/file-drop host is R087's finding, and
             # "downloads {url}" would describe it wrongly as well as score
@@ -329,11 +541,13 @@ def _build_findings(diff_text, config, add) -> None:
                 continue
             if claims_pipe_to_shell(_strip_comment(line[1:])):
                 continue
-            for match in _NETWORK_FETCH_RE.finditer(line):
-                url = match.group(1)
+            # The *stripped* body, like the two claims above it: a
+            # commented-out fetch is not a fetch, and reading the raw line
+            # made `# curl ... | bash` an undeclared download.
+            for url in fetch_addresses(_strip_comment(line[1:])):
                 if normalize_url(url) not in declared:
                     add("R061", "Hidden Network Fetch In Build", "HIGH", "network",
-                        f"{enclosing[i]}() downloads {url}, which is not in source=()",
+                        f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() downloads {url}, which is not in source=()",
                         position=enclosing[i], url=url)
                     break
             else:
@@ -342,19 +556,21 @@ def _build_findings(diff_text, config, add) -> None:
 
     if "R062" in wanted:
         for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _INSTALL_HOOKS:
+            if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
+                continue
+            if context.get(i) == "message":
                 continue
             body = _strip_comment(line)
-            if _NETWORK_FETCH_RE.search(body) or _HOOK_EXEC_RE.search(body):
+            if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
                 add("R062", "Install Hook Fetches Or Executes", "HIGH", "installer",
-                    f"{enclosing[i]}() runs as root and contains: {body.strip()[:80]}",
+                    f"{scopes.label(i, _INSTALL_HOOKS)}() runs as root and contains: {body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 break
 
     if "R063" in wanted:
         declared_urls = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
         for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+            if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
             match = _UNTRUSTED_PATCH_RE.search(_strip_comment(line))
             if match:
@@ -363,7 +579,7 @@ def _build_findings(diff_text, config, add) -> None:
                 if patch_src.startswith("http") and normalize_url(patch_src) in declared_urls:
                     continue
                 add("R063", "Patch Applied From Outside The Build Tree", "HIGH", "integrity",
-                    f"{enclosing[i]}() applies a patch from {patch_src[:70]}",
+                    f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() applies a patch from {patch_src[:70]}",
                     position=enclosing[i], patch_src=patch_src[:70])
                 break
 
@@ -382,12 +598,14 @@ def _build_findings(diff_text, config, add) -> None:
     if "R081" in wanted:
         foreign_re = _foreign_pkg_re(config)
         for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _INSTALL_HOOKS:
+            if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
+                continue
+            if context.get(i) == "message":
                 continue
             body = _strip_comment(line)
             if foreign_re.search(body):
                 add("R081", "Foreign Package Manager In Install Hook", "HIGH", "installer",
-                    f"{enclosing[i]}() invokes foreign package manager: {body.strip()[:80]}",
+                    f"{scopes.label(i, _INSTALL_HOOKS)}() invokes foreign package manager: {body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 break
 
@@ -401,7 +619,7 @@ def _build_findings(diff_text, config, add) -> None:
         density = _obfuscation_density_threshold(config)
         action_re = _reconstructs_to_action_re(config)
         for i, line in enumerate(lines):
-            if not line.startswith("+") or enclosing.get(i) not in _CRITICAL_FUNCTIONS:
+            if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
             raw_body = _strip_comment(raw_lines[i])
             body = _strip_comment(line)
@@ -409,7 +627,7 @@ def _build_findings(diff_text, config, add) -> None:
             if count >= density:
                 severity = "HIGH" if action_re.search(body) else "MEDIUM"
                 add("R082", "Shell Obfuscation Density", severity, "obfuscation",
-                    f"{enclosing[i]}() line has {count} obfuscation indicators: {body.strip()[:80]}",
+                    f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() line has {count} obfuscation indicators: {body.strip()[:80]}",
                     position=enclosing[i], count=count, body=body.strip()[:80])
                 break
 

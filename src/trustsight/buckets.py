@@ -10,6 +10,38 @@ from .config import load_domains, load_hosts
 _extractor = None
 
 
+def canonical_host(netloc: str) -> str:
+    """One host spelling, for every part of the program that reads one.
+
+    A host has several spellings that name the same machine: case
+    (`GITHUB.com`), the root-label dot (`github.com.`), the default port
+    (`github.com:443`) and userinfo (`user@github.com`). Each subsystem
+    normalised a different subset, so they disagreed - `classify_url`
+    lowercased the host for the raw-hosting check and then handed the
+    *raw* URL to the suffix extractor, which is why `https://GITHUB.com/…`
+    classified as `unknown` while the lowercase form classified as
+    `trusted_forge`.
+
+    Novelty had the mirror of the same problem: five spellings of one
+    resource are five first-seen events, so a maintainer rotating the
+    spelling never accumulates history.
+    """
+    host = netloc
+    if "@" in host:
+        host = host.rsplit("@", 1)[1]
+    if host.startswith("["):
+        # IPv6 literal: the brackets end the host, a colon after them is
+        # the port.
+        close = host.find("]")
+        if close != -1:
+            host = host[: close + 1] + host[close + 1:].split(":", 1)[0]
+    elif ":" in host:
+        host, _, port = host.partition(":")
+        if port not in ("", "80", "443"):
+            host = f"{host}:{port}"
+    return host.rstrip(".").lower()
+
+
 def _extract(url: str):
     """Split *url* using a tldextract instance that never hits the network.
 
@@ -34,6 +66,16 @@ CONFUSABLES = {
 # to check whether a script-mixed label is confusable with a configured
 # popular domain, not merely script-mixed.
 _CONFUSABLE_TO_LATIN = {conf: latin for latin, conf in CONFUSABLES.items()}
+
+# Fullwidth Latin (U+FF01-U+FF5E) folds onto ASCII by a fixed offset of
+# 0xFEE0.  It is a whole homoglyph alphabet rather than the handful of
+# lookalikes the configured table lists, and a command word written in it -
+# `ｃｕｒｌ` - renders as the real name and executes as a name that does not
+# exist. Generated rather than enumerated: the mapping is arithmetic, and
+# writing out ninety-four entries invites one of them to go missing.
+_CONFUSABLE_TO_LATIN.update(
+    {chr(cp): chr(cp - 0xFEE0) for cp in range(0xFF01, 0xFF5F)}
+)
 
 # Memoized confusable-target set (config rarely changes mid-process).
 _confusable_targets_cache: frozenset[str] | None = None
@@ -223,7 +265,7 @@ def _classify_prepared(
 ) -> tuple[str, str]:
     """Classify *url* against already-prepared domain sets."""
     parsed = urlparse(url)
-    domain = _bounded_host(parsed.netloc.lower())
+    domain = _bounded_host(canonical_host(parsed.netloc))
 
     if has_homograph(domain):
         return "homograph_attack", domain
@@ -235,7 +277,11 @@ def _classify_prepared(
 
     # The registered domain is only needed for the forge comparison, and
     # computing it is the expensive part of this function.
-    extracted = _extract(url)
+    #
+    # The *canonical* host, not the raw URL: handing the raw one over is
+    # what made `GITHUB.com` produce `GITHUB.com` as its registrable
+    # domain, which matches nothing in a lowercase configuration set.
+    extracted = _extract(domain.split(":", 1)[0])
     registered = f"{extracted.domain}.{extracted.suffix}"
 
     if registered in trusted_forges:

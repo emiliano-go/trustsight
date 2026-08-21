@@ -1,8 +1,10 @@
+import fnmatch
 import re
 
 import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
+from .coverage import unpinned_source_refs
 from .schema import DiffSummary, SourceChanges
 from .tokenizer import split_lines
 
@@ -286,14 +288,21 @@ def generate_diff(
     return text, summary
 
 
+# `^[+ ]`, not `^\+`: a VCS source is a fact about the package whether or
+# not *this* diff changed the line.  Anchoring on added lines meant a
+# `-git` package whose `source=(git+...)` sat on a context line had its
+# mandatory `SKIP` read as unjustified - and that only became visible once
+# checksum detection stopped looking at `sha256sums` alone, because these
+# packages carry `b2sums` or `md5sums`.  Removals are still excluded: a
+# source this diff deletes justifies nothing.
 _VCS_SOURCE_RE = re.compile(
-    r"^\+(?:.*\b(?:git\+https?://|git://|svn://|hg://|bzr://|svn\+https?://|git\+ssh://))",
+    r"^[+ ](?:.*\b(?:git\+https?://|git://|svn://|hg://|bzr://|svn\+https?://|git\+ssh://))",
     re.IGNORECASE,
 )
-_GIT_PKG_RE = re.compile(r"^\+\s*source\s*=.*\.git\b", re.IGNORECASE)
+_GIT_PKG_RE = re.compile(r"^[+ ]\s*source\s*=.*\.git\b", re.IGNORECASE)
 _SIG_SRC_RE = re.compile(r"\.(?:sig|asc)[\'\"]?\s*$", re.IGNORECASE)
-_VALIDPGPKEYS_RE = re.compile(r"^\+\s*validpgpkeys\s*=\s*\(", re.IGNORECASE)
-_DKMS_RE = re.compile(r"^\+\s*DKMS", re.IGNORECASE)
+_VALIDPGPKEYS_RE = re.compile(r"^[+ ]\s*validpgpkeys\s*=\s*\(", re.IGNORECASE)
+_DKMS_RE = re.compile(r"^[+ ]\s*DKMS", re.IGNORECASE)
 
 _SKIP_JUSTIFICATION_CHECKS = [
     ("vcs source", lambda t: bool(_VCS_SOURCE_RE.search(t) or _GIT_PKG_RE.search(t) or _DKMS_RE.search(t))),
@@ -347,7 +356,11 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     )
 
 
-_CHECKSUM_VARS = "sha256sums|sha512sums|sha1sums|sha224sums|sha384sums|b2sums|md5sums"
+_CHECKSUM_VAR_NAMES = (
+    "sha256sums", "sha512sums", "sha1sums", "sha224sums", "sha384sums",
+    "b2sums", "md5sums",
+)
+_CHECKSUM_VARS = "|".join(_CHECKSUM_VAR_NAMES)
 
 _CHK_DECL_RE = re.compile(
     r"^\s*(?:" + _CHECKSUM_VARS + r")\s*=\s*", re.IGNORECASE,
@@ -400,22 +413,167 @@ _CHK_HASH_CHAR_RE = re.compile(r"[0-9A-Za-z+/=]")
 _CHK_SKIP_WORD_RE = re.compile(r"[\'\"]?(?:SKIP|NONE)[\'\"]?")
 
 
+def _resolve_checksum_text(diff_text: str, contents: str) -> str:
+    """*contents* with the diff's own variables substituted.
+
+    Checksum rules read the array as text, so `_cs=SKIP` two lines above
+    and `sha256sums=("${_cs}")` below reported `checksum_added_or_changed`:
+    verification was off and the reader was told a checksum had been set.
+    The name is the writer's to choose and the value is in the same diff,
+    which is the argument for resolving everywhere else too.
+    """
+    if "$" not in contents:
+        return contents
+    from .tokenizer import _variable_table
+
+    readable = [
+        ln[1:] for ln in split_lines(diff_text)
+        if ln.startswith("+") and not ln.startswith("+++")
+    ]
+    try:
+        table, _arrays = _variable_table(readable)
+    except Exception:
+        return contents
+    out = contents
+    for name, value in table.items():
+        if not isinstance(value, str):
+            continue
+        for spelling in (f"${{{name}}}", f"${name}"):
+            if spelling in out:
+                out = out.replace(spelling, value)
+    return out
+
+
+def checksum_array_parity(diff_text: str) -> tuple[int, int, str] | None:
+    """``(sources, sums, var)`` when a declared array is short, else None.
+
+    makepkg pairs `source=()` with each `*sums=()` by position, and a
+    missing entry is not a missing check - it is a *failed* build, unless
+    the array is short in the direction that leaves an entry unverified.
+    In practice a mismatch is either a mistake or a source slipped in
+    beside a checksum list nobody recounted, and no rule looked at the two
+    lengths together: adding a second source with one checksum scored
+    nothing but priors.
+
+    Only the added side is read, and only when both arrays are declared in
+    this diff - comparing a new source array against a checksum array the
+    diff does not show would be guessing at the other half.
+    """
+    sources = _added_array_items(diff_text, _SOURCE_ARRAY_START_RE)
+    if sources is None:
+        return None
+    for var in _CHECKSUM_VAR_NAMES:
+        items = _added_array_items(
+            diff_text, re.compile(r"^\s*" + var + r"\s*=\s*\("))
+        if items is None:
+            continue
+        if len(items) < len(sources):
+            return (len(sources), len(items), var)
+    return None
+
+
+def _quoted_items(contents: str) -> list[str] | None:
+    """The array elements in *contents*, or None if it never closed.
+
+    Elements are split on *unquoted* whitespace, which a token regex
+    cannot do: `"$_pkgsrc"::"git+$url.git"` is makepkg's rename form and is
+    one source, and reading it as a quoted token followed by the rest read
+    it as two. Every renamed source in the corpus then looked like an
+    array one element longer than its checksum list.
+    """
+    if "(" not in contents or ")" not in contents:
+        return None
+    inner = contents[contents.index("(") + 1:contents.rindex(")")]
+    items: list[str] = []
+    current: list[str] = []
+    quote = ""
+    for ch in inner:
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "'\"":
+            quote = ch
+            current.append(ch)
+        elif ch.isspace():
+            if current:
+                items.append("".join(current))
+                current = []
+        elif ch == "#":
+            # A comment inside the array ends the element and the line.
+            break
+        else:
+            current.append(ch)
+    if current:
+        items.append("".join(current))
+    return items
+
+
+def _added_array_items(diff_text: str, start_re) -> list[str] | None:
+    """Elements of the first *wholly added* array matching *start_re*.
+
+    ``None`` unless the array opens and closes inside added lines with no
+    context line between. A diff shows a hunk, not a file: an array that
+    opens on a `+` line and continues through unchanged entries is only
+    partly visible, and counting what is visible reported a two-element
+    array as one. That mistake fired on 26 benign packages - every
+    multi-source recipe whose diff touched one entry.
+    """
+    collecting = False
+    parts: list[str] = []
+    for line in split_lines(diff_text):
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        added = line.startswith("+")
+        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        if not collecting:
+            if added and start_re.match(body):
+                collecting = True
+                parts.append(body[body.index("("):])
+                if ")" in parts[-1]:
+                    return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+            continue
+        if not added:
+            # The array continues into text this diff does not add, so
+            # what it holds in full is not something this function knows.
+            return None
+        parts.append(body)
+        if ")" in body:
+            return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+    return None
+
+
 def detect_checksum_changes(diff_text: str) -> str:
     """Detect checksum-related changes in a diff.
 
-    Deliberately reports only on the ``sha256sums`` array (PKU's default
-    checksum), and correctly handles the multiline form: a diff that adds
-    ``sha256sums=(\n  'SKIP'\n)`` must read as *skip*, not ``unchanged``.
+    Reads *every* checksum array, and correctly handles the multiline form:
+    a diff that adds ``sha256sums=(\n  'SKIP'\n)`` must read as *skip*, not
+    ``unchanged``.
+
+    It used to read `sha256sums` alone, on the reasoning that it is
+    makepkg's default. makepkg accepts `b2sums`, `sha512sums`, `md5sums` and
+    the rest just as happily, and a package that declares only one of those
+    is verified by that one - so `b2sums=('SKIP')` disabled verification and
+    reported `unchanged`, which is R004 not firing at all. Modern AUR
+    packages increasingly ship `b2sums`, so the default was becoming the
+    minority case.
+
+    A SKIP anywhere wins over a hash elsewhere: the array carrying SKIP is
+    the one that stopped verifying a source, whatever a sibling array does.
     """
-    for var, contents in _added_checksum_arrays(diff_text):
-        if var != "sha256sums":
-            continue
+    seen = False
+    emptied = False
+    for _var, contents in _added_checksum_arrays(diff_text):
+        seen = True
+        contents = _resolve_checksum_text(diff_text, contents)
         if _CHK_SKIP_WORD_RE.search(contents):
             return "changed_from_sha256_to_skip"
         if "(" in contents and not _CHK_HASH_CHAR_RE.search(contents):
-            return "checksum_array_emptied"
-        return "checksum_added_or_changed"
-    return "unchanged"
+            emptied = True
+    if emptied:
+        return "checksum_array_emptied"
+    return "checksum_added_or_changed" if seen else "unchanged"
 
 
 _CHECKSUM_LINE_RE = re.compile(
@@ -571,6 +729,77 @@ def _top_level_blob(tree, name: str):
 # every finding.  ``.install`` is matched by suffix separately.
 _COMPANION_SKIP = frozenset({"PKGBUILD", ".SRCINFO", ".gitignore"})
 
+#: A sentinel name meaning "the selection itself was incomplete".  Returned
+#: in the name list rather than as a second return value so that every
+#: existing caller of `_companion_names` keeps working unchanged.
+_COMPANION_INCOMPLETE = "\x00incomplete"
+
+
+#: Records a build tool reads without the recipe ever naming them.  The left
+#: side is what the recipe *does* say; the right side is the file that runs.
+_TOOL_CONTRACT_FILES = (
+    (re.compile(r"\b(?:npm|pnpm|yarn|bun)\b"), "package.json"),
+    (re.compile(r"\bcargo\b"), "Cargo.toml"),
+    (re.compile(r"\bcargo\b"), "build.rs"),
+    (re.compile(r"\bcmake\b"), "CMakeLists.txt"),
+    (re.compile(r"\bmeson\b"), "meson.build"),
+    (re.compile(r"\bninja\b"), "build.ninja"),
+    (re.compile(r"\b(?:gradle|gradlew)\b"), "build.gradle"),
+    (re.compile(r"\bmvn\b|\bmaven\b"), "pom.xml"),
+    (re.compile(r"\bgo\b\s+(?:build|install|run|generate)"), "go.mod"),
+    # `go build` compiles every .go file in the module, and an `init()` runs
+    # before `main`.  Loading go.mod alone read the manifest and none of the
+    # code it names.
+    (re.compile(r"\bgo\b\s+(?:build|install|run|generate)"), "main.go"),
+    (re.compile(r"\bgo\b\s+(?:build|install|run|generate)"), "init.go"),
+    (re.compile(r"\bdotnet\b"), "Program.cs"),
+    (re.compile(r"\bpip[23]?\b|\bpython[23]?\s+-m\s+(?:pip|build)"), "setup.py"),
+    (re.compile(r"\bpip[23]?\b|\bpython[23]?\s+-m\s+(?:pip|build)"), "pyproject.toml"),
+    (re.compile(r"\bpip[23]?\b"), "requirements.txt"),
+    (re.compile(r"\bbundle\b|\bgem\b"), "Gemfile"),
+    (re.compile(r"\bcomposer\b"), "composer.json"),
+    (re.compile(r"\bg?make\b"), "Makefile"),
+    (re.compile(r"\bg?make\b"), "GNUmakefile"),
+)
+
+
+#: A reference that names a *set* of committed files rather than one:
+#: `bash r$i.sh` inside a loop, or `for f in *.sh`.  The literal-name test
+#: resolves neither, so a payload split across `r1.sh`, `r2.sh`, `r3.sh` was
+#: committed, executed, and never read - the loop is the only thing standing
+#: between the reference and the file.
+#: Anchored to a whole token.  Unanchored, the leading `[\w./-]*` retries
+#: from every position on a line that has no match, which measured 387 ms on
+#: a full-length hostile line - the same quadratic shape the address matcher
+#: had. Splitting on whitespace is one pass and each match is linear in its
+#: own token.
+_PATTERN_REF_RE = re.compile(
+    r"\A[\w./-]*(?:\$\{?\w+\}?|\*|\?|\[[^\]]+\])[\w./-]*\.[A-Za-z0-9_]+\Z"
+)
+
+
+def _referenced_by_pattern(name: str, pkgbuild_text: str) -> bool:
+    """True when *name* matches a glob or variable reference in the recipe."""
+    tokens = {
+        token.strip("\"'();,")
+        for token in pkgbuild_text.split()
+        if ("$" in token or "*" in token or "?" in token or "[" in token)
+        and "." in token
+    }
+    for token in tokens:
+        if not _PATTERN_REF_RE.match(token):
+            continue
+        # A variable stands for an unknown run of characters, exactly as a
+        # `*` does; both become one wildcard so the same matcher answers.
+        pattern = re.sub(r"\$\{?\w+\}?", "*", token)
+        if pattern in ("*", "*.*"):
+            # A reference that matches everything names nothing: `$f` alone
+            # would pull in every committed file.
+            continue
+        if fnmatch.fnmatchcase(name, pattern):
+            return True
+    return False
+
 
 def _companion_names(tree, pkgbuild_text: str) -> list[str]:
     """Committed top-level files whose content the recipe pulls in.
@@ -582,7 +811,19 @@ def _companion_names(tree, pkgbuild_text: str) -> list[str]:
     it.  Tying the scan to files the recipe *names* keeps an unrelated
     committed blob out of it while leaving no referenced file unread.
     """
+    unsafe_names = False
     declared = local_source_names(pkgbuild_text)
+    # A build tool names its own input by contract, not by spelling it in the
+    # recipe.  `npm install` reads package.json, `cargo build` reads
+    # Cargo.toml and compiles build.rs, `cmake` reads CMakeLists.txt - each
+    # of those files is committed code that runs at build time, and none of
+    # them appears in the PKGBUILD text, so the name test above excluded
+    # exactly the records whose contents matter most.
+    implied = {
+        name
+        for pattern, name in _TOOL_CONTRACT_FILES
+        if pattern.search(pkgbuild_text)
+    }
     names: list[str] = []
     inspected = 0
     for entry in tree:
@@ -596,11 +837,26 @@ def _companion_names(tree, pkgbuild_text: str) -> list[str]:
             continue
         name = entry.name
         if not _is_safe_companion_name(name):
+            # A name past the length cap, or one that fails the safety
+            # check, is a referenced file left unread.  Silence here was a
+            # place to put a payload: 25 with a generic committed-exec
+            # claim and no sign that anything had been skipped.
+            unsafe_names = True
             continue
-        if name in _COMPANION_SKIP or name.endswith(".install"):
+        if name in _COMPANION_SKIP:
             continue
-        if name in declared or name in pkgbuild_text:
+        # `.install` used to be skipped here.  A scriptlet runs as root at
+        # install time, and its body is the single most consequential text in
+        # an AUR package; skipping it meant that a hook committed in an
+        # earlier commit was never read at all, so a `post_install()` holding
+        # `curl ... | bash` scored 15 for the attribute change and nothing
+        # for the payload.  R062 reads hook lines from the diff; this makes
+        # the committed body one of those lines.
+        if (name in declared or name in implied or name in pkgbuild_text
+                or _referenced_by_pattern(name, pkgbuild_text)):
             names.append(name)
+    if inspected >= MAX_COMPANION_TREE_ENTRIES or unsafe_names:
+        names.append(_COMPANION_INCOMPLETE)
     return names
 
 
@@ -621,10 +877,106 @@ def _is_safe_companion_name(name: str) -> bool:
     return "\x00" not in name
 
 
+#: Read size when draining a streamed blob.  Only the head is kept.
+_DRAIN_CHUNK_BYTES = 256 * 1024
+
+#: Past this, streaming a blob's head costs time linear in a size the
+#: attacker chose, so the member is left unread and *reported* unread.
+MAX_STREAM_BYTES = 64 * 1024 * 1024
+
+
+def read_blob_head(blob, limit: int, max_stream_bytes: int = MAX_STREAM_BYTES):
+    """The first *limit* bytes of *blob*, or None if it could not be read.
+
+    ``blob.data`` materialises the whole blob, so taking a slice of it
+    bounds what is *kept*, not what is read.  Above a small size the head is
+    streamed instead - and streaming has a trap: ``pygit2.BlobIO`` feeds
+    from a worker thread through a ``Queue(maxsize=1)`` and ``close()``
+    joins that thread, so reading 64 bytes of a 1 MiB blob and closing
+    parks the writer on a full queue forever.  The rest is drained before
+    close, which holds memory at one chunk and costs time linear in the
+    blob - hence the ceiling above it.
+    """
+    size = getattr(blob, "size", 0)
+    if size <= max(limit, 512 * 1024):
+        try:
+            return blob.data[:limit]
+        except (KeyError, TypeError, ValueError):
+            return None
+    if size > max_stream_bytes:
+        return None
+    try:
+        stream = pygit2.BlobIO(blob)
+    except Exception:
+        return None
+    try:
+        head = stream.read(limit)
+        while stream.read(_DRAIN_CHUNK_BYTES):
+            pass
+        return head
+    except Exception:
+        return None
+    finally:
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+
+#: Suffixes whose bytes the text rules never read.  A change to one of
+#: these produces an empty diff: git emits no content for a binary file, so
+#: the *only* observable is the blob's identity.
+_OPAQUE_MEMBER_RE = re.compile(
+    r"\.(?:bin|so(?:\.\d+)*|a|o|ko|dylib|dll|exe|elf|jar|war|apk|whl|gem"
+    r"|tar|tgz|gz|bz2|xz|zst|zip|7z|rar|deb|rpm|pkg|img|iso|db|sqlite3?"
+    r"|png|jpg|jpeg|gif|ico|pdf|woff2?|ttf|otf)$",
+    re.IGNORECASE,
+)
+
+
+def changed_opaque_members(repo, old_oid: str, new_oid: str) -> list[str]:
+    """Committed files whose bytes changed but whose diff is empty.
+
+    A git blob id is a content hash, so comparing the two trees answers
+    "did this file change" exactly, without reading either version - which
+    matters because these are the members the analysis deliberately does
+    not read. R118 claims a committed ELF's *presence*; it reports the same
+    thing whether the binary was replaced or left alone, because git emits
+    no diff body for it.
+
+    Cheap by construction: the ids are already in the tree objects, so this
+    is a walk of two manifests and no blob reads at all.
+    """
+    def members(oid: str) -> dict[str, str]:
+        commit = repo.get(oid) if oid else None
+        if commit is None:
+            return {}
+        found: dict[str, str] = {}
+        try:
+            for entry in commit.tree:
+                if getattr(entry, "type_str", None) != "blob":
+                    continue
+                if _OPAQUE_MEMBER_RE.search(entry.name):
+                    found[entry.name] = str(entry.id)
+        except (KeyError, AttributeError, TypeError, ValueError):
+            return {}
+        return found
+
+    before, after = members(old_oid), members(new_oid)
+    return sorted(
+        name for name, oid in after.items()
+        if name in before and before[name] != oid
+    )
+
+
 def companion_source_hunks(
     repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES
-) -> str:
-    """Committed companion files rendered as added-file diff hunks.
+) -> tuple[str, bool]:
+    """Committed companion files as added-file hunks, and whether any was cut.
+
+    The second element is the honest half.  Every bound in this function
+    used to drop content and say nothing, so a payload past the budget
+    scored the same as a package with no companions at all.
 
     Every committed text file the PKGBUILD names -- a declared ``source=()``
     entry or one it merely executes/sources/patches by path -- is emitted as
@@ -638,43 +990,90 @@ def companion_source_hunks(
     max_bytes = max(1, min(max_bytes, MAX_COMPANION_BYTES))
     commit = repo.get(commit_oid)
     if commit is None:
-        return ""
+        return "", False
     pkgbuild = _top_level_blob(commit.tree, "PKGBUILD")
     if pkgbuild is None:
-        return ""
+        # No PKGBUILD is not a truncation: there is nothing to companion.
+        return "", False
     try:
         blob = repo[pkgbuild.id]
-        # Size before data: `blob.data` materialises the whole blob, so a
-        # check afterwards bounds what is kept rather than what is read.
+        # Size before any read: `blob.data` materialises the whole blob, so a
+        # check afterwards bounds what is kept rather than what is read.  The
+        # companion names come from this text, so a cut PKGBUILD means
+        # companions this scan will never know to look for - which is a
+        # truncation, not an absence.
         if getattr(blob, "size", 0) > MAX_PKG_BUILD_BYTES:
-            return ""
-        pkgbuild_text = blob.data[:MAX_PKG_BUILD_BYTES].decode(
-            "utf-8", errors="replace"
-        )
+            return "", True
+        head = read_blob_head(blob, MAX_PKG_BUILD_BYTES)
+        if head is None:
+            return "", True
+        pkgbuild_text = head.decode("utf-8", errors="replace")
     except (KeyError, TypeError, ValueError):
-        return ""
+        return "", True
 
     hunks: list[str] = []
     used = 0
-    for name in sorted(set(_companion_names(commit.tree, pkgbuild_text)))[:MAX_COMPANION_FILES]:
+    truncated = False
+    selected = set(_companion_names(commit.tree, pkgbuild_text))
+    if _COMPANION_INCOMPLETE in selected:
+        # The *selection* was cut, not just the reading: a name past the
+        # length cap, or a tree with more entries than the walk inspects.
+        selected.discard(_COMPANION_INCOMPLETE)
+        truncated = True
+    names = sorted(selected)
+    if len(names) > MAX_COMPANION_FILES:
+        truncated = True
+    # An equal share per named file rather than one pool drained in sort
+    # order.  A single pool is a starvation primitive: commit a large benign
+    # file whose name sorts first, and it consumes the whole budget before
+    # the payload file is reached - the attacker picks both names, so they
+    # pick the order.  Sharing spends no more bytes in total, it only stops
+    # one file deciding how much the others get.
+    selected = names[:MAX_COMPANION_FILES]
+    share = max(4096, max_bytes // max(1, len(selected)))
+    for name in selected:
         entry = _top_level_blob(commit.tree, name)
         if entry is None:
             continue
+        remaining = min(share, max_bytes - used)
+        if remaining <= 0:
+            truncated = True
+            break
         try:
             blob = repo[entry.id]
-            if getattr(blob, "size", 0) > max_bytes - used:
-                break
-            data = blob.data
         except (KeyError, TypeError, ValueError):
+            truncated = True
             continue
+        # An oversized companion used to `break` here, unread and unrecorded.
+        # Both halves of that were wrong.  `break` meant one padded benign
+        # file - which sorts wherever the attacker names it - ended the loop
+        # for every companion after it, so a small payload file placed later
+        # was never read either.  And nothing said so: the promise in
+        # `analyze_package` that a companion's "committed content is scanned
+        # with the same rules" silently stopped holding, while the verdict
+        # still read Low.  The head is now read within the remaining budget,
+        # the loop continues to the next file, and what was cut is reported.
+        oversized = getattr(blob, "size", 0) > remaining
+        data = read_blob_head(blob, remaining)
+        if data is None:
+            truncated = True
+            continue
+        if oversized:
+            truncated = True
         # NUL in the head marks a binary; ELF is R118's job, not the text
         # rules'.
+        # NUL in the head marks a binary; ELF is R118's job, not the text
+        # rules'.  Deliberately *not* recorded as a truncation: R118-tree
+        # reads the manifest and owns committed binaries, so this surface is
+        # examined by another rule rather than left unexamined - and a gap
+        # here would fire on every package that commits an icon.
         if b"\x00" in data[:8192] or data[:4] == b"\x7fELF":
             continue
         text = data.decode("utf-8", errors="replace")
         lines: list[str] = []
         for ln in split_lines(text):
             if used + len(ln) + 1 > max_bytes:
+                truncated = True
                 break
             lines.append(ln)
             used += len(ln) + 1
@@ -684,9 +1083,7 @@ def companion_source_hunks(
             f"--- /dev/null\n+++ b/{name}\n@@ -0,0 +1,{len(lines)} @@\n"
             + "\n".join("+" + ln for ln in lines)
         )
-        if used >= max_bytes:
-            break
-    return "\n".join(hunks)
+    return "\n".join(hunks), truncated
 
 
 _GPG_VERIFY_RE = re.compile(
@@ -758,5 +1155,12 @@ def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") ->
         evidence.append("validpgpkeys_declared")
     if _GPG_VERIFY_RE.search(post):
         evidence.append("gpg_verify_present")
+    # The absence of a pin, stated.  P005/P006 report a commit or tag pin,
+    # so a recipe tracking a branch produced no line at all and read the
+    # same as one that pins.  Computed over the end-state for the reason
+    # given above: what will be fetched does not depend on whether the ref
+    # changed in this commit.
+    if unpinned_source_refs(post):
+        evidence.append("no_commit_pin")
 
     return evidence

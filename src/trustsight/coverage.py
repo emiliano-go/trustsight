@@ -31,6 +31,7 @@ the codebase allowed to turn coverage into a verdict.
 """
 
 import re
+import threading
 from .tokenizer import split_lines
 
 # The gap identifiers.  These are part of the report schema and the
@@ -43,17 +44,24 @@ UNRESOLVED_SOURCE = "unresolved_source"
 UNRESOLVED_PARSE_TIME = "unresolved_parse_time"
 SNAPSHOT_REFUSED = "snapshot_refused"
 UNPINNED_BUILD_DEPS = "unpinned_build_deps"
+COMPANION_TRUNCATED = "companion_truncated"
+UNPINNED_SOURCE_REF = "unpinned_source_ref"
 DEPS_NOT_SCANNED = "deps_not_scanned"
+RULESET_DRIFTED = "ruleset_drifted"
+STAGE_DEGRADED = "stage_degraded"
 
 GAPS = (
     DIFF_TRUNCATED,
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
+    COMPANION_TRUNCATED,
     UNRESOLVED_SOURCE,
     UNRESOLVED_PARSE_TIME,
     SNAPSHOT_REFUSED,
     UNPINNED_BUILD_DEPS,
+    RULESET_DRIFTED,
     DEPS_NOT_SCANNED,
+    STAGE_DEGRADED,
 )
 
 GAP_REASONS = {
@@ -71,6 +79,11 @@ GAP_REASONS = {
     TREE_NOT_ANALYZED: (
         "the repository file manifest was unavailable, so only the PKGBUILD "
         "was examined"
+    ),
+    COMPANION_TRUNCATED: (
+        "a committed file the recipe names was larger than the companion "
+        "read budget, or there were more of them than the file limit, so "
+        "its content was not matched against any rule"
     ),
     UNRESOLVED_SOURCE: (
         "a source entry is computed at build time, so the URL that will be "
@@ -93,7 +106,60 @@ GAP_REASONS = {
         "the AUR dependency walk stopped before the closure was exhausted, so "
         "some packages this build will pull in were never analysed"
     ),
+    RULESET_DRIFTED: (
+        "the installed rules.toml differs from the shipped rule set in a "
+        "field that changes what a rule detects, so this analysis did not "
+        "run the checks this version documents"
+    ),
+    STAGE_DEGRADED: (
+        "an analysis stage could not complete on this input, so the checks it "
+        "performs did not run over all of the change"
+    ),
 }
+
+
+# ---------------------------------------------------------------------------
+# Stage failures.
+# ---------------------------------------------------------------------------
+#
+# The gaps above are all *anticipated*: a bound was hit, a value was not
+# resolvable.  This one covers the other kind, where a stage meant to run
+# raised and the handler returned a neutral value.  Every such handler read
+# as "no finding here", which is the same thing an analysis that ran and
+# found nothing reports - so an unbalanced quote in a `source=` array, or a
+# blob that would not stream, removed a whole check and left the verdict
+# saying UNFLAGGED with no hint that anything had been skipped.  That is the
+# exact condition B2 forbids.
+#
+# Thread-local, and for the reason the rules memo is: `review` analyses
+# packages in a pool, and a shared set would attribute one package's failure
+# to whichever report happened to be assembling.
+_stages = threading.local()
+
+
+def begin_stage_tracking() -> None:
+    """Start a fresh stage-failure record for the calling thread."""
+    _stages.failed = []
+
+
+def note_stage_failure(stage: str) -> None:
+    """Record that *stage* could not complete.
+
+    Called from an exception handler that is about to return a neutral
+    value.  Safe to call outside an analysis: without a prior
+    :func:`begin_stage_tracking` the note is dropped rather than leaking
+    into the next run on this thread.
+    """
+    failed = getattr(_stages, "failed", None)
+    if failed is None:
+        return
+    if stage not in failed:
+        failed.append(stage)
+
+
+def stage_failures() -> list[str]:
+    """The stages that failed since :func:`begin_stage_tracking`."""
+    return list(getattr(_stages, "failed", []) or [])
 
 # A source assignment, or a variable whose name says it holds a URL and
 # which a source array is built from.  Both halves are declared facts: the
@@ -112,6 +178,63 @@ _SOURCE_ASSIGN_RE = re.compile(
 # included, because the tokenizer does resolve those and R-rules already
 # cover the ones it cannot.
 _COMMAND_SUBSTITUTION_RE = re.compile(r"\$\(|`")
+
+
+#: A VCS source entry.  makepkg spells the scheme as `<vcs>+<url>`.
+_VCS_SOURCE_RE = re.compile(
+    r"\b(?:git|hg|svn|bzr|fossil)\+(?P<url>[^\s'\"()]+)", re.IGNORECASE
+)
+
+#: A fragment that names an immutable object.  Everything else - `#branch=`,
+#: `#tag=`, or no fragment at all - resolves at build time.
+_PINNED_FRAGMENT_RE = re.compile(
+    r"#(?:commit|revision)=(?P<rev>[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)",
+    re.IGNORECASE,
+)
+
+
+def unpinned_source_refs(text: str) -> list[str]:
+    """VCS source entries whose content is chosen after this analysis.
+
+    ``git+https://example/x.git#commit=<sha>`` names one immutable tree, and
+    changing it changes the diff.  ``#branch=main``, ``#tag=v1`` and a bare
+    ``git+url`` do not: makepkg resolves them when the package is built, so
+    what gets compiled and run is whatever upstream publishes at that
+    moment.  Two builds of the identical recipe can execute different code
+    and neither the recipe nor its diff records that.
+
+    R079 already reports the *transition* - a commit pin replaced by a
+    movable ref is an edit, and an edit is evidence.  It cannot report the
+    steady state, because a package that has always tracked a branch never
+    edits anything, and that is the case this gap covers.  A tag is included
+    deliberately: a tag is a name upstream can repoint, which is R079's own
+    stated reasoning.
+
+    Reported as P008, a declared-practice fact at weight 0, not as a
+    coverage gap: the statement is true of every VCS package by design, and
+    a gap fires 12.2% of the locked benign corpus into Inconclusive, which
+    buys alert fatigue rather than information.  The reader is told what the
+    recipe declares and the band is left alone.
+
+    Returns the offending entries so the report can quote them.
+    """
+    found: list[str] = []
+    for line in split_lines(text):
+        if line.startswith(("---", "+++", "@@")):
+            continue
+        if line.startswith("-"):
+            continue
+        body = line[1:] if line[:1] in ("+", " ") else line
+        stripped = body.strip()
+        if stripped.startswith("#"):
+            continue
+        for match in _VCS_SOURCE_RE.finditer(body):
+            entry = match.group(0)
+            if _PINNED_FRAGMENT_RE.search(entry):
+                continue
+            if entry not in found:
+                found.append(entry[:120])
+    return found
 
 
 def unresolved_source_lines(diff_text: str) -> list[str]:
@@ -240,12 +363,15 @@ def gaps_from(
     diff_truncated: bool = False,
     scan_truncated: bool = False,
     tree_analyzed: bool = True,
+    companion_truncated: bool = False,
     unresolved_sources: list[str] | None = None,
     long_lines: int = 0,
     parse_time_substitutions: list[str] | None = None,
     snapshot_refused: bool = False,
     unpinned_build_deps: bool = False,
     deps_not_scanned: bool = False,
+    ruleset_drifted: bool = False,
+    degraded_stages: list[str] | None = None,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
@@ -261,6 +387,11 @@ def gaps_from(
         gaps.append(LINE_TRUNCATED)
     if not tree_analyzed:
         gaps.append(TREE_NOT_ANALYZED)
+    # Separate from TREE_NOT_ANALYZED: that gap says no manifest was
+    # available at all, this one says a file the recipe *executes* was read
+    # only in part, which points at a different dial (MAX_COMPANION_BYTES).
+    if companion_truncated:
+        gaps.append(COMPANION_TRUNCATED)
     if unresolved_sources:
         gaps.append(UNRESOLVED_SOURCE)
     if parse_time_substitutions:
@@ -279,6 +410,24 @@ def gaps_from(
     # level 2 exists.
     if deps_not_scanned:
         gaps.append(DEPS_NOT_SCANNED)
+    # `rules.toml` is written once, at install time, and never rewritten.
+    # A user who never hand-edits rules therefore runs whatever the
+    # defaults were on the day the tool first ran - and `sync-rules`
+    # *reports* the divergence but refuses to adopt shipped patterns,
+    # because it cannot tell a stale rule from a customised one except
+    # through a hand-maintained list of superseded patterns.
+    #
+    # That is a defensible refusal: overwriting a user's edits would be
+    # worse. What is not defensible is doing it silently. A run against a
+    # drifted ruleset is a run whose detection surface is not the one this
+    # version documents, and B2 says an analysis that could not do what it
+    # claims must say so rather than report a clean verdict.
+    if ruleset_drifted:
+        gaps.append(RULESET_DRIFTED)
+    # Last, because it is the least specific: when a named gap already
+    # explains the same shortfall the reader wants that one first.
+    if degraded_stages:
+        gaps.append(STAGE_DEGRADED)
     return gaps
 
 
@@ -309,6 +458,10 @@ GAP_INCONCLUSIVE_REASONS = {
     DIFF_TRUNCATED: "diff truncated: payload may be hidden",
     LINE_TRUNCATED: "line truncated: payload may be hidden",
     TREE_NOT_ANALYZED: "repository files not examined: payload may be hidden",
+    COMPANION_TRUNCATED: (
+        "a committed file the recipe runs was not read in full: payload may "
+        "be hidden"
+    ),
     UNRESOLVED_SOURCE: (
         "source computed at build time: fetch destination unknown"
     ),
@@ -323,6 +476,12 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     DEPS_NOT_SCANNED: (
         "dependency walk cut short: part of the closure was never analysed"
+    ),
+    RULESET_DRIFTED: (
+        "installed rules differ from shipped: checks did not run as documented"
+    ),
+    STAGE_DEGRADED: (
+        "an analysis stage failed on this input: its checks did not run"
     ),
 }
 

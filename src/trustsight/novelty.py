@@ -27,13 +27,32 @@ _HASH_RE = re.compile(r"(?<=[./])[a-f0-9]{7,40}(?=[./]|$)", re.IGNORECASE)
 _DATE_RE = re.compile(r"\d{4}[-_]\d{2}[-_]\d{2}")
 
 
+_URL_HOST_RE = re.compile(r"\A([a-z][\w+.-]*://)([^/?#]*)", re.IGNORECASE)
+
+
+def _canonicalise_host(url: str) -> str:
+    """*url* with its host in the one spelling the program agrees on.
+
+    Case, the root-label dot, the default port and userinfo each name the
+    same machine, and novelty treated all five as distinct - so five
+    spellings of one resource were five first-seen events, and a
+    maintainer rotating the spelling never accumulated any history at all.
+    """
+    m = _URL_HOST_RE.match(url)
+    if not m:
+        return url
+    from .buckets import canonical_host
+
+    return m.group(1).lower() + canonical_host(m.group(2)) + url[m.end():]
+
+
 def normalize_url(url: str) -> str:
     """Normalize a URL into a version-stable template for novelty dedup.
 
     Strips version numbers, hashes, and dates so that routine bumps
     (e.g. ``v2.0.0`` → ``v2.0.1``) do not generate false novelty signals.
     """
-    n = url
+    n = _canonicalise_host(url)
     n = _VERSION_RE.sub("0", n)
     n = _HASH_RE.sub("HASH", n)
     n = _DATE_RE.sub("DATE", n)

@@ -189,6 +189,14 @@ def test_generated_diffs_are_safe_at_the_analysis_boundary():
             "tree_not_analyzed",
             "unresolved_source",
             "unresolved_parse_time",
+            # A random diff may add a dependency, and this run analyses
+            # none of them.
+            "deps_not_scanned",
+            # This test reads the developer machine's `rules.toml`, which
+            # is written once at install time and is usually behind
+            # shipped. That is the condition the gap exists to report, so
+            # seeing it here is the gap working.
+            "ruleset_drifted",
         }
         assert all(entry.severity in valid_severities for entry in fact.score_breakdown)
         json.dumps({"risk": fact.risk, "score": fact.final_score,

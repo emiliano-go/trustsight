@@ -56,7 +56,14 @@ def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
     cold start never trips it.
     """
     added_deps = extract_dependency_changes(diff_text, package_name)
-    for field in ("provides", "replaces"):
+    # `conflicts` belongs beside the other two.  All three insert this
+    # package in front of a name the ecosystem relies on: `provides` and
+    # `replaces` claim to *be* it, and `conflicts` makes pacman refuse to
+    # install it alongside - which removes the real package just as
+    # effectively while raising nothing at all.  The asymmetry was visible
+    # in the numbers: `replaces=('firefox')` scored HIGH and
+    # `conflicts=('firefox')` scored zero.
+    for field in ("provides", "replaces", "conflicts"):
         for name in sorted(added_deps.get(field, ())):
             if is_related_package(name, package_name):
                 continue
@@ -128,7 +135,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
                 new_network=", ".join(new_network))
 
     if "D004" in wanted:
-        for field in ("provides", "replaces"):
+        for field in ("provides", "replaces", "conflicts"):
             for name in sorted(added_deps.get(field, ())):
                 if is_related_package(name, package_name):
                     continue

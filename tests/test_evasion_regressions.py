@@ -423,3 +423,46 @@ def test_attempt9_path_injection_undeclared_directory():
     fact = _fact(ATTEMPT9)
     assert fact.final_score >= 20
     assert "R140" in _rule_ids(fact)
+
+
+#: Modules that read attacker-authored diff or PKGBUILD text. Every one must
+#: split it the way a shell does.
+_MATCHING_MODULES = (
+    "rules.py", "tokenizer.py", "differ.py", "coverage.py", "deps.py",
+)
+
+#: Splitting output this project produced itself is not the same problem.
+_NOT_ATTACKER_TEXT = {"discovery.py", "seed_build.py", "srcinfo.py",
+                      "ioc_baseline.py", "corpus.py", "pivot.py", "export.py",
+                      # pacman's own stdout, not a package's text.
+                      "db.py"}
+
+
+def test_no_matching_module_splits_lines_the_python_way():
+    r"""`str.splitlines` breaks on eight characters a shell does not.
+
+    The first sweep replaced `name.splitlines()` and silently missed
+    `clamp_text(diff_text).splitlines()` - a call on a call, which the
+    pattern could not see. Four modules kept the old behaviour:
+    `sabotage`, `crossfire`, `adoption` and `buildfetch`, which between
+    them hold the sabotage family, the whole crossfire family and the
+    orphan-adoption rules. A payload split by `` or `U+2028` stayed
+    invisible to all of them for exactly as long as nobody looked.
+
+    A grep is the fix, because the defect was that a grep was not general
+    enough.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parent.parent / "src" / "trustsight"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name in _NOT_ATTACKER_TEXT or "__pycache__" in str(path):
+            continue
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            if ".splitlines()" in line and "def split_lines" not in line:
+                offenders.append(f"{path.relative_to(root)}:{number}")
+    assert offenders == [], (
+        "these read attacker text and must use tokenizer.split_lines: "
+        f"{offenders}"
+    )

@@ -56,7 +56,7 @@ from ..schema import (
     fact_to_dict,
 )
 from ..tokenizer import tokenize_and_resolve_indexed
-from .properties import extract_properties, update_properties
+from .properties import extract_properties, metadata_divergence, update_properties
 from ..tokenizer import split_lines
 
 log = logging.getLogger(__name__)
@@ -305,9 +305,21 @@ def analyze_package_text(
     except Exception:
         log.warning("property tracking failed for %s", pkg_name, exc_info=True)
 
+    # R148 - the metadata and the recipe describe different packages.
+    metadata_findings: list[dict] = []
+    for host in metadata_divergence(new_pkgbuild, srcinfo):
+        metadata_findings.append(stamp({
+            "rule_id": "R148",
+            "name": "Metadata Names A Source The Recipe Does Not",
+            "severity": "HIGH", "category": "integrity",
+            "match": f".SRCINFO names {host}, which the PKGBUILD never does",
+            "params": {"host": host},
+        }))
+
     if old_pkgbuild is None:
         novelty = build_novelty_context([], package_id)
         triggered_rules: list[dict] = []
+        triggered_rules.extend(metadata_findings)
         triggered_rules.extend(
             _temporal_findings(temporal, pkg_name, True)
         )
@@ -416,6 +428,7 @@ def analyze_package_text(
         line_map=line_map,
         resolved_indices=resolved_indices,
     )
+    triggered_rules.extend(metadata_findings)
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,

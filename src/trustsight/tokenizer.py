@@ -375,6 +375,40 @@ def _expand_one(
             return regex.sub(rep, val)
         return regex.sub(rep, val, count=1)
 
+    # ,, , ^^ ^ - case conversion.  `${c,,}` on `c=CURL` is `curl`, which
+    # is a command name assembled out of a case operator: the payload rules
+    # match `curl` and saw `${c,,}`.  X002 caught it as a *technique*, which
+    # is the family's job only while the tokenizer cannot do this one.
+    #
+    # The optional pattern after the operator restricts which characters
+    # convert, and is not resolved: `${c,,[!a]}` is refused rather than
+    # guessed at, because a wrong expansion is worse than an unresolved one.
+    m = re.match(r"^(\w+)(,,|,|\^\^|\^)$", body)
+    if m:
+        name, op = m.group(1), m.group(2)
+        val = vars_.get(name)
+        if val is None:
+            return None
+        if op == ",,":
+            return val.lower()
+        if op == ",":
+            return val[:1].lower() + val[1:]
+        if op == "^^":
+            return val.upper()
+        return val[:1].upper() + val[1:]
+
+    # arr[@]:offset:length - an array slice.  `${a[@]:0:1}` on `a=(curl x)`
+    # is `curl`; the slice is how the name gets past a scan that reads the
+    # whole array or nothing.
+    m = re.match(r"^(\w+)\[(?:\*|@)\]:(\d+)(?::(\d+))?$", body)
+    if m:
+        name, off, length = m.group(1), int(m.group(2)), m.group(3)
+        arr = arrays.get(name)
+        if arr is None:
+            return None
+        end = off + int(length) if length else len(arr)
+        return " ".join(arr[off:end])
+
     # ##pat  #pat  %%pat  %pat
     m = re.match(r"^(\w+)(##|#|%%|%)(.*)$", body)
     if m:
@@ -571,8 +605,13 @@ def join_line_continuations(lines: list[str]) -> list[str]:
 # ``C+=' https://...'`` lines kept no literal ``curl ... | bash`` on any one
 # line, so the assignment resolver never rebuilt the command and R001 never
 # saw it.  Accumulating += closes that gap; the value group moved from 2 to 3.
+# `(.*)` rather than `(.+)`: `x=` assigns the empty string, and requiring a
+# value meant the variable was never recorded.  Bash then expands `ba${x}sh`
+# to `bash` and R001 fires - but only if the tokenizer knows `x` is empty.
+# `x=''` was recorded and `x=` was not, which is the same assignment written
+# two ways and the difference between High and Medium.
 _ASSIGNMENT_RE = re.compile(
-    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*(.+)"
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+)?(\w+)\s*(\+?=)\s*(.*)"
 )
 
 # Array assignment opener: ``_c=(curl -fsSL)`` or ``source=(`` spanning
@@ -715,6 +754,198 @@ def _substitute(
     return reconstructed if len(reconstructed) <= limit else text
 
 
+#: `alias dl='curl -fsSL'` defines a new spelling for a command, and every
+#: fetch rule keys on the literal word `curl`.  One line removes the
+#: downloader from R001, R010, R061 and R137 at once while bash runs exactly
+#: the same pipeline - the same shape as `CMD=curl; $CMD ...`, which the
+#: variable table already resolves, so leaving aliases unresolved made the
+#: harder-to-read spelling the safer one.
+_ALIAS_DEF_RE = re.compile(r"^\s*alias\s+(?!-)(.+)$")
+
+#: Where bash performs alias expansion: the first word of a simple command.
+#: An alias name in argument position is just a word, so expanding it there
+#: would invent text the shell never produces.
+_ALIAS_USE_PREFIX = re.compile(r"(^|[;&|(){}]|&&|\|\||\bthen\b|\bdo\b|\belse\b)(\s*)$")
+
+#: Aliases resolved per diff.  Bounded like the variable table: the recipe is
+#: attacker-written, and a chain of aliases must not become a work amplifier.
+_MAX_ALIASES = 64
+_MAX_ALIAS_LEN = 512
+
+
+def _alias_table(additions: list[str]) -> dict[str, str]:
+    """``{name: expansion}`` for `alias` definitions among added lines."""
+    table: dict[str, str] = {}
+    for line in additions:
+        match = _ALIAS_DEF_RE.match(line)
+        if not match:
+            continue
+        rest = match.group(1)
+        for name, value in _alias_pairs(rest):
+            if len(table) >= _MAX_ALIASES:
+                return table
+            if value and len(value) <= _MAX_ALIAS_LEN:
+                table[name] = value
+    # An alias may be written in terms of another; bash resolves that at use
+    # time.  Two passes covers the realistic depth without a fixpoint loop
+    # over attacker-controlled text.
+    for _ in range(2):
+        for name, value in list(table.items()):
+            head = value.split(None, 1)
+            if head and head[0] in table and head[0] != name:
+                tail = head[1] if len(head) > 1 else ""
+                merged = (table[head[0]] + " " + tail).strip()
+                if len(merged) <= _MAX_ALIAS_LEN:
+                    table[name] = merged
+    return table
+
+
+def _alias_pairs(rest: str):
+    """Yield ``(name, value)`` from an `alias` command's arguments."""
+    i = 0
+    while i < len(rest):
+        eq = rest.find("=", i)
+        if eq == -1:
+            return
+        name = rest[i:eq].strip()
+        if not name or not re.fullmatch(r"[A-Za-z_][\w.-]*", name):
+            return
+        j = eq + 1
+        if j < len(rest) and rest[j] in "'\"":
+            quote = rest[j]
+            end = rest.find(quote, j + 1)
+            if end == -1:
+                return
+            yield name, rest[j + 1:end]
+            i = end + 1
+        else:
+            end = rest.find(" ", j)
+            if end == -1:
+                yield name, rest[j:]
+                return
+            yield name, rest[j:end]
+            i = end
+        while i < len(rest) and rest[i] == " ":
+            i += 1
+
+
+def _expand_aliases(line: str, table: dict[str, str]) -> str:
+    """Replace command-position alias names in *line* with their expansion."""
+    if not table:
+        return line
+    out = line
+    for _ in range(3):
+        changed = False
+        for name, value in table.items():
+            start = 0
+            while True:
+                idx = out.find(name, start)
+                if idx == -1:
+                    break
+                after = idx + len(name)
+                boundary_ok = (
+                    (after >= len(out) or not (out[after].isalnum() or out[after] in "_.-"))
+                    and _ALIAS_USE_PREFIX.search(out[:idx]) is not None
+                )
+                if boundary_ok and value.split(None, 1)[:1] != [name]:
+                    out = out[:idx] + value + out[after:]
+                    changed = True
+                    start = idx + len(value)
+                else:
+                    start = after
+        if not changed or len(out) > _MAX_VALUE_LEN:
+            break
+    return out
+
+
+#: A path segment followed by `..` cancels out.  The shell does not collapse
+#: this - the kernel does, when the file is opened - so
+#: `"$pkgdir"/lib/../etc/cron.d/y` really does write into `/etc/cron.d`, and
+#: every rule anchored on `$pkgdir/etc/cron.d/` read it as a path into
+#: `/lib`.  A traversal is a spelling, and this is the one place that can
+#: make all of those rules read the same path the kernel will.
+_TRAVERSAL_RE = re.compile(r"/(?!\.\./)[^/\s;&|\"']+/\.\.(?=/|$)")
+
+
+#: A byte-order mark is an encoding artifact when it opens a line and a
+#: zero-width character in code anywhere else.  R013 is FATAL and claims
+#: U+FEFF wherever it appears, so a PKGBUILD saved by an editor that writes a
+#: BOM scored 100/Critical for its encoding - the maximum severity this tool
+#: has, on a file that does nothing.  Mid-line is a different fact and stays
+#: claimed: `make\ufeffinstall` displays as two words and runs as one.
+def strip_leading_bom(line: str) -> str:
+    """Remove a BOM that opens *line*, keeping any that sits inside it."""
+    if line[:1] in ("+", "-", " "):
+        marker, body = line[0], line[1:]
+        return marker + body.lstrip("\ufeff") if body[:1] == "\ufeff" else line
+    return line.lstrip("\ufeff") if line[:1] == "\ufeff" else line
+
+
+def collapse_traversal(text: str) -> str:
+    """Collapse `a/b/../c` to `a/c` in path-shaped tokens."""
+    for _ in range(8):
+        collapsed = _TRAVERSAL_RE.sub("", text)
+        if collapsed == text:
+            break
+        text = collapsed
+    return text
+
+
+#: Files whose `KEY=value` lines are shell assignments.  Everywhere else a
+#: `KEY=value` is a configuration *directive*, and the difference decides
+#: whether the line is a command.
+_SHELL_SOURCE_FILE_RE = re.compile(
+    r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh|profile|bashrc))$",
+    re.IGNORECASE,
+)
+
+_DIFF_TARGET_LINE_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
+
+#: A heredoc opener and its delimiter.
+_HEREDOC_OPENER_RE = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?")
+
+
+def _assignments_are_shell(lines: list[str]) -> list[bool]:
+    """Per line: may a `KEY=value` here be folded away as an assignment?
+
+    In a shell file it may: the value goes into the table and is matched
+    where it is *used*.  In a systemd unit or a `.desktop` file there is no
+    later use - the value **is** the command, and folding it away removed
+    the line from matching altogether.  `ExecStart=/bin/sh -c "curl ... |
+    bash"` produced no candidate at all, so no resolved rule ever saw it.
+
+    A diff with no `+++` header is treated as shell, which is what a
+    fragment handed straight to `scan_diff` is.
+    """
+    flags: list[bool] = []
+    shell = True
+    delimiter = ""
+    for line in lines:
+        header = _DIFF_TARGET_LINE_RE.match(line)
+        if header:
+            path = header.group(1).strip()
+            shell = path == "/dev/null" or bool(_SHELL_SOURCE_FILE_RE.search(path))
+            delimiter = ""
+            flags.append(shell)
+            continue
+        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        if delimiter:
+            # Inside a heredoc the text is *content*, whatever the file is:
+            # `cat > "$pkgdir/…/e.service" <<EOF` with an `ExecStart=` line
+            # inside is a directive being written, not a shell assignment,
+            # and folding it away removed it from matching exactly as it did
+            # for a unit file shipped whole.
+            flags.append(False)
+            if body.strip() == delimiter:
+                delimiter = ""
+            continue
+        flags.append(shell)
+        opener = _HEREDOC_OPENER_RE.search(body)
+        if opener:
+            delimiter = opener.group(1)
+    return flags
+
+
 def _variable_table(
     additions: list[str],
 ) -> tuple[dict[str, str], dict[str, list[str]]]:
@@ -784,13 +1015,14 @@ def resolve_added_lines(diff_text: str) -> list[str]:
 
 def _resolve_added_lines(diff_text: str) -> list[str]:
     lines = join_line_continuations(split_lines(diff_text))
-    var_table, array_table = _variable_table(
-        [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
-    )
+    additions = [ln[1:] for ln in lines if ln.startswith("+") and ln[1:].strip()]
+    var_table, array_table = _variable_table(additions)
+    alias_table = _alias_table(additions)
     resolved_lines = []
     for line in lines:
         if line.startswith("+"):
             r, _ok = _substitute_with_resolve(line[1:], var_table, array_table)
+            r = collapse_traversal(_expand_aliases(r, alias_table))
             resolved_lines.append("+" + r)
         else:
             resolved_lines.append(line)
@@ -860,15 +1092,23 @@ def tokenize_and_resolve_indexed(
                 addition_indices.append(raw_index)
 
     var_table, array_table = _variable_table(additions)
+    # This is a second resolver, parallel to `_resolve_added_lines`, and it
+    # is what feeds every `match_target = "resolved"` rule - R001 among them.
+    # Alias expansion added in only one of the two would be the same defect
+    # the aliases themselves exploit: a spelling that one path understands
+    # and the other does not.
+    alias_table = _alias_table(additions)
 
     # An assignment whose value is statically known contributes its value
     # to the table rather than a command line to match against; anything
     # else is a candidate for resolution.
+    shell_at = _assignments_are_shell(split_lines(diff_text))
     candidates = [
         (addition_indices[k], line)
         for k, line in enumerate(additions)
         if not (
-            (m := _ASSIGNMENT_RE.match(line))
+            shell_at[addition_indices[k]]
+            and (m := _ASSIGNMENT_RE.match(line))
             and "$(" not in m.group(3)
             and "`" not in m.group(3)
         )
@@ -878,8 +1118,9 @@ def tokenize_and_resolve_indexed(
     unresolved_out = []
     for _raw_index, line in candidates:
         r, ok = _substitute_with_resolve(line, var_table, array_table)
-        resolved.append(r)
-        if not ok or r == line:
+        expanded = collapse_traversal(_expand_aliases(r, alias_table))
+        resolved.append(expanded)
+        if not ok or expanded == line:
             unresolved_out.append(line)
     candidate_indices = [raw_index for raw_index, _line in candidates]
     return resolved, unresolved_out, candidate_indices

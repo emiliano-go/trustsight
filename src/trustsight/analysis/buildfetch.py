@@ -33,6 +33,7 @@ import re
 from functools import lru_cache
 
 from ..deps import _strip_comment
+from ..tokenizer import split_lines
 from ..rules import _classify_enclosing_function, clamp_text, join_line_continuations
 
 #: Functions makepkg runs while building.  ``package()`` is included: it
@@ -126,7 +127,7 @@ def _registry_resolutions_uncached(diff_text: str) -> list[tuple[str, str]]:
     from npm still gets the gap on the run that first sees the recipe,
     because ``first_seen`` analyses read the whole file as added.
     """
-    lines = join_line_continuations(clamp_text(diff_text).splitlines())
+    lines = join_line_continuations(split_lines(clamp_text(diff_text)))
     enclosing = _classify_enclosing_function(lines)
     found: list[tuple[str, str]] = []
     for i, line in enumerate(lines):

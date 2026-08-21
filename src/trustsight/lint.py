@@ -132,12 +132,29 @@ def _pattern_matches_empty(compiled: re.Pattern) -> bool:
 # repetitions a classic ``(a+)+$`` takes ~110ms on Python 3.10 while
 # a linear pattern takes ~0.03ms; on 3.12+ the optimised re engine
 # runs it in ~15ms at 18 reps, so 22 restores the margin.
+#: Re-measurements taken when a pattern first looks over budget.  Only the
+#: minimum counts: contention on a loaded machine inflates a timing and
+#: never deflates one, so a genuinely catastrophic pattern is slow on every
+#: attempt while a linear one measured beside a busy test suite is fast the
+#: moment it gets the CPU.  Without this the linter reported a clean
+#: ruleset as unlinted depending on what else was running - and a checker
+#: that fails for reasons unrelated to what it checks teaches operators to
+#: ignore it.
+_RETRIES_WHEN_OVER_BUDGET = 3
+
+
 def _backtracking_risk(compiled: re.Pattern) -> float:
     """Time *compiled* against short pathological inputs.
 
-    Returns the worst elapsed time in seconds.
+    Returns the worst elapsed time in seconds, re-measured while it looks
+    over budget.
     """
-    return backtracking_risk(compiled)
+    worst = backtracking_risk(compiled)
+    for _ in range(_RETRIES_WHEN_OVER_BUDGET - 1):
+        if worst <= _BACKTRACK_BUDGET_S:
+            return worst
+        worst = min(worst, backtracking_risk(compiled))
+    return worst
 
 
 def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[LintFinding]:

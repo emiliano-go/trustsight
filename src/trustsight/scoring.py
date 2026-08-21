@@ -40,6 +40,7 @@ P_SIGNATURE_SOURCE = "P003"
 P_COMMIT_PINNED = "P005"
 P_TAG_PINNED = "P006"
 P_TRUSTED_FORGE = "P007"
+P_NO_COMMIT_PIN = "P008"
 
 # Buckets whose membership is itself the declared fact.  Kept beside the
 # weights so that changing a weight cannot change which findings exist.
@@ -49,6 +50,7 @@ _PINNED_LEVELS = {"checksum_pinned": P_COMMIT_PINNED, "tag_pinned": P_TAG_PINNED
 
 _EVIDENCE_IDS = {
     "checksum_present": P_CHECKSUMS,
+    "no_commit_pin": P_NO_COMMIT_PIN,
     "validpgpkeys_declared": P_VALIDPGPKEYS,
     "gpg_verify_present": P_SIGNATURE_SOURCE,
 }
@@ -62,13 +64,23 @@ DECLARED_REASONS = {
     # form, and R079 exists precisely because a tag can be moved.
     P_TAG_PINNED: "source pinned to a tag (tags can be repointed; commit pins cannot)",
     P_TRUSTED_FORGE: "source hosted on a trusted forge over HTTPS",
+    # The counterpart P005/P006 never had.  A recipe that pins says so; one
+    # that tracks a branch said nothing at all, and "nothing" reads the same
+    # as "pinned" to anyone scanning the group.  Phrased as what happens
+    # rather than as a warning: this is a declared fact, not a finding.
+    P_NO_COMMIT_PIN: (
+        "source tracks a branch or unpinned ref; upstream decides at build "
+        "time what this compiles and runs"
+    ),
 }
 
 # Which declared practices are worth stating unprompted.  Seventeen INFO
 # lines on every package buries the risk findings, which is the opposite of
 # what the group is for, so the default set is the ones a reader would find
 # *surprising by their absence*.  The rest render under --verbose.
-DECLARED_DEFAULT = frozenset({P_VALIDPGPKEYS, P_COMMIT_PINNED, P_SIGNATURE_SOURCE})
+DECLARED_DEFAULT = frozenset({
+    P_VALIDPGPKEYS, P_COMMIT_PINNED, P_SIGNATURE_SOURCE, P_NO_COMMIT_PIN,
+})
 
 # What the group must say wherever it is rendered.  Not a disclaimer: it is
 # the finding's actual content.  Without it the group reads as a safety

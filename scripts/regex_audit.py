@@ -120,6 +120,26 @@ def _configured_patterns() -> list[tuple[str, str]]:
             for rule in rules if isinstance(rule.get("pattern"), str)]
 
 
+
+#: How many times a pattern that appears over budget is re-measured. Only
+#: the *minimum* counts: contention on a loaded machine inflates a timing
+#: and never deflates one, so a genuinely catastrophic pattern is slow on
+#: every attempt while a linear one measured next to a busy test suite is
+#: fast as soon as it gets the CPU. This ran green alone and red inside the
+#: full suite, which is a property of the machine rather than of the rule.
+_RETRIES_WHEN_OVER_BUDGET = 3
+
+
+def _stable_backtracking_risk(compiled) -> float:
+    """The worst probe time, re-measured while it looks over budget."""
+    worst = _backtracking_risk(compiled)
+    for _ in range(_RETRIES_WHEN_OVER_BUDGET - 1):
+        if worst <= _BACKTRACK_BUDGET_S:
+            return worst
+        worst = min(worst, _backtracking_risk(compiled))
+    return worst
+
+
 def audit_patterns() -> list[PatternAudit]:
     audits: list[PatternAudit] = []
     # Keyed on the pattern text, not on where it was found. The same
@@ -134,7 +154,7 @@ def audit_patterns() -> list[PatternAudit]:
         seen.add(pattern)
         try:
             compiled = re.compile(pattern, re.IGNORECASE)
-            worst = _backtracking_risk(compiled)
+            worst = _stable_backtracking_risk(compiled)
             # Growth as well as absolute cost, matching `rules._compiled`:
             # a quadratic pattern with a small constant sits under the
             # budget at the probe length and costs seconds at a full line.

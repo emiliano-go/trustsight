@@ -21,6 +21,7 @@ from ..ioc_baseline import (
 )
 from .buildfetch import registry_install_names
 from .ioc import _added_bodies, _digests_in, _hosts_in
+from ..tokenizer import split_lines
 
 _CHECKSUM_ARRAY_RE = re.compile(
     r"\b(?:sha256sums|sha512sums|md5sums|b2sums)\s*=\s*\(",
@@ -34,7 +35,7 @@ _DEP_FIELDS = ("depends", "makedepends", "optdepends", "checkdepends",
 
 def _as_added(text: str) -> str:
     """Present whole-file text as an all-added diff for scanning."""
-    return "\n".join("+" + line for line in text.splitlines())
+    return "\n".join("+" + line for line in split_lines(text))
 
 
 def _checksum_digests(body: str) -> set[str]:
@@ -58,7 +59,7 @@ def _value_in_body(pattern: str, body: str) -> bool:
 def _find_line(diff_text: str, needle: str) -> int | None:
     """1-based diff line carrying *needle* on an added line."""
     lowered = needle.lower()
-    for i, line in enumerate(diff_text.splitlines()):
+    for i, line in enumerate(split_lines(diff_text)):
         if line.startswith("+") and not line.startswith("+++"):
             if lowered in line.lower():
                 return i + 1

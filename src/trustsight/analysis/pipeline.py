@@ -1,12 +1,13 @@
 import difflib
 import json
 import logging
+import re
 import time
 
 import pygit2
 
 from ..buckets import classify_urls
-from ..config import load_config
+from ..config import drifted_shipped_rules, load_config
 from ..db import (
     effective_observation_count,
     get_last_analysis,
@@ -21,6 +22,7 @@ from ..db import (
 )
 from ..differ import (
     generate_diff_bounded,
+    changed_opaque_members,
     companion_source_hunks,
     detect_gpg_verification_removed,
     detect_verification_evidence,
@@ -53,8 +55,11 @@ from ..rules import (
 from .adoption import adoption_findings
 from .buildfetch import has_unpinned_build_deps
 from ..coverage import (
+    begin_stage_tracking,
     fail_closed,
     gaps_from,
+    note_stage_failure,
+    stage_failures,
     oversized_lines,
     parse_time_substitution_lines,
     unresolved_source_lines,
@@ -68,9 +73,10 @@ from ..schema import (
     PackageFact,
     fact_to_dict,
 )
-from ..tokenizer import tokenize_and_resolve_indexed
+from ..tokenizer import split_lines, tokenize_and_resolve_indexed
 from .base import (
     _GLOBAL_URL_KEY,
+    _pkgver_changed_in_diff,
     _aggregate_pinning,
     _ensure_init,
     _get_installed_version,
@@ -90,39 +96,182 @@ from .temporal import _package_is_new, _recent_update, _stale_revival
 log = logging.getLogger(__name__)
 
 
-def _collect_tree_files(repo, commit_oid: str, max_file_bytes: int = 512 * 1024, head_bytes: int = 64) -> list[tuple[str, bytes]]:
-    """Walk a commit tree, returning ``(path, first_bytes)`` for each blob.
+#: Read size when draining a streamed blob.  Only the head is kept; this is
+#: the memory the drain costs, not the file.
+_DRAIN_CHUNK_BYTES = 256 * 1024
 
-    Blobs larger than *max_file_bytes* are skipped: a committed payload is
-    small, and an untrusted repository must not be able to force the
-    reviewer to read a giant file.  AUR repos are small, so this is cheap.
+
+#: Committed files whose *content* is worth more than their magic bytes.
+#:
+#: 64 bytes answers "is this an ELF", which is all R118 asked. It cannot
+#: answer "what does this unit file run", and that question is the one the
+#: audit kept finding unanswerable: a `.service` committed in one push and
+#: `install`ed in a later one shows the reviewer nothing but the install
+#: line, because the payload is in a file the diff does not touch and the
+#: manifest truncated at byte 64.
+#:
+#: The extra reading is bounded twice - per file and in total - because the
+#: tree is attacker-controlled, and it is bounded to the names a recipe can
+#: actually ship or apply.
+_COMPANION_CONTENT_RE = re.compile(
+    r"(?:\.(?:service|socket|timer|path|mount|automount|target|desktop"
+    r"|rules|conf|cfg|ini|install|hook|patch|diff|sh|bash|zsh|py|pl|rb)\Z"
+    r"|(?:\A|/)(?:\.?[A-Za-z0-9_.-]+\.d/|PKGBUILD\Z|\.SRCINFO\Z))",
+    re.IGNORECASE,
+)
+
+#: Per-file and whole-tree ceilings on the selective read.
+_COMPANION_HEAD_BYTES = 16 * 1024
+_COMPANION_TOTAL_BYTES = 512 * 1024
+
+
+def _collect_tree_files(
+    repo,
+    commit_oid: str,
+    max_file_bytes: int = 512 * 1024,
+    head_bytes: int = 64,
+    max_stream_bytes: int = 64 * 1024 * 1024,
+) -> tuple[list[tuple[str, bytes]], bool]:
+    """Walk a commit tree, returning ``([(path, first_bytes)], complete)``.
+
+    ``complete`` is False when any member could not be read, so the caller
+    can say the tree was not fully examined instead of implying it was.
+
+    A blob larger than *max_file_bytes* used to be **skipped**, on the
+    reasoning that "a committed payload is small".  That is an assumption
+    about the attacker, and the attacker reads it: R118 fires on a
+    committed ELF, and a payload binary is far more likely to be large than
+    small, so anything over 512 KiB was invisible - while
+    ``tree_analyzed`` still reported True because some other file had been
+    read.  An incomplete read reporting as complete is what
+    [B2](../../docs/security.md) forbids.
+
+    The size cap existed because ``blob.data`` materialises the whole blob.
+    Streaming the head instead removes the reason for it over the range that
+    matters: R118 needs the magic bytes, not the file.
+
+    Streaming has its own bound.  ``pygit2.BlobIO`` runs libgit2's filter
+    chain on a worker thread feeding a ``Queue(maxsize=1)``, and ``close()``
+    waits for that writer to finish - so reading 64 bytes of a 1 MiB blob
+    and closing deadlocks, with the writer parked on a full queue forever.
+    Reading the head therefore means draining the rest, which costs time
+    linear in the blob but holds memory at one chunk.  Past
+    *max_stream_bytes* that time is the attacker's to choose, so the member
+    is left unread and *reported* unread - the fallback is the old
+    behaviour, minus the silence.
     """
     files: list[tuple[str, bytes]] = []
+    complete = True
+    budget = _COMPANION_TOTAL_BYTES
+
+    def head_of(blob, want: int) -> bytes | None:
+        """The first *want* bytes of *blob*, or None if it was not read."""
+        if blob.size <= max_file_bytes:
+            try:
+                return blob.data[:want]
+            except (KeyError, TypeError, ValueError):
+                note_stage_failure("tree-blob-read")
+                return None
+        if blob.size > max_stream_bytes:
+            return None
+        try:
+            stream = pygit2.BlobIO(blob)
+        except Exception:
+            note_stage_failure("tree-blob-read")
+            return None
+        try:
+            head = stream.read(want)
+            # Drain, or close() blocks on the writer thread.
+            while stream.read(_DRAIN_CHUNK_BYTES):
+                pass
+            return head
+        except Exception:
+            note_stage_failure("tree-blob-read")
+            return None
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
 
     def walk(tree, prefix: str) -> None:
+        nonlocal complete, budget
         for entry in tree:
             if entry.type_str == "tree":
-                walk(repo[entry.id], prefix + entry.name + "/")
+                try:
+                    walk(repo[entry.id], prefix + entry.name + "/")
+                except (KeyError, TypeError, ValueError):
+                    complete = False
             elif entry.type_str == "blob":
                 try:
                     blob = repo[entry.id]
                 except (KeyError, TypeError, ValueError):
+                    complete = False
                     continue
-                if blob.size > max_file_bytes:
+                path = prefix + entry.name
+                want = head_bytes
+                if budget > 0 and _COMPANION_CONTENT_RE.search(path):
+                    want = max(head_bytes, min(_COMPANION_HEAD_BYTES, budget))
+                data = head_of(blob, want)
+                if data is None:
+                    complete = False
                     continue
-                try:
-                    data = blob.data
-                except (KeyError, TypeError, ValueError):
-                    continue
-                files.append((prefix + entry.name, data[:head_bytes]))
+                if want > head_bytes:
+                    budget -= len(data)
+                    # A companion cut short is a companion partly read, and
+                    # saying the tree was fully examined would be the same
+                    # untruth the size cap used to tell.
+                    if blob.size > len(data):
+                        complete = False
+                files.append((path, data))
 
     try:
         commit = repo.get(commit_oid)
         if commit is not None:
             walk(commit.tree, "")
+        else:
+            complete = False
     except (KeyError, AttributeError, TypeError, ValueError):
-        pass
-    return files
+        complete = False
+    return files, complete
+
+
+_SCRIPTLET_ATTR_RE = re.compile(
+    r"^\+?\s*(?:install|changelog)\s*=\s*[\"']?([^\"'\s#;]+)",
+    re.MULTILINE,
+)
+
+
+def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
+    """True when `install=` names a file the manifest does not carry.
+
+    An `.install` scriptlet runs as root on the installing machine, and the
+    recipe names it rather than containing it. When a tree was read, the
+    absence of `tree_not_analyzed` says the committed files were examined -
+    but a manifest that does not hold the named hook means the one file
+    whose whole purpose is to run as root was never examined at all, and
+    the report said the tree was complete.
+    """
+    if not tree_manifest:
+        return False
+    names = {m.group(1).rsplit("/", 1)[-1]
+             for m in _SCRIPTLET_ATTR_RE.finditer(diff_text)}
+    if not names:
+        return False
+    have = {path.rsplit("/", 1)[-1] for path, _head in tree_manifest}
+    return bool(names - have)
+
+
+def _adds_a_dependency(diff_text: str) -> bool:
+    """True when the diff adds a runtime or build dependency."""
+    from ..deps import extract_dependency_changes
+
+    try:
+        added = extract_dependency_changes(diff_text, "")
+    except Exception:
+        return False
+    return any(added.get(field) for field in
+               ("depends", "makedepends", "checkdepends", "optdepends"))
 
 
 def _walk_dependencies(pkg_name, depth, config, seen):
@@ -157,6 +306,7 @@ def analyze_package(
     _depth_seen: set | None = None,
 ) -> PackageFact:
     _ensure_init()
+    begin_stage_tracking()
     config = load_config()
 
     if installed_version is None:
@@ -204,7 +354,10 @@ def analyze_package(
                             old_commit = str(c.id)
                             break
                 except pygit2.GitError:
-                    pass
+                    # The fallback below compares HEAD against HEAD, whose
+                    # diff is empty - every rule then matches nothing and
+                    # the package reports clean because the walk failed.
+                    note_stage_failure("history-walk")
                 if not old_commit:
                     old_commit = head_commit
         else:
@@ -224,7 +377,7 @@ def analyze_package(
     # rules as the PKGBUILD, or a curl|bash simply moves one file over and the
     # filename filter above drops it.  Appended before the byte cap, so an
     # oversized companion truncates the combined diff and fails closed.
-    companion = companion_source_hunks(repo, head_commit)
+    companion, companion_truncated = companion_source_hunks(repo, head_commit)
     if companion:
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 
@@ -268,7 +421,28 @@ def analyze_package(
         line_map=line_map,
         resolved_indices=resolved_indices,
     )
-    tree_manifest = _collect_tree_files(repo, head_commit)
+    tree_manifest, tree_complete = _collect_tree_files(repo, head_commit)
+    # A committed binary changing produces an *empty* diff - git emits no
+    # body for it - so nothing downstream can see the change. The blob id
+    # is a content hash and both trees are already open.
+    swapped = changed_opaque_members(repo, old_commit, head_commit)
+    if swapped:
+        version_moved = _pkgver_changed_in_diff(diff_text)
+        triggered_rules.append(stamp({
+            "rule_id": "C009" if version_moved else "C008",
+            "name": ("Unread Content Moved With The Version" if version_moved
+                     else "Unread Content Moved Under A Stable Version"),
+            "severity": "INFO" if version_moved else "HIGH",
+            "category": "integrity",
+            "match": (
+                f"committed file(s) replaced with no diff body: "
+                f"{', '.join(swapped[:3])}"
+                + ("" if version_moved else "; pkgver did not change")
+            ),
+            "file": swapped[0], "line": None,
+            "params": {"carrier": "committed-binary",
+                       "members": ", ".join(swapped[:5])},
+        }))
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -364,7 +538,7 @@ def analyze_package(
                     recent_commit_burst = True
                     break
         except (AttributeError, pygit2.GitError):
-            pass
+            note_stage_failure("commit-burst")
 
     aggregate_pinning = _aggregate_pinning(
         diff_text, source_changes.added_urls, source_changes.checksum_behavior
@@ -382,12 +556,27 @@ def analyze_package(
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           diff_text, tree_manifest)),
+        companion_truncated=companion_truncated,
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
         unpinned_build_deps=has_unpinned_build_deps(diff_text),
-        deps_not_scanned=depth_result.truncated,
+        # A dependency this diff *adds* and this run did not analyse is
+        # unread code the package now pulls in. Dependency findings never
+        # move the parent's score (B1: the score is this package's own
+        # evidence), which is right - but it left a clean parent with an
+        # attacker-controlled new `depends=` reporting a complete analysis
+        # of a change it had only half read. The score stays where it was;
+        # what changes is that the report stops claiming completeness.
+        deps_not_scanned=(
+            depth_result.truncated
+            or (_adds_a_dependency(diff_text) and not depth_result.reports)
+        ),
+        ruleset_drifted=bool(drifted_shipped_rules()),
+        degraded_stages=stage_failures(),
     )
 
     score, breakdown, risk = calculate_score(
@@ -436,7 +625,9 @@ def analyze_package(
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           diff_text, tree_manifest)),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,
         risk=risk,
@@ -483,7 +674,9 @@ def scan_diff(
     observation_count: int = 0,
     tree_manifest: list[tuple[str, bytes]] | None = None,
     current_text: str | None = None,
+    tree_complete: bool = True,
 ) -> PackageFact:
+    begin_stage_tracking()
     if config is None:
         config = load_config()
 
@@ -592,11 +785,19 @@ def scan_diff(
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           diff_text, tree_manifest)),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
         unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        # This path analyses no dependencies at all, so any dependency the
+        # diff adds is code the package now pulls in and this run did not
+        # read. See the note on the incremental path above.
+        deps_not_scanned=_adds_a_dependency(diff_text),
+        ruleset_drifted=bool(drifted_shipped_rules()),
+        degraded_stages=stage_failures(),
     )
 
     score, breakdown, risk = calculate_score(
@@ -619,8 +820,8 @@ def scan_diff(
     fact = PackageFact(
         package_name=package_name,
         diff_summary=DiffSummary(
-            lines_added=sum(1 for line in diff_text.splitlines() if line.startswith("+")),
-            lines_removed=sum(1 for line in diff_text.splitlines() if line.startswith("-")),
+            lines_added=sum(1 for line in split_lines(diff_text) if line.startswith("+")),
+            lines_removed=sum(1 for line in split_lines(diff_text) if line.startswith("-")),
         ),
         source_changes=source_changes,
         source_buckets=source_buckets,
@@ -628,7 +829,9 @@ def scan_diff(
         novelty_context=novelty,
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           diff_text, tree_manifest)),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,
         risk=risk,
@@ -650,12 +853,17 @@ def analyze_package_text(
     adapter: str = "corpus",
     tree_manifest: list[tuple[str, bytes]] | None = None,
 ) -> PackageFact:
+    begin_stage_tracking()
     if config is None:
         config = load_config()
 
     diff_text = "\n".join(difflib.unified_diff(
-        old_text.splitlines() if old_text else [],
-        new_text.splitlines() if new_text else [],
+        # The recipe decides where its lines end only in the ways a shell
+        # agrees with: a U+2028 in a PKGBUILD is a character in a word, and
+        # letting difflib break there produces diff lines that do not
+        # correspond to the file every downstream rule then reads.
+        split_lines(old_text) if old_text else [],
+        split_lines(new_text) if new_text else [],
         fromfile="PKGBUILD", tofile="PKGBUILD",
         n=config.get("diff", {}).get("max_context_lines", 3),
     ))
@@ -709,16 +917,25 @@ def _make_fresh_analysis(
     if new_pkg:
         triggered_rules.append(new_pkg)
     tree_manifest: list = []
+    tree_complete = True
     if commit:
         from .delivery import scan_tree_manifest
-        tree_manifest = _collect_tree_files(repo, commit) or []
+        tree_manifest, tree_complete = _collect_tree_files(repo, commit)
         if tree_manifest:
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
     # This path used to declare tree_analyzed=True unconditionally, which
     # was false whenever there was no commit to read a tree from: a first
     # analysis of an empty repository examined nothing and reported a bare
     # "Low".  It is the same coverage accounting as every other producer.
-    gaps = gaps_from(tree_analyzed=bool(tree_manifest))
+    gaps = gaps_from(
+        # There is no diff on this path, so the recipe itself is what
+        # names the scriptlet.
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           head_pkgbuild, tree_manifest)),
+        ruleset_drifted=bool(drifted_shipped_rules()),
+        degraded_stages=stage_failures(),
+    )
     # The same scorer the incremental path uses, on the findings this path
     # actually made.  Novelty is empty and stays empty - "first seen" means
     # the novelty tier has nothing to say, not that the rules did not fire -
@@ -741,7 +958,9 @@ def _make_fresh_analysis(
         novelty_context=novelty,
         first_seen=True,
         temporal_source="git_commit",
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=(bool(tree_manifest) and tree_complete
+                       and not _scriptlet_files_unread(
+                           head_pkgbuild, tree_manifest)),
         coverage_gaps=gaps,
         ioc_matches=ioc_baseline_matches("", pkg_name, current_text=head_pkgbuild),
         score_breakdown=breakdown,

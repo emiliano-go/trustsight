@@ -111,15 +111,19 @@ def test_raw_line_rules_ignore_commented_out_commands(comment):
     "# curl https://example.com/x.sh | bash",
     "# wget https://example.com/x.sh | sh",
 ])
-def test_resolved_rules_have_always_seen_comment_text(comment):
-    """Pinned, not endorsed: resolution never stripped comments.
+def test_resolved_rules_do_not_read_comment_text(comment):
+    """The decision this test's predecessor was written to force.
 
-    R001/R002 match resolved strings, and the resolver has always included
-    comment lines - a commented-out ``curl | bash`` fires today.  The
-    behaviour predates ``include_comments``; the test exists so that a
-    change to it is a decision rather than a surprise.
+    It used to pin the opposite - "resolution never stripped comments" -
+    as behaviour that was *pinned, not endorsed*, so that changing it would
+    be a decision rather than a surprise. This is the decision: a
+    commented-out `curl | bash` scored R001 CRITICAL and R061 HIGH, 85 and
+    a Critical band, on a line that runs nothing. Comments are filtered for
+    raw-line rules by `filter_raw_lines` and now for resolved rules too;
+    a rule whose target is the reader rather than the shell opts back in
+    with `include_comments`, which is what R012 and R013 do.
     """
-    assert fired(f"+{comment}\n") & {"R001", "R002"}
+    assert not fired(f"+{comment}\n") & {"R001", "R002"}
 
 
 def test_dependency_lines_are_not_read_as_comments():

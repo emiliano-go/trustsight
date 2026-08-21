@@ -243,11 +243,30 @@ def test_r054_fires_on_pkgdir_units_in_any_quoting_style(line):
 
 
 @pytest.mark.parametrize("line", [
-    '+  install -Dm644 t.service "$pkgdir/usr/lib/systemd/user/t.service"',
     '+  install -Dm644 t.service "$pkgdir/usr/share/t.service"',
+    # A menu entry runs when the user clicks it, which is not persistence,
+    # and it is how every GUI package on the system ships.
+    '+  install -Dm644 t.desktop "$pkgdir/usr/share/applications/t.desktop"',
+    # A read is not a plant: this tests for a file rather than installing one.
+    "+  if [[ -f /etc/profile.d/cuda.sh ]]; then true; fi",
 ])
 def test_r054_ignores_non_persistence_paths(line):
     assert not fires("R054", [line])
+
+
+@pytest.mark.parametrize("line", [
+    '+  install -Dm644 t.service "$pkgdir/usr/lib/systemd/user/t.service"',
+    '+  install -Dm644 t.desktop "$pkgdir/etc/xdg/autostart/t.desktop"',
+    '+  install -Dm644 t.sh "$pkgdir/etc/profile.d/t.sh"',
+    '+  install -Dm644 t "$pkgdir/etc/sudoers.d/t"',
+])
+def test_r054_claims_the_whole_autostart_surface(line):
+    """A systemd *user* unit was pinned as non-persistence; it starts with
+    the user's login, which needs no root and is if anything more reliable
+    than a system unit.  `profile.d` runs in every new shell, `xdg/autostart`
+    with every session, and `sudoers.d` decides who may become root.
+    """
+    assert fires("R054", [line])
 
 
 def test_r055_git_clone_variable_branch():

@@ -20,6 +20,7 @@ never cries wolf.
 import re
 
 from ..config import (
+    ANY_EXECUTOR,
     DEFAULT_COVERT_EGRESS_CLIENTS,
     DEFAULT_COVERT_EGRESS_ENDPOINTS,
     DEFAULT_PARSE_TIME_FETCH,
@@ -408,7 +409,14 @@ _ARRAY_CONTINUATION_RE = re.compile(r"^\s*['\"]")
 # the heavier claim (remote code executes, not merely a download).  R129
 # yields rather than scoring the same line twice.
 _PIPE_TO_SHELL_RE = re.compile(
-    r"\b(?:curl|wget|aria2c|axel)\b[^|;&]*\|\s*(?:\S+\s+)?(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\b",
+    # The bar must be an operative pipe: an escaped one is an argument
+    # and starts no pipeline.  Same guard as R001-R003 and R045.
+    # The executor list is the shared one.  This regex decides when R061
+    # *stands down* in favour of R001, so a name here that R001 does not
+    # know is not a wider net - it is a hole: R061 yields and R001 never
+    # catches.  `curl url | ksh -s` was exactly that.
+    r"\b(?:curl|wget|aria2c|axel)\b[^|;&]*(?<!\\)\|\s*(?:\S+\s+)?(?:"
+    + ANY_EXECUTOR + r")",
     re.IGNORECASE,
 )
 
@@ -548,6 +556,22 @@ def _host_of(url: str) -> str:
     return authority.rsplit("@", 1)[-1].split(":")[0].lower()
 
 
+#: A path an upload reads that no build artifact lives at.  Anything the
+#: recipe produced is under `$srcdir`/`$pkgdir` or relative to them; these
+#: are the reader's machine.
+_OUTSIDE_TREE_UPLOAD_RE = re.compile(
+    r"[@=\s\"']"
+    r"(?:~/|\$HOME/|\$\{HOME\}/"
+    r"|/etc/|/root/|/home/|/var/(?:log|lib|spool)/|/proc/|/sys/"
+    r"|/usr/lib/systemd/|/boot/)"
+)
+
+
+def _uploads_from_outside_the_tree(command: str) -> bool:
+    """True when *command* sends a file that is not a build artifact."""
+    return bool(_OUTSIDE_TREE_UPLOAD_RE.search(command))
+
+
 def _paste_egress_findings(diff_text, config, add) -> None:
     """A build or install function *uploads* to a paste or file-drop host (R087).
 
@@ -578,18 +602,39 @@ def _paste_egress_findings(diff_text, config, add) -> None:
                 continue
             for _, url in iter_scheme_urls(command, _URL_STOP_CHARS):
                 host = _host_of(url)
-                if host in hosts or any(
+                if not host:
+                    continue
+                drop_host = host in hosts or any(
                     host.endswith("." + h) for h in hosts
-                ):
-                    add("R087", "Upload To Paste Or File-Drop Host", "HIGH",
-                        "exfil",
-                        f"{enclosing[i]}() uploads to {host}: "
-                        f"{command.strip()[:80]}",
-                        line=_find_line(diff_text, command.strip()[:40]),
-                        position=enclosing[i], host=host,
-                        body=command.strip()[:80],
-                        detail=f"{enclosing[i]}() uploads to {host}")
-                    return
+                )
+                # Two auditable conditions, not one guess.  The host list
+                # is the original: a host whose entire purpose is to accept
+                # an anonymous drop.  The second is the *file*: a build
+                # sends nothing off the machine, and one that reads from
+                # outside its own tree - `/etc/passwd`, `~/.ssh/id_rsa`,
+                # `$HOME/...` - is not uploading a build artifact.
+                #
+                # `curl -F file=@report.json https://ci.example.com` stays
+                # quiet under both: a relative path inside the build tree,
+                # to a host nobody can call a drop site. That case is
+                # pinned in tests/test_gap_rules.py, and the principle it
+                # states - "defined by an auditable host list, not by a
+                # guess about what an endpoint is for" - is why this adds a
+                # second list rather than dropping the first.
+                outside = _uploads_from_outside_the_tree(command)
+                if not drop_host and not outside:
+                    continue
+                name = ("Upload To Paste Or File-Drop Host" if drop_host
+                        else "Upload Of A File From Outside The Build Tree")
+                where = f"a drop host ({host})" if drop_host else host
+                add("R087", name, "HIGH", "exfil",
+                    f"{enclosing[i]}() uploads to {where}: "
+                    f"{command.strip()[:80]}",
+                    line=_find_line(diff_text, command.strip()[:40]),
+                    position=enclosing[i], host=host,
+                    body=command.strip()[:80],
+                    detail=f"{enclosing[i]}() uploads to {where}")
+                return
 
 
 def claims_upload_line(body: str, config=None) -> bool:
@@ -605,9 +650,14 @@ def claims_upload_line(body: str, config=None) -> bool:
         command = match.group(1)
         if not any(flag.search(command) for flag in flags):
             continue
+        outside = _uploads_from_outside_the_tree(command)
         for _, url in iter_scheme_urls(command, _URL_STOP_CHARS):
             host = _host_of(url)
-            if host in hosts or any(host.endswith("." + h) for h in hosts):
+            if not host:
+                continue
+            if outside or host in hosts or any(
+                host.endswith("." + h) for h in hosts
+            ):
                 return True
     return False
 

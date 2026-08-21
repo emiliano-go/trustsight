@@ -41,6 +41,305 @@ DEFAULT_FOREIGN_PKG_MANAGERS = [
 # carrying at least ``[thresholds] r082_obfuscation_density`` distinct
 # forms fires; the reconstruction rules (R117) decide whether the line is
 # inert or reveals an executable action.
+# ---------------------------------------------------------------------------
+# The executor vocabulary
+# ---------------------------------------------------------------------------
+#
+# One list, because there were six and they disagreed.  R001/R002 knew
+# `bash|sh|python|zsh|dash|busybox sh`; R127 knew `bash|sh|zsh|dash`;
+# `network._PIPE_TO_SHELL_RE` knew `bash|sh|zsh|dash|ksh|python3?|perl|ruby`;
+# crossfire knew all of them.  The disagreement was not cosmetic - R061
+# *stands down* when it believes R001 owns the line, and it made that
+# decision with the wider list, so `curl url | ksh -s` silenced R061 and
+# then fell through R001, which had never heard of ksh.  A CRITICAL became
+# a LOW because two lists that had to agree were edited separately.
+#
+# Defined here, in the lowest layer, so the rule TOML below and the Python
+# analysers can share one definition without `config` importing `analysis`.
+SHELL_EXECUTOR = r"(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)"
+
+#: Shells plus the interpreters that read a script from stdin just as well.
+#: `curl url | php` is a remote shell as surely as `curl url | bash` - php,
+#: lua, tclsh and the alternative shells all execute standard input when
+#: given no script argument.  Leaving them out did not make the list
+#: conservative, it made it an allowlist one rename wide.
+#:
+#: `awk` is deliberately absent: awk reads its *program* from an argument
+#: and its stdin is data, so `curl url | awk '{print}'` executes nothing.
+SCRIPT_EXECUTOR = SHELL_EXECUTOR + (
+    r"|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish"
+    r"|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh"
+)
+
+#: A wrapper may carry its own flags before the executor: `env -i bash`.
+EXEC_WRAPPER = (
+    # Two shapes, because wrappers take their arguments differently.
+    #
+    # The plain ones carry flags and at most a duration: `env -i bash`,
+    # `timeout 5 bash`, `nice -n 10 bash`.
+    # A terminal emulator's `-e` is "run this command", which makes it a
+    # wrapper in exactly the sense `env` and `timeout` are: the executor
+    # and its argument follow, and every rule that reads an execution
+    # should see through it. Bare `st` is deliberately absent - two
+    # characters match `stat(` and `static` in committed C.
+    r"(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf"
+    r"|timeout|unbuffer|script"
+    r")"
+    r"(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+"
+    # The sandboxes take *positional* arguments - `chroot /tmp/root bash`,
+    # `bwrap --ro-bind / / bash` - so a flags-only form cannot reach the
+    # executor past them.  Bounded to four tokens: enough for the real
+    # invocations, short enough that the span cannot wander off looking for
+    # an executor several commands away.
+    # Terminals sit in the *positional* group, not the flag group: the
+    # command may follow a subcommand rather than a flag (`wezterm start
+    # bash x.sh`), which is the same shape `chroot DIR cmd` has.
+    r"|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot"
+    r"|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij"
+    r"|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot"
+    r"|systemd-nspawn|toolbox|distrobox-enter"
+    # `screen -dmS name bash s.sh` and `runuser -u u -- bash s.sh` put the
+    # command after their own positional arguments too.
+    r"|screen|dtach|abduco|runuser|setpriv|nohup)"
+    r"(?:\s+[^\s;&|]+){0,4}\s+"
+    r")"
+)
+
+#: Programs that bring bytes onto the machine from somewhere else.
+#:
+#: R001/R002 claim `curl` and `wget`; R061 and R137 knew a slightly longer
+#: list; `_PIPE_TO_SHELL_RE` knew a third.  Every one of them was an
+#: allowlist, and the interesting property of a downloader is not its name -
+#: `lftp -c "cat URL" | bash`, `nc host 80 | bash` and
+#: `openssl s_client -connect h:443 | bash` are the same operation with the
+#: same result.  Listed once so that adding a client adds it everywhere.
+#: Kept as a tuple, not a pre-joined string: consumers need to subtract the
+#: clients R001/R002 already claim, and splitting a joined pattern on `|`
+#: tears alternation groups (`git\s+(?:clone|fetch)`) into fragments.
+NETWORK_CLIENT_ALTERNATIVES = (
+    r"curl", r"wget2?", r"aria2c", r"axel", r"lftp", r"ncftp(?:get)?", r"snarf",
+    r"httpie",
+    r"elinks", r"links2?", r"w3m", r"lynx", r"browsh",
+    r"scp", r"sftp", r"rsync", r"ftp", r"tftp",
+    # `ssh host cat /srv/p.sh | sh` is a fetch with a shell attached, and
+    # `ssh` was never on this list. It read as covered because the audit's
+    # own probe used `host` as the hostname, which collides with the
+    # `host` DNS client below - the chain fired for the wrong reason and
+    # any other hostname scored nothing.
+    #
+    # Anchored on a remote command so the bare word cannot match: `ssh` at
+    # a command position followed by a target and something to run there.
+    # Neither `ssh` nor `scp` appears anywhere in the benign corpus.
+    r"ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)",
+    r"nc", r"ncat", r"netcat", r"socat", r"telnet",
+    r"openssl\s+s_client",
+    r"dig", r"host", r"nslookup", r"drill", r"kdig",
+    r"git\s+(?:clone|fetch|pull|ls-remote|archive)",
+    r"svn\s+(?:co|checkout|export)",
+    r"hg\s+(?:clone|pull|unbundle)",
+    r"bzr\s+(?:branch|pull|export)",
+    r"darcs\s+get", r"fossil\s+clone",
+    # `cvs -d :pserver:host:/repo checkout p` puts the root between the
+    # verb and the command, and it is not a flag.
+    r"cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)",
+    # Object and content stores.  The bytes still arrive from off the
+    # machine; only the address notation differs - `s3://`, a content
+    # identifier, a magnet link, an LFS pointer.  A client whose transport
+    # is not HTTP is not a client the recipe can be trusted to have
+    # declared.
+    r"s3cmd\s+(?:get|sync|cp)",
+    r"aws\s+s3\s+(?:cp|sync|mv)",
+    r"gsutil\s+(?:cp|rsync)",
+    r"az(?:copy)?\s+(?:storage\s+blob\s+download|copy)",
+    r"rclone\s+(?:copy|sync|cat|copyto)",
+    r"ipfs\s+(?:get|cat|dag\s+get)",
+    r"swift\s+download",
+    r"rados\s+get",
+    r"git\s+lfs\s+(?:pull|fetch|checkout)",
+    r"yt-dlp|youtube-dl",
+    # A lookahead, for the reason the BSD `fetch` arm needs one: consuming
+    # the magnet link as part of the client token leaves no address behind
+    # for the address matcher, so the fetch is recognised and scores
+    # nothing.
+    r"transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)",
+    r"b2\s+download-file",
+    r"restic\s+restore|borg\s+extract",
+    # libwww-perl ships a CLI, and it is the one a Perl recipe reaches for
+    # when it wants a download without a shell-out to curl.
+    #
+    # `GET`, `POST` and `HEAD` are its aliases and are deliberately absent:
+    # matching is case-insensitive here, so they would claim every `get`
+    # in the ecosystem. `lwp-request` is what the alias runs and cannot be
+    # confused with an English word.
+    r"lwp-request", r"lwp-download",
+    # `git push` sends bytes *out*. The inventory had clone/fetch/pull -
+    # every way to bring code in and no way to send it - so a recipe
+    # exfiltrating through a push looked like nothing at all.
+    r"git\s+push",
+    # BSD `fetch(1)`. Anchored on a URL argument because `fetch` on its own
+    # is a word `git fetch` and a hundred build scripts already use.
+    # A lookahead, not a match: consuming the URL as part of the client
+    # token left no address behind for the address matcher to pair with,
+    # so the client was recognised and the fetch still scored nothing.
+    r"fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://)",
+)
+
+NETWORK_CLIENT = "|".join(NETWORK_CLIENT_ALTERNATIVES)
+
+#: HTTPie's binary really is called `http`, and a bare `http` alternative
+#: matches the scheme of every URL in the recipe.  A client name that fires
+#: on its own argument is not a client name.
+
+#: The subset R001/R002 already claim.  X009 covers the remainder, so one
+#: fetch-and-execute is scored once however it was spelled.
+CATALOGUED_FETCH_ALTERNATIVES = (r"curl", r"wget2?")
+
+#: Everything else, for X009.
+OTHER_FETCH_CLIENT = "|".join(
+    alt for alt in NETWORK_CLIENT_ALTERNATIVES
+    if alt not in CATALOGUED_FETCH_ALTERNATIVES
+)
+
+#: Package managers that resolve a dependency and then *run* code from it -
+#: `pip` runs setup.py and PEP 517 hooks, `npm` runs lifecycle scripts,
+#: `cargo` compiles build.rs in-process, `gem` runs extconf, `go` builds the
+#: module.  Fetching and executing third-party code is what these commands
+#: are for, which is why the recipe naming one is the whole signal.
+PACKAGE_MANAGER_INSTALL = (
+    r"(?:pip[23]?|pipx|uv(?:\s+pip)?|poetry|conda|mamba|micromamba)\s+(?:pip\s+)?"
+    r"(?:install|add|sync)"
+    r"|(?:npm|pnpm|yarn|bun)\s+(?:install|add|ci|exec)"
+    r"|cargo\s+(?:install|add)"
+    r"|go\s+(?:install|get)"
+    r"|gem\s+(?:install|build)"
+    r"|composer\s+(?:require|install|update)"
+    r"|opam\s+(?:install|pin)"
+    r"|luarocks\s+(?:install|build|make)"
+    r"|cpanm?\s+|nimble\s+install|dub\s+fetch|stack\s+install"
+    # The distribution's own tools.  `pacman -U ./evil.pkg.tar.zst` inside
+    # `build()` installs a package as root, scriptlets and all, and
+    # `pacman -S` downloads one first.  R081 claims *foreign* package
+    # managers in install hooks; pacman is not foreign and a build function
+    # is not a hook, so this fell between the two.  A recipe has no business
+    # installing packages: makepkg resolves `depends` for that.
+    r"|pacman\s+-(?:U|S(?![a-z]*[yq])|S[a-z]*y)"
+    r"|makepkg\s+(?:-\S*i|--install)"
+    r"|(?:apt-get|apt|dnf|yum|zypper|apk|emerge)\s+(?:install|add)"
+    # The one-shot runners.  `npx evilpkg` resolves a package from the
+    # registry and executes it in a single word - no install step to notice,
+    # no lockfile, nothing left behind.  It is the install class with the
+    # install elided, which is a weaker signal to a reader and an identical
+    # one to the machine.
+    r"|(?:npx|bunx|pnpx|yarn\s+dlx)\b"
+    r"|(?:uv|pipx|conda|mamba|poetry|pdm|hatch|rye)\s+run\b"
+    r"|deno\s+(?:run|install|cache)"
+    # Run-a-remote-module verbs.  `cargo script <url>`, `bun x <url>` and
+    # `pkgx <url>` fetch and execute in a single word with no install step
+    # to notice - the one-shot runner class again, one ecosystem further on.
+    r"|cargo\s+script|bun\s+x\b|pkgx\b|nix\s+run\b|uvx\b"
+    # Container and image stores.  `docker pull evil/img && docker run
+    # evil/img` fetches a filesystem and executes its entrypoint; `snap`
+    # and `flatpak` install and then run confined applications; `helm`
+    # applies charts that carry hooks.  None of them names a URL, which is
+    # why the fetch inventory never saw them, but "resolve a name from a
+    # registry and run what comes back" is exactly X011's claim.
+    r"|(?:docker|podman|nerdctl|ctr)\s+(?:run|pull|exec|compose\s+up|build)"
+    r"|(?:lxc|incus)\s+(?:launch|init|exec|image\s+(?:copy|import))"
+    r"|snap\s+(?:install|run|refresh)"
+    r"|flatpak\s+(?:install|run|remote-add)"
+    r"|helm\s+(?:install|upgrade|pull)"
+    r"|(?:kubectl|oc)\s+(?:apply|run|create)"
+    r"|(?:go|cargo)\s+run\b"
+)
+
+#: Query tools that pull a *value* out of a structured file.
+#:
+#: The same shape as a decoder, with a query instead of an algorithm:
+#: `jq -r .cmd cfg.json | bash` runs whatever that field holds, and the
+#: field is in a JSON file no rule reads.  A reviewer looking at the recipe
+#: sees a config lookup; what executes is chosen by the data.
+STRUCTURED_EXTRACTOR = (
+    r"\b(?:jq|gojq|jaq|yq|tomlq|xq|dasel|fx)\b[^\n|;&]*?-[^\n|;&]*?r"
+    r"|\b(?:jq|gojq|jaq|yq|tomlq|xq|dasel)\s+[^\n|;&]*?[.\[]"
+    r"|\bxmlstarlet\s+sel\b|\bxmllint\b[^\n|;&]*?--xpath"
+    r"|\bsqlite3\b[^\n|;&]*?(?:\.read\b|select\b)"
+    # `[^\n|&]` for the interpreter arm, not `[^\n|;&]`: a shell command
+    # ends at `;`, but `python3 -c 'import json;print(...)'` puts one inside
+    # a quoted argument as a matter of Python syntax.  The same distinction
+    # the interpreter fetch arm needed.
+    r"|\b(?:python[23]?|ruby|perl|node)\b[^\n|&]*?"
+    r"(?:json\.loads?|yaml\.safe_load|tomllib?\.loads?|JSON\.parse"
+    r"|Marshal\.load|msgpack|pickle\.loads?)"
+    r"|\bplutil\b[^\n|;&]*?-extract"
+    r"|\bgit\s+config\s+--get\b"
+    r"|\bcrudini\s+--get\b|\bawk\b[^\n|;&]*?/[^/\n]*/[^\n|;&]*?print"
+)
+
+#: Commands that turn a file the reviewer cannot read into bytes.  X001
+#: already claimed base32/basenc/uudecode/openssl/xxd/tr on the reasoning
+#: that they "decode the same payload into the same shell"; compression is
+#: the same sentence.  `gzip -dc payload.gz | bash` needs no encoder alphabet
+#: at all, and a `.gz` in `source=()` with `SKIP` is unremarkable to read.
+DECOMPRESSOR = (
+    r"\b(?:gzip|bzip2|xz|lzma|lzip|plzip|clzip|zstd|lz4|brotli|compress"
+    r"|lrzip|rzip|7zr)\s+[^\n|;&]*?-[^\n|;&]*?[dc]"
+    # `uncompress -c p.Z` and `iconv -f UCS-2 -t UTF-8 p.uc2` both turn bytes
+    # a reviewer cannot read into a script.  iconv is a transcoder rather
+    # than a decompressor, which is a distinction about the algorithm, not
+    # about what reaches the shell.
+    r"|\buncompress\b|\biconv\b[^\n|;&]*?-[ft]\b"
+    r"|\b(?:gunzip|bunzip2|unxz|unlzma|unzstd|unlz4|zcat|bzcat|xzcat|lzcat"
+    r"|zstdcat|lz4cat)\b"
+    # `-xOf` is one cluster: the O is not at a word boundary, which is how
+    # the most natural spelling of this slipped the first version.
+    r"|\b(?:bsd)?tar\s+[^\n|;&]*?(?:-[A-Za-z]*O[A-Za-z]*|--to-stdout)\b"
+    # `7za?` misses `7zz`, the binary 7-Zip ships as of 23.x - one
+    # character past the pattern that named it. The suffix is open-ended
+    # for the same reason the executor list was inverted: the next
+    # spelling is the packager's to choose.
+    r"|\b7z[a-z0-9]*\s+[^\n|;&]*?-so\b"
+    # squashfs images are an archive family the list did not have at all.
+    r"|\bunsquashfs\s+[^\n|;&]*?(?:-cat|-stdout)\b"
+    r"|\bcpio\s+[^\n|;&]*?--to-stdout\b"
+    # The zip family reads a member to stdout with its own verbs, none of
+    # which look like a decompressor flag.  `unzip -p p.zip | bash` is the
+    # same operation as `gzip -dc p.gz | bash` and was claimed by nobody.
+    r"|\bunzip\s+[^\n|;&]*?-[A-Za-z]*p[A-Za-z]*\b"
+    r"|\b(?:funzip|zipcat)\b"
+    r"|\bunrar\s+[^\n|;&]*?\bp\b"
+    r"|\b(?:ar|7zr)\s+[^\n|;&]*?\bp\b"
+    # Decryption is decoding: the reviewer cannot read the input either way.
+    # `gpg -d` and `gpg --decrypt` write the plaintext to stdout by default.
+    r"|\bgpg2?\s+[^\n|;&]*?(?:-[A-Za-z]*d[A-Za-z]*|--decrypt)\b"
+    r"|\bage\s+[^\n|;&]*?(?:-[A-Za-z]*d[A-Za-z]*|--decrypt)\b"
+)
+
+#: Commands whose output is a *payload*: they turn bytes the reviewer cannot
+#: read into bytes a shell can run.  Used both for the piped form (X001) and
+#: for the redirect form, where the same producer writes a file that a later
+#: line executes.
+PAYLOAD_PRODUCER = (
+    DECOMPRESSOR
+    + r"|\b(?:base64|base32|basenc|uudecode|uudeview)\b"
+    r"|\bxxd\s+[^\n|;&]*?-[A-Za-z]*r"
+    r"|\bod\s+[^\n|;&]*?-A"
+    r"|\bopenssl\s+(?:enc|base64|zlib)\b"
+    r"|\bcertutil\s+[^\n|;&]*?-decode"
+)
+
+#: Anything that will execute text handed to it, in any of its spellings.
+ANY_EXECUTOR = (
+    # A brace group or subshell is a pipe target whose body runs a shell:
+    # `curl url | { bash; }` and `curl url | ( sh )` execute exactly what
+    # `curl url | bash` does, and the literal after-the-bar arm saw a `{`.
+    r"[({]\s*(?:" + EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?(?:" + SCRIPT_EXECUTOR + r")\b"
+    r"|(?:/(?:usr/)?bin/)?(?:" + SCRIPT_EXECUTOR + r")\b"
+    r"|" + EXEC_WRAPPER + r"(?:/(?:usr/)?bin/)?(?:" + SCRIPT_EXECUTOR + r")\b"
+    # `source /dev/stdin` and `. /dev/stdin` read the pipe as a script.
+    r"|(?:source|\.)\s+/dev/stdin\b"
+)
+
+
 DEFAULT_OBFUSCATION_INDICATORS = [
     r"base64.*(?:-d|--decode)",
     r"printf\s+['\"]\\x",
@@ -465,7 +764,12 @@ DEFAULT_RULES = """\
 [[rules]]
 id = "R001"
 name = "Remote Script Execution"
-pattern = 'curl.*\\|\\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\\s+sh|source\\s+/dev/stdin)'
+# The pipe must not be escaped.  An escaped pipe passes a literal bar to
+# curl as an argument and runs no pipeline at all, and this rule fired on
+# it: a false positive on the highest-severity, highest-recall rule in the
+# set.  The tokenizer deliberately keeps that escape intact (see
+# tokenizer._ESCAPE_REMOVABLE) precisely so the distinction survives here.
+pattern = 'curl.*(?<!\\\\)\\|\\s*(?:@@EXEC@@)'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
@@ -473,7 +777,9 @@ match_target = "resolved"
 [[rules]]
 id = "R002"
 name = "Wget Pipe to Shell"
-pattern = 'wget.*\\|\\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\\s+sh|source\\s+/dev/stdin)'
+# Unescaped, for the reason R001 above gives: an escaped bar is an
+# argument to wget, not a pipeline.
+pattern = 'wget.*(?<!\\\\)\\|\\s*(?:@@EXEC@@)'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
@@ -481,7 +787,9 @@ match_target = "resolved"
 [[rules]]
 id = "R003"
 name = "Base64 Decode and Execute"
-pattern = 'base64.*(?:\\-d|\\-\\-decode).*\\|'
+# The trailing bar must be a real pipe; escaped, the decode goes to
+# stdout and nothing consumes it.
+pattern = 'base64.*(?:\\-d|\\-\\-decode).*(?<!\\\\)\\|'
 severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
@@ -565,7 +873,7 @@ name = "LLM Prompt Injection"
 #
 # Calibrated: 22/22 injection fixtures, 0 fires across 3,246 benign
 # corpus diffs (every alternative measured separately).
-pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\s+(?:\\w+\\s+){0,2}(?:instructions?|commands?|input|context|rules?|prompts?|guidelines?|checks?)|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\b'''
+pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\b|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\b'''
 severity = "FATAL"
 category = "injection"
 match_target = "resolved"
@@ -634,7 +942,12 @@ match_target = "resolved"
 [[rules]]
 id = "R040"
 name = "Shell -c With Dynamic Payload"
-pattern = '\\b(?:bash|sh|zsh|dash)\\s+-c\\s+(?:\\$\\(|`|\\$\\{|"[^"]*\\$)'
+# `bash -c "$E"` where `E` was assigned on an earlier line is the same
+# dynamic payload as `bash -c "$(...)"`; only the substitution moved.  A
+# bare `$NAME` argument is therefore dynamic too - the tokenizer resolves
+# the ones it can, so what reaches this pattern unresolved is precisely
+# what could not be read.
+pattern = '\\b(?:@@SHELL@@)\\s+-c\\s+(?:\\$\\(|`|\\$\\{|["\\x27]?\\$[A-Za-z_]|"[^"]*\\$)'
 severity = "CRITICAL"
 category = "execution"
 match_target = "resolved"
@@ -642,7 +955,12 @@ match_target = "resolved"
 [[rules]]
 id = "R041"
 name = "Shell Network Redirection"
-pattern = '/dev/(?:tcp|udp)/'
+# The literal spelling was the whole rule, and `/dev/t?p/` opens the same
+# socket: bash expands the glob when the redirect runs, and the diff never
+# contains the word the pattern looks for. A `/dev/` path whose protocol
+# component is not a literal is claimed on that basis - there is no benign
+# reason to glob or interpolate the name of a device node.
+pattern = '/dev/(?:tcp|udp)/|/dev/[a-z]*[?*\\[][a-z?*\\]\\[]*/|/dev/\\$\\{?\\w+\\}?/'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
@@ -674,7 +992,7 @@ match_target = "resolved"
 [[rules]]
 id = "R045"
 name = "Binary Encoding Pipe"
-pattern = '\\b(?:xxd|uudecode)\\s+[^|]*\\|'
+pattern = '\\b(?:xxd|uudecode)\\s+[^|]*(?<!\\\\)\\|'
 severity = "MEDIUM"
 category = "obfuscation"
 match_target = "resolved"
@@ -733,7 +1051,11 @@ added_only = true
 [[rules]]
 id = "R051"
 name = "Network Access In pkgver"
-pattern = '\\b(?:curl|wget|git\\s+(?:clone|fetch|pull|ls-remote)|svn\\s+(?:co|checkout)|hg\\s+pull)\\b'
+# The client list is the shared one.  `pkgver()` runs before any review
+# step, so "which binary fetched" is the least interesting property of a
+# fetch there - and `openssl s_client`, `lftp` and `wget2` all walked past
+# a five-verb list.
+pattern = '\\b(?:@@NETCLIENT@@)\\b'
 severity = "HIGH"
 category = "packaging"
 match_target = "raw_line"
@@ -760,7 +1082,10 @@ name = "Setuid Or Setgid Bit Set In Package Root"
 # package; measured across the benign corpus it changes no package's
 # risk band at MEDIUM, which keeps the evidence visible without
 # reclassifying ordinary updates.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+(?!["\\x27]?/)|\\s+(?!--\\s)(?!["\\x27]?/))'
+# `setcap cap_setuid+ep` grants the same power the setuid bit does, by a
+# different mechanism, and was claimed by neither rule: a file capability
+# is not a mode.
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+(?!["\\x27]?/)|\\s+(?!--\\s)(?!["\\x27]?/))|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+(?!["\\x27]?/)'
 severity = "MEDIUM"
 category = "privilege"
 match_target = "raw_line"
@@ -773,7 +1098,7 @@ name = "Setuid Or Setgid Bit Set Outside Package Root"
 # The same operation against an absolute path touches the live
 # filesystem rather than $pkgdir, so it is a privilege change on the
 # build host and not packaging.
-pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+["\\x27]?/|\\s+(?!--\\s)["\\x27]?/)'
+pattern = '\\bchmod\\s+(?:-\\S+\\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\\b|[ugoa]*\\+s\\b))(?:\\s+--\\s+["\\x27]?/|\\s+(?!--\\s)["\\x27]?/)|\\bsetcap\\s+(?:-\\S+\\s+)*["\\x27]?cap_\\w+[^\\s]*\\s+["\\x27]?/'
 severity = "HIGH"
 category = "privilege"
 match_target = "raw_line"
@@ -804,7 +1129,41 @@ name = "Persistence Unit Outside Package Root"
 # recipe staged), so a $pkgdir prefix in any quoting style is an anchor
 # too.  This rule reads raw added lines, independently of tokenizer
 # quote handling.
-pattern = '(?:[\\s"\\x27]|\\$\\{?pkgdir\\}?)(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/system)|/usr/lib/systemd/system|/var/spool/cron)/'
+# The path list is the *autostart surface*, not just cron and system
+# units.  Everything here runs code with nobody asking it to: a `.desktop`
+# in `xdg/autostart` starts with the session, a systemd **user** unit starts
+# with the user's login, `profile.d`, `bash.bashrc.d` and `zshrc.d` run in
+# every new shell, `Xsession.d` and `xinitrc.d` run at graphical login, a
+# D-Bus policy grants a service the right to be activated on demand, and
+# `sudoers.d` decides who may become root.
+#
+# `pam.d`, `dispatcher.d`, `xinetd.d`, `init.d`/`rc.d` and `logrotate.d`
+# join on the same test: a PAM line runs on every authentication, a
+# dispatcher script on every network change, an xinetd entry on every
+# connection, and a logrotate `postrotate` block on every rotation. Each
+# appears in *zero* of the 3,246 benign diffs - an AUR package that needs
+# one of these ships it as a declared source file, which R054 reads either
+# way.
+#
+# `ld.so.conf.d` is here on its own measurement: a directory added to the
+# loader search path is code loaded into every process that starts
+# afterwards, and it appears in *zero* of the 3,246 benign diffs.  It was
+# excluded in a first pass that measured five paths together and read the
+# aggregate as if it applied to each.
+#
+# Deliberately *not* here: `/usr/share/applications`, which is where every
+# GUI package on the system puts its menu entry - it runs when the user
+# clicks it, which is not persistence - and `tmpfiles.d`, `sysusers.d`,
+# `udev/rules.d` and `modprobe.d`, which ordinary driver and library
+# packages ship as a matter of course (modprobe.d alone is 0.28% of the
+# corpus).  Including that group fired on 30 benign packages and would have
+# made the rule mean "this package installs files".
+#
+# A *write*, not a mention.  The path alone matched
+# `if [[ -f /etc/profile.d/cuda.sh ]]`, which tests for a file rather than
+# planting one - and a rule that reads "persistence unit installed" must not
+# fire on a package checking whether one exists.
+pattern = '(?:\\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\\b|>)[^;&|\\n]*?(?:[\\s"\\x27]|\\$\\{?pkgdir\\}?)(?:(?:/etc/(?:cron\\.[a-z]+|cron\\.d|systemd/(?:system|user)|profile\\.d|bash\\.bashrc\\.d|zsh(?:/zshrc\\.d|rc\\.d)|X11/(?:Xsession|xinit/xinitrc)\\.d|xdg/autostart|dbus-1/(?:system|session)\\.d|sudoers\\.d|ld\\.so\\.conf\\.d|pam\\.d|security/pam_\\w+\\.conf|NetworkManager/dispatcher\\.d|xinetd\\.d|(?:init|rc)\\.d|logrotate\\.d|tmpfiles\\.d|sysusers\\.d|binfmt\\.d|sysctl\\.d|environment\\.d|polkit-1/(?:rules|actions)\\.d|polkit-1/(?:rules|actions)|skel|update-motd\\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\\.local|profile|bash\\.bashrc|ld\\.so\\.preload|environment|csh\\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\\w./-]))'
 severity = "HIGH"
 category = "persistence"
 match_target = "raw_line"
@@ -818,6 +1177,35 @@ pattern = 'git\\s+clone\\s+[^;&|]*(?:--branch|-b)\\s+\\$\\{?[a-zA-Z_]'
 severity = "MEDIUM"
 category = "source"
 match_target = "resolved"
+
+[[rules]]
+id = "R144"
+name = "Packaged File Points At A World-Writable Path"
+# A file staged into $pkgdir that names a program under /tmp, /var/tmp or
+# /dev/shm.  Those directories are world-writable, so whatever the config
+# names can be replaced by any local user between the package being
+# installed and the config being read - and the config is read as root for
+# a unit, a PAM line or a cron entry.
+#
+# It is both halves at once: an attacker who ships this is arranging for
+# their own planted file to run, and a maintainer who ships it by accident
+# has handed the same lever to anyone with a shell on the machine.  The
+# target is never in the diff, which is why every rule that looks for a
+# payload found nothing here.
+#
+# Order-free: the recipe may write the config and then name the path
+# (`printf SCRIPT=/tmp/e.sh > "$pkgdir/etc/conf.d/x"`) or the reverse.
+# Zero occurrences in the 3,246-diff benign corpus - a package pointing
+# its own config at /tmp is not something the ecosystem does.
+#
+# Anchored at `^` so each lookahead runs once.  Unanchored, `search` retries
+# both from every position and the audit refuses the pattern outright.
+pattern = '^\\+?(?=[^\\n]*\\$\\{?pkgdir\\}?)(?=[^\\n]*(?:/tmp/|/var/tmp/|/dev/shm/))\\S'
+severity = "HIGH"
+category = "persistence"
+match_target = "raw_line"
+scope = ["function_body", "other"]
+added_only = true
 
 [[rules]]
 id = "R056"
@@ -852,6 +1240,16 @@ match_target = "raw_line"
 scope = ["function_body", "other"]
 added_only = true
 """
+
+# The executor list is substituted rather than written out, so R001, R002
+# and R040 cannot drift from the list R061 stands down on.  See
+# SHELL_EXECUTOR above for what that drift cost.
+DEFAULT_RULES = (
+    DEFAULT_RULES
+    .replace("@@EXEC@@", ANY_EXECUTOR)
+    .replace("@@SHELL@@", SHELL_EXECUTOR)
+    .replace("@@NETCLIENT@@", NETWORK_CLIENT)
+)
 
 DEFAULT_DOMAINS = """\
 [trusted_forges]
@@ -1363,6 +1761,17 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     # matching - so an install-file modification would go unreported on
     # every installation still holding the old text.
     "R007": {r"\+.*\.install.*"},
+    # Pre-0.13.3: fired on an escaped pipe, which runs no pipeline. The
+    # replacement is strictly narrower, so an install still holding this
+    # one loses nothing but the false positive.
+    "R001": {
+        r"curl.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)"
+    },
+    "R002": {
+        r"wget.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)"
+    },
+    "R003": {r"base64.*(?:\-d|\-\-decode).*\|"},
+    "R045": {r"\b(?:xxd|uudecode)\s+[^|]*\|"},
 }
 
 
@@ -1384,7 +1793,16 @@ def outdated_shipped_rules() -> list[str]:
 
 # Fields whose drift from the shipped definition changes what a rule
 # detects rather than merely how it reads.
-_SEMANTIC_FIELDS = ("match_target", "severity", "category")
+#
+# `pattern` belongs here for the same reason the others do, and its absence
+# was the more expensive omission: this function already parsed it and then
+# compared everything except it, so a shipped *pattern* fix was invisible on
+# every existing install and nothing said so.  The escape guard that stopped
+# R001 firing on `curl \| grep` and the executor list that stopped `curl |
+# ksh` slipping past both landed that way.  `outdated_shipped_rules` covers
+# the same ground only for patterns a human remembered to add to
+# LEGACY_RULE_PATTERNS, which is a list that has to be maintained to work.
+_SEMANTIC_FIELDS = ("match_target", "severity", "category", "pattern")
 
 
 def _shipped_rule_fields() -> dict[str, dict[str, str]]:
@@ -1392,7 +1810,7 @@ def _shipped_rule_fields() -> dict[str, dict[str, str]]:
     parsed: dict[str, dict[str, str]] = {}
     for rid, block in _rule_blocks(DEFAULT_RULES).items():
         fields: dict[str, str] = {}
-        for field in _SEMANTIC_FIELDS + ("pattern",):
+        for field in _SEMANTIC_FIELDS:
             match = re.search(rf"^{field}\s*=\s*(.+)$", block, re.MULTILINE)
             if match:
                 fields[field] = match.group(1).strip().strip("'\"")

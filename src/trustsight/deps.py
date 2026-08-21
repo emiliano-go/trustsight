@@ -16,10 +16,14 @@ from .tokenizer import split_lines
 
 DEP_FIELDS = (
     "depends", "makedepends", "optdepends", "checkdepends",
-    # Not dependencies, but parsed by the same machinery: `provides` and
-    # `replaces` declare which packages this one satisfies or supersedes,
-    # which is how a package inserts itself in front of a system package.
-    "provides", "replaces",
+    # Not dependencies, but parsed by the same machinery: `provides`,
+    # `replaces` and `conflicts` all declare how this package stands in
+    # relation to another name.  The first two claim to *be* it; the third
+    # makes pacman refuse to install it alongside, which removes the real
+    # package just as effectively.  `conflicts` was absent, so
+    # `replaces=('firefox')` scored HIGH and `conflicts=('firefox')` scored
+    # nothing at all.
+    "provides", "replaces", "conflicts",
 )
 
 # `name>=1.2`, `name<3`, `name=1:2.3-4`, and the `name: why you want it`
@@ -281,7 +285,7 @@ def extract_dependency_changes(
         # package claiming to be an *unrelated* one is the hijack.  That
         # comparison is made by the rule, so only the universal filters
         # (unresolved variables, sonames) apply here.
-        if f in ("provides", "replaces"):
+        if f in ("provides", "replaces", "conflicts"):
             added[f] = {n for n in names if not is_ignorable(n)}
         else:
             added[f] = {n for n in names if not is_ignorable(n, pkgbase)}

@@ -65,6 +65,17 @@ def version() -> str:
         return tomllib.load(handle)["project"]["version"]
 
 
+def _untracked() -> list[str]:
+    """Paths git is not tracking and .gitignore does not cover."""
+    result = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=normal"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+    return sorted(
+        line[3:] for line in result.stdout.splitlines() if line.startswith("??")
+    )
+
+
 def _worktree_tree() -> str:
     """Write a tree object for the current working tree and return its id.
 
@@ -73,7 +84,30 @@ def _worktree_tree() -> str:
     checksum for the previous commit's content.  Staging into a throwaway
     index leaves the real index untouched, and the tree object it writes is
     unreferenced until a commit adopts it.
+
+    ``git add -A`` stages *everything* the ignore rules do not exclude, and
+    that is wider than "the content that will be tagged": a scratch
+    directory left in the checkout is untracked, unignored, and would be
+    swept into the tarball the recorded checksum then describes.  A release
+    archive holding files nobody reviewed is the failure this whole script
+    exists to prevent, and it is silent - the checksum matches the tarball,
+    both are wrong together, and the mismatch only surfaces on CI, whose
+    checkout is clean.  That is how v0.13.2 came to record a checksum no
+    clean tree can reproduce.  Being in the index is the operator's
+    statement that a new file belongs in the release, so untracked content
+    is refused rather than guessed at.
     """
+    stray = _untracked()
+    if stray:
+        listed = "\n".join(f"  {path}" for path in stray[:20])
+        more = f"\n  ... and {len(stray) - 20} more" if len(stray) > 20 else ""
+        raise SystemExit(
+            "refusing to build a release tarball from a tree with untracked "
+            f"files:\n{listed}{more}\n"
+            "`git add` what belongs in the release, delete or ignore what "
+            "does not, or pass --rev to archive a committed revision."
+        )
+
     index = ROOT / ".git" / "release-tarball.index"
     env = {**os.environ, "GIT_INDEX_FILE": str(index)}
     try:

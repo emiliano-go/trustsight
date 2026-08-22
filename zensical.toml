@@ -91,28 +91,6 @@ Guides = [
   {"Acting on a Flag" = "guides/acting-on-a-flag.md"},
   {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},
   {"Tuning False Positives" = "guides/tuning-false-positives.md"},
-  {"Running the Sandbox" = "guides/running-the-sandbox.md"},
-]
-
-[[project.nav]]
-Rules = [
-  {"All Rules" = "reference/rules/index.md"},
-  {"Rule System" = "reference/rules/system.md"},
-  {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
-  {Crossfire = "reference/rules/crossfire.md"},
-  {Unverifiable = "reference/rules/unverifiable.md"},
-  {Obfuscation = "reference/rules/obfuscation.md"},
-  {"Deception and Anti-Analysis" = "reference/rules/deception.md"},
-  {"Install and Persistence" = "reference/rules/install-and-persist.md"},
-  {"Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"},
-  {"Integrity and Verification" = "reference/rules/integrity.md"},
-  {Sabotage = "reference/rules/sabotage.md"},
-  {"Naming and Dependencies" = "reference/rules/naming-and-dependency.md"},
-  {"Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"},
-  {"Temporal Context" = "reference/rules/temporal.md"},
-  {Composition = "reference/rules/composition.md"},
-  {"Count-Based" = "reference/rules/count-based.md"},
-  {"Corpus Behavioral" = "reference/rules/corpus-behavioral.md"},
 ]
 
 [[project.nav]]
@@ -126,6 +104,30 @@ Reference = [
   {"Baseline Keys" = "reference/baseline-keys.md"},
   {"IOC Federation" = "reference/ioc.md"},
   {"Exit Codes" = "reference/exit-codes.md"},
+  # Nested under Reference because that is where the pages live
+  # (`reference/rules/`) and how `reference/index.md` presents them.  The
+  # category order is `RuleCategory` in `src/trustsight/categories.py`, the
+  # same order `scripts/build_rules_index.py` writes the index tables in, so
+  # the sidebar, the index and the taxonomy cannot disagree.
+  {Rules = [
+    {"Rules Overview" = "reference/rules/index.md"},
+    {"Rule System" = "reference/rules/system.md"},
+    {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
+    {Obfuscation = "reference/rules/obfuscation.md"},
+    {"Deception and Anti-Analysis" = "reference/rules/deception.md"},
+    {"Install and Persistence" = "reference/rules/install-and-persist.md"},
+    {"Staging and Reconnaissance" = "reference/rules/staging-and-recon.md"},
+    {"Integrity and Verification" = "reference/rules/integrity.md"},
+    {"Naming and Dependencies" = "reference/rules/naming-and-dependency.md"},
+    {"Maintainer and Metadata" = "reference/rules/maintainer-and-metadata.md"},
+    {"Temporal Context" = "reference/rules/temporal.md"},
+    {Composition = "reference/rules/composition.md"},
+    {"Count-Based" = "reference/rules/count-based.md"},
+    {"Corpus Behavioral" = "reference/rules/corpus-behavioral.md"},
+    {Crossfire = "reference/rules/crossfire.md"},
+    {Sabotage = "reference/rules/sabotage.md"},
+    {Unverifiable = "reference/rules/unverifiable.md"},
+  ]},
 ]
 
 [[project.nav]]

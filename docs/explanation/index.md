@@ -78,19 +78,18 @@ namespace and shown to the reader:
 | pinned to a tag | `P006` | 0 |
 | trusted-forge source | `P007` | 0 |
 
-Earlier versions subtracted for these. They no longer do. Everything TrustSight
-sees is attacker-declared, and TrustSight never fetches, so it never confirms
-that a declared key signs anything or that a pinned commit holds what it claims.
-Adding `validpgpkeys=(...)` costs an attacker nothing, so a credit for it is a
-mechanism whose only reliable effect is buying points back for whoever reads the
-rules. The reader can check these claims in ways the tool cannot, which is why
-they are still reported. See
+Positive evidence is reported and never credited. Everything TrustSight sees is
+attacker-declared, and TrustSight never fetches, so it cannot confirm that a
+declared key signs anything or that a pinned commit holds what it claims. Adding
+`validpgpkeys=(...)` costs an attacker nothing, so a score credit for it would
+only buy points back for whoever reads the rules. The reader can check these
+claims in ways the tool cannot, which is why they are reported at weight 0. See
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
-The calibration problem the subtractions solved, a package doing GPG
-verification scoring *worse* than one doing nothing because a `SKIP` on a `.asc`
-file added points, is fixed at source instead: R004 does not fire on a `SKIP`
-that is mandatory, structurally uncheckable, or covered by declared PGP keys.
+A credit would also be the wrong fix for the calibration problem it appears to
+solve. A package doing GPG verification must not score *worse* than one doing
+nothing, and that is handled at the source: R004 does not fire on a `SKIP` that
+is mandatory, structurally uncheckable, or covered by declared PGP keys.
 
 **Source bucket modifiers** adjust for the trustworthiness of the domain:
 

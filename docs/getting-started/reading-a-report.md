@@ -139,7 +139,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier from the published R/C/D/S/X catalog; P001-P007 are declared-practice findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
+| `R004` | Rule identifier from the published R/C/D/S/X catalog; P001-P008 are declared-practice findings and W001-W006 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 
@@ -160,6 +160,26 @@ Declared verification
 When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than an UNFLAGGED score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
 Unresolved patterns are listed in the inspect output under "Unresolved Patterns." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) for the full list of analysis blind spots.
+
+### W findings: a gap attached to a line
+
+A coverage gap describes the whole run. The **W series** (`W001` to `W006`)
+says the same thing about one line: this line runs something, and nothing has
+read it.
+
+```
+  0  INFO  W001  Executes Code This Analysis Did Not Read
+              build() runs "$srcdir/scripts/postunpack.sh", which is neither
+              declared in source=() nor committed to this repository
+```
+
+W findings are weight 0 and never change the score, the risk band, or the
+verdict. They are shown even so, unlike other weight-0 findings, because a
+statement whose only value is to a reader is worthless if filtered. A W
+finding is not evidence of wrongdoing: a recipe running a script from inside
+a checksummed archive is following the packaging format. What it tells you is
+where to look if you decide to look. The full series is in the
+[unverifiable rules reference](../reference/rules/unverifiable.md).
 
 ---
 

@@ -43,7 +43,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 145 documented scoring rules across five families: 119 R-series detection rules, seven C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and seven X-series crossfire rules. The identifier space is intentionally non-contiguous; the [catalog](reference/rules/index.md) is authoritative and includes R132, R136-R143, S001-S008, and X001-X007. Declared-practice findings P001-P007 are reported at weight zero and never score. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 171 documented scoring rules across six families: 127 R-series detection rules, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 23 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 
@@ -79,7 +79,6 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Acting on a Flag](guides/acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE - next steps. |
 | [Configuring Rules and Weights](guides/configuring-rules-and-weights.md) | Edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](guides/tuning-false-positives.md) | A rule is firing too often on your packages - identify and fix it. |
-| [Running the Sandbox (aspirational)](guides/running-the-sandbox.md) | Rejected, not-yet-implemented design for sandboxing a PKGBUILD. |
 
 ## Reference
 

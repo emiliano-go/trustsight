@@ -1,3 +1,7 @@
+---
+description: What each TrustSight exit code means, per command, and why a flagged package still exits 0.
+---
+
 # Exit Codes
 
 | Code | Name | Condition |

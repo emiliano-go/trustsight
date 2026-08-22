@@ -1,3 +1,7 @@
+---
+description: How to add a rule to TrustSight: choosing a namespace and id, writing the pattern, and the checks it must pass.
+---
+
 # Writing a Rule
 
 TrustSight has two rule namespaces to avoid identifier collision:
@@ -7,9 +11,11 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | R-series  | R001-R003, R007-R008, R010-R013, R039-R059 | `rules.toml` | Yes | Regex-detectable patterns   |
 | R-series  | R004-R006, R009, R060+ | `analysis/*.py` | No | Code-emitted detection |
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
-| C-series  | C001-C007   | `analysis/*.py`  | No                | Structural / multi-condition |
+| C-series  | C001-C009   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
-| X-series  | X001-X007   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
+| X-series  | X001-X023   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
+| P-series  | P001-P008   | `analysis/*.py`  | No                | Declared practice, reported at weight 0 |
+| W-series  | W001-W006   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |
 
 ## R-series rules (TOML)
 
@@ -195,7 +201,7 @@ pytest tests/test_rules.py::test_r001_curl_bash_benign -v
 
 ### ID collision
 
-C-series IDs start with `C` (`C001`, `C002`, …). R-series IDs start with `R` (`R001`, `R002`, …). Do not assign an `R0xx` ID to a code rule. (The rule formerly known as `R016` was renamed to `C001` for this reason.)
+C-series IDs start with `C` (`C001`, `C002`, …). R-series IDs start with `R` (`R001`, `R002`, …). Do not assign an `R0xx` ID to a code rule.
 
 ### Delta vs. end-state
 

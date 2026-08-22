@@ -93,7 +93,7 @@ Running the PKGBUILD to resolve variables would produce accurate resolution but 
 
 Dependency changes (`depends`, `makedepends`, `optdepends`) are filtered out of *pattern* matching: `rules.py` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
 
-The trade-off used to be that a dependency-based attack was entirely invisible. The [D-series rules](../reference/rules/system.md#d-series) narrow that gap by asking a different question. Rather than pattern-matching the text, they compare the dependency arrays before and after the diff and check each newly added name against every dependency name ever observed in the AUR. A name nobody has ever depended on is rare and worth attention, where "this line mentions a package" is not.
+The [D-series rules](../reference/rules/system.md#d-series) narrow the resulting gap by asking a different question. Rather than pattern-matching the text, they compare the dependency arrays before and after the diff and check each newly added name against every dependency name ever observed in the AUR. A name nobody has ever depended on is rare and worth attention, where "this line mentions a package" is not.
 
 This narrows the gap; it does not close it:
 
@@ -101,7 +101,7 @@ This narrows the gap; it does not close it:
 - Removing a dependency is not scored. Dropping a hardening library is a real weakening, but it is indistinguishable from ordinary cleanup.
 - The rules are only as good as the seeded corpus. Against an unseeded database, D001 stays silent by design rather than flagging every dependency it sees.
 
-The D-series is enabled by default since v0.7.0; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
+The D-series is enabled by default; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
 
 ## Registry-payload gap
 

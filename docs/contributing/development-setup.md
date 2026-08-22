@@ -1,3 +1,7 @@
+---
+description: Setting up a TrustSight development environment: editable install, test suite, linter and docs build.
+---
+
 # Development Setup
 
 ## Prerequisites
@@ -66,3 +70,27 @@ python -m trustsight inspect <package-name>
 ```
 
 This runs the full analysis pipeline on one AUR package and prints the per-rule breakdown, evidence, and final score.
+
+## Build the documentation
+
+```bash
+uv run --extra docs zensical build          # renders docs/ into site/
+uv run --extra docs python scripts/build_llms_txt.py
+```
+
+`zensical build` renders every page listed in `zensical.toml`'s nav. The
+second command writes `site/llms.txt` and `site/llms-full.txt`, the plain-text
+companions every page advertises through `<link rel="alternate">`: an indexed
+map of the site, and the whole corpus concatenated. It reads the same nav, so
+a page reachable in the sidebar is a page reachable in both files.
+
+Run it after `zensical build`, which clears `site/`. `--check` verifies the
+two files match the current docs without writing anything, which is the form
+to use in a deployment that should fail rather than publish a stale index:
+
+```bash
+uv run --extra docs python scripts/build_llms_txt.py --check
+```
+
+`site/` is gitignored; neither the rendered site nor these two files are
+committed.

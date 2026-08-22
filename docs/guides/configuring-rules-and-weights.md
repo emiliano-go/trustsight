@@ -22,7 +22,7 @@ TrustSight has several rule families. Only the non-FATAL rules defined in `rules
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
 | **R-series** (119 rules) | `rules.toml` + code | TOML-defined non-FATAL subset only | Detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` can set `enabled` and `weight_override` only for rules that have a TOML definition. Code-emitted R rules do not read these controls. |
-| **C-series** (C001-C007) | Code only | No | Structural invariants : checksum/source coherence and related diff anomalies. These cannot be disabled through `rules.toml`. |
+| **C-series** (C001-C009) | Code only | No | Structural invariants : checksum/source coherence and related diff anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.
 
@@ -59,7 +59,7 @@ malicious = 40
 ```
 
 There is no block for verification or pinning. Declared checksums, PGP keys,
-GPG sources and source pins are reported as weight-0 `P001`-`P007` findings and
+GPG sources and source pins are reported as weight-0 `P001`-`P008` findings and
 cannot be given a weight: a signal an attacker can assert for free must not be
 able to move a score. See
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
@@ -85,4 +85,3 @@ After editing `rules.toml` or `config.toml`:
 - [Config reference](../reference/configuration.md): full schema for both files.
 - [Rules reference](../reference/rules/index.md): per-rule defaults across the complete R/C/D/S/X catalog.
 - [Tuning false positives](tuning-false-positives.md): how to fix rules that over-fire on your packages.
-- [Running the sandbox](running-the-sandbox.md): isolated build execution.

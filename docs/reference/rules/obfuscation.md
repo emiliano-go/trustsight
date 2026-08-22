@@ -42,7 +42,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `obfuscation`
 - **Pattern:** `base64.*(?:\-d|\-\-decode).*(?<!\\)\|`
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
-- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
 ### R025: Eval or Exec Usage {#r025}
 
@@ -84,7 +84,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `obfuscation`
 - **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*(?<!\\)\|`
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
-- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
 ### R117: Obfuscated Literal Reconstructed {#r117}
 

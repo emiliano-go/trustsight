@@ -19,7 +19,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series detection rules, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - R004/R005 checksum integrity rules (hard-coded, not TOML).
-- C001-C007 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C009 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.
 
 ### Availability
@@ -91,7 +91,7 @@ First-seen tracking for URLs and maintainers, backed by the local SQLite databas
 
 ### Sources
 
-- `build_novelty_context()` in `src/trustsight/analysis/novelty.py`.
+- `build_novelty_context()` in `src/trustsight/novelty.py`.
 - `source_urls` and `maintainers` tables in the local database at `~/.local/share/trustsight/`.
 
 ### Signals
@@ -177,4 +177,18 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 | A | Structural | Yes | No | Positive | 40 (CRITICAL) or 100 (FATAL) |
 | B | Priors/Context | Yes | No | Positive only | +30 (homograph); trusted forge is 0 |
 | C | History/Novelty | No : zero without a seed | Yes (×0→1) | Positive only | +15 (maintainer) |
-| D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P007`) |
+| D | Verification | Yes | No | Reported, never scored | 0 (`P001`-`P008`) |
+
+---
+
+## Outside the tiers: the W series
+
+The four tiers classify **evidence about the recipe**. The W series
+(`W001`-`W006`) makes a different kind of statement: not that the recipe did
+something, but that this analysis could not read something the recipe will
+run. A tier answers "how strong is this signal"; a W finding answers "what
+was not looked at".
+
+It is therefore not tier-gated, not maturity-scaled, and not scored. It is
+the per-line form of a [coverage gap](report-schema.md), available cold and
+always shown. See the [unverifiable rules reference](rules/unverifiable.md).

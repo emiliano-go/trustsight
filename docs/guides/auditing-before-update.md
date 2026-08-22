@@ -50,7 +50,7 @@ The final score is the weighted sum of all triggered rules across four [evidence
 | **A** | Structural | Checksum disabled, source URL changed, new dependency added |
 | **B** | Priors / context | Domain trust buckets, prior package history |
 | **C** | History / novelty | First-seen URLs, maturity-gated weight |
-| **D** | Verification | Declared checksums, `validpgpkeys`, GPG source, source pinning: reported as `P001`-`P007` at weight 0 |
+| **D** | Verification | Declared checksums, `validpgpkeys`, GPG source, source pinning: reported as `P001`-`P008` at weight 0 |
 
 Tier D never moves the score. Those are claims the recipe makes and TrustSight
 cannot confirm, so they are reported for you to check rather than credited; see

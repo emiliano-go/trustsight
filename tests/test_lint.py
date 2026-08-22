@@ -1,5 +1,7 @@
 import tomllib
 
+import pytest
+
 from trustsight.config import DEFAULT_RULES
 from trustsight.lint import SEVERITY_ERROR, SEVERITY_WARNING, lint_rules
 
@@ -165,3 +167,60 @@ def test_well_formed_rule_produces_no_findings():
         _rule(pattern=r"\bsudo\b", severity="CRITICAL", scope=["function_body"])
     ])
     assert findings == []
+
+
+def test_every_code_emitted_id_is_reserved():
+    """The reserved set is the catalog minus the TOML rules, not a list.
+
+    `PROGRAMMATIC_IDS` was hand-written as five ids while the analysis
+    modules emitted 152, so a user's `rules.toml` could define `C004`, any
+    S, X, D, W or P rule, or ninety-odd R rules, and the check that exists
+    to stop one id meaning two things said nothing. Two lists that have to
+    agree is the defect this codebase keeps finding; deriving the set from
+    the catalog removes the second list.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+    from trustsight.config import DEFAULT_RULES
+    from trustsight.lint import PROGRAMMATIC_IDS
+    from trustsight.scoring import DECLARED_REASONS
+
+    toml_ids = {rule["id"] for rule in tomllib.loads(DEFAULT_RULES)["rules"]}
+    catalog = set(RULE_CATEGORIES) | set(DECLARED_REASONS)
+
+    unreserved = sorted((catalog - toml_ids) - PROGRAMMATIC_IDS)
+    assert unreserved == [], (
+        f"code-emitted ids a rules.toml could shadow in silence: {unreserved}"
+    )
+    # The converse: a rule this build ships in rules.toml must stay
+    # definable there, or `sync-rules` would write a file its own linter
+    # rejects.
+    assert not (PROGRAMMATIC_IDS & toml_ids)
+
+
+@pytest.mark.parametrize("rule_id", ["C004", "C009", "X001", "X023", "S001",
+                                     "D001", "W001", "P001", "R151"])
+def test_shadowing_a_code_emitted_id_is_an_error(rule_id):
+    findings = _checks(lint_rules([_rule(id=rule_id)]), "programmatic-id")
+    assert findings and findings[0].level == SEVERITY_ERROR, (
+        f"{rule_id} is emitted from code but redefining it lints clean"
+    )
+
+
+@pytest.mark.parametrize("rule_id", ["R001", "R010", "R012", "R013"])
+def test_a_shipped_toml_rule_is_not_treated_as_code_emitted(rule_id):
+    """These are the ids `rules.toml` legitimately carries."""
+    assert not _checks(lint_rules([_rule(id=rule_id)]), "programmatic-id")
+
+
+def test_the_reserved_set_is_not_built_at_import():
+    """`lint` is imported on every CLI invocation; the set costs a TOML parse."""
+    import importlib
+    import sys
+
+    for name in [m for m in sys.modules if m.startswith("trustsight")]:
+        del sys.modules[name]
+    module = importlib.import_module("trustsight.lint")
+    assert "PROGRAMMATIC_IDS" not in module.__dict__
+    assert module._programmatic_ids_cache is None
+    assert len(module.PROGRAMMATIC_IDS) > 100
+    assert "PROGRAMMATIC_IDS" in module.__dict__

@@ -95,12 +95,53 @@ PROBE_LINES = [line for line, _ in PROBE_DIFF]
 # Severities where a benign-corpus hit is a real cost, not noise.
 _HIGH_SEVERITIES = frozenset({"FATAL", "CRITICAL", "HIGH", "MEDIUM"})
 
-# Ids emitted by analysis.py rather than rules.toml.  They need diff
-# context that a single-line regex cannot see, so they are generated in
-# code.  A TOML rule reusing one of these ids produces two different
-# findings under one id, which corrupts baselines and fixture
-# expectations.
-PROGRAMMATIC_IDS = frozenset({"R004", "R005", "C001", "C002", "C003"})
+#: Ids emitted from code rather than from ``rules.toml``.  They need diff
+#: context that a single-line regex cannot see, so they are generated in
+#: the analysis modules.  A TOML rule reusing one of these ids produces two
+#: different findings under one id, which corrupts baselines and fixture
+#: expectations.
+#:
+#: Derived, not enumerated.  A hand-written set is a second list that has to
+#: agree with the catalog, and it did not: it named five ids while the
+#: analysis modules emitted 152, so ``C004`` through ``C009``, every S, X, D,
+#: W and P rule and ninety-odd R rules could all be redefined in a user's
+#: ``rules.toml`` with nothing said.  The catalog already knows every id, and
+#: ``rules.toml`` already knows which of them are TOML rules, so the reserved
+#: set is the difference and cannot drift from either.
+#:
+#: Resolved on first use rather than at import: it costs a TOML parse, and
+#: `lint` is imported by the CLI on every invocation.
+_LAZY = frozenset({"PROGRAMMATIC_IDS"})
+
+_programmatic_ids_cache: "frozenset[str] | None" = None
+
+
+def _programmatic_ids() -> frozenset[str]:
+    """The reserved set, derived once and cached.
+
+    Callers inside this module must use this rather than the module-level
+    name: ``__getattr__`` is consulted for attribute access from outside a
+    module, never for a plain global lookup within it.
+    """
+    global _programmatic_ids_cache
+    if _programmatic_ids_cache is None:
+        from .categories import RULE_CATEGORIES
+        from .config import shipped_rules
+        from .scoring import DECLARED_REASONS
+
+        catalog = set(RULE_CATEGORIES) | set(DECLARED_REASONS)
+        _programmatic_ids_cache = frozenset(
+            catalog - {rule["id"] for rule in shipped_rules()}
+        )
+    return _programmatic_ids_cache
+
+
+def __getattr__(name: str):
+    if name not in _LAZY:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = _programmatic_ids()
+    globals()[name] = value
+    return value
 
 # A pattern that matches a function *header* line, e.g. ``pkgver() {``.
 _FUNCTION_HEADER_PATTERN_RE = re.compile(r"\\\(\\\)|\(\)\\s\*\\\{|\\\(\\\)\\s\*\\\{")
@@ -175,11 +216,11 @@ def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[L
                 rid, SEVERITY_WARNING, "id-format",
                 f"id '{rule['id']}' does not match the R###/C### convention",
             ))
-        if rule["id"] in PROGRAMMATIC_IDS:
+        if rule["id"] in _programmatic_ids():
             findings.append(LintFinding(
                 rid, SEVERITY_ERROR, "programmatic-id",
-                f"id '{rule['id']}' is emitted programmatically by "
-                f"analysis.py; defining it here makes one id mean two "
+                f"id '{rule['id']}' is emitted from code rather than from "
+                f"rules.toml; defining it here makes one id mean two "
                 f"different things",
             ))
         if rule["id"] in seen_ids:

@@ -87,3 +87,54 @@ def test_no_workflow_weakens_the_release_build(flag):
             if not line.lstrip().startswith("#") and flag in line:
                 offenders.append(f"{workflow.name}:{lineno}")
     assert offenders == [], f"{flag} used in: {offenders}"
+
+
+def test_a_worktree_build_refuses_untracked_files(tmp_path):
+    """An untracked scratch directory may not reach the release tarball.
+
+    ``_worktree_tree`` stages with ``git add -A``, which is wider than "the
+    content that will be tagged": anything the ignore rules do not cover is
+    swept in.  A stray directory left in a checkout therefore shipped
+    unreviewed files inside the archive, and the recorded checksum
+    described that archive, so the two agreed with each other and disagreed
+    with every clean tree.  v0.13.2 recorded such a checksum, and it
+    surfaced only on CI, whose checkout has nothing stray in it.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from build_release_tarball import _untracked, _worktree_tree
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run = lambda *args: subprocess.run(  # noqa: E731
+        args, cwd=repo, check=True, capture_output=True,
+    )
+    run("git", "init", "-q")
+    run("git", "config", "user.email", "t@example.invalid")
+    run("git", "config", "user.name", "t")
+    (repo / "kept.txt").write_text("shipped\n")
+    run("git", "add", "-A")
+    run("git", "commit", "-qm", "c")
+
+    import build_release_tarball as brt
+
+    monkey = brt.ROOT
+    try:
+        brt.ROOT = repo
+        assert _untracked() == []
+        # A clean tree still builds.
+        assert _worktree_tree()
+
+        (repo / "scratch").mkdir()
+        (repo / "scratch" / "stray.bin").write_bytes(b"unreviewed")
+        assert _untracked() == ["scratch/"]
+        with pytest.raises(SystemExit, match="untracked files"):
+            _worktree_tree()
+
+        # Staging it is the operator saying it belongs in the release.
+        run("git", "add", "-A")
+        assert _untracked() == []
+        assert _worktree_tree()
+    finally:
+        brt.ROOT = monkey

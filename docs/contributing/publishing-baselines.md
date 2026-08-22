@@ -51,7 +51,7 @@ the corpus asset. It uses the canonical seed already attached to the channel
 release, or builds the documented fallback when that asset is absent.
 
 The seed and IOC assets are built and uploaded **automatically** by
-[`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml),
+[`.github/workflows/baselines.yml`](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml),
 which only runs for `baseline-*` releases and manual dispatch (software
 releases skip it entirely). The workflow checks the release for an existing
 `baseline-seed.tar.gz` first: the **canonical seed is maintainer-built from

@@ -53,7 +53,7 @@ The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retai
 | R010 | Uses curl in PKGBUILD | LOW | <2 % | |
 | R011 | Uses wget in PKGBUILD | LOW | <2 % | |
 | R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
-| R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs had zero-width joiners in localized text; fixed with ASCII-neighbour guard |
+| R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs carry zero-width joiners in localized text; the ASCII-neighbour guard keeps them quiet |
 
 ## Expanded rules (R039-R059)
 
@@ -113,19 +113,19 @@ Calibrated against the current 3,246-diff locked corpus. 14 of 21 fire on zero b
 
 ## D-series dependency rules
 
-Measured against the 3246-diff benign corpus with a 209,909-name dependency seed. All enabled by default since v0.7.0.
+Measured against the 3246-diff benign corpus with a 209,909-name dependency seed. All are enabled by default.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| D001 | Novel Dependency Added | HIGH | 0.15 % | 5/3246 | After extractor fixes (was 5.95 % before array parsing was corrected). The 5 hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise |
+| D001 | Novel Dependency Added | HIGH | 0.15 % | 5/3246 | The 5 hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise |
 | D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3246 | Refined by D001; bounded by edit-distance threshold |
 | D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3246 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
 | D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
-| R075 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Post-promotion measurement with seeded DB (209,909-name seed). Well under the 30% gate. |
+| R075 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Measured with a seeded database (209,909-name seed). Well under the 30% gate. |
 
 ## Code-emitted rules (R060-R064)
 
-Measured against the 3246-diff benign corpus. All enabled by default since v0.7.0 (R060 was always on).
+Measured against the 3246-diff benign corpus. All are enabled by default.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
@@ -167,10 +167,8 @@ they are not repeated here.
 | R071 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
 | R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | R074 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
-| R081 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives on the graduated corpus. |
-| R082 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives on the graduated corpus. |
-
-R081 and R082 were promoted from experimental to always-on in v0.11.0.
+| R081 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
+| R082 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 
 ## Temporal metadata rule (R073)
 
@@ -182,7 +180,7 @@ be measured against the static corpus.
 |------|------|------|-----------|------|-------|
 | R073 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
 
-## Structural rules (C001-C007)
+## Structural rules (C001-C009)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.
 

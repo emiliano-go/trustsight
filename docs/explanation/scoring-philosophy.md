@@ -128,7 +128,7 @@ These rules are hard-coded in `src/trustsight/analysis/structural.py` and cannot
 
 ### R009: why sudo detection is scoped to function_body
 
-A naive `sudo` rule that matches anywhere in the PKGBUILD would fire on comments, examples in the `pkgdesc()`, and top-level variable assignments like `groups=('sudo')`. The function_body scope restricts matching to the actual build functions (`build()`, `package()`, `check()`), where a `sudo` command would have real effect. This was a result of corpus fire-rate analysis showing that unfiltered sudo matching was a census signal.
+A naive `sudo` rule that matches anywhere in the PKGBUILD fires on comments, on text in `pkgdesc`, and on top-level variable assignments like `groups=('sudo')`. The `function_body` scope restricts matching to the build functions (`build()`, `package()`, `check()`), where a `sudo` command has real effect. Corpus fire-rate analysis is what settles it: unfiltered `sudo` matching is a census signal rather than a risk signal.
 
 ### C001, C002, C003: why code rules exist
 

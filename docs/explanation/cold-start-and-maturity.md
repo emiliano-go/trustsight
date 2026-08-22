@@ -69,15 +69,17 @@ The interaction is additive, not multiplicative. Each signal contributes indepen
 
 ## The seed database
 
-A cold database is no longer the usual state. TrustSight can fetch and import a
-verified novelty seed on first run. The current seed records 179,956 normalized
+A cold database is not the usual state. TrustSight fetches and imports a
+verified novelty seed on first run. The seed records 179,956 normalized
 source URLs, about 35,903 maintainers, and 209,909 dependency names, plus a bootstrap
 observation count. Maturity uses the greater of that seed count and the local
 analysis count, not a per-package count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
 
 Measured against the AUR mirror, the seed recognises **86%** of the source URLs in a package's most recent update. That figure falls off for older updates (62% mid-history, 20% for the oldest commit in a 30-commit window) because the seed is a snapshot of current `.SRCINFO` state, and historical versions used paths that no longer exist. Since a review always concerns the newest update, 86% is the number that matters in practice; corpus replays over deep history understate it.
 
-These weights were calibrated only after tier C became live. They had previously never been exercised: `observation_count` was never populated, so the maturity multiplier was permanently 0 and every novelty weight resolved to zero regardless of its configured value.
+The weights only have an effect where `observation_count` is populated. With no
+observations the maturity multiplier is 0, and every novelty weight resolves to
+zero whatever its configured value.
 
 ## The INCONCLUSIVE downgrade
 

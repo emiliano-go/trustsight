@@ -1,17 +1,17 @@
 # Seed Provenance
 
-Where the novelty seed comes from, why trusting it used to be a circular
-assumption, how to rebuild and audit it yourself, and how the release
-channel signs it.
+Where the novelty seed comes from, why its trust anchor is kept outside the
+AUR, how to rebuild and audit it yourself, and how the release channel signs
+it.
 
 ## What the seed is
 
 The seed is a bundle of prior knowledge drawn from the whole AUR, published
 on the [release channel](../reference/baseline-keys.md#the-release-channel) as `baseline-seed.tar.gz` and
 imported into the user's database on first run (or manually with
-`trustsight seed fetch`). Since v0.12 the shipped seed is the **v2 hashed
-format**: a `trustsight-seed-v2/` directory of salted SHA-256 hashes, not a
-SQLite file with plaintext values. Its three kinds of prior knowledge are:
+`trustsight seed fetch`). The shipped seed is the **v2 hashed format**: a
+`trustsight-seed-v2/` directory of salted SHA-256 hashes rather than a SQLite
+file of plaintext values. Its three kinds of prior knowledge are:
 
 - **source URLs** (179,956, normalised), with first-seen timestamps
   and use counts;
@@ -29,17 +29,16 @@ bootstrap; real analyses take over as soon as they outnumber it. The mechanism
 is described in [cold start and maturity](cold-start-and-maturity.md), and the
 import commands in [`trustsight seed`](../reference/cli.md#trustsight-seed).
 
-## How trust moved out of the package
+## Why trust sits outside the package
 
-Until v0.11 the seed shipped inside the package as
-`src/trustsight/data/seed.db.gz`. The package is installed from the AUR,
-which is the very channel TrustSight exists to audit; the trust anchor for
-the tool's priors was therefore the thing under review, and that was circular.
+The seed does not ship inside the package. A seed carried in the AUR package
+would take its trust anchor from the very channel TrustSight exists to audit,
+which is circular: the priors used to judge the AUR would themselves have been
+installed from it.
 
-The seed no longer lives in the package. It is built by the published
-scripts, signed by the centralized distribution key held out-of-band (never in
-the repository), and distributed through the release channel, which is not the
-AUR. At import time
+Instead the seed is built by the published scripts, signed by the centralized
+distribution key held out-of-band (never in the repository), and distributed
+through the release channel, which is not the AUR. At import time
 the tool downloads the bounded artifact bytes, then verifies their detached
 ed25519 signature against a public key pinned in the source tree
 (`src/trustsight/full_aur/baseline_pubkey.pem`) before parsing or importing
@@ -124,7 +123,7 @@ archive as `trustsight-seed-v2/seed-provenance.json`. It is metadata about
 the build, never part of the hashed content, and it is what lets a third
 party reproduce the seed and compare their record against the published one.
 
-The release workflow [`.github/workflows/baselines.yml`](../../.github/workflows/baselines.yml)
+The release workflow [`.github/workflows/baselines.yml`](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml)
 runs this pipeline against a draft channel release (a `baseline-<date>` tag,
 published only after its complete asset family is verified; see the
 [publishing guide](../contributing/publishing-baselines.md)). The canonical
@@ -160,9 +159,9 @@ trustsight seed fetch --json   # "status: ok" means the signature verified
 ## 2. It is the published script over the published input:
 python scripts/generate_seed.py --out /tmp/seed-audit.db \
   --provenance-out /tmp/seed-audit-provenance.json
-## compare maintainers with --src/trustsight/seed-audit against a fresh build
-## and diff your seed-provenance.json against the published one: same mirror
-## state must produce the same package, maintainer and observation counts.
+## then diff your seed-provenance.json against the published one: the same
+## mirror state must produce the same package, maintainer and observation
+## counts.
 ```
 
 The schema itself is auditable in one read: it is the `SCHEMA` literal at the

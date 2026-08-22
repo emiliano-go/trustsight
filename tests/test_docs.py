@@ -16,6 +16,7 @@ import pytest
 from trustsight.categories import RULE_CATEGORIES, RuleCategory, category_of
 from trustsight.cli import app
 from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES
+from trustsight.scoring import DECLARED_REASONS
 
 ROOT = Path(__file__).resolve().parent.parent
 RULES_DIR = ROOT / "docs" / "reference" / "rules"
@@ -28,7 +29,7 @@ CLI_SRC = ROOT / "src" / "trustsight" / "cli"
 
 SHIPPED_RULES = tomllib.loads(DEFAULT_RULES)["rules"]
 PROGRAMMATIC_RULES = ["R004", "R005", "C001", "C002", "C003",
-                      "C004", "C005", "C006", "C007"]
+                      "C004", "C005", "C006", "C007", "C008", "C009"]
 
 # Pages under RULES_DIR that hold no rule definitions.  `index.md` is the
 # map and `system.md` is everything that is not an individual rule, so a
@@ -36,7 +37,17 @@ PROGRAMMATIC_RULES = ["R004", "R005", "C001", "C002", "C003",
 NON_RULE_PAGES = {"index.md", "system.md"}
 
 # A rule section, as opposed to the prose headings that share the level.
-_RULE_SECTION_RE = re.compile(r"^### ([RCDSX]\d{3}):", re.M)
+#
+# `W` belongs here: the unverifiable series is documented as `### W001:`
+# sections on its own page exactly like every other series, and leaving it
+# out of the character class made all six invisible to the two checks below
+# - a W rule could be documented on the wrong page, or left behind in
+# system.md, and nothing would say so.
+#
+# `P` is deliberately absent. Declared-practice findings are rendered from
+# `DECLARED_REASONS` and documented as one table in system.md rather than as
+# per-rule sections, so there is no `### P00N:` heading to find.
+_RULE_SECTION_RE = re.compile(r"^### ([RCDSXW]\d{3}):", re.M)
 
 
 def _rule_page(rule_id: str) -> Path:
@@ -426,3 +437,144 @@ def test_the_corpus_lock_matches_the_files_on_disk():
     assert on_disk == lock["total_entries"], (
         f"{on_disk} diffs on disk, lock records {lock['total_entries']}"
     )
+
+
+def _series_bounds() -> dict[str, tuple[int, int]]:
+    """Lowest and highest number actually shipped for each rule namespace."""
+    seen: dict[str, list[int]] = {}
+    for rule_id in RULE_CATEGORIES:
+        match = re.fullmatch(r"([A-Z]+)(\d+)", rule_id)
+        if match:
+            seen.setdefault(match.group(1), []).append(int(match.group(2)))
+    return {series: (min(nums), max(nums)) for series, nums in seen.items()}
+
+
+#: Series a `001-NNN` range can only be describing in full.  The R space is
+#: deliberately non-contiguous and is documented in subsets (`R039-R059` is
+#: the expanded-rules block), so a range there says nothing about the total
+#: and R is excluded.  P has one gap (`P004` is skipped and documented as
+#: skipped) but is only ever written as the whole family, so its upper bound
+#: is still checkable.
+_WHOLE_FAMILY_SERIES = ("C", "D", "P", "S", "W", "X")
+
+
+def test_documented_series_ranges_end_at_the_highest_shipped_rule():
+    """A range like `X001-X007` is a claim about the catalog, not decoration.
+
+    These ranges are written by hand on the overview pages, and adding a
+    rule to a series does not touch them, so they decay quietly: the
+    catalog reached X023 and C009 while six pages still advertised X007 and
+    C007. Nothing failed, because every individual rule was documented on
+    its own page and all the per-rule checks above passed. Only a reader
+    counting the families would have caught it.
+    """
+    # `RULE_CATEGORIES` holds every scoring rule.  The declared-practice
+    # series is not a detection and lives in `DECLARED_REASONS` instead, so
+    # its bound comes from there or `P001-P007` stays green forever.
+    bounds: dict[str, int] = {}
+    for rule_id in (*RULE_CATEGORIES, *DECLARED_REASONS):
+        match = re.fullmatch(r"([A-Z]+)(\d+)", rule_id)
+        if match:
+            series, number = match.group(1), int(match.group(2))
+            bounds[series] = max(bounds.get(series, 0), number)
+
+    offenders = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        if path.name == "changelog.md":
+            continue
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            # `` `P001`-`P008` `` is the same claim as `P001-P008`, and the
+            # backticks sit between the digits and the hyphen.  Dropping them
+            # first is what makes both forms one case; matching only the bare
+            # form let three pages keep `P001`-`P007` after the series grew.
+            plain = line.replace("`", "")
+            for series, low, high in re.findall(
+                r"\b([A-Z])(\d{3})\s*\-\s*(?:[A-Z])?(\d{3})\b", plain
+            ):
+                if series not in _WHOLE_FAMILY_SERIES or series not in bounds:
+                    continue
+                if int(low) != 1 or int(high) == bounds[series]:
+                    continue
+                offenders.append(
+                    f"{path.relative_to(ROOT)}:{lineno} says "
+                    f"{series}{low}-{series}{high}, but the catalog ends at "
+                    f"{series}{bounds[series]:03d}"
+                )
+    assert not offenders, "stale rule-series ranges:\n" + "\n".join(offenders)
+
+
+def test_the_landing_page_rule_count_matches_the_catalog():
+    """`docs/index.md` advertises a total; it drifted to 145 against 171."""
+    scoring = sum(
+        1 for rule_id in RULE_CATEGORIES
+        if category_of(rule_id) is not RuleCategory.UNVERIFIABLE
+    )
+    text = (ROOT / "docs" / "index.md").read_text()
+    match = re.search(r"TrustSight ships ([\d,]+) documented scoring rules", text)
+    assert match, "docs/index.md no longer states a scoring-rule count"
+    claimed = int(match.group(1).replace(",", ""))
+    assert claimed == scoring, (
+        f"docs/index.md claims {claimed} scoring rules; the catalog holds {scoring}"
+    )
+
+
+def test_every_environment_variable_is_documented():
+    """An env var is a public interface with no `--help` to discover it.
+
+    `TRUSTSIGHT_OFFLINE` gates the release and AUR bulk channels and shipped
+    undocumented, while `reference/index.md` advertised an "Environment
+    variable reference" that did not exist. A flag is listed by `--help` and
+    is covered by the flag check above; a variable is visible only where
+    someone wrote it down.
+    """
+    read = set()
+    for path in sorted((ROOT / "src" / "trustsight").rglob("*.py")):
+        text = path.read_text()
+        read.update(re.findall(r'environ(?:\.get)?\(\s*"([A-Z][A-Z0-9_]*)"', text))
+        read.update(re.findall(r'getenv\(\s*"([A-Z][A-Z0-9_]*)"', text))
+
+    documented = set(re.findall(r"`([A-Z][A-Z0-9_]{2,})`", CONFIG_MD.read_text()))
+    undocumented = sorted(read - documented)
+    assert undocumented == [], (
+        "environment variables read by the code but absent from "
+        f"docs/reference/configuration.md: {undocumented}"
+    )
+
+
+def test_the_llms_txt_generator_covers_every_page():
+    """The templates promise `/llms.txt` and `/llms-full.txt` on every page.
+
+    Both were advertised by `<link rel="alternate">` in `overrides/main.html`
+    and produced by nothing, so all 57 pages pointed at a 404. The generator
+    reads the nav, so this checks the two that can still drift: a page the
+    nav does not reach would be absent from both files, and a nav entry with
+    no file would put a dead link in them.
+    """
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from build_llms_txt import _config, _sections, build
+
+    meta = _config()
+    docs = ROOT / meta.get("docs_dir", "docs")
+
+    navigated = {path for _, pages in _sections(meta) for _, path in pages}
+    on_disk = {str(p.relative_to(docs)) for p in docs.rglob("*.md")}
+    assert navigated == on_disk, (
+        f"only in nav: {sorted(navigated - on_disk)}; "
+        f"only on disk: {sorted(on_disk - navigated)}"
+    )
+
+    index, full = build(docs, meta)
+    base = meta["site_url"].rstrip("/") + "/"
+    assert index.startswith(f"# {meta['site_name']}")
+    for path in sorted(on_disk):
+        slug = path.removesuffix(".md").removesuffix("/index")
+        url = base if slug == "index" else f"{base}{slug}/"
+        assert f"({url})" in index, f"{path} is missing from llms.txt"
+        assert f"Source: {url}" in full, f"{path} is missing from llms-full.txt"
+
+    # Every entry carries a summary; an index of bare links is not an index.
+    bare = [line for line in index.splitlines()
+            if line.startswith("- [") and "): " not in line]
+    assert bare == [], f"llms.txt entries with no summary: {bare}"

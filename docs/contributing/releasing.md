@@ -18,12 +18,11 @@ package whose integrity check depends on a file somebody else regenerates is
 not pinned, it is hoping. A release asset is an immutable blob; nothing
 regenerates it.
 
-**The ordering was impossible.** The generated archive cannot exist until the
-tag does, so its checksum could only be recorded *after* tagging, by a second
-commit. Between those two commits the PKGBUILD named a new `pkgver` beside the
-previous release's checksum. That window opened on every release, and in
-v0.13.1 the workflow that closes it failed, so the window never shut and a
-user reported the mismatch.
+**The ordering is impossible.** A generated archive cannot exist until the tag
+does, so its checksum can only be recorded *after* tagging, by a second commit.
+Between those two commits the PKGBUILD names a new `pkgver` beside the previous
+release's checksum. That window opens on every release, and it stays open for
+as long as the repair step takes, and permanently if the repair step fails.
 
 ## The determinism contract
 
@@ -62,10 +61,27 @@ python scripts/build_release_tarball.py --rev v0.13.2
 python scripts/build_release_tarball.py --check <sha256>
 ```
 
+Archiving the working tree means staging it, and staging is `git add -A`, which
+takes everything the ignore rules do not exclude. A scratch file left in the
+checkout is untracked, unignored, and would therefore ship inside the release
+archive with a checksum that describes it. The working-tree mode refuses to run
+while any untracked file is present and names what it found:
+
+```
+refusing to build a release tarball from a tree with untracked files:
+  scratch/
+`git add` what belongs in the release, delete or ignore what does not, or pass
+--rev to archive a committed revision.
+```
+
+Being in the index is the statement that a new file belongs in the release, so
+add the ones that do before computing the checksum. `--rev` archives a committed
+revision and is unaffected.
+
 `tests/test_pkgbuild.py::test_recorded_checksum_matches_a_freshly_built_tarball`
 rebuilds the tarball and compares it against the recorded value, so a stale
-checksum cannot be committed at all. This is the check that makes the v0.13.1
-report unrepeatable.
+checksum cannot be committed at all. `tests/test_release_workflow.py::test_a_worktree_build_refuses_untracked_files`
+covers the refusal.
 
 ## The steps
 
@@ -113,14 +129,14 @@ paths gate skips only `ARCHIVE_EXCLUDED_PATHS` from its existence assertion.
 The package `check()` command also excludes `tests/test_fetcher.py` and
 `tests/test_rebaseline.py`; those modules require repository/network fixtures
 that are not part of the shipped archive test environment.
-Two missing exclusions took down the v0.13.1 release:
+Two exclusions carry the weight here, and both are required:
 
 - `scripts/critical_paths.py` lists `ARCHIVE_EXCLUDED_PATHS`, the critical
   paths `export-ignore` legitimately removes. The `critical paths are
   synchronised` gate skips their existence check when it is running from an
-  archive and enforces it everywhere else. Before that, the gate required
-  `packaging/aur/PKGBUILD` to exist while `.gitattributes` guaranteed it would
-  not, a contradiction that could never hold inside the tarball.
+  archive and enforces it everywhere else. Without the skip the gate requires
+  `packaging/aur/PKGBUILD` to exist while `.gitattributes` guarantees it will
+  not, a contradiction that can never hold inside the tarball.
 - A test that shells out to `git` must skip when there is no checkout. Inside
   a `makepkg` build the tree is owned by a different user than the one
   building, so git refuses with `detected dubious ownership`, which says

@@ -67,7 +67,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `network_execution`
 - **Pattern:** `curl.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Detects `curl | bash`, `curl | sh`, and variants including `python`, `zsh`, `dash`, `busybox sh`, and `source /dev/stdin`. This is the most common careless malice pattern in AUR PKGBUILDs: downloading a script and piping it directly to a shell without verification.
-- **Note:** The lookbehind requires the pipe to be **unescaped**. `curl x \| sh` passes a literal bar to `curl` as an argument and starts no pipeline, and this rule used to fire on it - a false positive on the highest-severity rule in the set. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the older, wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
+- **Note:** The lookbehind requires the pipe to be **unescaped**. `curl x \| sh` passes a literal bar to `curl` as an argument and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
 ### R002: Wget Pipe to Shell {#r002}
 
@@ -76,7 +76,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `network_execution`
 - **Pattern:** `wget.*(?<!\\)\|\s*(?:[({]\s*(?:(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+))?(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:(?:env|exec|command|sudo|doas|nohup|setsid|nice|ionice|stdbuf|timeout|unbuffer|script)(?:\s+-[-\w]+)*(?:\s+\d+[smhd]?)?\s+|(?:xterm|u?rxvt|konsole|gnome-terminal|alacritty|kitty|wezterm|foot|terminator|xfce4-terminal|lxterminal|tilix|ttyd|zellij|chroot|bwrap|firejail|nsjail|unshare|proot|fakeroot|fakechroot|systemd-nspawn|toolbox|distrobox-enter|screen|dtach|abduco|runuser|setpriv|nohup)(?:\s+[^\s;&|]+){0,4}\s+)(?:/(?:usr/)?bin/)?(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)|python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh)\b|(?:source|\.)\s+/dev/stdin\b)`
 - **Description:** Same as R001 but for `wget`. Separate rule per tool to allow per-tool tuning.
-- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, and this rule used to fire on it. The tokenizer keeps that escape intact (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. An installation written before 0.13.3 holds the wider pattern; it is registered in `LEGACY_RULE_PATTERNS`, so `trustsight config sync-rules --update` replaces it.
+- **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
 ### R006: Insecure Download Protocol {#r006}
 
@@ -237,7 +237,7 @@ At weight 0 it is context for a reviewer rather than a signal, which is why it i
 
 Function membership comes from `_classify_enclosing_function()` in `rules.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
 
-On by default since v0.7.0. See [`[experimental_rules]`](../configuration.md#experimental_rules).
+On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
 
 ### R061: Hidden Network Fetch In Build {#r061}
 
@@ -248,7 +248,7 @@ On by default since v0.7.0. See [`[experimental_rules]`](../configuration.md#exp
 
 The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
 
-On by default since v0.7.0. See [`[experimental_rules]`](../configuration.md#experimental_rules).
+On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
 
 ### R076: Version-In-URL Injection {#r076}
 

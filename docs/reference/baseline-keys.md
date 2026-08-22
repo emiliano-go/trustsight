@@ -20,7 +20,7 @@ Raw public key (hex): `3bc5a24d09072c4aed2165f29d5a8fd42aeacb9f96962c12eccde64c7
 The **private key never enters the repository**. It is held by the maintainer
 and, since the release channel exists, is also placed in the GitHub Actions
 secret `BASELINE_SIGNING_KEY`, which the
-[release baseline workflow](../../.github/workflows/baselines.yml) reads to
+[release baseline workflow](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml) reads to
 sign the `baseline-*` assets at release time. Rotation means cutting a release
 that pins a new public key; there is no in-band revocation.
 

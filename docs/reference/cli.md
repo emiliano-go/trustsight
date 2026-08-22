@@ -402,7 +402,7 @@ trustsight seed-db [--import] [--file PATH] [--force]
 
 On an empty database every source URL looks first-seen and `maturity()` returns 0, which gates tier C off entirely and downgrades every Medium verdict to INCONCLUSIVE. Maturity is global to the database, not per package. The seed supplies both halves of what maturity is really asking about: a body of known AUR source URLs, and a bootstrap observation count.
 
-The seed no longer ships inside the package. It is published as the signed
+The seed is not shipped inside the package. It is published as the signed
 `baseline-seed.tar.gz` release asset (v2 hashed format) and fetched with
 `trustsight seed fetch`; `seed-db --file` still imports any `.db`, `.db.gz`
 or `.tar.gz` seed you built yourself. The underlying data is built from the
@@ -448,7 +448,7 @@ The seed is derived entirely from public AUR data and is reproducible: re-runnin
 
 ## trustsight seed
 
-Inspect and migrate the hashed maintainer seed (v0.12.0).
+Inspect and migrate the hashed maintainer seed.
 
 ```
 trustsight seed info
@@ -530,7 +530,7 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 | `compile` | error | The pattern does not compile. `apply_rules()` skips uncompilable rules silently. |
 | `backtracking` | error | The pattern is superlinear on adversarial input; a crafted PKGBUILD line could hang the scan. |
 | `duplicate-id` | error | Two rules share an id, so the later one silently redefines what the id means in baselines and fixtures. |
-| `programmatic-id` | error | The id is one emitted by code (`R004`, `R005`, `C001`-`C003`). |
+| `programmatic-id` | error | The id is one the analysis modules emit rather than one `rules.toml` defines. Every catalog id that is not a shipped TOML rule is reserved, so defining it here would make one id mean two different things. |
 | `severity` | error | Unknown severity. Unknown severities score 0. |
 | `match-target` / `scope` | error | Unknown `match_target`, or an unknown scope value. |
 | `comment-shadowed` | error | Every line the pattern matches is a comment or `depends` declaration, which `filter_raw_lines()` strips before matching. |
@@ -605,7 +605,7 @@ trustsight full-aur --watch [--interval SECONDS] [--cycles N]
 | Flag | Description |
 |------|-------------|
 | `--bootstrap` | Allow a from-scratch bootstrap of the whole AUR when there is no prior snapshot. Required to start one, because it fetches every PKGBUILD; without it a snapshot-less run refuses rather than scraping ~120k packages by accident. The bootstrap is capped per cycle and resumes automatically, so run the command repeatedly to finish it in gentle chunks. |
-| `--resume` | Continue an interrupted cycle. Now implied: every cycle resumes automatically from its saved progress, so this flag is accepted but no longer needed. |
+| `--resume` | Accepted and implied. Every cycle resumes automatically from its saved progress, so the flag has no effect. |
 | `--export PATH` | Write the signed baseline artifact to this path. Only written when the cycle *completes* the current transition; a capped, still-pending cycle does not export a half-built corpus. |
 | `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
 | `--watch` | Keep running cycles on an interval until interrupted. |

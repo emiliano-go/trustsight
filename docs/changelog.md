@@ -1,3 +1,7 @@
+---
+description: Release history for TrustSight: what changed in each version, and why.
+---
+
 # Changelog
 
 ## [0.13.2] - 2026-08-15
@@ -2857,7 +2861,7 @@
   preserved on top of the distribution signature), first-run auto-import of a
   missing seed from the channel, and `scripts/build_release_baselines.py`
   (build, sign, self-verify, manifest). The
-  [`.github/workflows/baselines.yml`](../.github/workflows/baselines.yml)
+  [`.github/workflows/baselines.yml`](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml)
   workflow builds and uploads the seed, IOC and manifest assets on every
   published release, signing with the `BASELINE_SIGNING_KEY` Actions secret;
   the corpus baseline is exported by the maintainer and uploaded per the

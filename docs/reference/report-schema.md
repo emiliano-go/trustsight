@@ -131,7 +131,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
 | `suppressed_rules` | `list[dict]` | Rules suppressed by user override. Each entry has `rule_id`, `severity`, `override_reason`, and `override_package`. These did not contribute to the score. |
-| `ioc_matches` | `list[dict]` | IOC federation baseline hits (v0.12.0). Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
+| `ioc_matches` | `list[dict]` | IOC federation baseline hits. Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
 ### `diff_summary`
@@ -189,9 +189,9 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published R/C/D/S/X catalog, `P001`-`P007` (declared practice, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published R/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0), `W001`-`W006` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
-| `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` finding. |
+| `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. Truncated to 80 characters in CLI display; full string in JSON. |
 | `params` | `dict` | Parameters retained by the score entry for rendering or storage. |
 | `template` | `string` | The render string for this finding, with `{placeholders}` filled from `evidence`. Output is rendered from the template, so a finding says the same thing everywhere it appears. |

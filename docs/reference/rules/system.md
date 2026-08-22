@@ -479,7 +479,7 @@ See [R061: Hidden Network Fetch In Build](fetch-and-execution.md#r061).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below are historical measurements against the 3,246-diff benign corpus with a 209,909-name dependency corpus, retained because the per-rule hit counts have not been regenerated as a complete table. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below were measured against the 3,246-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -648,8 +648,8 @@ See [R075: Dependency-Set Expansion](count-based.md#r075-rule).
 ## Install and build context rules (R081-R082) {#r081-r082}
 
 Defined in `src/trustsight/analysis/build.py`. They inspect install hooks and
-build-function content for additional risk signals. Both graduated from experimental
-to enabled by default in v0.11.0 with zero false positives on the benign corpus of that release.
+build-function content for additional risk signals. Both are enabled by default,
+and both fire on zero diffs of the benign corpus.
 
 ### R081 {#r081}
 
@@ -673,7 +673,7 @@ They also have to bypass the engine's own filtering: `rules.py` strips
 `depends`, `makedepends`, `optdepends`, and `checkdepends` lines before any
 pattern runs, which is why extraction lives in `src/trustsight/deps.py`.
 
-All D-series rules are **enabled by default** since v0.7.0. Disable them
+All D-series rules are **enabled by default**. Disable them
 individually under [`[experimental_rules]`](../configuration.md#experimental_rules).
 
 ### D001 {#d001}
@@ -1256,9 +1256,9 @@ in the shipped config or the code-emitted rule set:
 
 Measured against the TrustSight test corpus.
 
-!!! warning "Two rows predate a ruleset expansion"
+!!! warning "Two rows measure a narrower configuration"
 
-    The recall rows above were measured while `observation_count` was never populated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and before the R039+ expanded rules or C004-C007 shipped. The three distribution rows below are re-measured by the calibration gates against the current 3,246-diff corpus on every push.
+    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 3,246-diff corpus on every push.
 
 | Rule | Recall | Notes |
 |------|--------|-------|

@@ -90,7 +90,7 @@ Everything TrustSight sees is attacker-declared, and TrustSight never fetches,
 so it never confirms that a declared key signs anything or that a pinned commit
 holds what it claims. A signal an attacker can assert for free must not be able
 to lower a score. These facts are now reported as weight-0 declared-practice
-findings in the `P` namespace (`P001`-`P007`); see
+findings in the `P` namespace (`P001`-`P008`); see
 [the security model](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 Pinning classification via `classify_pinning_level()` in
@@ -139,7 +139,7 @@ dedicated settings where available, such as `[experimental_rules]`.
 
 ### `[experimental_rules]`
 
-Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true` since v0.7.0 after corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
+Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
 
 A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_EXPERIMENTAL_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
 
@@ -346,6 +346,45 @@ rule.
 `value`, `confidence`, `provenance`, `campaign` and `added`. The confidence
 tier decides severity: `confirmed` is FATAL, `high` is CRITICAL, `medium` is
 HIGH. The shipped file is empty, and a miss is uninformative.
+
+---
+
+## Environment variables
+
+TrustSight reads one environment variable. Everything else that changes
+behaviour is a config key or a command flag.
+
+| Variable | Values | Effect |
+|----------|--------|--------|
+| `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
+
+Every path that would reach the release channel checks it first, so an
+air-gapped machine or a CI runner is pinned to what is already on disk. The
+commands that need a channel refuse with a message naming the variable rather
+than failing as a transport error:
+
+```console
+$ TRUSTSIGHT_OFFLINE=1 trustsight seed fetch
+The release channel is disabled (TRUSTSIGHT_OFFLINE is set).
+```
+
+Four commands stop, and they do not all stop for the same reason:
+
+| Command | Channel refused |
+|---------|-----------------|
+| `seed fetch` | Release channel. Exits 2. |
+| `ioc update` | Release channel. Reported as skipped; exits 0. |
+| `baseline build` | AUR network channel. |
+| `full-aur` | AUR network channel. |
+
+**It does not make the program offline.** `review` and `inspect` still clone
+the package's own AUR repository, because that clone is how a diff exists at
+all; `fetcher` does not consult this variable. What the variable governs is
+the bulk and release channels, not the per-package fetch that
+[A3](../security.md#the-invariants) already constrains to one host keyed by
+package name. To stop all outbound traffic, deny it at the network layer.
+
+Defined in `release.offline()`.
 
 ---
 

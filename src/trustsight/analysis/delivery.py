@@ -404,10 +404,18 @@ _HEREDOC_TO_INTERPRETER_RE = re.compile(
 # The destination is asserted by a lookahead rather than walked to by a
 # greedy run: `[^"'\s;&|]*` followed by a large alternation backtracks
 # through every branch at every position, which the adversarial audit
-# refuses. The lookahead runs once per `>` on the line.
+# refuses.
+#
+# The lookahead scans the destination *token*, not the rest of the line.
+# `[^\n]*` ran to the end of the line from every `>` on it - quadratic on
+# a line of redirects, which the audit measured at 294ms for 4 KiB - and it
+# also read a later word as the destination, so `cat > out.txt && echo
+# x.service` reported a unit file nothing wrote.  A redirect target holds
+# no whitespace, quote, pipe, semicolon or angle bracket, and both the
+# directory and the extension the alternation looks for sit inside it.
 _HEREDOC_TO_EXECUTING_CONFIG_RE = re.compile(
-    r">\s*[\"']?"
-    r"(?=[^\n]*(?:"
+    r">\s*+[\"']?"
+    r"(?=[^\"'\s;&|<>]*(?:"
     r"/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|xdg/autostart"
     r"|pam\.d|profile\.d|init\.d|rc\.d|xinetd\.d|logrotate\.d"
     r"|dispatcher\.d|udev/rules\.d|conf\.d|sudoers\.d)/"
@@ -492,10 +500,23 @@ _EXEC_PREFIX = r"(?:" + _EXEC_WRAPPER + r")*"
 # command name.  Requiring a separator meant `for f in *.sh; do bash "$f";
 # done` had no execution at all - the loop body is where the work happens,
 # and it is always preceded by one of these words.
+# The whitespace runs are possessive.  A command word is never whitespace,
+# so backtracking into the indentation only re-fails at a shorter offset -
+# work with no possible outcome.  On a line of separators the engine was
+# doing it at every position, for every arm that shares this prefix, which
+# is what put `_EXECUTION_RE` over the adversarial audit's budget.
 _CMD_START = (
-    r"(?:\A\s*|[;&|{(]\s*|\b(?:do|then|else|elif)\s+)" + _EXEC_PREFIX
+    r"(?:\A\s*+|[;&|{(]\s*+|\b(?:do|then|else|elif)\s++)" + _EXEC_PREFIX
 )
 _EXECUTION_RE = re.compile(
+    # `_CMD_START` is factored out of the arms that share it rather than
+    # repeated per arm.  Repeated, the engine re-matched the separator, the
+    # indentation and the whole wrapper alternation once per arm at every
+    # position on the line; on a line of `;` that is eight scans per
+    # character, and the adversarial audit measured it over budget.  The
+    # arms keep their order and their capture numbering, so the match a
+    # given line produces is unchanged.
+    _CMD_START + r"(?:"
     # `(?![<>])`: a redirect is not a filename argument.  Without it this
     # arm matched `bash < pipe` and captured `<`, and being first in the
     # alternation it also shadowed the redirect arm below.
@@ -508,7 +529,7 @@ _EXECUTION_RE = re.compile(
     # An absolute path is the same shell: `/usr/bin/bash s.sh` ran and
     # paired with nothing.  A quoted argument may hold spaces, and the
     # bare `\S+` stopped at the first one.
-    _CMD_START + r"(?:busybox\s+)?(?:/[\w./-]*/)?(?:bash|sh|zsh|dash|ksh|ash|mksh"
+    r"(?:busybox\s+)?(?:/[\w./-]*/)?(?:bash|sh|zsh|dash|ksh|ash|mksh"
     r"|node|php|lua(?:jit)?|tclsh|fish)"
     r"(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])"
     # `[^\s;&|<>]+`, not `\S+`: a command may end at a separator, and
@@ -520,33 +541,36 @@ _EXECUTION_RE = re.compile(
     # No literal `|` for R001 to see and no filename argument for the
     # pattern above, while `curl > p` is already a fetch output R137 tracks.
     # `<(` is process substitution and `<<` a heredoc; neither is this.
-    r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh)\s*<\s*(?!\(|<)(\S+)"
-    r"|" + _CMD_START + r"source\s+(\S+)"
-    r"|" + _CMD_START + r"\.\s+(\S+)"
+    r"|(?:bash|sh|zsh|dash|ksh)\s*<\s*(?!\(|<)(\S+)"
+    r"|source\s+(\S+)"
+    r"|\.\s+(\S+)"
     # `./x` only where a command starts. Unanchored, this arm matched the
     # `./` inside `sed 's|./log\.txt|…|g'` and inside `../x.patch`, and
     # captured whatever followed - harmless for R138, which discards a
     # capture that is not a declared basename, and not harmless at all for
     # a rule that reports the path to a reader.
-    r"|" + _CMD_START + r"\./(\S+)"
+    r"|\./(\S+)"
+    r")"
     # A build-tree path in command position runs without any verb at all:
     # `"$srcdir/s.sh"` is an execution and was read as nothing.  The quotes
     # are optional here because the tokenizer has already removed them by
     # the time this pattern runs - requiring them matched the raw text and
     # nothing else.
-    r"|(?:\A\s*|[;&|]\s*)[\"']?([$][{]?(?:srcdir|startdir|pkgdir)[}]?/[^\"'\s;&|]+)"
+    r"|(?:\A\s*+|[;&|]\s*+)[\"']?([$][{]?(?:srcdir|startdir|pkgdir)[}]?/[^\"'\s;&|]+)"
     # An absolute path at a command position, with or without arguments:
     # requiring it to stand alone let `/tmp/.stage2 --install` past the
     # write-then-execute dataflow while `/tmp/.stage2` was caught.
     r"|^\s*(\/[^\s;&|]+)(?=\s|$)"
-    r"|" + _CMD_START + r"(?:python3?|perl|ruby)(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])(\S+)"
+    r"|" + _CMD_START + r"(?:"
+    r"(?:python3?|perl|ruby)(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])(\S+)"
     # Engines that run a committed record rather than a script argument.
     # `node x.js`, `dotnet run`, `go run .`, `./gradlew build` and `cargo
     # build` each execute code from a file in the tree, and R136's verb
     # list named none of them.
-    r"|" + _CMD_START + r"(?:dotnet\s+(?:run|exec)|go\s+run|deno\s+run)"
+    r"|(?:dotnet\s+(?:run|exec)|go\s+run|deno\s+run)"
     r"(?:\s+-{1,2}[A-Za-z-]*)*\s*(\S*)"
-    r"|" + _CMD_START + r"(?:gcc|g\+\+|clang|cc|rustc)\b\s+[^;&|]*?(?:-o\s+\S+\s+)?(\S+\.(?:c|cc|cpp|rs))\b",
+    r"|(?:gcc|g\+\+|clang|cc|rustc)\b\s+[^;&|]*?(?:-o\s+\S+\s+)?(\S+\.(?:c|cc|cpp|rs))\b"
+    r")",
     re.IGNORECASE,
 )
 
@@ -1144,13 +1168,21 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
 # (`"$srcdir/setup.sh"`), and handing a downloaded makefile to `make -f`
 # are all execution of downloaded code; only the spelling differed, and the
 # declared-source half of the pair could not see any of them.
+# `_CMD_START` is factored across the runs of adjacent arms that share it,
+# for the reason given on `_EXECUTION_RE`: repeated, it re-scans the
+# separator, the indentation and the whole wrapper alternation once per arm
+# at every position, and this pattern was the one the adversarial audit
+# measured furthest over budget.  The arms keep their order and their
+# capture numbering.
 _SOURCE_EXEC_RE = re.compile(
+    _CMD_START + r"(?:"
     # `(?![<>])`: a redirect is not a filename argument. Without it this
     # arm captured the `<` of `sh < file` and the redirect arm below never
     # got a turn - the same trap `_EXECUTION_RE` documents.
-    _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\s+(?![<>])(\S+)"
-    r"|" + _CMD_START + r"source\s+(\S+)"
-    r"|" + _CMD_START + r"\.\s+(\S+)"
+    r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\s+(?![<>])(\S+)"
+    r"|source\s+(\S+)"
+    r"|\.\s+(\S+)"
+    r")"
     r"|\./(\S+)"
     # `sh < file` - the interpreter reads the script from its stdin.
     # `(?!\(|<)` keeps process substitution and here-strings out: those are
@@ -1158,7 +1190,7 @@ _SOURCE_EXEC_RE = re.compile(
     r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)"
     r"\s*<\s*(?!\(|<)(\S+)"
     # A bare `"$srcdir/x"` in command position: the file is the command.
-    r"|(?:\A\s*|[;&|]\s*)[\"']?(\$\{?(?:srcdir|startdir)\}?/[^\"'\s;&|]+)"
+    r"|(?:\A\s*+|[;&|]\s*+)[\"']?(\$\{?(?:srcdir|startdir)\}?/[^\"'\s;&|]+)"
     # `make -f downloaded.mk` runs the recipes in a downloaded file.
     r"|" + _CMD_START + r"(?:g?make|cmake)\s+(?:-\S+\s+)*-f\s+(\S+)",
     re.IGNORECASE,

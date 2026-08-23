@@ -1,3 +1,7 @@
+---
+description: Rules for a packaging step writing outside `$srcdir` and `$pkgdir`, hiding what it wrote, or learning about the host it ran on.
+---
+
 # Staging and Reconnaissance
 
 A packaging step may write inside `$srcdir` and `$pkgdir` and nowhere else.

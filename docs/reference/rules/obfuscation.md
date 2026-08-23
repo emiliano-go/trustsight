@@ -1,3 +1,7 @@
+---
+description: Rules for a recipe hiding what it does from whoever reads it: encoding, runtime assembly and name indirection, where the line shown is not the command that runs.
+---
+
 # Obfuscation
 
 The recipe hides what it does from whoever reads it. Encoding (R003, R043,

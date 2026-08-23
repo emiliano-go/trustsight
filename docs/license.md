@@ -1,3 +1,7 @@
+---
+description: TrustSight is released under the MIT License, deliberately permissive to encourage adoption, auditing and fork-investigation.
+---
+
 # License
 
 TrustSight is released under the MIT License : deliberately permissive to encourage adoption, auditing, and fork-investigation by the Arch Linux and security communities.

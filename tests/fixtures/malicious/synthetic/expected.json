@@ -1,65 +1,4 @@
 {
-  "R001-curl-pipe-bash.diff": {
-    "max_score": 70,
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-curl-pipe-dash.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-curl-pipe-python.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-curl-pipe-sh.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-curl-pipe-source-stdin.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-curl-pipe-zsh.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R001"
-    ]
-  },
-  "R001-wget-pipe-bash.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R002"
-    ]
-  },
-  "R001-wget-pipe-sh.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R002"
-    ]
-  },
-  "R003-base64-decode-bash.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R003"
-    ]
-  },
-  "R003-base64-decode-sh.diff": {
-    "min_score": 40,
-    "must_fire": [
-      "R003"
-    ]
-  },
   "H001-skip-git-justified.diff": {
     "min_score": 25,
     "must_fire": [
@@ -130,6 +69,125 @@
       "R013"
     ]
   },
+  "H004-sudo-in-build.diff": {
+    "max_score": 70,
+    "min_score": 40,
+    "must_fire": [
+      "H004"
+    ],
+    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not H004. H004 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (H004 CRITICAL 40 + R058 HIGH 25 = 65)."
+  },
+  "H005-validpgpkeys-added.diff": {
+    "must_fire": [
+      "H078"
+    ],
+    "relabelled": "H005 -> H078 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
+  },
+  "H006-makedepends-added.diff": {
+    "min_score": 10,
+    "must_fire": [
+      "D003"
+    ],
+    "relabelled": "H006 -> D003 2026-08-07: H006 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
+  },
+  "H006-optdepends-added.diff": {
+    "relabelled": "H006 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
+  },
+  "H007-ln-sf.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "H076"
+    ],
+    "relabelled": "H007 -> H076 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
+  },
+  "H008-cflags-suspicious.diff": {
+    "min_score": 10,
+    "must_fire": [
+      "H079"
+    ],
+    "relabelled": "H008 -> H079 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which H025 cannot see (it is scoped to build functions)"
+  },
+  "H014-eval.diff": {
+    "min_score": 30,
+    "must_fire": [
+      "R039"
+    ],
+    "relabelled": "H014 -> R039 (eval of a substitution)"
+  },
+  "H014-exec.diff": {
+    "min_score": 30,
+    "must_fire": [
+      "H077"
+    ],
+    "relabelled": "H014 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which H077 claims (HIGH 25) plus the source bucket (20)."
+  },
+  "H087-recipe-only-npm.diff": {
+    "min_score": 20,
+    "must_fire": [
+      "H087"
+    ]
+  },
+  "R001-curl-pipe-bash.diff": {
+    "max_score": 70,
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-curl-pipe-dash.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-curl-pipe-python.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-curl-pipe-sh.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-curl-pipe-source-stdin.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-curl-pipe-zsh.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R001"
+    ]
+  },
+  "R001-wget-pipe-bash.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R002"
+    ]
+  },
+  "R001-wget-pipe-sh.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R002"
+    ]
+  },
+  "R003-base64-decode-bash.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R003"
+    ]
+  },
+  "R003-base64-decode-sh.diff": {
+    "min_score": 40,
+    "must_fire": [
+      "R003"
+    ]
+  },
   "R007-install-added.diff": {
     "min_score": 15,
     "must_fire": [
@@ -153,14 +211,6 @@
     "must_fire": [
       "R008"
     ]
-  },
-  "H004-sudo-in-build.diff": {
-    "max_score": 70,
-    "min_score": 40,
-    "must_fire": [
-      "H004"
-    ],
-    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not H004. H004 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (H004 CRITICAL 40 + R058 HIGH 25 = 65)."
   },
   "R010-curl-fetch.diff": {
     "min_score": 25,
@@ -991,24 +1041,8 @@
     ],
     "must_not_fire": []
   },
-  "H005-validpgpkeys-added.diff": {
-    "must_fire": [
-      "H078"
-    ],
-    "relabelled": "H005 -> H078 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
-  },
   "R015-depends-added.diff": {
     "relabelled": "R015 -> (none) 2026-08-07: R015 is a reserved ID. A depends addition is reported as a fact (dependency_changes) and scored only by D001 (novel dependency), which needs a seeded corpus; the gates measure on a cold DB, so this is silent by design there."
-  },
-  "H006-makedepends-added.diff": {
-    "min_score": 10,
-    "must_fire": [
-      "D003"
-    ],
-    "relabelled": "H006 -> D003 2026-08-07: H006 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
-  },
-  "H006-optdepends-added.diff": {
-    "relabelled": "H006 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
   },
   "R017-chmod-sgid.diff": {
     "min_score": 25,
@@ -1030,34 +1064,6 @@
     ],
     "relabelled": "R017 -> R059"
   },
-  "H007-ln-sf.diff": {
-    "min_score": 15,
-    "must_fire": [
-      "H076"
-    ],
-    "relabelled": "H007 -> H076 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
-  },
-  "H008-cflags-suspicious.diff": {
-    "min_score": 10,
-    "must_fire": [
-      "H079"
-    ],
-    "relabelled": "H008 -> H079 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which H025 cannot see (it is scoped to build functions)"
-  },
-  "H014-eval.diff": {
-    "min_score": 30,
-    "must_fire": [
-      "R039"
-    ],
-    "relabelled": "H014 -> R039 (eval of a substitution)"
-  },
-  "H014-exec.diff": {
-    "min_score": 30,
-    "must_fire": [
-      "H077"
-    ],
-    "relabelled": "H014 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which H077 claims (HIGH 25) plus the source bucket (20)."
-  },
   "R026-checksum-to-skip.diff": {
     "min_score": 25,
     "must_fire": [
@@ -1071,12 +1077,6 @@
       "H002"
     ],
     "relabelled": "R027 -> H002"
-  },
-  "H087-recipe-only-npm.diff": {
-    "min_score": 20,
-    "must_fire": [
-      "H087"
-    ]
   },
   "S001-fork-bomb.diff": {
     "min_score": 30,

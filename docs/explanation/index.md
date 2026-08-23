@@ -1,3 +1,7 @@
+---
+description: How TrustSight works end to end: parse the diff, analyse the end state, score the evidence, classify the risk band, and translate it into a verdict.
+---
+
 # How TrustSight Works
 
 TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the **end-state** of a diff: the post-patch PKGBUILD, not the delta. Every decision is reproducible: same input always produces the same score and the same evidence record.

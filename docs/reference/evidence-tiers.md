@@ -1,3 +1,7 @@
+---
+description: The A/B/C/D evidence taxonomy: structural findings, source priors, history and novelty, and declared verification, with the maturity gating that governs them.
+---
+
 # Evidence Tiers
 
 TrustSight groups scoring signals into four evidence tiers. Each tier represents a fundamentally different kind of information with different availability and confidence characteristics.

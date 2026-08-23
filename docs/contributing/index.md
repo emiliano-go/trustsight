@@ -1,3 +1,7 @@
+---
+description: How to contribute to TrustSight: development setup, writing rules, re-baselining, releasing, security review and blinded evaluation.
+---
+
 # Contributing to TrustSight
 
 TrustSight is a CLI tool that audits AUR PKGBUILD diffs for supply-chain risk. It

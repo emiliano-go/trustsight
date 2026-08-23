@@ -1,3 +1,7 @@
+---
+description: The AUR-derived seed behind URL, maintainer and dependency history, why it is optional context rather than a requirement, and how running cold differs.
+---
+
 # Corpus and Priors
 
 TrustSight can use an AUR-derived seed for URL, maintainer, and dependency

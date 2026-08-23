@@ -1,3 +1,7 @@
+---
+description: Rules that fire on how a diff is written rather than on what it does: tokenizer defeat, command reconstruction, and the techniques used to hide a payload.
+---
+
 # Crossfire
 
 Crossfire rules fire on **how a diff is written**, not on what it does.

@@ -1,5 +1,5 @@
 ---
-description: What each TrustSight exit code means, per command, and why a flagged package still exits 0.
+description: What each TrustSight exit code means, per command, and why a flagged package still exits 0: the code answers whether the tool ran, not what it found.
 ---
 
 # Exit Codes

@@ -1,3 +1,7 @@
+---
+description: Install TrustSight, run your first review, and read the output table: what each column means, why the first run reports nothing, and what a verdict claims.
+---
+
 # Quickstart
 
 This guide walks through the single happy path: install, run a review, and understand the output.

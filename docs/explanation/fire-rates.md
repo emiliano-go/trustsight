@@ -1,3 +1,7 @@
+---
+description: Per-rule false-positive rates measured on the locked benign corpus: how each is measured, what a high rate costs, and which rules are gated on theirs.
+---
+
 # Fire Rates
 
 Fire rates measure the false-positive rate of each rule: how often it fires on a benign corpus where nothing malicious is happening. A rule that fires on every benign diff cannot distinguish malice from ordinary packaging; a rule that fires on none is either very precise or never tested.

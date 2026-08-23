@@ -1,5 +1,5 @@
 ---
-description: Release history for TrustSight: what changed in each version, and why.
+description: Release history for TrustSight: what changed in each version, why it changed, and what a change means for existing databases, baselines and configurations.
 ---
 
 # Changelog

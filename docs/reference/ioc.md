@@ -1,3 +1,7 @@
+---
+description: The IOC federation layer: signed indicator baselines, curator attribution, confidence tiers, and why a match is reported outside the heuristic score.
+---
+
 # IOC Federation
 
 An IOC (Indicator of Compromise) list is a versioned inventory of known-bad

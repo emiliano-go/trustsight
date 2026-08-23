@@ -1,3 +1,7 @@
+---
+description: W-series findings report what the analysis could not check, at weight 0 and always shown. A claim about the analysis, not about the recipe.
+---
+
 # Unverifiable
 
 W rules report **what the analysis could not check**.

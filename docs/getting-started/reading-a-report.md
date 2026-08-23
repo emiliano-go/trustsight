@@ -1,3 +1,7 @@
+---
+description: Every part of a TrustSight report explained: score breakdown, evidence tiers, rule firings, novelty context, coverage gaps, and what a verdict does not claim.
+---
+
 # Reading a Report
 
 A misread verdict is worse than no verdict. This page explains exactly what every part of a TrustSight report means : and what it does not.

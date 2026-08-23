@@ -1,3 +1,7 @@
+---
+description: The stored `PackageFact` and the CLI/API report body, field by field, including rule identifiers, coverage gaps and the JSON shapes consumers can rely on.
+---
+
 # Report Schema
 
 The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core analysis result. It is serialised to JSON via `fact_to_dict()` (`src/trustsight/schema.py`) for database storage and for `trustsight history --score-breakdown`. The **report** bodies that `review --json`, `inspect --json` and the Python API's `to_dict()` emit are a different, shared shape, built by `reporting.report_body`: same keys on all three, with the score group withheld unless asked for. See [B11](../security.md#b11-every-surface-reports-the-same-thing).

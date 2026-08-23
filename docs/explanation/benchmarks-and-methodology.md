@@ -1,3 +1,7 @@
+---
+description: How TrustSight is measured: per-class separation on the locked benign corpus, the CI gates that re-measure it, and what the numbers do not claim.
+---
+
 # Benchmarks and Methodology
 
 ## Scope of this evaluation

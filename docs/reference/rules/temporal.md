@@ -1,3 +1,7 @@
+---
+description: Rules reading how recently the package or this revision appeared, from AUR commit timestamps alone. None of them needs a diff.
+---
+
 # Temporal Context
 
 How recently the package or this revision appeared. These read git commit

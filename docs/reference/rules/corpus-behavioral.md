@@ -1,3 +1,7 @@
+---
+description: Rules reading the package's position in the corpus, or its deviation from a corpus baseline. Silent without prior observations; run once per metadata cycle.
+---
+
 # Corpus Behavioral
 
 The package's position in the corpus, or its deviation from a corpus

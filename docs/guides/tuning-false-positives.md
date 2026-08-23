@@ -1,5 +1,5 @@
 ---
-description: How to identify and fix rules that fire too often on your package set.
+description: How to find a rule that fires too often on your package set, confirm it against measured fire rates, and disable or reweight it without blinding the rest.
 ---
 
 # Tuning False Positives

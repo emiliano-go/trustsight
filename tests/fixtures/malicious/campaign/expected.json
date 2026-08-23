@@ -4,8 +4,8 @@
   "campaign": "june-w1-w2",
   "fidelity": "representative",
   "must_fire": [
-   "R007",
-   "H035"
+   "H035",
+   "R007"
   ],
   "min_score": 25
  },
@@ -24,9 +24,9 @@
   "campaign": "june-w3-obfuscated",
   "fidelity": "representative",
   "must_fire": [
-   "R007",
    "H035",
-   "H065"
+   "H065",
+   "R007"
   ],
   "min_score": 25
  },

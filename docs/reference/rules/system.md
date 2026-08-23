@@ -1,3 +1,7 @@
+---
+description: How the rule engine works: the fields a rule carries, how severity becomes weight, what each series prefix means, and which identifiers are reserved.
+---
+
 # Rule System Reference
 
 How the rule engine works: the fields a rule
@@ -116,10 +120,13 @@ rendered from `DECLARED_REASONS`.
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
 | `P008` | Source tracks a branch or unpinned ref, so upstream decides at build time what this compiles and runs |
 
-`P004` is skipped. Only `P002`, `P003`, `P005` and `P008` render unprompted by
-default: six of the eight on every package would bury the risk findings, and
-the default set is the ones a reader would find *surprising by their absence* -
-plus `P008`, which is the one whose *presence* is the notable thing.
+`P004` is skipped, so the family has seven members rather than eight. Four of
+them - `P002`, `P003`, `P005` and `P008` - render unprompted; the other three
+render under `--verbose`. Stating every declared practice on every package
+would bury the risk findings, which is the opposite of what the group is for,
+so the default set is the ones a reader would find *surprising by their
+absence* - plus `P008`, which is the one whose *presence* is the notable thing.
+The set is `DECLARED_DEFAULT` in `src/trustsight/scoring.py`.
 
 `P008` is the counterpart `P005`/`P006` never had. A recipe that pins says so;
 one that tracks a branch produced no line at all, and "nothing" reads exactly

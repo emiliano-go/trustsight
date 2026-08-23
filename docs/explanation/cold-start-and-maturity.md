@@ -1,3 +1,7 @@
+---
+description: Why novelty signals are meaningless on the first run, how maturity gating withholds them until the database has seen enough, and what a cold run reports.
+---
+
 # Cold Start and Maturity
 
 TrustSight operates in two regimes: **cold DB** (first run, no history) and **warm DB** (established observation history). The behaviour is different by design.

@@ -1,5 +1,5 @@
 ---
-description: What to do when a package is FLAGGED or INCONCLUSIVE.
+description: What to do when a package scores above the threshold or returns INCONCLUSIVE: how to investigate the evidence, and why a flag is a prompt to look, not a verdict.
 ---
 
 # Acting on a Flag

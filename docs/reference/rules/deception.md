@@ -1,3 +1,7 @@
+---
+description: Rules targeting the reviewer rather than the shell: reviewer-directed template text and codepoints that make displayed text differ from executed text.
+---
+
 # Deception and Anti-Analysis
 
 These rules target the reviewer, not the shell. R012 and R013 are the two

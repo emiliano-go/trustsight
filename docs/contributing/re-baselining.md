@@ -1,3 +1,7 @@
+---
+description: When and how to regenerate the score-distribution baseline over the pinned corpus after a scoring change, and how to read the resulting diff.
+---
+
 # Re-baselining
 
 The baseline (`tests/fixtures/baseline.json`) records the expected score distribution over the pinned corpus. It must be regenerated whenever the scoring logic changes.

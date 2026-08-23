@@ -1,5 +1,5 @@
 ---
-description: The core TrustSight workflow : run a review before updating AUR packages.
+description: The everyday TrustSight workflow: run a review before yay -Syu or pacman -Syu to catch structural risk and careless malice in PKGBUILD diffs before they land.
 ---
 
 # Auditing Before Update

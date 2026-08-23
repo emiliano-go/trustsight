@@ -1,3 +1,7 @@
+---
+description: Why the score is a sum of evidence weighted by how much information each signal carries, why verification is declared rather than scored, and how weights are set.
+---
+
 # Scoring Philosophy
 
 The scoring system is designed around a single question: *how much new information does each signal carry?* Signals that fire on every package carry zero information. Signals that rarely fire and correlate with known threats carry the most.

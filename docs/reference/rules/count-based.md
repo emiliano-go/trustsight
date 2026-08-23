@@ -1,3 +1,7 @@
+---
+description: Rules that fire when a count of same-kind indicators crosses a fixed threshold within one artifact or one cluster.
+---
+
 # Count-Based
 
 A count crossed a fixed threshold. What separates these from

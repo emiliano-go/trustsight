@@ -1,3 +1,7 @@
+---
+description: Rules claiming that something was fetched, something was executed, or a path connects the two. The densest group in the ruleset.
+---
+
 # Fetch and Execution
 
 Code reaches the machine and runs. Every rule here claims one of three

@@ -1,3 +1,7 @@
+---
+description: How a TrustSight version reaches users: the source tarball this repository builds, the PKGBUILD that consumes it, and the checks that gate a tag.
+---
+
 # Releasing
 
 How a TrustSight version reaches users, and why the source tarball is built

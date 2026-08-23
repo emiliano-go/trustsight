@@ -1,5 +1,5 @@
 ---
-description: "Full documentation for TrustSight: deterministic AUR PKGBUILD audit tool."
+description: Full documentation for TrustSight, the deterministic AUR PKGBUILD audit tool: installation, guides, the complete rule catalog, and the security model behind it.
 ---
 
 # TrustSight
@@ -97,7 +97,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 |------|----------------|
 | [Development Setup](contributing/development-setup.md) | Set up a local dev environment. |
 | [Writing a Rule](contributing/writing-a-rule.md) | R-series regex, H-series heuristic and C-series rule guidelines. |
-| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes.
+| [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes. |
 
 ---
 

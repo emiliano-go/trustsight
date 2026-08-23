@@ -1,5 +1,5 @@
 ---
-description: How to review a security control in TrustSight, and the failure mode that keeps recurring.
+description: How to review a security control in TrustSight, and the recurring failure mode that lets a gate pass while the invariant it exists to protect is broken.
 ---
 
 # Reviewing a Security Control

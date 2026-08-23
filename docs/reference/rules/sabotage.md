@@ -1,3 +1,7 @@
+---
+description: Rules for a payload that wrecks, exhausts or steals rather than exfiltrates, written against the distinction between the build sandbox and the system.
+---
+
 # Sabotage
 
 A payload that wrecks, exhausts or steals rather than exfiltrates.

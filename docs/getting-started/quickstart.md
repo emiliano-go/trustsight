@@ -52,8 +52,13 @@ The second and later commands:
 │           [R004]                                                       │
 │           Source URL classified as unknown                             │
 │           (https://sketchy-cdn.example.com/p.tar.gz) [SOURCE_BUCKET]   │
+│           PKGBUILD line 23  Executes Code This Analysis Did Not Read   │
+│           [W001]                                                       │
 │  Changed  pkgver 0.9.2-1 -> 1.0.0-2                                    │
 │           source host added: sketchy-cdn.example.com                   │
+│           build() runs npm install                                     │
+│  Declared checksums declared for all non-VCS sources [P001]            │
+│           validpgpkeys declared [P002]                                 │
 ╰────────────────────────────────────────────────────────────────────────╯
 2 package(s) needing update and reviewed out of 12 installed
 ```

@@ -118,6 +118,8 @@ When the statically visible post-diff PKGBUILD text declares structural integrit
 | `validpgpkeys` declared | `P002` | 0 |
 | signature source declared | `P003` | 0 |
 | pinned to a commit / tag | `P005` / `P006` | 0 |
+| source on a trusted forge over HTTPS | `P007` | 0 |
+| source tracks a branch or unpinned ref | `P008` | 0 |
 
 TrustSight never fetches, so it cannot confirm that a declared key signs anything or that a pinned commit holds what it claims, and adding any of these costs an attacker nothing. They are reported so *you* can check them, which is something you can do and the tool cannot. See [B10](../security.md#b10-positive-evidence-is-reported-never-credited).
 
@@ -149,6 +151,8 @@ Declared-practice lines appear at weight 0, in their own group:
 Declared verification
   P001  checksums declared for all non-VCS sources
   P002  validpgpkeys declared
+  P007  source on a trusted forge over HTTPS
+  P008  source tracks a branch or unpinned ref
 
   TrustSight does not verify these claims. It reports that the recipe makes them.
 ```
@@ -201,9 +205,11 @@ Output:
 │                          pkgver 1.0-1 -> 1.1-2                             │
 │                          checksums changed from sha256 to SKIP             │
 │                          source host added: sketchy-cdn.example.com        │
+│                          build() runs npm install                          │
 │                                                                            │
 │ Declared verification                                                      │
-│                          validpgpkeys declared                             │
+│                          P001  checksums declared for all non-VCS sources  │
+│                          P002  validpgpkeys declared                       │
 │                          TrustSight does not verify these claims. It       │
 │                        reports that the recipe makes them.                 │
 │                                                                            │
@@ -223,6 +229,12 @@ Output:
 │                        NOVELTY +8 HIGH Source URL first seen globally      │
 │                        (maturity 0.80)                                     │
 │                                                                            │
+│    Unverifiable findings                                                   │
+│                        W001  Executes Code This Analysis Did Not Read      │
+│                              build() runs "$srcdir/scripts/postunpack.sh"  │
+│                        W002  Build Resolves Dependencies From A Registry   │
+│                              npm install in build()                        │
+│                                                                            │
 │                 Score  53/100  (High)                                      │
 │                        sum: +53, clamped to 53/100                         │
 │                                                                            │
@@ -231,7 +243,7 @@ Output:
 ```
 
 **Interpretation**: The total is 25 + 20 + 8 = **53**, and the panel shows the
-arithmetic under the score rather than asking you to trust it. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares PGP keys, reported as `P002` at weight 0: it does not reduce the 53, because anyone can write a `validpgpkeys` line. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
+arithmetic under the score rather than asking you to trust it. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares checksums and PGP keys, reported as `P001` and `P002` at weight 0: they do not reduce the 53, because anyone can write those lines. Two `W` findings are shown because the analysis could not read everything the build will run: a script invoked from inside the source tree (`W001`) and `npm install` resolving dependencies from a registry (`W002`). They do not change the score; they mark boundaries you may want to look past. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
 
 The weights and severities above appear because this run passed `--score` and
 `--risk`. Without them the same panel shows the findings and the verdict and no

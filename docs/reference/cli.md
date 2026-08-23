@@ -149,6 +149,13 @@ When [rich](https://github.com/Textualize/rich) is available:
 │        Rules Triggered                                                     │
 │                         R001 Remote Script Execution                       │
 │                                                                            │
+│    Unverifiable findings                                                   │
+│                         W001  Executes Code This Analysis Did Not Read     │
+│                                                                            │
+│       Declared verification                                                │
+│                         P001  checksums declared for all non-VCS sources   │
+│                         P002  validpgpkeys declared                        │
+│                                                                            │
 │           Dependencies                                                     │
 │                         ╭──────────────── L1  libhelper ─────────────────╮ │
 │                         │ Findings 2                                     │ │

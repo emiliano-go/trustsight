@@ -67,7 +67,7 @@ def test_a_rule_weight_override_replaces_its_severity_weight():
 
 def test_a_high_finding_is_not_floored():
     """The floor is CRITICAL-only: HIGH keeps the band its weight earns."""
-    triggered = [{"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip",
+    triggered = [{"rule_id": "H001", "severity": "HIGH", "name": "Checksum Skip",
                   "match": "sha256sums=SKIP"}]
     score, _breakdown, level = calculate_score(
         triggered, {}, NoveltyContext(observation_count=999), SHARED_CONFIG)
@@ -91,7 +91,7 @@ def test_the_floor_never_lowers_a_band():
 def test_calculate_score_multiple_rules():
     triggered = [
         {"rule_id": "R001", "severity": "CRITICAL", "name": "Remote Exec", "match": "curl | bash"},
-        {"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip", "match": "sha256sums=SKIP"},
+        {"rule_id": "H001", "severity": "HIGH", "name": "Checksum Skip", "match": "sha256sums=SKIP"},
     ]
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), SHARED_CONFIG)
     assert score == 65  # 40 + 25
@@ -102,8 +102,8 @@ def test_calculate_score_multiple_rules():
 def test_calculate_score_all_severities():
     triggered = [
         {"rule_id": "R001", "severity": "CRITICAL", "name": "C1", "match": "a"},
-        {"rule_id": "R004", "severity": "HIGH", "name": "H1", "match": "b"},
-        {"rule_id": "R006", "severity": "MEDIUM", "name": "M1", "match": "c"},
+        {"rule_id": "H001", "severity": "HIGH", "name": "H1", "match": "b"},
+        {"rule_id": "H003", "severity": "MEDIUM", "name": "M1", "match": "c"},
         {"rule_id": "R010", "severity": "LOW", "name": "L1", "match": "d"},
         {"rule_id": "RINF", "severity": "INFO", "name": "I1", "match": "e"},
     ]
@@ -181,7 +181,7 @@ def test_score_novelty_all():
 def test_score_everything_combined():
     triggered = [
         {"rule_id": "R001", "severity": "CRITICAL", "name": "Remote Exec", "match": "curl | bash"},
-        {"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip", "match": "sha256sums=SKIP"},
+        {"rule_id": "H001", "severity": "HIGH", "name": "Checksum Skip", "match": "sha256sums=SKIP"},
     ]
     novelty = NoveltyContext(
         url_first_seen_in_this_package=True,
@@ -304,7 +304,7 @@ def test_a_tag_pin_is_reported_as_the_weaker_form():
         {}, NoveltyContext(), SHARED_CONFIG,
         pinning_level="tag_pinned",
     )
-    # A tag pin buys nothing: a tag can be repointed, which is what R079 is for.
+    # A tag pin buys nothing: a tag can be repointed, which is what H033 is for.
     assert score == 5
     assert any(e.rule_id == "P006" and e.weight == 0 for e in breakdown)
 
@@ -345,7 +345,7 @@ def test_inconclusive_medium_score_cold_db():
 
 def test_inconclusive_not_when_high_severity():
     """HIGH rule present → stays Medium, not Inconclusive."""
-    triggered = [{"rule_id": "R004", "severity": "HIGH", "name": "Checksum Skip", "match": "SKIP"}]
+    triggered = [{"rule_id": "H001", "severity": "HIGH", "name": "Checksum Skip", "match": "SKIP"}]
     novelty = NoveltyContext(observation_count=0)
     score, breakdown, level = calculate_score(triggered, {}, novelty, SHARED_CONFIG)
     assert score == 25

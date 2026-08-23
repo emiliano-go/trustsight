@@ -28,7 +28,7 @@ API_MD = ROOT / "docs" / "reference" / "python-api.md"
 CLI_SRC = ROOT / "src" / "trustsight" / "cli"
 
 SHIPPED_RULES = tomllib.loads(DEFAULT_RULES)["rules"]
-PROGRAMMATIC_RULES = ["R004", "R005", "C001", "C002", "C003",
+PROGRAMMATIC_RULES = ["H001", "H002", "C001", "C002", "C003",
                       "C004", "C005", "C006", "C007", "C008", "C009"]
 
 # Pages under RULES_DIR that hold no rule definitions.  `index.md` is the
@@ -47,7 +47,7 @@ NON_RULE_PAGES = {"index.md", "system.md"}
 # `P` is deliberately absent. Declared-practice findings are rendered from
 # `DECLARED_REASONS` and documented as one table in system.md rather than as
 # per-rule sections, so there is no `### P00N:` heading to find.
-_RULE_SECTION_RE = re.compile(r"^### ([RCDSXW]\d{3}):", re.M)
+_RULE_SECTION_RE = re.compile(r"^### ([RCDSXWH]\d{3}):", re.M)
 
 
 def _rule_page(rule_id: str) -> Path:
@@ -151,7 +151,7 @@ def test_system_md_holds_no_rule_definitions():
 
 @pytest.mark.parametrize("rule_id", sorted(RULE_CATEGORIES), ids=str)
 def test_system_md_still_anchors_every_rule_id(rule_id):
-    """Anchors like `rules.md#r129` were linked from other pages and from
+    """Anchors like `rules.md#h077` were linked from other pages and from
     outside the repo before the split.  system.md keeps every one of them
     pointing at wherever the rule now lives."""
     md = SYSTEM_MD.read_text()
@@ -307,11 +307,11 @@ def test_no_rendered_sample_shows_a_fixed_defect(check):
     for path, line, block in _rendered_blocks():
         where = f"{path.name}:{line}"
         if check == "rule id once":
-            for rule in set(re.findall(r"\[(R\d{3})\]", block)):
+            for rule in set(re.findall(r"\[([RH]\d{3})\]", block)):
                 if block.count(f"[{rule}]") > block.count("line") + 1:
                     continue
             # A finding line naming its rule twice: `... [R001]  ... [R001]`
-            if re.search(r"\[(R\d{3})\][^\n]*\[\1\]", block):
+            if re.search(r"\[([RH]\d{3})\][^\n]*\[\1\]", block):
                 offenders.append(f"{where} names a rule twice on one line")
         elif check == "no empty markup":
             if "[]" in block:

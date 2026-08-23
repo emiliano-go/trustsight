@@ -95,7 +95,7 @@ def test_a_swapped_metadata_snapshot_is_refused(isolated):
 
     Without this check a validly signed artifact could be re-published with
     an attacker's entire AUR metadata attached - maintainers, versions,
-    dependency edges, everything discovery, R092/R100/R116 and `corpus
+    dependency edges, everything discovery, H045/H052/H064 and `corpus
     pivot` read - and the signature would still verify.
     """
     honest = [{"Name": "demo", "Maintainer": "alice"}]
@@ -285,7 +285,7 @@ def test_url_extraction_edge_cases(text, expected):
     assert list(iter_scheme_urls(text)) == expected
 
 
-def test_r106_is_not_slowed_by_a_pathological_line():
+def test_h056_is_not_slowed_by_a_pathological_line():
     """The rule runs on every added line of every reviewed package."""
     from trustsight.analysis.ioc import _ioc_findings
     from trustsight.iocs import load_indicators

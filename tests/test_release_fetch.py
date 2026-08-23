@@ -19,6 +19,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from trustsight import release
 from trustsight.db import get_connection, init_db, seed_observation_count
 
+
+@pytest.fixture(autouse=True)
+def _the_channel_is_the_subject(monkeypatch):
+    """This file tests the release channel, so it opts out of offline mode.
+
+    The suite sets ``TRUSTSIGHT_OFFLINE`` for every test, and everything
+    that would reach the channel checks it first - which would make these
+    tests assert that a refusal happened rather than that a download
+    verifies. Every test here mocks the transport, so nothing leaves the
+    machine; the socket guard in `conftest` still holds the line.
+    """
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+
 # ---------------------------------------------------------------------------
 # URL building
 # ---------------------------------------------------------------------------

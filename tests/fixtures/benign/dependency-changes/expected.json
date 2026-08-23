@@ -3,11 +3,11 @@
     "must_fire": [],
     "max_score": 0
   },
-  "R016-makedepends-added.diff": {
+  "H006-makedepends-added.diff": {
     "must_fire": [],
     "max_score": 0
   },
-  "R016-optdepends-added.diff": {
+  "H006-optdepends-added.diff": {
     "must_fire": [],
     "max_score": 0
   }

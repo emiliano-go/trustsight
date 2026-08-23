@@ -69,7 +69,7 @@ def test_a_trailing_or_true_does_not_hide_the_pipe():
      '  logwatch --configdir "$srcdir"'],
 ])
 def test_a_generated_config_handed_to_the_tool_that_reads_it(lines):
-    """X022: R145 and R149 claim a config that is *shipped*. This one stays
+    """X022: H089 and H093 claim a config that is *shipped*. This one stays
     in the build tree, where naming `$srcdir` is normal - what makes it
     execution is the second line."""
     assert "X022" in _x(lines), lines

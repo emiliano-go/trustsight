@@ -238,8 +238,8 @@ def test_x005_catches_every_spelling_of_a_home_path(label, command):
 
 
 @pytest.mark.parametrize("label,command", [
-    ("r077-owns-tilde", 'install -Dm755 t ~/bin/tool'),
-    ("r077-owns-home",  'install -Dm644 c $HOME/.bashrc'),
+    ("h032-owns-tilde", 'install -Dm755 t ~/bin/tool'),
+    ("h032-owns-home",  'install -Dm644 c $HOME/.bashrc'),
     ("pkgdir-staging",  'install -Dm755 t "$pkgdir/home/shared/tool"'),
     ("srcdir",          'cp t "$srcdir/home/x"'),
     # `/home` with nothing after it is the parent of all homes, not

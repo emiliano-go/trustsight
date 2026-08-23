@@ -114,11 +114,11 @@ def test_get_last_analysis_found(db):
 
 def test_get_triggered_rules(db):
     pid = upsert_package("myapp", "1.0")
-    rules = [{"rule_id": "R001", "severity": "CRITICAL"}, {"rule_id": "R004", "severity": "HIGH"}]
+    rules = [{"rule_id": "R001", "severity": "CRITICAL"}, {"rule_id": "H001", "severity": "HIGH"}]
     hid = insert_analysis(pid, "1.0", "2.0", "a", "b", 65, "+d", "{}", rules)
     stored = get_triggered_rules(hid)
     assert len(stored) == 2
-    assert stored[0]["rule_id"] in ("R001", "R004")
+    assert stored[0]["rule_id"] in ("R001", "H001")
 
 
 def test_get_history(db):
@@ -459,7 +459,7 @@ def test_is_maintainer_globally_novel_false_when_in_maintainer_counts(db):
     assert is_maintainer_globally_novel("seeded-dev") is False
 
 
-# --- R071 end-to-end tests (real DB, no monkeypatch) ---
+# --- H026 end-to-end tests (real DB, no monkeypatch) ---
 
 def _warm_the_db():
     """Insert enough analyses so effective_observation_count() > 0."""
@@ -475,7 +475,7 @@ def _warm_the_db():
         )
 
 
-def test_r071_cold_db_suppressed(db):
+def test_h026_cold_db_suppressed(db):
     """Cold database (no analyses, no seed) must not fire even when a
     maintainer changes to a novel name."""
     from trustsight.analysis import _check_untrusted_maintainer_takeover
@@ -485,7 +485,7 @@ def test_r071_cold_db_suppressed(db):
     assert result is None
 
 
-def test_r071_warm_db_novel_maintainer_fires(db):
+def test_h026_warm_db_novel_maintainer_fires(db):
     """Warm database + globally novel maintainer change must fire."""
     from trustsight.analysis import _check_untrusted_maintainer_takeover
     from trustsight.db import is_maintainer_globally_novel
@@ -495,10 +495,10 @@ def test_r071_warm_db_novel_maintainer_fires(db):
         True, "fresh-mntnr"
     )
     assert result is not None
-    assert result["rule_id"] == "R071"
+    assert result["rule_id"] == "H026"
 
 
-def test_r071_warm_db_known_maintainer_suppressed(db):
+def test_h026_warm_db_known_maintainer_suppressed(db):
     """Warm database + maintainer already in the maintainers table must
     not fire."""
     from trustsight.analysis import _check_untrusted_maintainer_takeover
@@ -516,9 +516,9 @@ def test_r071_warm_db_known_maintainer_suppressed(db):
     assert result is None
 
 
-def test_r071_warm_db_counts_seed_maintainer(db):
+def test_h026_warm_db_counts_seed_maintainer(db):
     """Maintainer present in the seed-only maintainer_counts table is
-    not novel; R071 should not fire."""
+    not novel; H026 should not fire."""
     from trustsight.analysis import _check_untrusted_maintainer_takeover
     from trustsight.db import get_connection, is_maintainer_globally_novel
     _warm_the_db()
@@ -677,3 +677,84 @@ def test_init_db_adds_column_missing_from_an_older_database(tmp_path, monkeypatc
             "SELECT current_maintainer FROM packages WHERE name = 'preexisting'"
         ).fetchone()
     assert row["current_maintainer"] == "someone"
+
+
+# --- rule id rename migration (R -> H) ------------------------------------
+
+
+def _seed_old_rule_ids(tmp_path, monkeypatch):
+    """A database written before the rename: old ids, user_version 0."""
+    import sqlite3
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    with get_connection() as conn:
+        conn.execute("PRAGMA user_version = 0")
+        conn.execute(
+            "INSERT INTO alert_state (package_name, rule_id, first_seen) "
+            "VALUES (?, ?, ?)", ("pkg", "R060", "2026-01-01"))
+        conn.execute(
+            "INSERT INTO alert_state (package_name, rule_id, first_seen) "
+            "VALUES (?, ?, ?)", ("pkg", "R001", "2026-01-01"))
+        # `triggered_rules.history_id` is a foreign key, so the row it
+        # points at has to exist before the rule id can be stored.
+        package_id = conn.execute(
+            "INSERT INTO packages (name, current_version) VALUES (?, ?)",
+            ("pkg", "1.0")).lastrowid
+        history_id = conn.execute(
+            "INSERT INTO analysis_history (package_id, final_score) "
+            "VALUES (?, ?)", (package_id, 40)).lastrowid
+        conn.execute(
+            "INSERT INTO triggered_rules (history_id, rule_id, severity) "
+            "VALUES (?, ?, ?)", (history_id, "R151", "HIGH"))
+        conn.commit()
+    assert sqlite3  # the import is the point: this writes the legacy shape
+
+
+def test_migration_rewrites_renamed_rule_ids(tmp_path, monkeypatch):
+    """Alert dedup keys on (package, rule_id); a stale id re-notifies."""
+    from trustsight.rule_id_history import RENAMED_RULE_IDS
+
+    _seed_old_rule_ids(tmp_path, monkeypatch)
+    init_db()
+
+    with get_connection() as conn:
+        alerts = {row["rule_id"] for row in
+                  conn.execute("SELECT rule_id FROM alert_state").fetchall()}
+        triggered = {row["rule_id"] for row in
+                     conn.execute("SELECT rule_id FROM triggered_rules").fetchall()}
+
+    assert RENAMED_RULE_IDS["R060"] in alerts
+    assert "R060" not in alerts
+    assert RENAMED_RULE_IDS["R151"] in triggered
+    # A regex rule keeps its id: it was never part of the mapping.
+    assert "R001" in alerts
+
+
+def test_migration_is_idempotent_and_leaves_new_ids_alone(tmp_path, monkeypatch):
+    """Running twice must not rewrite an id that is already current.
+
+    The mapping's values are ids the migration also has to leave untouched,
+    so a second pass over an already-migrated database is the case that
+    would corrupt data if the version gate were missing.
+    """
+    _seed_old_rule_ids(tmp_path, monkeypatch)
+    init_db()
+    with get_connection() as conn:
+        first = sorted(row["rule_id"] for row in
+                       conn.execute("SELECT rule_id FROM alert_state").fetchall())
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+    assert version >= 1
+
+    init_db()
+    with get_connection() as conn:
+        second = sorted(row["rule_id"] for row in
+                        conn.execute("SELECT rule_id FROM alert_state").fetchall())
+    assert first == second
+
+
+def test_a_fresh_database_is_stamped_with_the_schema_version(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    with get_connection() as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] >= 1

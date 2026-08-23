@@ -1032,6 +1032,11 @@ def test_full_aur_help_documents_watch():
 
 
 def test_full_aur_watch_invokes_the_loop(monkeypatch):
+    # `full-aur` refuses to start when TRUSTSIGHT_OFFLINE is set, which the
+    # suite sets for every test. What is asserted here is the argument
+    # wiring, so the command has to be allowed to start; the loop it would
+    # enter is stubbed out below and nothing reaches the network.
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
     seen = {}
     monkeypatch.setattr(
         "trustsight.full_aur.pipeline.run_watch",

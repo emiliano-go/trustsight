@@ -55,7 +55,7 @@ def test_duplicate_id_is_an_error():
 
 
 def test_programmatic_id_collision_is_an_error():
-    findings = lint_rules([_rule(id="R004")])
+    findings = lint_rules([_rule(id="H001")])
     assert _checks(findings, "programmatic-id")[0].level == SEVERITY_ERROR
 
 
@@ -198,7 +198,7 @@ def test_every_code_emitted_id_is_reserved():
 
 
 @pytest.mark.parametrize("rule_id", ["C004", "C009", "X001", "X023", "S001",
-                                     "D001", "W001", "P001", "R151"])
+                                     "D001", "W001", "P001", "H095"])
 def test_shadowing_a_code_emitted_id_is_an_error(rule_id):
     findings = _checks(lint_rules([_rule(id=rule_id)]), "programmatic-id")
     assert findings and findings[0].level == SEVERITY_ERROR, (
@@ -217,10 +217,43 @@ def test_the_reserved_set_is_not_built_at_import():
     import importlib
     import sys
 
-    for name in [m for m in sys.modules if m.startswith("trustsight")]:
+    # The import has to happen from scratch, and the damage has to be put
+    # back. Every other test module holds references bound at collection
+    # time - `from trustsight.db import init_db` - while `monkeypatch`
+    # resolves "trustsight.db.DATA_DIR" through `sys.modules` at call time.
+    # Leave a second set of module objects behind and those two stop being
+    # the same module: `init_db()` creates tables in a tmpdir and
+    # `get_connection()` opens the operator's real database. That is what
+    # this test used to do to eleven tests in `test_novelty` and nine in
+    # `test_watch`, none of which named it in their failure.
+    saved = {n: m for n, m in sys.modules.items() if n.startswith("trustsight")}
+    for name in saved:
         del sys.modules[name]
-    module = importlib.import_module("trustsight.lint")
-    assert "PROGRAMMATIC_IDS" not in module.__dict__
-    assert module._programmatic_ids_cache is None
-    assert len(module.PROGRAMMATIC_IDS) > 100
-    assert "PROGRAMMATIC_IDS" in module.__dict__
+    try:
+        module = importlib.import_module("trustsight.lint")
+        assert "PROGRAMMATIC_IDS" not in module.__dict__
+        assert module._programmatic_ids_cache is None
+        assert len(module.PROGRAMMATIC_IDS) > 100
+        assert "PROGRAMMATIC_IDS" in module.__dict__
+    finally:
+        for name in [n for n in sys.modules if n.startswith("trustsight")]:
+            del sys.modules[name]
+        sys.modules.update(saved)
+
+
+def test_a_retired_rule_id_is_not_available_for_reuse():
+    """The R/H split freed ninety-five `R` numbers; none may be recycled.
+
+    A stored report, a published baseline and a user's `[rules.R###]`
+    override can all still name an old id. Handing that number to an
+    unrelated new rule would make those references quietly wrong rather
+    than loudly absent.
+    """
+    from trustsight.lint import PROGRAMMATIC_IDS
+    from trustsight.rule_id_history import RENAMED_RULE_IDS
+
+    retired = set(RENAMED_RULE_IDS)
+    assert retired, "the mapping is empty; the rename artifact is missing"
+    assert retired <= set(PROGRAMMATIC_IDS)
+    # And defining one in rules.toml is refused, not merely discouraged.
+    assert _checks(lint_rules([_rule(id="R060")]), "programmatic-id")

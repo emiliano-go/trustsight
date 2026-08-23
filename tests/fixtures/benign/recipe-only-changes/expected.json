@@ -1,9 +1,9 @@
 {
-  "R142-version-bump-not-recipe-only.diff": {
+  "H087-version-bump-not-recipe-only.diff": {
     "must_fire": [],
     "max_score": 0
   },
-  "R142-offline-build-no-gap.diff": {
+  "H087-offline-build-no-gap.diff": {
     "must_fire": [],
     "max_score": 0
   }

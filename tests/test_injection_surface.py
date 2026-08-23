@@ -117,7 +117,7 @@ def test_resolved_rules_do_not_read_comment_text(comment):
     It used to pin the opposite - "resolution never stripped comments" -
     as behaviour that was *pinned, not endorsed*, so that changing it would
     be a decision rather than a surprise. This is the decision: a
-    commented-out `curl | bash` scored R001 CRITICAL and R061 HIGH, 85 and
+    commented-out `curl | bash` scored R001 CRITICAL and H016 HIGH, 85 and
     a Critical band, on a line that runs nothing. Comments are filtered for
     raw-line rules by `filter_raw_lines` and now for resolved rules too;
     a rule whose target is the reader rather than the shell opts back in

@@ -1,10 +1,10 @@
-"""Phase 7 - Class E indicator matching (R106) and the corpus pivot.
+"""Phase 7 - Class E indicator matching (H056) and the corpus pivot.
 
-R106 is the one rule that names a specific artefact, so the tests are about
+H056 is the one rule that names a specific artefact, so the tests are about
 exactness in both directions: it must fire on the artefact and it must stay
 silent on everything that merely resembles it.  The shipped list is empty,
 which is also the calibration gate - an out-of-the-box install cannot fire
-R106 on any corpus diff.
+H056 on any corpus diff.
 """
 
 import pytest
@@ -80,7 +80,7 @@ def test_empty_list_short_circuits():
 
 
 def test_template_is_registered():
-    assert "R106" in TEMPLATES
+    assert "H056" in TEMPLATES
 
 
 # --- normalization ----------------------------------------------------------
@@ -360,7 +360,7 @@ def test_scan_diff_reports_a_confirmed_indicator_as_fatal(monkeypatch):
     )
     fact = scan_diff(diff, rules=[], config=load_config(),
                      package_name="demo", seen_urls={})
-    hits = [e for e in fact.score_breakdown if e.rule_id == "R106"]
+    hits = [e for e in fact.score_breakdown if e.rule_id == "H056"]
     assert len(hits) == 1
     assert hits[0].severity == "FATAL"
     assert fact.final_score == 100
@@ -378,15 +378,15 @@ def test_scan_diff_reads_the_current_file_when_given(monkeypatch):
 
     without = scan_diff(diff, rules=[], config=load_config(),
                         package_name="demo", seen_urls={})
-    assert not [e for e in without.score_breakdown if e.rule_id == "R106"]
+    assert not [e for e in without.score_breakdown if e.rule_id == "H056"]
 
     with_state = scan_diff(diff, rules=[], config=load_config(),
                            package_name="demo", seen_urls={},
                            current_text=current)
-    assert [e for e in with_state.score_breakdown if e.rule_id == "R106"]
+    assert [e for e in with_state.score_breakdown if e.rule_id == "H056"]
 
 
-def test_an_r106_override_cannot_silence_a_confirmed_indicator(monkeypatch):
+def test_an_h056_override_cannot_silence_a_confirmed_indicator(monkeypatch):
     """The overrides file is user-editable, and FATAL ignores it.
 
     A lower-tier indicator stays overridable - that is the point of the
@@ -397,7 +397,7 @@ def test_an_r106_override_cannot_silence_a_confirmed_indicator(monkeypatch):
 
     monkeypatch.setattr(
         "trustsight.override.load_overrides",
-        lambda: [RuleOverride(rule_id="R106", reason="noisy", package=None)],
+        lambda: [RuleOverride(rule_id="H056", reason="noisy", package=None)],
     )
     confirmed = _fire("+source=('https://malware.example/x')",
                       indicators=_set(_domain()))[0]
@@ -405,12 +405,12 @@ def test_an_r106_override_cannot_silence_a_confirmed_indicator(monkeypatch):
                    indicators=_set(_domain(confidence="medium")))[0]
 
     kept, suppressed = filter_triggered_rules(
-        [{"rule_id": "R106", "severity": confirmed["severity"]}], package="demo"
+        [{"rule_id": "H056", "severity": confirmed["severity"]}], package="demo"
     )
     assert kept and not suppressed
 
     kept, suppressed = filter_triggered_rules(
-        [{"rule_id": "R106", "severity": medium["severity"]}], package="demo"
+        [{"rule_id": "H056", "severity": medium["severity"]}], package="demo"
     )
     assert suppressed and not kept
 

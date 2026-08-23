@@ -141,7 +141,7 @@ package() {
 def test_attempt1_array_expansion_fetch_then_execute():
     fact = _fact(ATTEMPT1)
     assert fact.final_score >= 20
-    assert "R137" in _rule_ids(fact)
+    assert "H082" in _rule_ids(fact)
 
 
 # Attempt 2: download the payload through the declared ``source=()`` array
@@ -171,7 +171,7 @@ package() {
 def test_attempt2_downloaded_source_file_executed():
     fact = _fact(ATTEMPT2)
     assert fact.final_score >= 20
-    assert "R138" in _rule_ids(fact)
+    assert "H083" in _rule_ids(fact)
 
 
 # Attempt 3: command substitution inside ``source=()`` so the fetched URL is
@@ -236,12 +236,12 @@ package() {
 def test_attempt4_parse_time_function_fetch():
     fact = _fact(ATTEMPT4)
     assert fact.final_score >= 20
-    assert "R129" in _rule_ids(fact)
+    assert "H077" in _rule_ids(fact)
     assert "unresolved_parse_time" in fact.coverage_gaps
 
 
 # Attempt 5: execute a helper script committed to the AUR repo but not
-# declared in ``source=()``.  Covered by R136.
+# declared in ``source=()``.  Covered by H081.
 ATTEMPT5 = """# Maintainer: Jane Doe <jane@example.org>
 pkgname=fontconfig-tweaks
 pkgver=2.20.0
@@ -265,7 +265,7 @@ package() {
 def test_attempt5_committed_undeclared_file_executed():
     fact = _fact(ATTEMPT5)
     assert fact.final_score >= 20
-    assert "R136" in _rule_ids(fact)
+    assert "H081" in _rule_ids(fact)
 
 
 # Attempt 6: move the whole payload into an install hook.
@@ -309,7 +309,7 @@ package() {
         current_text=new,
     )
     assert fact.final_score >= 20
-    assert {"R062", "R007"} & _rule_ids(fact)
+    assert {"H017", "R007"} & _rule_ids(fact)
 
 
 # Attempt 7: base64-decode an embedded payload and run it.
@@ -342,7 +342,7 @@ PAYLOAD
 def test_attempt7_base64_payload_then_execute():
     fact = _fact(ATTEMPT7)
     assert fact.final_score >= 20
-    assert {"R043", "R120"} & _rule_ids(fact)
+    assert {"R043", "H068"} & _rule_ids(fact)
 
 
 # Attempt 8: hide the payload in a source-tarball binary and run it from a
@@ -389,7 +389,7 @@ def test_attempt8_service_binary_undeclared():
         ],
     )
     assert fact.final_score >= 20
-    assert "R139" in _rule_ids(fact)
+    assert "H084" in _rule_ids(fact)
 
 
 # Attempt 9: PATH injection via a build-tree directory so a standard ``make``
@@ -422,7 +422,7 @@ package() {
 def test_attempt9_path_injection_undeclared_directory():
     fact = _fact(ATTEMPT9)
     assert fact.final_score >= 20
-    assert "R140" in _rule_ids(fact)
+    assert "H085" in _rule_ids(fact)
 
 
 #: Modules that read attacker-authored diff or PKGBUILD text. Every one must

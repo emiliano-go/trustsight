@@ -52,7 +52,7 @@ ATTACK = """diff --git a/PKGBUILD b/PKGBUILD
  }
 """
 
-# An ordinary update: upstream moved, so R142 must stay silent however much
+# An ordinary update: upstream moved, so H087 must stay silent however much
 # else changed alongside it.
 ORDINARY = """diff --git a/PKGBUILD b/PKGBUILD
 --- a/PKGBUILD
@@ -131,13 +131,13 @@ def test_a_resolution_outside_a_build_function_is_not_this_gap():
 
 
 # ---------------------------------------------------------------------------
-# R142: the recipe moved and upstream did not.
+# H087: the recipe moved and upstream did not.
 # ---------------------------------------------------------------------------
 
 
 def test_recipe_only_change_is_the_campaigns_signature():
     assert is_recipe_only_change(ATTACK)
-    assert "R142" in _fired(ATTACK, was_orphaned=-1)
+    assert "H087" in _fired(ATTACK, was_orphaned=-1)
 
 
 @pytest.mark.parametrize("field,line", [
@@ -145,40 +145,40 @@ def test_recipe_only_change_is_the_campaigns_signature():
     ("checksums", "+sha256sums=('cccc')"),
     ("source", "+source=(\"https://example.org/new.tar.gz\")"),
 ])
-def test_any_upstream_move_silences_r142(field, line):
+def test_any_upstream_move_silences_h087(field, line):
     """Upstream moving makes it an ordinary update, whatever else changed."""
     diff = f"""diff --git a/PKGBUILD b/PKGBUILD
 +makedepends=('npm')
 {line}
 """
-    assert not is_recipe_only_change(diff), f"{field} moved but R142 still fired"
+    assert not is_recipe_only_change(diff), f"{field} moved but H087 still fired"
 
 
 def test_an_ordinary_version_bump_is_not_recipe_only():
     assert not is_recipe_only_change(ORDINARY)
-    assert "R142" not in _fired(ORDINARY, was_orphaned=1)
+    assert "H087" not in _fired(ORDINARY, was_orphaned=1)
 
 
 # ---------------------------------------------------------------------------
-# R141/R143: stateful, and silent without their state.
+# H086/H088: stateful, and silent without their state.
 # ---------------------------------------------------------------------------
 
 
-def test_r141_needs_a_recorded_prior_observation():
+def test_h086_needs_a_recorded_prior_observation():
     """-1 is "never asked", which is not evidence of an adoption.
 
     Letting "no record" read as "was orphaned" would invent an adoption for
     every package on a fresh database.
     """
-    assert "R141" not in _fired(ATTACK, was_orphaned=-1)
-    assert "R141" not in _fired(ATTACK, was_orphaned=0)
-    assert "R141" in _fired(ATTACK, was_orphaned=1)
+    assert "H086" not in _fired(ATTACK, was_orphaned=-1)
+    assert "H086" not in _fired(ATTACK, was_orphaned=0)
+    assert "H086" in _fired(ATTACK, was_orphaned=1)
 
 
-def test_r143_requires_all_three_conditions():
+def test_h088_requires_all_three_conditions():
     """The composition is the point: each member alone is ordinary."""
     # All three: adopted, recipe-only, registry resolution.
-    assert "R143" in _fired(ATTACK, was_orphaned=1)
+    assert "H088" in _fired(ATTACK, was_orphaned=1)
     # Adopted and recipe-only (deps and build both moved), but nothing is
     # fetched from a registry, so the composition is incomplete.
     no_fetch = """diff --git a/PKGBUILD b/PKGBUILD
@@ -188,20 +188,20 @@ def test_r143_requires_all_three_conditions():
 +  cmake --build .
  }
 """
-    assert "R142" in _fired(no_fetch, was_orphaned=1)
-    assert "R143" not in _fired(no_fetch, was_orphaned=1)
+    assert "H087" in _fired(no_fetch, was_orphaned=1)
+    assert "H088" not in _fired(no_fetch, was_orphaned=1)
 
-    # A build tweak with no dependency change is R060's territory, not
-    # R142's: the conjunction is what keeps this off ordinary packaging fixes.
+    # A build tweak with no dependency change is H015's territory, not
+    # H087's: the conjunction is what keeps this off ordinary packaging fixes.
     build_only = """diff --git a/PKGBUILD b/PKGBUILD
  build() {
 -  make
 +  make -j1
  }
 """
-    assert "R142" not in _fired(build_only, was_orphaned=1)
+    assert "H087" not in _fired(build_only, was_orphaned=1)
     # Registry resolution and recipe-only, but no recorded adoption.
-    assert "R143" not in _fired(ATTACK, was_orphaned=0)
+    assert "H088" not in _fired(ATTACK, was_orphaned=0)
 
 
 def test_the_orphan_state_is_tri_state_and_persisted():

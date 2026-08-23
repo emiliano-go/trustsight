@@ -110,16 +110,16 @@ def test_watch_passes_json_output_through(monkeypatch):
 def test_a_cluster_is_reported_once_not_every_cycle(data_dir):
     """The second cycle of an unchanged corpus announces nothing: the
     maintainer who adopted forty packages last night is not news twice."""
-    pairs = [("pkg-one", "R092"), ("pkg-two", "R092")]
+    pairs = [("pkg-one", "H045"), ("pkg-two", "H045")]
     assert record_alerts(pairs) == pairs
     assert record_alerts(pairs) == []
-    assert record_alerts(pairs + [("pkg-three", "R092")]) == [("pkg-three", "R092")]
+    assert record_alerts(pairs + [("pkg-three", "H045")]) == [("pkg-three", "H045")]
 
 
 def test_repeat_alerts_are_counted_not_forgotten(data_dir):
-    record_alerts([("pkg", "R090")])
-    record_alerts([("pkg", "R090")])
-    record_alerts([("pkg", "R090")])
+    record_alerts([("pkg", "H044")])
+    record_alerts([("pkg", "H044")])
+    record_alerts([("pkg", "H044")])
     row = alert_history("pkg")[0]
     assert row["count"] == 3
     assert row["first_seen"] <= row["last_sent"]
@@ -127,8 +127,8 @@ def test_repeat_alerts_are_counted_not_forgotten(data_dir):
 
 def test_alerts_are_per_rule(data_dir):
     """The same package hitting a *different* rule is a new alert."""
-    record_alerts([("pkg", "R090")])
-    assert record_alerts([("pkg", "R126")]) == [("pkg", "R126")]
+    record_alerts([("pkg", "H044")])
+    assert record_alerts([("pkg", "H074")]) == [("pkg", "H074")]
 
 
 def test_record_alerts_with_nothing_to_record(data_dir):
@@ -192,8 +192,8 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
     }
     second = run_baseline_build()
     fired = {f["rule_id"] for f in second.cluster_findings}
-    assert {"R090", "R071"} <= fired
-    assert ("pkg", "R071") in second.new_alerts
+    assert {"H044", "H026"} <= fired
+    assert ("pkg", "H026") in second.new_alerts
 
     third = run_baseline_build()
     assert third.new_alerts == []

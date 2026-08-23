@@ -1,7 +1,7 @@
 """Tests for Phase 5 - Class C longitudinal rules (plan §7).
 
 Covers the STABILITY_FLOOR gating in ``stability_weight`` / the property
-update step, and the ``longitudinal_findings`` consumer (R094-R098/R102/R083).
+update step, and the ``longitudinal_findings`` consumer (H047-H051/H054/H037).
 The cold-start gate is structural: the first observation only INSERTs, so a
 cold database can never produce a PropertyBreak and never fires any of these.
 """
@@ -120,62 +120,62 @@ def _ids(diff, breaks):
     return {f["rule_id"] for f in longitudinal_findings(diff, "pkg", breaks, {})}
 
 
-def test_r094_fires_on_security_flag_change():
+def test_h047_fires_on_security_flag_change():
     b = _pb("configure_flags", {"--prefix=/usr", "-fno-pie"}, {"--prefix=/usr"})
     r = longitudinal_findings("", "pkg", [b], {})
-    assert [f["rule_id"] for f in r] == ["R094"]
+    assert [f["rule_id"] for f in r] == ["H047"]
     assert r[0]["severity"] == "HIGH"  # hardening flag removed
 
 
-def test_r094_quiet_for_non_security_flag_churn():
+def test_h047_quiet_for_non_security_flag_churn():
     b = _pb("configure_flags", {"--prefix=/usr"}, {"--prefix=/opt"})
     assert _ids("", [b]) == set()
 
 
-def test_r095_vendors_matching_source():
+def test_h048_vendors_matching_source():
     b = _pb("depends", {"openssl", "zlib"}, {"zlib"})
     diff = "+source=('https://x/openssl-3.1.0.tar.gz')\n"
-    assert "R095" in _ids(diff, [b])
+    assert "H048" in _ids(diff, [b])
 
 
-def test_r095_quiet_when_source_name_does_not_match():
+def test_h048_quiet_when_source_name_does_not_match():
     b = _pb("depends", {"openssl", "zlib"}, {"zlib"})
     diff = "+source=('https://x/libre-ssl-wrapper-2.0.tar.gz')\n"
     assert _ids(diff, [b]) == set()
 
 
-def test_r095_quiet_without_diff_source():
+def test_h048_quiet_without_diff_source():
     b = _pb("depends", {"openssl"}, set())
     assert _ids("+pkgrel=2\n", [b]) == set()
 
 
-def test_r096_source_host_change():
+def test_h049_source_host_change():
     b = _pb("source_hosts", {"github.com"}, {"evil.example"})
-    assert "R096" in _ids("", [b])
+    assert "H049" in _ids("", [b])
 
 
-def test_r097_version_scheme_is_context():
+def test_h050_version_scheme_is_context():
     b = _pb("version_scheme", "semver", "hash")
     r = longitudinal_findings("", "pkg", [b], {})
-    assert [f["rule_id"] for f in r] == ["R097"]
+    assert [f["rule_id"] for f in r] == ["H050"]
     assert r[0]["severity"] == "INFO"
 
 
-def test_r098_pkgdesc_change():
+def test_h051_pkgdesc_change():
     b = _pb("pkgdesc_tokens", {"nice", "tool"}, {"malicious", "tool"})
-    assert "R098" in _ids("", [b])
+    assert "H051" in _ids("", [b])
 
 
-def test_r102_build_system_change():
+def test_h054_build_system_change():
     b = _pb("build_system_markers", {"make"}, {"cmake"})
-    assert "R102" in _ids("", [b])
+    assert "H054" in _ids("", [b])
 
 
-def test_r083_residue_property_change():
+def test_h037_residue_property_change():
     b = _pb("license", {"MIT"}, {"custom"})
-    assert "R083" in _ids("", [b])
+    assert "H037" in _ids("", [b])
     b2 = _pb("install_hook_present", False, True)
-    assert "R083" in _ids("", [b2])
+    assert "H037" in _ids("", [b2])
 
 
 def test_subfloor_break_is_never_consumed():

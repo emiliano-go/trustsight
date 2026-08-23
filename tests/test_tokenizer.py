@@ -365,7 +365,7 @@ def test_resolve_added_lines_glob_delete():
     assert any("echo a" in l for l in lines)
 
 
-# --- R117: obfuscated literal reconstruction ---
+# --- H065: obfuscated literal reconstruction ---
 
 def test_reconstruct_ansi_c_hex():
     from trustsight.tokenizer import reconstruct_literals

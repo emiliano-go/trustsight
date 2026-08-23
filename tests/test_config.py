@@ -246,7 +246,7 @@ def test_load_pattern_tables_round_trip(tmp_path, monkeypatch):
     assert hosts["standard_ports"] == DEFAULT_STANDARD_PORTS
     assert hosts["free_registrar_tlds"] == DEFAULT_FREE_REGISTRAR_TLDS
 
-    assert load_thresholds()["r082"]["obfuscation_density"] == 3
+    assert load_thresholds()["h036"]["obfuscation_density"] == 3
 
 
 def test_ensure_default_configs_idempotent(tmp_path, monkeypatch):
@@ -451,8 +451,8 @@ def test_no_drift_reported_for_a_current_rules_file(tmp_path, monkeypatch):
     assert drifted_shipped_rules() == []
 
 
-def test_a_pre_r106_iocs_stub_is_replaced(tmp_path, monkeypatch):
-    """The schema must reach installs that predate R106.
+def test_a_pre_h056_iocs_stub_is_replaced(tmp_path, monkeypatch):
+    """The schema must reach installs that predate H056.
 
     Config files are written once, at install time, so a placeholder from
     before the rule existed would otherwise keep its user forever without

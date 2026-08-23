@@ -425,57 +425,57 @@ def test_c007_ignores_variable_expansion():
     assert "C007" not in _findings(diff)
 
 
-# --- R006: Insecure Download Protocol (structural) ---
+# --- H003: Insecure Download Protocol (structural) ---
 
-def test_r006_http_source_without_checksum():
+def test_h003_http_source_without_checksum():
     """http:// added with no checksum change -> fires."""
     diff = '+source=("http://example.com/pkg.tar.gz")\n'
-    assert "R006" in _findings(diff)
+    assert "H003" in _findings(diff)
 
 
-def test_r006_http_source_with_checksum_added():
+def test_h003_http_source_with_checksum_added():
     """http:// added alongside checksum -> suppressed."""
     diff = (
         '+source=("http://example.com/pkg.tar.gz")\n'
         "+sha256sums=('abcdef1234567890')\n"
     )
-    assert "R006" not in _findings(diff)
+    assert "H003" not in _findings(diff)
 
 
-def test_r006_https_source_without_checksum():
+def test_h003_https_source_without_checksum():
     """https:// without checksum -> no fire (only http:// is insecure)."""
     diff = '+source=("https://example.com/pkg.tar.gz")\n'
-    assert "R006" not in _findings(diff)
+    assert "H003" not in _findings(diff)
 
 
-def test_r006_http_source_with_skip_checksum():
+def test_h003_http_source_with_skip_checksum():
     """http:// with sha256sums=SKIP -> fires (no actual checksum coverage)."""
     diff = (
         '+source=("http://example.com/pkg.tar.gz")\n'
         "+sha256sums=('SKIP')\n"
     )
-    assert "R006" in _findings(diff)
+    assert "H003" in _findings(diff)
 
 
-def test_r006_http_vcs_source_without_checksum():
+def test_h003_http_vcs_source_without_checksum():
     """http:// VCS source without checksum -> fires."""
     diff = '+source=("http://github.com/user/repo.git")\n'
-    assert "R006" in _findings(diff)
+    assert "H003" in _findings(diff)
 
 
-def test_r006_no_http_sources():
+def test_h003_no_http_sources():
     """No http:// added -> no fire."""
     diff = '+source=("https://example.com/pkg.tar.gz")\n'
-    assert "R006" not in _findings(diff)
+    assert "H003" not in _findings(diff)
 
 
-def test_r006_http_combined_with_https():
+def test_h003_http_combined_with_https():
     """Mixed http/https, checksum added -> no fire."""
     diff = (
         '+source=("http://cdn.example.com/pkg.tar.gz" "https://backup.example.com/pkg.tar.gz")\n'
         "+sha256sums=('abcdef1234567890')\n"
     )
-    assert "R006" not in _findings(diff)
+    assert "H003" not in _findings(diff)
 
 
 # --- Regressions found by measuring against the benign corpus ---
@@ -584,9 +584,9 @@ def test_contextual_codepoints_are_allowed_inside_non_latin_text():
         assert pattern.search(f"evil.com{ch}/x"), f"{hex(cp)} must fire in ASCII"
 
 
-# --- R071: Untrusted Maintainer Takeover ---
+# --- H026: Untrusted Maintainer Takeover ---
 
-def _r071_finding(
+def _h026_finding(
     maintainer_changed: bool,
     new_maintainer: str,
     monkeypatch,
@@ -607,38 +607,38 @@ def _r071_finding(
     )
 
 
-def test_r071_always_on_by_default(monkeypatch):
-    """R071 is always on; no experimental_rules section needed."""
-    result = _r071_finding(True, "newbie", monkeypatch)
+def test_h026_always_on_by_default(monkeypatch):
+    """H026 is always on; no experimental_rules section needed."""
+    result = _h026_finding(True, "newbie", monkeypatch)
     assert result is not None
 
 
-def test_r071_requires_maintainer_change(monkeypatch):
+def test_h026_requires_maintainer_change(monkeypatch):
     """No maintainer change means no takeover signal."""
-    assert _r071_finding(False, "newbie", monkeypatch) is None
+    assert _h026_finding(False, "newbie", monkeypatch) is None
 
 
-def test_r071_requires_new_maintainer_name(monkeypatch):
+def test_h026_requires_new_maintainer_name(monkeypatch):
     """Empty new_maintainer should not fire."""
-    assert _r071_finding(True, "", monkeypatch) is None
+    assert _h026_finding(True, "", monkeypatch) is None
 
 
-def test_r071_cold_start_gate(monkeypatch):
+def test_h026_cold_start_gate(monkeypatch):
     """Zero observation count suppresses the rule (all names are novel on
     a fresh database)."""
-    assert _r071_finding(True, "newbie", monkeypatch, effective_count=0) is None
+    assert _h026_finding(True, "newbie", monkeypatch, effective_count=0) is None
 
 
-def test_r071_novelty_gate(monkeypatch):
+def test_h026_novelty_gate(monkeypatch):
     """A known maintainer (not globally novel) must not fire."""
-    assert _r071_finding(True, "known-dev", monkeypatch, is_novel=False) is None
+    assert _h026_finding(True, "known-dev", monkeypatch, is_novel=False) is None
 
 
-def test_r071_all_gates_pass(monkeypatch):
+def test_h026_all_gates_pass(monkeypatch):
     """When every condition is satisfied the finding has the right shape."""
-    result = _r071_finding(True, "stranger", monkeypatch)
+    result = _h026_finding(True, "stranger", monkeypatch)
     assert result is not None
-    assert result["rule_id"] == "R071"
+    assert result["rule_id"] == "H026"
     assert result["name"] == "Untrusted Maintainer Takeover"
     assert result["severity"] == "HIGH"
     assert result["category"] == "maintainer"

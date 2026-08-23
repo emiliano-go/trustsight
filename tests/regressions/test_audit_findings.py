@@ -7,7 +7,7 @@ import pytest
 #
 # `_collect_tree_files` skipped any blob over 512 KiB, on the reasoning that
 # "a committed payload is small".  That is an assumption about the attacker,
-# and R118 fires on a committed ELF - which is far more likely to be large
+# and H066 fires on a committed ELF - which is far more likely to be large
 # than small.  Worse, `tree_analyzed` still reported True because some other
 # file had been read, so the run presented as complete.
 # ---------------------------------------------------------------------------

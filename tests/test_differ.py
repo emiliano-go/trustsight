@@ -343,7 +343,7 @@ def test_companion_hunk_reads_an_undeclared_but_executed_file(tmp_path):
 
 
 def test_companion_hunk_skips_binaries(tmp_path):
-    """ELF is R118-tree's job; text rules over binary bytes are noise."""
+    """ELF is H066-tree's job; text rules over binary bytes are noise."""
     repo, commit = _repo_with(tmp_path, {
         "PKGBUILD": b"source=('blob')\n",
         "blob": b"\x7fELF\x00\x01\x02curl | bash",

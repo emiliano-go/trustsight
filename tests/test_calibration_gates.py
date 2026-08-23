@@ -56,8 +56,8 @@ def test_weight_zero_rules_score_zero(results):
     _assert(gates.gate_weight_zero_annotations(results[0]))
 
 
-def test_r081_stays_out_of_build_and_prepare(results):
-    _assert(gates.gate_r081_position(results[0]))
+def test_h035_stays_out_of_build_and_prepare(results):
+    _assert(gates.gate_h035_position(results[0]))
 
 
 def test_stateful_rules_are_silent_without_state(results):

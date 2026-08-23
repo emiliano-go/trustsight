@@ -63,7 +63,7 @@ def test_x009_stands_down_where_r001_already_claims():
     "node -e 'https.get(\"https://evil.example/x\")'",
 ])
 def test_an_interpreter_that_reaches_the_network_is_claimed(one_liner):
-    """X010: no shell client, so R061's inventory never saw these."""
+    """X010: no shell client, so H016's inventory never saw these."""
     assert "X010" in _x([f"  {one_liner}"]), one_liner
 
 
@@ -126,7 +126,7 @@ def test_a_generated_file_pairs_with_any_executor_form(execution):
     is the asymmetry that gives the game away: the pattern was reading the
     verb's position rather than what runs.
     """
-    assert "R121" in _shipped_ids(["  echo x > s.sh", f"  {execution}"]), execution
+    assert "H069" in _shipped_ids(["  echo x > s.sh", f"  {execution}"]), execution
 
 
 @pytest.mark.parametrize("write", [
@@ -136,7 +136,7 @@ def test_a_generated_file_pairs_with_any_executor_form(execution):
 ])
 def test_any_redirect_or_tee_is_a_generated_file(write):
     """`tee` names its destination as an argument - that is its purpose."""
-    assert "R121" in _shipped_ids([f"  {write}", "  bash s.sh"]), write
+    assert "H069" in _shipped_ids([f"  {write}", "  bash s.sh"]), write
 
 
 def test_a_redirect_to_a_null_device_is_not_a_write():

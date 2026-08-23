@@ -112,7 +112,7 @@ def test_fetch_pkgbuild_with_tree_falls_back_to_cgit():
 
 
 def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
-    """The snapshot path surfaces R122 when the archive has trailing junk."""
+    """The snapshot path surfaces H070 when the archive has trailing junk."""
     from trustsight.full_aur import fetch as F
 
     body = _snapshot_tarball("demo", "pkgname=demo\npkgver=1.0\n") + b"JUNK"
@@ -122,7 +122,7 @@ def test_fetch_pkgbuild_with_tree_flags_trailing_archive_bytes():
     assert text == "pkgname=demo\npkgver=1.0\n"
     assert manifest is not None
     assert trailer_finding is not None
-    assert trailer_finding["rule_id"] == "R122"
+    assert trailer_finding["rule_id"] == "H070"
     assert trailer_finding["params"]["kind"] == "gzip"
     assert trailer_finding["params"]["trailing_bytes"] == 4
 

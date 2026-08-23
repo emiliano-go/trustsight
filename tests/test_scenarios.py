@@ -170,7 +170,7 @@ def test_obvious_sudo_usage():
 +}"""
     fact = scan_diff(diff, config=load_config())
     assert fact.final_score >= 40
-    assert any(e.rule_id == "R009" for e in fact.score_breakdown)
+    assert any(e.rule_id == "H004" for e in fact.score_breakdown)
 
 
 def test_obvious_checksum_disabled():
@@ -179,7 +179,7 @@ def test_obvious_checksum_disabled():
 +sha256sums=('SKIP')"""
     r = _run_pipeline(diff)
     assert r["score"] >= 25
-    assert any(t["rule_id"] == "R004" for t in r["triggered_rules"])
+    assert any(t["rule_id"] == "H001" for t in r["triggered_rules"])
 
 
 def test_obvious_python_c_url():
@@ -286,13 +286,13 @@ def test_subtle_nothing_wrong_but_all_new():
 
 def test_subtle_checksum_emptied_with_forge_url():
     """On a trusted forge, checksum array is emptied.
-    Forge membership is declared at weight 0; R005 supplies the score."""
+    Forge membership is declared at weight 0; H002 supplies the score."""
     diff = """-sha256sums=('abc123...')
 +sha256sums=()
 +source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")"""
     r = _run_pipeline(diff)
-    assert any(t["rule_id"] == "R005" for t in r["triggered_rules"])
-    assert r["score"] <= 25  # R005 is the only scoring signal.
+    assert any(t["rule_id"] == "H002" for t in r["triggered_rules"])
+    assert r["score"] <= 25  # H002 is the only scoring signal.
 
 
 def test_subtle_second_malicious_source_array_entry():
@@ -321,7 +321,7 @@ def test_subtle_protocol_downgrade():
     diff = """-source=("https://github.com/trusted/project/archive/v2.0.0.tar.gz")
 +source=("http://github.com/trusted/project/archive/v2.0.0.tar.gz")"""
     r = _run_pipeline(diff)
-    # R006 checks added HTTP sources without changed checksum backing.
+    # H003 checks added HTTP sources without changed checksum backing.
     assert r["score"] <= 10
 
 
@@ -339,7 +339,7 @@ def test_benign_desktop_file_update():
 def test_skip_checksum_earns_no_verification_credit():
     """detect_verification_evidence accepts checksum_behavior, but both
     call sites in analysis.py omitted it, so `sha256sums=('SKIP')` earned
-    a -10 'checksum present' credit while also firing R004."""
+    a -10 'checksum present' credit while also firing H001."""
 
     from trustsight.analysis import scan_diff
     from trustsight.config import DEFAULT_CONFIG, DEFAULT_RULES

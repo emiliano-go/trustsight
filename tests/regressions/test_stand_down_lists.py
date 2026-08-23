@@ -5,9 +5,9 @@ import pytest
 # ---------------------------------------------------------------------------
 # Audit E2/E8 - the stand-down list was wider than the list that catches
 #
-# R061 yields to R001 on `claims_pipe_to_shell`, and that decision was made
+# H016 yields to R001 on `claims_pipe_to_shell`, and that decision was made
 # with an executor list R001 had never seen.  `curl url | ksh -s` silenced
-# R061 and then fell through R001: a CRITICAL became a LOW because two lists
+# H016 and then fell through R001: a CRITICAL became a LOW because two lists
 # that had to agree were edited separately.  Six copies existed in all.
 # ---------------------------------------------------------------------------
 
@@ -16,7 +16,7 @@ import pytest
     "bash", "sh", "zsh", "dash", "ksh", "mksh", "yash", "posh", "pdksh",
     "ash", "busybox sh", "busybox ash", "python3", "perl", "ruby", "node",
 ])
-def test_every_executor_that_silences_r061_is_caught_by_r001(executor):
+def test_every_executor_that_silences_h016_is_caught_by_r001(executor):
     from trustsight.analysis.network import _PIPE_TO_SHELL_RE
     from trustsight.rules import _compiled
     from trustsight.config import shipped_rules
@@ -26,7 +26,7 @@ def test_every_executor_that_silences_r061_is_caught_by_r001(executor):
     assert r001 is not None, "R001's pattern must survive the regex safety gate"
     if _PIPE_TO_SHELL_RE.search(line):
         assert r001.search(line), (
-            f"R061 stands down for {executor} and R001 does not catch it"
+            f"H016 stands down for {executor} and R001 does not catch it"
         )
 
 

@@ -7,7 +7,7 @@
       "R001"
     ],
     "must_not_fire": [],
-    "relabelled": "R009 dropped 2026-08-03: the diff contains no sudo; the label predated R009 becoming a command-position code rule"
+    "relabelled": "H004 dropped 2026-08-03: the diff contains no sudo; the label predated H004 becoming a command-position code rule"
   },
   "fake-browser-bin.diff": {
     "fidelity": "approximate",
@@ -24,23 +24,23 @@
     "description": "DKMS package that writes to /etc/modules-load.d/ and sets SUID",
     "must_fire": [
       "R059",
-      "R060",
-      "R128"
+      "H015",
+      "H076"
     ],
     "must_not_fire": [
       "R017"
     ],
-    "relabelled": "R017 -> R059 (setuid bit), R018 -> R128 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)"
+    "relabelled": "R017 -> R059 (setuid bit), H007 -> H076 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)"
   },
   "libjpeg-turbo-skid.diff": {
     "fidelity": "approximate",
     "source": "Arch Linux bug tracker FS#42091",
     "description": "Compromised AUR upload that removed validpgpkeys and set SKIP",
     "must_fire": [
-      "R004",
-      "R069"
+      "H001",
+      "H024"
     ],
     "must_not_fire": [],
-    "relabelled": "R026 -> R004 (checksum set to SKIP), R014 -> R069 (validpgpkeys removed)"
+    "relabelled": "R026 -> H001 (checksum set to SKIP), H005 -> H024 (validpgpkeys removed)"
   }
 }

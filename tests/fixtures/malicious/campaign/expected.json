@@ -5,7 +5,7 @@
   "fidelity": "representative",
   "must_fire": [
    "R007",
-   "R081"
+   "H035"
   ],
   "min_score": 25
  },
@@ -25,8 +25,8 @@
   "fidelity": "representative",
   "must_fire": [
    "R007",
-   "R081",
-   "R117"
+   "H035",
+   "H065"
   ],
   "min_score": 25
  },
@@ -35,8 +35,8 @@
   "campaign": "june-w3-obfuscated",
   "fidelity": "representative",
   "must_fire": [
-   "R081",
-   "R117"
+   "H035",
+   "H065"
   ],
   "min_score": 25
  },
@@ -45,7 +45,7 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R119"
+   "H067"
   ],
   "min_score": 25
  },
@@ -54,7 +54,7 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R120"
+   "H068"
   ],
   "min_score": 25
  },
@@ -63,16 +63,16 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R121"
+   "H069"
   ],
   "min_score": 25
  },
  "july-write-then-execute.diff": {
-  "description": "A file the recipe places is then executed from its new path - the dataflow, not the generation (R121 owns that)",
+  "description": "A file the recipe places is then executed from its new path - the dataflow, not the generation (H069 owns that)",
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R124"
+   "H072"
   ],
   "min_score": 25
  },
@@ -81,7 +81,7 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R085"
+   "H039"
   ],
   "min_score": 25
  },
@@ -90,7 +90,7 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R114"
+   "H062"
   ],
   "min_score": 5
  },
@@ -99,7 +99,7 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R128"
+   "H076"
   ],
   "min_score": 25
  },
@@ -108,23 +108,23 @@
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R087"
+   "H041"
   ],
   "must_not_fire": [
-   "R061"
+   "H016"
   ],
   "min_score": 25
  },
  "july-full-kill-chain.diff": {
-  "description": "Anti-analysis, an encoded payload, persistence and an obfuscated install hook in one diff: R089's whole point",
+  "description": "Anti-analysis, an encoded payload, persistence and an obfuscated install hook in one diff: H043's whole point",
   "campaign": "july",
   "fidelity": "representative",
   "must_fire": [
-   "R081",
-   "R089",
-   "R114",
-   "R119",
-   "R120"
+   "H035",
+   "H043",
+   "H062",
+   "H067",
+   "H068"
   ],
   "min_score": 60
  },
@@ -133,10 +133,10 @@
   "campaign": "control",
   "fidelity": "representative",
   "must_not_fire": [
-   "R119",
-   "R121",
-   "R124",
-   "R128"
+   "H067",
+   "H069",
+   "H072",
+   "H076"
   ],
   "max_score": 20
  },
@@ -145,10 +145,10 @@
   "campaign": "control",
   "fidelity": "representative",
   "must_not_fire": [
-   "R118",
-   "R120",
-   "R124",
-   "R128"
+   "H066",
+   "H068",
+   "H072",
+   "H076"
   ],
   "max_score": 35
  }

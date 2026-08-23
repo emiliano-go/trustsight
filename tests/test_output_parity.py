@@ -377,8 +377,8 @@ def test_the_api_matches_the_cli_on_the_flag_and_on_the_attribute():
 # ---------------------------------------------------------------------------
 
 
-def test_x005_defers_to_r077_on_the_plain_spelling():
-    """R077 owns `~/` and `$HOME/`; X005 owns the spellings that dodge it.
+def test_x005_defers_to_h032_on_the_plain_spelling():
+    """H032 owns `~/` and `$HOME/`; X005 owns the spellings that dodge it.
 
     Both firing on one line would score a single write twice, which is the
     double-count the persistence rules already avoid among themselves.
@@ -392,13 +392,13 @@ def test_x005_defers_to_r077_on_the_plain_spelling():
                 if e.weight}
 
     plain = fired("install -Dm755 tool ~/bin/tool")
-    assert "R077" in plain and "X005" not in plain
+    assert "H032" in plain and "X005" not in plain
 
     aliased = fired("install -Dm755 tool /home/$USER/bin/tool")
-    assert "X005" in aliased and "R077" not in aliased
+    assert "X005" in aliased and "H032" not in aliased
 
 
-def test_r077_is_critical_in_an_install_scriptlet():
+def test_h032_is_critical_in_an_install_scriptlet():
     """pacman runs scriptlets as root; the same write in build() is HIGH."""
     from trustsight.analysis import scan_diff
 
@@ -408,5 +408,5 @@ def test_r077_is_critical_in_an_install_scriptlet():
         return {e.rule_id: e.severity
                 for e in scan_diff(diff, package_name="p").score_breakdown}
 
-    assert severity("post_install")["R077"] == "CRITICAL"
-    assert severity("build")["R077"] == "HIGH"
+    assert severity("post_install")["H032"] == "CRITICAL"
+    assert severity("build")["H032"] == "HIGH"

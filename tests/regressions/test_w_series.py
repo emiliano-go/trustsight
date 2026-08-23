@@ -18,8 +18,8 @@ from .helpers import _shipped_ids, _x
 def test_code_runs_that_this_analysis_never_read(line):
     """W001 is the E7 boundary, reported rather than scored.
 
-    R138 claims the case where the executed file is a declared source and
-    R136 where it is committed. What is left is code that runs and that
+    H083 claims the case where the executed file is a declared source and
+    H081 where it is committed. What is left is code that runs and that
     nobody looked at - which the boundary documentation had to describe as
     something TrustSight cannot see. It can see it.
     """
@@ -40,7 +40,7 @@ def test_the_standard_entry_points_of_an_unpacked_tree_are_not_a_finding(line):
     ecosystem while saying nothing a reader does not already assume.
 
     The `sed` case is the one that forced the pattern to be W001's own
-    rather than shared with R138: reusing R138's deliberately loose capture
+    rather than shared with H083: reusing H083's deliberately loose capture
     produced evidence like `log\\.txt|/var/log/ventoy.log|g` from the
     innards of a substitution.
     """
@@ -84,7 +84,7 @@ def test_a_w_finding_is_shown_even_though_it_scores_nothing():
 
 def test_w001_stands_down_where_a_scoring_rule_can_speak():
     """W001 is what is left when nothing else could: a declared source is
-    R138's, and a committed file is R136's."""
+    H083's, and a committed file is H081's."""
     from trustsight.analysis import scan_diff
 
     declared = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
@@ -92,7 +92,7 @@ def test_w001_stands_down_where_a_scoring_rule_can_speak():
                 "+sha256sums=('SKIP')\n+build() {\n"
                 '+  bash "$srcdir/setup.sh"\n+}\n')
     ids = {e.rule_id for e in scan_diff(declared, package_name="p").score_breakdown}
-    assert "R138" in ids and "W001" not in ids
+    assert "H083" in ids and "W001" not in ids
 
     committed = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
                  "+pkgname=p\n+pkgver=1\n"
@@ -136,8 +136,8 @@ def test_a_patch_whose_bytes_were_never_read(cmd):
     assert "W003" in _shipped_ids([cmd], declared=False, fn="prepare"), cmd
 
 
-def test_w003_stands_down_on_a_patch_r146_has_read():
-    """A committed patch is one R146 reads by its added lines."""
+def test_w003_stands_down_on_a_patch_h090_has_read():
+    """A committed patch is one H090 reads by its added lines."""
     from trustsight.analysis import scan_diff
 
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
@@ -199,7 +199,7 @@ def test_a_line_whose_only_finding_is_a_w_scores_nothing_extra():
     assert noisy.risk == quiet.risk
 
 
-_R149_DIFF = (
+_H093_DIFF = (
     "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
     "+pkgname=p\n+pkgver=1\n+source=(x.service)\n+sha256sums=('SKIP')\n"
     "+package() {\n"
@@ -212,7 +212,7 @@ def _committed_ids(name, blob):
     from trustsight.analysis import scan_diff
 
     return {e.rule_id for e in scan_diff(
-        _R149_DIFF, package_name="p", tree_manifest=[(name, blob)],
+        _H093_DIFF, package_name="p", tree_manifest=[(name, blob)],
     ).score_breakdown}
 
 
@@ -224,12 +224,12 @@ def _committed_ids(name, blob):
     ("9.rules", b'ACTION=="add", RUN+="/bin/sh $startdir/x.sh"\n'),
 ])
 def test_a_committed_config_pointing_at_a_build_only_path(name, blob):
-    """R149 is the symmetric half of R145: that rule reads content the
+    """H093 is the symmetric half of H089: that rule reads content the
     recipe *generates* into `$pkgdir`, this one content it *committed* and
     then ships. Same observable, same reasoning - those directories exist
     only while the package is being built.
     """
-    assert "R149" in _committed_ids(name, blob), name
+    assert "H093" in _committed_ids(name, blob), name
 
 
 @pytest.mark.parametrize("name,blob", [
@@ -241,15 +241,15 @@ def test_a_committed_config_pointing_at_a_build_only_path(name, blob):
     # A build path in a field that runs nothing is a cosmetic mistake.
     ("x.desktop", b"[Desktop Entry]\nComment=built in $srcdir\nExec=/usr/bin/p\n"),
 ])
-def test_r149_needs_a_directive_that_runs_something(name, blob):
+def test_h093_needs_a_directive_that_runs_something(name, blob):
     """What makes the finding sound is not which key carries the command,
     it is that the value names a directory that will not exist on the
     target machine."""
-    assert "R149" not in _committed_ids(name, blob), (name, blob)
+    assert "H093" not in _committed_ids(name, blob), (name, blob)
 
 
 def test_the_packaging_phase_is_where_an_unread_script_gets_scored():
-    """R150 is the scoring half of W001, and the split is measured rather
+    """H094 is the scoring half of W001, and the split is measured rather
     than assumed.
 
     Of the three benign corpus diffs that execute a script from the
@@ -260,11 +260,11 @@ def test_the_packaging_phase_is_where_an_unread_script_gets_scored():
     """
     packaged = _shipped_ids(
         ['  bash "$srcdir/x-1.0/postinstall.sh"'], declared=False, fn="package")
-    assert "R150" in packaged and "W001" not in packaged
+    assert "H094" in packaged and "W001" not in packaged
 
     built = _shipped_ids(
         ['  bash "$srcdir/x-1.0/postunpack.sh"'], declared=False, fn="build")
-    assert "W001" in built and "R150" not in built
+    assert "W001" in built and "H094" not in built
 
 
 @pytest.mark.parametrize("lines", [
@@ -312,10 +312,10 @@ def test_w004_needs_an_explicit_manifest_argument(line):
 
 
 def test_w004_stands_down_when_the_manifest_is_declared():
-    """A declared source is checksum-pinned and R138's to claim."""
+    """A declared source is checksum-pinned and H083's to claim."""
     ids = _shipped_ids(['  make -f "$srcdir/setup.mk" all'], declared=False,
                        source="https://e.example/setup.mk")
-    assert "R138" in ids and "W004" not in ids
+    assert "H083" in ids and "W004" not in ids
 
 
 @pytest.mark.parametrize("name,line", [
@@ -331,7 +331,7 @@ def test_w004_stands_down_when_the_manifest_is_declared():
     ("Makefile", b"all:\n\tbash $srcdir/e.sh\n"),
     ("build.ninja", b"rule r\n  command = bash $PWD/e.sh\n"),
 ])
-def test_r149_does_not_depend_on_naming_the_directive(name, line):
+def test_h093_does_not_depend_on_naming_the_directive(name, line):
     """Every one of these is a different word for "run this", and the next
     daemon has another.
 
@@ -418,7 +418,7 @@ def test_a_standard_target_says_what_it_does(line):
 
 
 def test_w005_stands_down_when_the_makefile_is_committed():
-    """A committed Makefile is one R149 reads."""
+    """A committed Makefile is one H093 reads."""
     from trustsight.analysis import scan_diff
 
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
@@ -473,9 +473,9 @@ def test_x021_leaves_a_named_file_and_a_wrapper_alone(lines):
     '  guestfish --rw -a d.img run : upload "$srcdir/x.sh" /x.sh',
 ])
 def test_boot_material_built_from_the_source_tree(line):
-    """R151: the initramfs runs before userspace exists and before any
+    """H095: the initramfs runs before userspace exists and before any
     filesystem the user can inspect is mounted."""
-    assert "R151" in _shipped_ids([line], declared=False, fn="package"), line
+    assert "H095" in _shipped_ids([line], declared=False, fn="package"), line
 
 
 @pytest.mark.parametrize("line", [
@@ -486,7 +486,7 @@ def test_boot_material_built_from_the_source_tree(line):
 def test_shipping_boot_files_is_not_generating_them(line):
     """A package may legitimately ship kernel modules or a bootloader, and
     those are `install`ed like any other file."""
-    assert "R151" not in _shipped_ids([line], declared=False, fn="package"), line
+    assert "H095" not in _shipped_ids([line], declared=False, fn="package"), line
 
 
 @pytest.mark.parametrize("line", [
@@ -498,7 +498,7 @@ def test_a_content_address_is_still_an_address(line):
     and the address matcher finds addresses by that marker. The client was
     recognised and the fetch scored nothing because no address could be
     attributed to it."""
-    assert "R061" in _shipped_ids([line], declared=False), line
+    assert "H016" in _shipped_ids([line], declared=False), line
 
 
 @pytest.mark.parametrize("line", [

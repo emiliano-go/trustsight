@@ -364,7 +364,7 @@ def test_analysis_integration_scan_diff(baseline_dir, isolated_db, monkeypatch):
     assert fact.ioc_matches[0].type == "domain"
     assert fact.ioc_matches[0].value == "malware.example"
     # IOC matches do not affect the score.
-    assert not any(e.rule_id == "R106" for e in fact.score_breakdown)
+    assert not any(e.rule_id == "H056" for e in fact.score_breakdown)
 
 
 def test_analysis_integration_package_name(baseline_dir, isolated_db, monkeypatch):

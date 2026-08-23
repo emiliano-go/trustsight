@@ -160,7 +160,7 @@ def test_a_hostile_finding_reason_survives_rendering_intact():
 
     A snapshot tarball member name is chosen by the package author, is not
     bounded the way the git path bounds companion names, and lands in
-    R118's reason text.
+    H066's reason text.
     """
     from trustsight.analysis import scan_diff
 

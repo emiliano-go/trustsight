@@ -1,15 +1,15 @@
 {
   "evasion-fetch-via-indirect.diff": {
-    "description": "The fetch tool is reached through ${!C} indirection, so the resolved line keeps no literal curl/wget for R001/R002/R061 and R129 to name",
+    "description": "The fetch tool is reached through ${!C} indirection, so the resolved line keeps no literal curl/wget for R001/R002/H016 and H077 to name",
     "must_fire": [
-      "R132"
+      "H080"
     ],
     "min_score": 40
   },
   "evasion-shell-via-indirect.diff": {
     "description": "curl is variable-routed and the shell is reached through ${!P}: R001's shell alternation names literals only",
     "must_fire": [
-      "R132"
+      "H080"
     ],
     "min_score": 40
   },
@@ -31,20 +31,20 @@
   "evasion-heredoc-fed-indirect.diff": {
     "description": "The remote-execution line lives inside a heredoc fed straight to a shell; the literal pipe-to-shell rules never see it once the fetch is indirect",
     "must_fire": [
-      "R132"
+      "H080"
     ],
     "min_score": 40
   },
   "evasion-heredoc-written-indirect.diff": {
-    "description": "The recipe writes an executable script into $srcdir and sources it; R121/R124 want the writer and the executor in the same visible line, and the fetch inside is indirect",
+    "description": "The recipe writes an executable script into $srcdir and sources it; H069/H072 want the writer and the executor in the same visible line, and the fetch inside is indirect",
     "must_fire": [
-      "R132"
+      "H080"
     ],
     "min_score": 40
   },
   "evasion-command-via-array-index.diff": {
     "known_gap": true,
-    "description": "curl is stored as an array element and reached through ${A[0]}; the resolver folds A only as a whole, never by subscript, and ${A[0]} is not the ${!name} form R132 reads, so the fetch line keeps no literal curl",
+    "description": "curl is stored as an array element and reached through ${A[0]}; the resolver folds A only as a whole, never by subscript, and ${A[0]} is not the ${!name} form H080 reads, so the fetch line keeps no literal curl",
     "must_fire": [
       "R133"
     ],

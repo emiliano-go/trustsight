@@ -249,7 +249,7 @@ def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
     the new-package check, and the committed-tree scan - handed them to
     `insert_analysis`, and then built the fact with a hardcoded score of 0
     and no breakdown. A first-seen package shipping an ELF binary in its git
-    tree (R118, the Atomic Arch delivery shape) reported **Low, score 0, no
+    tree (H066, the Atomic Arch delivery shape) reported **Low, score 0, no
     findings**, with the finding sitting in the row it had just written.
 
     First-seen is the case with the least prior evidence about a package,
@@ -263,7 +263,7 @@ def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
     from trustsight.schema import NoveltyContext
 
     monkeypatch.setattr(pipeline, "_recent_update", lambda repo, commit: {
-        "rule_id": "R065", "name": "Very Recent Update", "severity": "MEDIUM",
+        "rule_id": "H020", "name": "Very Recent Update", "severity": "MEDIUM",
         "category": "temporal", "reason": "updated 2h ago", "weight": 10})
     monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
     monkeypatch.setattr(
@@ -283,7 +283,7 @@ def test_a_first_analysis_reports_what_it_found(isolated, monkeypatch):
     )
 
     fired = {e.rule_id for e in fact.score_breakdown}
-    assert {"R065", "R118"} <= fired, "the findings this path made were dropped"
+    assert {"H020", "H066"} <= fired, "the findings this path made were dropped"
     assert fact.final_score > 0, "a scored finding must move the score"
     assert fact.risk != "Low"
     assert fact.current_maintainer == "M <m@example.org>"

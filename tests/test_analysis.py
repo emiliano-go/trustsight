@@ -44,7 +44,7 @@ def test_pipeline_stage_integration():
     triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
     rule_ids = [r["rule_id"] for r in triggered]
     assert "R001" in rule_ids
-    assert "R004" in rule_ids
+    assert "H001" in rule_ids
     assert "R010" in rule_ids
 
     config = {
@@ -104,7 +104,7 @@ def test_pipeline_subtly_malicious():
     raw_lines = get_raw_diff_lines(diff)
     triggered = apply_rules(resolved, raw_lines, SHARED_RULES)
     rule_ids = [r["rule_id"] for r in triggered]
-    assert "R004" in rule_ids
+    assert "H001" in rule_ids
 
     config = {
         "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
@@ -147,7 +147,7 @@ def test_pipeline_hard_to_spot_malicious():
     assert level == "Medium"
 
 
-# --- Structural anomaly tests (R014, R016) ---
+# --- Structural anomaly tests (H005, H006) ---
 
 def test_pkgver_changed_detected():
     from trustsight.analysis import _pkgver_changed_in_diff
@@ -167,7 +167,7 @@ def test_url_changed_no_version_bump():
     from trustsight.schema import NoveltyContext
 
     triggered = [
-        {"rule_id": "R014", "name": "Source URL Changed Without Version Bump", "severity": "MEDIUM", "category": "integrity", "match": "URLs changed"},
+        {"rule_id": "H005", "name": "Source URL Changed Without Version Bump", "severity": "MEDIUM", "category": "integrity", "match": "URLs changed"},
     ]
     config = {
         "severity_weights": {"MEDIUM": 15},
@@ -177,7 +177,7 @@ def test_url_changed_no_version_bump():
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), config)
     assert score == 15
     assert level == "Low"
-    assert any(e.rule_id == "R014" for e in breakdown)
+    assert any(e.rule_id == "H005" for e in breakdown)
 
 
 def test_checksum_changed_no_url_change():
@@ -185,7 +185,7 @@ def test_checksum_changed_no_url_change():
     from trustsight.schema import NoveltyContext
 
     triggered = [
-        {"rule_id": "R016", "name": "Checksum Changed Without Source Change", "severity": "HIGH", "category": "integrity", "match": "sha256sums changed"},
+        {"rule_id": "H006", "name": "Checksum Changed Without Source Change", "severity": "HIGH", "category": "integrity", "match": "sha256sums changed"},
     ]
     config = {
         "severity_weights": {"HIGH": 25},
@@ -195,7 +195,7 @@ def test_checksum_changed_no_url_change():
     score, breakdown, level = calculate_score(triggered, {}, NoveltyContext(), config)
     assert score == 25
     assert level == "Medium"
-    assert any(e.rule_id == "R016" for e in breakdown)
+    assert any(e.rule_id == "H006" for e in breakdown)
 
 
 # --- Offline novelty tracking must match the live path ---
@@ -272,7 +272,7 @@ def test_a_truncated_diff_is_marked_as_such():
 
 def test_checksum_multiline_hash_detected():
     """sha256sums=( ) split across lines must read as a checksum addition,
-    not 'unchanged' (previously every multiline checksum escaped C001/R004)."""
+    not 'unchanged' (previously every multiline checksum escaped C001/H001)."""
     diff = "+sha256sums=(\n+  'ab12cd34ef5678'\n+)\n"
     sc = extract_urls_from_diff(diff)
     assert sc.checksum_behavior == "checksum_added_or_changed"
@@ -304,7 +304,7 @@ def test_checksum_any_algorithm_counts():
     makepkg verifies with whichever array the package declares, so a
     package shipping only `b2sums` or `sha512sums` was verified by that
     one, and `b2sums=('SKIP')` disabled verification while reporting
-    `unchanged`, which is R004 not firing at all.
+    `unchanged`, which is H001 not firing at all.
     """
     diff = "+sha512sums=(\n+  'ab12cd34ef5678'\n+)\n"
     sc = extract_urls_from_diff(diff)

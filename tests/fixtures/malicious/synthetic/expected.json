@@ -60,72 +60,72 @@
       "R003"
     ]
   },
-  "R004-skip-git-justified.diff": {
+  "H001-skip-git-justified.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ],
     "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
-  "R004-skip-git-pkgname.diff": {
+  "H001-skip-git-pkgname.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ],
     "relabelled": "2026-08-03: a -git *name* does not justify SKIP - justification requires a declared VCS source, a .sig, validpgpkeys or DKMS, none of which this diff has. The name is attacker-chosen, so firing is correct."
   },
-  "R004-skip-https-bare.diff": {
+  "H001-skip-https-bare.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ],
     "must_not_fire": [
       "R012",
       "R013"
     ]
   },
-  "R004-skip-https-named.diff": {
+  "H001-skip-https-named.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ],
     "must_not_fire": [
       "R012",
       "R013"
     ]
   },
-  "R004-skip-indexed.diff": {
+  "H001-skip-indexed.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ]
   },
-  "R004-skip-validpgpkeys.diff": {
+  "H001-skip-validpgpkeys.diff": {
     "must_not_fire": [
-      "R004",
+      "H001",
       "R012",
       "R013"
     ]
   },
-  "R005-empty-checksum.diff": {
+  "H002-empty-checksum.diff": {
     "min_score": 25,
     "must_fire": [
-      "R005"
+      "H002"
     ]
   },
-  "R006-http-url.diff": {
+  "H003-http-url.diff": {
     "min_score": 15,
     "must_fire": [
-      "R006"
+      "H003"
     ],
     "must_not_fire": [
       "R012",
       "R013"
     ]
   },
-  "R006-https-url.diff": {
+  "H003-https-url.diff": {
     "must_not_fire": [
-      "R006",
+      "H003",
       "R012",
       "R013"
     ]
@@ -154,27 +154,27 @@
       "R008"
     ]
   },
-  "R009-sudo-in-build.diff": {
+  "H004-sudo-in-build.diff": {
     "max_score": 70,
     "min_score": 40,
     "must_fire": [
-      "R009"
+      "H004"
     ],
-    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not R009. R009 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (R009 CRITICAL 40 + R058 HIGH 25 = 65)."
+    "relabelled": "2026-08-07: fixture was wrong, not the rule - the sudo sat at top level, where it fires R058 (write outside $pkgdir) but not H004. H004 is scoped to build/install functions, so the diff now adds a build() body containing the sudo (H004 CRITICAL 40 + R058 HIGH 25 = 65)."
   },
   "R010-curl-fetch.diff": {
     "min_score": 25,
     "must_fire": [
-      "R129"
+      "H077"
     ],
-    "relabelled": "R010 -> R129 2026-08-05: R010 is scoped to build functions by design; a top-level fetch runs when makepkg merely sources the recipe, which is R129's claim"
+    "relabelled": "R010 -> H077 2026-08-05: R010 is scoped to build functions by design; a top-level fetch runs when makepkg merely sources the recipe, which is H077's claim"
   },
   "R011-wget-fetch.diff": {
     "min_score": 25,
     "must_fire": [
-      "R129"
+      "H077"
     ],
-    "relabelled": "R011 -> R129 2026-08-05: same as R010; the parse-time position is the finding, not the downloader's name"
+    "relabelled": "R011 -> H077 2026-08-05: same as R010; the parse-time position is the finding, not the downloader's name"
   },
   "R012-control-no-injection.diff": {
     "max_score": 0,
@@ -991,24 +991,24 @@
     ],
     "must_not_fire": []
   },
-  "R014-validpgpkeys-added.diff": {
+  "H005-validpgpkeys-added.diff": {
     "must_fire": [
-      "R130"
+      "H078"
     ],
-    "relabelled": "R014 -> R130 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
+    "relabelled": "H005 -> H078 2026-08-05: the signing-key set changing is now reported; introducing validpgpkeys where there was none is signature checking being switched on, so it is an INFO fact rather than a scored finding"
   },
   "R015-depends-added.diff": {
     "relabelled": "R015 -> (none) 2026-08-07: R015 is a reserved ID. A depends addition is reported as a fact (dependency_changes) and scored only by D001 (novel dependency), which needs a seeded corpus; the gates measure on a cold DB, so this is silent by design there."
   },
-  "R016-makedepends-added.diff": {
+  "H006-makedepends-added.diff": {
     "min_score": 10,
     "must_fire": [
       "D003"
     ],
-    "relabelled": "R016 -> D003 2026-08-07: R016 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
+    "relabelled": "H006 -> D003 2026-08-07: H006 was renamed to C001 and the makedepends change is now scored by D003 (network-using makedepends), which is stateless and fires on a cold DB."
   },
-  "R016-optdepends-added.diff": {
-    "relabelled": "R016 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
+  "H006-optdepends-added.diff": {
+    "relabelled": "H006 -> (none) 2026-08-07: same as R015 - an optdepends addition is a reported fact, never scored without corpus state, so it is silent under the gates' cold DB."
   },
   "R017-chmod-sgid.diff": {
     "min_score": 25,
@@ -1030,52 +1030,52 @@
     ],
     "relabelled": "R017 -> R059"
   },
-  "R018-ln-sf.diff": {
+  "H007-ln-sf.diff": {
     "min_score": 15,
     "must_fire": [
-      "R128"
+      "H076"
     ],
-    "relabelled": "R018 -> R128 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
+    "relabelled": "H007 -> H076 (build function writes outside $pkgdir); the symlink into a system directory is one shape of that write"
   },
-  "R019-cflags-suspicious.diff": {
+  "H008-cflags-suspicious.diff": {
     "min_score": 10,
     "must_fire": [
-      "R131"
+      "H079"
     ],
-    "relabelled": "R019 -> R131 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which R070 cannot see (it is scoped to build functions)"
+    "relabelled": "H008 -> H079 2026-08-05: a top-level assignment replacing the makepkg.conf flag set, which H025 cannot see (it is scoped to build functions)"
   },
-  "R025-eval.diff": {
+  "H014-eval.diff": {
     "min_score": 30,
     "must_fire": [
       "R039"
     ],
-    "relabelled": "R025 -> R039 (eval of a substitution)"
+    "relabelled": "H014 -> R039 (eval of a substitution)"
   },
-  "R025-exec.diff": {
+  "H014-exec.diff": {
     "min_score": 30,
     "must_fire": [
-      "R129"
+      "H077"
     ],
-    "relabelled": "R025 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which R129 claims (HIGH 25) plus the source bucket (20)."
+    "relabelled": "H014 dropped 2026-08-07: no shipped rule names exec of fetched output; the top-level wget is a parse-time fetch, which H077 claims (HIGH 25) plus the source bucket (20)."
   },
   "R026-checksum-to-skip.diff": {
     "min_score": 25,
     "must_fire": [
-      "R004"
+      "H001"
     ],
-    "relabelled": "R026 -> R004"
+    "relabelled": "R026 -> H001"
   },
   "R027-checksum-emptied.diff": {
     "min_score": 25,
     "must_fire": [
-      "R005"
+      "H002"
     ],
-    "relabelled": "R027 -> R005"
+    "relabelled": "R027 -> H002"
   },
-  "R142-recipe-only-npm.diff": {
+  "H087-recipe-only-npm.diff": {
     "min_score": 20,
     "must_fire": [
-      "R142"
+      "H087"
     ]
   },
   "S001-fork-bomb.diff": {
@@ -1143,15 +1143,15 @@
       "R001",
       "R002",
       "R003",
-      "R004",
-      "R005",
-      "R006",
+      "H001",
+      "H002",
+      "H003",
       "R007",
       "R008",
-      "R009",
+      "H004",
       "R012",
       "R013",
-      "R025",
+      "H014",
       "R026",
       "R027"
     ]

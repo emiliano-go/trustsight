@@ -23,7 +23,7 @@ def test_a_fetched_build_driver_input_is_an_execution(write, execute):
     claims "this file came with the project" and was reading the filename
     instead of the provenance.
     """
-    assert "R137" in _shipped_ids([f"  {write}", f"  {execute}"],
+    assert "H082" in _shipped_ids([f"  {write}", f"  {execute}"],
                                   declared=False), write
 
 
@@ -34,7 +34,7 @@ def test_a_fetched_build_driver_input_is_an_execution(write, execute):
 def test_an_ordinary_build_driver_is_not_an_execution_finding(ordinary):
     """Almost every package runs make; only a file this recipe *fetched*
     or committed is the signal."""
-    assert "R137" not in _shipped_ids(ordinary, declared=False), ordinary
+    assert "H082" not in _shipped_ids(ordinary, declared=False), ordinary
 
 
 @pytest.mark.parametrize("fetch", [
@@ -44,7 +44,7 @@ def test_an_ordinary_build_driver_is_not_an_execution_finding(ordinary):
 def test_a_fetch_with_no_destination_still_writes_a_file(fetch):
     """`wget URL` saves the URL's basename, and `curl -O` asks for exactly
     that, so the file the next line runs was never written down anywhere."""
-    assert "R137" in _shipped_ids([f"  {fetch}", "  bash x.sh"],
+    assert "H082" in _shipped_ids([f"  {fetch}", "  bash x.sh"],
                                   declared=False), fetch
 
 
@@ -58,7 +58,7 @@ def test_a_capital_O_is_not_an_output_argument():
 
 def test_an_scp_source_without_a_user_is_still_a_remote():
     """`scp host:/x.sh dest` is the same remote read as `user@host:/x.sh`,
-    and requiring `@` left the fetch unattributed while R137 paired the
+    and requiring `@` left the fetch unattributed while H082 paired the
     write with its execution."""
     from trustsight.analysis.build import fetch_addresses
 
@@ -87,7 +87,7 @@ def test_conflicts_claims_an_established_package_like_replaces_does(monkeypatch)
     package just as effectively while raising nothing at all.
 
     "Established" is a fact about the machine - pacman's repo data, or the
-    dependency corpus - and R116 is documented to stay silent without it so
+    dependency corpus - and H064 is documented to stay silent without it so
     a cold start never trips.  Reading it live made this assertion pass on
     a developer's seeded database and fail on a fresh CI runner, which
     tests the corpus rather than the claim; the claim is that `conflicts`
@@ -107,12 +107,12 @@ def test_conflicts_claims_an_established_package_like_replaces_does(monkeypatch)
                 f"+{field}=('firefox')\n+build() {{\n+  true\n+}}\n")
         return {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
 
-    assert "R116" in fired("conflicts")
-    assert "R116" in fired("replaces")
+    assert "H064" in fired("conflicts")
+    assert "H064" in fired("replaces")
     # A package's own variant is packaging, not a hijack.
     own = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,8 @@\n"
            "+conflicts=('p-git')\n+build() {\n+  true\n+}\n")
-    assert "R116" not in {e.rule_id for e in
+    assert "H064" not in {e.rule_id for e in
                           scan_diff(own, package_name="p").score_breakdown}
 
 

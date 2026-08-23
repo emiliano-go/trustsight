@@ -19,7 +19,7 @@ reporting UNFLAGGED.
 **Why a gap and not a rule.** ``npm install`` inside ``prepare()`` is what
 thousands of legitimate AUR packages do; a rule firing on it would blow the
 30% benign fire-rate ceiling and bury real findings, which is exactly why
-R081 is scoped to install hooks and why a calibration gate keeps it there.
+H035 is scoped to install hooks and why a calibration gate keeps it there.
 The June 2026 campaign worked *because* its build step looked ordinary. A
 gap makes no accusation: it says the analysis could not see what the build
 will run, which is true of the attack and equally true of the thousands of
@@ -98,7 +98,7 @@ _OFFLINE_RE = re.compile(
 
 #: Diffs retained by the resolution cache.  Three separate callers ask the
 #: same question about the same diff - the coverage gap, the IOC surface and
-#: the R143 composition - and each pass re-joins every line and re-classifies
+#: the H088 composition - and each pass re-joins every line and re-classifies
 #: every function. Bounded rather than unbounded for the same reason the
 #: comment cache is: the keys are attacker-controlled text.
 _RESOLUTION_CACHE = 4

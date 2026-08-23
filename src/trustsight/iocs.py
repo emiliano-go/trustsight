@@ -1,8 +1,8 @@
-"""Class E - the indicator list behind R106 (plan §9).
+"""Class E - the indicator list behind H056 (plan §9).
 
 An indicator is a *confirmed* artefact of a real incident: a package name
 that was published as malware, a domain a payload was fetched from, the hash
-of a dropped binary.  R106 does exactly one thing with it - exact equality.
+of a dropped binary.  H056 does exactly one thing with it - exact equality.
 Nothing here infers, resembles, or scores: a hit means "this is the known
 artefact", and anything short of equality is not a hit at all.
 
@@ -27,7 +27,7 @@ from .config import load_iocs
 
 log = logging.getLogger(__name__)
 
-# The only entry types R106 knows how to match.  A new type needs a matcher
+# The only entry types H056 knows how to match.  A new type needs a matcher
 # in analysis/ioc.py, so an unknown one is dropped rather than ignored.
 IOC_TYPES = frozenset({"package", "domain", "hash"})
 

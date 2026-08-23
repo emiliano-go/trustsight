@@ -103,7 +103,7 @@ _DRAIN_CHUNK_BYTES = 256 * 1024
 
 #: Committed files whose *content* is worth more than their magic bytes.
 #:
-#: 64 bytes answers "is this an ELF", which is all R118 asked. It cannot
+#: 64 bytes answers "is this an ELF", which is all H066 asked. It cannot
 #: answer "what does this unit file run", and that question is the one the
 #: audit kept finding unanswerable: a `.service` committed in one push and
 #: `install`ed in a later one shows the reviewer nothing but the install
@@ -139,7 +139,7 @@ def _collect_tree_files(
 
     A blob larger than *max_file_bytes* used to be **skipped**, on the
     reasoning that "a committed payload is small".  That is an assumption
-    about the attacker, and the attacker reads it: R118 fires on a
+    about the attacker, and the attacker reads it: H066 fires on a
     committed ELF, and a payload binary is far more likely to be large than
     small, so anything over 512 KiB was invisible - while
     ``tree_analyzed`` still reported True because some other file had been
@@ -148,7 +148,7 @@ def _collect_tree_files(
 
     The size cap existed because ``blob.data`` materialises the whole blob.
     Streaming the head instead removes the reason for it over the range that
-    matters: R118 needs the magic bytes, not the file.
+    matters: H066 needs the magic bytes, not the file.
 
     Streaming has its own bound.  ``pygit2.BlobIO`` runs libgit2's filter
     chain on a worker thread feeding a ``Queue(maxsize=1)``, and ``close()``
@@ -473,19 +473,19 @@ def analyze_package(
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
             triggered_rules.append(stamp({
-                "rule_id": "R068", "name": "Install Hook Present",
+                "rule_id": "H023", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
             }))
 
     if detect_gpg_verification_removed(diff_text):
         triggered_rules.append(stamp({
-            "rule_id": "R069", "name": "GPG Verification Removed",
+            "rule_id": "H024", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
 
-    # R141 compares the *previous* recorded AUR state against the current
+    # H086 compares the *previous* recorded AUR state against the current
     # one, so the read has to happen before update_aur_orphan_state below.
     was_orphaned = get_aur_orphan_state(pkg_name)
 
@@ -495,7 +495,7 @@ def analyze_package(
     if takeover:
         triggered_rules.append(takeover)
 
-    # R141/R142/R143.  Emitted before the meta annotations so R143 is in the
+    # H086/H087/H088.  Emitted before the meta annotations so H088 is in the
     # breakdown any composition or coverage logic downstream reads.
     adoption_findings(
         diff_text,
@@ -516,7 +516,7 @@ def analyze_package(
         squatted = package_typosquat_target(pkg_name)
         if squatted:
             triggered_rules.append(stamp({
-                "rule_id": "R074", "name": "Package-Name Typosquat",
+                "rule_id": "H029", "name": "Package-Name Typosquat",
                 "severity": "HIGH", "category": "naming",
                 "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
                 "params": {"pkg_name": pkg_name, "squatted": squatted},
@@ -724,8 +724,8 @@ def scan_diff(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
 
-    # R142 only.  was_orphaned=-1 means "no recorded observation", so R141
-    # and R143 are structurally silent here: the stateless path has no AUR
+    # H087 only.  was_orphaned=-1 means "no recorded observation", so H086
+    # and H088 are structurally silent here: the stateless path has no AUR
     # history to claim an adoption against, and a rule that fires without
     # its state is the cold-start failure the calibration gates catch.
     adoption_findings(
@@ -745,14 +745,14 @@ def scan_diff(
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
             triggered_rules.append(stamp({
-                "rule_id": "R068", "name": "Install Hook Present",
+                "rule_id": "H023", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
             }))
 
     if detect_gpg_verification_removed(diff_text):
         triggered_rules.append(stamp({
-            "rule_id": "R069", "name": "GPG Verification Removed",
+            "rule_id": "H024", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
@@ -899,7 +899,7 @@ def _make_fresh_analysis(
     * ``triggered_rules`` were found, written to the database, and then
       dropped: the fact carried an empty ``score_breakdown`` and a
       hardcoded score of 0. A first-seen package shipping a committed ELF
-      binary - R118, the Atomic Arch delivery pattern - reported **Low,
+      binary - H066, the Atomic Arch delivery pattern - reported **Low,
       score 0, no findings**, with the finding sitting in the database the
       whole time. First-seen is the case with the least prior evidence, so
       it is the last one that should be reported clean without looking.

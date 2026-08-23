@@ -73,8 +73,8 @@ _NO_CHECKSUM_BEHAVIORS = ("changed_from_sha256_to_skip", "checksum_array_emptied
 
 _EXPERIMENTAL_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
-    "R060": True,
-    "R061": True, "R062": True, "R063": True, "R064": True,
+    "H015": True,
+    "H016": True, "H017": True, "H018": True, "H019": True,
 }
 
 

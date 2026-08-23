@@ -52,16 +52,16 @@ CRITICAL_MIN_SCORE = 40
 
 # Rules that may never fire in the stateless diff path: they need corpus or
 # longitudinal state, and firing here would mean firing on a cold database.
-CLASS_C_RULES = frozenset({"R083", "R094", "R095", "R096", "R097", "R098", "R102"})
+CLASS_C_RULES = frozenset({"H037", "H047", "H048", "H049", "H050", "H051", "H054"})
 CLASS_D_RULES = frozenset({
-    "R090", "R092", "R093", "R100", "R101", "R105", "R107", "R108", "R110",
-    "R111", "R112", "R125", "R126",
-    # R141 needs a recorded prior AUR orphan observation and R143 composes
+    "H044", "H045", "H046", "H052", "H053", "H055", "H057", "H058", "H059",
+    "H060", "H061", "H073", "H074",
+    # H086 needs a recorded prior AUR orphan observation and H088 composes
     # it, so both are stateful and must be silent on the stateless path.
-    # R142 is deliberately absent: it reads the diff alone, so it has a real
+    # H087 is deliberately absent: it reads the diff alone, so it has a real
     # benign fire rate (11.5% on the locked corpus) and belongs to the
     # fire-rate gate rather than this one.
-    "R141", "R143",
+    "H086", "H088",
 })
 
 
@@ -181,7 +181,7 @@ def scan_malicious(root: Path) -> list[dict]:
                 "name": path.name,
                 "score": fact.final_score,
                 "fired": {e.rule_id for e in fact.score_breakdown},
-                # A weight-0 finding is a reported fact, not a flag: R004 on a
+                # A weight-0 finding is a reported fact, not a flag: H001 on a
                 # justified SKIP says "this is a -git package's SKIP", which is
                 # exactly what a must_not_fire label means to allow.
                 "scored": {
@@ -258,7 +258,7 @@ def gate_benign_fire_rates(benign: list[dict]) -> Gate:
 def _is_attack_fixture(result: dict) -> bool:
     """True for a fixture that stands for a whole attack.
 
-    Most synthetic fixtures are single-signal probes - "does R004 fire on a
+    Most synthetic fixtures are single-signal probes - "does H001 fire on a
     SKIP" - and a lone MEDIUM signal is *supposed* to score like an ordinary
     suspicious diff.  Including them would measure the unit fixtures, not
     the separation the gate is about.  What counts is the historical corpus
@@ -299,7 +299,7 @@ def gate_score_not_size(benign: list[dict]) -> Gate:
 def gate_weight_zero_annotations(benign: list[dict]) -> Gate:
     """Weight-0 rules move the score by exactly 0.
 
-    Annotations (R086/R089/R097/R107/R111/R112 and every INFO finding) exist
+    Annotations (H040/H043/H050/H057/H060/H061 and every INFO finding) exist
     to say *what happened*, never to add to the number.  A severity that
     quietly acquires weight would double-count evidence another rule already
     scored.
@@ -317,16 +317,16 @@ def gate_weight_zero_annotations(benign: list[dict]) -> Gate:
     )
 
 
-def gate_r081_position(benign: list[dict]) -> Gate:
-    """`R081.fire_rate(benign, position=build|prepare) == 0`."""
+def gate_h035_position(benign: list[dict]) -> Gate:
+    """`H035.fire_rate(benign, position=build|prepare) == 0`."""
     hits = [
         f"{r['package']}:{e['params'].get('position')}"
         for r in benign for e in r["entries"]
-        if e["rule_id"] == "R081"
+        if e["rule_id"] == "H035"
         and e["params"].get("position") in ("build", "prepare")
     ]
     return Gate(
-        "R081 never fires in build()/prepare()", not hits, len(hits), 0,
+        "H035 never fires in build()/prepare()", not hits, len(hits), 0,
         "" if not hits else f"position-scoping broken: {hits[:5]}",
     )
 
@@ -349,7 +349,7 @@ def gate_stateful_rules_stay_out(benign: list[dict]) -> Gate:
 
 
 def gate_ioc_exact_match(benign: list[dict]) -> Gate:
-    """Class E: R106 exact-match only.
+    """Class E: H056 exact-match only.
 
     Two halves: the shipped list fires on nothing (it is empty, and an
     install must not invent indicators), and a populated list of plausible
@@ -360,7 +360,7 @@ def gate_ioc_exact_match(benign: list[dict]) -> Gate:
     from trustsight.iocs import load_indicators
 
     shipped_hits = sum(
-        1 for r in benign for e in r["entries"] if e["rule_id"] == "R106"
+        1 for r in benign for e in r["entries"] if e["rule_id"] == "H056"
     )
 
     probe = load_indicators({
@@ -383,7 +383,7 @@ def gate_ioc_exact_match(benign: list[dict]) -> Gate:
 
     total = shipped_hits + probe_hits
     return Gate(
-        "R106 exact-match only", total == 0,
+        "H056 exact-match only", total == 0,
         {"shipped": shipped_hits, "synthetic": probe_hits}, 0,
         "" if total == 0 else "an indicator matched something it does not equal",
     )
@@ -474,7 +474,7 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gate_benign_fire_rates(benign),
         gate_score_not_size(benign),
         gate_weight_zero_annotations(benign),
-        gate_r081_position(benign),
+        gate_h035_position(benign),
         gate_stateful_rules_stay_out(benign),
         gate_ioc_exact_match(benign),
         gate_homograph_single_script(),

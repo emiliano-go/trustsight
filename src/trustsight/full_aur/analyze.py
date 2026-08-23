@@ -99,7 +99,7 @@ def _temporal_findings(
     pkg_name: str,
     is_new_package: bool,
 ) -> list[dict]:
-    """Generate temporal findings (R065, R066, R067) from TemporalContext."""
+    """Generate temporal findings (H020, H021, H022) from TemporalContext."""
     findings: list[dict] = []
     now = time.time()
 
@@ -107,7 +107,7 @@ def _temporal_findings(
         hours_ago = (now - temporal.last_modified) / 3600
         if 0 <= hours_ago < 72:
             findings.append(stamp({
-                "rule_id": "R065",
+                "rule_id": "H020",
                 "name": "Very Recent Update",
                 "severity": "INFO",
                 "category": "temporal",
@@ -119,7 +119,7 @@ def _temporal_findings(
         days_ago = (now - temporal.first_seen) / 86400
         if 0 <= days_ago < 30:
             findings.append(stamp({
-                "rule_id": "R066",
+                "rule_id": "H021",
                 "name": "Brand New Package",
                 "severity": "INFO",
                 "category": "temporal",
@@ -134,7 +134,7 @@ def _temporal_findings(
         gap_days = (temporal.last_modified - temporal.previous_modified) / 86400
         if gap_days > 365:
             findings.append(stamp({
-                "rule_id": "R067",
+                "rule_id": "H022",
                 "name": "Stale Package Revived",
                 "severity": "MEDIUM",
                 "category": "temporal",
@@ -251,12 +251,12 @@ def analyze_package_text(
         temporal:  TemporalContext with clock timestamps and source.
         srcinfo:  .SRCINFO text (for richer property extraction).
         tree_manifest:  ``(path, head_bytes)`` pairs from the AUR snapshot
-            tarball, when it was fetched.  Runs the R118-tree scan; when
+            tarball, when it was fetched.  Runs the H066-tree scan; when
             absent the result reports ``tree_analyzed=false`` rather than
             silently reading as full coverage.
-        archive_trailer_finding:  an R122 finding stamped by
+        archive_trailer_finding:  an H070 finding stamped by
             ``check_archive_trailer`` on the snapshot tarball bytes, when
-            one was produced.  Surfaced exactly like the R118-tree scan
+            one was produced.  Surfaced exactly like the H066-tree scan
             results, so the corpus path reports what the archive carried.
         depth:  AUR dependency levels to analyse, as on the review path.
             The corpus walk is cheaper than the review one: the metadata
@@ -286,7 +286,7 @@ def analyze_package_text(
     package_id = upsert_package(pkg_name, new_version)
 
     # Property stability tracking: record now, consumed in the same analysis
-    # by the longitudinal rules (R094-R098/R102/R083).
+    # by the longitudinal rules (H047-H051/H054/H037).
     observed_at: str = ""
     if temporal.last_modified is not None:
         from datetime import datetime, timezone
@@ -305,11 +305,11 @@ def analyze_package_text(
     except Exception:
         log.warning("property tracking failed for %s", pkg_name, exc_info=True)
 
-    # R148 - the metadata and the recipe describe different packages.
+    # H092 - the metadata and the recipe describe different packages.
     metadata_findings: list[dict] = []
     for host in metadata_divergence(new_pkgbuild, srcinfo):
         metadata_findings.append(stamp({
-            "rule_id": "R148",
+            "rule_id": "H092",
             "name": "Metadata Names A Source The Recipe Does Not",
             "severity": "HIGH", "category": "integrity",
             "match": f".SRCINFO names {host}, which the PKGBUILD never does",
@@ -336,7 +336,7 @@ def analyze_package_text(
             squatted = package_typosquat_target(pkg_name)
             if squatted:
                 triggered_rules.append(stamp({
-                    "rule_id": "R074", "name": "Package-Name Typosquat",
+                    "rule_id": "H029", "name": "Package-Name Typosquat",
                     "severity": "HIGH", "category": "naming",
                     "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
                     "params": {"pkg_name": pkg_name, "squatted": squatted},
@@ -460,14 +460,14 @@ def analyze_package_text(
     if not any(r["rule_id"] == "R007" for r in triggered_rules):
         if _has_install_hook(diff_text):
             triggered_rules.append(stamp({
-                "rule_id": "R068", "name": "Install Hook Present",
+                "rule_id": "H023", "name": "Install Hook Present",
                 "severity": "INFO", "category": "context",
                 "match": "PKGBUILD declares an install hook",
             }))
 
     if detect_gpg_verification_removed(diff_text):
         triggered_rules.append(stamp({
-            "rule_id": "R069", "name": "GPG Verification Removed",
+            "rule_id": "H024", "name": "GPG Verification Removed",
             "severity": "HIGH", "category": "integrity",
             "match": "validpgpkeys was populated and is now empty or removed",
         }))
@@ -479,10 +479,10 @@ def analyze_package_text(
         triggered_rules.append(takeover)
 
     categories = {r.get("category", "") for r in triggered_rules
-                  if r.get("category") and r["rule_id"] != "R072"}
+                  if r.get("category") and r["rule_id"] != "H027"}
     if len(categories) >= 3:
         triggered_rules.append(stamp({
-            "rule_id": "R072", "name": "Capability Density Anomaly",
+            "rule_id": "H027", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
             "params": {"n_categories": len(categories)},
@@ -492,7 +492,7 @@ def analyze_package_text(
         squatted = package_typosquat_target(pkg_name)
         if squatted:
             triggered_rules.append(stamp({
-                "rule_id": "R074", "name": "Package-Name Typosquat",
+                "rule_id": "H029", "name": "Package-Name Typosquat",
                 "severity": "HIGH", "category": "naming",
                 "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
                 "params": {"pkg_name": pkg_name, "squatted": squatted},

@@ -30,7 +30,7 @@ class ExecutionChanges:
 
 @dataclass
 class TemporalContext:
-    """Explicit temporal context for R065–R067 (and R083).
+    """Explicit temporal context for H020–H022 (and H037).
 
     Both analysis paths declare their clock source rather than
     deriving one internally, ensuring the same package gets the
@@ -94,7 +94,7 @@ class PackageFact:
     recent_commit_burst: bool = False
 
     # True when the repository file manifest (git tree / snapshot tarball)
-    # was inspected for R118-tree.  A corpus-path result analysed without
+    # was inspected for H066-tree.  A corpus-path result analysed without
     # the snapshot must not read the same as one that saw the whole tree.
     tree_analyzed: bool = False
 

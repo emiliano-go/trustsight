@@ -1,18 +1,18 @@
 """Phase 2 - July delivery stack (Class A) rules.
 
-R119-R124 share a threat: the PKGBUILD carries or creates the payload it
+H067-H072 share a threat: the PKGBUILD carries or creates the payload it
 later executes.  The rules are code rather than rules.toml entries because
-each needs more than a regex: R119 needs position scoping against a config
-list, R120 needs actual decoding of candidate blobs, and R121/R124 need
+each needs more than a regex: H067 needs position scoping against a config
+list, H068 needs actual decoding of candidate blobs, and H069/H072 need
 same-function write-then-execute path tracking.
 
 Everything here is static.  Nothing is decoded into an executed string;
 ``base64.b64decode`` produces bytes that are checked against executable
 magic and then discarded.
 
-R118-tree (the git-tree variant) lives here as ``scan_tree_manifest``;
-R118-blob (an ELF blob embedded in the PKGBUILD) is R120's job, so the two
-never double-fire on the same evidence.  R122 (archive trailer anomaly) is
+H066-tree (the git-tree variant) lives here as ``scan_tree_manifest``;
+H066-blob (an ELF blob embedded in the PKGBUILD) is H068's job, so the two
+never double-fire on the same evidence.  H070 (archive trailer anomaly) is
 a pure function in :mod:`trustsight.analysis.archives`.
 """
 
@@ -55,7 +55,7 @@ _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
 
 def _anti_analysis_probes(config=None) -> list[re.Pattern]:
-    """Compile the R119 anti-analysis probe fragments from patterns.toml."""
+    """Compile the H067 anti-analysis probe fragments from patterns.toml."""
     patterns = load_patterns().get("patterns", {})
     frags = patterns.get("anti_analysis_probes") or DEFAULT_ANTI_ANALYSIS_PROBES
     return [re.compile(p, re.IGNORECASE) for p in frags]
@@ -67,7 +67,7 @@ def _find_line(diff_text: str, fragment: str) -> int | None:
 
 
 # ---------------------------------------------------------------------------
-# R119 - anti-analysis check
+# H067 - anti-analysis check
 # ---------------------------------------------------------------------------
 
 
@@ -94,7 +94,7 @@ def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
         for probe in probes:
             m = probe.search(body)
             if m:
-                add("R119", "Anti-Analysis Check", "HIGH", "anti_analysis",
+                add("H067", "Anti-Analysis Check", "HIGH", "anti_analysis",
                     f"{enclosing[i]}() probes its environment: {body.strip()[:80]}",
                     line=_find_line(diff_text, m.group(0)),
                     position=enclosing[i],
@@ -103,7 +103,7 @@ def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R120 - reconstructed-executable payload
+# H068 - reconstructed-executable payload
 # ---------------------------------------------------------------------------
 
 _ELF_MAGIC = b"\x7fELF"
@@ -246,7 +246,7 @@ def _uu_blocks(added_lines: list[str]) -> list[tuple[bytes, str]]:
 def _reconstructed_payload_findings(diff_text, config, add) -> None:
     """An encoded blob whose decoded bytes are an executable payload.
 
-    R120 is the type check on R117's reconstruction output: one check covers
+    H068 is the type check on H065's reconstruction output: one check covers
     every encoding (base64, hex, uuencode) without naming it.  The decoded
     side is executable magic (ELF, shebang, PE, Mach-O) or shell-script
     text without a shebang (a ``curl | bash`` blob carries no magic).  The
@@ -265,7 +265,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
         for run in _HEX_RUN_RE.findall(body):
             decoded = _decode_hex(run)
             if decoded and (magic := _payload_name(decoded)):
-                add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
+                add("H068", "Reconstructed Executable Payload", "HIGH", "execution",
                     f"hex blob on the line decodes to {magic}: {line.strip()[:80]}",
                     line=_find_line(diff_text, run),
                     encoding="hex", magic=magic, decoded_bytes=len(decoded))
@@ -274,7 +274,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
         for run in _B64_RUN_RE.findall(body):
             decoded = _decode_b64(run)
             if decoded and (magic := _payload_name(decoded)):
-                add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
+                add("H068", "Reconstructed Executable Payload", "HIGH", "execution",
                     f"base64 blob on the line decodes to {magic}: {line.strip()[:80]}",
                     line=_find_line(diff_text, run),
                     encoding="base64", magic=magic, decoded_bytes=len(decoded))
@@ -282,7 +282,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 
     for decoded, context in _uu_blocks(added):
         if magic := _payload_name(decoded):
-            add("R120", "Reconstructed Executable Payload", "HIGH", "execution",
+            add("H068", "Reconstructed Executable Payload", "HIGH", "execution",
                 f"uuencoded block decodes to {magic}: {context.strip()[:80]}",
                 line=_find_line(diff_text, "begin"),
                 encoding="uuencode", magic=magic, decoded_bytes=len(decoded))
@@ -290,7 +290,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R121 / R124 - generate-then-execute and write-then-execute
+# H069 / H072 - generate-then-execute and write-then-execute
 # ---------------------------------------------------------------------------
 
 # Generation writes: a heredoc or ``>`` redirect that creates the file's
@@ -350,7 +350,7 @@ _INTERPRETER_WRITE_RE = re.compile(
 # redirect.  The write tracker knew `>`, `tee`, `cp`, `install` and heredocs
 # - every form the shell itself performs - so `openssl enc -d -in p.enc -out
 # s.sh` followed by `bash s.sh` wrote and executed a payload that neither
-# R121/R124 nor any decoder rule saw: X001's openssl arm requires the decode
+# H069/H072 nor any decoder rule saw: X001's openssl arm requires the decode
 # to be *piped*, and the pipe is exactly what this spelling avoids.
 #
 # Deliberately not a general `-o` arm.  `-o` is one of the most overloaded
@@ -539,14 +539,14 @@ _EXECUTION_RE = re.compile(
     # argument, and a FIFO makes that a *fetch* it executes:
     #   mkfifo p; curl url > p & ; bash < p
     # No literal `|` for R001 to see and no filename argument for the
-    # pattern above, while `curl > p` is already a fetch output R137 tracks.
+    # pattern above, while `curl > p` is already a fetch output H082 tracks.
     # `<(` is process substitution and `<<` a heredoc; neither is this.
     r"|(?:bash|sh|zsh|dash|ksh)\s*<\s*(?!\(|<)(\S+)"
     r"|source\s+(\S+)"
     r"|\.\s+(\S+)"
     # `./x` only where a command starts. Unanchored, this arm matched the
     # `./` inside `sed 's|./log\.txt|…|g'` and inside `../x.patch`, and
-    # captured whatever followed - harmless for R138, which discards a
+    # captured whatever followed - harmless for H083, which discards a
     # capture that is not a declared basename, and not harmless at all for
     # a rule that reports the path to a reader.
     r"|\./(\S+)"
@@ -565,7 +565,7 @@ _EXECUTION_RE = re.compile(
     r"(?:python3?|perl|ruby)(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])(\S+)"
     # Engines that run a committed record rather than a script argument.
     # `node x.js`, `dotnet run`, `go run .`, `./gradlew build` and `cargo
-    # build` each execute code from a file in the tree, and R136's verb
+    # build` each execute code from a file in the tree, and H081's verb
     # list named none of them.
     r"|(?:dotnet\s+(?:run|exec)|go\s+run|deno\s+run)"
     r"(?:\s+-{1,2}[A-Za-z-]*)*\s*(\S*)"
@@ -576,9 +576,9 @@ _EXECUTION_RE = re.compile(
 
 # Build artifacts that are written and then run by the project's own build
 # flow.  ``./configure`` after a configure script is generated by autotools
-# is ordinary; these names are exempt from R124 (not from R121, where a
+# is ordinary; these names are exempt from H072 (not from H069, where a
 # heredoc-generated configure executed in-recipe is exactly the signal).
-_R124_BENIGN_EXEC = frozenset({
+_H072_BENIGN_EXEC = frozenset({
     "configure", "make", "Makefile", "makefile", "config.status",
     "config.log", "config.cache", "config.h", "cmake", "cpack", "ctest",
     "meson", "ninja", "build.ninja", "CMakeCache.txt",
@@ -595,7 +595,7 @@ _R124_BENIGN_EXEC = frozenset({
 #:
 #: `_SOURCE_EXEC_RE` captures the word after an interpreter, and that word
 #: is not always a file: `python3 -m build` yields `-m`, a loop body yields
-#: `*`, and an unresolved parameter expansion yields `${patch%%`. R138
+#: `*`, and an unresolved parameter expansion yields `${patch%%`. H083
 #: discards them silently because none can equal a declared basename, so
 #: the weakness was invisible - until W001 tried to *print* one.
 #: `$srcdir` and its siblings are excepted: they are makepkg's own names
@@ -873,7 +873,7 @@ def _collect_executions(body: str) -> list[str]:
 
     A build driver is an execution of its input file.  `curl -o Makefile
     URL` followed by `make` fetches a script and runs it, and neither half
-    was paired with the other: `make` matched no execution pattern, so R137
+    was paired with the other: `make` matched no execution pattern, so H082
     saw a download and nothing more.  The driver's *implicit* input is
     resolved the same way `_implicit_build_input` resolves it for committed
     files - the difference is only where the file came from.
@@ -907,14 +907,14 @@ def _collect_executions(body: str) -> list[str]:
 
 
 def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
-    """Same-function write-then-execute dataflow (R121, R124).
+    """Same-function write-then-execute dataflow (H069, H072).
 
     A path written by the recipe and later executed in the same build
-    function is a delivered payload.  R121 fires on generation writes
-    (heredoc/``>``) whose content the recipe itself created; R124 fires on
+    function is a delivered payload.  H069 fires on generation writes
+    (heredoc/``>``) whose content the recipe itself created; H072 fires on
     any write.  Both stay silent when the executed path arrived via the
     declared source array or is one of the project's own configure/make
-    artifacts (R124 only).
+    artifacts (H072 only).
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
@@ -922,7 +922,7 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
     heredoc_body = _heredoc_body_indices(lines)
 
     writes_by_fn: dict[str, list[tuple[str, str]]] = {}
-    r121_claimed: set[tuple[str, str]] = set()
+    h069_claimed: set[tuple[str, str]] = set()
 
     for i, line in enumerate(lines):
         # The *resolved* scope, not the enclosing name: a write in a helper
@@ -943,18 +943,18 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
             for (kind, wpath) in list(writes_by_fn.get(fn, [])):
                 if wpath != path and os.path.basename(wpath) != base:
                     continue
-                if (fn, wpath) in r121_claimed:
+                if (fn, wpath) in h069_claimed:
                     continue
-                r121_claimed.add((fn, wpath))
+                h069_claimed.add((fn, wpath))
                 if kind == "generation":
-                    add("R121", "Build-time Generation Then Execution", "HIGH", "execution",
+                    add("H069", "Build-time Generation Then Execution", "HIGH", "execution",
                         f"{fn}() generates {wpath or path} and then executes it",
                         line=_find_line(diff_text, path or base),
                         position=fn, path=path)
                     return
-                if base in _R124_BENIGN_EXEC or base in source_basenames:
+                if base in _H072_BENIGN_EXEC or base in source_basenames:
                     continue
-                add("R124", "Write Then Execute", "HIGH", "execution",
+                add("H072", "Write Then Execute", "HIGH", "execution",
                     f"{fn}() writes {wpath or path} and then executes it",
                     line=_find_line(diff_text, path or base),
                     position=fn, path=path)
@@ -962,7 +962,7 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R137 - network fetch then execute
+# H082 - network fetch then execute
 # ---------------------------------------------------------------------------
 
 # A downloader that writes to a file and a later execution of that file in
@@ -975,7 +975,7 @@ _FETCH_CLIENT_RE = re.compile(
 
 # Where an interpreter one-liner puts what it downloaded.  `urlretrieve(url,
 # path)` and `open(path, "wb")` are the two shapes that reach a file; the
-# quoted token that is not the URL is the path, which is the only part R137
+# quoted token that is not the URL is the path, which is the only part H082
 # needs in order to pair the fetch with a later execution of it.
 _INTERPRETER_OUTPUT_RE = re.compile(
     r"(?:urlretrieve|getstore|open|File\.write|writeFileSync|copyfileobj)"
@@ -1001,7 +1001,7 @@ _FETCH_OUTPUT_RE = re.compile(
     # `-o` is rarely alone.  `curl -Lo f` and `wget -qO f` are the forms
     # people actually type, and requiring the flag to stand by itself meant
     # the fetch never paired with the later execution of what it wrote - one
-    # letter moved, and R137 went quiet.  The cluster must *end* in the
+    # letter moved, and H082 went quiet.  The cluster must *end* in the
     # output letter, because that is the one whose argument follows.
     # `-O` (capital, curl) takes no argument: it means "save as the URL's
     # basename", and reading the URL after it as a destination produced a
@@ -1025,7 +1025,7 @@ _FETCH_OUTPUT_RE = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
-# Build/package/check/prepare only; install hooks already have R062.
+# Build/package/check/prepare only; install hooks already have H017.
 _BUILD_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS)
 
 #: Where files are staged rather than built.
@@ -1094,11 +1094,11 @@ def _collect_fetch_outputs(body: str) -> list[str]:
 
 
 def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> None:
-    """A downloader writes a file and the same function later executes it (R137).
+    """A downloader writes a file and the same function later executes it (H082).
 
-    R001/R002 own the single-line pipe form; R137 owns the split form.
+    R001/R002 own the single-line pipe form; H082 owns the split form.
     Files that arrived via the declared ``source=()`` array are deliberately
-    excluded here - they have their own rule (R138) so checksum-bearing
+    excluded here - they have their own rule (H083) so checksum-bearing
     source files are not double-counted.
     """
     lines = resolve_added_lines(diff_text)
@@ -1128,7 +1128,7 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
             base = os.path.basename(path)
             for directory in cloned_by_fn.get(fn, []):
                 if directory and path.startswith(directory.rstrip("/") + "/"):
-                    add("R137", "Fetch Then Execute", "CRITICAL",
+                    add("H082", "Fetch Then Execute", "CRITICAL",
                         "network_execution",
                         f"{fn}() clones into {directory} and then executes "
                         f"{path} from it",
@@ -1146,7 +1146,7 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                 # same mistake the committed-`configure` case made.
                 if base in source_basenames:
                     continue
-                add("R137", "Fetch Then Execute", "CRITICAL", "network_execution",
+                add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
                     f"{fn}() downloads {fpath or path} and then executes it",
                     line=_find_line(diff_text, path or base),
                     position=fn, path=path)
@@ -1154,7 +1154,7 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
 
 
 # ---------------------------------------------------------------------------
-# R138 - execution of a downloaded source file
+# H083 - execution of a downloaded source file
 # ---------------------------------------------------------------------------
 
 # An interpreter run on a file that arrived through the declared source=()
@@ -1162,7 +1162,7 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
 # followed by ``bash "$srcdir/that.sh"`` is remote code execution just like
 # ``curl | bash``, only hidden behind the ordinary download path.
 #
-# Three arms below were in R137 and not here, and the pair are meant to be
+# Three arms below were in H082 and not here, and the pair are meant to be
 # the same question asked of a fetched file and a declared one. Feeding the
 # script on stdin (`sh < "$srcdir/setup.sh"`), running it as a bare command
 # (`"$srcdir/setup.sh"`), and handing a downloaded makefile to `make -f`
@@ -1186,7 +1186,7 @@ _SOURCE_EXEC_RE = re.compile(
     r"|\./(\S+)"
     # `sh < file` - the interpreter reads the script from its stdin.
     # `(?!\(|<)` keeps process substitution and here-strings out: those are
-    # different constructs that R127 owns.
+    # different constructs that H075 owns.
     r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)"
     r"\s*<\s*(?!\(|<)(\S+)"
     # A bare `"$srcdir/x"` in command position: the file is the command.
@@ -1198,7 +1198,7 @@ _SOURCE_EXEC_RE = re.compile(
 
 
 def _source_file_execution_findings(diff_text, config, add, current_text=None) -> None:
-    """A file downloaded via ``source=()`` is executed as a script (R138).
+    """A file downloaded via ``source=()`` is executed as a script (H083).
 
     Build-system scripts (configure, make, meson, ninja, cmake) are common
     declared-source executables and stay silent; the rule targets interpreted
@@ -1224,11 +1224,11 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
                 continue
             path = _norm_path(raw)
             base = os.path.basename(path)
-            if not base or base in _R124_BENIGN_EXEC:
+            if not base or base in _H072_BENIGN_EXEC:
                 continue
             if base not in source_basenames:
                 continue
-            add("R138", "Downloaded Source File Executed", "HIGH", "execution",
+            add("H083", "Downloaded Source File Executed", "HIGH", "execution",
                 f"{fn}() executes declared source file {base}",
                 line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
                 position=fn, path=path)
@@ -1236,7 +1236,7 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
 
 
 # ---------------------------------------------------------------------------
-# R139 - systemd service running an undeclared binary
+# H084 - systemd service running an undeclared binary
 # ---------------------------------------------------------------------------
 
 # A service unit installed by the package points at a binary the recipe
@@ -1292,7 +1292,7 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
 
 
 def _service_binary_findings(diff_text, tree_manifest, add) -> None:
-    """A systemd service's ExecStart points at an undeclared binary (R139).
+    """A systemd service's ExecStart points at an undeclared binary (H084).
 
     Service units are read from the tree manifest when one is supplied, and
     from added diff lines otherwise.  If the ExecStart target is installed
@@ -1336,7 +1336,7 @@ def _service_binary_findings(diff_text, tree_manifest, add) -> None:
             continue
         if manifest_basenames is not None and src_base in manifest_basenames:
             continue
-        add("R139", "Service ExecStart Targets Undeclared Binary", "HIGH", "persistence",
+        add("H084", "Service ExecStart Targets Undeclared Binary", "HIGH", "persistence",
             f"systemd service runs {dst}, installed from undeclared {src_base}",
             line=_find_line(diff_text, dst.split("/")[-1]),
             exec_target=dst, source_file=src_base)
@@ -1344,7 +1344,7 @@ def _service_binary_findings(diff_text, tree_manifest, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R140 - PATH injection with an undeclared build-tree directory
+# H085 - PATH injection with an undeclared build-tree directory
 # ---------------------------------------------------------------------------
 
 # ``PATH=$srcdir/tools:$PATH make`` lets the recipe smuggle a binary into a
@@ -1359,7 +1359,7 @@ _PATH_BUILD_DIR_RE = re.compile(
 
 
 def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -> None:
-    """PATH is extended with an undeclared build-tree directory (R140).
+    """PATH is extended with an undeclared build-tree directory (H085).
 
     Only applies inside build/package/check/prepare functions.  Adding the
     plain source root is common enough that it stays silent; adding a
@@ -1393,7 +1393,7 @@ def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -
                     continue
                 if manifest_basenames is not None and subdir in manifest_basenames:
                     continue
-                add("R140", "PATH Injection With Undeclared Directory", "HIGH", "build",
+                add("H085", "PATH Injection With Undeclared Directory", "HIGH", "build",
                     f"{fn}() adds undeclared $srcdir/{subdir} to PATH",
                     line=_find_line(diff_text, f"PATH={rhs.strip()[:40]}"),
                     position=fn, directory=subdir)
@@ -1401,7 +1401,7 @@ def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -
 
 
 # ---------------------------------------------------------------------------
-# R136 - execution of a committed but undeclared repository file
+# H081 - execution of a committed but undeclared repository file
 # ---------------------------------------------------------------------------
 
 # Path evidence that the execution target lives in the cloned repository,
@@ -1516,9 +1516,9 @@ def _matches_committed(base: str, manifest_basenames) -> bool:
 
 def _committed_execution_findings(diff_text, tree_manifest, add, current_text=None) -> None:
     """An execution whose target is a repo-committed file the recipe never
-    declared (R136).
+    declared (H081).
 
-    R121/R124 own files the recipe itself writes; R118 owns committed ELF
+    H069/H072 own files the recipe itself writes; H066 owns committed ELF
     binaries.  Between them sat the cleartext helper script: committed to
     the AUR repository, never named in ``source=()`` (so makepkg never
     copies it into ``$srcdir`` and its bytes never reach the differ), and
@@ -1531,7 +1531,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
       manifest was supplied; without one the rule never guesses.
 
     Declared ``source=()`` basenames, files the recipe wrote earlier in the
-    same function, and the configure/make artifact names R124 already
+    same function, and the configure/make artifact names H072 already
     exempts stay silent.  The manifest signal requires a relative path: an
     absolute ``/usr/share/...`` target cannot be a repository file, however
     its basename collides.
@@ -1569,7 +1569,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
         # the question here is not the command but the file it reads.
         implicit = _implicit_build_input(body, manifest_basenames)
         if implicit and implicit not in source_basenames and implicit not in written:
-            add("R136", "Committed File Executed Without Declaration", "HIGH",
+            add("H081", "Committed File Executed Without Declaration", "HIGH",
                 "execution",
                 f"{fn}() runs a build tool over repo-committed {implicit}, "
                 "which is not declared in source=()",
@@ -1620,7 +1620,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
                 and _matches_committed(base, manifest_basenames)
                 and not raw.strip().strip('"\'').startswith("/")
             )
-            if base in _R124_BENIGN_EXEC and not committed_and_undeclared:
+            if base in _H072_BENIGN_EXEC and not committed_and_undeclared:
                 continue
             if base in written:
                 continue
@@ -1631,7 +1631,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
             )
             if not committed and not _STARTDIR_PATH_RE.search(raw):
                 continue
-            add("R136", "Committed File Executed Without Declaration", "HIGH", "execution",
+            add("H081", "Committed File Executed Without Declaration", "HIGH", "execution",
                 f"{fn}() executes repo-committed file not declared in source=(): {base}",
                 line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
                 position=fn, path=path)
@@ -1639,7 +1639,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
 
 
 # ---------------------------------------------------------------------------
-# R118-tree - embedded binary in the repository manifest
+# H066-tree - embedded binary in the repository manifest
 # ---------------------------------------------------------------------------
 
 _TEST_DIR_RE = re.compile(r"(?:^|/)(?:tests?|testdata|fixtures?|specs?|examples?)/")
@@ -1660,7 +1660,7 @@ def _is_test_fixture(name: str, base: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# R146 - a committed companion file carries a fetch-execute payload
+# H090 - a committed companion file carries a fetch-execute payload
 # ---------------------------------------------------------------------------
 #
 # A `.service` whose `ExecStart=` pipes a download into a shell, or a
@@ -1708,7 +1708,7 @@ _COMMITTED_CARRIER_RE = re.compile(
 
 
 def _committed_payload_finding(name: str, head: bytes) -> dict | None:
-    """R146 for one committed companion, or ``None``."""
+    """H090 for one committed companion, or ``None``."""
     if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
         return None
     try:
@@ -1726,7 +1726,7 @@ def _committed_payload_finding(name: str, head: bytes) -> dict | None:
     if not m:
         return None
     return stamp({
-        "rule_id": "R146",
+        "rule_id": "H090",
         "name": "Committed Companion Carries A Fetch-Execute Payload",
         "severity": "CRITICAL", "category": "delivery",
         "match": f"{name} downloads and runs code: {m.group(0).strip()[:80]}",
@@ -1761,9 +1761,9 @@ _DESCRIPTIVE_FIELD_RE = re.compile(
 
 
 def _committed_build_path_finding(name: str, head: bytes) -> dict | None:
-    """R149 for one committed companion, or ``None``.
+    """H093 for one committed companion, or ``None``.
 
-    The symmetric half of R145. That rule reads content the recipe
+    The symmetric half of H089. That rule reads content the recipe
     *generates* into `$pkgdir`; this one reads content the recipe
     *committed* and then ships. The observable is identical and so is the
     reasoning: `$srcdir`, `$startdir` and `$PWD` exist only while the
@@ -1793,7 +1793,7 @@ def _committed_build_path_finding(name: str, head: bytes) -> dict | None:
         if _DESCRIPTIVE_FIELD_RE.search(line):
             continue
         return stamp({
-            "rule_id": "R149",
+            "rule_id": "H093",
             "name": "Committed Config Points At A Build-Only Path",
             "severity": "HIGH", "category": "persistence",
             "match": f"{name} runs {named.group(0)}, a directory that exists "
@@ -1806,12 +1806,12 @@ def _committed_build_path_finding(name: str, head: bytes) -> dict | None:
 
 
 def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]:
-    """R118 and R146 findings for a repository file manifest.
+    """H066 and H090 findings for a repository file manifest.
 
     *files* is ``[(path, head_bytes)]`` from a git tree or a snapshot
     tarball.  A committed ELF file that is not a declared ``source=``
-    filename and not a test fixture fires R118; a committed unit, rule,
-    hook or patch whose content fetches and runs code fires R146.
+    filename and not a test fixture fires H066; a committed unit, rule,
+    hook or patch whose content fetches and runs code fires H090.
     """
     source_basenames = {_source_basename(u) for u in source_urls if _source_basename(u)}
     findings: list[dict] = []
@@ -1832,7 +1832,7 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
         if _is_test_fixture(name, base):
             continue
         findings.append(stamp({
-            "rule_id": "R118", "name": "Embedded Binary In Tree",
+            "rule_id": "H066", "name": "Embedded Binary In Tree",
             "severity": "HIGH", "category": "obfuscation",
             "match": f"ELF file committed to the repository: {name}",
             "file": name,
@@ -1844,7 +1844,7 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
 
 
 # ---------------------------------------------------------------------------
-# R145 - a packaged file names a path that only exists during the build
+# H089 - a packaged file names a path that only exists during the build
 # ---------------------------------------------------------------------------
 #
 # The audit's largest silent family is a configuration file the recipe
@@ -1887,7 +1887,7 @@ _PKGDIR_TARGET_RE = re.compile(r"\$\{?pkgdir\}?")
 
 
 def _packaged_content_findings(diff_text, config, add, current_text=None) -> None:
-    """Content written into ``$pkgdir`` naming a build-only path (R145)."""
+    """Content written into ``$pkgdir`` naming a build-only path (H089)."""
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
 
@@ -1940,7 +1940,7 @@ def _packaged_content_findings(diff_text, config, add, current_text=None) -> Non
 
 def _report_packaged_path(add, diff_text, scopes, index, body, target) -> None:
     named = _BUILD_ONLY_PATH_RE.search(body)
-    add("R145", "Packaged File Names A Build-Only Path", "HIGH", "persistence",
+    add("H089", "Packaged File Names A Build-Only Path", "HIGH", "persistence",
         f"a file staged into the package names {named.group(0)}, "
         "a directory that exists only while the package is built",
         line=_find_line(diff_text, body.strip()),
@@ -1959,8 +1959,8 @@ def _report_packaged_path(add, diff_text, scopes, index, body, target) -> None:
 # This one is the E7 boundary. A recipe unpacks a declared, checksummed
 # archive and runs a script from inside it. The checksum proves the bytes
 # arrived unaltered; it says nothing about what they do, and this analysis
-# never reads them. R138 claims the case where the executed file is itself
-# a declared source, and R136 the case where it is committed. What is left
+# never reads them. H083 claims the case where the executed file is itself
+# a declared source, and H081 the case where it is committed. What is left
 # is code that runs and that nobody looked at.
 #
 # It carries no weight, and it must not. Pricing it would put a finding on
@@ -1969,7 +1969,7 @@ def _report_packaged_path(add, diff_text, scopes, index, body, target) -> None:
 # is what the boundary documentation had to describe as something
 # TrustSight cannot see. It can see it. It simply must not price it.
 #
-# The pattern is its own rather than shared with R138, because R138's
+# The pattern is its own rather than shared with H083, because H083's
 # capture is allowed to be loose: a token that is not a path cannot equal a
 # declared basename, so `python3 -m build` capturing `-m` costs that rule
 # nothing. A rule that *prints* the path to a reader has no such luxury,
@@ -2044,13 +2044,13 @@ def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
         if _not_a_path(raw):
             continue
         base = os.path.basename(_norm_path(raw))
-        if not base or base in _R124_BENIGN_EXEC:
+        if not base or base in _H072_BENIGN_EXEC:
             continue
         # Anything already claimed by a scoring rule is not this rule's
         # subject: W001 is what is left when nothing else could speak.
         if base in source_basenames or base in committed:
             continue
-        # R150 - the same act, in the one function where it is not
+        # H094 - the same act, in the one function where it is not
         # ordinary. `package()` stages files into `$pkgdir`; it is not
         # where software gets built, and its output *is* the package.
         # Running an unaudited script there is a different act from
@@ -2062,7 +2062,7 @@ def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
         # the surface where the behaviour is ordinary, and the subset that
         # is not ordinary is scored rather than merely reported.
         if fn in _PACKAGING_FUNCTIONS:
-            add("R150", "Unread Script Executed During Packaging", "HIGH",
+            add("H094", "Unread Script Executed During Packaging", "HIGH",
                 "execution",
                 f"{fn}() runs {raw}, whose content was never read, while "
                 "staging the files that become the package",
@@ -2102,7 +2102,7 @@ def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
 #
 # `patch -Np1 -i "$srcdir/fix.patch"` edits the source before it is built,
 # and the edit is whatever the patch says. When the patch is *committed*,
-# R146 reads it and claims a fetch-execute payload in its added lines. When
+# H090 reads it and claims a fetch-execute payload in its added lines. When
 # it is a declared remote source, the bytes are behind a checksum this tool
 # never downloads - the same sealed tin as the tarball, applied to code
 # that was about to be compiled.
@@ -2140,7 +2140,7 @@ def _unread_manifest_findings(diff_text, add, tree_manifest=None,
 
     The counterpart to X020. That rule claims the recipe *writing* a
     manifest; this one reports the recipe *pointing an engine at* one whose
-    content is neither declared nor committed. R138 already claims the case
+    content is neither declared nor committed. H083 already claims the case
     where the named file is a declared source - there the bytes are at
     least checksum-pinned - so what is left is a manifest that arrived
     inside an archive, and whose build steps are therefore chosen by
@@ -2263,7 +2263,7 @@ _BOOT_ARTIFACT_RE = re.compile(
 
 
 def _boot_artifact_findings(diff_text, add, current_text=None) -> None:
-    """Boot or image material built from the source tree (R151)."""
+    """Boot or image material built from the source tree (H095)."""
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
@@ -2279,7 +2279,7 @@ def _boot_artifact_findings(diff_text, add, current_text=None) -> None:
         named = _BUILD_ONLY_PATH_RE.search(m.group(1))
         if named is None:
             continue
-        add("R151", "Boot Or Image Artifact Built From The Source Tree",
+        add("H095", "Boot Or Image Artifact Built From The Source Tree",
             "HIGH", "persistence",
             f"{fn}() builds boot or image material naming {named.group(0)}, "
             "so content from the build tree runs before userspace",
@@ -2314,7 +2314,7 @@ def _generated_config_findings(diff_text, add, current_text=None) -> None:
     whether anything runs it is not visible here.
 
     That is a W and not a rule with weight, because the claim stops at
-    "unreadable", and the same predicate R149 uses decides it: a line that
+    "unreadable", and the same predicate H093 uses decides it: a line that
     names a build-only path and is not a field that merely describes.
     """
     lines = resolve_added_lines(diff_text)
@@ -2333,7 +2333,7 @@ def _generated_config_findings(diff_text, add, current_text=None) -> None:
             continue
         content, target = body[:cut], body[cut + 1:]
         if _PKGDIR_TARGET_RE.search(target):
-            continue          # R145 owns anything staged into the package.
+            continue          # H089 owns anything staged into the package.
         named = _BUILD_ONLY_PATH_RE.search(content)
         if named is None:
             continue
@@ -2406,7 +2406,7 @@ def _unread_patch_findings(diff_text, add, tree_manifest=None,
         if _not_a_path(raw):
             continue
         base = os.path.basename(_norm_path(raw))
-        # A committed patch is one R146 has already read.
+        # A committed patch is one H090 has already read.
         if not base or base in committed:
             continue
         add("W003", "Applies A Patch This Analysis Did Not Read", "INFO",
@@ -2425,7 +2425,7 @@ def _unread_patch_findings(diff_text, add, tree_manifest=None,
 def _delivery_findings(
     diff_text, config, add, tree_manifest=None, current_text=None
 ) -> None:
-    """Run the diff-text Phase 2 rules (R119-R121, R124, R136-R140) through *add*.
+    """Run the diff-text Phase 2 rules (H067-H069, H072, H081-H085) through *add*.
 
     *current_text* is the PKGBUILD as it now stands, used only to build the
     call graph: a helper added by this diff may be called from a ``build()``

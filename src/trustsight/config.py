@@ -19,7 +19,7 @@ CACHE_DIR = Path.home() / ".cache" / "trustsight" / "repos"
 # to these when a config value is absent.
 # ---------------------------------------------------------------------------
 
-# R081 - foreign package managers invoked from an install hook.  Each entry
+# H035 - foreign package managers invoked from an install hook.  Each entry
 # is a case-insensitive regex fragment matched against reconstructed text.
 DEFAULT_FOREIGN_PKG_MANAGERS = [
     r"\b(?:pip|pip3)\s+install\b",
@@ -37,20 +37,20 @@ DEFAULT_FOREIGN_PKG_MANAGERS = [
     r"\bmake\s+install\b(?!\s+DESTDIR)",
 ]
 
-# R082 - obfuscation indicators counted on a single raw line.  A line
-# carrying at least ``[thresholds] r082_obfuscation_density`` distinct
-# forms fires; the reconstruction rules (R117) decide whether the line is
+# H036 - obfuscation indicators counted on a single raw line.  A line
+# carrying at least ``[thresholds] h036_obfuscation_density`` distinct
+# forms fires; the reconstruction rules (H065) decide whether the line is
 # inert or reveals an executable action.
 # ---------------------------------------------------------------------------
 # The executor vocabulary
 # ---------------------------------------------------------------------------
 #
 # One list, because there were six and they disagreed.  R001/R002 knew
-# `bash|sh|python|zsh|dash|busybox sh`; R127 knew `bash|sh|zsh|dash`;
+# `bash|sh|python|zsh|dash|busybox sh`; H075 knew `bash|sh|zsh|dash`;
 # `network._PIPE_TO_SHELL_RE` knew `bash|sh|zsh|dash|ksh|python3?|perl|ruby`;
-# crossfire knew all of them.  The disagreement was not cosmetic - R061
+# crossfire knew all of them.  The disagreement was not cosmetic - H016
 # *stands down* when it believes R001 owns the line, and it made that
-# decision with the wider list, so `curl url | ksh -s` silenced R061 and
+# decision with the wider list, so `curl url | ksh -s` silenced H016 and
 # then fell through R001, which had never heard of ksh.  A CRITICAL became
 # a LOW because two lists that had to agree were edited separately.
 #
@@ -107,7 +107,7 @@ EXEC_WRAPPER = (
 
 #: Programs that bring bytes onto the machine from somewhere else.
 #:
-#: R001/R002 claim `curl` and `wget`; R061 and R137 knew a slightly longer
+#: R001/R002 claim `curl` and `wget`; H016 and H082 knew a slightly longer
 #: list; `_PIPE_TO_SHELL_RE` knew a third.  Every one of them was an
 #: allowlist, and the interesting property of a downloader is not its name -
 #: `lftp -c "cat URL" | bash`, `nc host 80 | bash` and
@@ -218,7 +218,7 @@ PACKAGE_MANAGER_INSTALL = (
     r"|cpanm?\s+|nimble\s+install|dub\s+fetch|stack\s+install"
     # The distribution's own tools.  `pacman -U ./evil.pkg.tar.zst` inside
     # `build()` installs a package as root, scriptlets and all, and
-    # `pacman -S` downloads one first.  R081 claims *foreign* package
+    # `pacman -S` downloads one first.  H035 claims *foreign* package
     # managers in install hooks; pacman is not foreign and a build function
     # is not a hook, so this fell between the two.  A recipe has no business
     # installing packages: makepkg resolves `depends` for that.
@@ -356,7 +356,7 @@ DEFAULT_OBFUSCATION_INDICATORS = [
     r"(?<=\w)''(?=\w)",
 ]
 
-# R119 - anti-analysis probes run from a build/install function.  A build
+# H067 - anti-analysis probes run from a build/install function.  A build
 # recipe that checks whether it is being debugged, virtualized, sandboxed, or
 # running on CI has no packaging purpose: it is probing its environment to
 # decide whether to deploy a payload.  Each entry is a case-insensitive regex
@@ -373,17 +373,17 @@ DEFAULT_ANTI_ANALYSIS_PROBES = [
     r"\$\{?(?:CI|GITHUB_ACTIONS|GITLAB_CI|TRAVIS|JENKINS_URL|BUILD_ID|BUILD_NUMBER|CIRCLECI|TF_BUILD|CONTAINER)\}?",
 ]
 
-# R086 - host-profiling commands run from a build/install function.  Host
+# H040 - host-profiling commands run from a build/install function.  Host
 # reconnaissance (who am I / what machine am I on) has no packaging purpose;
-# it is the recon stage of the kill-chain R089 composes.  Each entry is a
+# it is the recon stage of the kill-chain H043 composes.  Each entry is a
 # case-insensitive regex fragment matched against reconstructed text.  The
 # leading command-position anchor means only a command invoked at the start
 # of a line or after ; / && / || / | fires - bare mentions in strings, sed
 # expressions and variable values never do.  `env`, `dmidecode` and
 # `systemd-detect-virt` are excluded: `env VAR=val` is overwhelmingly benign,
-# and the latter two already belong to R119.  Calibrated to zero benign
+# and the latter two already belong to H067.  Calibrated to zero benign
 # fires across the 3,246-diff corpus.  A lone `uname -m` (arch check) fires
-# R086 at INFO by design.
+# H040 at INFO by design.
 DEFAULT_RECON_COMMANDS = [
     r"(?:\A\s*|[;&|]\s*)uname\b",
     r"(?:\A\s*|[;&|]\s*)whoami\b",
@@ -407,7 +407,7 @@ DEFAULT_RECON_COMMANDS = [
     r"(?:\A\s*|[;&|]\s*)printenv\b",
 ]
 
-# R129 - network clients invoked at parse time (top level of the PKGBUILD).
+# H077 - network clients invoked at parse time (top level of the PKGBUILD).
 # makepkg sources the recipe before any build step runs, and `makepkg
 # --printsrcinfo`, an AUR helper's metadata refresh and a plain `source
 # PKGBUILD` all reach these lines.  Each entry is a regex fragment carrying a
@@ -460,16 +460,16 @@ DEFAULT_ECOSYSTEM_PREFIXES = [
 # Suffixes denoting expected package variants (fork, build, packaging mode)
 # rather than typosquats.  Stripped before edit-distance comparison so that
 # ``foo-git``, ``foo-bin``, ``foo-lts`` are never confused with the real
-# ``foo`` (R074).
+# ``foo`` (H029).
 DEFAULT_KNOWN_SUFFIXES = (
     "-git", "-bin", "-debug", "-lts", "-stable", "-beta",
     "-svn", "-hg", "-bzr", "-cvs",
     "-wine", "-appimage", "-flatpak", "-nightly", "-devel", "-common",
 )
 
-# Paste and ephemeral file-drop hosts (R087).  Bucket classification in
+# Paste and ephemeral file-drop hosts (H041).  Bucket classification in
 # trusted_domains.toml [raw_hosting] already weights these *as source URLs*,
-# which is why R087 does not look at source=(): it reads the other
+# which is why H041 does not look at source=(): it reads the other
 # direction, an upload to one of these hosts from inside a build or install
 # function, where no bucket applies and the data is leaving the machine.
 DEFAULT_PASTE_HOSTS = [
@@ -478,9 +478,9 @@ DEFAULT_PASTE_HOSTS = [
     "temp.sh", "anonfiles.com", "dpaste.com", "sprunge.us",
 ]
 
-# R087 - invocation shapes that *send* a request body rather than fetch one.
+# H041 - invocation shapes that *send* a request body rather than fetch one.
 # Direction is the whole point of the rule: downloading from a gist is an
-# undeclared fetch (R061), while uploading to one is data leaving the build
+# undeclared fetch (H016), while uploading to one is data leaving the build
 # machine.  Fragments are matched after the client name on a command-position
 # line.
 DEFAULT_UPLOAD_FLAGS = [
@@ -498,7 +498,7 @@ DEFAULT_UPLOAD_FLAGS = [
     r"-X\s*(?:POST|PUT)\b",
 ]
 
-# Source schemes allowed by R080 (source URL uses an exotic protocol).  A
+# Source schemes allowed by H034 (source URL uses an exotic protocol).  A
 # ``transport+base`` token like ``git+https`` is judged by its base scheme;
 # only the base matters here.  Anything outside this allowlist is exotic.
 DEFAULT_SOURCE_SCHEMES = [
@@ -506,7 +506,7 @@ DEFAULT_SOURCE_SCHEMES = [
     "cvs", "file", "dav", "davs",
 ]
 
-# Covert-egress / tunneling clients flagged by R123 when invoked from a
+# Covert-egress / tunneling clients flagged by H071 when invoked from a
 # build/install function.  These tools exist to move data over channels
 # that bypass the normal network surface and have no packaging purpose.
 # Kept out: `nc`/`telnet`/`ssh`/`tor` alone are too ambiguous for a static
@@ -518,7 +518,7 @@ DEFAULT_COVERT_EGRESS_CLIENTS = [
     r"(?:iodine|dnscat2?)\b",
 ]
 
-# DoH endpoints flagged by R123 (covert egress).  Encrypted DNS-over-HTTPS
+# DoH endpoints flagged by H071 (covert egress).  Encrypted DNS-over-HTTPS
 # in a build/install function is a covert channel: it moves DNS queries, the
 # one channel a build is not supposed to touch, out of the resolver's sight.
 DEFAULT_COVERT_EGRESS_ENDPOINTS = [
@@ -544,7 +544,7 @@ DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
 # Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
 DEFAULT_FREE_REGISTRAR_TLDS = ["tk", "ml", "ga", "cf", "gq", "pw"]
 
-# R094 - security-relevant build flags, matched against the tokenized
+# H047 - security-relevant build flags, matched against the tokenized
 # ``configure_flags`` property (full_aur/properties.py).  A hardening flag
 # appearing or disappearing after a long-stable build is an attack-surface
 # change the diff alone would not surface.
@@ -561,7 +561,7 @@ DEFAULT_SECURITY_RELEVANT_FLAGS = [
     "-D_FORTIFY_SOURCE",
 ]
 
-# R095 - security-relevant libraries.  Vendoring one of these (dropping the
+# H048 - security-relevant libraries.  Vendoring one of these (dropping the
 # system dependency and pulling a source copy whose name matches) bypasses
 # the distribution's security updates.
 DEFAULT_SECURITY_RELEVANT_LIBRARIES = [
@@ -723,25 +723,25 @@ experimental = false
 #       no checksum covers
 # D004  provides/replaces claims an established, unrelated package, which
 #       installs this package in front of it
-# R061  a download inside build() whose URL is not in source=()
-# R062  a .install hook, which runs as root, fetches or executes
-# R063  a patch applied from outside the build tree (a URL, an absolute
+# H016  a download inside build() whose URL is not in source=()
+# H017  a .install hook, which runs as root, fetches or executes
+# H018  a patch applied from outside the build tree (a URL, an absolute
 #       path, or process substitution)
-# R064  a source= URL downgraded from https to http
+# H019  a source= URL downgraded from https to http
 D001 = true
 D002 = true
 D003 = true
 D004 = true
-R061 = true
-R062 = true
-R063 = true
-R064 = true
+H016 = true
+H017 = true
+H018 = true
+H019 = true
 
-# R060 reports that a critical build function was modified.  It is INFO
+# H015 reports that a critical build function was modified.  It is INFO
 # severity, so it carries weight 0 and cannot move a score: it fires on
 # 21.4% of benign diffs and is context for a reviewer, not a signal.  That
 # is why it is the one rule here safe to leave on.
-R060 = true
+H015 = true
 
 [ports]
 # Standard ports excluded from R047 (source URL uses non-standard port).
@@ -794,7 +794,7 @@ severity = "CRITICAL"
 category = "obfuscation"
 match_target = "resolved"
 
-# R006 is now a structural rule (src/trustsight/analysis/structural.py):
+# H003 is now a structural rule (src/trustsight/analysis/structural.py):
 # fires on http:// added sources when no checksum was also added.
 
 [[rules]]
@@ -819,7 +819,7 @@ severity = "HIGH"
 category = "network_execution"
 match_target = "resolved"
 
-# R009 is now a code rule (src/trustsight/analysis/build.py): sudo at a
+# H004 is now a code rule (src/trustsight/analysis/build.py): sudo at a
 # command position inside a build/install function.  The regex form fired on
 # any `sudo` mention in a function body - optdepends names, path segments
 # and echo strings - which the code rule's position scoping eliminates.
@@ -910,7 +910,7 @@ include_comments = true
 # ---------------------------------------------------------------------
 # Expanded ruleset (R039+).
 #
-# Numbering starts at R039 because R014-R026 are already referenced by
+# Numbering starts at R039 because H005-R026 are already referenced by
 # tests/fixtures/baseline.json and the malicious fixture generators.
 # Reusing those ids would silently change what they mean.
 #
@@ -1242,7 +1242,7 @@ added_only = true
 """
 
 # The executor list is substituted rather than written out, so R001, R002
-# and R040 cannot drift from the list R061 stands down on.  See
+# and R040 cannot drift from the list H016 stands down on.  See
 # SHELL_EXECUTOR above for what that drift cost.
 DEFAULT_RULES = (
     DEFAULT_RULES
@@ -1310,22 +1310,22 @@ def write_default_file(path: Path, content: str):
         path.write_text(content)
 
 
-# The iocs.toml this project shipped before R106 existed: a placeholder with
+# The iocs.toml this project shipped before H056 existed: a placeholder with
 # no schema, no tiers and no warning that a miss is uninformative.  An
 # install that still carries it byte-for-byte has never been edited, so
 # replacing it costs the user nothing and is the only way the documented
 # schema reaches anyone who installed earlier.
 LEGACY_IOCS_STUBS = frozenset({
     "[iocs]\n"
-    "# R106 - exact-match indicators, each with provenance and a confidence\n"
-    "# tier.  Populated by the phase that ships R106.\n"
+    "# H056 - exact-match indicators, each with provenance and a confidence\n"
+    "# tier.  Populated by the phase that ships H056.\n"
     "version = 1\n"
     "entries = []\n"
 })
 
 
 def _refresh_legacy_iocs() -> bool:
-    """Replace an untouched pre-R106 iocs.toml.  True when rewritten."""
+    """Replace an untouched pre-H056 iocs.toml.  True when rewritten."""
     path = CONFIG_DIR / "iocs.toml"
     try:
         if path.read_text() in LEGACY_IOCS_STUBS:
@@ -1424,44 +1424,44 @@ def _toml_value(val) -> str:
 
 DEFAULT_PATTERNS = (
     "[patterns]\n"
-    "# R081 - foreign package managers invoked from an install hook.  A\n"
+    "# H035 - foreign package managers invoked from an install hook.  A\n"
     "# PKGBUILD that hands installation to another package manager installs\n"
     "# that payload outside pacman's control and its checksums.  Each entry\n"
     "# is a case-insensitive regex fragment matched against reconstructed\n"
     "# text.\n"
     "foreign_pkg_managers = " + _toml_str_list(DEFAULT_FOREIGN_PKG_MANAGERS) + "\n"
     "\n"
-    "# R082 - obfuscation indicators counted on a single raw line.  A line\n"
-    "# carrying at least [thresholds] r082_obfuscation_density distinct\n"
-    "# forms fires; the reconstruction rules (R117) decide whether the\n"
+    "# H036 - obfuscation indicators counted on a single raw line.  A line\n"
+    "# carrying at least [thresholds] h036_obfuscation_density distinct\n"
+    "# forms fires; the reconstruction rules (H065) decide whether the\n"
     "# resolved line reveals an executable action.\n"
     "obfuscation_indicators = " + _toml_str_list(DEFAULT_OBFUSCATION_INDICATORS) + "\n"
     "\n"
-    "# R119 - anti-analysis probes run from a build/install function.  A build\n"
+    "# H067 - anti-analysis probes run from a build/install function.  A build\n"
     "# recipe checking whether it is being debugged, virtualized, sandboxed, or\n"
     "# running on CI has no packaging purpose.  Each entry is a regex fragment\n"
     "# matched against reconstructed text; legitimate arch/feature checks\n"
     "# (uname -m, getconf) never match these.\n"
     "anti_analysis_probes = " + _toml_str_list(DEFAULT_ANTI_ANALYSIS_PROBES) + "\n"
     "\n"
-    "# R086 - host-profiling commands run from a build/install function.  Host\n"
+    "# H040 - host-profiling commands run from a build/install function.  Host\n"
     "# reconnaissance (who am I / what machine am I on) has no packaging\n"
-    "# purpose; it is the recon stage of the kill-chain R089 composes.  Each\n"
+    "# purpose; it is the recon stage of the kill-chain H043 composes.  Each\n"
     "# entry is a regex fragment matched against reconstructed text.  Fragments\n"
     "# carry a command-position anchor so bare mentions in strings, sed\n"
     "# expressions or variable values never fire; `env`, `dmidecode` and\n"
-    "# systemd-detect-virt are deliberately absent (they belong to R119 or\n"
-    "# produce benign false positives).  A lone `uname -m` fires R086 at INFO.\n"
+    "# systemd-detect-virt are deliberately absent (they belong to H067 or\n"
+    "# produce benign false positives).  A lone `uname -m` fires H040 at INFO.\n"
     "recon_commands = " + _toml_str_list(DEFAULT_RECON_COMMANDS) + "\n"
     "\n"
     "\n"
-    "# R087 - curl/wget invocation shapes that send a request body.  An\n"
+    "# H041 - curl/wget invocation shapes that send a request body.  An\n"
     "# upload to a paste or file-drop host from a build or install function\n"
-    "# is the exfil direction; a download from one is R061's undeclared\n"
+    "# is the exfil direction; a download from one is H016's undeclared\n"
     "# fetch.  Matched after the client name on a command-position line.\n"
     "upload_flags = " + _toml_str_list(DEFAULT_UPLOAD_FLAGS) + "\n"
     "\n"
-    "# R129 - network clients invoked at parse time (the top level of the\n"
+    "# H077 - network clients invoked at parse time (the top level of the\n"
     "# PKGBUILD, outside every function).  makepkg sources the recipe before\n"
     "# any build step runs, so these lines execute on a metadata refresh, not\n"
     "# only on a build.  Fragments carry a command-position anchor.\n"
@@ -1472,12 +1472,12 @@ DEFAULT_PATTERNS = (
     "# not cover.\n"
     "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS) + "\n"
     "\n"
-    "# R094 - security-relevant build flags.  A hardening flag dropping out of\n"
+    "# H047 - security-relevant build flags.  A hardening flag dropping out of\n"
     "# (or appearing in) a long-stable configure_flags set is an attack-surface\n"
     "# change that the diff alone would not surface.\n"
     "security_relevant_flags = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_FLAGS) + "\n"
     "\n"
-    "# R095 - security-relevant libraries.  When a package stops depending on\n"
+    "# H048 - security-relevant libraries.  When a package stops depending on\n"
     "# one of these and starts vendoring a matching source copy, it bypasses\n"
     "# the distribution's security updates.\n"
     "security_relevant_libraries = " + _toml_str_list(DEFAULT_SECURITY_RELEVANT_LIBRARIES) + "\n"
@@ -1495,24 +1495,24 @@ DEFAULT_NAMING = (
     "\n"
     "# Suffixes denoting expected package variants, stripped before\n"
     "# edit-distance comparison so foo-git is never confused with foo\n"
-    "# (R074).\n"
+    "# (H029).\n"
     "known_suffixes = " + _toml_str_list(DEFAULT_KNOWN_SUFFIXES) + "\n"
 )
 
 DEFAULT_HOSTS = (
     "[hosts]\n"
-    "# Paste and ephemeral file-drop hosts (R087).  Bucket classification\n"
+    "# Paste and ephemeral file-drop hosts (H041).  Bucket classification\n"
     "# in trusted_domains.toml [raw_hosting] already weights these; this\n"
-    "# list backs the dedicated detection rule shipped with R087.\n"
+    "# list backs the dedicated detection rule shipped with H041.\n"
     "paste_hosts = " + _toml_str_list(DEFAULT_PASTE_HOSTS) + "\n"
     "\n"
-    "# Source schemes allowed by R080 (source URL uses exotic protocol).\n"
+    "# Source schemes allowed by H034 (source URL uses exotic protocol).\n"
     "source_schemes = " + _toml_str_list(DEFAULT_SOURCE_SCHEMES) + "\n"
     "\n"
-    "# Covert-egress / tunneling clients invoked in build/install (R123).\n"
+    "# Covert-egress / tunneling clients invoked in build/install (H071).\n"
     "covert_egress_clients = " + _toml_str_list(DEFAULT_COVERT_EGRESS_CLIENTS) + "\n"
     "\n"
-    "# DoH endpoints flagged by R123 (covert egress).\n"
+    "# DoH endpoints flagged by H071 (covert egress).\n"
     "covert_egress_endpoints = " + _toml_str_list(DEFAULT_COVERT_EGRESS_ENDPOINTS) + "\n"
     "\n"
     "# Popular domains that R013b treats as homoglyph targets.\n"
@@ -1526,83 +1526,83 @@ DEFAULT_HOSTS = (
 )
 
 DEFAULT_THRESHOLDS = (
-    "[r082]\n"
-    "# R082 fires when a single line carries at least this many distinct\n"
+    "[h036]\n"
+    "# H036 fires when a single line carries at least this many distinct\n"
     "# obfuscation indicators from [patterns] obfuscation_indicators.\n"
     "obfuscation_density = 3\n"
     "\n"
-    "[r089]\n"
-    "# R089 annotates a diff whose rule hits span at least this many distinct\n"
-    "# kill-chain stages from the R089 stage map (recon, staging, persistence,\n"
+    "[h043]\n"
+    "# H043 annotates a diff whose rule hits span at least this many distinct\n"
+    "# kill-chain stages from the H043 stage map (recon, staging, persistence,\n"
     "# foreign_fetch, payload, install_hook, write_then_exec, obfuscation,\n"
     "# anti_analysis, hidden_drop, exfil, takeover, mass_adoption).\n"
     "attack_chain_stages = 3\n"
     "\n"
-    "[r116]\n"
-    "# R116 fires when a diff newly claims a provides/replaces entry naming a\n"
+    "[h064]\n"
+    "# H064 fires when a diff newly claims a provides/replaces entry naming a\n"
     "# package the corpus shows this many packages depend on (established,\n"
     "# official-repo membership fires regardless).\n"
     "widely_provided_observations = 25\n"
     "\n"
-    "[r092]\n"
-    "# R092 (mass adoption) fires when a single maintainer submits at least\n"
+    "[h045]\n"
+    "# H045 (mass adoption) fires when a single maintainer submits at least\n"
     "# this many packages with the whole cluster landing within this many days.\n"
     "# The no-baseline gate keeps it silent on a first bootstrap.\n"
     "min_packages = 10\n"
     "window_days = 7\n"
     "\n"
-    "[r100]\n"
-    "# R100 (shared source repo cluster) fires when at least this many\n"
+    "[h052]\n"
+    "# H052 (shared source repo cluster) fires when at least this many\n"
     "# unrelated packages (distinct package bases) declare the same normalized\n"
     "# upstream source URL.\n"
     "min_packages = 3\n"
     "\n"
-    "[r105]\n"
-    "# R105 (attribute burst) fires when at least this many packages by one\n"
+    "[h055]\n"
+    "# H055 (attribute burst) fires when at least this many packages by one\n"
     "# maintainer are modified within this many hours.  Added packages are\n"
-    "# excluded: R092 already claims the adoption clusters.\n"
+    "# excluded: H045 already claims the adoption clusters.\n"
     "min_packages = 5\n"
     "window_hours = 24\n"
     "\n"
-    "[r125]\n"
-    "# R125 (introduction-rate deviation) compares a cycle's new-package count\n"
+    "[h073]\n"
+    "# H073 (introduction-rate deviation) compares a cycle's new-package count\n"
     "# to the prior cycles; it only fires once this many prior cycles exist and\n"
     "# the rate exceeds the mean by at least this many standard deviations.\n"
     "min_history_cycles = 3\n"
     "z_score = 3.0\n"
     "min_introduced = 3\n"
     "\n"
-    "[r126]\n"
-    "# R126 (adopt-then-modify) fires on a package adopted this cycle whose\n"
+    "[h074]\n"
+    "# H074 (adopt-then-modify) fires on a package adopted this cycle whose\n"
     "# modify time still falls within this many days.\n"
     "window_days = 14\n"
     "\n"
-    "[r107]\n"
-    "# R107 (transitive exposure) only reports a package whose transitive\n"
+    "[h057]\n"
+    "# H057 (transitive exposure) only reports a package whose transitive\n"
     "# dependency closure reaches an adopted-from-orphan package at this many\n"
     "# hops or deeper.  Context only; weight 0.\n"
     "min_hops = 2\n"
     "\n"
-    "[r111]\n"
-    "# R111 (transitive orphan risk) only reports a package whose transitive\n"
+    "[h060]\n"
+    "# H060 (transitive orphan risk) only reports a package whose transitive\n"
     "# dependency closure reaches a currently-orphaned package at this many\n"
     "# hops or deeper.  Context only; weight 0.\n"
     "min_hops = 2\n"
     "\n"
-    "[r112]\n"
-    "# R112 (dependency centrality) flags a package depended on by at least\n"
+    "[h061]\n"
+    "# H061 (dependency centrality) flags a package depended on by at least\n"
     "# this many AUR packages.  Prioritisation only; weight 0.\n"
     "min_dependents = 50\n"
     "\n"
-    "[r108]\n"
-    "# R108 (maintainer baseline deviation) is maturity- and z-gated like R125,\n"
+    "[h058]\n"
+    "# H058 (maintainer baseline deviation) is maturity- and z-gated like H073,\n"
     "# but per maintainer against that maintainer's own prior activity.\n"
     "min_history_cycles = 3\n"
     "z_score = 2.0\n"
     "min_activity = 3\n"
     "\n"
     "[longitudinal]\n"
-    "# R094-R098/R102/R083 gate on a property holding at least this many\n"
+    "# H047-H051/H054/H037 gate on a property holding at least this many\n"
     "# consecutive observations before its break is reported.  Below it the\n"
     "# stability_weight is 0 and no PropertyBreak is emitted, so a cold or\n"
     "# immature database never fires the longitudinal rules.\n"
@@ -1610,11 +1610,11 @@ DEFAULT_THRESHOLDS = (
 )
 
 DEFAULT_IOCS = (
-    "# R106 - Class E indicators of compromise.\n"
+    "# H056 - Class E indicators of compromise.\n"
     "#\n"
     "# An entry is a confirmed artefact of a real incident: a package name\n"
     "# that was published as malware, a host a payload was fetched from, the\n"
-    "# digest of a dropped binary.  R106 matches by exact equality and\n"
+    "# digest of a dropped binary.  H056 matches by exact equality and\n"
     "# nothing else - 'evil.example' does not match 'notevil.example' or\n"
     "# 'cdn.evil.example', and a truncated digest matches nothing.\n"
     "#\n"
@@ -1984,9 +1984,10 @@ def enforce_fatal_rules(rules: list[dict]) -> tuple[list[dict], list[str]]:
 def load_rules() -> list[dict]:
     """Load rules from rules.toml, applying per-rule config.toml controls.
 
-    ``[rules.R001]`` controls apply only to rules defined in rules.toml.
-    Code-emitted rules have no TOML definition and intentionally keep their
-    own configuration paths.
+    ``[rules.R001]`` controls apply only to rules defined in rules.toml,
+    which since the R/H split is every ``R`` id and no other: an ``H`` rule
+    is a heuristic emitted from an analysis module, has no TOML definition,
+    and intentionally keeps its own configuration paths.
     """
     data = load_toml("rules.toml")
     rules, restored = enforce_fatal_rules(data.get("rules", []))
@@ -2045,27 +2046,27 @@ def load_domains() -> dict:
 
 
 def load_patterns() -> dict:
-    """Load pattern tables from patterns.toml (R081/R082/D003)."""
+    """Load pattern tables from patterns.toml (H035/H036/D003)."""
     return load_toml("patterns.toml", copy_result=False)
 
 
 def load_naming() -> dict:
-    """Load naming tables from naming.toml (D002/D004/R074)."""
+    """Load naming tables from naming.toml (D002/D004/H029)."""
     return load_toml("naming.toml", copy_result=False)
 
 
 def load_hosts() -> dict:
-    """Load host tables from hosts.toml (R047/R048/R087)."""
+    """Load host tables from hosts.toml (R047/R048/H041)."""
     return load_toml("hosts.toml", copy_result=False)
 
 
 def load_thresholds() -> dict:
-    """Load thresholds from thresholds.toml (R082/R125/R126)."""
+    """Load thresholds from thresholds.toml (H036/H073/H074)."""
     return load_toml("thresholds.toml", copy_result=False)
 
 
 def load_iocs() -> dict:
-    """Load the versioned indicator list from iocs.toml (R106)."""
+    """Load the versioned indicator list from iocs.toml (H056)."""
     return load_toml("iocs.toml", copy_result=False)
 
 

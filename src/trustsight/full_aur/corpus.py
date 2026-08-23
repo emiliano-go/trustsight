@@ -8,9 +8,9 @@ per-package, so :func:`run_corpus_sweep` runs once per metadata cycle,
 after the per-package analysis loop, and returns one finding per cluster
 (the cluster members live in ``params.members``).
 
-Rules: R092/R100/R105/R125 (adoption/momentum), R090/R126 (commit
-identity / adopt-then-modify), R101/R108/R110 (consensus), and the graph
-rules R093/R107/R111/R112 (see :mod:`~trustsight.full_aur.graph`).
+Rules: H045/H052/H055/H073 (adoption/momentum), H044/H074 (commit
+identity / adopt-then-modify), H053/H058/H059 (consensus), and the graph
+rules H046/H057/H060/H061 (see :mod:`~trustsight.full_aur.graph`).
 
 All detectors are silent when there is no prior snapshot (``old_meta is
 None``): the Class D calibration gate is ``fire_rate(no_baseline) == 0``.
@@ -25,13 +25,13 @@ from .graph import run_graph_sweep
 from .metadata import diff_metadata
 
 _SEVERITY = {
-    "R092": "HIGH", "R100": "HIGH", "R105": "MEDIUM", "R125": "MEDIUM",
-    "R090": "MEDIUM", "R126": "MEDIUM", "R071": "HIGH",
-    "R101": "MEDIUM", "R108": "MEDIUM", "R110": "MEDIUM",
+    "H045": "HIGH", "H052": "HIGH", "H055": "MEDIUM", "H073": "MEDIUM",
+    "H044": "MEDIUM", "H074": "MEDIUM", "H026": "HIGH",
+    "H053": "MEDIUM", "H058": "MEDIUM", "H059": "MEDIUM",
 }
 
 # Hosts where an ecosystem package would be expected to live; a divergence
-# from every one of these for a prefixed package is R101's signal.
+# from every one of these for a prefixed package is H053's signal.
 _FORGE_HOSTS = frozenset({
     "github.com", "gitlab.com", "codeberg.org", "bitbucket.org",
     "sourceforge.net", "gitea.com", "gitea.io", "git.sr.ht",
@@ -136,13 +136,13 @@ def _cluster(rule: str, name: str, match: str, members: list[str],
 
 
 def _mass_adoption(new_meta: dict, changes: dict) -> list[dict]:
-    """R092: one maintainer files N packages within a short window.
+    """H045: one maintainer files N packages within a short window.
 
     Only *added* packages count (an adoption is a new submission), and the
     cluster is attributed to the metadata Maintainer of record.
     """
-    min_packages = _threshold("r092", "min_packages", 10)
-    window_s = _threshold("r092", "window_days", 7) * 86400
+    min_packages = _threshold("h045", "min_packages", 10)
+    window_s = _threshold("h045", "window_days", 7) * 86400
     by_maintainer: dict[str, list[tuple[str, int]]] = {}
     for name, status in changes.items():
         if status != "added":
@@ -163,9 +163,9 @@ def _mass_adoption(new_meta: dict, changes: dict) -> list[dict]:
         members = sorted(pkg for pkg, _ in pkgs)
         findings.append(
             _cluster(
-                "R092",
+                "H045",
                 "Mass Adoption",
-                f"maintainer {maintainer} submitted {len(members)} packages within {_threshold('r092', 'window_days', 7)} days",
+                f"maintainer {maintainer} submitted {len(members)} packages within {_threshold('h045', 'window_days', 7)} days",
                 members,
                 maintainer=maintainer,
             )
@@ -174,14 +174,14 @@ def _mass_adoption(new_meta: dict, changes: dict) -> list[dict]:
 
 
 def _attribute_burst(new_meta: dict, changes: dict) -> list[dict]:
-    """R105: N packages sharing an attribute modified in a short window.
+    """H055: N packages sharing an attribute modified in a short window.
 
-    Only *modified* packages count; R092 already claims the added-package
+    Only *modified* packages count; H045 already claims the added-package
     adoption clusters, so counting adds again here would double-report the
     same maintainer.  The shared attribute is the maintainer of record.
     """
-    min_packages = _threshold("r105", "min_packages", 5)
-    window_s = _threshold("r105", "window_hours", 24) * 3600
+    min_packages = _threshold("h055", "min_packages", 5)
+    window_s = _threshold("h055", "window_hours", 24) * 3600
     by_maintainer: dict[str, list[tuple[str, int]]] = {}
     for name, status in changes.items():
         if status != "modified":
@@ -203,9 +203,9 @@ def _attribute_burst(new_meta: dict, changes: dict) -> list[dict]:
         members = sorted(pkg for pkg, _ in pkgs)
         findings.append(
             _cluster(
-                "R105",
+                "H055",
                 "Attribute Burst",
-                f"{len(members)} packages by maintainer {maintainer} modified within {_threshold('r105', 'window_hours', 24)}h",
+                f"{len(members)} packages by maintainer {maintainer} modified within {_threshold('h055', 'window_hours', 24)}h",
                 members,
                 maintainer=maintainer,
             )
@@ -216,14 +216,14 @@ def _attribute_burst(new_meta: dict, changes: dict) -> list[dict]:
 def _shared_repo_cluster(
     new_meta: dict, changes: dict, source_repos: dict[str, set[str]]
 ) -> list[dict]:
-    """R100: >= min_packages unrelated packages share a source repo.
+    """H052: >= min_packages unrelated packages share a source repo.
 
     ``source_repos`` maps package name to the set of normalized upstream
     URLs its PKGBUILD declares.  "Unrelated" is enforced by requiring the
     cluster to span distinct package bases, so split packages of one base
     cannot trip the rule.
     """
-    min_packages = _threshold("r100", "min_packages", 3)
+    min_packages = _threshold("h052", "min_packages", 3)
     by_repo: dict[str, set[str]] = {}
     for name in changes:
         repos = source_repos.get(name) or set()
@@ -240,7 +240,7 @@ def _shared_repo_cluster(
             continue
         findings.append(
             _cluster(
-                "R100",
+                "H052",
                 "Shared Source Repo Cluster",
                 f"{len(members_sorted)} unrelated packages share source {repo}",
                 members_sorted,
@@ -251,15 +251,15 @@ def _shared_repo_cluster(
 
 
 def _introduction_deviation(new_meta: dict, changes: dict, prior_history: list[dict]) -> list[dict]:
-    """R125: this cycle's introduction rate deviates from the baseline.
+    """H073: this cycle's introduction rate deviates from the baseline.
 
     Maturity-gated: a fresh corpus (fewer than *min_history_cycles* prior
     cycles) has no baseline, so the rule stays silent.  Only over-achievement
     is suspicious; a quiet cycle is not.
     """
-    min_cycles = _threshold("r125", "min_history_cycles", 3)
-    z_score = float(_threshold("r125", "z_score", 3.0))
-    min_introduced = _threshold("r125", "min_introduced", 3)
+    min_cycles = _threshold("h073", "min_history_cycles", 3)
+    z_score = float(_threshold("h073", "z_score", 3.0))
+    min_introduced = _threshold("h073", "min_introduced", 3)
     if len(prior_history) < min_cycles:
         return []
     introduced = sum(1 for status in changes.values() if status == "added")
@@ -276,7 +276,7 @@ def _introduction_deviation(new_meta: dict, changes: dict, prior_history: list[d
     members = sorted(name for name, status in changes.items() if status == "added")
     return [
         _cluster(
-            "R125",
+            "H073",
             "Introduction-Rate Deviation",
             f"introduction rate {introduced} vs prior mean {mean:.0f} (z={z:.1f})",
             members,
@@ -291,7 +291,7 @@ def _known_maintainers(old_meta: dict) -> set[str]:
     """Every maintainer the previous snapshot knew of.
 
     The corpus sweep's own answer to "has this account been seen before":
-    the per-package R071 asks the observation database, which on the corpus
+    the per-package H026 asks the observation database, which on the corpus
     path has only what earlier cycles happened to analyse, while the
     snapshot names the maintainer of every package in the AUR.
     """
@@ -306,18 +306,18 @@ def _known_maintainers(old_meta: dict) -> set[str]:
 def _ownership_transition_findings(
     new_meta: dict, old_meta: dict, transitions: dict
 ) -> list[dict]:
-    """R090 - a package changed maintainer this cycle, and R071 with it.
+    """H044 - a package changed maintainer this cycle, and H026 with it.
 
-    Transitions to a non-empty maintainer are the takeover half of R090
+    Transitions to a non-empty maintainer are the takeover half of H044
     (the commit-identity half needs git metadata the snapshot sweep does
     not carry).  A move to an empty maintainer is abandonment, handled by
-    R093/R111 as orphan state rather than a takeover.
+    H046/H060 as orphan state rather than a takeover.
 
-    R071 ships with R090 (plan §8): when the incoming account maintained
+    H026 ships with H044 (plan §8): when the incoming account maintained
     nothing at all in the previous snapshot, the transition is not just a
     handover between known packagers, and that is a different claim from
-    R090's.  The two are separate findings on separate evidence, so a
-    handover between established maintainers carries R090 alone.
+    H044's.  The two are separate findings on separate evidence, so a
+    handover between established maintainers carries H044 alone.
     """
     out: list[dict] = []
     known = _known_maintainers(old_meta)
@@ -325,7 +325,7 @@ def _ownership_transition_findings(
         if not new_m:
             continue
         out.append(_cluster(
-            "R090",
+            "H044",
             "Ownership Transition",
             f"maintainer of {name} changed from '{old_m or 'orphan'}' to '{new_m}'",
             [name],
@@ -336,7 +336,7 @@ def _ownership_transition_findings(
         ))
         if new_m not in known:
             out.append(_cluster(
-                "R071",
+                "H026",
                 "Untrusted Maintainer Takeover",
                 f"maintainer of {name} changed to '{new_m}', who maintained "
                 f"no package in the previous snapshot",
@@ -355,14 +355,14 @@ def _adopt_then_modify_findings(
     transitions: dict,
     now: int,
 ) -> list[dict]:
-    """R126 - adopt-then-immediately-modify (fires on the first package).
+    """H074 - adopt-then-immediately-modify (fires on the first package).
 
     A package adopted (maintainer transition to a non-empty maintainer)
     whose version also changed in the same cycle was touched by the new
     owner immediately.  Clusters by the adopting maintainer; the window
     bounds how recent the touch must be.
     """
-    window_s = _threshold("r126", "window_days", 14) * 86400
+    window_s = _threshold("h074", "window_days", 14) * 86400
     by_maintainer: dict[str, list[str]] = {}
     for name, (old_m, new_m) in transitions.items():
         if not new_m:
@@ -378,7 +378,7 @@ def _adopt_then_modify_findings(
     out: list[dict] = []
     for maintainer, members in by_maintainer.items():
         out.append(_cluster(
-            "R126",
+            "H074",
             "Adopt-then-Modify",
             f"maintainer {maintainer} adopted and immediately modified "
             f"{len(members)} package(s)",
@@ -402,7 +402,7 @@ def _ecosystem_prefix_of(name: str) -> str | None:
 def _name_host_divergence_findings(
     changes: dict, source_repos: dict[str, set[str]]
 ) -> list[dict]:
-    """R101 - name-token <-> host consensus divergence.
+    """H053 - name-token <-> host consensus divergence.
 
     An ecosystem-prefixed package (``python-*``, ``nodejs-*``, ...) added
     this cycle whose sources live on a host that is neither the ecosystem's
@@ -426,7 +426,7 @@ def _name_host_divergence_findings(
         if hosts & _FORGE_HOSTS:
             continue
         out.append(_cluster(
-            "R101",
+            "H053",
             "Ecosystem/Host Divergence",
             f"{name} claims the {prefix} ecosystem but sources from "
             f"{', '.join(sorted(hosts)[:3])}",
@@ -442,7 +442,7 @@ def _name_host_divergence_findings(
 def _name_repo_divergence_findings(
     changes: dict, source_repos: dict[str, set[str]]
 ) -> list[dict]:
-    """R110 - package name and source repo share no token.
+    """H059 - package name and source repo share no token.
 
     A multi-token package name whose upstream repo path shares none of its
     tokens is a name/repo mismatch; on a newly added package that is the
@@ -470,7 +470,7 @@ def _name_repo_divergence_findings(
         )
         if not overlapping:
             out.append(_cluster(
-                "R110",
+                "H059",
                 "Name/Repo Divergence",
                 f"{name} sources from {', '.join(sorted(repos)[:3])}, "
                 "sharing no token with its name",
@@ -487,15 +487,15 @@ def _maintainer_deviation_findings(
     new_meta: dict,
     maintainer_history: list[dict],
 ) -> list[dict]:
-    """R108 - a maintainer's activity deviates from their own baseline.
+    """H058 - a maintainer's activity deviates from their own baseline.
 
     Compares this cycle's package count per maintainer against that
     maintainer's prior per-cycle activity (from the adoption feed).
-    Maturity-gated like R125: no prior baseline, no finding.
+    Maturity-gated like H073: no prior baseline, no finding.
     """
-    min_cycles = int(_threshold("r108", "min_history_cycles", 3))
-    z_score = float(_threshold("r108", "z_score", 2.0))
-    min_activity = int(_threshold("r108", "min_activity", 3))
+    min_cycles = int(_threshold("h058", "min_history_cycles", 3))
+    z_score = float(_threshold("h058", "z_score", 2.0))
+    min_activity = int(_threshold("h058", "min_activity", 3))
     prior_by_maintainer: dict[str, list[int]] = {}
     for row in maintainer_history:
         m = row.get("maintainer") or ""
@@ -523,7 +523,7 @@ def _maintainer_deviation_findings(
         if z < z_score:
             continue
         out.append(_cluster(
-            "R108",
+            "H058",
             "Maintainer Baseline Deviation",
             f"maintainer {maintainer} active on {len(members)} packages "
             f"vs prior mean {mean:.0f} (z={z:.1f})",

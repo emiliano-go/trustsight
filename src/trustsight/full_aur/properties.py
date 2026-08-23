@@ -3,7 +3,7 @@
 Records per-package, per-key property values across analyses.
 ``update_properties()`` persists state and returns ``PropertyBreak``
 objects on value changes.  ``longitudinal_findings()`` is a stub that
-returns ``[]`` until R094–R102 are implemented.
+returns ``[]`` until H047–H054 are implemented.
 """
 
 import hashlib
@@ -122,7 +122,7 @@ _METADATA_HOST_RE = re.compile(r"(?:https?|git\+https?|ftps?)://([^/\s\"')#]+)")
 
 
 def metadata_divergence(new_pkgbuild: str, srcinfo: Optional[str]) -> list[str]:
-    """Hosts `.SRCINFO` names that the PKGBUILD does not (R148).
+    """Hosts `.SRCINFO` names that the PKGBUILD does not (H092).
 
     `.SRCINFO` is *generated from* the PKGBUILD, and the analysis prefers
     it wherever it is richer - structured `depends`, expanded sources. That

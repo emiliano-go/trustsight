@@ -34,7 +34,7 @@ LEGEND_END = "<!-- /generated: legend -->"
 TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
 
-HEADING = re.compile(r"^### ([RCDSXW]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
+HEADING = re.compile(r"^### ([RCDSXWH]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
 SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
 
 
@@ -55,7 +55,7 @@ def _catalog() -> list[tuple[str, str, str, RuleCategory, str]]:
                 (rule_id, name, _severity(lines[index:index + 12]),
                  category, anchor or rule_id.lower())
             )
-    # Sort by series then by number, so R100 follows R099 rather than R010.
+    # Sort by series then by number, so H052 follows R099 rather than R010.
     rows.sort(key=lambda row: (row[0][0], int(row[0][1:]), row[4]))
     return rows
 

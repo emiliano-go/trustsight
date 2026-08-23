@@ -5,7 +5,7 @@ selection = "pkgname ends in '-bin' and not '-git'"
 source = "aur_rpc"
 
 [strata.vcs_git]
-description = "Live VCS checkouts. SKIP is mandatory → must NOT fire R004."
+description = "Live VCS checkouts. SKIP is mandatory → must NOT fire H001."
 target = 30
 selection = "pkgname ends in '-git'"
 source = "aur_rpc"

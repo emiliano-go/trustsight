@@ -10,9 +10,9 @@ from .base import _experimental_enabled, _rarities_of
 
 _DEP_EXPANSION_GATE = 1.5
 
-# A name this many packages depend on counts as "widely provided" for R116.
+# A name this many packages depend on counts as "widely provided" for H064.
 # Uses the same observation table as the typosquat proxy; overridden by
-# ``[r116] widely_provided_observations`` in thresholds.toml.
+# ``[h064] widely_provided_observations`` in thresholds.toml.
 _WIDELY_PROVIDED_OBSERVATIONS = 25
 
 
@@ -27,7 +27,7 @@ def _network_tools(config: dict) -> frozenset:
 
 
 def _widely_provided_threshold(config: dict) -> int:
-    thresholds = load_thresholds().get("r116", {})
+    thresholds = load_thresholds().get("h064", {})
     return int(thresholds.get(
         "widely_provided_observations", _WIDELY_PROVIDED_OBSERVATIONS
     ))
@@ -36,7 +36,7 @@ def _widely_provided_threshold(config: dict) -> int:
 def _is_widely_provided(name: str, config: dict) -> bool:
     """True when the corpus shows *name* is depended on by many packages.
 
-    R116's "widely-provided (corpus-measured)" signal: distinct from
+    H064's "widely-provided (corpus-measured)" signal: distinct from
     *established* (official repo membership), this is the observation-count
     proxy from the dependency seed, so a package claiming a name the whole
     AUR relies on is flagged even when pacman has no repo data.
@@ -46,7 +46,7 @@ def _is_widely_provided(name: str, config: dict) -> bool:
 
 def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
     """Newly claimed ``provides``/``replaces`` naming an established or widely
-    provided package unrelated to *package_name* (R116).
+    provided package unrelated to *package_name* (H064).
 
     The default-path counterpart of the experimental D004: a package that
     inserts itself in front of a name the ecosystem relies on has a
@@ -68,7 +68,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
             if is_related_package(name, package_name):
                 continue
             if is_established_package(name):
-                add("R116", "Provides/Replaces Scope Expansion", "HIGH",
+                add("H064", "Provides/Replaces Scope Expansion", "HIGH",
                     "dependency",
                     f"{field} claims '{name}', an established package unrelated "
                     f"to '{package_name}'",
@@ -76,7 +76,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
                     package_name=package_name)
                 return
             if _is_widely_provided(name, config):
-                add("R116", "Provides/Replaces Scope Expansion", "MEDIUM",
+                add("H064", "Provides/Replaces Scope Expansion", "MEDIUM",
                     "dependency",
                     f"{field} claims '{name}', widely depended on but unrelated "
                     f"to '{package_name}'",
@@ -96,7 +96,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
         magnitude = len(all_new) * (sum(rarities) / len(rarities))
         if magnitude >= _DEP_EXPANSION_GATE:
             novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
-            add("R075", "Dependency-Set Expansion", "MEDIUM", "dependency",
+            add("H030", "Dependency-Set Expansion", "MEDIUM", "dependency",
                 f"diff adds {len(novel)} novel/rare deps: {novel}",
                 n_novel=len(novel), novel_names=", ".join(novel))
 

@@ -64,7 +64,7 @@ add("june-w1-install-hook-foreign-fetch",
     ),
     description="Install hook installs a package from a foreign package manager",
     campaign="june-w1-w2", fidelity="representative",
-    must_fire=["R007", "R081"], min_score=25)
+    must_fire=["R007", "H035"], min_score=25)
 
 add("june-w2-install-hook-remote-script",
     diff(
@@ -89,7 +89,7 @@ add("june-w3-obfuscated-install-hook",
     description="June W3 re-release: the package manager name is ANSI-C hex, "
                 "so the rule has to match the reconstruction",
     campaign="june-w3-obfuscated", fidelity="representative",
-    must_fire=["R007", "R081", "R117"], min_score=25)
+    must_fire=["R007", "H035", "H065"], min_score=25)
 
 add("june-w3-empty-quote-concat-hook",
     diff(
@@ -100,7 +100,7 @@ add("june-w3-empty-quote-concat-hook",
     ),
     description="Same step via empty-quote concatenation",
     campaign="june-w3-obfuscated", fidelity="representative",
-    must_fire=["R081", "R117"], min_score=25)
+    must_fire=["H035", "H065"], min_score=25)
 
 # ── July: the delivery stack ────────────────────────────────────────────────
 
@@ -115,7 +115,7 @@ add("july-anti-analysis-guard",
     description="Build refuses to run under a debugger or a VM - a check with "
                 "no packaging purpose",
     campaign="july", fidelity="representative",
-    must_fire=["R119"], min_score=25)
+    must_fire=["H067"], min_score=25)
 
 add("july-reconstructed-elf-payload",
     diff(
@@ -127,7 +127,7 @@ add("july-reconstructed-elf-payload",
     ),
     description="A base64 blob in the PKGBUILD whose bytes carry ELF magic",
     campaign="july", fidelity="representative",
-    must_fire=["R120"], min_score=25)
+    must_fire=["H068"], min_score=25)
 
 add("july-generate-then-execute",
     diff(
@@ -141,7 +141,7 @@ add("july-generate-then-execute",
     ),
     description="Build writes a script in the same function that executes it",
     campaign="july", fidelity="representative",
-    must_fire=["R121"], min_score=25)
+    must_fire=["H069"], min_score=25)
 
 add("july-write-then-execute",
     diff(
@@ -152,9 +152,9 @@ add("july-write-then-execute",
         "}",
     ),
     description="A file the recipe places is then executed from its new "
-                "path - the dataflow, not the generation (R121 owns that)",
+                "path - the dataflow, not the generation (H069 owns that)",
     campaign="july", fidelity="representative",
-    must_fire=["R124"], min_score=25)
+    must_fire=["H072"], min_score=25)
 
 add("july-systemd-persistence",
     diff(
@@ -168,7 +168,7 @@ add("july-systemd-persistence",
     ),
     description="Unit whose ExecStart points at a runtime-writable path",
     campaign="july", fidelity="representative",
-    must_fire=["R085"], min_score=25)
+    must_fire=["H039"], min_score=25)
 
 add("july-pacman-hook-persistence",
     diff(
@@ -179,7 +179,7 @@ add("july-pacman-hook-persistence",
     description="Package installs a pacman hook - code that runs on every "
                 "later transaction",
     campaign="july", fidelity="representative",
-    must_fire=["R114"], min_score=5)
+    must_fire=["H062"], min_score=5)
 
 add("july-build-write-outside-staging",
     diff(
@@ -191,7 +191,7 @@ add("july-build-write-outside-staging",
     description="A build-time write that lands outside $srcdir/$pkgdir - "
                 "pacman tracks none of it",
     campaign="july", fidelity="representative",
-    must_fire=["R128"], min_score=25)
+    must_fire=["H076"], min_score=25)
 
 add("july-exfil-to-drop-host",
     diff(
@@ -203,7 +203,7 @@ add("july-exfil-to-drop-host",
     description="Collected data uploaded to an ephemeral file-drop host, "
                 "the exfil direction no source bucket can see",
     campaign="july", fidelity="representative",
-    must_fire=["R087"], must_not_fire=["R061"], min_score=25)
+    must_fire=["H041"], must_not_fire=["H016"], min_score=25)
 
 # ── The chain, not the step ────────────────────────────────────────────────
 
@@ -224,9 +224,9 @@ add("july-full-kill-chain",
         "}",
     ),
     description="Anti-analysis, an encoded payload, persistence and an "
-                "obfuscated install hook in one diff: R089's whole point",
+                "obfuscated install hook in one diff: H043's whole point",
     campaign="july", fidelity="representative",
-    must_fire=["R089", "R119", "R120", "R114", "R081"], min_score=60)
+    must_fire=["H043", "H067", "H068", "H062", "H035"], min_score=60)
 
 # ── Controls: the must-not-fire surface §10 names ──────────────────────────
 
@@ -248,7 +248,7 @@ add("control-arch-check-and-generated-desktop",
     description="Architecture detection and a generated .desktop consumed by "
                 "a declared install step",
     campaign="control", fidelity="representative",
-    must_not_fire=["R119", "R121", "R124", "R128"], max_score=20)
+    must_not_fire=["H067", "H069", "H072", "H076"], max_score=20)
 
 add("control-bin-package-declared-source",
     diff(
@@ -268,7 +268,7 @@ add("control-bin-package-declared-source",
                 "and that is the calibration cost of not paying back points "
                 "for a claim an attacker can make for free.",
     campaign="control", fidelity="representative",
-    must_not_fire=["R118", "R120", "R124", "R128"], max_score=35)
+    must_not_fire=["H066", "H068", "H072", "H076"], max_score=35)
 
 
 def main() -> int:

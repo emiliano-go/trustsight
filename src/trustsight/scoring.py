@@ -24,7 +24,7 @@ FLAG_THRESHOLD = 20
 # tag_pinned -3, and a trusted-forge credit capped at -20).  The calibration
 # problem they existed to solve, a package doing GPG verification scoring
 # worse than one doing nothing because SKIP on a .asc file added points, is
-# fixed at source instead: R004 does not fire on a SKIP that is mandatory
+# fixed at source instead: H001 does not fire on a SKIP that is mandatory
 # for a VCS source, structurally uncheckable for a signature file, or
 # covered by declared PGP keys (``is_skip_justified``).  Stopping the false
 # positive was the right fix; paying it back was not.
@@ -61,7 +61,7 @@ DECLARED_REASONS = {
     P_SIGNATURE_SOURCE: "a signature source accompanies a source, with PGP keys declared",
     P_COMMIT_PINNED: "source pinned to a full commit hash",
     # Phrased so it cannot be read as reassurance: the tag pin is the weaker
-    # form, and R079 exists precisely because a tag can be moved.
+    # form, and H033 exists precisely because a tag can be moved.
     P_TAG_PINNED: "source pinned to a tag (tags can be repointed; commit pins cannot)",
     P_TRUSTED_FORGE: "source hosted on a trusted forge over HTTPS",
     # The counterpart P005/P006 never had.  A recipe that pins says so; one

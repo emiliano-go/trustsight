@@ -1,6 +1,6 @@
 """``trustsight corpus`` - corpus-wide queries (plan §9).
 
-``corpus pivot <ioc>`` inverts R106: instead of asking what one package
+``corpus pivot <ioc>`` inverts H056: instead of asking what one package
 carries, it asks which packages reference one indicator.  That is the shape
 of the question an advisory creates.
 """

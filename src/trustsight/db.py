@@ -17,6 +17,7 @@ from typing import Optional
 
 from .bounded_io import read_capped, read_file_capped
 from .config import DATA_DIR
+from .rule_id_history import RENAMED_RULE_IDS
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def get_db_path() -> Path:
 
 # Connections are cached per (thread, database path) rather than opened per
 # query.  Opening one costs ~0.35ms once the two PRAGMAs are counted, and the
-# hot paths issue thousands of small reads: R074 alone used to open 5001
+# hot paths issue thousands of small reads: H029 alone used to open 5001
 # connections for a single package.  Keying on the path keeps the tests
 # honest, since they monkeypatch DATA_DIR to a tmpdir between cases.
 _local = threading.local()
@@ -265,7 +266,7 @@ def init_db():
 
             /* Class D adoption feed: one row per package per corpus cycle.
                The metadata-dump diff between cycles is the first-class
-               stream the corpus sweep consumes; R092/R105/R100/R125 read
+               stream the corpus sweep consumes; H045/H055/H052/H073 read
                introduction events and per-cycle timestamps from it. */
             CREATE TABLE IF NOT EXISTS cycle_events (
                 package_name TEXT NOT NULL,
@@ -313,7 +314,7 @@ def init_db():
 _ADDED_COLUMNS = {
     "packages": {
         "current_maintainer": "TEXT DEFAULT ''",
-        # R141: whether the AUR reported this package as orphaned the last
+        # H086: whether the AUR reported this package as orphaned the last
         # time we asked.  -1 means "never asked", which is not the same as
         # "was not orphaned": an adoption can only be claimed against a
         # recorded prior observation, never against an absence of one.
@@ -342,6 +343,39 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # The old table is renamed rather than dropped so the migration is
     # reversible and any data attached to it remains inspectable.
     _migrate_plaintext_maintainers(conn)
+
+    _migrate_rule_ids(conn)
+
+
+#: Bumped when a migration rewrites stored data rather than adding a column.
+#: Column additions are self-describing - ``PRAGMA table_info`` answers
+#: whether they ran - but a value rewrite leaves no trace of itself, so it
+#: needs a marker or it runs on every open.
+_SCHEMA_VERSION = 1
+
+
+def _migrate_rule_ids(conn: sqlite3.Connection) -> None:
+    """Rewrite stored rule ids for the heuristic rules renamed to ``H``.
+
+    Alert de-duplication keys on ``(package_name, rule_id)``.  Without this,
+    the release that renames ``R060`` to ``H015`` makes every alert an
+    operator has already seen look new, and the first run after upgrading
+    re-notifies for the entire watchlist.
+
+    The rewrite cannot collide: the mapping is injective and ``H`` ids never
+    existed before it, so no updated row can land on a primary key that is
+    already occupied.
+    """
+    if conn.execute("PRAGMA user_version").fetchone()[0] >= _SCHEMA_VERSION:
+        return
+    pairs = [(new, old) for old, new in RENAMED_RULE_IDS.items()]
+    conn.executemany(
+        "UPDATE alert_state SET rule_id = ? WHERE rule_id = ?", pairs)
+    conn.executemany(
+        "UPDATE triggered_rules SET rule_id = ? WHERE rule_id = ?", pairs)
+    # A literal, because PRAGMA does not take bound parameters. The value is
+    # a module constant, never anything read from a database or a diff.
+    conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION:d}")
 
 
 def _migrate_plaintext_maintainers(conn: sqlite3.Connection) -> None:
@@ -606,7 +640,7 @@ def update_package_maintainer(name: str, maintainer: str):
 def get_aur_orphan_state(name: str) -> int:
     """The last recorded AUR orphan state: 1 orphaned, 0 maintained, -1 unknown.
 
-    -1 is load-bearing.  R141 claims "this package was adopted", and that
+    -1 is load-bearing.  H086 claims "this package was adopted", and that
     claim needs a prior observation showing it orphaned; a database that has
     never asked must not let "no record" read as "was maintained" or as
     "was orphaned".
@@ -1702,7 +1736,7 @@ def record_cycle_events(events: list[dict]) -> None:
 
 
 def introduction_rate_history(cycles: int | None = None) -> list[dict]:
-    """Per-cycle introduction counts, oldest first (Class D R125).
+    """Per-cycle introduction counts, oldest first (Class D H073).
 
     Returns ``[{cycle_time, introduced}]`` for every recorded cycle with at
     least one event; *cycles* limits the number returned (most recent) when
@@ -1733,7 +1767,7 @@ def latest_cycle_time() -> int:
 
 
 def maintainer_activity_history() -> list[dict]:
-    """Per-maintainer per-cycle event counts, oldest first (Class D R108).
+    """Per-maintainer per-cycle event counts, oldest first (Class D H058).
 
     Returns ``[{maintainer, cycle_time, activity}]`` covering every
     recorded cycle, so a maintainer's own past activity can serve as the

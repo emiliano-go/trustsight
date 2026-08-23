@@ -1,20 +1,20 @@
 """Phase 3 - kill-chain composition rules (plan §5).
 
-R086 and R089 share one threat model: a PKGBUILD diff that carries a *staged
+H040 and H043 share one threat model: a PKGBUILD diff that carries a *staged
 attack* rather than a single suspicious act.  Both are weight-0 annotations;
 neither changes the score.
 
-R086 (host reconnaissance) fires at INFO when a build/install function runs
+H040 (host reconnaissance) fires at INFO when a build/install function runs
 a host-profiling command from the config-driven ``recon_commands`` list.
 Probing "who am I / what machine am I on" has no packaging purpose, but a
-single `uname -m` arch check is common and benign, so R086 is deliberately
-quiet: it is the recon stage that R089 composes, nothing more.
+single `uname -m` arch check is common and benign, so H040 is deliberately
+quiet: it is the recon stage that H043 composes, nothing more.
 
-R089 (attack-chain composition) is computed over the *aggregated*
+H043 (attack-chain composition) is computed over the *aggregated*
 ``triggered_rules`` of a diff scan.  Every rule in the plan maps to a
-kill-chain stage; when the hits of one diff span ``[thresholds] r089
+kill-chain stage; when the hits of one diff span ``[thresholds] h043
 attack_chain_stages`` distinct stages, the diff is annotated as a staged
-attack.  R089 is an annotation of rule hits, never an additive score, and
+attack.  H043 is an annotation of rule hits, never an additive score, and
 its own ``meta`` finding is excluded from every stage count.
 """
 
@@ -36,19 +36,19 @@ from .delivery import (
 )
 
 # ---------------------------------------------------------------------------
-# R086 - host reconnaissance
+# H040 - host reconnaissance
 # ---------------------------------------------------------------------------
 
 
 def _recon_probes(config=None) -> list[re.Pattern]:
-    """Compile the R086 recon-command fragments from patterns.toml."""
+    """Compile the H040 recon-command fragments from patterns.toml."""
     patterns = load_patterns().get("patterns", {})
     frags = patterns.get("recon_commands") or DEFAULT_RECON_COMMANDS
     return [re.compile(p, re.IGNORECASE) for p in frags]
 
 
 def _recon_findings(diff_text, config, add) -> None:
-    """A build/install line runs a host-profiling command (R086, INFO).
+    """A build/install line runs a host-profiling command (H040, INFO).
 
     The probe list is config-driven (patterns.toml ``recon_commands``).  The
     fragments carry a command-position anchor, so a mention inside a string,
@@ -70,7 +70,7 @@ def _recon_findings(diff_text, config, add) -> None:
         for probe in probes:
             m = probe.search(body)
             if m:
-                add("R086", "Host Reconnaissance", "INFO", "recon",
+                add("H040", "Host Reconnaissance", "INFO", "recon",
                     f"{enclosing[i]}() profiles the host: {body.strip()[:80]}",
                     line=_find_line(diff_text, m.group(0)),
                     position=enclosing[i],
@@ -79,37 +79,37 @@ def _recon_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R089 - attack-chain composition
+# H043 - attack-chain composition
 # ---------------------------------------------------------------------------
 
 # Stage map (plan §5): each rule id belongs to exactly one kill-chain stage.
-# Meta rules (R072, R089, R069) are absent - they annotate, they do not
+# Meta rules (H027, H043, H024) are absent - they annotate, they do not
 # stage.
 _STAGE_OF = {
-    "R071": "takeover", "R090": "takeover", "R126": "takeover",
-    "R092": "mass_adoption", "R125": "mass_adoption",
-    "R068": "install_hook", "R062": "install_hook",
-    "R001": "foreign_fetch", "R081": "foreign_fetch", "R118": "foreign_fetch",
-    "R120": "payload", "R121": "payload",
-    "R082": "obfuscation", "R117": "obfuscation",
-    "R119": "anti_analysis", "R132": "anti_analysis",
-    "R124": "write_then_exec", "R136": "write_then_exec",
-    "R084": "staging",
-    "R086": "recon",
-    "R085": "persistence", "R114": "persistence", "R128": "persistence",
-    "R087": "exfil", "R123": "exfil",
-    "R088": "hidden_drop",
-    "R080": "foreign_fetch",
+    "H026": "takeover", "H044": "takeover", "H074": "takeover",
+    "H045": "mass_adoption", "H073": "mass_adoption",
+    "H023": "install_hook", "H017": "install_hook",
+    "R001": "foreign_fetch", "H035": "foreign_fetch", "H066": "foreign_fetch",
+    "H068": "payload", "H069": "payload",
+    "H036": "obfuscation", "H065": "obfuscation",
+    "H067": "anti_analysis", "H080": "anti_analysis",
+    "H072": "write_then_exec", "H081": "write_then_exec",
+    "H038": "staging",
+    "H040": "recon",
+    "H039": "persistence", "H062": "persistence", "H076": "persistence",
+    "H041": "exfil", "H071": "exfil",
+    "H042": "hidden_drop",
+    "H034": "foreign_fetch",
     # The map was written when the R-series was the whole ruleset, and it
     # stopped there. A diff carrying nothing but evasion, or nothing but
     # sabotage, could not reach the stage count however many rules fired -
     # which inverts the rule's purpose, because a staged attack spelled in
-    # the families designed to *avoid* the R-series is the case R089 is
+    # the families designed to *avoid* the R-series is the case H043 is
     # most wanted for.
-    "R041": "foreign_fetch", "R137": "write_then_exec",
-    "R138": "write_then_exec", "R146": "foreign_fetch",
-    "R144": "persistence", "R145": "persistence", "R054": "persistence",
-    "R147": "integrity_removed",
+    "R041": "foreign_fetch", "H082": "write_then_exec",
+    "H083": "write_then_exec", "H090": "foreign_fetch",
+    "R144": "persistence", "H089": "persistence", "R054": "persistence",
+    "H091": "integrity_removed",
     "X001": "obfuscation", "X002": "obfuscation", "X003": "obfuscation",
     "X005": "obfuscation", "X008": "obfuscation", "X018": "obfuscation",
     "X004": "anti_analysis",
@@ -127,14 +127,14 @@ _STAGE_OF = {
 
 # Rules that fire on the *same* evidence as a heavier rule and must never be
 # counted as extra stages of their own.  No such rule exists today; the plan's
-# no-cascade guarantees (R107/R111/R112 never additive) are satisfied because
+# no-cascade guarantees (H057/H060/H061 never additive) are satisfied because
 # those rules are not in the stage map at all.
 _CASCADE_ONLY = frozenset()
 
 
 def _attack_chain_threshold(config=None) -> int:
-    """Return the R089 stage threshold from thresholds.toml."""
-    thresholds = load_thresholds().get("r089", {})
+    """Return the H043 stage threshold from thresholds.toml."""
+    thresholds = load_thresholds().get("h043", {})
     return thresholds.get("attack_chain_stages", 3)
 
 
@@ -158,18 +158,18 @@ def _attack_chain_stages(triggered_rules: list[dict]) -> dict[str, list[str]]:
 
 
 def _meta_annotations(triggered_rules: list[dict], config=None) -> list[dict]:
-    """Compose the meta annotations of a diff scan (R072, R089).
+    """Compose the meta annotations of a diff scan (H027, H043).
 
-    R072 keeps its exact historical behavior (distinct categories excluding
-    only R072 itself).  R089 is appended when the distinct kill-chain stages
-    reach ``[thresholds] r089 attack_chain_stages``.  Both are INFO/weight-0.
+    H027 keeps its exact historical behavior (distinct categories excluding
+    only H027 itself).  H043 is appended when the distinct kill-chain stages
+    reach ``[thresholds] h043 attack_chain_stages``.  Both are INFO/weight-0.
     """
     out = []
     categories = {r.get("category", "") for r in triggered_rules
-                  if r.get("category") and r["rule_id"] != "R072"}
+                  if r.get("category") and r["rule_id"] != "H027"}
     if len(categories) >= 3:
         out.append(stamp({
-            "rule_id": "R072", "name": "Capability Density Anomaly",
+            "rule_id": "H027", "name": "Capability Density Anomaly",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(categories)} distinct capability categories",
             "params": {"n_categories": len(categories)},
@@ -180,7 +180,7 @@ def _meta_annotations(triggered_rules: list[dict], config=None) -> list[dict]:
     if len(stages) >= threshold:
         names = ", ".join(sorted(stages))
         out.append(stamp({
-            "rule_id": "R089", "name": "Attack-Chain Composition",
+            "rule_id": "H043", "name": "Attack-Chain Composition",
             "severity": "INFO", "category": "meta",
             "match": f"rule hits span {len(stages)} distinct kill-chain stages: {names}",
             "params": {"n_stages": len(stages), "stages": names},

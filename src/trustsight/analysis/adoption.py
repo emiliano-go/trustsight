@@ -1,28 +1,28 @@
 """The June 2026 campaign's shape, on the single-package path.
 
-The corpus rules already describe mass adoption (R092, R126) and orphan
-reachability (R093, R107, R111), but every one of them needs a ``full-aur``
+The corpus rules already describe mass adoption (H045, H074) and orphan
+reachability (H046, H057, H060), but every one of them needs a ``full-aur``
 cycle. Somebody running ``trustsight review`` over their installed packages
 sees none of them, and those are the people the campaign actually hit.
 
 Three rules here, and the third is the one that matters:
 
-* **R141** - the AUR reported this package orphaned, and now reports a
+* **H086** - the AUR reported this package orphaned, and now reports a
   maintainer. That is the campaign's entry point: adoption is how the
   attacker got commit rights to something the reviewer already trusted.
-* **R142** - the recipe changed but upstream did not: same ``source=``
+* **H087** - the recipe changed but upstream did not: same ``source=``
   URLs, same checksums, same ``pkgver``, yet dependencies *and* a build
   function both moved.
   This is what made the attack invisible to a reviewer scanning source
   lines, and it is the signature that separates it from an ordinary update,
   which almost always moves ``pkgver`` and the checksums together.
-* **R143** - the composition. R141 and R142 are individually survivable:
+* **H088** - the composition. H086 and H087 are individually survivable:
   packages do get adopted honestly, and recipes do get fixed without an
   upstream release. What is not ordinary is *adopted, then the recipe
   rewritten, and the build now pulling unpinned code from a registry* - the
   three together, in one change. Scoring the composition rather than
   inflating any single rule is how this clears the flag threshold without
-  spending benign fire rate, the same reasoning R082 and R117 use.
+  spending benign fire rate, the same reasoning H036 and H065 use.
 """
 
 from __future__ import annotations
@@ -123,9 +123,9 @@ def is_recipe_only_change(diff_text: str) -> bool:
     the June 2026 campaign changed both, because new build dependencies are
     useless without a build step that invokes them.
 
-    It also keeps R142 out of two neighbours' territory. A dependency added
+    It also keeps H087 out of two neighbours' territory. A dependency added
     with no build change is a packaging fix. A build function edited with no
-    dependency change is R060, which is INFO precisely because it fires on
+    dependency change is H015, which is INFO precisely because it fires on
     21.4% of benign diffs; a MEDIUM twin of it would be the same mistake with
     a different id.
     """
@@ -143,10 +143,10 @@ def adoption_findings(
     currently_maintained: bool,
     add,
 ) -> None:
-    """Emit R141, R142 and the R143 composition.
+    """Emit H086, H087 and the H088 composition.
 
     *was_orphaned* is the tri-state from :func:`db.get_aur_orphan_state`:
-    1 orphaned, 0 maintained, -1 never recorded. R141 requires 1, so a
+    1 orphaned, 0 maintained, -1 never recorded. H086 requires 1, so a
     database with no prior observation says nothing rather than guessing.
     """
     adopted = was_orphaned == 1 and currently_maintained
@@ -154,12 +154,12 @@ def adoption_findings(
     resolutions = registry_resolutions(diff_text)
 
     if adopted:
-        add("R141", "Adopted From Orphan", "MEDIUM", "maintainer",
+        add("H086", "Adopted From Orphan", "MEDIUM", "maintainer",
             f"{package_name} was orphaned in the AUR and now has a maintainer",
             package=package_name)
 
     if recipe_only:
-        add("R142", "Recipe Changed Without Upstream", "MEDIUM", "integrity",
+        add("H087", "Recipe Changed Without Upstream", "MEDIUM", "integrity",
             "build recipe changed while source URLs, checksums and pkgver did not",
             package=package_name)
 
@@ -169,7 +169,7 @@ def adoption_findings(
     # cannot support.
     if adopted and recipe_only and resolutions:
         function, command = resolutions[0]
-        add("R143", "Adopted, Recipe Rewritten, Unpinned Fetch", "HIGH", "takeover",
+        add("H088", "Adopted, Recipe Rewritten, Unpinned Fetch", "HIGH", "takeover",
             f"{package_name} was adopted from orphan, its recipe changed with no "
             f"upstream move, and {function}() now resolves dependencies from a "
             f"registry: {command[:80]}",

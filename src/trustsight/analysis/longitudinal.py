@@ -6,16 +6,16 @@ cycle and records even when no consumer exists; this module is the consumer.
 
 Rules are keyed by tracked property (see the deferred-spec tracking table):
 
-- R094 - ``configure_flags`` changed, dropping or adding a security-relevant
+- H047 - ``configure_flags`` changed, dropping or adding a security-relevant
   hardening flag.
-- R095 - ``depends`` changed such that a dependency was removed *and* the diff
+- H048 - ``depends`` changed such that a dependency was removed *and* the diff
   vendors a new source whose name matches the removed dependency (the narrowed,
   mechanical case).
-- R096 - ``source_hosts`` / ``source_orgs`` changed after a long-stable run.
-- R097 - ``version_scheme`` changed (semver -> hash, ...). Context only, weight 0.
-- R098 - ``pkgdesc_tokens`` changed.
-- R102 - ``build_system_markers`` / ``build_line_count`` changed.
-- R083 - a tracked-but-otherwise-unowned property (``license``,
+- H049 - ``source_hosts`` / ``source_orgs`` changed after a long-stable run.
+- H050 - ``version_scheme`` changed (semver -> hash, ...). Context only, weight 0.
+- H051 - ``pkgdesc_tokens`` changed.
+- H054 - ``build_system_markers`` / ``build_line_count`` changed.
+- H037 - a tracked-but-otherwise-unowned property (``license``,
   ``install_hook_present``) changed after stability.
 
 All of them require the break to clear STABILITY_FLOOR: ``PropertyBreak``
@@ -34,16 +34,16 @@ from ..config import (
 from ..differ import extract_urls_from_diff
 from ..findings import stamp
 
-# Property keys each rule owns.  R083 claims the tracked-but-quoted residue
-# (license, install_hook_present); ``depends`` is R095's (needs the diff).
+# Property keys each rule owns.  H037 claims the tracked-but-quoted residue
+# (license, install_hook_present); ``depends`` is H048's (needs the diff).
 _RULE_FOR_KEY = {
-    "configure_flags": "R094",
-    "source_hosts": "R096",
-    "source_orgs": "R096",
-    "version_scheme": "R097",
-    "pkgdesc_tokens": "R098",
-    "build_system_markers": "R102",
-    "build_line_count": "R102",
+    "configure_flags": "H047",
+    "source_hosts": "H049",
+    "source_orgs": "H049",
+    "version_scheme": "H050",
+    "pkgdesc_tokens": "H051",
+    "build_system_markers": "H054",
+    "build_line_count": "H054",
 }
 
 _ARCHIVE_SUFFIXES = (
@@ -87,7 +87,7 @@ def _changed_by(break_) -> tuple[set, set]:
 def _source_name(url: str) -> str:
     """Project-name approximation from a source URL's basename.
 
-    ``https://x/openssl-3.0.1.tar.gz`` -> ``openssl``.  Good enough for R095's
+    ``https://x/openssl-3.0.1.tar.gz`` -> ``openssl``.  Good enough for H048's
     mechanical dep-vs-source name match; exact archive layouts are not assumed.
     """
     base = url.split("/")[-1].split("?")[0].split("#")[0]
@@ -116,7 +116,7 @@ def longitudinal_findings(
     breaks: list,
     config: dict | None = None,
 ) -> list[dict]:
-    """Concrete findings from a cycle's property breaks (R094-R098/R102/R083).
+    """Concrete findings from a cycle's property breaks (H047-H051/H054/H037).
 
     *breaks* come from ``update_properties`` in the same analysis.  Anything
     below the stability floor has weight 0 and is never present here anyway;
@@ -136,16 +136,16 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
     key = break_.key
 
     if key == "depends":
-        return _r095(diff_text, break_)
+        return _h048(diff_text, break_)
 
     rule_id = _RULE_FOR_KEY.get(key)
     if rule_id is None:
         if key in ("license", "install_hook_present"):
-            rule_id = "R083"
+            rule_id = "H037"
         else:
             return []
 
-    if rule_id == "R094":
+    if rule_id == "H047":
         old, new = _changed_by(break_)
         sec = _security_flags()
         sec_changed = sorted((old ^ new) & sec)
@@ -153,7 +153,7 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
             return []
         severity = "HIGH" if (old - new) & sec else "MEDIUM"
         return [stamp({
-            "rule_id": "R094", "name": "Security-Relevant Build Flag Change",
+            "rule_id": "H047", "name": "Security-Relevant Build Flag Change",
             "severity": severity, "category": "build",
             "match": f"configure_flags changed security flags after "
                      f"{break_.stable_for_n} stable obs: {sec_changed}",
@@ -161,18 +161,18 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
                        "stable_for_n": break_.stable_for_n},
         })]
 
-    if rule_id == "R096":
+    if rule_id == "H049":
         return [stamp({
-            "rule_id": "R096", "name": "Source Host Changed",
+            "rule_id": "H049", "name": "Source Host Changed",
             "severity": "MEDIUM", "category": "source",
             "match": f"source {key} changed after {break_.stable_for_n} stable obs",
             "params": {"key": key,
                        "stable_for_n": break_.stable_for_n},
         })]
 
-    if rule_id == "R097":
+    if rule_id == "H050":
         return [stamp({
-            "rule_id": "R097", "name": "Version Scheme Changed",
+            "rule_id": "H050", "name": "Version Scheme Changed",
             "severity": "INFO", "category": "context",
             "match": f"version scheme changed {break_.old_value} -> {break_.new_value}",
             "params": {"old_scheme": break_.old_value,
@@ -180,17 +180,17 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
                        "stable_for_n": break_.stable_for_n},
         })]
 
-    if rule_id == "R098":
+    if rule_id == "H051":
         return [stamp({
-            "rule_id": "R098", "name": "Package Description Changed",
+            "rule_id": "H051", "name": "Package Description Changed",
             "severity": "MEDIUM", "category": "integrity",
             "match": f"pkgdesc changed after {break_.stable_for_n} stable obs",
             "params": {"stable_for_n": break_.stable_for_n},
         })]
 
-    if rule_id == "R102":
+    if rule_id == "H054":
         return [stamp({
-            "rule_id": "R102", "name": "Build System Changed",
+            "rule_id": "H054", "name": "Build System Changed",
             "severity": "MEDIUM", "category": "build",
             "match": f"build {key} changed after {break_.stable_for_n} stable obs: "
                      f"{break_.old_value} -> {break_.new_value}",
@@ -198,9 +198,9 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
                        "old_value": break_.old_value, "new_value": break_.new_value},
         })]
 
-    if rule_id == "R083":
+    if rule_id == "H037":
         return [stamp({
-            "rule_id": "R083", "name": "Long-Stable Property Changed",
+            "rule_id": "H037", "name": "Long-Stable Property Changed",
             "severity": "MEDIUM", "category": "temporal",
             "match": f"{key} changed after {break_.stable_for_n} stable obs",
             "params": {"key": key, "stable_for_n": break_.stable_for_n},
@@ -209,8 +209,8 @@ def _finding_for_break(diff_text, break_, config) -> list[dict]:
     return []
 
 
-def _r095(diff_text: str, break_) -> list[dict]:
-    """A dependency was removed and the diff vendors a matching source (R095).
+def _h048(diff_text: str, break_) -> list[dict]:
+    """A dependency was removed and the diff vendors a matching source (H048).
 
     Narrowed to the mechanical case: the removed name must match the added
     source's project name, so a routine dep swap with a differently-named
@@ -226,7 +226,7 @@ def _r095(diff_text: str, break_) -> list[dict]:
     sec = _security_libs()
     severity = "HIGH" if vendored & sec else "MEDIUM"
     return [stamp({
-        "rule_id": "R095", "name": "Dependency Vendored Into Source",
+        "rule_id": "H048", "name": "Dependency Vendored Into Source",
         "severity": severity, "category": "dependency",
         "match": f"removed dep(s) {sorted(vendored)} now sourced in-tree after "
                  f"{break_.stable_for_n} stable obs",

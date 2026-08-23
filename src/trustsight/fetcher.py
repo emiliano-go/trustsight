@@ -413,7 +413,7 @@ def _read_blob(tree, name: str) -> str:
 def get_pkgbuild_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
     """Return the PKGBUILD text at *commit_oid*, or "" when unavailable.
 
-    Rules that describe the package's *current* state (R106) need the file
+    Rules that describe the package's *current* state (H056) need the file
     as it now stands, not only the lines this revision touched.
     """
     try:

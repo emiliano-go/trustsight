@@ -420,7 +420,7 @@ def import_baseline(
         # signed - so without this check a validly signed artifact could be
         # re-published with an attacker's entire AUR metadata snapshot
         # attached: maintainers, versions, dependency edges, everything
-        # discovery, R092/R100/R116 and `corpus pivot` read.  The signature
+        # discovery, H045/H052/H064 and `corpus pivot` read.  The signature
         # would still verify.  Recompute and compare, and refuse on
         # mismatch even for an unsigned import: a hash that does not match
         # its own payload means the artifact is damaged either way.

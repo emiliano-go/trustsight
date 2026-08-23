@@ -1069,7 +1069,7 @@ def gate_seed_cannot_rewrite_the_database() -> Gate:
         db.set_metadata("baseline_provenance", "local")
 
         # A locally learned maintainer count: the seed must not be able to
-        # raise it, because a high count is what makes R071/R090 stay quiet.
+        # raise it, because a high count is what makes H026/H044 stay quiet.
         with db.get_connection() as local:
             local.execute(
                 "INSERT OR REPLACE INTO maintainer_counts (name, count) "
@@ -2476,7 +2476,7 @@ def gate_unpinned_build_deps_is_a_declared_gap() -> Gate:
     with a normal corpus before this gap existed.
 
     Deliberately not a scored rule: ``npm install`` in a build function is
-    ordinary AUR practice, which is why R081 is scoped to install hooks and
+    ordinary AUR practice, which is why H035 is scoped to install hooks and
     why a calibration gate keeps it there.  The gap claims nothing about the
     package; it records that a sensor was missing, and B2 then forbids the
     run from reading as clean.
@@ -2795,7 +2795,7 @@ def gate_a_critical_finding_never_reads_medium() -> Gate:
         problems.append(f"three CRITICALs read {high_level!r}, not 'Critical'")
 
     # And it is CRITICAL-only: a HIGH keeps the band its weight earns.
-    high = [{"rule_id": "R004", "severity": "HIGH", "name": "x", "match": "y"}]
+    high = [{"rule_id": "H001", "severity": "HIGH", "name": "x", "match": "y"}]
     _s, _b, medium_level = calculate_score(high, {}, warm, config)
     if medium_level != "Medium":
         problems.append(f"a lone HIGH read {medium_level!r}, not 'Medium'")

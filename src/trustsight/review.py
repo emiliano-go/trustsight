@@ -32,7 +32,7 @@ def _orphan_state(aur: Optional[dict]) -> Optional[bool]:
 
     The RPC omits ``Maintainer`` or sets it null for an orphan.  A missing
     metadata entry is None rather than False, because "we could not ask" and
-    "it has a maintainer" are different facts and R141 needs to tell them
+    "it has a maintainer" are different facts and H086 needs to tell them
     apart.
     """
     if not aur:
@@ -180,7 +180,7 @@ def discover_packages(
             latest_ver = aur.get("Version", "") if aur else ""
             if all_packages and aur is None and not show_unmatched:
                 continue
-            # R141: the AUR reports Maintainer=null for an orphan, and an
+            # H086: the AUR reports Maintainer=null for an orphan, and an
             # adoption is the June 2026 campaign's entry point.  Absent
             # metadata stays None: unknown is not "maintained".
             orphaned = _orphan_state(aur)

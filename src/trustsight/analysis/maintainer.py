@@ -13,7 +13,7 @@ def _check_untrusted_maintainer_takeover(
     if not is_maintainer_globally_novel(new_maintainer):
         return None
     return stamp({
-        "rule_id": "R071",
+        "rule_id": "H026",
         "name": "Untrusted Maintainer Takeover",
         "severity": "HIGH", "category": "maintainer",
         "match": f"maintainer changed to '{new_maintainer}', "

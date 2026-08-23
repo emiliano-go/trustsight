@@ -103,7 +103,7 @@ _SCHEME_ADDRESS_RE = re.compile(
 _SCP_ADDRESS_RE = re.compile(
     # The user part is optional: `scp host:/x.sh dest` is the same remote
     # read as `scp user@host:/x.sh dest`, and requiring `@` left the fetch
-    # unattributed while R137 paired the write with its execution.  The
+    # unattributed while H082 paired the write with its execution.  The
     # host must carry a dot, or every `make target:` reads as a remote.
     r"\A(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+:\S+\Z"
 )
@@ -205,22 +205,22 @@ def _network_fetch_url(body: str) -> str | None:
 
 
 def _foreign_pkg_re(config=None) -> re.Pattern:
-    """Compile the R081 foreign-package-manager regex from patterns.toml."""
+    """Compile the H035 foreign-package-manager regex from patterns.toml."""
     patterns = load_patterns().get("patterns", {})
     frags = patterns.get("foreign_pkg_managers") or DEFAULT_FOREIGN_PKG_MANAGERS
     return re.compile("|".join(frags), re.IGNORECASE)
 
 
 def _obfuscation_indicators(config=None) -> list[re.Pattern]:
-    """Compile the R082 obfuscation indicators from patterns.toml."""
+    """Compile the H036 obfuscation indicators from patterns.toml."""
     patterns = load_patterns().get("patterns", {})
     frags = patterns.get("obfuscation_indicators") or DEFAULT_OBFUSCATION_INDICATORS
     return [re.compile(p) for p in frags]
 
 
-# R082 composition: a dense obfuscated line that reconstructs to an
+# H036 composition: a dense obfuscated line that reconstructs to an
 # executable action is HIGH, not MEDIUM.  The action shapes mirror what
-# R081 (foreign package manager), R003/R043 (decode-and-pipe) and R039
+# H035 (foreign package manager), R003/R043 (decode-and-pipe) and R039
 # (eval of dynamic content) detect on reconstructed text.
 def _reconstructs_to_action_re(config=None) -> re.Pattern:
     foreign = _foreign_pkg_re(config)
@@ -237,8 +237,8 @@ def _reconstructs_to_action_re(config=None) -> re.Pattern:
 
 
 def _obfuscation_density_threshold(config) -> int:
-    """Return the R082 density threshold from thresholds.toml."""
-    thresholds = load_thresholds().get("r082", {})
+    """Return the H036 density threshold from thresholds.toml."""
+    thresholds = load_thresholds().get("h036", {})
     return thresholds.get("obfuscation_density", 3)
 
 
@@ -271,7 +271,7 @@ _ENV_SUBVERSION_MED_RE = re.compile(
     r"\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
 )
 
-# R009 - sudo at a command position.  `sudo` is executed, not mentioned,
+# H004 - sudo at a command position.  `sudo` is executed, not mentioned,
 # only when it starts a command: line start, after `;`/`&&`/`||`/`|`, or
 # inside `$(...)`.  The suffix allows the closing `)` so ``$(sudo)`` (an
 # invocation form an earlier test missed) is caught too.  Backtick
@@ -345,7 +345,7 @@ def _recipe_lines(current_text: str | None) -> list[str] | None:
 
 
 def _sudo_findings(diff_text, config, add, current_text=None) -> None:
-    """A build/install function executes ``sudo`` (R009, CRITICAL).
+    """A build/install function executes ``sudo`` (H004, CRITICAL).
 
     Replaces the old ``\\bsudo\\b`` regex rule: that fired on any mention
     inside a function body, including optdepends names, path segments and
@@ -360,7 +360,7 @@ def _sudo_findings(diff_text, config, add, current_text=None) -> None:
             continue
         body = _strip_comment(line[1:])
         if _SUDO_CMD_START_RE.search(body) or _backtick_sudo_executes(body):
-            add("R009", "Privilege Escalation", "CRITICAL", "privilege",
+            add("H004", "Privilege Escalation", "CRITICAL", "privilege",
                 f"{scopes.label(i, _SCOPE_FUNCTIONS)}() escalates privilege: "
                 f"{body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
@@ -368,7 +368,7 @@ def _sudo_findings(diff_text, config, add, current_text=None) -> None:
             return
 
 
-# R127 - a fetched script reaches a shell through an indirect path the
+# H075 - a fetched script reaches a shell through an indirect path the
 # pipe-to-shell regexes (R001/R002) and the R039/R040 eval / sh -c rules do
 # not see: process substitution (``bash <(curl ...)``), xargs (``curl ... |
 # xargs bash``), and a here-string fed by command substitution
@@ -402,33 +402,33 @@ _REMOTE_HERESTRING_RE = re.compile(
 
 
 def _indirect_remote_execution_findings(diff_text, config, add) -> None:
-    """A fetched script is executed through an indirect shell path (R127)."""
+    """A fetched script is executed through an indirect shell path (H075)."""
     for line in resolve_added_lines(diff_text):
         if not line.startswith("+"):
             continue
         body = _strip_comment(line[1:])
         if _REMOTE_PROC_SUBST_RE.search(body):
-            add("R127", "Remote Script Via Process Substitution", "CRITICAL",
+            add("H075", "Remote Script Via Process Substitution", "CRITICAL",
                 "execution",
                 f"process substitution feeds a fetched script to a shell: {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 body=body.strip()[:80])
             return
         if _REMOTE_PROC_SUBST_OUT_RE.search(body):
-            add("R127", "Remote Script Via Process Substitution", "CRITICAL",
+            add("H075", "Remote Script Via Process Substitution", "CRITICAL",
                 "execution",
                 f"a fetch fans out to a shell through >(...): {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 body=body.strip()[:80])
             return
         if _REMOTE_XARGS_SHELL_RE.search(body):
-            add("R127", "Remote Script Via xargs", "CRITICAL", "execution",
+            add("H075", "Remote Script Via xargs", "CRITICAL", "execution",
                 f"fetched script piped to a shell through xargs: {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 body=body.strip()[:80])
             return
         if _REMOTE_HERESTRING_RE.search(body):
-            add("R127", "Remote Script Via Here-String", "CRITICAL", "execution",
+            add("H075", "Remote Script Via Here-String", "CRITICAL", "execution",
                 f"shell fed a here-string carrying command substitution: {body.strip()[:80]}",
                 line=_added_line_number(diff_text, body.strip()[:30]),
                 body=body.strip()[:80])
@@ -436,12 +436,12 @@ def _indirect_remote_execution_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R132 - a command or shell is named through indirect variable expansion
+# H080 - a command or shell is named through indirect variable expansion
 # ---------------------------------------------------------------------------
 
 # ``${!C}`` expands to the value of the variable whose *name* is held in C, so
 # ``C=curl; ${!C} url | bash`` runs curl while the recipe carries no literal
-# curl and no literal shell on the line R001/R002/R129/R121 read.  The
+# curl and no literal shell on the line R001/R002/H077/H069 read.  The
 # tokenizer refuses to evaluate indirection (it cannot know the target
 # statically), so the obfuscated line reaches the rules verbatim and every
 # literal-matching rule steps over it.  Flagging the indirection itself is
@@ -455,7 +455,7 @@ _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
 
 
 def _indirect_expansion_findings(diff_text, config, add) -> None:
-    """A command or shell is reached through indirect expansion (R132)."""
+    """A command or shell is reached through indirect expansion (H080)."""
     for line in join_line_continuations(split_lines(diff_text)):
         if not line.startswith("+") or line.startswith("+++"):
             continue
@@ -463,7 +463,7 @@ def _indirect_expansion_findings(diff_text, config, add) -> None:
         m = _INDIRECT_EXPANSION_RE.search(body)
         if not m:
             continue
-        add("R132", "Indirect Command Expansion", "CRITICAL", "obfuscation",
+        add("H080", "Indirect Command Expansion", "CRITICAL", "obfuscation",
             f"a command or shell is named through indirect expansion "
             f"{m.group(0)}: {body.strip()[:80]}",
             line=_added_line_number(diff_text, body.strip()[:30]),
@@ -495,21 +495,21 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         if _ENV_SUBVERSION_MED_RE.search(body):
             med_found = True
     if high_found:
-        add("R070", "Build Environment Subversion", "HIGH", "build",
+        add("H025", "Build Environment Subversion", "HIGH", "build",
             "LD_PRELOAD or LD_LIBRARY_PATH set inside a build function",
             detail="LD_PRELOAD or LD_LIBRARY_PATH set inside a build function")
     elif med_found:
-        add("R070", "Build Environment Subversion", "MEDIUM", "build",
+        add("H025", "Build Environment Subversion", "MEDIUM", "build",
             "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function",
             detail="CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
 
-    wanted = ({r for r in ("R060", "R061", "R062", "R063", "R064")
+    wanted = ({r for r in ("H015", "H016", "H017", "H018", "H019")
                if _experimental_enabled(config, r)}
-              | {"R081", "R082"})
+              | {"H035", "H036"})
     if not wanted:
         return
-    wants_060 = "R060" in wanted
-    wants_061 = "R061" in wanted
+    wants_060 = "H015" in wanted
+    wants_061 = "H016" in wanted
 
     touched = sorted({
         fn for i, line in enumerate(lines)
@@ -517,7 +517,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         and (fn := enclosing.get(i)) in _CRITICAL_FUNCTIONS
     })
     if wants_060 and touched:
-        add("R060", "Critical Build Function Modified", "INFO", "build",
+        add("H015", "Critical Build Function Modified", "INFO", "build",
             f"diff modifies {', '.join(f'{f}()' for f in touched)}",
             touched=", ".join(touched))
 
@@ -531,11 +531,11 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
-            # An upload to a paste/file-drop host is R087's finding, and
+            # An upload to a paste/file-drop host is H041's finding, and
             # "downloads {url}" would describe it wrongly as well as score
             # the same command twice.  The same double-count applies when
             # the fetch is piped into a shell: executing remote code is
-            # R001/R002's claim, and R061 standing down keeps one command
+            # R001/R002's claim, and H016 standing down keeps one command
             # scored once no matter how many rules could describe it.
             if claims_upload_line(_strip_comment(line[1:]), config):
                 continue
@@ -546,7 +546,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             # made `# curl ... | bash` an undeclared download.
             for url in fetch_addresses(_strip_comment(line[1:])):
                 if normalize_url(url) not in declared:
-                    add("R061", "Hidden Network Fetch In Build", "HIGH", "network",
+                    add("H016", "Hidden Network Fetch In Build", "HIGH", "network",
                         f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() downloads {url}, which is not in source=()",
                         position=enclosing[i], url=url)
                     break
@@ -554,7 +554,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 continue
             break
 
-    if "R062" in wanted:
+    if "H017" in wanted:
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
                 continue
@@ -562,12 +562,12 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 continue
             body = _strip_comment(line)
             if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
-                add("R062", "Install Hook Fetches Or Executes", "HIGH", "installer",
+                add("H017", "Install Hook Fetches Or Executes", "HIGH", "installer",
                     f"{scopes.label(i, _INSTALL_HOOKS)}() runs as root and contains: {body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 break
 
-    if "R063" in wanted:
+    if "H018" in wanted:
         declared_urls = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
@@ -578,24 +578,24 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 # Skip URL-based patches that are also declared in source=()
                 if patch_src.startswith("http") and normalize_url(patch_src) in declared_urls:
                     continue
-                add("R063", "Patch Applied From Outside The Build Tree", "HIGH", "integrity",
+                add("H018", "Patch Applied From Outside The Build Tree", "HIGH", "integrity",
                     f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() applies a patch from {patch_src[:70]}",
                     position=enclosing[i], patch_src=patch_src[:70])
                 break
 
-    if "R064" in wanted:
+    if "H019" in wanted:
         before = extract_source_array_urls(diff_text, side="before")
         after = extract_source_array_urls(diff_text, side="after")
         for url in sorted(before):
             if not url.startswith("https://"):
                 continue
             if url.replace("https://", "http://", 1) in after:
-                add("R064", "Source URL Downgraded To HTTP", "MEDIUM", "network",
+                add("H019", "Source URL Downgraded To HTTP", "MEDIUM", "network",
                     f"source URL downgraded from https to http: {url[:70]}",
                     url=url[:70])
                 break
 
-    if "R081" in wanted:
+    if "H035" in wanted:
         foreign_re = _foreign_pkg_re(config)
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
@@ -604,16 +604,16 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 continue
             body = _strip_comment(line)
             if foreign_re.search(body):
-                add("R081", "Foreign Package Manager In Install Hook", "HIGH", "installer",
+                add("H035", "Foreign Package Manager In Install Hook", "HIGH", "installer",
                     f"{scopes.label(i, _INSTALL_HOOKS)}() invokes foreign package manager: {body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 break
 
-    if "R082" in wanted:
+    if "H036" in wanted:
         # Density is measured on the raw line: reconstruction removes the
         # markers, so counting on resolved text would miss the campaign.
         # The composed HIGH requires the reconstructed line to reveal an
-        # executable action (R117 composition).
+        # executable action (H065 composition).
         raw_lines = join_line_continuations(split_lines(diff_text))
         indicators = _obfuscation_indicators(config)
         density = _obfuscation_density_threshold(config)
@@ -626,14 +626,14 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             count = sum(1 for p in indicators if p.search(raw_body))
             if count >= density:
                 severity = "HIGH" if action_re.search(body) else "MEDIUM"
-                add("R082", "Shell Obfuscation Density", severity, "obfuscation",
+                add("H036", "Shell Obfuscation Density", severity, "obfuscation",
                     f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() line has {count} obfuscation indicators: {body.strip()[:80]}",
                     position=enclosing[i], count=count, body=body.strip()[:80])
                 break
 
 
 # ---------------------------------------------------------------------------
-# R117 - obfuscated literal reconstructed
+# H065 - obfuscated literal reconstructed
 # ---------------------------------------------------------------------------
 
 # A revealed run this long is a word - a command name, a host, a flag.  A
@@ -643,7 +643,7 @@ _REVEALED_RUN_RE = re.compile(r"[!-~]{3,}")
 
 # Ordinary quoted data (``depends=('glibc' 'foo')``) is not obfuscation, but
 # quote stripping would make it look as if something was hidden.  Only report
-# R117 when the original line carried one of the reconstruction targets.
+# H065 when the original line carried one of the reconstruction targets.
 _OBFUSCATION_MARKER_RE = re.compile(
     r"(?<=\w)(?:''|\"\")(?=\w)"          # empty-quote concat: b''u''n
     r"|\$\(\s*printf\s+['\"]"           # $(printf 'literal')
@@ -655,10 +655,10 @@ _OBFUSCATION_MARKER_RE = re.compile(
 
 
 def _reconstruction_findings(diff_text, config, add) -> None:
-    """Report that a line was read in reconstructed form (R117).
+    """Report that a line was read in reconstructed form (H065).
 
     The tokenizer already rebuilds the four obfuscation forms so that
-    R081/R003/R039 match on what the line *means* rather than on how it is
+    H035/R003/R039 match on what the line *means* rather than on how it is
     spelled.  Doing that silently would leave the report describing text the
     file does not contain, so the reconstruction is itself a reported fact:
     weight 0, no score, but the reviewer is told which line was rewritten and
@@ -679,7 +679,7 @@ def _reconstruction_findings(diff_text, config, add) -> None:
             # inconclusive case, whether or not anything else on the line
             # was rebuilt - so this is tested before the "nothing changed"
             # exit, which a wholly unreconstructable line also takes.
-            add("R117", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
+            add("H065", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
                 f"line carries a literal that could not be reconstructed: {body.strip()[:80]}",
                 detail="obfuscated literal could not be fully reconstructed",
                 reconstructed=False, body=body.strip()[:80])
@@ -694,7 +694,7 @@ def _reconstruction_findings(diff_text, config, add) -> None:
         ]
         if not revealed:
             continue
-        add("R117", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
+        add("H065", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
             f"obfuscated literal reconstructs to {revealed[0][:40]!r}: {body.strip()[:80]}",
             detail=f"obfuscated literal reconstructs to {revealed[0][:40]!r}",
             reconstructed=True, revealed=revealed[0][:40], body=body.strip()[:80])
@@ -702,7 +702,7 @@ def _reconstruction_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R131 - the recipe overrides the distribution build flags
+# H079 - the recipe overrides the distribution build flags
 # ---------------------------------------------------------------------------
 
 _BUILD_FLAG_ASSIGN_RE = re.compile(
@@ -723,7 +723,7 @@ _HARDENING_OFF_RE = re.compile(
 
 
 def _build_flag_findings(diff_text, config, add) -> None:
-    """The recipe replaces or weakens the distribution's build flags (R131).
+    """The recipe replaces or weakens the distribution's build flags (H079).
 
     makepkg exports a hardened flag set (stack protector, FORTIFY_SOURCE,
     PIE, RELRO).  A recipe that *appends* to it keeps those; one that
@@ -736,11 +736,11 @@ def _build_flag_findings(diff_text, config, add) -> None:
     Only the recipe's own lines count: a vendored Makefile or configure
     fragment inside a shipped patch is not the packager's assignment.
 
-    Kept off R070's evidence: R070 reports that a build function *modified*
+    Kept off H025's evidence: H025 reports that a build function *modified*
     the environment, which is the weaker claim and already covers the
-    in-function case.  R131 adds the two things R070 does not say - a named
+    in-function case.  H079 adds the two things H025 does not say - a named
     mitigation being switched off (HIGH, wherever it appears) and a
-    top-level replacement of the whole set (MEDIUM), which R070 cannot see
+    top-level replacement of the whole set (MEDIUM), which H025 cannot see
     because it is scoped to build functions and which also runs at parse
     time, before any build step.
     """
@@ -755,7 +755,7 @@ def _build_flag_findings(diff_text, config, add) -> None:
             continue
         variable, operator, value = match.group(1), match.group(2), match.group(3)
         if _HARDENING_OFF_RE.search(value):
-            add("R131", "Build Flags Weakened", "HIGH", "integrity",
+            add("H079", "Build Flags Weakened", "HIGH", "integrity",
                 f"{variable} disables a hardening default: {value.strip()[:70]}",
                 line=i + 1, variable=variable, value=value.strip()[:70],
                 detail=f"{variable} disables a hardening default")
@@ -770,7 +770,7 @@ def _build_flag_findings(diff_text, config, add) -> None:
             and not re.search(r"\$\{?" + variable + r"\b", value)
             and re.search(r"(?:^|\s|[\"'])-[A-Za-z]", value)
         ):
-            add("R131", "Build Flags Weakened", "MEDIUM", "integrity",
+            add("H079", "Build Flags Weakened", "MEDIUM", "integrity",
                 f"{variable} is replaced at the top level rather than "
                 f"extended, dropping the makepkg.conf set: {value.strip()[:70]}",
                 line=i + 1, variable=variable, value=value.strip()[:70],

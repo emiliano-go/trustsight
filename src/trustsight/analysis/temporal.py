@@ -18,7 +18,7 @@ def _recent_update(repo, head_commit):
         hours_ago = (time.time() - commit.commit_time) / 3600
         if hours_ago < 72:
             return stamp({
-                "rule_id": "R065",
+                "rule_id": "H020",
                 "name": "Very Recent Update",
                 "severity": "INFO",
                 "category": "temporal",
@@ -47,7 +47,7 @@ def _package_is_new(repo, head_commit, pkg_name=None):
                 break
         if root_age is not None and root_age < 30:
             return stamp({
-                "rule_id": "R066",
+                "rule_id": "H021",
                 "name": "Brand New Package",
                 "severity": "INFO",
                 "category": "temporal",
@@ -70,7 +70,7 @@ def _stale_revival(repo, old_commit, head_commit):
         gap_days = (head.commit_time - old.commit_time) / 86400
         if gap_days > 365:
             return stamp({
-                "rule_id": "R067",
+                "rule_id": "H022",
                 "name": "Stale Package Revived",
                 "severity": "MEDIUM",
                 "category": "temporal",

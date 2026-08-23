@@ -29,7 +29,7 @@ historical_fixtures = [
 """,
         "must_fire": ["R001"],
         "must_not_fire": [],
-        "relabelled": "R009 dropped 2026-08-03: the diff contains no sudo; the label predated R009 becoming a command-position code rule",
+        "relabelled": "H004 dropped 2026-08-03: the diff contains no sudo; the label predated H004 becoming a command-position code rule",
     },
     {
         "name": "libjpeg-turbo-skid",
@@ -46,9 +46,9 @@ historical_fixtures = [
 -sha256sums=('abc123...')
 +sha256sums=('SKIP')
 """,
-        "must_fire": ["R004", "R069"],
+        "must_fire": ["H001", "H024"],
         "must_not_fire": [],
-        "relabelled": "R026 -> R004 (checksum set to SKIP), R014 -> R069 (validpgpkeys removed)",
+        "relabelled": "R026 -> H001 (checksum set to SKIP), H005 -> H024 (validpgpkeys removed)",
     },
     {
         "name": "fake-browser-bin",
@@ -84,7 +84,7 @@ historical_fixtures = [
 +  ln -sf /usr/bin/elevate /usr/lib/systemd/system-sleep/elevate
 +}
 """,
-        "must_fire": ["R059", "R018"],
+        "must_fire": ["R059", "H007"],
         "must_not_fire": ["R017"],
     },
 ]

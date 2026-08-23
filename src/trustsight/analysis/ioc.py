@@ -1,8 +1,8 @@
 """Phase 7 - Class E indicator matching (plan §9).
 
-R106 is the only rule in TrustSight that recognises a *specific* artefact.
+H056 is the only rule in TrustSight that recognises a *specific* artefact.
 Every other rule describes a shape - what the code structurally does - which
-is what keeps them alive when an attacker changes mechanism.  R106 is the
+is what keeps them alive when an attacker changes mechanism.  H056 is the
 opposite trade: it names the artefact, so it is exact, unarguable, and
 expires the moment the attacker moves.
 
@@ -58,7 +58,7 @@ def _added_bodies(diff_text: str) -> list[str]:
 def as_added(text: str) -> str:
     """Present whole-file text as an all-added diff.
 
-    R106 is a statement about the package's *current* state, not about what
+    H056 is a statement about the package's *current* state, not about what
     one revision changed: a dependency on a package later published as
     malware does not stop being one because today's diff left it alone.
     Marking every line as added lets the same extractors - and the same
@@ -101,7 +101,7 @@ def _line_of(diff_text: str, needle: str) -> int | None:
 
 def _ioc_findings(diff_text, package_name, config, add, indicators=None,
                   current_text=None) -> None:
-    """R106 - a declared fact matches a shipped indicator exactly.
+    """H056 - a declared fact matches a shipped indicator exactly.
 
     When *current_text* is given (the PKGBUILD as it now stands) the whole
     file is read instead of only the diff's added lines, because an
@@ -124,7 +124,7 @@ def _ioc_findings(diff_text, package_name, config, add, indicators=None,
         if key in seen:
             return
         seen.add(key)
-        add("R106", "Known Indicator of Compromise", ind.severity, "ioc",
+        add("H056", "Known Indicator of Compromise", ind.severity, "ioc",
             detail, line=line,
             ioc_type=ind.type, ioc_value=ind.value, surface=surface,
             confidence=ind.confidence or "unspecified",

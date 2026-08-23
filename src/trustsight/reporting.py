@@ -14,15 +14,15 @@ from typing import Any, Sequence
 #:
 #: The filter below keeps findings that carry score, which is right for a
 #: rule that claims a *line*: a weight-0 line-rule is a note about
-#: something already counted. These two are not about a line. R089 says
-#: the diff holds a staged attack chain and R117 says a line the reader is
+#: something already counted. These two are not about a line. H043 says
+#: the diff holds a staged attack chain and H065 says a line the reader is
 #: about to judge was reconstructed rather than read - each changes how
 #: every other finding should be read, and both were computed and then
 #: dropped before anyone saw them.
 #:
 #: Computing and hiding is the worst of the three options; the other two
 #: are to show them or to stop computing them.
-ALWAYS_SHOWN_ANNOTATIONS = frozenset({"R089", "R117"})
+ALWAYS_SHOWN_ANNOTATIONS = frozenset({"H043", "H065"})
 
 
 def finding_rows(fact) -> list[dict]:

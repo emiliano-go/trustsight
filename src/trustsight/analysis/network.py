@@ -1,18 +1,18 @@
 """Phase 3 - network-surface rules (plan §5).
 
-R076/R079/R080/R123 share one question: does the PKGBUILD's declared or
+H031/H033/H034/H071 share one question: does the PKGBUILD's declared or
 executed network surface carry an injection or a covert channel?  All four
 are code rules because each needs more than a regex:
 
-- R076 needs the literal ``pkgver``/``_pkgver`` value and its interpolation
+- H031 needs the literal ``pkgver``/``_pkgver`` value and its interpolation
   into a source URL;
-- R079 needs both sides of the diff: which commit a repository ref resolved
+- H033 needs both sides of the diff: which commit a repository ref resolved
   to before, and which one it resolves to now;
-- R080 needs the raw source array with its scheme tokens (``git+https://``,
+- H034 needs the raw source array with its scheme tokens (``git+https://``,
   ``svn://``, ...);
-- R123 needs config-driven endpoint and client lists plus command position.
+- H071 needs config-driven endpoint and client lists plus command position.
 
-R080 is additive evidence for R089's ``foreign_fetch`` stage and R123 for
+H034 is additive evidence for H043's ``foreign_fetch`` stage and H071 for
 its ``exfil`` stage; all four are deliberately quiet so the benign corpus
 never cries wolf.
 """
@@ -79,7 +79,7 @@ def _hosts(config) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# R080 - exotic source protocol
+# H034 - exotic source protocol
 # ---------------------------------------------------------------------------
 
 
@@ -89,19 +89,19 @@ def _source_schemes(config=None) -> frozenset[str]:
 
 
 def _exotic_protocol_findings(diff_text, config, add) -> None:
-    """A source URL uses a scheme outside the configured allowlist (R080)."""
+    """A source URL uses a scheme outside the configured allowlist (H034)."""
     allowed = _source_schemes(config)
     for scheme, url in _source_url_tokens(diff_text):
         base = scheme.rsplit("+", 1)[-1].lower()
         if base not in allowed:
-            add("R080", "Exotic Source Protocol", "MEDIUM", "network",
+            add("H034", "Exotic Source Protocol", "MEDIUM", "network",
                 f"source URL uses non-allowlisted scheme {scheme}: {url[:70]}",
                 url=url[:70], scheme=scheme)
             return
 
 
 # ---------------------------------------------------------------------------
-# R076 - version-in-URL injection
+# H031 - version-in-URL injection
 # ---------------------------------------------------------------------------
 
 _PKGVER_ASSIGN_RE = re.compile(
@@ -114,7 +114,7 @@ _SAFE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+\-]+$")
 
 def _version_in_url_findings(diff_text, config, add) -> None:
     """``pkgver``/``_pkgver`` interpolated into a source URL with a value
-    carrying characters outside ``[A-Za-z0-9._+-]`` (R076).
+    carrying characters outside ``[A-Za-z0-9._+-]`` (H031).
 
     A literal version like ``1.2.3`` or ``2026.08.01`` is safe.  A value
     containing ``;``, whitespace, ``/`` or other delimiters that is then
@@ -140,7 +140,7 @@ def _version_in_url_findings(diff_text, config, add) -> None:
             bare = re.search(r"\$" + re.escape(name) + r"(?![\w])", url)
             if not (braced or bare):
                 continue
-            add("R076", "Version-In-URL Injection", "MEDIUM", "network",
+            add("H031", "Version-In-URL Injection", "MEDIUM", "network",
                 f"{name}={value!r} carries injection chars and is "
                 f"interpolated into a source URL: {url[:70]}",
                 url=url[:70], variable=name, value=value[:40])
@@ -148,7 +148,7 @@ def _version_in_url_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R079 - moved git ref
+# H033 - moved git ref
 # ---------------------------------------------------------------------------
 
 # A git source token, with or without a ``name::`` rename in front of it.
@@ -225,7 +225,7 @@ def _pin_is_a_git_ref(var: str, haystack: str) -> bool:
 
 def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
     """The commit a package builds moved while the version it declares did
-    not (R079).
+    not (H033).
 
     A tag is a name upstream can repoint at will, so "same tag" is not the
     same code twice.  Two shapes say so from declared facts alone:
@@ -261,7 +261,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
             if k in ("tag", "branch") or not _COMMIT_HEX_RE.match(v)
         )
         if old_pinned and not new_pinned and movable:
-            add("R079", "Moved Git Ref", "MEDIUM", "integrity",
+            add("H033", "Moved Git Ref", "MEDIUM", "integrity",
                 f"commit pin replaced by a movable ref for {repo}: {movable[0]}",
                 line=_find_line(diff_text, movable[0][:40]),
                 repo=repo[:70], detail=f"commit pin dropped for {movable[0]}")
@@ -289,13 +289,13 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
         moved = sorted(new_commits - old_commits)[0]
         if tags:
             tag = sorted(tags)[0]
-            add("R079", "Moved Git Ref", "HIGH", "integrity",
+            add("H033", "Moved Git Ref", "HIGH", "integrity",
                 f"tag {tag} now resolves to a different commit for {repo}: "
                 f"{sorted(old_commits)[0][:12]} -> {moved[:12]}",
                 line=_find_line(diff_text, moved[:12]), repo=repo[:70], tag=tag[:40],
                 detail=f"tag {tag} now resolves to {moved[:12]}")
         else:
-            add("R079", "Moved Git Ref", "MEDIUM", "integrity",
+            add("H033", "Moved Git Ref", "MEDIUM", "integrity",
                 f"commit pin moved with no version change for {repo}: "
                 f"{sorted(old_commits)[0][:12]} -> {moved[:12]}",
                 line=_find_line(diff_text, moved[:12]), repo=repo[:70],
@@ -309,7 +309,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
         if old_value == new_value or not _pin_is_a_git_ref(var, haystack):
             continue
         anchored = bool(old_note) and old_note == new_note
-        add("R079", "Moved Git Ref", "HIGH" if anchored else "MEDIUM", "integrity",
+        add("H033", "Moved Git Ref", "HIGH" if anchored else "MEDIUM", "integrity",
             (f"{var} moved under an unchanged {old_note.lstrip('#').strip()} annotation: "
              if anchored else f"{var} moved with no version change: ")
             + f"{old_value[:12]} -> {new_value[:12]}",
@@ -319,7 +319,7 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R123 - covert egress
+# H071 - covert egress
 # ---------------------------------------------------------------------------
 
 _ONION_HOST_RE = re.compile(r"\b[a-z0-9-]+\.(?:onion|i2p)\b", re.IGNORECASE)
@@ -347,7 +347,7 @@ def _covert_endpoints(config) -> frozenset[str]:
 
 def _covert_egress_findings(diff_text, config, add) -> None:
     """.onion/.i2p hosts, DoH endpoints or tunneling clients anywhere they
-    have no packaging purpose (R123)."""
+    have no packaging purpose (H071)."""
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
     clients = _covert_clients(config)
@@ -358,18 +358,18 @@ def _covert_egress_findings(diff_text, config, add) -> None:
             continue
         body = _strip_comment(line[1:])
         if _ONION_HOST_RE.search(body):
-            add("R123", "Covert Egress", "HIGH", "network",
+            add("H071", "Covert Egress", "HIGH", "network",
                 f"source or command references an onion/i2p host: {body.strip()[:80]}",
                 line=_find_line(diff_text, ".onion"), detail=".onion/.i2p host referenced")
             return
         if _DOH_QUERY_RE.search(body):
-            add("R123", "Covert Egress", "HIGH", "network",
+            add("H071", "Covert Egress", "HIGH", "network",
                 f"DoH (DNS-over-HTTPS) query issued: {body.strip()[:80]}",
                 line=_find_line(diff_text, "dns-query"), detail="DoH endpoint queried")
             return
         match = _DOH_HOST_RE.search(body)
         if match and match.group(1).lower() in endpoints:
-            add("R123", "Covert Egress", "HIGH", "network",
+            add("H071", "Covert Egress", "HIGH", "network",
                 f"DoH endpoint {match.group(1)} queried: {body.strip()[:80]}",
                 line=_find_line(diff_text, match.group(1)[:40]),
                 detail=f"DoH endpoint {match.group(1)} queried")
@@ -381,14 +381,14 @@ def _covert_egress_findings(diff_text, config, add) -> None:
         body = _strip_comment(line[1:])
         for client in clients:
             if client.search(body):
-                add("R123", "Covert Egress", "HIGH", "network",
+                add("H071", "Covert Egress", "HIGH", "network",
                     f"{enclosing[i]}() invokes a tunneling/covert client: "
                     f"{body.strip()[:80]}",
                     position=enclosing[i], body=body.strip()[:80])
                 return
 
 # ---------------------------------------------------------------------------
-# R129 - network fetch at parse time
+# H077 - network fetch at parse time
 # ---------------------------------------------------------------------------
 
 
@@ -406,14 +406,14 @@ _ASSIGNMENT_LINE_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*\+?=")
 _ARRAY_CONTINUATION_RE = re.compile(r"^\s*['\"]")
 
 # A fetch piped straight into a shell is R001/R002's evidence, and theirs is
-# the heavier claim (remote code executes, not merely a download).  R129
+# the heavier claim (remote code executes, not merely a download).  H077
 # yields rather than scoring the same line twice.
 _PIPE_TO_SHELL_RE = re.compile(
     # The bar must be an operative pipe: an escaped one is an argument
     # and starts no pipeline.  Same guard as R001-R003 and R045.
-    # The executor list is the shared one.  This regex decides when R061
+    # The executor list is the shared one.  This regex decides when H016
     # *stands down* in favour of R001, so a name here that R001 does not
-    # know is not a wider net - it is a hole: R061 yields and R001 never
+    # know is not a wider net - it is a hole: H016 yields and R001 never
     # catches.  `curl url | ksh -s` was exactly that.
     r"\b(?:curl|wget|aria2c|axel)\b[^|;&]*(?<!\\)\|\s*(?:\S+\s+)?(?:"
     + ANY_EXECUTOR + r")",
@@ -467,7 +467,7 @@ def _fetch_function_names(diff_text: str, config) -> set[str]:
 
 
 def _parse_time_fetch_findings(diff_text, config, add) -> None:
-    """A network client runs when the PKGBUILD is merely *sourced* (R129).
+    """A network client runs when the PKGBUILD is merely *sourced* (H077).
 
     Everything outside a function body executes as soon as makepkg reads the
     file, which happens on ``makepkg --printsrcinfo``, on an AUR helper's
@@ -509,7 +509,7 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
         if enclosing.get(i) is not None or _PIPE_TO_SHELL_RE.search(body):
             continue
         if fetch_funcs & set(_CMDSUB_CALL_RE.findall(body)):
-            add("R129", "Parse-time Network Fetch", "HIGH", "network",
+            add("H077", "Parse-time Network Fetch", "HIGH", "network",
                 f"top-level command substitution invokes a function that "
                 f"fetches over the network: {stripped[:80]}",
                 line=_find_line(diff_text, stripped[:40]),
@@ -518,7 +518,7 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
             return
         for pattern in patterns:
             if pattern.search(body):
-                add("R129", "Parse-time Network Fetch", "HIGH", "network",
+                add("H077", "Parse-time Network Fetch", "HIGH", "network",
                     f"top-level line fetches over the network when the "
                     f"PKGBUILD is sourced: {stripped[:80]}",
                     line=_find_line(diff_text, stripped[:40]),
@@ -528,7 +528,7 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
 
 
 # ---------------------------------------------------------------------------
-# R087 - upload to a paste or file-drop host
+# H041 - upload to a paste or file-drop host
 # ---------------------------------------------------------------------------
 
 # The client, then anything up to the end of the command.  The upload flags
@@ -573,7 +573,7 @@ def _uploads_from_outside_the_tree(command: str) -> bool:
 
 
 def _paste_egress_findings(diff_text, config, add) -> None:
-    """A build or install function *uploads* to a paste or file-drop host (R087).
+    """A build or install function *uploads* to a paste or file-drop host (H041).
 
     The paste-host list also feeds the ``raw_hosting`` source bucket, and a
     rule that fired on a declared `source=` URL would double-count that
@@ -582,9 +582,9 @@ def _paste_egress_findings(diff_text, config, add) -> None:
     entire purpose is to accept an anonymous drop and hand back a link.
 
     Direction is the distinction that makes it a separate claim.  Fetching
-    from a gist is an undeclared download, which is R061's finding; posting
+    from a gist is an undeclared download, which is H016's finding; posting
     to one is data leaving the machine that is building the package, which is
-    R089's ``exfil`` stage. On a line this rule claims, R061 yields, so one
+    H043's ``exfil`` stage. On a line this rule claims, H016 yields, so one
     upload is not scored twice.
     """
     lines = mask_to_recipe(resolve_added_lines(diff_text))
@@ -627,7 +627,7 @@ def _paste_egress_findings(diff_text, config, add) -> None:
                 name = ("Upload To Paste Or File-Drop Host" if drop_host
                         else "Upload Of A File From Outside The Build Tree")
                 where = f"a drop host ({host})" if drop_host else host
-                add("R087", name, "HIGH", "exfil",
+                add("H041", name, "HIGH", "exfil",
                     f"{enclosing[i]}() uploads to {where}: "
                     f"{command.strip()[:80]}",
                     line=_find_line(diff_text, command.strip()[:40]),
@@ -638,10 +638,10 @@ def _paste_egress_findings(diff_text, config, add) -> None:
 
 
 def claims_upload_line(body: str, config=None) -> bool:
-    """True when R087 owns this line, so R061 can stand down.
+    """True when H041 owns this line, so H016 can stand down.
 
-    R061 describes an undeclared *download*; when the same invocation is an
-    upload to a drop host, R087's description is the accurate one and two
+    H016 describes an undeclared *download*; when the same invocation is an
+    upload to a drop host, H041's description is the accurate one and two
     HIGH findings for one command would be a cascade.
     """
     flags = _upload_flags(config)
@@ -663,12 +663,12 @@ def claims_upload_line(body: str, config=None) -> bool:
 
 
 def claims_pipe_to_shell(body: str) -> bool:
-    """True when R001/R002 own this line, so R061 can stand down.
+    """True when R001/R002 own this line, so H016 can stand down.
 
-    R061 reports an undeclared *download*; when that same download is
+    H016 reports an undeclared *download*; when that same download is
     piped straight into a shell it is not merely fetch-but-undeclared but
     remote code execution, which is R001/R002's heavier claim.  Firing
-    both would score one command twice, which is why R129 already yields
+    both would score one command twice, which is why H077 already yields
     to this signal.
     """
     return bool(_PIPE_TO_SHELL_RE.search(body))

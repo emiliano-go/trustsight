@@ -1,17 +1,17 @@
 """Phase 6 - Class D dependency-graph rules (plan §8).
 
-R093/R107/R111/R112 read the *corpus-wide* dependency graph built from the
+H046/H057/H060/H061 read the *corpus-wide* dependency graph built from the
 metadata snapshot's Depends/MakeDepends/CheckDepends fields (edges are kept
 only when the dependency is itself an AUR package):
 
-- R093 (additive MEDIUM): a package depends directly on a package that was
+- H046 (additive MEDIUM): a package depends directly on a package that was
   just orphaned or just adopted this cycle.  Fires on the transition, so a
   long-standing orphan dependency never repeats.
-- R107 (context, weight 0): a package's transitive closure includes a
+- H057 (context, weight 0): a package's transitive closure includes a
   package adopted this cycle from a previous orphan (the takeover vector).
-- R111 (context, weight 0): a package's transitive closure includes a
+- H060 (context, weight 0): a package's transitive closure includes a
   currently-orphaned package.
-- R112 (context, weight 0): dependency-centrality hub, for prioritisation
+- H061 (context, weight 0): dependency-centrality hub, for prioritisation
   only.
 
 All four are silent on a fresh bootstrap (no prior snapshot), matching the
@@ -54,8 +54,8 @@ def _transitive_closure(name: str, edges: dict[str, set[str]], depth: int) -> di
     """Shortest hop distance to every node reachable from *name*.
 
     Returns ``{node: distance}`` for nodes within *depth* hops (excluding
-    self).  R107/R111 use the distance so that "transitive" means the risk
-    is at least two hops away, keeping them out of R093's direct-dep lane.
+    self).  H057/H060 use the distance so that "transitive" means the risk
+    is at least two hops away, keeping them out of H046's direct-dep lane.
     """
     closure: dict[str, int] = {}
     frontier = {name}
@@ -91,7 +91,7 @@ def _orphan_dependency_findings(
     edges: dict[str, set[str]],
     transitions: dict,
 ) -> list[dict]:
-    """R093 - direct dependency on a package orphaned/adopted this cycle."""
+    """H046 - direct dependency on a package orphaned/adopted this cycle."""
     out: list[dict] = []
     for dependent, status in changes.items():
         if status == "removed":
@@ -107,7 +107,7 @@ def _orphan_dependency_findings(
             else:
                 continue
             out.append(_cluster(
-                "R093",
+                "H046",
                 "Orphan/Adoption Dependency",
                 f"{dependent} depends on {dep}, {kind} this cycle",
                 [dependent],
@@ -123,8 +123,8 @@ def _transitive_exposure_findings(
     edges: dict[str, set[str]],
     transitions: dict,
 ) -> list[dict]:
-    """R107 - transitive closure reaches a package adopted from an orphan."""
-    min_hops = int(_threshold("r107", "min_hops", 2))
+    """H057 - transitive closure reaches a package adopted from an orphan."""
+    min_hops = int(_threshold("h057", "min_hops", 2))
     out: list[dict] = []
     for name, status in changes.items():
         if status == "removed":
@@ -136,7 +136,7 @@ def _transitive_exposure_findings(
             old_m, new_m = transitions[dep]
             if not old_m and new_m:  # adopted out of the orphan state
                 out.append(_cluster(
-                    "R107",
+                    "H057",
                     "Transitive Exposure",
                     f"{name} transitively depends on {dep}, adopted this cycle",
                     [name],
@@ -152,8 +152,8 @@ def _transitive_orphan_findings(
     new_meta: dict,
     edges: dict[str, set[str]],
 ) -> list[dict]:
-    """R111 - transitive closure includes a currently-orphaned package."""
-    min_hops = int(_threshold("r111", "min_hops", 2))
+    """H060 - transitive closure includes a currently-orphaned package."""
+    min_hops = int(_threshold("h060", "min_hops", 2))
     out: list[dict] = []
     for name, status in changes.items():
         if status == "removed":
@@ -164,7 +164,7 @@ def _transitive_orphan_findings(
                 continue
             if not (new_meta.get(dep) or {}).get("Maintainer"):
                 out.append(_cluster(
-                    "R111",
+                    "H060",
                     "Transitive Orphan Risk",
                     f"{name} transitively depends on orphaned {dep}",
                     [name],
@@ -176,8 +176,8 @@ def _transitive_orphan_findings(
 
 
 def _centrality_findings(edges: dict[str, set[str]]) -> list[dict]:
-    """R112 - dependency-centrality hubs, prioritisation only."""
-    min_dependents = int(_threshold("r112", "min_dependents", 50))
+    """H061 - dependency-centrality hubs, prioritisation only."""
+    min_dependents = int(_threshold("h061", "min_dependents", 50))
     indegree: dict[str, int] = {}
     for deps in edges.values():
         for dep in deps:
@@ -187,7 +187,7 @@ def _centrality_findings(edges: dict[str, set[str]]) -> list[dict]:
         if count < min_dependents:
             break
         out.append(_cluster(
-            "R112",
+            "H061",
             "Dependency Centrality",
             f"{hub} is depended on by {count} AUR packages",
             [hub],

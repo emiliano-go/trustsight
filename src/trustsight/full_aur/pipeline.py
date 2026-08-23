@@ -99,7 +99,7 @@ def _record_cycle_feed(
 ) -> None:
     """Record this cycle's introduction events into the Class D adoption feed.
 
-    The feed is the per-cycle diff stream that R125's introduction-rate
+    The feed is the per-cycle diff stream that H073's introduction-rate
     baseline is derived from.  A fresh bootstrap records the whole corpus as
     cycle 1.
     """
@@ -165,7 +165,7 @@ def _run_corpus_sweep(
     With no prior snapshot (first bootstrap) the sweep is skipped entirely;
     the Class D calibration gate is ``fire_rate(no_baseline) == 0``.  Each
     cluster finding adds its severity weight to every member's profile score
-    (R092/R100/R105/R125 are additive; only R107/R111/R112 are not).
+    (H045/H052/H055/H073 are additive; only H057/H060/H061 are not).
     """
     if old_meta is None:
         return []

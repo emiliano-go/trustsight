@@ -50,7 +50,11 @@ def _is_valid_scope(value: str) -> bool:
 
 REQUIRED_FIELDS = ("id", "name", "pattern", "severity", "category")
 
-_ID_RE = re.compile(r"^[RC]\d{3}$")
+#: `H` is accepted so a user-written rule that reuses a heuristic rule's id
+#: is reported as a *duplicate* rather than as a malformed one.  The
+#: programmatic-id check below is what actually refuses it, and it can only
+#: do that if the id parses in the first place.
+_ID_RE = re.compile(r"^[RCH]\d{3}$")
 
 # A realistic mini-diff, each line tagged with whether it represents
 # ordinary packaging or genuinely suspicious content.  Rules are matched
@@ -127,11 +131,18 @@ def _programmatic_ids() -> frozenset[str]:
     if _programmatic_ids_cache is None:
         from .categories import RULE_CATEGORIES
         from .config import shipped_rules
+        from .rule_id_history import RENAMED_RULE_IDS
         from .scoring import DECLARED_REASONS
 
         catalog = set(RULE_CATEGORIES) | set(DECLARED_REASONS)
+        # Retired ids stay reserved. The R/H split freed ninety-five `R`
+        # numbers, and a database, a published baseline or a stored report
+        # can still name one. Left available, `R060` could be handed to an
+        # unrelated new rule, and a user's `[rules.R060]` override - or an
+        # old report a reader is comparing against - would quietly attach
+        # to a rule that is not the one it meant. Retired, not recycled.
         _programmatic_ids_cache = frozenset(
-            catalog - {rule["id"] for rule in shipped_rules()}
+            (catalog | set(RENAMED_RULE_IDS)) - {rule["id"] for rule in shipped_rules()}
         )
     return _programmatic_ids_cache
 
@@ -214,7 +225,7 @@ def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[L
         if not _ID_RE.match(rule["id"]):
             findings.append(LintFinding(
                 rid, SEVERITY_WARNING, "id-format",
-                f"id '{rule['id']}' does not match the R###/C### convention",
+                f"id '{rule['id']}' does not match the R###/C###/H### convention",
             ))
         if rule["id"] in _programmatic_ids():
             findings.append(LintFinding(

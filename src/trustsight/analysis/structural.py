@@ -68,14 +68,14 @@ _VALIDPGPKEYS_LINE_RE = re.compile(r"^\s*validpgpkeys\s*=|^\s*validpgpkeys\s*=?\
 
 
 def _signing_key_findings(diff_text: str, add) -> None:
-    """The set of keys trusted to sign this package's sources changed (R130).
+    """The set of keys trusted to sign this package's sources changed (H078).
 
     ``validpgpkeys`` is the list of key fingerprints whose signature makepkg
     will accept for a signed source.  Whoever holds one of those keys can
     ship code to every user of the package, so the set changing is a trust
     change, and the diff states it as a declared fact.
 
-    R069 owns the *removal* case (verification taken away).  R130 owns the
+    H024 owns the *removal* case (verification taken away).  H078 owns the
     other two:
 
     - a key **replaced** (one fingerprint out, a different one in) means the
@@ -119,20 +119,20 @@ def _signing_key_findings(diff_text: str, add) -> None:
     keys = ", ".join(sorted(k[-8:] for k in genuinely_added))
     line_no = find_line_in_diff(diff_text, r"validpgpkeys")
     if genuinely_removed:
-        add("R130", "Signing Key Replaced", "HIGH", "integrity",
+        add("H078", "Signing Key Replaced", "HIGH", "integrity",
             f"validpgpkeys now trusts {keys} instead of "
             f"{', '.join(sorted(k[-8:] for k in genuinely_removed))}",
             line=line_no, added_keys=keys,
             removed_keys=", ".join(sorted(k[-8:] for k in genuinely_removed)),
             detail=f"signing key replaced: now {keys}")
     elif had_keys_before:
-        add("R130", "Signing Key Added", "MEDIUM", "integrity",
+        add("H078", "Signing Key Added", "MEDIUM", "integrity",
             f"validpgpkeys gained {keys}; another holder may now sign this "
             f"package's sources",
             line=line_no, added_keys=keys,
             detail=f"signing key {keys} added to an existing set")
     else:
-        add("R130", "Signature Verification Introduced", "INFO", "integrity",
+        add("H078", "Signature Verification Introduced", "INFO", "integrity",
             f"validpgpkeys introduced with {keys}",
             line=line_no, added_keys=keys,
             detail=f"validpgpkeys introduced with {keys}")
@@ -156,7 +156,7 @@ def _unread_carrier_findings(diff_text, pkgver_changed, add) -> None:
     bytes are not in the diff, so the recipe can look untouched while the
     code it builds is replaced.  What *is* in the diff is the carrier's
     identity - the checksum, the commit, the OID - and a change to that with
-    no version change is the same event R079 already claims for a git ref
+    no version change is the same event H033 already claims for a git ref
     and C001 for a checksum.
 
     Two carriers had no such claim.  A submodule gitlink names code the
@@ -164,7 +164,7 @@ def _unread_carrier_findings(diff_text, pkgver_changed, add) -> None:
     there either.  Moving one is a content change with no content in the
     diff, which is precisely the shape that reads as "nothing happened".
 
-    The version distinguishes the two readings, as it does for R079: an
+    The version distinguishes the two readings, as it does for H033: an
     upstream bump moves the pointer *and* the version, and moving it while
     the version stands still means anyone who already built this version
     gets different code than anyone who builds it now.
@@ -229,7 +229,7 @@ def _structural_findings(
     if cs_behavior != "checksum_added_or_changed":
         http_sources = [url for url in added if url.startswith("http://")]
         if http_sources:
-            add("R006", "Insecure Download Protocol", "LOW", "integrity",
+            add("H003", "Insecure Download Protocol", "LOW", "integrity",
                 f"http:// sources without checksum backing: {http_sources}",
                 line=find_line_in_diff(diff_text, r"http://"),
                 http_sources=", ".join(http_sources))
@@ -237,21 +237,21 @@ def _structural_findings(
     if cs_behavior == "changed_from_sha256_to_skip":
         skip_reason = is_skip_justified(diff_text)
         suffix = f" ({skip_reason})" if skip_reason else ""
-        add("R004", "Checksum Disabled", "INFO" if skip_reason else "HIGH", "integrity",
+        add("H001", "Checksum Disabled", "INFO" if skip_reason else "HIGH", "integrity",
             f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP",
             line=find_line_in_diff(diff_text, r"SKIP|NONE"),
             skip_suffix=suffix)
     elif cs_behavior == "checksum_array_emptied":
-        add("R005", "Checksum Emptied", "HIGH", "integrity", cs_behavior,
+        add("H002", "Checksum Emptied", "HIGH", "integrity", cs_behavior,
             line=find_line_in_diff(diff_text, r"sha256sums\s*=\s*\(\s*\)"))
 
-    # R147 - makepkg pairs `source=()` with each `*sums=()` by position,
+    # H091 - makepkg pairs `source=()` with each `*sums=()` by position,
     # and no rule looked at the two lengths together. A source slipped in
     # beside a checksum list nobody recounted scored nothing but priors.
     parity = checksum_array_parity(diff_text)
     if parity is not None:
         n_src, n_sum, var = parity
-        add("R147", "Checksum Array Shorter Than Source Array", "HIGH",
+        add("H091", "Checksum Array Shorter Than Source Array", "HIGH",
             "integrity",
             f"{n_src} sources declared against {n_sum} {var} entries",
             line=find_line_in_diff(diff_text, r"source\s*=\s*\("),
@@ -331,12 +331,12 @@ def _structural_findings(
     _version_in_url_findings(diff_text, config or {}, add)
     _parse_time_fetch_findings(diff_text, config or {}, add)
     _paste_egress_findings(diff_text, config or {}, add)
-    # R079 asks the current file which variable feeds a git ref; the diff
+    # H033 asks the current file which variable feeds a git ref; the diff
     # alone shows only the hunk around the pin.
     _moved_git_ref_findings(diff_text, config or {}, add, current_text=current_text)
     _covert_egress_findings(diff_text, config or {}, add)
     _epoch_findings(diff_text, config or {}, add)
-    # R106 reads the current file where the caller has it: an indicator that
+    # H056 reads the current file where the caller has it: an indicator that
     # predates this diff is still a fact about the package being reviewed.
     _ioc_findings(diff_text, package_name, config or {}, add,
                   current_text=current_text)

@@ -555,7 +555,7 @@ def detect_checksum_changes(diff_text: str) -> str:
     makepkg's default. makepkg accepts `b2sums`, `sha512sums`, `md5sums` and
     the rest just as happily, and a package that declares only one of those
     is verified by that one - so `b2sums=('SKIP')` disabled verification and
-    reported `unchanged`, which is R004 not firing at all. Modern AUR
+    reported `unchanged`, which is H001 not firing at all. Modern AUR
     packages increasingly ship `b2sums`, so the default was becoming the
     minority case.
 
@@ -614,12 +614,12 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     """URLs declared in ``source=()``, on one side of the diff.
 
     Distinct from :func:`extract_urls_from_diff`, which collects URLs from
-    *any* added line.  R061 asks whether a download inside ``build()`` is
+    *any* added line.  H016 asks whether a download inside ``build()`` is
     also a declared source, and the broader helper would include the
     download's own URL, so the comparison could never fail.
 
-    ``side="after"`` is the post-diff end-state (the default, which R061
-    relies on); ``side="before"`` is the pre-diff state, so R064 can tell a
+    ``side="after"`` is the post-diff end-state (the default, which H016
+    relies on); ``side="before"`` is the pre-diff state, so H019 can tell a
     URL that was downgraded from one that was always plain http.
     """
     skip = "-" if side == "after" else "+"
@@ -850,7 +850,7 @@ def _companion_names(tree, pkgbuild_text: str) -> list[str]:
         # an AUR package; skipping it meant that a hook committed in an
         # earlier commit was never read at all, so a `post_install()` holding
         # `curl ... | bash` scored 15 for the attribute change and nothing
-        # for the payload.  R062 reads hook lines from the diff; this makes
+        # for the payload.  H017 reads hook lines from the diff; this makes
         # the committed body one of those lines.
         if (name in declared or name in implied or name in pkgbuild_text
                 or _referenced_by_pattern(name, pkgbuild_text)):
@@ -940,7 +940,7 @@ def changed_opaque_members(repo, old_oid: str, new_oid: str) -> list[str]:
     A git blob id is a content hash, so comparing the two trees answers
     "did this file change" exactly, without reading either version - which
     matters because these are the members the analysis deliberately does
-    not read. R118 claims a committed ELF's *presence*; it reports the same
+    not read. H066 claims a committed ELF's *presence*; it reports the same
     thing whether the binary was replaced or left alone, because git emits
     no diff body for it.
 
@@ -982,7 +982,7 @@ def companion_source_hunks(
     entry or one it merely executes/sources/patches by path -- is emitted as
     a ``+++ b/<name>`` hunk whose whole current content is added lines, so the
     ordinary line rules, the tokenizer and ``map_diff_lines`` see it with
-    correct file attribution.  Binary and ELF files are left out: R118-tree
+    correct file attribution.  Binary and ELF files are left out: H066-tree
     already owns embedded binaries, and text rules over binary bytes are
     noise.  The full current content is emitted, not just this commit's diff,
     so a payload committed earlier and merely referenced now is still read.
@@ -1060,10 +1060,10 @@ def companion_source_hunks(
             continue
         if oversized:
             truncated = True
-        # NUL in the head marks a binary; ELF is R118's job, not the text
+        # NUL in the head marks a binary; ELF is H066's job, not the text
         # rules'.
-        # NUL in the head marks a binary; ELF is R118's job, not the text
-        # rules'.  Deliberately *not* recorded as a truncation: R118-tree
+        # NUL in the head marks a binary; ELF is H066's job, not the text
+        # rules'.  Deliberately *not* recorded as a truncation: H066-tree
         # reads the manifest and owns committed binaries, so this surface is
         # examined by another rule rather than left unexamined - and a gap
         # here would fire on every package that commits an icon.

@@ -1,6 +1,6 @@
 """Phase 4 - Class B version rules, and the version comparison (plan §6, §13).
 
-R115 fires on an ``epoch=`` that is newly present in a diff.
+H063 fires on an ``epoch=`` that is newly present in a diff.
 
 The rest of this module answers a question the CLI used to answer wrongly:
 *is the AUR ahead of what is installed?*  Two objects were being compared
@@ -234,7 +234,7 @@ def _epoch_introduced(diff_text: str) -> tuple[bool, str | None]:
 
 
 def _epoch_findings(diff_text: str, config, add) -> None:
-    """A diff introduces ``epoch=`` where none existed (R115, MEDIUM).
+    """A diff introduces ``epoch=`` where none existed (H063, MEDIUM).
 
     Introducing an epoch overrides the version ordering: a nonzero epoch
     makes the package sort above anything that shares its pkgver/pkgrel,
@@ -245,7 +245,7 @@ def _epoch_findings(diff_text: str, config, add) -> None:
     if not introduced:
         return
     severity = "MEDIUM" if value and value != "0" else "INFO"
-    add("R115", "Epoch Introduced", severity, "version",
+    add("H063", "Epoch Introduced", severity, "version",
         f"epoch={value} newly introduced" if value else "epoch newly introduced",
         line=next(
             (

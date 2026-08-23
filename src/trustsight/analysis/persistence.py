@@ -1,18 +1,18 @@
 """Phase 3 - install-path persistence rules (plan §5).
 
-R077/R084/R085/R088/R114 share one question: where does a build/install
+H032/H038/H039/H042/H062 share one question: where does a build/install
 function put a file?  They are code rules because each needs write-target
 resolution (install/cp/ln/redirect destinations) against a path taxonomy
 ($pkgdir staging, $srcdir build tree, $HOME, absolute runtime paths).
 
-Heredoc bodies are data, not commands, so R077/R084/R088/R114 skip them;
-R085 is the exception because a systemd unit's ExecStart line *is* the
+Heredoc bodies are data, not commands, so H032/H038/H042/H062 skip them;
+H039 is the exception because a systemd unit's ExecStart line *is* the
 content being written.
 
-R088 is deliberately the quietest rule here so the persistence signals
+H042 is deliberately the quietest rule here so the persistence signals
 never triple-fire on one piece of evidence: a hidden write that is later
-executed belongs to R121/R124, one that lands in a world-writable dir
-belongs to R084, and R088 only claims the hidden drop that neither rule
+executed belongs to H069/H072, one that lands in a world-writable dir
+belongs to H038, and H042 only claims the hidden drop that neither rule
 already owns.
 """
 
@@ -158,7 +158,7 @@ def _libalpm_hook_findings(diff_text, config, add) -> None:
             continue
         for t in _raw_targets(_strip_comment(line[1:])):
             if _PACMAN_HOOK_RE.search(_norm_path(t)):
-                add("R114", "Pacman Hook Installed", "MEDIUM", "persistence",
+                add("H062", "Pacman Hook Installed", "MEDIUM", "persistence",
                     f"{enclosing[i]}() installs a pacman hook: {t}",
                     line=i + 1, position=enclosing[i], path=t)
                 return
@@ -186,7 +186,7 @@ def _home_rc_findings(diff_text, config, add) -> None:
                 # root reaching into it is categorical rather than suspicious.
                 in_scriptlet = enclosing[i] in _INSTALL_SCRIPTLETS
                 severity = "CRITICAL" if in_scriptlet else "HIGH"
-                add("R077", "Write To User Home Or RC", severity, "persistence",
+                add("H032", "Write To User Home Or RC", severity, "persistence",
                     f"{enclosing[i]}() writes into the user's home/rc: {t}",
                     line=i + 1, position=enclosing[i], path=t)
                 return
@@ -206,18 +206,18 @@ def _worldwritable_staging_findings(diff_text, config, add) -> None:
             continue
         for t in _raw_targets(body):
             if _WW_DIR_RE.search(t.strip().strip("\"'")):
-                add("R084", "World-Writable Staging", "HIGH", "persistence",
+                add("H038", "World-Writable Staging", "HIGH", "persistence",
                     f"{enclosing[i]}() stages work in a world-writable path: {t}",
                     line=i + 1, position=enclosing[i], path=t)
                 return
         for t in _collect_executions(body):
             if _WW_DIR_RE.search(t):
-                add("R084", "World-Writable Staging", "HIGH", "persistence",
+                add("H038", "World-Writable Staging", "HIGH", "persistence",
                     f"{enclosing[i]}() executes from a world-writable path: {t}",
                     line=i + 1, position=enclosing[i], path=t)
                 return
         if _WW_CD_RE.search(body):
-            add("R084", "World-Writable Staging", "HIGH", "persistence",
+            add("H038", "World-Writable Staging", "HIGH", "persistence",
                 f"{enclosing[i]}() works from a world-writable directory: {body.strip()[:80]}",
                 line=i + 1, position=enclosing[i], body=body.strip()[:80])
             return
@@ -254,7 +254,7 @@ def _hidden_drop_findings(diff_text, config, add) -> None:
                 continue
             if base in execs_by_fn.get(fn, set()):
                 continue
-            add("R088", "Hidden Drop", "HIGH", "persistence",
+            add("H042", "Hidden Drop", "HIGH", "persistence",
                 f"{fn}() drops a hidden file outside the build trees: {t}",
                 line=i + 1, position=fn, path=t)
             return
@@ -274,14 +274,14 @@ def _systemd_unit_findings(diff_text, config, add) -> None:
             continue
         target = m.group(1).strip("\"'")
         if _RUNTIME_WRITABLE_RE.search(target):
-            add("R085", "Systemd ExecStart From Runtime-Writable Path", "HIGH",
+            add("H039", "Systemd ExecStart From Runtime-Writable Path", "HIGH",
                 "persistence",
                 f"systemd unit ExecStart points at runtime-writable path: {target}",
                 line=i + 1, exec_target=target)
             return
 
 
-# R128 - a build function's only legitimate write destinations.  Devices are
+# H076 - a build function's only legitimate write destinations.  Devices are
 # not filesystem state ( ``> /dev/null`` is how a build stays quiet), and a
 # target carrying shell metacharacters is a fragment of an awk program or a
 # parameter expansion that the extractor picked up, not a path.
@@ -291,7 +291,7 @@ _BUILD_TIME_FUNCTIONS = frozenset({"prepare", "build", "check", "package"})
 
 
 def _outside_staging_findings(diff_text, config, add) -> None:
-    """R128 - a build-time function writes outside the staging root.
+    """H076 - a build-time function writes outside the staging root.
 
     ``prepare``/``build``/``check``/``package`` run on the *builder's*
     machine, and everything they produce belongs under ``$srcdir`` or
@@ -307,7 +307,7 @@ def _outside_staging_findings(diff_text, config, add) -> None:
     even on `makepkg --nobuild`.
 
     Install hooks are excluded: ``post_install`` legitimately acts on the
-    target system, and its writes are R077/R084/R085/R114's territory.
+    target system, and its writes are H032/H038/H039/H062's territory.
     """
     lines = resolve_added_lines(diff_text)
     enclosing = _classify_enclosing_function(lines)
@@ -328,7 +328,7 @@ def _outside_staging_findings(diff_text, config, add) -> None:
                 continue
             if not _PLAIN_ABS_PATH_RE.match(path):
                 continue
-            add("R128", "Build Writes Outside Staging Root", "HIGH",
+            add("H076", "Build Writes Outside Staging Root", "HIGH",
                 "persistence",
                 f"{fn}() writes to {path}, outside $pkgdir/$srcdir",
                 line=i + 1, position=fn, path=path)
@@ -341,7 +341,7 @@ def _outside_staging_findings(diff_text, config, add) -> None:
 
 
 def _persistence_findings(diff_text, config, add) -> None:
-    """Run the install-path persistence rules (R077/R084/R085/R114/R088/R128)."""
+    """Run the install-path persistence rules (H032/H038/H039/H062/H042/H076)."""
     _systemd_unit_findings(diff_text, config, add)
     _libalpm_hook_findings(diff_text, config, add)
     _home_rc_findings(diff_text, config, add)

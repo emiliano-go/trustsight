@@ -1,6 +1,6 @@
 """Phase 7 - the corpus-side indicator pivot (plan §9).
 
-R106 answers "does *this* package carry a known indicator?".  The pivot
+H056 answers "does *this* package carry a known indicator?".  The pivot
 answers the other direction: given one indicator, which AUR packages
 reference it?  That is the question an advisory raises - one malicious host
 is published, and the useful next step is the full list of packages that
@@ -9,9 +9,9 @@ point at it, not a per-package rescan.
 The pivot reads only material the corpus already holds: the metadata
 snapshot (names, maintainers, declared dependencies, upstream ``url=``) and
 the stored PKGBUILD snapshots.  It never fetches anything a PKGBUILD points
-at - the same threat-model line the plan draws for R122.
+at - the same threat-model line the plan draws for H070.
 
-Matching is R106's: exact equality on a declared fact.  The query value does
+Matching is H056's: exact equality on a declared fact.  The query value does
 not have to be on the shipped list; when it is, the entry's provenance and
 confidence ride along with the result.
 """

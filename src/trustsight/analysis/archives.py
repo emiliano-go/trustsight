@@ -1,4 +1,4 @@
-"""R122 - archive trailer anomaly (pure function).
+"""H070 - archive trailer anomaly (pure function).
 
 ``check_archive_trailer(data)`` decides whether *data* carries bytes past
 the end of the archive it contains, returning a stamped finding when it
@@ -11,7 +11,7 @@ local file, or a cached tarball.
 Threat-model note (see the plan spec §4): fetching attacker-declared
 ``source=`` URLs must never happen in the ``review`` path.  Downloading
 arbitrary URLs at analysis time turns the reviewer into an SSRF probe, tells
-the attacker who scanned them, and is a DoS vector.  If R122 ever runs live,
+the attacker who scanned them, and is a DoS vector.  If H070 ever runs live,
 the bytes belong to a corpus-side fetch where downloads are centralised,
 rate-limited, and distributed as facts - never to a user's review.
 """
@@ -118,7 +118,7 @@ def _zip_trailing_bytes(data: bytes) -> int | None:
 
 
 def check_archive_trailer(data: bytes) -> dict | None:
-    """Return an R122 finding when *data* carries bytes past its trailer.
+    """Return an H070 finding when *data* carries bytes past its trailer.
 
     Recognised containers: gzip (including concatenated members), plain
     tar, and zip.  A clean archive returns None.  Malformed input returns
@@ -135,7 +135,7 @@ def check_archive_trailer(data: bytes) -> dict | None:
         offset = _gzip_trailing_bytes(data)
         if offset is not None:
             return stamp({
-                "rule_id": "R122", "name": "Archive Trailer Anomaly",
+                "rule_id": "H070", "name": "Archive Trailer Anomaly",
                 "severity": "HIGH", "category": "integrity",
                 "match": f"{len(data) - offset} trailing bytes past the gzip trailer",
                 "params": {"kind": "gzip", "trailing_bytes": len(data) - offset,
@@ -147,7 +147,7 @@ def check_archive_trailer(data: bytes) -> dict | None:
         offset = _zip_trailing_bytes(data)
         if offset is not None:
             return stamp({
-                "rule_id": "R122", "name": "Archive Trailer Anomaly",
+                "rule_id": "H070", "name": "Archive Trailer Anomaly",
                 "severity": "HIGH", "category": "integrity",
                 "match": f"{len(data) - offset} bytes after the end-of-central-directory",
                 "params": {"kind": "zip", "trailing_bytes": len(data) - offset,
@@ -159,7 +159,7 @@ def check_archive_trailer(data: bytes) -> dict | None:
         offset = _tar_trailing_bytes(data)
         if offset is not None:
             return stamp({
-                "rule_id": "R122", "name": "Archive Trailer Anomaly",
+                "rule_id": "H070", "name": "Archive Trailer Anomaly",
                 "severity": "HIGH", "category": "integrity",
                 "match": f"{len(data) - offset} bytes past the tar end-of-archive marker",
                 "params": {"kind": "tar", "trailing_bytes": len(data) - offset,

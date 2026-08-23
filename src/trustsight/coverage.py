@@ -203,11 +203,11 @@ def unpinned_source_refs(text: str) -> list[str]:
     moment.  Two builds of the identical recipe can execute different code
     and neither the recipe nor its diff records that.
 
-    R079 already reports the *transition* - a commit pin replaced by a
+    H033 already reports the *transition* - a commit pin replaced by a
     movable ref is an edit, and an edit is evidence.  It cannot report the
     steady state, because a package that has always tracked a branch never
     edits anything, and that is the case this gap covers.  A tag is included
-    deliberately: a tag is a name upstream can repoint, which is R079's own
+    deliberately: a tag is a name upstream can repoint, which is H033's own
     stated reasoning.
 
     Reported as P008, a declared-practice fact at weight 0, not as a

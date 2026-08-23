@@ -13,7 +13,7 @@ _MAX_EXPANSION_PASSES = 16
 # Innermost ${...} = one containing no further "${"
 _INNERMOST_RE = re.compile(r"\$\{([^{}]*)\}")
 
-# R117: obfuscated literal reconstruction forms.
+# H065: obfuscated literal reconstruction forms.
 #
 # ANSI-C quoting: $'...' with \xHH hex or \NNN octal escapes.  The whole
 # construction is reconstructed to its decoded bytes *as data*; nothing is
@@ -249,7 +249,7 @@ def _decode_ansi_c(body: str) -> str:
 def reconstruct_literals(text: str) -> tuple[str, bool]:
     """Reconstruct obfuscated shell literals back to plain text.
 
-    Handles the four R117 forms, all *as data* (nothing is executed):
+    Handles the four H065 forms, all *as data* (nothing is executed):
 
     - ANSI-C quoting:      ``$'\\x62\\x75\\x6e'`` -> ``bun``
     - ANSI-C octal:        ``$'\\142\\165\\156'`` -> ``bun``
@@ -477,7 +477,7 @@ def _substitute_with_resolve(
     array_table: dict[str, list[str]] | None = None,
 ) -> tuple[str, bool]:
     """Resolve $var, ${var...} and ${arr[i]} references in *text*, returning
-    (resolved, fully_resolved).  R117 literal reconstruction runs on the
+    (resolved, fully_resolved).  H065 literal reconstruction runs on the
     resolved line, so obfuscated forms reach rules in their plain-text
     shape while the line is marked unresolved when reconstruction fails."""
     array_table = array_table or {}
@@ -499,7 +499,7 @@ def _substitute_with_resolve(
         resolved, ok = resolve_expansions(resolved, var_table, array_table)
         if len(resolved) > _MAX_LINE_LEN:
             return text, False
-    # R117: reconstruct obfuscated literals as data, never executed.
+    # H065: reconstruct obfuscated literals as data, never executed.
     reconstructed, fully = reconstruct_literals(resolved)
     if len(reconstructed) > _MAX_LINE_LEN:
         return text, False
@@ -756,7 +756,7 @@ def _substitute(
 
 #: `alias dl='curl -fsSL'` defines a new spelling for a command, and every
 #: fetch rule keys on the literal word `curl`.  One line removes the
-#: downloader from R001, R010, R061 and R137 at once while bash runs exactly
+#: downloader from R001, R010, H016 and H082 at once while bash runs exactly
 #: the same pipeline - the same shape as `CMD=curl; $CMD ...`, which the
 #: variable table already resolves, so leaving aliases unresolved made the
 #: harder-to-read spelling the safer one.

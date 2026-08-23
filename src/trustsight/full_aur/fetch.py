@@ -236,7 +236,7 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     The AUR snapshot tarball comes from the AUR mirror, never from a
     PKGBUILD-declared ``source=`` URL, so reading it keeps the review path's
     "no network, no execution" claim intact.  Only the head of each member
-    is read: R118 needs the magic bytes, not the whole file.
+    is read: H066 needs the magic bytes, not the whole file.
     """
     manifest: list[tuple[str, bytes]] = []
     for member in tf:  # lazy: getmembers() would parse the whole archive
@@ -258,15 +258,15 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
 def fetch_pkgbuild_with_tree(
     name: str,
 ) -> tuple[Optional[str], Optional[list[tuple[str, bytes]]], Optional[dict], bool]:
-    """PKGBUILD text, the tree manifest, an R122 finding, and a refusal flag.
+    """PKGBUILD text, the tree manifest, an H070 finding, and a refusal flag.
 
     Downloads the AUR snapshot tarball directly so the corpus path sees the
-    same committed file tree the git path does (R118-tree).  The tarball is
+    same committed file tree the git path does (H066-tree).  The tarball is
     fetched from the AUR mirror - never from a PKGBUILD-declared URL - so
     this is consistent with the "static, offline" review claim.  Falls back
     to the cgit text-only fetch when the tarball cannot be read.
 
-    The full tarball bytes are handed to ``check_archive_trailer`` (R122):
+    The full tarball bytes are handed to ``check_archive_trailer`` (H070):
     the corpus side is the one place AUR content is downloaded, so it is
     also where the archive container is inspected.  A trailer anomaly is
     returned as a stamped finding; a clean archive returns None.

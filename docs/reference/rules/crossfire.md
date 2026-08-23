@@ -29,7 +29,7 @@ It does not identify which payload was hidden, only that hiding occurred.
 - It does not claim bytes another rule claims. Base64-to-shell belongs to
   [R003](obfuscation.md#r003) and [R043](obfuscation.md#r043), bidi and
   homoglyph codepoints to [R013](deception.md#r013), and `~/` writes to
-  [R077](install-and-persist.md#r077).
+  [H032](install-and-persist.md#h032).
 
 ## The gate is the file, not the function {#the-gate-is-the-file-not-the-function}
 
@@ -141,11 +141,11 @@ compositional, in [X007](#x007). Bare `2>/dev/null` is excluded as noise.
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a write or redirect reaches a home directory by a spelling
-[R077](install-and-persist.md#r077) does not match: `/home/alice`,
+[H032](install-and-persist.md#h032) does not match: `/home/alice`,
 `/home/$USER/...`, `~alice`, `/root`, `${HOME:-/home/alice}/...`, or a
 traversal naming `home` or `root`. The trailing separator is optional.
 
-Defers rather than doubles: a target R077 claims is skipped, so one write
+Defers rather than doubles: a target H032 claims is skipped, so one write
 scores once.
 
 Staging paths are exempt, and the exemption belongs to the **target**, not
@@ -206,7 +206,7 @@ interpreter on an executing line.
 | `dig +short TXT d \| tr -d '"' \| sh` | |
 
 The rule reads the **end** of the pipeline, so intervening filters do not
-hide the chain. The client vocabulary is shared with R061, R137 and R051
+hide the chain. The client vocabulary is shared with H016, H082 and R051
 through `config.NETWORK_CLIENT`.
 
 `curl` and `wget` are excluded: R001 and R002 claim those, and one operation
@@ -218,7 +218,7 @@ scored twice is its own kind of wrong.
 
 Fires when a `-c`/`-e`/`-r` script contains a URL or a fetch call
 (`urlopen`, `requests.get`, `file_get_contents`, `LWP`, `socket.connect`).
-No shell client is involved, so R061's inventory never sees it.
+No shell client is involved, so H016's inventory never sees it.
 
 ### X011: Package Manager Runs Fetched Code At Build Time {#x011}
 
@@ -443,7 +443,7 @@ printf "dhcp-script=$PWD/x.sh\n" > "$srcdir"/d
 dnsmasq --conf-file="$srcdir"/d
 ```
 
-[R145](install-and-persist.md#r145) and [R149](install-and-persist.md#r149)
+[H089](install-and-persist.md#h089) and [H093](install-and-persist.md#h093)
 claim configs that are *shipped*. This one stays in the build tree, where
 naming `$srcdir` is normal, and is never installed. What makes it execution
 is the second line: the recipe runs the program that reads the file, on the

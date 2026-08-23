@@ -39,7 +39,7 @@ rules, because a W is weight-0 by construction:
 
 | W rule | Scored counterpart |
 |---|---|
-| [W001](#w001) executes unread code | [R150](fetch-and-execution.md#r150), the same act during `package()` |
+| [W001](#w001) executes unread code | [H094](fetch-and-execution.md#h094), the same act during `package()` |
 | [W004](#w004) unread manifest | [X020](crossfire.md#x020), the recipe writing one |
 | [W006](#w006) unread generated config | [X022](crossfire.md#x022), the same config handed to a tool |
 
@@ -74,8 +74,8 @@ repository.
 | `chroot "$srcdir/root" /bin/sh /x.sh` | `/bin/sh /usr/share/p/helper.sh` |
 | `xterm -e "bash $PWD/x.sh"` | `make` |
 
-[R138](fetch-and-execution.md#r138) claims the case where the executed file
-is a declared source, and R136 where it is committed. What is left is code
+[H083](fetch-and-execution.md#h083) claims the case where the executed file
+is a declared source, and H081 where it is committed. What is left is code
 that runs and that nobody looked at.
 
 Two shapes qualify and no third: an interpreter naming a file, and a `./`
@@ -116,7 +116,7 @@ Fires on `patch` or `git apply` naming a `.patch`/`.diff` that is not
 committed to the repository.
 
 A patch edits the source before it is built, and the edit is whatever the
-patch says. A committed patch is one [R146](fetch-and-execution.md#r146)
+patch says. A committed patch is one [H090](fetch-and-execution.md#h090)
 reads; a declared remote one sits behind a checksum this tool never
 downloads.
 
@@ -136,7 +136,7 @@ explicit manifest argument that is neither declared nor committed.
 | Fires | Quiet |
 |---|---|
 | `ninja -f "$srcdir/gen.ninja"` | `ninja -C build` |
-| `make -f "$srcdir/build.mk" all` | `make -f setup.mk` when declared (R138) |
+| `make -f "$srcdir/build.mk" all` | `make -f setup.mk` when declared (H083) |
 
 Anchored on an explicit `-f`/`--file`. A bare `make` also runs a manifest
 nobody read, and that is most of the ecosystem; reporting it would say

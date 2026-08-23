@@ -101,7 +101,7 @@ The per-stratum requirement prevents the benchmark from optimizing for easy clas
 
 Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.3% zero-rate means 68.3% of benign diffs score 0, while **13.1% exceed the 20-point threshold**: roughly one reviewer workload item per eight benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are R060 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.3% zero-rate means 68.3% of benign diffs score 0, while **13.1% exceed the 20-point threshold**: roughly one reviewer workload item per eight benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

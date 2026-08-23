@@ -7,11 +7,11 @@ diff, and all three also fire on first-seen packages through
 
 None is calibrated against the benign corpus, because each one is a
 function of when the scan runs rather than of what the package contains.
-R065 and R066 are INFO for that reason: recency has no meaning on its own,
+H020 and H021 are INFO for that reason: recency has no meaning on its own,
 and only escalates a package once another signal fires alongside it.
 
 Release cadence is a related but separate claim and is not scored at all;
-see [R073](corpus-behavioral.md#r073).
+see [H028](corpus-behavioral.md#h028).
 
 See [the rule system reference](system.md) for the field table, the
 severity weights and the reserved identifier ranges.
@@ -23,12 +23,12 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [R065](#r065) | Very Recent Update | INFO |
-| [R066](#r066) | Brand New Package | INFO |
-| [R067](#r067) | Stale Package Revived | MEDIUM |
+| [H020](#h020) | Very Recent Update | INFO |
+| [H021](#h021) | Brand New Package | INFO |
+| [H022](#h022) | Stale Package Revived | MEDIUM |
 <!-- /generated: page-index -->
 
-### R065: Very Recent Update {#r065}
+### H020: Very Recent Update {#h020}
 
 - **Target:** programmatic (commit timestamp)
 - **Severity:** INFO (weight 0)
@@ -39,7 +39,7 @@ Packages updated moments ago have not been visible to the community long enough
 for anyone to vet them. Combined with other signals - maintainer change, new
 source domains - recency escalates suspicion.
 
-### R066: Brand New Package {#r066}
+### H021: Brand New Package {#h021}
 
 - **Target:** programmatic (root commit timestamp)
 - **Severity:** INFO (weight 0)
@@ -49,7 +49,7 @@ source domains - recency escalates suspicion.
 A package that barely exists has no reputation. An established package with a
 recent update is routine; a package uploaded last week has zero track record.
 
-### R067: Stale Package Revived {#r067}
+### H022: Stale Package Revived {#h022}
 
 - **Target:** programmatic (commit timestamp gap)
 - **Severity:** MEDIUM (weight 15)

@@ -57,7 +57,7 @@ Rules match one line at a time, so without this the pipe-to-shell patterns would
 
 ### How scope reduces false positives
 
-Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like R009 (`sudo`) would fire on every line containing the word `sudo`, including comments (`# sudo is required`), messages (`echo "sudo needed"`), and top-level declarations (`groups=('sudo')`). The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
+Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like H004 (`sudo`) would fire on every line containing the word `sudo`, including comments (`# sudo is required`), messages (`echo "sudo needed"`), and top-level declarations (`groups=('sudo')`). The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
 
 Scope is set per-rule in `rules.toml`. When absent, the rule matches all lines. Scope has no effect on `resolved`-target rules because resolution already strips comments and top-level declarations.
 
@@ -84,7 +84,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R-series (through R151), S001-S008, X001-X023, C001-C009, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R144, H001-H095, S001-S008, X001-X023, C001-C009, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -112,7 +112,7 @@ rendered from `DECLARED_REASONS`.
 | `P002` | `validpgpkeys` declared |
 | `P003` | A signature source accompanies a source, with PGP keys declared |
 | `P005` | Source pinned to a full commit hash (`checksum_pinned`) |
-| `P006` | Source pinned to a tag - the weaker pin, which `R079` exists to flag because a tag can be repointed |
+| `P006` | Source pinned to a tag - the weaker pin, which `H033` exists to flag because a tag can be repointed |
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
 | `P008` | Source tracks a branch or unpinned ref, so upstream decides at build time what this compiles and runs |
 
@@ -128,21 +128,31 @@ gap: the statement is true of every VCS package by design, and raising a gap
 would put 20.1% of the locked benign corpus (653 of 3,246 diffs) into
 Inconclusive, which buys alert fatigue rather than information. The band is
 left alone and the reader is told what the recipe declares. The
-rest render under `--verbose`. The P namespace contrasts with R079/R096/R110:
+rest render under `--verbose`. The P namespace contrasts with H033/H049/H059:
 those fire when a practice is *changed*, these report when one is *present*.
 No P finding can lower a score - B10.
 
 ---
 
-## R-series (TOML-configurable detection rules) {#r-series}
+## R-series and H-series (core detection rules) {#r-series}
 
-Defined in `~/.config/trustsight/rules.toml`. Loaded at runtime via `load_rules()` in `src/trustsight/rules.py`.
+Two namespaces, distinguished by mechanism rather than by subject. An
+**R-series** rule is a regex defined in `~/.config/trustsight/rules.toml` and
+loaded at runtime by `load_rules()` in `src/trustsight/rules.py`; you can read
+it, retune it, or switch it off. An **H-series** rule is a heuristic emitted by
+an analysis module because it needs diff context a single-line regex cannot
+see - what changed, what it changed relative to, what the corpus has seen
+before - and it has no entry in `rules.toml`.
+
+The fields below describe an R-series rule. H-series rules carry the same
+severity, category and weight vocabulary in their findings, but they are not
+configured through this file.
 
 Each rule supports these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier (`R001`-`R013` core, `R014`/`R016`-`R025` additional TOML, `R039`-`R059` expanded TOML, `R060`+ code-emitted). |
+| `id` | `string` | Rule identifier. Every id in `rules.toml` is an `R` id: `R001`-`R003`, `R007`-`R008`, `R010`-`R013`, `R017`, `R039`-`R059` and `R144`. |
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
@@ -168,19 +178,19 @@ See [R002: Wget Pipe to Shell](fetch-and-execution.md#r002).
 See [R003: Base64 Decode and Execute](obfuscation.md#r003).
 
 
-### R004 {#r004}
+### H001 {#h001}
 
-See [R004: Checksum Disabled](integrity.md#r004).
-
-
-### R005 {#r005}
-
-See [R005: Checksum Emptied](integrity.md#r005).
+See [H001: Checksum Disabled](integrity.md#h001).
 
 
-### R006 {#r006}
+### H002 {#h002}
 
-See [R006: Insecure Download Protocol](fetch-and-execution.md#r006).
+See [H002: Checksum Emptied](integrity.md#h002).
+
+
+### H003 {#h003}
+
+See [H003: Insecure Download Protocol](fetch-and-execution.md#h003).
 
 
 ### R007 {#r007}
@@ -193,9 +203,9 @@ See [R007: Install File Modification](install-and-persist.md#r007).
 See [R008: Unexpected File Download](fetch-and-execution.md#r008).
 
 
-### R009 {#r009}
+### H004 {#h004}
 
-See [R009: Privilege Escalation](fetch-and-execution.md#r009).
+See [H004: Privilege Escalation](fetch-and-execution.md#h004).
 
 
 ### R010 {#r010}
@@ -218,14 +228,14 @@ See [R012: Prompt Injection Detection](deception.md#r012).
 See [R013: Unicode Bidi Override](deception.md#r013).
 
 
-### R014 {#r014}
+### H005 {#h005}
 
-See [R014: validpgpkeys Added](integrity.md#r014).
+See [H005: validpgpkeys Added](integrity.md#h005).
 
 
-### R016 {#r016}
+### H006 {#h006}
 
-See [R016: New Make/Opt/Check Dependency](naming-and-dependency.md#r016).
+See [H006: New Make/Opt/Check Dependency](naming-and-dependency.md#h006).
 
 
 ### R017 {#r017}
@@ -233,44 +243,44 @@ See [R016: New Make/Opt/Check Dependency](naming-and-dependency.md#r016).
 See [R017: Setuid/Setgid Permission](install-and-persist.md#r017).
 
 
-### R018 {#r018}
+### H007 {#h007}
 
-See [R018: Symlink Redirect](staging-and-recon.md#r018).
-
-
-### R019 {#r019}
-
-See [R019: Suspicious Environment Variable](integrity.md#r019).
+See [H007: Symlink Redirect](staging-and-recon.md#h007).
 
 
-### R020 {#r020}
+### H008 {#h008}
 
-See [R020: Network connection attempt](fetch-and-execution.md#r020).
-
-
-### R021 {#r021}
-
-See [R021: Suspicious file write](staging-and-recon.md#r021).
+See [H008: Suspicious Environment Variable](integrity.md#h008).
 
 
-### R022 {#r022}
+### H009 {#h009}
 
-See [R022: Sensitive binary execution](fetch-and-execution.md#r022).
-
-
-### R023 {#r023}
-
-See [R023: Strace detection attempt (TracerPid check)](deception.md#r023).
+See [H009: Network connection attempt](fetch-and-execution.md#h009).
 
 
-### R024 {#r024}
+### H010 {#h010}
 
-See [R024: Strace log truncated (possible flood evasion)](deception.md#r024).
+See [H010: Suspicious file write](staging-and-recon.md#h010).
 
 
-### R025 {#r025}
+### H011 {#h011}
 
-See [R025: Eval or Exec Usage](obfuscation.md#r025).
+See [H011: Sensitive binary execution](fetch-and-execution.md#h011).
+
+
+### H012 {#h012}
+
+See [H012: Strace detection attempt (TracerPid check)](deception.md#h012).
+
+
+### H013 {#h013}
+
+See [H013: Strace log truncated (possible flood evasion)](deception.md#h013).
+
+
+### H014 {#h014}
+
+See [H014: Eval or Exec Usage](obfuscation.md#h014).
 
 
 ### Severity weights
@@ -288,7 +298,7 @@ Configured in `config.toml` `[severity_weights]`:
 
 ### FATAL rules {#fatal-rules}
 
-R012 and R013 are shipped FATAL rules. R106 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; R106's severity is derived from the signed/local indicator confidence tier.
+R012 and R013 are shipped FATAL rules. H056 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; H056's severity is derived from the signed/local indicator confidence tier.
 
 ---
 
@@ -355,7 +365,7 @@ The `experimental` flag remains supported for future additions. A rule carrying 
 experimental = true
 ```
 
-Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `R014` and `R016`-`R025` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved**: they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
+Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `H005` and `H006`-`H014` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved**: they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
 
 Every `raw_line` rule below sets `added_only = true`.
 
@@ -466,21 +476,21 @@ See [R058: Write Outside Package Root](staging-and-recon.md#r058).
 
 ---
 
-### R060 {#r060}
+### H015 {#h015}
 
-See [R060: Critical Build Function Modified](fetch-and-execution.md#r060).
+See [H015: Critical Build Function Modified](fetch-and-execution.md#h015).
 
 
-### R061 {#r061}
+### H016 {#h016}
 
-See [R061: Hidden Network Fetch In Build](fetch-and-execution.md#r061).
+See [H016: Hidden Network Fetch In Build](fetch-and-execution.md#h016).
 
 
 ---
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below were measured against the 3,246-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, R061-R064, and R081-R082 rules are **on by default**, as are the code-emitted rules R083-R131. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below were measured against the 3,246-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -489,48 +499,48 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | Rule | Severity | Fires | Rate | Read |
 |------|----------|-------|------|------|
 | D004 | HIGH | 0 | 0.00 % | No false positive across the 2084 corpus diffs that declare `provides`/`replaces`. |
-| R062 | HIGH | 4 | 0.12 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
-| R063 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
-| R064 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
-| R065 | INFO | - | - | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
-| R066 | INFO | - | - | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
-| R067 | MEDIUM | - | - | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
-| R068 | INFO | - | - | Not calibrated: zero-weight metadata; context only. |
-| R069 | HIGH | 1 | 0.03 % | Near-zero; matches the predicted rate. |
-| R070 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
-| R071 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
-| R072 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
-| R074 | HIGH | 2/179 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
-| R075 | MEDIUM | 11 | 0.34 % | Measured with seeded DB (209,909-name seed). Well under the 30% gate. |
+| H017 | HIGH | 4 | 0.12 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
+| H018 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
+| H019 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
+| H020 | INFO | - | - | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
+| H021 | INFO | - | - | Not calibrated: fires on packages < 30 days old, which is a small and shifting set. |
+| H022 | MEDIUM | - | - | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
+| H023 | INFO | - | - | Not calibrated: zero-weight metadata; context only. |
+| H024 | HIGH | 1 | 0.03 % | Near-zero; matches the predicted rate. |
+| H025 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
+| H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
+| H027 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
+| H029 | HIGH | 2/179 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
+| H030 | MEDIUM | 11 | 0.34 % | Measured with seeded DB (209,909-name seed). Well under the 30% gate. |
 | D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
-| R060 | INFO | 694 | **21.4 %** | Why it is INFO. No narrowing reaches triage quality (`pkgver` unchanged still leaves 11.6 %, a bump that also edits `build()` is 9.8 %), so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
-| R061 | HIGH | 7 | 0.22 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
-| R076 | MEDIUM | 0 | 0.00 % | Needs both an unsafe literal version and its interpolation into a source URL. |
-| R077 | HIGH | 1 | 0.03 % | A legitimate `$HOME/.config/...log` write from a `post_upgrade`. |
-| R079 | HIGH/MED | 4 | 0.12 % | Maintainers tracking a moving patch branch under a fixed version, which is the shape the rule describes. |
-| R080 | MEDIUM | 6 | 0.18 % | Schemes outside the shipped allowlist. |
-| R084 | HIGH | 0 | 0.00 % | `mktemp -d` is excluded wholesale, so private scratch directories never count. |
-| R087 | HIGH | 0 | 0.00 % | The one paste-host reference in the corpus is a gist download, which is R061's. |
-| R085 | HIGH | 0 | 0.00 % | Reads the unit's `ExecStart`, not its filename. |
-| R086 | INFO | 0 | 0.00 % | `env` was dropped after a `sed` expression read as a command position. |
-| R088 | HIGH | 0 | 0.00 % | Deliberately the quietest of the persistence group. |
-| R089 | INFO | 0 | 0.00 % | A benign diff with one or two hits cannot reach three distinct stages. |
-| R106 | tiered | 0 | 0.00 % | With the shipped (empty) list and with a synthetic one. A positive control (`github.com`) fires on 1561 diffs, so the surface extraction is real. |
-| R114 | MEDIUM | 4 | 0.12 % | Packages that legitimately ship pacman hooks. |
-| R115 | MEDIUM | 0 | 0.00 % | An unchanged epoch never surfaces in a hunk. |
-| R116 | HIGH/MED | 0 | 0.00 % | Related name shapes suppress; cold start cannot fire. |
-| R117 | INFO | 0 | 0.00 % | Weight 0. Anchoring the check on an ANSI-C quote opener removed four regex end-anchor false positives. |
-| R119 | HIGH | 0 | 0.00 % | Architecture checks are not probes. |
-| R120 | HIGH | 0 | 0.00 % | A type check on decoded bytes, so encodings do not need enumerating. |
-| R121 | HIGH | 0 | 0.00 % | Heredoc bodies are excluded from command scanning. |
-| R123 | HIGH | 0 | 0.00 % | Command-position anchored; a client in `makedepends` is a declaration. |
-| R124 | HIGH | 0 | 0.00 % | Still zero after the execution match was widened to a path with arguments. |
-| R128 | HIGH | 0 | 0.00 % | A representative backdoor fixture goes from 25 to 50 with it. |
-| R129 | HIGH | 3 | 0.09 % | One package resolving a redirect with `curl` at the top level, which really does fetch on a metadata refresh. |
-| R130 | HIGH/MED/INFO | 6 | 0.18 % | Two introductions and four upstream key rotations. |
-| R131 | HIGH/MED | 3 | 0.09 % | One wine package that genuinely disables FORTIFY_SOURCE. |
+| H015 | INFO | 694 | **21.4 %** | Why it is INFO. No narrowing reaches triage quality (`pkgver` unchanged still leaves 11.6 %, a bump that also edits `build()` is 9.8 %), so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
+| H016 | HIGH | 7 | 0.22 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
+| H031 | MEDIUM | 0 | 0.00 % | Needs both an unsafe literal version and its interpolation into a source URL. |
+| H032 | HIGH | 1 | 0.03 % | A legitimate `$HOME/.config/...log` write from a `post_upgrade`. |
+| H033 | HIGH/MED | 4 | 0.12 % | Maintainers tracking a moving patch branch under a fixed version, which is the shape the rule describes. |
+| H034 | MEDIUM | 6 | 0.18 % | Schemes outside the shipped allowlist. |
+| H038 | HIGH | 0 | 0.00 % | `mktemp -d` is excluded wholesale, so private scratch directories never count. |
+| H041 | HIGH | 0 | 0.00 % | The one paste-host reference in the corpus is a gist download, which is H016's. |
+| H039 | HIGH | 0 | 0.00 % | Reads the unit's `ExecStart`, not its filename. |
+| H040 | INFO | 0 | 0.00 % | `env` was dropped after a `sed` expression read as a command position. |
+| H042 | HIGH | 0 | 0.00 % | Deliberately the quietest of the persistence group. |
+| H043 | INFO | 0 | 0.00 % | A benign diff with one or two hits cannot reach three distinct stages. |
+| H056 | tiered | 0 | 0.00 % | With the shipped (empty) list and with a synthetic one. A positive control (`github.com`) fires on 1561 diffs, so the surface extraction is real. |
+| H062 | MEDIUM | 4 | 0.12 % | Packages that legitimately ship pacman hooks. |
+| H063 | MEDIUM | 0 | 0.00 % | An unchanged epoch never surfaces in a hunk. |
+| H064 | HIGH/MED | 0 | 0.00 % | Related name shapes suppress; cold start cannot fire. |
+| H065 | INFO | 0 | 0.00 % | Weight 0. Anchoring the check on an ANSI-C quote opener removed four regex end-anchor false positives. |
+| H067 | HIGH | 0 | 0.00 % | Architecture checks are not probes. |
+| H068 | HIGH | 0 | 0.00 % | A type check on decoded bytes, so encodings do not need enumerating. |
+| H069 | HIGH | 0 | 0.00 % | Heredoc bodies are excluded from command scanning. |
+| H071 | HIGH | 0 | 0.00 % | Command-position anchored; a client in `makedepends` is a declaration. |
+| H072 | HIGH | 0 | 0.00 % | Still zero after the execution match was widened to a path with arguments. |
+| H076 | HIGH | 0 | 0.00 % | A representative backdoor fixture goes from 25 to 50 with it. |
+| H077 | HIGH | 3 | 0.09 % | One package resolving a redirect with `curl` at the top level, which really does fetch on a metadata refresh. |
+| H078 | HIGH/MED/INFO | 6 | 0.18 % | Two introductions and four upstream key rotations. |
+| H079 | HIGH/MED | 3 | 0.09 % | One wine package that genuinely disables FORTIFY_SOURCE. |
 
 Getting D001 from 5.95 % to 0.15 % took two extractor fixes, both found by this measurement rather than by review:
 
@@ -539,24 +549,24 @@ Getting D001 from 5.95 % to 0.15 % took two extractor fixes, both found by this 
 
 Both are covered by regression tests in `tests/test_deps_rules.py`.
 
-### R062 {#r062}
+### H017 {#h017}
 
-See [R062: Install Hook Fetches Or Executes](install-and-persist.md#r062).
-
-
-### R063 {#r063}
-
-See [R063: Patch Applied From Outside The Build Tree](integrity.md#r063).
+See [H017: Install Hook Fetches Or Executes](install-and-persist.md#h017).
 
 
-### R064 {#r064}
+### H018 {#h018}
 
-See [R064: Source URL Downgraded To HTTP](integrity.md#r064).
+See [H018: Patch Applied From Outside The Build Tree](integrity.md#h018).
+
+
+### H019 {#h019}
+
+See [H019: Source URL Downgraded To HTTP](integrity.md#h019).
 
 
 ---
 
-## Temporal context rules (R065-R067) {#temporal-rules}
+## Temporal context rules (H020-H022) {#temporal-rules}
 
 Defined in `src/trustsight/analysis/temporal.py`. They inspect git commit timestamps on
 the AUR repository to surface temporal signals. None require a diff, so they
@@ -564,102 +574,102 @@ also fire on first-seen packages in `_make_fresh_analysis()` (in `pipeline.py`).
 
 All three are **on by default** with no config toggle.
 
-### R065 {#r065}
+### H020 {#h020}
 
-See [R065: Very Recent Update](temporal.md#r065).
-
-
-### R066 {#r066}
-
-See [R066: Brand New Package](temporal.md#r066).
+See [H020: Very Recent Update](temporal.md#h020).
 
 
-### R067 {#r067}
+### H021 {#h021}
 
-See [R067: Stale Package Revived](temporal.md#r067).
+See [H021: Brand New Package](temporal.md#h021).
+
+
+### H022 {#h022}
+
+See [H022: Stale Package Revived](temporal.md#h022).
 
 
 ---
 
-## Install and build context rules (R068-R070) {#install-build-rules}
+## Install and build context rules (H023-H025) {#install-build-rules}
 
 Defined in `src/trustsight/analysis/build.py` and `src/trustsight/analysis/pipeline.py`. They
 inspect the diff for changes to security-critical build and install
 infrastructure - hooks that run as root, signature verification that gets
 dropped, environment variables that subvert the compiler.
 
-### R068 {#r068}
+### H023 {#h023}
 
-See [R068: Install Hook Present](install-and-persist.md#r068).
-
-
-### R069 {#r069}
-
-See [R069: GPG Verification Removed](integrity.md#r069).
+See [H023: Install Hook Present](install-and-persist.md#h023).
 
 
-### R070 {#r070}
+### H024 {#h024}
 
-See [R070: Build Environment Subversion](integrity.md#r070).
-
-
----
-
-## Maintainer and capability rules (R071-R072) {#maintainer-capability-rules}
-
-### R071 {#r071}
-
-See [R071: Untrusted Maintainer Takeover](maintainer-and-metadata.md#r071).
+See [H024: GPG Verification Removed](integrity.md#h024).
 
 
-### R072 {#r072}
+### H025 {#h025}
 
-See [R072: Capability Density Anomaly](composition.md#r072).
+See [H025: Build Environment Subversion](integrity.md#h025).
 
 
 ---
 
-## Temporal metadata (R073) - not a scored finding {#r073}
+## Maintainer and capability rules (H026-H027) {#maintainer-capability-rules}
 
-### R073 {#r073}
+### H026 {#h026}
 
-See [R073: Accelerated Release Cadence](corpus-behavioral.md#r073).
+See [H026: Untrusted Maintainer Takeover](maintainer-and-metadata.md#h026).
 
 
----
+### H027 {#h027}
 
-## Naming rule (R074) - package-name typosquat {#r074}
-
-### R074 {#r074-rule}
-
-See [R074: Package-Name Typosquat](naming-and-dependency.md#r074-rule).
+See [H027: Capability Density Anomaly](composition.md#h027).
 
 
 ---
 
-## Dependency-set expansion rule (R075) {#r075}
+## Temporal metadata (H028) - not a scored finding {#h028}
 
-### R075 {#r075-rule}
+### H028 {#h028}
 
-See [R075: Dependency-Set Expansion](count-based.md#r075-rule).
+See [H028: Accelerated Release Cadence](corpus-behavioral.md#h028).
 
 
 ---
 
-## Install and build context rules (R081-R082) {#r081-r082}
+## Naming rule (H029) - package-name typosquat {#h029}
+
+### H029 {#h029-rule}
+
+See [H029: Package-Name Typosquat](naming-and-dependency.md#h029-rule).
+
+
+---
+
+## Dependency-set expansion rule (H030) {#h030}
+
+### H030 {#h030-rule}
+
+See [H030: Dependency-Set Expansion](count-based.md#h030-rule).
+
+
+---
+
+## Install and build context rules (H035-H036) {#h035-h036}
 
 Defined in `src/trustsight/analysis/build.py`. They inspect install hooks and
 build-function content for additional risk signals. Both are enabled by default,
 and both fire on zero diffs of the benign corpus.
 
-### R081 {#r081}
+### H035 {#h035}
 
-See [R081: Foreign Package Manager In Install Hook](install-and-persist.md#r081).
+See [H035: Foreign Package Manager In Install Hook](install-and-persist.md#h035).
 
 
-### R082 {#r082}
+### H036 {#h036}
 
-See [R082: Shell Obfuscation Density](count-based.md#r082).
+See [H036: Shell Obfuscation Density](count-based.md#h036).
 
 
 ---
@@ -700,44 +710,44 @@ See [D003: New Network-Using Makedepends](naming-and-dependency.md#d003).
 
 ---
 
-## Network-surface rules (R076, R079, R080, R087, R123, R129) {#network-surface-rules}
+## Network-surface rules (H031, H033, H034, H041, H071, H077) {#network-surface-rules}
 
 These six ask one question in different places: what does this recipe reach
 over the network, in which direction, and when.
 
-### R076 {#r076}
+### H031 {#h031}
 
-See [R076: Version-In-URL Injection](fetch-and-execution.md#r076).
-
-
-### R079 {#r079}
-
-See [R079: Moved Git Ref](integrity.md#r079).
+See [H031: Version-In-URL Injection](fetch-and-execution.md#h031).
 
 
-### R080 {#r080}
+### H033 {#h033}
 
-See [R080: Exotic Source Protocol](fetch-and-execution.md#r080).
-
-
-### R087 {#r087}
-
-See [R087: Upload To Paste Or File-Drop Host](fetch-and-execution.md#r087).
+See [H033: Moved Git Ref](integrity.md#h033).
 
 
-### R123 {#r123}
+### H034 {#h034}
 
-See [R123: Covert Egress](fetch-and-execution.md#r123).
+See [H034: Exotic Source Protocol](fetch-and-execution.md#h034).
 
 
-### R129 {#r129}
+### H041 {#h041}
 
-See [R129: Parse-time Network Fetch](fetch-and-execution.md#r129).
+See [H041: Upload To Paste Or File-Drop Host](fetch-and-execution.md#h041).
+
+
+### H071 {#h071}
+
+See [H071: Covert Egress](fetch-and-execution.md#h071).
+
+
+### H077 {#h077}
+
+See [H077: Parse-time Network Fetch](fetch-and-execution.md#h077).
 
 
 ---
 
-## Install-path persistence (R077, R084, R085, R088, R114, R128) {#persistence-rules}
+## Install-path persistence (H032, H038, H039, H042, H062, H076) {#persistence-rules}
 
 One shared write-target resolver backs this group (`analysis/persistence.py`):
 `install`/`cp`/`mv`/`ln` destinations including `-t DIR`, `>` redirects, and
@@ -745,160 +755,160 @@ the verb-substitution forms `tee`, `dd of=`, `mkdir -p`, `touch`, `rsync` and
 `sed -i`. Every match is command-position anchored, so a quoted string such as
 `'cp x ~/.zshrc'` never reads as a write.
 
-### R077 {#r077}
+### H032 {#h032}
 
-See [R077: Write To User Home Or RC](install-and-persist.md#r077).
-
-
-### R084 {#r084}
-
-See [R084: World-Writable Staging](staging-and-recon.md#r084).
+See [H032: Write To User Home Or RC](install-and-persist.md#h032).
 
 
-### R085 {#r085}
+### H038 {#h038}
 
-See [R085: Systemd ExecStart From Runtime-Writable Path](install-and-persist.md#r085).
-
-
-### R088 {#r088}
-
-See [R088: Hidden Drop](staging-and-recon.md#r088).
+See [H038: World-Writable Staging](staging-and-recon.md#h038).
 
 
-### R114 {#r114}
+### H039 {#h039}
 
-See [R114: Pacman Hook Installed](install-and-persist.md#r114).
-
-
-### R128 {#r128}
-
-See [R128: Build Writes Outside Staging Root](staging-and-recon.md#r128).
+See [H039: Systemd ExecStart From Runtime-Writable Path](install-and-persist.md#h039).
 
 
----
+### H042 {#h042}
 
-## Reconstruction and delivery (R117 to R124, R127, R132, R136 to R140) {#delivery-rules}
-
-### R117 {#r117}
-
-See [R117: Obfuscated Literal Reconstructed](obfuscation.md#r117).
+See [H042: Hidden Drop](staging-and-recon.md#h042).
 
 
-### R132 {#r132}
+### H062 {#h062}
 
-See [R132: Indirect Command Expansion](obfuscation.md#r132).
+See [H062: Pacman Hook Installed](install-and-persist.md#h062).
+
+
+### H076 {#h076}
+
+See [H076: Build Writes Outside Staging Root](staging-and-recon.md#h076).
 
 
 ---
 
-### R118 {#r118}
+## Reconstruction and delivery (H065 to H072, H075, H080, H081 to H085) {#delivery-rules}
 
-See [R118: Embedded Binary In Tree](integrity.md#r118).
+### H065 {#h065}
 
-
-### R119 {#r119}
-
-See [R119: Anti-Analysis Check](deception.md#r119).
+See [H065: Obfuscated Literal Reconstructed](obfuscation.md#h065).
 
 
-### R120 {#r120}
+### H080 {#h080}
 
-See [R120: Reconstructed Executable Payload](fetch-and-execution.md#r120).
-
-
-### R121 {#r121}
-
-See [R121: Build-time Generation Then Execution](fetch-and-execution.md#r121).
-
-
-### R122 {#r122}
-
-See [R122: Archive Trailer Anomaly](integrity.md#r122).
-
-
-### R124 {#r124}
-
-See [R124: Write Then Execute](fetch-and-execution.md#r124).
-
-
-### R127 {#r127}
-
-See [R127: Indirect Remote Execution](fetch-and-execution.md#r127).
-
-
-### R136 {#r136}
-
-See [R136: Committed File Executed Without Declaration](fetch-and-execution.md#r136).
-
-
-### R137 {#r137}
-
-See [R137: Fetch Then Execute](fetch-and-execution.md#r137).
-
-
-### R138 {#r138}
-
-See [R138: Downloaded Source File Executed](fetch-and-execution.md#r138).
-
-
-### R139 {#r139}
-
-See [R139: Service ExecStart Targets Undeclared Binary](install-and-persist.md#r139).
-
-
-### R140 {#r140}
-
-See [R140: PATH Injection With Undeclared Directory](staging-and-recon.md#r140).
+See [H080: Indirect Command Expansion](obfuscation.md#h080).
 
 
 ---
 
-## Composition (R086, R089) {#composition-rules}
+### H066 {#h066}
+
+See [H066: Embedded Binary In Tree](integrity.md#h066).
+
+
+### H067 {#h067}
+
+See [H067: Anti-Analysis Check](deception.md#h067).
+
+
+### H068 {#h068}
+
+See [H068: Reconstructed Executable Payload](fetch-and-execution.md#h068).
+
+
+### H069 {#h069}
+
+See [H069: Build-time Generation Then Execution](fetch-and-execution.md#h069).
+
+
+### H070 {#h070}
+
+See [H070: Archive Trailer Anomaly](integrity.md#h070).
+
+
+### H072 {#h072}
+
+See [H072: Write Then Execute](fetch-and-execution.md#h072).
+
+
+### H075 {#h075}
+
+See [H075: Indirect Remote Execution](fetch-and-execution.md#h075).
+
+
+### H081 {#h081}
+
+See [H081: Committed File Executed Without Declaration](fetch-and-execution.md#h081).
+
+
+### H082 {#h082}
+
+See [H082: Fetch Then Execute](fetch-and-execution.md#h082).
+
+
+### H083 {#h083}
+
+See [H083: Downloaded Source File Executed](fetch-and-execution.md#h083).
+
+
+### H084 {#h084}
+
+See [H084: Service ExecStart Targets Undeclared Binary](install-and-persist.md#h084).
+
+
+### H085 {#h085}
+
+See [H085: PATH Injection With Undeclared Directory](staging-and-recon.md#h085).
+
+
+---
+
+## Composition (H040, H043) {#composition-rules}
 
 Both are annotations. Neither adds weight, so neither can turn an UNFLAGGED package
 into a flagged one on its own.
 
-### R086 {#r086}
+### H040 {#h040}
 
-See [R086: Host Reconnaissance](staging-and-recon.md#r086).
-
-
-### R089 {#r089}
-
-See [R089: Attack-Chain Composition](composition.md#r089).
+See [H040: Host Reconnaissance](staging-and-recon.md#h040).
 
 
----
+### H043 {#h043}
 
-## Integrity and trust (R130, R131) {#integrity-trust-rules}
-
-### R130 {#r130}
-
-See [R130: Signing Key Set Changed](integrity.md#r130).
-
-
-### R131 {#r131}
-
-See [R131: Build Flags Weakened](integrity.md#r131).
+See [H043: Attack-Chain Composition](composition.md#h043).
 
 
 ---
 
-## Class B: declaration-scope rules (R115, R116) {#class-b-rules}
+## Integrity and trust (H078, H079) {#integrity-trust-rules}
 
-### R115 {#r115}
+### H078 {#h078}
 
-See [R115: Epoch Introduced](maintainer-and-metadata.md#r115).
+See [H078: Signing Key Set Changed](integrity.md#h078).
 
 
-### R116 {#r116}
+### H079 {#h079}
 
-See [R116: Provides/Replaces Scope Expansion](naming-and-dependency.md#r116).
+See [H079: Build Flags Weakened](integrity.md#h079).
 
 
 ---
 
-## Class C: longitudinal rules (R083, R094 to R098, R102) {#class-c-rules}
+## Class B: declaration-scope rules (H063, H064) {#class-b-rules}
+
+### H063 {#h063}
+
+See [H063: Epoch Introduced](maintainer-and-metadata.md#h063).
+
+
+### H064 {#h064}
+
+See [H064: Provides/Replaces Scope Expansion](naming-and-dependency.md#h064).
+
+
+---
+
+## Class C: longitudinal rules (H037, H047 to H051, H054) {#class-c-rules}
 
 Class C rules do not read a diff. They read `PropertyBreak` records from the
 corpus property layer: a value that held for many consecutive observations and
@@ -910,44 +920,44 @@ at least that many consecutive observations before a change is reported at all.
 Above the floor the weight ramps logistically, reaching roughly 0.9 by about 40
 observations.
 
-### R083 {#r083}
+### H037 {#h037}
 
-See [R083: Long-Stable Property Changed](maintainer-and-metadata.md#r083).
-
-
-### R094 {#r094}
-
-See [R094: Security-Relevant Build Flag Change](integrity.md#r094).
+See [H037: Long-Stable Property Changed](maintainer-and-metadata.md#h037).
 
 
-### R095 {#r095}
+### H047 {#h047}
 
-See [R095: Dependency Vendored Into Source](naming-and-dependency.md#r095).
-
-
-### R096 {#r096}
-
-See [R096: Source Host Changed](maintainer-and-metadata.md#r096).
+See [H047: Security-Relevant Build Flag Change](integrity.md#h047).
 
 
-### R097 {#r097}
+### H048 {#h048}
 
-See [R097: Version Scheme Changed](maintainer-and-metadata.md#r097).
-
-
-### R098 {#r098}
-
-See [R098: Package Description Changed](maintainer-and-metadata.md#r098).
+See [H048: Dependency Vendored Into Source](naming-and-dependency.md#h048).
 
 
-### R102 {#r102}
+### H049 {#h049}
 
-See [R102: Build System Changed](maintainer-and-metadata.md#r102).
+See [H049: Source Host Changed](maintainer-and-metadata.md#h049).
+
+
+### H050 {#h050}
+
+See [H050: Version Scheme Changed](maintainer-and-metadata.md#h050).
+
+
+### H051 {#h051}
+
+See [H051: Package Description Changed](maintainer-and-metadata.md#h051).
+
+
+### H054 {#h054}
+
+See [H054: Build System Changed](maintainer-and-metadata.md#h054).
 
 
 ---
 
-## Class D: corpus rules (R071, R090, R092, R093, R100, R101, R105, R107, R108, R110, R111, R112, R125, R126) {#class-d-rules}
+## Class D: corpus rules (H026, H044, H045, H046, H052, H053, H055, H057, H058, H059, H060, H061, H073, H074) {#class-d-rules}
 
 Class D rules describe the corpus, not a package. They run once per metadata
 cycle in `trustsight full-aur`, after the per-package loop, and each returns one
@@ -955,88 +965,88 @@ finding per **cluster**, with the members in `params.members`. They are silent
 without a prior snapshot: the calibration gate is
 `fire_rate(no_baseline) == 0`.
 
-### R071 {#r071-corpus}
+### H026 {#h026-corpus}
 
-See [R071: Untrusted Maintainer Takeover (corpus path)](maintainer-and-metadata.md#r071-corpus).
-
-
-### R090 {#r090}
-
-See [R090: Ownership Transition](maintainer-and-metadata.md#r090).
+See [H026: Untrusted Maintainer Takeover (corpus path)](maintainer-and-metadata.md#h026-corpus).
 
 
-### R092 {#r092}
+### H044 {#h044}
 
-See [R092: Mass Adoption](count-based.md#r092).
-
-
-### R093 {#r093}
-
-See [R093: Orphan/Adoption Dependency](corpus-behavioral.md#r093).
+See [H044: Ownership Transition](maintainer-and-metadata.md#h044).
 
 
-### R100 {#r100}
+### H045 {#h045}
 
-See [R100: Shared Source Repository](count-based.md#r100).
-
-
-### R101 {#r101}
-
-See [R101: Name/Host Consensus Divergence](naming-and-dependency.md#r101).
+See [H045: Mass Adoption](count-based.md#h045).
 
 
-### R105 {#r105}
+### H046 {#h046}
 
-See [R105: Attribute Burst](count-based.md#r105).
-
-
-### R107 {#r107}
-
-See [R107: Transitive Exposure](corpus-behavioral.md#r107).
+See [H046: Orphan/Adoption Dependency](corpus-behavioral.md#h046).
 
 
-### R108 {#r108}
+### H052 {#h052}
 
-See [R108: Maintainer Baseline Deviation](maintainer-and-metadata.md#r108).
-
-
-### R110 {#r110}
-
-See [R110: Name/Repo Divergence](naming-and-dependency.md#r110).
+See [H052: Shared Source Repository](count-based.md#h052).
 
 
-### R111 {#r111}
+### H053 {#h053}
 
-See [R111: Transitive Orphan Exposure](corpus-behavioral.md#r111).
-
-
-### R112 {#r112}
-
-See [R112: Dependency Centrality](corpus-behavioral.md#r112).
+See [H053: Name/Host Consensus Divergence](naming-and-dependency.md#h053).
 
 
-### R125 {#r125}
+### H055 {#h055}
 
-See [R125: Introduction Rate Deviation](corpus-behavioral.md#r125).
+See [H055: Attribute Burst](count-based.md#h055).
 
 
-### R126 {#r126}
+### H057 {#h057}
 
-See [R126: Adopt-then-Modify](maintainer-and-metadata.md#r126).
+See [H057: Transitive Exposure](corpus-behavioral.md#h057).
+
+
+### H058 {#h058}
+
+See [H058: Maintainer Baseline Deviation](maintainer-and-metadata.md#h058).
+
+
+### H059 {#h059}
+
+See [H059: Name/Repo Divergence](naming-and-dependency.md#h059).
+
+
+### H060 {#h060}
+
+See [H060: Transitive Orphan Exposure](corpus-behavioral.md#h060).
+
+
+### H061 {#h061}
+
+See [H061: Dependency Centrality](corpus-behavioral.md#h061).
+
+
+### H073 {#h073}
+
+See [H073: Introduction Rate Deviation](corpus-behavioral.md#h073).
+
+
+### H074 {#h074}
+
+See [H074: Adopt-then-Modify](maintainer-and-metadata.md#h074).
 
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
-R141-R143 are per-package findings, not Class D corpus findings. S001-S008
+H086-H088 are per-package findings, not Class D corpus findings. S001-S008
 and X001-X023 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
-### R141 {#r141}
+### H086 {#h086}
 
-See [R141: Adopted From Orphan](maintainer-and-metadata.md#r141).
+See [H086: Adopted From Orphan](maintainer-and-metadata.md#h086).
 
-### R142 {#r142}
+### H087 {#h087}
 
-See [R142: Recipe Changed Without Upstream](integrity.md#r142).
+See [H087: Recipe Changed Without Upstream](integrity.md#h087).
 
 ### W002 {#w002}
 
@@ -1078,41 +1088,41 @@ See [X020: Recipe Writes The Build Steps The Engine Runs](crossfire.md#x020).
 
 See [W001: Executes Code This Analysis Did Not Read](unverifiable.md#w001).
 
-### R151 {#r151}
+### H095 {#h095}
 
-See [R151: Boot Or Image Artifact Built From The Source Tree](install-and-persist.md#r151).
+See [H095: Boot Or Image Artifact Built From The Source Tree](install-and-persist.md#h095).
 
-### R150 {#r150}
+### H094 {#h094}
 
-See [R150: Unread Script Executed During Packaging](fetch-and-execution.md#r150).
+See [H094: Unread Script Executed During Packaging](fetch-and-execution.md#h094).
 
-### R149 {#r149}
+### H093 {#h093}
 
-See [R149: Committed Config Points At A Build-Only Path](install-and-persist.md#r149).
+See [H093: Committed Config Points At A Build-Only Path](install-and-persist.md#h093).
 
-### R148 {#r148}
+### H092 {#h092}
 
-See [R148: Metadata Names A Source The Recipe Does Not](integrity.md#r148).
+See [H092: Metadata Names A Source The Recipe Does Not](integrity.md#h092).
 
-### R147 {#r147}
+### H091 {#h091}
 
-See [R147: Checksum Array Shorter Than Source Array](integrity.md#r147).
+See [H091: Checksum Array Shorter Than Source Array](integrity.md#h091).
 
-### R146 {#r146}
+### H090 {#h090}
 
-See [R146: Committed Companion Carries A Fetch-Execute Payload](fetch-and-execution.md#r146).
+See [H090: Committed Companion Carries A Fetch-Execute Payload](fetch-and-execution.md#h090).
 
-### R145 {#r145}
+### H089 {#h089}
 
-See [R145: Packaged File Names A Build-Only Path](install-and-persist.md#r145).
+See [H089: Packaged File Names A Build-Only Path](install-and-persist.md#h089).
 
 ### R144 {#r144}
 
 See [R144: Packaged File Points At A World-Writable Path](install-and-persist.md#r144).
 
-### R143 {#r143}
+### H088 {#h088}
 
-See [R143: Adopted, Recipe Rewritten, Unpinned Fetch](maintainer-and-metadata.md#r143).
+See [H088: Adopted, Recipe Rewritten, Unpinned Fetch](maintainer-and-metadata.md#h088).
 
 ### X001 {#x001}
 
@@ -1225,19 +1235,19 @@ See [S008: Shell History Or Log Destruction](sabotage.md#s008).
 
 ---
 
-## Class E: indicators of compromise (R106) {#class-e-rules}
+## Class E: indicators of compromise (H056) {#class-e-rules}
 
-### R106 {#r106}
+### H056 {#h056}
 
-See [R106: Known Indicator of Compromise](corpus-behavioral.md#r106).
+See [H056: Known Indicator of Compromise](corpus-behavioral.md#h056).
 
 
 ---
 
 ## Not currently a rule {#not-rules}
 
-- **R073 (release cadence)** is metadata on the analysis record, not a scored
-  finding. See [R073](corpus-behavioral.md#r073).
+- **H028 (release cadence)** is metadata on the analysis record, not a scored
+  finding. See [H028](corpus-behavioral.md#h028).
 - **R103 and R109** describe the ruleset's ceiling rather than a detection.
   See [the novelty ceiling](../../explanation/what-trustsight-cannot-see.md).
 
@@ -1250,6 +1260,15 @@ in the shipped config or the code-emitted rule set:
   current shipped configuration. `R103`/`R109` are claimed above as the
   novelty ceiling; the rest are simply unused and may be returned to service
   when a detection needs them.
+- The ninety-five ids retired by the R/H split are **retired, not
+  recycled**. A stored report, a published baseline and a user's
+  `[rules.R###]` override can all still name an old id; handing that number
+  to an unrelated new rule would make those references quietly wrong rather
+  than loudly absent. The linter refuses a `rules.toml` entry that claims
+  one, and the reservation is derived from
+  `trustsight.rule_id_history.RENAMED_RULE_IDS` rather than restated here,
+  so this page cannot drift from what is enforced. The full mapping is in
+  [the changelog](../../changelog.md#rule-id-mapping).
 
 ---
 

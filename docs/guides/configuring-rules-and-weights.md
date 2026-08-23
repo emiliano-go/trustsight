@@ -10,7 +10,7 @@ TrustSight exposes two configuration files. Together they control which rules fi
 
 | File | Purpose |
 |------|---------|
-| `rules.toml` | Definitions for the TOML-defined R-series subset: pattern, severity, target, and scope |
+| `rules.toml` | Definitions for every R-series regex rule: pattern, severity, target, and scope |
 | `config.toml` | Global scoring parameters: `severity_weights`, `source_bucket_weights`, `novelty_weights` |
 
 Both files live in the TrustSight config directory and are read automatically on every run.
@@ -21,7 +21,8 @@ TrustSight has several rule families. Only the non-FATAL rules defined in `rules
 
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
-| **R-series** (119 rules) | `rules.toml` + code | TOML-defined non-FATAL subset only | Detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` can set `enabled` and `weight_override` only for rules that have a TOML definition. Code-emitted R rules do not read these controls. |
+| **R-series** (32 rules) | `rules.toml` | Non-FATAL rules only | Regex detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` set `enabled` and `weight_override`. Every R rule has a TOML definition, so every R rule reads these controls. |
+| **H-series** (95 rules) | Code only | No | Heuristics needing diff context a single regex cannot see. They have no `rules.toml` entry and do not read `[rules.H###]` controls. |
 | **C-series** (C001-C009) | Code only | No | Structural invariants : checksum/source coherence and related diff anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.
@@ -83,5 +84,5 @@ After editing `rules.toml` or `config.toml`:
 ## See also
 
 - [Config reference](../reference/configuration.md): full schema for both files.
-- [Rules reference](../reference/rules/index.md): per-rule defaults across the complete R/C/D/S/X catalog.
+- [Rules reference](../reference/rules/index.md): per-rule defaults across the complete R/H/C/D/S/X catalog.
 - [Tuning false positives](tuning-false-positives.md): how to fix rules that over-fire on your packages.

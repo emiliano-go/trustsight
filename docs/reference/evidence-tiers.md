@@ -17,8 +17,8 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Sources
 
-- R-series detection rules, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
-- R004/R005 checksum integrity rules (hard-coded, not TOML).
+- R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
+- H001/H002 checksum integrity rules (hard-coded, not TOML).
 - C001-C009 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.
 
@@ -31,9 +31,9 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 | Signal | Rule | Severity |
 |--------|------|----------|
 | `curl ... \| bash` | R001 | CRITICAL |
-| `sha256sums=SKIP` | R004 | HIGH / INFO |
-| `sha256sums=()` | R005 | HIGH |
-| `sudo` in function body | R009 | CRITICAL |
+| `sha256sums=SKIP` | H001 | HIGH / INFO |
+| `sha256sums=()` | H002 | HIGH |
+| `sudo` in function body | H004 | CRITICAL |
 | Unicode bidi override | R013 | FATAL |
 
 ### Benchmark

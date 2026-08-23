@@ -6,8 +6,8 @@ kind rather than over distinct kinds, and what separates them from
 [corpus behavioral](corpus-behavioral.md) is that the threshold is a
 configured constant rather than a deviation from a learned baseline.
 
-R082 counts obfuscation indicators on one line. R075 counts added
-dependencies weighted by rarity. R092, R100 and R105 count packages in a
+H036 counts obfuscation indicators on one line. H030 counts added
+dependencies weighted by rarity. H045, H052 and H055 count packages in a
 cluster. Every threshold is configurable under `[thresholds]`, and every
 one was set against the benign corpus rather than chosen.
 
@@ -21,14 +21,14 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [R075](#r075-rule) | Dependency-Set Expansion | MEDIUM |
-| [R082](#r082) | Shell Obfuscation Density | MEDIUM |
-| [R092](#r092) | Mass Adoption | HIGH |
-| [R100](#r100) | Shared Source Repository | HIGH |
-| [R105](#r105) | Attribute Burst | MEDIUM |
+| [H030](#h030-rule) | Dependency-Set Expansion | MEDIUM |
+| [H036](#h036) | Shell Obfuscation Density | MEDIUM |
+| [H045](#h045) | Mass Adoption | HIGH |
+| [H052](#h052) | Shared Source Repository | HIGH |
+| [H055](#h055) | Attribute Burst | MEDIUM |
 <!-- /generated: page-index -->
 
-### R075: Dependency-Set Expansion {#r075-rule}
+### H030: Dependency-Set Expansion {#h030-rule}
 
 - **Target:** programmatic (delta over dependency arrays × per-dep novelty)
 - **Severity:** MEDIUM (weight 15) - corpus rate 0.34 %
@@ -37,11 +37,11 @@ severity weights and the reserved identifier ranges.
 
 **Why not count alone:** Adding 5 deps that are all common (`glibc`, `qt6-base`, `cmake`) is a normal heavy build and should not fire. The signal is count **weighted by how rare/novel each added dep is**, reusing D001's `dependency_observation_count` as a rarity proxy. Novel/obscure deps push the magnitude up; common deps contribute near zero.
 
-**No double-count with D001:** R075 fires on the **aggregate pattern** (multiple rare deps appearing together), which is a materially different signal from any single dep being novel. Individual D001 per-dep firings remain untouched. This is not the R072 mistake: the aggregate condition captures a different phenomenon (co-occurrence, not individual presence).
+**No double-count with D001:** H030 fires on the **aggregate pattern** (multiple rare deps appearing together), which is a materially different signal from any single dep being novel. Individual D001 per-dep firings remain untouched. This is not the H027 mistake: the aggregate condition captures a different phenomenon (co-occurrence, not individual presence).
 
-**Origin:** Socket/Snyk dependency-surface profiling - a version bump that expands the dependency graph with obscure entries is the "expand attack surface quietly" shape. D001 already flags each novel dep individually; R075 catches the disproportionate co-occurrence.
+**Origin:** Socket/Snyk dependency-surface profiling - a version bump that expands the dependency graph with obscure entries is the "expand attack surface quietly" shape. D001 already flags each novel dep individually; H030 catches the disproportionate co-occurrence.
 
-### R082: Shell Obfuscation Density {#r082}
+### H036: Shell Obfuscation Density {#h036}
 
 - **Target:** programmatic (resolved build-function lines, position-scoped)
 - **Severity:** MEDIUM (weight 15)
@@ -64,23 +64,23 @@ for dynamic configuration). Three or more on the same line is characteristic
 of deliberately hidden behaviour: each layer adds indirection, and the density
 itself is the signal.
 
-### R092: Mass Adoption {#r092}
+### H045: Mass Adoption {#h045}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
-- **Condition:** One maintainer submitted at least `[thresholds] r092.min_packages` (default 10) packages within `r092.window_days` (default 7).
+- **Condition:** One maintainer submitted at least `[thresholds] h045.min_packages` (default 10) packages within `h045.window_days` (default 7).
 
-### R100: Shared Source Repository {#r100}
+### H052: Shared Source Repository {#h052}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
-- **Condition:** At least `[thresholds] r100.min_packages` (default 3) otherwise unrelated packages share a source repository, a new domain, or an adoption window.
+- **Condition:** At least `[thresholds] h052.min_packages` (default 3) otherwise unrelated packages share a source repository, a new domain, or an adoption window.
 
-### R105: Attribute Burst {#r105}
+### H055: Attribute Burst {#h055}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
-- **Condition:** At least `[thresholds] r105.min_packages` (default 5) packages sharing a maintainer were modified within `r105.window_hours` (default 24).
+- **Condition:** At least `[thresholds] h055.min_packages` (default 5) packages sharing a maintainer were modified within `h055.window_hours` (default 24).
 
-Only modified packages count. R092 already claims the added-package clusters,
+Only modified packages count. H045 already claims the added-package clusters,
 so counting additions here would report the same maintainer twice.

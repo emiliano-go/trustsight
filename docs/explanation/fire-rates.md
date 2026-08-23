@@ -44,12 +44,12 @@ The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retai
 | R001 | Remote Script Execution | CRITICAL | ~0 % | Extremely rare on benign diffs |
 | R002 | Wget Pipe to Shell | CRITICAL | ~0 % | |
 | R003 | Base64 Decode and Execute | CRITICAL | ~0 % | |
-| R004 | Checksum Disabled | HIGH/INFO | <1 % | Corpus-dependent |
-| R005 | Checksum Emptied | HIGH | ~0 % | |
-| R006 | Insecure Download Protocol | LOW | Not yet published | Added `http://` source without newly added checksum backing; programmatic, diff-aware rule |
+| H001 | Checksum Disabled | HIGH/INFO | <1 % | Corpus-dependent |
+| H002 | Checksum Emptied | HIGH | ~0 % | |
+| H003 | Insecure Download Protocol | LOW | Not yet published | Added `http://` source without newly added checksum backing; programmatic, diff-aware rule |
 | R007 | Install File Modification | MEDIUM | <2 % | |
 | R008 | Unexpected File Download | HIGH | ~0 % | |
-| R009 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |
+| H004 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |
 | R010 | Uses curl in PKGBUILD | LOW | <2 % | |
 | R011 | Uses wget in PKGBUILD | LOW | <2 % | |
 | R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
@@ -121,21 +121,21 @@ Measured against the 3246-diff benign corpus with a 209,909-name dependency seed
 | D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3246 | Refined by D001; bounded by edit-distance threshold |
 | D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3246 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
 | D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
-| R075 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Measured with a seeded database (209,909-name seed). Well under the 30% gate. |
+| H030 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Measured with a seeded database (209,909-name seed). Well under the 30% gate. |
 
-## Code-emitted rules (R060-R064)
+## Code-emitted rules (H015-H019)
 
 Measured against the 3246-diff benign corpus. All are enabled by default.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| R060 | Build Function Modified | INFO | 21.4 % | 694/3246 | INFO severity, weight 0. No narrowing reaches triage quality: restricting to unchanged `pkgver` still leaves 11.6 %; a version bump that also edits `build()` is 9.8 %. Harmless at weight 0, useful as reviewer context |
-| R061 | Hidden Network Fetch In Build | HIGH | 0.22 % | 7/3246 | Real build-time downloads (apple-fonts, ttf-ms-win-\*, gamescope-nvidia): the behaviour the rule exists to surface |
-| R062 | Install Hook Fetches/Executes | HIGH | 0.09 % | 3/3246 | All `mullvad-vpn-bin`, which sets a setuid bit and enables a systemd unit from `post_install()`. Real privileged behaviour |
-| R063 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3246 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
-| R064 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3246 | `transset-df`: a genuine https to http downgrade |
+| H015 | Build Function Modified | INFO | 21.4 % | 694/3246 | INFO severity, weight 0. No narrowing reaches triage quality: restricting to unchanged `pkgver` still leaves 11.6 %; a version bump that also edits `build()` is 9.8 %. Harmless at weight 0, useful as reviewer context |
+| H016 | Hidden Network Fetch In Build | HIGH | 0.22 % | 7/3246 | Real build-time downloads (apple-fonts, ttf-ms-win-\*, gamescope-nvidia): the behaviour the rule exists to surface |
+| H017 | Install Hook Fetches/Executes | HIGH | 0.09 % | 3/3246 | All `mullvad-vpn-bin`, which sets a setuid bit and enables a systemd unit from `post_install()`. Real privileged behaviour |
+| H018 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3246 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
+| H019 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3246 | `transset-df`: a genuine https to http downgrade |
 
-## Temporal context rules (R065-R067)
+## Temporal context rules (H020-H022)
 
 These rules inspect git commit timestamps rather than diff content, so they
 are inherently time-of-run dependent and cannot be calibrated against the
@@ -143,42 +143,42 @@ static corpus. Fire rates vary per database and per run.
 
 | Rule | Name | Sev | Condition | Notes |
 |------|------|-----|-----------|-------|
-| R065 | Very Recent Update | INFO | HEAD commit < 72 h old | Depends on when you run the tool. |
-| R066 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
-| R067 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
+| H020 | Very Recent Update | INFO | HEAD commit < 72 h old | Depends on when you run the tool. |
+| H021 | Brand New Package | INFO | Root commit < 30 days old | Small shifting set; not corpus-calibrated. |
+| H022 | Stale Package Revived | MEDIUM | Gap to last analyzed > 365 days | Depends on age of your local database. |
 
-## Install, maintainer, and naming rules (R068-R072, R074, R081-R082)
+## Install, maintainer, and naming rules (H023-H027, H029, H035-H036)
 
 These rules are defined in `src/trustsight/analysis/build.py`,
 `src/trustsight/analysis/temporal.py`, and `src/trustsight/analysis/pipeline.py`.
 Fire rates marked "TBD" require a live git
-repository and cannot be measured against the static corpus; R071
+repository and cannot be measured against the static corpus; H026
 falls in this category.
 
 The measured-fire-rate table in the [rules reference](../reference/rules/system.md#experimental-fire-rates)
-records the remaining code-emitted rules (R083-R131) that were calibrated after this page was written;
+records the remaining code-emitted rules (H037-H079) that were calibrated after this page was written;
 they are not repeated here.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| R068 | Install Hook Present | INFO | 20.95 % | 680/3246 | INFO weight 0; 30% gate does not apply. 1 in 5 PKGBUILDs declare an install hook. |
-| R069 | GPG Verification Removed | HIGH | 0.03 % | 1/3246 | Near-zero; matches the predicted rate. Well under the 30% gate. |
-| R070 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3246 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
-| R071 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
-| R072 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
-| R074 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
-| R081 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
-| R082 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
+| H023 | Install Hook Present | INFO | 20.95 % | 680/3246 | INFO weight 0; 30% gate does not apply. 1 in 5 PKGBUILDs declare an install hook. |
+| H024 | GPG Verification Removed | HIGH | 0.03 % | 1/3246 | Near-zero; matches the predicted rate. Well under the 30% gate. |
+| H025 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3246 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
+| H026 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
+| H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
+| H029 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
+| H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
+| H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 
-## Temporal metadata rule (R073)
+## Temporal metadata rule (H028)
 
-R073 is metadata only; it is never appended to `triggered_rules` and
+H028 is metadata only; it is never appended to `triggered_rules` and
 contributes nothing to the score. It requires live git history and cannot
 be measured against the static corpus.
 
 | Rule | Name | Type | Fire rate | Hits | Notes |
 |------|------|------|-----------|------|-------|
-| R073 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
+| H028 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
 
 ## Structural rules (C001-C009)
 

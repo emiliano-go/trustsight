@@ -4,6 +4,105 @@ description: Release history for TrustSight: what changed in each version, and w
 
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- **Rule ids now say how a rule works: `R` is a regex, `H` is a heuristic.**
+  The `R` prefix used to mean only "a detection rule". Some `R` ids were
+  patterns in `rules.toml` that an operator could read, tune or disable; others
+  were emitted from analysis code and could not be touched from a config file at
+  all. Nothing in the id distinguished them, so "look up the rule and adjust it"
+  was advice that worked for some ids and silently failed for others.
+
+  The ninety-five programmatic ids are renamed to `H001`-`H095`. The
+  thirty-two ids declared in `rules.toml` keep their `R` prefix, and after this
+  release every `R` id is something you can find and edit in that file. No
+  exceptions, which is the point: the prefix is now a fact about the rule rather
+  than a fact about when it was added.
+
+  The `S`, `X`, `C`, `D`, `W` and `P` families are untouched.
+
+    - **The mapping is derived, not hand-written.** It is the catalog minus the
+      shipped rule set, computed once by `scripts/rule_id_mapping.py` and frozen
+      into `trustsight.rule_id_history`. A hand-maintained list would be a second
+      list that has to agree with the catalog, which is the defect class this
+      release is cleaning up rather than repeating.
+    - **Stored ids are migrated on first open.** Alert de-duplication keys on
+      `(package_name, rule_id)`, so without a migration the first run after
+      upgrading would treat every previously-seen alert as new and re-notify for
+      the whole watchlist. `alert_state` and `triggered_rules` are rewritten, and
+      the database is stamped with a schema version so the rewrite runs once.
+    - **Baselines and reports published before this release name the old ids.**
+      `trustsight.rule_id_history.current_id` translates one, for artifacts that
+      are read but never rewritten.
+    - **Retired ids are not recycled.** The rename frees ninety-five `R`
+      numbers, and a stored report, a published baseline or a `[rules.R###]`
+      override can still name one. Handing `R060` to an unrelated new rule
+      would make those references quietly wrong rather than loudly absent, so
+      the linter reserves every retired id and refuses a `rules.toml` entry
+      that claims one.
+    - **Weights, severities, thresholds and behaviour are unchanged.** No rule
+      fires differently; only its name changed.
+
+### Fixed
+
+- **The test suite no longer hangs.** A full run stalled indefinitely instead
+  of finishing. `test_watch_stops_cleanly_on_interrupt` patches
+  `run_baseline_build`; under a full run the patch stopped applying, the real
+  function ran, and the suite sat downloading the live AUR metadata dump
+  behind a 300-second timeout. It never failed - it waited, with no failing
+  assertion to point at.
+
+  The suite now runs offline by construction: `TRUSTSIGHT_OFFLINE` is set for
+  every test and outbound sockets are blocked, so a missing mock raises
+  immediately and names the frame that reached for the network. A full run
+  finishes in about 85 seconds.
+
+    - **The cause of most of it was one test.** A lint test deleted every
+      `trustsight*` entry from `sys.modules` to check an attribute is built
+      lazily, and never restored them. After that, a later test's
+      `monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)` patched a
+      different module object from the one its own imports were bound to:
+      `init_db()` created tables in a temporary directory while
+      `get_connection()` opened the operator's real database. That single
+      leak accounted for twenty-seven failures across three files, none of
+      which named the test that caused them - including a `H064` cold-start
+      failure that looked like a rule bug and was not one.
+    - **The guard is a `BaseException`.** `run_watch` treats a failed cycle as
+      a network blip and retries forever when the cycle count is zero, so a
+      guard that ordinary error handling can swallow turns a stall into a
+      spin.
+
+#### Rule id mapping
+
+| Old | New | Old | New | Old | New | Old | New |
+|---|---|---|---|---|---|---|---|
+| `R004` | `H001` | `R070` | `H025` | `R096` | `H049` | `R125` | `H073` |
+| `R005` | `H002` | `R071` | `H026` | `R097` | `H050` | `R126` | `H074` |
+| `R006` | `H003` | `R072` | `H027` | `R098` | `H051` | `R127` | `H075` |
+| `R009` | `H004` | `R073` | `H028` | `R100` | `H052` | `R128` | `H076` |
+| `R014` | `H005` | `R074` | `H029` | `R101` | `H053` | `R129` | `H077` |
+| `R016` | `H006` | `R075` | `H030` | `R102` | `H054` | `R130` | `H078` |
+| `R018` | `H007` | `R076` | `H031` | `R105` | `H055` | `R131` | `H079` |
+| `R019` | `H008` | `R077` | `H032` | `R106` | `H056` | `R132` | `H080` |
+| `R020` | `H009` | `R079` | `H033` | `R107` | `H057` | `R136` | `H081` |
+| `R021` | `H010` | `R080` | `H034` | `R108` | `H058` | `R137` | `H082` |
+| `R022` | `H011` | `R081` | `H035` | `R110` | `H059` | `R138` | `H083` |
+| `R023` | `H012` | `R082` | `H036` | `R111` | `H060` | `R139` | `H084` |
+| `R024` | `H013` | `R083` | `H037` | `R112` | `H061` | `R140` | `H085` |
+| `R025` | `H014` | `R084` | `H038` | `R114` | `H062` | `R141` | `H086` |
+| `R060` | `H015` | `R085` | `H039` | `R115` | `H063` | `R142` | `H087` |
+| `R061` | `H016` | `R086` | `H040` | `R116` | `H064` | `R143` | `H088` |
+| `R062` | `H017` | `R087` | `H041` | `R117` | `H065` | `R145` | `H089` |
+| `R063` | `H018` | `R088` | `H042` | `R118` | `H066` | `R146` | `H090` |
+| `R064` | `H019` | `R089` | `H043` | `R119` | `H067` | `R147` | `H091` |
+| `R065` | `H020` | `R090` | `H044` | `R120` | `H068` | `R148` | `H092` |
+| `R066` | `H021` | `R092` | `H045` | `R121` | `H069` | `R149` | `H093` |
+| `R067` | `H022` | `R093` | `H046` | `R122` | `H070` | `R150` | `H094` |
+| `R068` | `H023` | `R094` | `H047` | `R123` | `H071` | `R151` | `H095` |
+| `R069` | `H024` | `R095` | `H048` | `R124` | `H072` |  |  |
+
 ## [0.13.2] - 2026-08-15
 
 ### Added
@@ -2811,7 +2910,7 @@ description: Release history for TrustSight: what changed in each version, and w
   zip end-of-central-directory record produce a stamped R122 finding,
   surfaced exactly like the R118-tree scan results. The review path still
   never downloads PKGBUILD-declared URLs, so R122 only ever sees the AUR's
-  own snapshot tarballs; see [rules.md](reference/rules/integrity.md#r122).
+  own snapshot tarballs; see [rules.md](reference/rules/integrity.md#h070).
 - **The malicious corpus is committed source.** All 164 malicious `.diff`
   bodies are now committed (a gitignore override for
   `tests/fixtures/malicious/`), so a fresh clone runs the recall and
@@ -4145,3 +4244,4 @@ reconciliation.
 [0.13.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.0
 [0.13.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.1
 [0.13.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.2
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.13.2...HEAD

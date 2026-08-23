@@ -58,13 +58,13 @@ The maturity gate scales novelty weights by the database-wide effective observat
 
 The score breakdown in `trustsight inspect` groups signals into four evidence tiers. Each tier represents a fundamentally different kind of information:
 
-### Tier A : Structural (R/C/D/S/X rules)
+### Tier A : Structural (R/H/C/D/S/X rules)
 
 Pattern-matched from the PKGBUILD diff. These are direct, observable facts about what the build script does:
 
 - `curl ... | bash` (R001, CRITICAL)
-- checksum set to `SKIP` (R004, HIGH or INFO)
-- `sudo` inside a function body (R009, CRITICAL)
+- checksum set to `SKIP` (H001, HIGH or INFO)
+- `sudo` inside a function body (H004, CRITICAL)
 - unicode bidi override characters (R013, FATAL)
 
 Tier A signals are the strongest evidence. CRITICAL recall is **100 %**: every CRITICAL-class sample in the benchmark corpus is detected.
@@ -78,7 +78,7 @@ Tier A signals are the strongest evidence. CRITICAL recall is **100 %**: every C
 
 R012's low recall is intentional. It is a tripwire: when it fires, you know something is almost certainly malicious. When it does not, nothing can be concluded. Attackers have too many ways to rephrase injection payloads.
 
-Rules span the R-series detection rules, C-series structural rules, D-series dependency rules, S-series sabotage rules, and X-series crossfire rules. The complete inventory, including reserved gaps and declared-practice P-series findings, is maintained in the [rules reference](../reference/rules/index.md).
+Rules span the R-series regex rules, the H-series heuristics, C-series structural rules, D-series dependency rules, S-series sabotage rules, and X-series crossfire rules. The complete inventory, including reserved gaps and declared-practice P-series findings, is maintained in the [rules reference](../reference/rules/index.md).
 
 ### Tier B : Priors / Context (source bucket classification)
 
@@ -132,7 +132,7 @@ Verification evidence is computed from the static post-diff text available to th
 Example from `trustsight inspect`:
 
 ```
-+25 HIGH R004 Checksum Disabled: sha256sums=SKIP
++25 HIGH H001 Checksum Disabled: sha256sums=SKIP
 ```
 
 Break this down left to right:
@@ -141,7 +141,7 @@ Break this down left to right:
 |------|---------|
 | `+25` | Weight contributed to the total score. Never negative: nothing lowers a score. `0` marks an annotation, a coverage gap, or a declared-practice `P` finding. |
 | `HIGH` | Severity tier. Determines the weight magnitude. Order: INFO (0) < LOW (5) < MEDIUM (15) < HIGH (25) < CRITICAL (40) < FATAL (hard-stop at 100). |
-| `R004` | Rule identifier from the published R/C/D/S/X catalog; P001-P008 are declared-practice findings and W001-W006 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
+| `H001` | Rule identifier from the published R/H/C/D/S/X catalog; P001-P008 are declared-practice findings and W001-W006 are unverifiable findings; SOURCE_BUCKET, NOVELTY and COVERAGE are structural categories. |
 | `Checksum Disabled` | Rule name. |
 | `sha256sums=SKIP` | Match reason : the exact text or summary that triggered the rule. |
 
@@ -221,7 +221,7 @@ Output:
 │                        https://sketchy-cdn.example.com/payload.tar.gz      │
 │                                                                            │
 │       Rules Triggered                                                      │
-│                        R004 +25 HIGH Checksum Disabled:                    │
+│                        H001 +25 HIGH Checksum Disabled:                    │
 │                        sha256sums=('SKIP')                                 │
 │                        SOURCE_BUCKET +20 MEDIUM Source URL classified as   │
 │                        unknown                                             │

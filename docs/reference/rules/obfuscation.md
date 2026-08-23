@@ -1,15 +1,15 @@
 # Obfuscation
 
 The recipe hides what it does from whoever reads it. Encoding (R003, R043,
-R045), runtime assembly (R025, R039, R040) and name indirection (R132) are
+R045), runtime assembly (H014, R039, R040) and name indirection (H080) are
 all the same move: the line a reviewer sees is not the command that runs.
 
-R117 is the counterpart rather than a detection. The tokenizer rebuilds
+H065 is the counterpart rather than a detection. The tokenizer rebuilds
 these forms so the other rules match on meaning rather than spelling, and
-R117 is what tells the reader the reconstruction happened, so the report
+H065 is what tells the reader the reconstruction happened, so the report
 never quotes text the file does not contain.
 
-Density, not shape, is [R082](count-based.md#r082): three or more
+Density, not shape, is [H036](count-based.md#h036): three or more
 indicators on one line, counted rather than pattern-matched. Integrity
 checks that read as hiding (a hidden drop, an archive trailer) belong to
 [staging and reconnaissance](staging-and-recon.md) and
@@ -25,14 +25,14 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [H014](#h014) | Eval or Exec Usage | MEDIUM |
+| [H065](#h065) | Obfuscated Literal Reconstructed | INFO |
+| [H080](#h080) | Indirect Command Expansion | CRITICAL |
 | [R003](#r003) | Base64 Decode and Execute | CRITICAL |
-| [R025](#r025) | Eval or Exec Usage | MEDIUM |
 | [R039](#r039) | Eval With Dynamic Content | CRITICAL |
 | [R040](#r040) | Shell -c With Dynamic Payload | CRITICAL |
 | [R043](#r043) | Base64 Blob Decode | CRITICAL |
 | [R045](#r045) | Binary Encoding Pipe | MEDIUM |
-| [R117](#r117) | Obfuscated Literal Reconstructed | INFO |
-| [R132](#r132) | Indirect Command Expansion | CRITICAL |
 <!-- /generated: page-index -->
 
 ### R003: Base64 Decode and Execute {#r003}
@@ -44,7 +44,7 @@ severity weights and the reserved identifier ranges.
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
-### R025: Eval or Exec Usage {#r025}
+### H014: Eval or Exec Usage {#h014}
 
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
@@ -86,14 +86,14 @@ severity weights and the reserved identifier ranges.
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
-### R117: Obfuscated Literal Reconstructed {#r117}
+### H065: Obfuscated Literal Reconstructed {#h065}
 
 - **Severity:** INFO (weight 0)
 - **Category:** `obfuscation`
 - **Condition:** An added line changes under literal reconstruction (ANSI-C hex `$'\x62\x75\x6e'`, ANSI-C octal, empty-quote concatenation `b''u''n`, `$(printf '\x62...')`) and the reconstruction reveals a word the raw line did not carry, or an ANSI-C quote survives reconstruction.
 
-The tokenizer rebuilds these forms so that R081, R003 and R039 match on what a
-line *means* rather than how it is spelled. R117 is what tells the reader that
+The tokenizer rebuilds these forms so that H035, R003 and R039 match on what a
+line *means* rather than how it is spelled. H065 is what tells the reader that
 this happened: without it the report quotes text the file does not contain. It
 carries no weight, so it cannot move a score; it changes what the reader is
 looking at.
@@ -103,7 +103,7 @@ Unreconstructable input is never read as UNFLAGGED.
 
 Fire rate: 0 of 3246.
 
-### R132: Indirect Command Expansion {#r132}
+### H080: Indirect Command Expansion {#h080}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
@@ -111,7 +111,7 @@ Fire rate: 0 of 3246.
 
 `${!C}` expands to the *value of the variable whose name is held in `C`*, so
 `C=curl; ${!C} URL | bash` executes `curl` while the recipe carries no literal
-`curl` and no literal shell on the line R001/R002/R129/R121 read. The tokenizer
+`curl` and no literal shell on the line R001/R002/H077/H069 read. The tokenizer
 refuses to evaluate indirection statically, so the obfuscated line reaches the
 rules verbatim and every literal-match rule steps over it: flagging the
 indirection itself closes that whole family at once.

@@ -29,7 +29,7 @@ route to somewhere else.
 None of these commands is rare in a PKGBUILD. `rm -rf` is *normal*: nearly
 every recipe clears `$srcdir` or prunes `$pkgdir` before packaging. A rule on
 `rm -rf` would fire on a large fraction of the corpus and have to be weighted
-into uselessness, which is the same trap [R081](install-and-persist.md#r081)
+into uselessness, which is the same trap [H035](install-and-persist.md#h035)
 avoids by staying out of build functions.
 
 So every rule here is written against a distinction rather than a command:
@@ -145,7 +145,7 @@ ones that keep a machine reachable, logged and firewalled: `sshd`,
 `auditd`, `rsyslog`, `apparmor`, `selinux`, `fail2ban`, `dbus`, `polkit`.
 
 `systemctl enable` is deliberately absent: that is persistence, and
-[R081](install-and-persist.md#r081) and R062 already claim it. `isolate` and
+[H035](install-and-persist.md#h035) and H017 already claim it. `isolate` and
 the power verbs are included whatever the target, because nothing a package
 build legitimately does reboots the machine.
 
@@ -170,4 +170,4 @@ file is how a miner is installed, not how one is mentioned.
 Anti-forensics, and MEDIUM because on its own it is weak evidence: a
 misguided recipe might clear history for tidiness. Its value is compositional
 - erasing the record of what ran is a strong signal *beside* something that
-ran, and R072 counts capability spread across families.
+ran, and H027 counts capability spread across families.

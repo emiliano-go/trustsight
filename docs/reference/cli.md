@@ -73,7 +73,7 @@ Discovery uses a local AUR metadata snapshot by default:
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
 2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded and the run stops there, since there is nothing to compare against yet. Later runs reuse the snapshot until it is older than `[discovery] metadata_ttl_minutes` (default 60), then refetch it: the version a review compares against is the snapshot's, so a snapshot left to age reports a machine with pending updates as fully current. A refresh that cannot reach the AUR keeps the snapshot on disk and warns that a package updated since then will not be reported.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
-4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the published R/C/D/S/X rule families, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
+4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the published R/H/C/D/S/X rule families, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints one panel per package, and a summary line counting what needed review separately from what was read.
 
 With `--deps` the subject changes: step 3's outdated set becomes the *roots* of a dependency closure walked to `--depth`, and it is the dependencies that are analysed and printed, each naming the packages that require it.
@@ -629,7 +629,7 @@ Use `--export` to produce a shareable baseline that other TrustSight instances c
 1. Fetch the AUR metadata snapshot and diff it against the stored copy.
 2. Download and analyse the PKGBUILDs of everything added or changed.
 3. Run the Class D corpus sweep over the whole metadata delta, which returns one finding per cluster rather than one per member.
-4. Record the cycle into the adoption feed that R125's introduction-rate baseline reads.
+4. Record the cycle into the adoption feed that H073's introduction-rate baseline reads.
 5. Report the packages that scored 40 or more this cycle, worst first.
 
 The first cycle of a fresh install is a bootstrap: with no prior snapshot there is nothing to deviate from, so the corpus sweep is silent by construction.
@@ -688,7 +688,7 @@ trustsight import-baseline <path>
 
 Manage IOC federation baselines.  Baselines are signed or unsigned directories
 containing `manifest.json` and `iocs.jsonl`; they supplement the local
-`iocs.toml` used by R106.
+`iocs.toml` used by H056.
 
 ```
 trustsight ioc sources
@@ -722,7 +722,7 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 
 ## trustsight corpus pivot
 
-Given one indicator, list every corpus package that references it. This inverts R106: instead of asking what a single package carries, it asks who points at a published indicator, which is the question an advisory creates.
+Given one indicator, list every corpus package that references it. This inverts H056: instead of asking what a single package carries, it asks who points at a published indicator, which is the question an advisory creates.
 
 ```
 trustsight corpus pivot <indicator> [--json]

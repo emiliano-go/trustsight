@@ -1,9 +1,9 @@
 # Integrity and Verification
 
 A verification the recipe carried is weakened, removed, or cannot cover
-what it claims to. The checksum rules (R004, R005, C001 to C005) and the
-signature rules (R014, R069, R130) are the core; the build-flag rules
-(R019, R049, R050, R070, R094, R131) are the same claim applied to
+what it claims to. The checksum rules (H001, H002, C001 to C005) and the
+signature rules (H005, H024, H078) are the core; the build-flag rules
+(H008, R049, R050, H025, H047, H079) are the same claim applied to
 mitigations rather than to sources.
 
 The asymmetry is deliberate throughout. Declaring verification costs an
@@ -29,28 +29,28 @@ severity weights and the reserved identifier ranges.
 | [C005](#c005) | Binary Artifact From Untrusted Source | MEDIUM |
 | [C008](#c008) | Unread Content Moved Under A Stable Version | HIGH |
 | [C009](#c009) | Unread Content Moved With The Version | INFO |
-| [R004](#r004) | Checksum Disabled | HIGH |
-| [R005](#r005) | Checksum Emptied | HIGH |
-| [R014](#r014) | validpgpkeys Added | MEDIUM |
-| [R019](#r019) | Suspicious Environment Variable | MEDIUM |
+| [H001](#h001) | Checksum Disabled | HIGH |
+| [H002](#h002) | Checksum Emptied | HIGH |
+| [H005](#h005) | validpgpkeys Added | MEDIUM |
+| [H008](#h008) | Suspicious Environment Variable | MEDIUM |
+| [H018](#h018) | Patch Applied From Outside The Build Tree | HIGH |
+| [H019](#h019) | Source URL Downgraded To HTTP | MEDIUM |
+| [H024](#h024) | GPG Verification Removed | HIGH |
+| [H025](#h025) | Build Environment Subversion | HIGH |
+| [H033](#h033) | Moved Git Ref | HIGH |
+| [H047](#h047) | Security-Relevant Build Flag Change | HIGH |
+| [H066](#h066) | Embedded Binary In Tree | HIGH |
+| [H070](#h070) | Archive Trailer Anomaly | HIGH |
+| [H078](#h078) | Signing Key Set Changed | HIGH |
+| [H079](#h079) | Build Flags Weakened | HIGH |
+| [H087](#h087) | Recipe Changed Without Upstream | MEDIUM |
+| [H091](#h091) | Checksum Array Shorter Than Source Array | HIGH |
+| [H092](#h092) | Metadata Names A Source The Recipe Does Not | HIGH |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
-| [R063](#r063) | Patch Applied From Outside The Build Tree | HIGH |
-| [R064](#r064) | Source URL Downgraded To HTTP | MEDIUM |
-| [R069](#r069) | GPG Verification Removed | HIGH |
-| [R070](#r070) | Build Environment Subversion | HIGH |
-| [R079](#r079) | Moved Git Ref | HIGH |
-| [R094](#r094) | Security-Relevant Build Flag Change | HIGH |
-| [R118](#r118) | Embedded Binary In Tree | HIGH |
-| [R122](#r122) | Archive Trailer Anomaly | HIGH |
-| [R130](#r130) | Signing Key Set Changed | HIGH |
-| [R131](#r131) | Build Flags Weakened | HIGH |
-| [R142](#r142) | Recipe Changed Without Upstream | MEDIUM |
-| [R147](#r147) | Checksum Array Shorter Than Source Array | HIGH |
-| [R148](#r148) | Metadata Names A Source The Recipe Does Not | HIGH |
 <!-- /generated: page-index -->
 
-### R004: Checksum Disabled {#r004}
+### H001: Checksum Disabled {#h001}
 
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25), downgraded to INFO (weight 0) if justified
@@ -59,7 +59,7 @@ severity weights and the reserved identifier ranges.
 - **Justification:** Severity is downgraded to INFO if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), `validpgpkeys` declaration, or DKMS reference. Justification checked via `is_skip_justified()` in `src/trustsight/differ.py`.
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml` because checksum integrity is foundational to the scoring model.
 
-### R005: Checksum Emptied {#r005}
+### H002: Checksum Emptied {#h002}
 
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25)
@@ -67,14 +67,14 @@ severity weights and the reserved identifier ranges.
 - **Condition:** Fires when `sha256sums=()` appears in the diff (array set to empty).
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml`.
 
-### R014: validpgpkeys Added {#r014}
+### H005: validpgpkeys Added {#h005}
 
-R014 is retained as a documentation anchor for a retired rule. It is not in the
+H005 is retained as a documentation anchor for a retired rule. It is not in the
 shipped ruleset and emits no finding. A post-diff `validpgpkeys` declaration is
 reported as `P002` at weight 0; changes to an existing signing-key set are
-handled by R130, and removal is handled by R069.
+handled by H078, and removal is handled by H024.
 
-### R019: Suspicious Environment Variable {#r019}
+### H008: Suspicious Environment Variable {#h008}
 
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
@@ -104,7 +104,7 @@ handled by R130, and removal is handled by R069.
 
 - **Severity:** CRITICAL (weight 40)
 - **Condition:** A checksum array line is deleted, no replacement checksum line is added, **and** the source URL set is unchanged.
-- **Description:** Distinct from R005 (`sha256sums=()` added, array emptied in place): here the declaration disappears from the file entirely, leaving makepkg with nothing to verify against a source that itself did not change. Detected by `detect_checksum_removed()` in `src/trustsight/differ.py`.
+- **Description:** Distinct from H002 (`sha256sums=()` added, array emptied in place): here the declaration disappears from the file entirely, leaving makepkg with nothing to verify against a source that itself did not change. Detected by `detect_checksum_removed()` in `src/trustsight/differ.py`.
 
 ### C005: Binary Artifact From Untrusted Source {#c005}
 
@@ -122,7 +122,7 @@ is real: a checksummed tarball's bytes are not in the diff, so a recipe can
 look untouched while the code it builds is replaced. What *is* in the diff is
 the carrier's **identity** - the checksum, the commit, the object id - and a
 change to that with no version change is the same event
-[R079](#r079) already claims for a git ref and
+[H033](#h033) already claims for a git ref and
 [C001](#c001) for a checksum.
 
 Two carriers had no such claim. A submodule gitlink names code the repository
@@ -130,7 +130,7 @@ does not contain; an LFS pointer names bytes that are not there either.
 Moving one is a content change with no content in the diff, which is exactly
 the shape that reads as "nothing happened".
 
-The version distinguishes the two readings, as it does for R079: an upstream
+The version distinguishes the two readings, as it does for H033: an upstream
 bump moves the pointer *and* the version, while moving it under a stable
 version means anyone who already built this version gets different code than
 anyone who builds it now.
@@ -160,7 +160,7 @@ behind the pointer changed even though no content appears in the diff.
 - **Pattern:** `\b(?:CFLAGS|CXXFLAGS|LDFLAGS)\s*\+?=.*(?:-fno-stack-protector|-z\s*execstack)`
 - **Description:** Detects removal of stack-protector or NX protections from the build flags.
 
-### R063: Patch Applied From Outside The Build Tree {#r063}
+### H018: Patch Applied From Outside The Build Tree {#h018}
 
 - **Target:** programmatic (resolved command lines)
 - **Severity:** HIGH (weight 25)
@@ -175,7 +175,7 @@ patch -p1 -i "$srcdir/fix.patch"                   # does not fire
 
 This rule deliberately does **not** check membership of `source=()`. Patches routinely arrive inside the extracted tarball, so absence from `source=()` does not mean a patch is undeclared, and no static check can separate the two. That broader form was measured at 2.13 % of benign diffs; asking where the input comes from instead measures 0.00 %.
 
-### R064: Source URL Downgraded To HTTP {#r064}
+### H019: Source URL Downgraded To HTTP {#h019}
 
 - **Target:** programmatic (diff-aware)
 - **Severity:** MEDIUM (weight 15)
@@ -184,7 +184,7 @@ This rule deliberately does **not** check membership of `source=()`. Patches rou
 
 Distinguishing a downgrade from a URL that was always http needs both sides of the diff, which is why `extract_source_array_urls()` takes a `side` parameter.
 
-### R069: GPG Verification Removed {#r069}
+### H024: GPG Verification Removed {#h024}
 
 - **Target:** programmatic (diff-aware)
 - **Severity:** HIGH (weight 25) - corpus rate 0.03 %
@@ -195,7 +195,7 @@ Distinguishing a downgrade from a URL that was always http needs both sides of t
 
 This is the exact inverse of the declared evidence. `detect_verification_evidence`
 emits `P002` at weight 0 when signatures are present, reporting the claim without
-crediting it; R069 adds a scoring signal when that protection is **removed**.
+crediting it; H024 adds a scoring signal when that protection is **removed**.
 The asymmetry is deliberate: declaring verification costs an attacker nothing,
 but removing it is a change to the recipe's own prior behaviour, which is
 evidence. Dropping GPG verification is a strong supply-chain signal with
@@ -206,14 +206,14 @@ verification.
 tools treat a dropped integrity check as a critical signal. npm's `audit
 signatures` command rejects packages whose registry ECDSA signature is missing
 or mismatched; pnpm's content-addressable store refuses to link corrupted
-files. R069 is the AUR analogue: `validpgpkeys` being removed means the
+files. H024 is the AUR analogue: `validpgpkeys` being removed means the
 package dismantled a verification layer it previously had.
 
 **Scope:** DELTA-scoped - fires on `validpgpkeys` *transitioning* from
 populated to empty/absent, following the same structure as
 `detect_checksum_changes` and `detect_checksum_removed` in `differ.py`.
 
-### R070: Build Environment Subversion {#r070}
+### H025: Build Environment Subversion {#h025}
 
 - **Target:** programmatic (resolved lines, position-scoped)
 - **Severity:** HIGH (weight 25) for `LD_PRELOAD`/`LD_LIBRARY_PATH`;
@@ -248,7 +248,7 @@ subverting the build* is the attack surface Nix closes and Cargo leaves open.
 `LD_PRELOAD`/`LD_LIBRARY_PATH` mutation inside a build function is the AUR
 equivalent of a `build.rs` that downloads and executes a binary.
 
-### R079: Moved Git Ref {#r079}
+### H033: Moved Git Ref {#h033}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25) when a tag anchor is unchanged, MEDIUM (weight 15) otherwise
@@ -278,30 +278,30 @@ belongs to is C003's neutral fact.
 Fire rate: 4 of 3246 benign diffs (0.12 %), all maintainers tracking a moving
 patch branch under a fixed version, which is the shape the rule describes.
 
-### R118: Embedded Binary In Tree {#r118}
+### H066: Embedded Binary In Tree {#h066}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
 - **Condition:** A file in the repository tree carries ELF magic (`\x7fELF`) and is not a declared `source=` filename.
 
-R118 has two variants that split by evidence and never double-fire. **R118-tree**
+H066 has two variants that split by evidence and never double-fire. **H066-tree**
 is this one: it needs the file manifest, so it runs on the git path, where the
 clone is always available, and on the corpus path when the AUR snapshot tarball
 was fetched. When the corpus path has no snapshot, the result reports
 `tree_analyzed = false` rather than reading as a full-coverage UNFLAGGED result.
-**R118-blob**, an ELF blob encoded inside the PKGBUILD, is R120 with a magic
-check, so an encoded ELF fires R120.
+**H066-blob**, an ELF blob encoded inside the PKGBUILD, is H068 with a magic
+check, so an encoded ELF fires H068.
 
 Does not fire on: a `-bin`/`-appimage`/`-wine` package whose binary arrives via
 a declared `source=`, or on icons, fonts, `.desktop` files and test fixtures.
 
-### R122: Archive Trailer Anomaly {#r122}
+### H070: Archive Trailer Anomaly {#h070}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
 - **Condition:** An archive carries data past its declared trailer (gzip, tar or zip).
 
-R122 is a pure function over bytes (`check_archive_trailer`). It is wired on
+H070 is a pure function over bytes (`check_archive_trailer`). It is wired on
 the corpus-side AUR snapshot path, where `fetch_pkgbuild_with_tree` already
 has the tarball bytes and the analysis pipeline can surface the finding
 without fetching any PKGBUILD-supplied URL.
@@ -309,11 +309,11 @@ without fetching any PKGBUILD-supplied URL.
 That is deliberate rather than incomplete. Fetching what a PKGBUILD points at
 would add an SSRF primitive, tell the attacker who scanned them, and break the
 one-host boundary the [security model](../../security.md#the-invariants)
-enforces. The only bytes TrustSight feeds to R122 are the AUR's own snapshot
+enforces. The only bytes TrustSight feeds to H070 are the AUR's own snapshot
 tarball bytes, corpus-side, where downloads are centralised and distributed as
 facts.
 
-### R130: Signing Key Set Changed {#r130}
+### H078: Signing Key Set Changed {#h078}
 
 - **Severity:** HIGH (weight 25) on replacement, MEDIUM (weight 15) on addition, INFO (weight 0) on introduction
 - **Category:** `integrity`
@@ -321,7 +321,7 @@ facts.
 
 Whoever holds a key in `validpgpkeys` can ship code to every user of the
 package, so the set changing is a trust change that the diff states outright.
-R069 owns the removal case, verification being taken away. R130 owns the other
+H024 owns the removal case, verification being taken away. H078 owns the other
 two: a key **replaced** (one fingerprint out, a different one in) means the same
 sources are now trusted under a different holder, and a key **added** to an
 existing set widens who may sign. Introducing `validpgpkeys` where there was
@@ -331,7 +331,7 @@ fact rather than as a finding against the package.
 Fire rate: 6 of 3246 (0.18 %), two introductions and four upstream key
 rotations.
 
-### R131: Build Flags Weakened {#r131}
+### H079: Build Flags Weakened {#h079}
 
 - **Severity:** HIGH (weight 25) when a mitigation is switched off, MEDIUM (weight 15) on a top-level replacement
 - **Category:** `integrity`
@@ -343,9 +343,9 @@ configured, and one that spells out a disabling flag drops a named one. Either
 way the installed binary is built with weaker mitigations than the same source
 built through the normal path, and no package metadata says so.
 
-R070 already reports that a build function modified the environment, which is
-the weaker claim, so R131 does not restate it: the MEDIUM branch is top-level
-only, where R070 is blind and where the assignment also runs at parse time. A
+H025 already reports that a build function modified the environment, which is
+the weaker claim, so H079 does not restate it: the MEDIUM branch is top-level
+only, where H025 is blind and where the assignment also runs at parse time. A
 value carrying no literal flag (`CFLAGS="${_cflags[@]}"`) is a set this rule
 cannot read, so it says nothing about it. Only the recipe's own lines count; a
 vendored Makefile inside a shipped patch is not the packager's assignment.
@@ -353,7 +353,7 @@ vendored Makefile inside a shipped patch is not the packager's assignment.
 Fire rate: 3 of 3246 (0.09 %), all one wine package that genuinely disables
 FORTIFY_SOURCE.
 
-### R094: Security-Relevant Build Flag Change {#r094}
+### H047: Security-Relevant Build Flag Change {#h047}
 
 - **Severity:** HIGH (weight 25) when a flag was dropped, MEDIUM (weight 15) when one appeared
 - **Category:** `build`
@@ -362,7 +362,7 @@ FORTIFY_SOURCE.
 Dropping a hardening flag is the weightier direction, because it removes a
 mitigation the package had.
 
-### R142: Recipe Changed Without Upstream {#r142}
+### H087: Recipe Changed Without Upstream {#h087}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `integrity`
@@ -373,10 +373,10 @@ build recipe and nothing else, so a reviewer reading source URLs and checksums
 - the fields that usually carry a supply-chain change - saw a package whose
 upstream was provably identical to the version they already trusted.
 
-R142 names that shape directly: the recipe moved and upstream did not. The
+H087 names that shape directly: the recipe moved and upstream did not. The
 conjunction is what makes it specific. Any edit to `source=`, a checksum array
 or `pkgver` means the package points at different upstream bytes, which is an
-ordinary update however much else changed with it, and R142 stays silent.
+ordinary update however much else changed with it, and H087 stays silent.
 
 Both halves of the recipe have to move, and that is measured rather than
 assumed. Against the 3,246-diff locked benign corpus: `deps or build` fires on
@@ -384,17 +384,17 @@ assumed. Against the 3,246-diff locked benign corpus: `deps or build` fires on
 **1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
 times the noise for no additional detection - the campaign changed both,
 because a new build dependency is useless without a build step that invokes
-it. The conjunction also keeps R142 off two neighbours: a dependency added
+it. The conjunction also keeps H087 off two neighbours: a dependency added
 with no build change is a packaging fix, and a build function edited with no
-dependency change is [R060](../rules/system.md#r060), which is INFO precisely
+dependency change is [H015](../rules/system.md#h015), which is INFO precisely
 because it fires on 21.4% of benign diffs.
 
 It is MEDIUM because the shape is not exclusively malicious: a dependency
 correction that also adjusts a build step is an ordinary packaging change.
 What is unusual is a recipe-only change on a package that was *just adopted*
-and whose build now fetches unpinned code, which is [R143](maintainer-and-metadata.md#r143).
+and whose build now fetches unpinned code, which is [H088](maintainer-and-metadata.md#h088).
 
-### R147: Checksum Array Shorter Than Source Array {#r147}
+### H091: Checksum Array Shorter Than Source Array {#h091}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
@@ -418,7 +418,7 @@ between; anything else is not something the diff knows.
 
 Zero occurrences in the 3,246-diff benign corpus.
 
-### R148: Metadata Names A Source The Recipe Does Not {#r148}
+### H092: Metadata Names A Source The Recipe Does Not {#h092}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`

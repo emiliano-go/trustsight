@@ -1,13 +1,13 @@
 # Install and Persistence
 
 Something survives the build. Install hooks run as root at install time,
-which makes them the highest-privilege code a PKGBUILD carries (R007, R062,
-R068, R081), and units, pacman hooks and setuid bits keep running long
-after makepkg exits (R053, R054, R059, R085, R114, R139).
+which makes them the highest-privilege code a PKGBUILD carries (R007, H017,
+H023, H035), and units, pacman hooks and setuid bits keep running long
+after makepkg exits (R053, R054, R059, H039, H062, H084).
 
 R017 and R053/R059 split the same operation by target: a setuid bit inside
 `$pkgdir` is Electron packaging, the same bit on an absolute path is a
-privilege change to the build host. R052 and R077 cover the user-profile
+privilege change to the build host. R052 and H032 cover the user-profile
 form, where the persistence is a dotfile rather than a unit.
 
 See [the rule system reference](system.md) for the field table, the
@@ -20,23 +20,23 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
+| [H023](#h023) | Install Hook Present | INFO |
+| [H032](#h032) | Write To User Home Or RC | HIGH |
+| [H035](#h035) | Foreign Package Manager In Install Hook | HIGH |
+| [H039](#h039) | Systemd ExecStart From Runtime-Writable Path | HIGH |
+| [H062](#h062) | Pacman Hook Installed | MEDIUM |
+| [H084](#h084) | Service ExecStart Targets Undeclared Binary | HIGH |
+| [H089](#h089) | Packaged File Names A Build-Only Path | HIGH |
+| [H093](#h093) | Committed Config Points At A Build-Only Path | HIGH |
+| [H095](#h095) | Boot Or Image Artifact Built From The Source Tree | HIGH |
 | [R007](#r007) | Install File Modification | MEDIUM |
 | [R017](#r017) | Setuid/Setgid Permission | HIGH |
 | [R052](#r052) | Dotfile Written To User Profile | HIGH |
 | [R053](#r053) | Setuid Or Setgid Bit Set In Package Root | MEDIUM |
 | [R054](#r054) | Persistence Unit Outside Package Root | HIGH |
 | [R059](#r059) | Setuid Or Setgid Bit Set Outside Package Root | HIGH |
-| [R062](#r062) | Install Hook Fetches Or Executes | HIGH |
-| [R068](#r068) | Install Hook Present | INFO |
-| [R077](#r077) | Write To User Home Or RC | HIGH |
-| [R081](#r081) | Foreign Package Manager In Install Hook | HIGH |
-| [R085](#r085) | Systemd ExecStart From Runtime-Writable Path | HIGH |
-| [R114](#r114) | Pacman Hook Installed | MEDIUM |
-| [R139](#r139) | Service ExecStart Targets Undeclared Binary | HIGH |
 | [R144](#r144) | Packaged File Points At A World-Writable Path | HIGH |
-| [R145](#r145) | Packaged File Names A Build-Only Path | HIGH |
-| [R149](#r149) | Committed Config Points At A Build-Only Path | HIGH |
-| [R151](#r151) | Boot Or Image Artifact Built From The Source Tree | HIGH |
 <!-- /generated: page-index -->
 
 ### R007: Install File Modification {#r007}
@@ -89,7 +89,7 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?:[\s"\x27]|\$\{?pkgdir\}?)(?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))`
 - **Description:** Detects a cron job or systemd unit written to a system path. A unit staged into `$pkgdir` is flagged too, in any quoting style (`"${pkgdir}"/usr/lib/...`, `"${pkgdir}/usr/lib/..."`, `$pkgdir/usr/lib/...`): pacman installs what the recipe staged, so all three produce the same persistent root-level unit. Writing to the live filesystem during a build is the worse case of the same finding.
 
-### R062: Install Hook Fetches Or Executes {#r062}
+### H017: Install Hook Fetches Or Executes {#h017}
 
 - **Target:** programmatic (defined in `src/trustsight/analysis/build.py`)
 - **Severity:** HIGH (weight 25)
@@ -100,9 +100,9 @@ Hooks run **as root at install time**, which makes them the highest-privilege co
 
 Comments are stripped before matching: one of the corpus hits was the line `# systemctl enable input-remapper`.
 
-Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning `.install` at MEDIUM. R007 is left as it is because it is calibrated and in the baseline; R062 is the narrow, higher-severity companion.
+Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning `.install` at MEDIUM. R007 is left as it is because it is calibrated and in the baseline; H017 is the narrow, higher-severity companion.
 
-### R068: Install Hook Present {#r068}
+### H023: Install Hook Present {#h023}
 
 - **Target:** programmatic (diff-aware)
 - **Severity:** INFO (weight 0)
@@ -110,22 +110,22 @@ Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning 
 - **Condition:** The PKGBUILD declares an `install=` file, or the diff touches
   a `*.install` file.
 
-An `.install` scriptlet runs code **as root** at install time. R068 is pure
+An `.install` scriptlet runs code **as root** at install time. H023 is pure
 context - "this package has a root-time hook" - not an accusation. It is the
 metadata a human wants when weighing other signals.
 
 **Origin:** mirrors pnpm's `allowBuilds`/`strictDepBuilds` - every package
 manager that distinguishes "declares a privileged post-install step" from
 "does not" treats that distinction as primary metadata. pnpm blocks all build
-scripts by default; R068 is the review-side equivalent - flagging `.install`
+scripts by default; H023 is the review-side equivalent - flagging `.install`
 hooks so a human can weigh them.
 
-**Overlap guard:** R007 already fires on *install added*. R068 fires on
-*install present* (existing or added). If R007 fires, R068 is redundant for
+**Overlap guard:** R007 already fires on *install added*. H023 fires on
+*install present* (existing or added). If R007 fires, H023 is redundant for
 that diff; the two must not both surface as separate findings for the same
 event.
 
-### R081: Foreign Package Manager In Install Hook {#r081}
+### H035: Foreign Package Manager In Install Hook {#h035}
 
 - **Target:** programmatic (resolved install hook lines, position-scoped)
 - **Severity:** HIGH (weight 25)
@@ -139,7 +139,7 @@ control, creating untracked dependencies and potential conflicts.
 Kernel modules (`dkms`), initramfs rebuilds, and service restarts are the
 expected scope of an install hook; foreign package managers are not.
 
-### R077: Write To User Home Or RC {#r077}
+### H032: Write To User Home Or RC {#h032}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
@@ -153,7 +153,7 @@ runs scriptlets as root during the transaction. Nothing a package installs
 belongs in somebody's home directory, and root reaching into one is
 categorical rather than suspicious.
 
-### R085: Systemd ExecStart From Runtime-Writable Path {#r085}
+### H039: Systemd ExecStart From Runtime-Writable Path {#h039}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
@@ -164,7 +164,7 @@ filename. A name proves nothing; the `ExecStart` line is the fact.
 
 Fire rate: 0 of 3246.
 
-### R114: Pacman Hook Installed {#r114}
+### H062: Pacman Hook Installed {#h062}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `persistence`
@@ -175,7 +175,7 @@ packages legitimately ship them, which is why it is MEDIUM.
 
 Fire rate: 4 of 3246 (0.12 %), all packages that legitimately ship hooks.
 
-### R139: Service ExecStart Targets Undeclared Binary {#r139}
+### H084: Service ExecStart Targets Undeclared Binary {#h084}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
@@ -214,7 +214,7 @@ the reverse, and anchored at `^` so each lookahead runs once. Zero
 occurrences in the 3,246-diff benign corpus: a package pointing its own
 config at `/tmp` is not something the ecosystem does.
 
-### R145: Packaged File Names A Build-Only Path {#r145}
+### H089: Packaged File Names A Build-Only Path {#h089}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
@@ -250,16 +250,16 @@ named on the opener.
 
 Zero occurrences in the 3,246-diff benign corpus.
 
-### R149: Committed Config Points At A Build-Only Path {#r149}
+### H093: Committed Config Points At A Build-Only Path {#h093}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 - **Condition:** A committed `.service`, `.desktop`, `.rules`, `.conf` (and
-  the rest of the carrier set R146 reads) holding a directive that runs
+  the rest of the carrier set H090 reads) holding a directive that runs
   something, whose value names `$srcdir`, `$startdir`, `$PWD`, `$BUILDDIR`
   or `$pkgdir`.
 
-The symmetric half of [R145](#r145). That rule reads content the recipe
+The symmetric half of [H089](#h089). That rule reads content the recipe
 *generates* into `$pkgdir`; this one reads content the recipe *committed*
 and then ships. The observable is identical and so is the reasoning: those
 directories exist only while the package is being built, so a shipped file
@@ -291,7 +291,7 @@ Measured across all thirty audited verticals in their committed form: thirty
 fire. Measured across 249 committed files in 81 real AUR repositories: none
 does.
 
-### R151: Boot Or Image Artifact Built From The Source Tree {#r151}
+### H095: Boot Or Image Artifact Built From The Source Tree {#h095}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
@@ -311,9 +311,9 @@ build is different: the result captures the builder's machine, and any path
 from the source tree that goes into it is code that will run at the earliest
 moment there is.
 
-The build-only path is the observable, as it is for [R145](#r145) and
-[R149](#r149). A bare relative filename establishes no provenance - if it is
-declared or committed, R146 and R149 read it; if it is neither, it is the
+The build-only path is the observable, as it is for [H089](#h089) and
+[H093](#h093). A bare relative filename establishes no provenance - if it is
+declared or committed, H090 and H093 read it; if it is neither, it is the
 [W001](unverifiable.md#w001) boundary.
 
 None of these tools appear in the benign corpus with a build-tree argument.

@@ -8,8 +8,8 @@ TrustSight has two rule namespaces to avoid identifier collision:
 
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|
-| R-series  | R001-R003, R007-R008, R010-R013, R039-R059 | `rules.toml` | Yes | Regex-detectable patterns   |
-| R-series  | R004-R006, R009, R060+ | `analysis/*.py` | No | Code-emitted detection |
+| R-series  | R001-R003, R007-R008, R010-R013, R017, R039-R059, R144 | `rules.toml` | Yes | Regex-detectable patterns   |
+| H-series  | H001-H095   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
 | C-series  | C001-C009   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
@@ -19,7 +19,9 @@ TrustSight has two rule namespaces to avoid identifier collision:
 
 ## R-series rules (TOML)
 
-R-series rules live in `rules.toml` under `~/.config/trustsight/`. Each rule has:
+Every R-series rule lives in `rules.toml` under `~/.config/trustsight/`; that is
+what the prefix means. A detection that cannot be expressed as a regex over
+diff lines is an H-series heuristic instead. Each R rule has:
 
 | Field         | Description                                           |
 |---------------|-------------------------------------------------------|
@@ -41,6 +43,34 @@ severity = "CRITICAL"
 category = "network"
 match_target = "raw_line"
 ```
+
+## H-series rules (code)
+
+H-series rules live in the `analysis/` package and are emitted from Python
+rather than matched from `rules.toml`. Reach for one when the signal is not a
+property of a line but of a *change*: what a value was before, whether a
+checksum moved with the URL it covers, how the package sits against the corpus.
+A regex sees one line at a time and cannot answer any of those.
+
+Adding one means:
+
+1. Emit the finding from the analysis module that owns the question, with an
+   id one past the current highest `H`.
+2. Add the id to `RULE_CATEGORIES` in `src/trustsight/categories.py`, which is
+   what makes it a documented rule and what reserves the id against a
+   `rules.toml` entry claiming it.
+3. Add its message template to `src/trustsight/findings.py`.
+4. Document it on the category page under `docs/reference/rules/`, as
+   `### H0NN:`, so the index builder picks it up.
+
+An H rule has no `enabled` or `weight_override` control, because it has no
+`rules.toml` entry to attach one to. If a rule *should* be operator-tunable,
+that is a reason to write it as a regex instead - see
+[when to use each](#when-to-use-each).
+
+Never reuse a retired id. The R/H split freed ninety-five `R` numbers and the
+linter reserves every one of them; stored reports and published baselines still
+name them.
 
 ## S-series rules (code)
 
@@ -68,7 +98,7 @@ Two different things are called a category, and a new rule needs both.
 
 The `category` field above names the **capability** a match touched
 (`network`, `persistence`, `obfuscation`). It is fine-grained, it is set
-per-rule, and it is what `R072` counts when it looks for a diff whose hits
+per-rule, and it is what `H027` counts when it looks for a diff whose hits
 span three or more capabilities. Reuse an existing value where one fits.
 
 `RuleCategory`, in `src/trustsight/categories.py`, names the **kind of
@@ -80,17 +110,17 @@ the rule:
 ```python
 RULE_CATEGORIES: dict[str, RuleCategory] = {
     ...
-    "R141": _C.MAINTAINER_AND_METADATA,
+    "H086": _C.MAINTAINER_AND_METADATA,
 }
 ```
 
-Then write the `### R141: Name {#r141}` section on that category's page,
+Then write the `### H086: Name {#h086}` section on that category's page,
 and add a stub to `docs/reference/rules/system.md`:
 
 ```markdown
-### R141 {#r141}
+### H086 {#h086}
 
-See [R141: Name](../reference/rules/maintainer-and-metadata.md#r141).
+See [H086: Name](../reference/rules/maintainer-and-metadata.md#h086).
 ```
 
 Then regenerate the index, whose legend and quick-reference table are both
@@ -110,6 +140,7 @@ the shipped one, or if the id is absent from the quick-reference table.
 |------------------------------------------------|----------|
 | A single regex matches a pattern in diff lines | R-series |
 | A single regex matches a resolved string       | R-series |
+| The signal needs diff context a line cannot show | H-series |
 | Logic spans multiple fields / conditions       | C-series |
 | Rule must always run (cannot be disabled)      | C-series |
 
@@ -201,7 +232,11 @@ pytest tests/test_rules.py::test_r001_curl_bash_benign -v
 
 ### ID collision
 
-C-series IDs start with `C` (`C001`, `C002`, …). R-series IDs start with `R` (`R001`, `R002`, …). Do not assign an `R0xx` ID to a code rule.
+Every prefix names a mechanism, and the linter enforces it. `R` is a regex in
+`rules.toml`; `H` is a heuristic in `analysis/*.py`; `C` is a structural rule.
+Do not give an `R` id to a code rule: `rules.toml` is where an operator looks
+for an `R`, and an id that is not there is an id they cannot act on. The
+reserved-id check refuses a `rules.toml` entry that reuses a code-emitted id.
 
 ### Delta vs. end-state
 

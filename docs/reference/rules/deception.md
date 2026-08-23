@@ -7,7 +7,7 @@ establishes an author's intent: R012 is a high-severity template tripwire for
 reviewer manipulation, while R013 identifies a concrete display/execution
 deception mechanism. When neither fires, nothing has been established.
 
-R119 and the reserved R023/R024 are the inverse direction: the recipe
+H067 and the reserved H012/H013 are the inverse direction: the recipe
 checking whether it is being watched. A build script that probes for a
 debugger, a VM or a CI runner has no legitimate reason to care.
 
@@ -21,11 +21,11 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [H012](#h012) | Strace detection attempt (TracerPid check) | CRITICAL |
+| [H013](#h013) | Strace log truncated (possible flood evasion) | HIGH |
+| [H067](#h067) | Anti-Analysis Check | HIGH |
 | [R012](#r012) | Prompt Injection Detection | FATAL |
 | [R013](#r013) | Unicode Bidi Override | FATAL |
-| [R023](#r023) | Strace detection attempt (TracerPid check) | CRITICAL |
-| [R024](#r024) | Strace log truncated (possible flood evasion) | HIGH |
-| [R119](#r119) | Anti-Analysis Check | HIGH |
 <!-- /generated: page-index -->
 
 ### R012: Prompt Injection Detection {#r012}
@@ -53,7 +53,7 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 
 - **Note:** Score hard-stops at 100 regardless of other signals. The previous pattern omitted U+200E/U+200F, U+2060-U+2064 and the tag block, which is where the documented recall gap came from; `unicode.py` already listed them.
 
-### R023: Strace detection attempt (TracerPid check) {#r023}
+### H012: Strace detection attempt (TracerPid check) {#h012}
 
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** CRITICAL (weight 40)
@@ -61,15 +61,15 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 - **Pattern:** `(?!)` (never matches)
 - **Description:** Reading `/proc/self/status` `TracerPid` to detect a debugger or sandbox. Anti-analysis behaviour. Reserved `never-match` runtime placeholder.
 
-### R024: Strace log truncated (possible flood evasion) {#r024}
+### H013: Strace log truncated (possible flood evasion) {#h013}
 
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** HIGH (weight 25)
 - **Category:** `evasion`
 - **Pattern:** `(?!)` (never matches)
-- **Description:** A beacon/timestamp flood that forces an audit log to truncate. Reserved `never-match` runtime placeholder; complements the R023 debugger probe.
+- **Description:** A beacon/timestamp flood that forces an audit log to truncate. Reserved `never-match` runtime placeholder; complements the H012 debugger probe.
 
-### R119: Anti-Analysis Check {#r119}
+### H067: Anti-Analysis Check {#h067}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `anti_analysis`

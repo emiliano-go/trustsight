@@ -43,7 +43,7 @@ tool cannot:
 | `validpgpkeys` declared | `P002` | 0 |
 | signature source declared | `P003` | 0 |
 
-The original inversion is fixed at source rather than paid back: R004 does not
+The original inversion is fixed at source rather than paid back: H001 does not
 fire on a `SKIP` that is mandatory for a VCS source, structurally uncheckable
 for a signature file, or covered by declared PGP keys. Stopping the false
 positive was the right fix. See
@@ -74,7 +74,7 @@ a pin is a claim about a ref that TrustSight never resolves.
 | pinned to a tag | `P006` | 0 |
 
 `P006` is deliberately phrased as the weaker form. A tag can be repointed; a
-commit hash cannot, which is why R079 exists.
+commit hash cannot, which is why H033 exists.
 
 Source bucket classification only ever adds:
 
@@ -100,7 +100,7 @@ Same lesson. A change of maintainer is a flag for investigation; it means the pa
 ## Why weights are derived from corpus frequency, not asserted
 
 Every scored rule is validated against corpus frequency. A rule that fires on
-most packages is not signalling anything useful. R006 is LOW because it makes
+most packages is not signalling anything useful. H003 is LOW because it makes
 the narrow, diff-aware claim that a newly added plain-HTTP source lacks newly
 declared checksum backing, not because it matches a broad source-array shape.
 
@@ -120,13 +120,13 @@ Prompt injection and unicode bidi overrides are attacks on the reviewer, not on 
 
 Low recall is acceptable for these rules. R012 has 17% recall on the benchmark corpus. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded.
 
-### R004 and R005: why checksum rules are hard-coded
+### H001 and H002: why checksum rules are hard-coded
 
-Checksum integrity is foundational to the entire scoring system. Every other signal is evaluated in the context of whether checksums are present or disabled. Allowing users to disable R004 or R005 through `rules.toml` would produce misleading results: a package with `sha256sums=('SKIP')` that otherwise looks clean would score 0, but the missing checksum is itself a risk.
+Checksum integrity is foundational to the entire scoring system. Every other signal is evaluated in the context of whether checksums are present or disabled. Allowing users to disable H001 or H002 through `rules.toml` would produce misleading results: a package with `sha256sums=('SKIP')` that otherwise looks clean would score 0, but the missing checksum is itself a risk.
 
-These rules are hard-coded in `src/trustsight/analysis/structural.py` and cannot be disabled through configuration. R004 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
+These rules are hard-coded in `src/trustsight/analysis/structural.py` and cannot be disabled through configuration. H001 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
 
-### R009: why sudo detection is scoped to function_body
+### H004: why sudo detection is scoped to function_body
 
 A naive `sudo` rule that matches anywhere in the PKGBUILD fires on comments, on text in `pkgdesc`, and on top-level variable assignments like `groups=('sudo')`. The `function_body` scope restricts matching to the build functions (`build()`, `package()`, `check()`), where a `sudo` command has real effect. Corpus fire-rate analysis is what settles it: unfiltered `sudo` matching is a census signal rather than a risk signal.
 

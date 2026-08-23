@@ -122,7 +122,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `first_seen` | `bool` | `true` if this is the first analysis for this package (no prior commit to diff against). |
 | `recent_commit_burst` | `bool` | `true` when the package's recent commit timestamps cluster unusually tightly. |
 | `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only a deterministic UTF-8-safe prefix was examined. The score then describes a prefix, not the change; `coverage_gaps` is non-empty and the result cannot be read as a complete clean analysis. |
-| `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for R118-tree. A result produced without the tree reports `false`. |
+| `tree_analyzed` | `bool` | `true` when the repository file manifest was inspected for H066-tree. A result produced without the tree reports `false`. |
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `scan_truncated` | `bool` | `true` when the diff held more lines than `rules.MAX_SCANNED_LINES` and only its first lines were matched. Distinct from `diff_truncated` because they name different caps: rule matching costs per line, so a diff of many short lines stays under `[diff] max_diff_bytes` and is still cut here. A reader who saw only `diff_truncated` would raise the byte limit and find it changed nothing. |
@@ -166,7 +166,7 @@ Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `resolved_commands` | `list[string]` | Fully resolved command strings after tokenization and variable expansion. Each is a single command extracted from the diff. |
-| `suspicious_patterns_detected` | `list[string]` | Rule IDs from the published R/C/D/S/X families that fired during analysis. |
+| `suspicious_patterns_detected` | `list[string]` | Rule IDs from the published R/H/C/D/S/X families that fired during analysis. |
 | `unresolved_patterns` | `list[string]` | Strings anywhere in the diff that the tokenizer could not fully resolve. Diagnostic only: nothing reads this field to decide a verdict. The subset that affects a verdict is the `source=` case, reported as the `unresolved_source` coverage gap and quoted in `unresolved_sources`. |
 
 Resolution performed by `tokenize_and_resolve()` in `src/trustsight/tokenizer.py`.
@@ -189,7 +189,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published R/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0), `W001`-`W006` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published R/H/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0), `W001`-`W006` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. Truncated to 80 characters in CLI display; full string in JSON. |

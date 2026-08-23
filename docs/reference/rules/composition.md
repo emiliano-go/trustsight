@@ -5,7 +5,7 @@ the points are already on the board from the rules that fired, so both
 rules here carry weight 0 by design: adding a score for the combination
 would double-count what the individual rules already scored.
 
-R072 counts distinct capability `category` values across one diff. R089
+H027 counts distinct capability `category` values across one diff. H043
 counts distinct kill-chain stages. Neither can turn an UNFLAGGED package
 into a flagged one on its own, and neither is a detection: they are
 annotations on findings that other rules produced.
@@ -20,11 +20,11 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [R072](#r072) | Capability Density Anomaly | INFO |
-| [R089](#r089) | Attack-Chain Composition | INFO |
+| [H027](#h027) | Capability Density Anomaly | INFO |
+| [H043](#h043) | Attack-Chain Composition | INFO |
 <!-- /generated: page-index -->
 
-### R072: Capability Density Anomaly {#r072}
+### H027: Capability Density Anomaly {#h027}
 
 - **Target:** programmatic (existing `triggered_rules`, no new detection)
 - **Severity:** INFO (weight 0) - report-only co-occurrence flag
@@ -39,30 +39,30 @@ co-occurrence is more suspicious than the sum of its parts.
 **Why weight 0:** Adding a score for the combination would **double-count**;
 the three categories already scored individually via their own rules. Stacking
 extra points on top would inflate the benign p95, exactly the inflation the
-accuracy work eliminated. R072 therefore carries weight 0: it is a
+accuracy work eliminated. H027 therefore carries weight 0: it is a
 **co-occurrence annotation** surfaced to the report.
 The pattern is the signal; the points are already there.
 
 **Origin:** Socket.dev's capability profiling - every package is annotated
 with a capability profile (network access, filesystem access, shell execution,
 encoded payloads) and Socket's diff view flags *permission creep* when a new
-version acquires capabilities it did not have before. R072 is the same insight
+version acquires capabilities it did not have before. H027 is the same insight
 at the rule-category level: a diff whose rule hits span multiple capability
 domains has a density that is itself a pattern.
 
-### R089: Attack-Chain Composition {#r089}
+### H043: Attack-Chain Composition {#h043}
 
 - **Severity:** INFO (weight 0)
 - **Category:** `composition`
-- **Condition:** The findings on one package span at least `[thresholds] r089.attack_chain_stages` (default 3) distinct kill-chain stages.
+- **Condition:** The findings on one package span at least `[thresholds] h043.attack_chain_stages` (default 3) distinct kill-chain stages.
 
-Stages: takeover (R071, R090, R126), mass adoption (R092, R125), install hook
-(R068, R062), foreign fetch (R001, R081, R118, R080), payload (R120, R121),
-obfuscation (R082, R117), anti-analysis (R119), write-then-execute (R124),
-staging (R084), recon (R086), persistence (R085, R114, R128), exfil (R087,
-R123), hidden drop (R088).
+Stages: takeover (H026, H044, H074), mass adoption (H045, H073), install hook
+(H023, H017), foreign fetch (R001, H035, H066, H034), payload (H068, H069),
+obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072),
+staging (H038), recon (H040), persistence (H039, H062, H076), exfil (H041,
+H071), hidden drop (H042).
 
-Each stage counts once however many rules in it fired, and R089's own finding
+Each stage counts once however many rules in it fired, and H043's own finding
 is excluded from its own count. It is a composition annotation, not an additive
 score: the point is that several independent stages co-occurred, which is what
 separated the 2018 acroread attack and the 2026 Atomic Arch campaign from

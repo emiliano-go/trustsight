@@ -43,7 +43,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 171 documented scoring rules across six families: 127 R-series detection rules, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 23 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 171 documented scoring rules across seven families: 32 R-series regex rules and 95 H-series heuristics, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 23 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 
@@ -84,7 +84,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 | Page | What it covers |
 |------|----------------|
-| [Rules](reference/rules/index.md) | Complete R/C/D/S/X catalog with severity, weight, and description. |
+| [Rules](reference/rules/index.md) | Complete R/H/C/D/S/X catalog with severity, weight, and description. |
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
 | [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |
@@ -96,7 +96,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | Page | What it covers |
 |------|----------------|
 | [Development Setup](contributing/development-setup.md) | Set up a local dev environment. |
-| [Writing a Rule](contributing/writing-a-rule.md) | R-series and C-series rule guidelines. |
+| [Writing a Rule](contributing/writing-a-rule.md) | R-series regex, H-series heuristic and C-series rule guidelines. |
 | [Re-baselining](contributing/re-baselining.md) | Update benchmarks after scoring changes.
 
 ---

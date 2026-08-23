@@ -29,7 +29,7 @@ The second and later commands:
 2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run, and refetches it once it is more than an hour old),
 3. Clones each outdated package's repository,
 4. Diffs the old and new PKGBUILD and `.install` files,
-5. Applies the published R-series detection, C-series structural, D-series dependency, S-series sabotage, and X-series crossfire rules,
+5. Applies the published R-series regex, H-series heuristic, C-series structural, D-series dependency, S-series sabotage, and X-series crossfire rules,
 6. Classifies all new source URLs into trust buckets,
 7. Checks novelty against the local database,
 8. Calculates a deterministic score from 0-100,
@@ -49,7 +49,7 @@ The second and later commands:
 │  Version  0.9.2-1 → 1.0.0-2                                            │
 │  Status   The update is not trivial. Review it.                        │
 │           PKGBUILD line 12  Checksum Disabled: sha256sums=('SKIP')     │
-│           [R004]                                                       │
+│           [H001]                                                       │
 │           Source URL classified as unknown                             │
 │           (https://sketchy-cdn.example.com/p.tar.gz) [SOURCE_BUCKET]   │
 │           PKGBUILD line 23  Executes Code This Analysis Did Not Read   │
@@ -115,7 +115,7 @@ appears as a mini-card nested inside its parent's card:
 │  Version       2.4.1-1 → 2.4.2-2                           │
 │  Status        The update is not trivial. Review it.       │
 │                PKGBUILD line 17  Install hook performs a   │
-│                privileged operation [R062]                 │
+│                privileged operation [H017]                 │
 │  Changed       pkgver 2.4.1-1 -> 2.4.2-2                   │
 │                                                            │
 │  Dependencies                                              │
@@ -154,7 +154,7 @@ declare it. A dependency three packages need is the one to read first.
 │  Version      0.8.1-1 → 0.9.0-2                                    │
 │  Status       The update is not trivial. Review it.                │
 │               PKGBUILD line 8  Install hook performs a privileged  │
-│               operation [R062]                                     │
+│               operation [H017]                                     │
 │  Changed      pkgver 0.8.1-1 -> 0.9.0-2                            │
 │  Required by  some-trusted-tool                                    │
 │               sketchy-pkg                                          │

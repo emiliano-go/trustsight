@@ -5,9 +5,9 @@
 | Path | Purpose |
 |------|---------|
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
-| `~/.config/trustsight/rules.toml` | Definitions for the TOML-defined R-series subset. Per-rule `enabled` and `weight_override` controls live in `config.toml`. |
+| `~/.config/trustsight/rules.toml` | Definitions for every R-series rule. H-series heuristics are emitted from code and have no entry here. Per-rule `enabled` and `weight_override` controls live in `config.toml`. |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
-| `~/.config/trustsight/iocs.toml` | R106 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
+| `~/.config/trustsight/iocs.toml` | H056 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
 
@@ -131,11 +131,22 @@ enabled = false
 weight_override = 15
 ```
 
-`enabled` and `weight_override` apply only to rules defined in `rules.toml` and
-only have an effective scoring use for non-FATAL rules. A FATAL rule cannot be
-disabled and always hard-stops the score at 100. Code-emitted rules have no TOML
-definition, so `[rules.R###]` does not affect them; use their documented
-dedicated settings where available, such as `[experimental_rules]`.
+`enabled` and `weight_override` apply only to rules defined in `rules.toml`,
+which since the R/H split means every `R` id and only those. They only have an
+effective scoring use for non-FATAL rules: a FATAL rule cannot be disabled and
+always hard-stops the score at 100.
+
+An `H` rule is a heuristic emitted from an analysis module and has no TOML
+definition, so a `[rules.H###]` block does nothing. That is what the prefix is
+for - if you can name it with an `R`, you can configure it here. Use the
+documented dedicated settings for heuristics where available, such as
+`[experimental_rules]` below.
+
+A `[rules.R###]` block naming an id this release retired (see
+[the mapping](../changelog.md#rule-id-mapping)) also does nothing, and did
+nothing before the rename either: those rules were always code-emitted. Retired
+ids are never reassigned, so such a block cannot later attach itself to an
+unrelated rule.
 
 ### `[experimental_rules]`
 
@@ -148,12 +159,12 @@ A config written before this section existed still gets these defaults: `load_co
 | `D001` | bool | `true` | Optional corpus-context signal: fire when a dependency name is added that has never been observed anywhere in the AUR. Requires a seeded `dependency_names` table; with no seed the rule stays silent rather than flagging everything. This avoids measuring an empty database rather than an unusual dependency. |
 | `D002` | bool | `true` | Fire when a novel dependency name is within one or two edits of a popular one (`openss1` for `openssl`). Refines D001: a name is only compared once D001 has found it globally unknown. |
 | `D003` | bool | `true` | Fire when `makedepends` gains a network-capable tool (`curl`, `git`, `python-requests`, …), meaning the build can now fetch code that no checksum covers. |
-| `R060` | bool | `true` | Report that the diff modifies `build()`, `prepare()`, `check()`, or `package()`. INFO severity, so it carries weight 0 and cannot move a score: it fires on 21.4% of benign diffs and exists as reviewer context. On by default for that reason. |
+| `H015` | bool | `true` | Report that the diff modifies `build()`, `prepare()`, `check()`, or `package()`. INFO severity, so it carries weight 0 and cannot move a score: it fires on 21.4% of benign diffs and exists as reviewer context. On by default for that reason. |
 | `D004` | bool | `true` | Fire when `provides`/`replaces` claims an established package unrelated to this one, which installs it in front of the real thing. Variants and siblings (`htop-vim` providing `htop`, `linux-cachyos` providing `linux-headers`) do not fire. |
-| `R061` | bool | `true` | Fire when a download inside a build function targets a URL absent from `source=()`. |
-| `R062` | bool | `true` | Fire when a `.install` hook body fetches over the network or performs a privileged operation (`chmod u+s`, `systemctl enable`, `eval`). Hooks run as root. |
-| `R063` | bool | `true` | Fire when a patch is applied from outside the build tree: a URL, an absolute path, or process substitution. Does *not* check `source=()` membership, since patches legitimately arrive inside the extracted tarball. |
-| `R064` | bool | `true` | Fire when a `source=` URL is downgraded from `https://` to `http://`. |
+| `H016` | bool | `true` | Fire when a download inside a build function targets a URL absent from `source=()`. |
+| `H017` | bool | `true` | Fire when a `.install` hook body fetches over the network or performs a privileged operation (`chmod u+s`, `systemctl enable`, `eval`). Hooks run as root. |
+| `H018` | bool | `true` | Fire when a patch is applied from outside the build tree: a URL, an absolute path, or process substitution. Does *not* check `source=()` membership, since patches legitimately arrive inside the extracted tarball. |
+| `H019` | bool | `true` | Fire when a `source=` URL is downgraded from `https://` to `http://`. |
 
 ### `[seed]`
 
@@ -283,13 +294,13 @@ written on first run and never rewritten, so an edited file is always kept.
 
 | Key | Rules | Contents |
 |-----|-------|----------|
-| `paste_hosts` | R087, source buckets | Paste and ephemeral file-drop hosts. As `source=` URLs they are weighted by the `raw_hosting` bucket; as upload destinations inside a function they are R087's. |
+| `paste_hosts` | H041, source buckets | Paste and ephemeral file-drop hosts. As `source=` URLs they are weighted by the `raw_hosting` bucket; as upload destinations inside a function they are H041's. |
 | `standard_ports` | R047 | Ports a build may legitimately contact. |
 | `free_registrar_tlds` | R048 | TLDs available at no cost, where a throwaway domain is cheap. |
-| `source_schemes` | R080 | Allowlisted `source=` schemes. The base of a `transport+base` token is judged, so `git+https` reads as `https`. |
+| `source_schemes` | H034 | Allowlisted `source=` schemes. The base of a `transport+base` token is judged, so `git+https` reads as `https`. |
 | `confusable_domains` | R013b | Popular domains a homoglyph label is tested against. A mixed-script label that resembles none of them stays quiet. |
-| `covert_egress_endpoints` | R123 | DNS-over-HTTPS endpoints. |
-| `covert_egress_clients` | R123 | Tunnelling and proxy clients, matched only at a command position. |
+| `covert_egress_endpoints` | H071 | DNS-over-HTTPS endpoints. |
+| `covert_egress_clients` | H071 | Tunnelling and proxy clients, matched only at a command position. |
 
 For the overlapping settings, `hosts.toml` has precedence: `standard_ports`
 overrides `[ports] standard`, and `free_registrar_tlds` overrides `[domains]
@@ -301,15 +312,15 @@ directly by their named rules; they do not merge with a generic host setting.
 
 | Key | Rules | Contents |
 |-----|-------|----------|
-| `foreign_pkg_managers` | R081 | Package managers that are not pacman. |
-| `obfuscation_indicators` | R082 | Per-line obfuscation markers, counted against a density threshold. |
-| `anti_analysis_probes` | R119 | Debugger, VM, sandbox and CI probes. |
-| `recon_commands` | R086 | Host-profiling commands, command-position anchored. |
-| `parse_time_fetch` | R129 | Network clients whose invocation outside every function runs when the recipe is sourced. |
-| `upload_flags` | R087 | `curl`/`wget` flags that send a request body, which is what separates an upload from a download. |
+| `foreign_pkg_managers` | H035 | Package managers that are not pacman. |
+| `obfuscation_indicators` | H036 | Per-line obfuscation markers, counted against a density threshold. |
+| `anti_analysis_probes` | H067 | Debugger, VM, sandbox and CI probes. |
+| `recon_commands` | H040 | Host-profiling commands, command-position anchored. |
+| `parse_time_fetch` | H077 | Network clients whose invocation outside every function runs when the recipe is sourced. |
+| `upload_flags` | H041 | `curl`/`wget` flags that send a request body, which is what separates an upload from a download. |
 | `network_tools` | D003 | Package names that grant a build network access. |
-| `security_relevant_flags` | R094, R131 | Hardening flags whose appearance or disappearance changes the mitigation set. |
-| `security_relevant_libraries` | R095 | Libraries whose vendoring bypasses distribution security updates. |
+| `security_relevant_flags` | H047, H079 | Hardening flags whose appearance or disappearance changes the mitigation set. |
+| `security_relevant_libraries` | H048 | Libraries whose vendoring bypasses distribution security updates. |
 
 These lists are consumed directly by their named rules. `network_tools` is the
 exception with a legacy fallback: D003 reads `patterns.toml` first, then
@@ -318,7 +329,7 @@ is no general precedence rule across sibling files.
 
 ### `naming.toml`
 
-Ecosystem prefixes (D004, R116) and variant suffixes (D002, R074, R100, R101).
+Ecosystem prefixes (D004, H064) and variant suffixes (D002, H029, H052, H053).
 These decide when two package names belong to the same project, which is what
 keeps a package claiming its own project's names from firing a scope-expansion
 rule.
@@ -327,17 +338,17 @@ rule.
 
 | Key | Rule | Default | Meaning |
 |-----|------|---------|---------|
-| `r082.obfuscation_density` | R082 | `3` | Distinct obfuscation indicators on one line before it is reported. |
-| `r089.attack_chain_stages` | R089 | `3` | Distinct kill-chain stages that must co-occur. |
-| `r092.min_packages` / `r092.window_days` | R092 | `10` / `7` | Cluster size and window for mass adoption. |
-| `r100.min_packages` | R100 | `3` | Unrelated packages that must share a source repository. |
-| `r105.min_packages` / `r105.window_hours` | R105 | `5` / `24` | Cluster size and window for an attribute burst. |
-| `r107.min_hops` / `r111.min_hops` | R107, R111 | `2` | Hops that make an exposure transitive rather than direct, keeping both out of R093's lane. |
-| `r108.min_history_cycles` / `r108.z_score` / `r108.min_activity` | R108 | `3` / `2.0` / `3` | Baseline length, deviation and floor for maintainer activity. |
-| `r112.min_dependents` | R112 | `50` | Dependents that make a package a hub. |
-| `r125.min_history_cycles` / `r125.z_score` / `r125.min_introduced` | R125 | `3` / `3.0` / `3` | Baseline length, deviation and floor for the corpus introduction rate. |
-| `r116.widely_provided_observations` | R116 | `25` | Observations that make a provided name widely provided. |
-| `r126.window_days` | R126 | `14` | How recent the modification must be after an adoption. |
+| `h036.obfuscation_density` | H036 | `3` | Distinct obfuscation indicators on one line before it is reported. |
+| `h043.attack_chain_stages` | H043 | `3` | Distinct kill-chain stages that must co-occur. |
+| `h045.min_packages` / `h045.window_days` | H045 | `10` / `7` | Cluster size and window for mass adoption. |
+| `h052.min_packages` | H052 | `3` | Unrelated packages that must share a source repository. |
+| `h055.min_packages` / `h055.window_hours` | H055 | `5` / `24` | Cluster size and window for an attribute burst. |
+| `h057.min_hops` / `h060.min_hops` | H057, H060 | `2` | Hops that make an exposure transitive rather than direct, keeping both out of H046's lane. |
+| `h058.min_history_cycles` / `h058.z_score` / `h058.min_activity` | H058 | `3` / `2.0` / `3` | Baseline length, deviation and floor for maintainer activity. |
+| `h061.min_dependents` | H061 | `50` | Dependents that make a package a hub. |
+| `h073.min_history_cycles` / `h073.z_score` / `h073.min_introduced` | H073 | `3` / `3.0` / `3` | Baseline length, deviation and floor for the corpus introduction rate. |
+| `h064.widely_provided_observations` | H064 | `25` | Observations that make a provided name widely provided. |
+| `h074.window_days` | H074 | `14` | How recent the modification must be after an adoption. |
 | `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
 
 ### `iocs.toml`

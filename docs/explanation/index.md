@@ -30,11 +30,11 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 **Structural signals (Tier A)** come from rule matching. Two match targets exist because PKGBUILDs have two surfaces:
 
 - **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
-- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (R004, R005, R007, R009, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
+- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
 
-Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions. R009 (sudo) was later moved out of the TOML ruleset entirely, because "inside a function body" still admitted `optdepends` names and `echo` strings; it is now a code rule that requires `sudo` at a command position.
+Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions. H004 (sudo) was later moved out of the TOML ruleset entirely, because "inside a function body" still admitted `optdepends` names and `echo` strings; it is now a code rule that requires `sudo` at a command position.
 
-The top-level position is not ignored, it is a separate claim: [R129](../reference/rules/fetch-and-execution.md#r129) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
+The top-level position is not ignored, it is a separate claim: [H077](../reference/rules/fetch-and-execution.md#h077) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
 
 **Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. No network calls are made at analysis time.
 
@@ -88,7 +88,7 @@ claims in ways the tool cannot, which is why they are reported at weight 0. See
 
 A credit would also be the wrong fix for the calibration problem it appears to
 solve. A package doing GPG verification must not score *worse* than one doing
-nothing, and that is handled at the source: R004 does not fire on a `SKIP` that
+nothing, and that is handled at the source: H001 does not fire on a `SKIP` that
 is mandatory, structurally uncheckable, or covered by declared PGP keys.
 
 **Source bucket modifiers** adjust for the trustworthiness of the domain:

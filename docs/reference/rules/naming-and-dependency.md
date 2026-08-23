@@ -1,8 +1,8 @@
 # Naming and Dependencies
 
 A name is claimed, or a dependency set changes, in a way that redirects
-what gets installed. R074 covers the package's own name impersonating a
-popular one; D002 covers the same attack against a dependency name; R116
+what gets installed. H029 covers the package's own name impersonating a
+popular one; D002 covers the same attack against a dependency name; H064
 and D004 cover `provides`/`replaces` claiming a name that belongs to
 something else.
 
@@ -10,7 +10,7 @@ Every rule here needs the dependency corpus, which is seeded from every
 `depends` entry in the AUR plus every package name and `provides` alias.
 Without the seed they stay silent rather than treating an empty table as
 "nothing has ever been seen". Aggregate expansion is counted rather than
-named, so it lives in [count-based](count-based.md#r075-rule).
+named, so it lives in [count-based](count-based.md#h030-rule).
 
 See [the rule system reference](system.md) for the field table, the
 severity weights and the reserved identifier ranges.
@@ -26,15 +26,15 @@ severity weights and the reserved identifier ranges.
 | [D002](#d002) | Typosquatted Dependency | HIGH |
 | [D003](#d003) | New Network-Using Makedepends | MEDIUM |
 | [D004](#d004) | Dependency Hijack Via Provides | HIGH |
-| [R016](#r016) | New Make/Opt/Check Dependency | INFO |
-| [R074](#r074-rule) | Package-Name Typosquat | HIGH |
-| [R095](#r095) | Dependency Vendored Into Source | HIGH |
-| [R101](#r101) | Name/Host Consensus Divergence | MEDIUM |
-| [R110](#r110) | Name/Repo Divergence | MEDIUM |
-| [R116](#r116) | Provides/Replaces Scope Expansion | HIGH |
+| [H006](#h006) | New Make/Opt/Check Dependency | INFO |
+| [H029](#h029-rule) | Package-Name Typosquat | HIGH |
+| [H048](#h048) | Dependency Vendored Into Source | HIGH |
+| [H053](#h053) | Name/Host Consensus Divergence | MEDIUM |
+| [H059](#h059) | Name/Repo Divergence | MEDIUM |
+| [H064](#h064) | Provides/Replaces Scope Expansion | HIGH |
 <!-- /generated: page-index -->
 
-### R016: New Make/Opt/Check Dependency {#r016}
+### H006: New Make/Opt/Check Dependency {#h006}
 
 - **Target:** `raw_line`
 - **Severity:** INFO (weight 0); see Note
@@ -43,7 +43,7 @@ severity weights and the reserved identifier ranges.
 - **Scope:** All lines
 - **Description:** Fires when a `makedepends=`, `optdepends=`, or `checkdepends=` array is added or modified. At INFO it contributes weight 0 and reports context only. Sources a dependency-extraction exclusion: the dependency declaration itself is metadata, not a command, and must not be read for command-position matching.
 
-### R074: Package-Name Typosquat {#r074-rule}
+### H029: Package-Name Typosquat {#h029-rule}
 
 - **Target:** programmatic (package name against seeded candidate list)
 - **Severity:** HIGH (weight 25) - corpus rate 1.12 % (package-name scan)
@@ -117,22 +117,22 @@ The ecosystem carve-out matters: thousands of unrelated packages share `python-`
 
 MEDIUM because adding `git` to fetch submodules is legitimate. It is a signal, not a verdict.
 
-### R116: Provides/Replaces Scope Expansion {#r116}
+### H064: Provides/Replaces Scope Expansion {#h064}
 
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
 - **Category:** `dependency`
-- **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[r116] widely_provided_observations`, default 25).
+- **Condition:** A newly claimed `provides` or `replaces` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).
 
 Claiming another project's name redirects installs of that name to this
 package. Relatedness suppresses the obvious false positive: variant, companion
 and sibling stems of the package's own name never fire. Cold start cannot fire
 either branch, since neither corpus nor pacman data exists to establish what is
-established. R116 always runs; the experimental D004 covers the same ground and
+established. H064 always runs; the experimental D004 covers the same ground and
 may double-report when experimental rules are enabled.
 
 Fire rate: 0 of 3246.
 
-### R095: Dependency Vendored Into Source {#r095}
+### H048: Dependency Vendored Into Source {#h048}
 
 - **Severity:** HIGH (weight 25) for a security-relevant library, MEDIUM (weight 15) otherwise
 - **Category:** `dependency`
@@ -142,13 +142,13 @@ Narrowed to that mechanical case on purpose. Vendoring a library bypasses the
 distribution's security updates for it, and `[patterns] security_relevant_libraries`
 is what raises the severity.
 
-### R101: Name/Host Consensus Divergence {#r101}
+### H053: Name/Host Consensus Divergence {#h053}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
 - **Condition:** An ecosystem-prefixed package (`python-`, `ruby-`, `nodejs-`, ...) is sourced from neither its ecosystem's canonical hosts nor a known forge.
 
-### R110: Name/Repo Divergence {#r110}
+### H059: Name/Repo Divergence {#h059}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`

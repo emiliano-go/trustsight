@@ -120,8 +120,8 @@ time, the bytes the registry serves remain outside TrustSight's visibility.
 
 Every cycle is also written to the **adoption feed**, a row per package per
 cycle in `cycle_events` recording whether it was added, modified or removed and
-who owned it. That feed is the baseline R125 measures a rate deviation against
-and the history R108 compares a maintainer's activity to. It is why the first
+who owned it. That feed is the baseline H073 measures a rate deviation against
+and the history H058 compares a maintainer's activity to. It is why the first
 cycle of a fresh install can never produce a Class D finding: there is nothing
 to deviate from, and that silence is enforced by a calibration gate.
 

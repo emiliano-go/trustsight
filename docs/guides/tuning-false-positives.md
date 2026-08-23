@@ -28,14 +28,14 @@ trustsight inspect <package>
 
 Look for patterns:
 
-- **R009/R010/R011** (command-structure rules): these now fire only in `function_body` context. If they are still over-firing, the package may use unconventional but legitimate helper functions.
-- **R004** (checksum removal): some AUR packages legitimately skip checksums for binary blobs.
-- **R005** (checksum array emptied): inspect why a recipe changed `sha256sums` to an empty array.
-- **R006** (insecure download protocol): inspect an added `http://` source and whether the same change added or updated checksum backing.
+- **H004/R010/R011** (command-structure rules): these now fire only in `function_body` context. If they are still over-firing, the package may use unconventional but legitimate helper functions.
+- **H001** (checksum removal): some AUR packages legitimately skip checksums for binary blobs.
+- **H002** (checksum array emptied): inspect why a recipe changed `sha256sums` to an empty array.
+- **H003** (insecure download protocol): inspect an added `http://` source and whether the same change added or updated checksum backing.
 
 ### Scope constraints already applied
 
-Rules R009, R010, and R011 were scoped to `function_body` context in a previous release specifically to reduce false positives on top-level variable assignments and sourced library files. If they still over-fire, your further options are:
+Rules H004, R010, and R011 were scoped to `function_body` context in a previous release specifically to reduce false positives on top-level variable assignments and sourced library files. If they still over-fire, your further options are:
 
 1. Demote the severity to INFO.
 2. Disable the rule entirely (not recommended; you lose signal).
@@ -47,7 +47,7 @@ Rules R009, R010, and R011 were scoped to `function_body` context in a previous 
 
 ```toml
 ## config.toml
-[rules.R004]
+[rules.H001]
 weight_override = 5  # was HIGH/25; still fires, but contributes less score
 ```
 

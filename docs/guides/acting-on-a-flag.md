@@ -16,16 +16,16 @@ This shows:
 
 - The **diff summary**: every line added, removed, or changed between the installed and candidate PKGBUILD.
 - **Resolved commands**: the expanded `source=()`, `sha256sums=()`, `validpgpkeys=()`, etc., as they would execute during the build.
-- **Triggered rules**: which published R/C/D/S/X rules fired, with the specific lines that matched.
+- **Triggered rules**: which published R/H/C/D/S/X rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 
 ## Step 2: Trace the score to specific PKGBUILD lines
 
 Every rule in the output references the line(s) that triggered it. Cross-reference with the diff:
 
-- **R004 (checksum removal)**: look for `sha256sums=('SKIP')` or a `source=` entry without a matching checksum.
-- **R005 (checksum array emptied)**: find the `sha256sums=()` change and establish why checksum coverage was removed.
-- **R006 (insecure download protocol)**: inspect an added `http://` source URL and whether the same diff added or changed checksum backing.
+- **H001 (checksum removal)**: look for `sha256sums=('SKIP')` or a `source=` entry without a matching checksum.
+- **H002 (checksum array emptied)**: find the `sha256sums=()` change and establish why checksum coverage was removed.
+- **H003 (insecure download protocol)**: inspect an added `http://` source URL and whether the same diff added or changed checksum backing.
 - **R012/R013 (FATAL)**: unicode confusables or prompt injection: do not install.
 
 ## Step 3: Act by severity tier

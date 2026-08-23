@@ -39,6 +39,46 @@ Run `uv run pytest` for the current test count; it changes as coverage is added.
 uv run pytest tests/test_rules.py::test_r001_curl_bash -v
 ```
 
+### The suite does not reach the network
+
+Every test runs with `TRUSTSIGHT_OFFLINE=1` set and with outbound sockets
+blocked. A test that tries to open a connection to anything but loopback
+fails immediately with `NetworkAccessDenied`, naming the address and the
+frame that reached for it.
+
+This is not a policy about tidiness. A test that reaches the real AUR does
+not fail; it **waits**. The metadata dump is tens of megabytes behind a
+300-second timeout, so a mock that silently stops applying turns a
+one-second unit test into a stalled CI job with no failing assertion to
+point at. The guard converts that stall into a named failure.
+
+If you hit it, the fix is almost always to patch the function that fetches
+rather than to allow the call:
+
+| Reaching for | Patch |
+|---|---|
+| The release channel (seed, IOC baselines, corpus) | Nothing - `TRUSTSIGHT_OFFLINE` already covers it |
+| The AUR metadata snapshot | `trustsight.full_aur.pipeline.fetch_metadata` |
+| A package's PKGBUILD | `trustsight.full_aur.pipeline.fetch_pkgbuild_with_tree` |
+| Dependency resolution | Already stubbed suite-wide; override it with your own data |
+
+A test whose subject *is* the online path opts back in with
+`monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)` and mocks its own
+transport; `tests/test_release_fetch.py` does this at file level. The socket
+guard still holds the line underneath, so opting out of offline mode does
+not let a real request through.
+
+!!! warning "Do not leave `sys.modules` rewritten"
+
+    A test that deletes `trustsight*` modules to re-import them must put
+    them back, in a `finally`. Otherwise a later test's
+    `monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)` patches one
+    module object while its own `from trustsight.db import init_db` refers
+    to another: `init_db()` creates tables in a tmpdir and
+    `get_connection()` opens your real database. This cost the suite 27
+    failures across three files, none of which named the test that caused
+    them.
+
 ## Lint the codebase
 
 ```bash

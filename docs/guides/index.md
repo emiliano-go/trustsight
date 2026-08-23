@@ -19,7 +19,7 @@ These pages cover common tasks you'll perform with TrustSight. Each guide is foc
 ## Reference
 
 - [CLI reference](../reference/cli.md)
-- [Rules reference (complete R/C/D/S/X catalog)](../reference/rules/index.md)
+- [Rules reference (complete R/H/C/D/S/X catalog)](../reference/rules/index.md)
 - [Code rules reference (C001-C009)](../reference/rules/system.md#c-series)
 - [Config reference](../reference/configuration.md)
 - [Evidence tiers](../reference/evidence-tiers.md)

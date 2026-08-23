@@ -6,10 +6,10 @@ the two. They are the densest group in the ruleset because the shapes are
 many and the claim is the same one, so a rule that only covers `curl |
 bash` leaves the rest of the family open.
 
-The pipe-to-shell rules (R001, R002) are the canonical form. R127, R137 and
-R138 exist because the pipe is not required: process substitution, a
+The pipe-to-shell rules (R001, R002) are the canonical form. H075, H082 and
+H083 exist because the pipe is not required: process substitution, a
 download split across two lines, and a declared `source=()` script all put
-fetched code in a shell without one. R129 moves the same question to parse
+fetched code in a shell without one. H077 moves the same question to parse
 time, where the fetch happens before any build step or checksum applies.
 
 See [the rule system reference](system.md) for the field table, the
@@ -23,15 +23,31 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C007](#c007) | Command Substitution In Source Array | CRITICAL |
+| [H003](#h003) | Insecure Download Protocol | LOW |
+| [H004](#h004) | Privilege Escalation | CRITICAL |
+| [H009](#h009) | Network connection attempt | CRITICAL |
+| [H011](#h011) | Sensitive binary execution | HIGH |
+| [H015](#h015) | Critical Build Function Modified | INFO |
+| [H016](#h016) | Hidden Network Fetch In Build | HIGH |
+| [H031](#h031) | Version-In-URL Injection | MEDIUM |
+| [H034](#h034) | Exotic Source Protocol | MEDIUM |
+| [H041](#h041) | Upload To Paste Or File-Drop Host | HIGH |
+| [H068](#h068) | Reconstructed Executable Payload | HIGH |
+| [H069](#h069) | Build-time Generation Then Execution | HIGH |
+| [H071](#h071) | Covert Egress | HIGH |
+| [H072](#h072) | Write Then Execute | HIGH |
+| [H075](#h075) | Indirect Remote Execution | CRITICAL |
+| [H077](#h077) | Parse-time Network Fetch | HIGH |
+| [H081](#h081) | Committed File Executed Without Declaration | HIGH |
+| [H082](#h082) | Fetch Then Execute | CRITICAL |
+| [H083](#h083) | Downloaded Source File Executed | HIGH |
+| [H090](#h090) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL |
+| [H094](#h094) | Unread Script Executed During Packaging | HIGH |
 | [R001](#r001) | Remote Script Execution | CRITICAL |
 | [R002](#r002) | Wget Pipe to Shell | CRITICAL |
-| [R006](#r006) | Insecure Download Protocol | LOW |
 | [R008](#r008) | Unexpected File Download | HIGH |
-| [R009](#r009) | Privilege Escalation | CRITICAL |
 | [R010](#r010) | Uses curl in PKGBUILD | LOW |
 | [R011](#r011) | Uses wget in PKGBUILD | LOW |
-| [R020](#r020) | Network connection attempt | CRITICAL |
-| [R022](#r022) | Sensitive binary execution | HIGH |
 | [R041](#r041) | Shell Network Redirection | CRITICAL |
 | [R042](#r042) | Download Then Execute | CRITICAL |
 | [R044](#r044) | Interpreter One-Liner With Network | HIGH |
@@ -42,22 +58,6 @@ severity weights and the reserved identifier ranges.
 | [R055](#r055) | Git Clone With Variable Branch | MEDIUM |
 | [R056](#r056) | Download Then Source | CRITICAL |
 | [R057](#r057) | TLS Verification Disabled | HIGH |
-| [R060](#r060) | Critical Build Function Modified | INFO |
-| [R061](#r061) | Hidden Network Fetch In Build | HIGH |
-| [R076](#r076) | Version-In-URL Injection | MEDIUM |
-| [R080](#r080) | Exotic Source Protocol | MEDIUM |
-| [R087](#r087) | Upload To Paste Or File-Drop Host | HIGH |
-| [R120](#r120) | Reconstructed Executable Payload | HIGH |
-| [R121](#r121) | Build-time Generation Then Execution | HIGH |
-| [R123](#r123) | Covert Egress | HIGH |
-| [R124](#r124) | Write Then Execute | HIGH |
-| [R127](#r127) | Indirect Remote Execution | CRITICAL |
-| [R129](#r129) | Parse-time Network Fetch | HIGH |
-| [R136](#r136) | Committed File Executed Without Declaration | HIGH |
-| [R137](#r137) | Fetch Then Execute | CRITICAL |
-| [R138](#r138) | Downloaded Source File Executed | HIGH |
-| [R146](#r146) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL |
-| [R150](#r150) | Unread Script Executed During Packaging | HIGH |
 <!-- /generated: page-index -->
 
 ### R001: Remote Script Execution {#r001}
@@ -78,7 +78,7 @@ severity weights and the reserved identifier ranges.
 - **Description:** Same as R001 but for `wget`. Separate rule per tool to allow per-tool tuning.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 
-### R006: Insecure Download Protocol {#r006}
+### H003: Insecure Download Protocol {#h003}
 
 - **Target:** programmatic (diff-aware)
 - **Severity:** LOW (weight 5)
@@ -94,7 +94,7 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `\b(python|ruby|perl)\s+-c\s+https?://`
 - **Description:** Detects language runtimes downloading scripts from URLs: `python -c <url>`, `ruby -c <url>`, `perl -c <url>`. An unusual pattern that indicates a runtime fetching and executing code from a remote server.
 
-### R009: Privilege Escalation {#r009}
+### H004: Privilege Escalation {#h004}
 
 - **Target:** `raw_line`
 - **Severity:** CRITICAL (weight 40)
@@ -121,7 +121,7 @@ severity weights and the reserved identifier ranges.
 - **Scope:** `["function_body"]` only
 - **Description:** Same rationale as R010 but for `wget`. Separate rule per tool.
 
-### R020: Network connection attempt {#r020}
+### H009: Network connection attempt {#h009}
 
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** CRITICAL (weight 40)
@@ -129,13 +129,13 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `(?!)` (never matches)
 - **Description:** A network socket opening at execution time. Shipped with a never-matching placeholder pattern because the current model cannot observe post-install behaviour from a static diff; the identifier is reserved so a future runtime probe can emit it without a baseline change.
 
-### R022: Sensitive binary execution {#r022}
+### H011: Sensitive binary execution {#h011}
 
 - **Target:** `runtime` (resolved execution path)
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
 - **Pattern:** `(?!)` (never matches)
-- **Description:** Execution of a sensitive binary in an unexpected position. Reserved `never-match` placeholder, as R020/R021.
+- **Description:** Execution of a sensitive binary in an unexpected position. Reserved `never-match` placeholder, as H009/H010.
 
 ### C007: Command Substitution In Source Array {#c007}
 
@@ -224,7 +224,7 @@ severity weights and the reserved identifier ranges.
 - **Pattern:** `(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)`
 - **Description:** Detects `curl --insecure` / `curl -k` and `wget --no-check-certificate`. Disabling certificate verification makes the transport trivially interceptable. The `-k` match requires a preceding word boundary so that flags such as `--keepalive-time` do not trigger it.
 
-### R060: Critical Build Function Modified {#r060}
+### H015: Critical Build Function Modified {#h015}
 
 - **Target:** programmatic (diff-aware, defined in `src/trustsight/analysis/build.py`)
 - **Severity:** INFO (weight 0)
@@ -239,7 +239,7 @@ Function membership comes from `_classify_enclosing_function()` in `rules.py`, *
 
 On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
 
-### R061: Hidden Network Fetch In Build {#r061}
+### H016: Hidden Network Fetch In Build {#h016}
 
 - **Target:** programmatic (resolved command lines)
 - **Severity:** HIGH (weight 25)
@@ -250,7 +250,7 @@ The comparison is against a **source-array-scoped** URL extraction, not the gene
 
 On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
 
-### R076: Version-In-URL Injection {#r076}
+### H031: Version-In-URL Injection {#h031}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** MEDIUM (weight 15)
@@ -264,7 +264,7 @@ ordinary packaging. What the rule describes is a value carrying delimiters
 
 Fire rate: 0 on all 3246 benign-corpus diffs.
 
-### R080: Exotic Source Protocol {#r080}
+### H034: Exotic Source Protocol {#h034}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** MEDIUM (weight 15)
@@ -276,7 +276,7 @@ gap rather than a silent pass.
 
 Fire rate: 6 of 3246 (0.18 %).
 
-### R087: Upload To Paste Or File-Drop Host {#r087}
+### H041: Upload To Paste Or File-Drop Host {#h041}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
@@ -291,9 +291,9 @@ attached, addressed to a host whose purpose is to accept an anonymous drop and
 hand back a link.
 
 Fetching from one of these hosts is not this rule. A `curl` pulling a patch
-from a gist is an undeclared download, which R061 already reports. Posting to
+from a gist is an undeclared download, which H016 already reports. Posting to
 that same gist is data leaving the machine that is building the package, and it
-is the evidence behind R089's `exfil` stage. On a line R087 claims, R061 stands
+is the evidence behind H043's `exfil` stage. On a line H041 claims, H016 stands
 down: describing an upload as a download would be wrong as well as scored
 twice.
 
@@ -301,9 +301,9 @@ The destination is an auditable list rather than a guess about what an endpoint
 is for, so an upload to a project's own CI host does not fire.
 
 Fire rate: 0 of 3246. The corpus contains one paste-host reference, a gist
-download in `gamescope-nvidia`, which stays R061's.
+download in `gamescope-nvidia`, which stays H016's.
 
-### R123: Covert Egress {#r123}
+### H071: Covert Egress {#h071}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
@@ -315,7 +315,7 @@ in a string or listed in `makedepends` never fires.
 
 Fire rate: 0 of 3246.
 
-### R129: Parse-time Network Fetch {#r129}
+### H077: Parse-time Network Fetch {#h077}
 
 - **Target:** programmatic (`analysis/network.py`)
 - **Severity:** HIGH (weight 25)
@@ -333,18 +333,18 @@ Quiet by construction on declarations: `DLAGENTS=(...)` and any other
 assignment whose *value* merely names a downloader configures makepkg rather
 than fetching. An assignment that *runs* one through a command substitution
 (`_ver=$(curl ...)`) is not a declaration and is not exempt. A fetch piped
-straight into a shell belongs to R001/R002, whose claim is heavier, so R129
+straight into a shell belongs to R001/R002, whose claim is heavier, so H077
 yields rather than scoring the same line twice.
 
 Fire rate: 3 of 3246 (0.09 %), all one package resolving a redirect with
 `curl` at the top level, which really does reach the network on a metadata
 refresh.
 
-### R120: Reconstructed Executable Payload {#r120}
+### H068: Reconstructed Executable Payload {#h068}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
-- **Condition:** Text on an added line (base64, hex, uuencode, or an R117 reconstruction) decodes to bytes carrying ELF, shebang, PE or Mach-O magic.
+- **Condition:** Text on an added line (base64, hex, uuencode, or an H065 reconstruction) decodes to bytes carrying ELF, shebang, PE or Mach-O magic.
 
 This is a type check on the decoder's output, which is why one rule covers
 every encoded-payload variant without naming the encoding. Encoded text assets,
@@ -352,7 +352,7 @@ checksums and keys decode to none of those magics.
 
 Fire rate: 0 of 3246.
 
-### R121: Build-time Generation Then Execution {#r121}
+### H069: Build-time Generation Then Execution {#h069}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
@@ -363,7 +363,7 @@ consumes is not generation-then-execution and does not fire.
 
 Fire rate: 0 of 3246.
 
-### R124: Write Then Execute {#r124}
+### H072: Write Then Execute {#h072}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
@@ -376,7 +376,7 @@ artefacts are exempt.
 
 Fire rate: 0 of 3246.
 
-### R127: Indirect Remote Execution {#r127}
+### H075: Indirect Remote Execution {#h075}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
@@ -385,13 +385,13 @@ Fire rate: 0 of 3246.
 Each still executes remote code at build time, so it belongs with R001/R002
 rather than at R010/R011's "uses curl" LOW.
 
-### R136: Committed File Executed Without Declaration {#r136}
+### H081: Committed File Executed Without Declaration {#h081}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
-- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an R124-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it.
+- **Condition:** An executed path is not a declared `source=()` basename, not a file the recipe wrote earlier in the same function, and not an H072-exempt build artifact, and either the path references `${startdir}`/`$startdir` or walks `../`, or the executed basename is present in the repository tree manifest under a relative path. A build tool (`make`, `cmake`, `ninja`, `meson`) whose *implicit* input file is in the manifest and undeclared counts as executing it.
 
-R121/R124 own files the recipe itself writes; R118 owns committed ELF
+H069/H072 own files the recipe itself writes; H066 owns committed ELF
 binaries. Between them sat the cleartext helper script: committed to the AUR
 repository, never named in `source=()` (so makepkg never copies it into
 `$srcdir` and its bytes never reach the differ), and executed through
@@ -403,7 +403,7 @@ file, however its basename collides, so the manifest signal requires a
 relative path.
 
 A build tool names no file on the command line, so no execution pattern saw
-one, and `make` sits in R124's benign-artifact exemption because almost every
+one, and `make` sits in H072's benign-artifact exemption because almost every
 package runs it. The question is not the command but the file it reads: a
 `Makefile` committed to the AUR repository and absent from `source=()` is code
 with no checksum over it and nothing declaring it. The rule therefore resolves
@@ -416,16 +416,16 @@ commit a build file declare it in `source=()`, so the arm fires on none of
 them. Detected by `_committed_execution_findings()` in
 `src/trustsight/analysis/delivery.py`.
 
-### R137: Fetch Then Execute {#r137}
+### H082: Fetch Then Execute {#h082}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Condition:** Inside a build/package/check/prepare function (install hooks already have R062), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
+- **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
 
 This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
 pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
 the declared `source=()` array are deliberately excluded - they have their
-own rule (R138), so checksum-bearing source files are not double-counted.
+own rule (H083), so checksum-bearing source files are not double-counted.
 
 The client list is not only `curl` and `wget`, because those are what a
 reviewer greps for: an interpreter that is already a makedepend fetches just
@@ -436,7 +436,7 @@ function name, so splitting them across helpers does not separate them.
 Detected by `_fetch_then_execute_findings()` in
 `src/trustsight/analysis/delivery.py`.
 
-### R138: Downloaded Source File Executed {#r138}
+### H083: Downloaded Source File Executed {#h083}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`
@@ -450,7 +450,7 @@ executables and stay silent; the rule targets interpreted execution of a
 downloaded script. Detected by `_source_file_execution_findings()` in
 `src/trustsight/analysis/delivery.py`.
 
-### R146: Committed Companion Carries A Fetch-Execute Payload {#r146}
+### H090: Committed Companion Carries A Fetch-Execute Payload {#h090}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `delivery`
@@ -477,14 +477,14 @@ read by its added lines only: a hunk that *removes* a `curl … | sh` is the
 opposite of this rule's subject.
 
 Reading the content at all required a change underneath it. The tree
-manifest kept 64 bytes per file, which answers "is this an ELF" - all R118
+manifest kept 64 bytes per file, which answers "is this an ELF" - all H066
 ever asked - and cannot answer "what does this unit run". Files whose names
 say a recipe can ship or apply them are now read to 16 KiB, with a 512 KiB
 ceiling across the whole tree, and a companion cut short by either bound
 marks the tree incomplete rather than reporting a full examination of a
 partial read.
 
-### R150: Unread Script Executed During Packaging {#r150}
+### H094: Unread Script Executed During Packaging {#h094}
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `execution`

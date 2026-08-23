@@ -27,7 +27,7 @@ name content this analysis never reads - and a change to one of them, with no
 corresponding version change, is the observable form of "the code was
 replaced".
 
-That reading is what [R079](../reference/rules/integrity.md#r079) already
+That reading is what [H033](../reference/rules/integrity.md#h033) already
 applies to a git ref and [C001](../reference/rules/integrity.md#c001) to a
 checksum, and [C008](../reference/rules/integrity.md#c008) now applies it to
 the rest. The binary case needed no new reading at all: a git blob id *is* a
@@ -59,7 +59,7 @@ build() {
 
 Every verb here is the most ordinary thing a PKGBUILD does. The code that runs is in the `Makefile` inside the tarball, which this analysis never downloads and never reads.
 
-It is not about `make` specifically. Every driver has this property - `cmake --build`, `ninja -C`, `autoreconf && ./configure`, `python setup.py build`, and equally `sh p-1.0/bootstrap.sh` or `perl p-1.0/Makefile.PL`. An execution is paired with a file this analysis can read only when that file is *individually declared* in `source=()` (R138) or *committed to the AUR repository* (R136). A script inside a declared tarball is neither: the tarball is declared as one entry, its contents are never read, and no rule knows the script exists.
+It is not about `make` specifically. Every driver has this property - `cmake --build`, `ninja -C`, `autoreconf && ./configure`, `python setup.py build`, and equally `sh p-1.0/bootstrap.sh` or `perl p-1.0/Makefile.PL`. An execution is paired with a file this analysis can read only when that file is *individually declared* in `source=()` (H083) or *committed to the AUR repository* (H081). A script inside a declared tarball is neither: the tarball is declared as one entry, its contents are never read, and no rule knows the script exists.
 
 Nor is the answer to add the verbs. Measured against the 3,246-diff locked benign corpus, executing a path that is neither declared nor committed is what **half** of all packages do - `python setup.py build`, `bash ./autogen.sh`, `./configure` are the ordinary shape of building software. A rule over that would fire on the corpus more often than not, and a coverage gap over it would put most packages into Inconclusive permanently. Either would replace a precise instrument with a warning nobody can act on.
 
@@ -69,7 +69,7 @@ That leaves the *documented* boundary narrower than it was. The excluded majorit
 
 Two adjacent cases *are* covered, and the boundary between them is worth being precise about:
 
-- A `Makefile` **committed to the AUR repository** and not declared in `source=()` is code the maintainer added, not code that arrived with the tarball. `R136` fires on it (see [Fetch and Execution](../reference/rules/fetch-and-execution.md#r136)).
+- A `Makefile` **committed to the AUR repository** and not declared in `source=()` is code the maintainer added, not code that arrived with the tarball. `H081` fires on it (see [Fetch and Execution](../reference/rules/fetch-and-execution.md#h081)).
 - A source that is **not pinned** - `git+https://…#branch=main`, or a bare `git+` URL - means the content is chosen by upstream at build time rather than fixed by this recipe. That is reported as `P008`, a weight-0 declared fact.
 
 What is left is the checksum-pinned tarball. There the content *is* fixed by the recipe: changing it requires changing the checksum, and that change is in the diff. So the recipe-level analysis has real, if indirect, coverage - it can tell you the meal came from the same sealed tin, not what is in the tin.
@@ -133,9 +133,9 @@ None of these mitigations eliminate the problem. A PKGBUILD that reuses well-kno
 
 ## The novelty ceiling (R103/R109)
 
-The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 tier codifies. R126 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.
+The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 tier codifies. H074 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.
 
-The composition rules that narrow this ceiling are grounded in real events. R089 (attack-chain composition) exists because both the 2018 acroread supply-chain attack and the 2026 Atomic Arch campaign progressed through multiple distinct kill-chain stages, and requiring several stages to co-occur is how the rule separates a genuine chain from single-stage noise.
+The composition rules that narrow this ceiling are grounded in real events. H043 (attack-chain composition) exists because both the 2018 acroread supply-chain attack and the 2026 Atomic Arch campaign progressed through multiple distinct kill-chain stages, and requiring several stages to co-occur is how the rule separates a genuine chain from single-stage noise.
 
 ## The limits of corpus-based detection
 

@@ -70,9 +70,13 @@ name = "trustsight on PyPI"
 [[project.nav]]
 Overview = [
   {Home = "index.md"},
-  {"Security Model" = "security.md"},
   {Changelog = "changelog.md"},
   {License = "license.md"},
+]
+
+[[project.nav]]
+Security = [
+  {"Security Model" = "security.md"},
 ]
 
 [[project.nav]]

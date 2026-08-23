@@ -195,6 +195,7 @@ Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery.py
 - **Category:** `persistence`
 - **Pattern:** `^\+?(?=[^\n]*\$\{?pkgdir\}?)(?=[^\n]*(?:/tmp/|/var/tmp/|/dev/shm/))\S`
 - **Condition:** A line that both references `$pkgdir` and names a path under `/tmp`, `/var/tmp` or `/dev/shm`.
+- **Description:** A file staged into the package root names a program under a world-writable directory. Anyone can replace the target after the package is built, so the installed path is not under the packager's control.
 
 A file staged into the package root that names a program under a
 world-writable directory. Those directories are writable by everyone, so

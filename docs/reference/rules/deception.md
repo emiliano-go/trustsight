@@ -43,6 +43,7 @@ severity weights and the reserved identifier ranges.
 - **Severity:** FATAL (hard-stop at 100, weight 0)
 - **Category:** `unicode`
 - **Pattern:** `[\u202A-\u202E\u2066-\u2069\u2060-\u2064\U000E0000-\U000E007F]|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])`
+- **Description:** Detects directionality overrides, isolates, invisible operators, tag characters, and zero-width joiners placed between ASCII neighbours. These codepoints can make displayed text differ from executed text. The ASCII-neighbour restriction preserves attacks hidden inside ASCII commands or URLs while dropping legitimate use in localized `GenericName[...]` lines.
 
 The rule splits deceptive codepoints into two classes, because they are not equally suspicious.
 

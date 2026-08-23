@@ -25,7 +25,7 @@ no timestamp, and the output depends only on the paths and contents that
 checksum into this PKGBUILD cannot change the tarball that checksum
 describes. That is what makes a pre-tag checksum possible at all.
 
-`sha256sums` is never `SKIP`. TrustSight reports a disabled checksum as R004
+`sha256sums` is never `SKIP`. TrustSight reports a disabled checksum as H001
 at HIGH severity, and shipping a package that trips its own rule would be
 indefensible.
 

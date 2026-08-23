@@ -12,7 +12,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
     <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
   </a>
   <a href="https://deepwiki.com/emiliano-go/trustsight">
-    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" width="153">
   </a>
   <a href="https://github.com/emiliano-go/trustsight/actions/workflows/test.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests" alt="Tests">
@@ -57,21 +57,21 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | Attack / Risk | How TrustSight catches it |
 |---|---|
 | **Piped shell scripts** (`curl \| bash`, `base64 \| sh`) | Scans every new or changed line for command-subprocess pipelines (R001, ~100% recall on known cases) |
-| **Obfuscated commands** (encoded strings, environment subversion like `LD_PRELOAD`) | Resolves variables and decodes known obfuscation patterns; flags build-environment tampering (R007, R070) |
-| **Checksum disabled or removed** | Compares old vs new `sha256sums` / `md5sums` arrays (R004, R005) |
+| **Obfuscated commands** (encoded strings, environment subversion like `LD_PRELOAD`) | Resolves variables and decodes known obfuscation patterns; flags build-environment tampering (R007, H025) |
+| **Checksum disabled or removed** | Compares old vs new `sha256sums` / `md5sums` arrays (H001, H002) |
 | **Source URL typosquatting** (`githab.com` instead of `github.com`) | Character-level edit distance against known forge domains (R008) |
-| **Package-name typosquatting** (e.g. `libuvc` resembling `libuv`) | Edit-distance comparison against more popular packages in the seed database (R074) |
+| **Package-name typosquatting** (e.g. `libuvc` resembling `libuv`) | Edit-distance comparison against more popular packages in the seed database (H029) |
 | **URL swapped without a version bump** | Tracks source URL changes that are not accompanied by a new version (C003) |
 | **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (about 180,000 known source URLs and 35,903 hashed maintainer identities, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
 | **Known-bad indicators** | Matches package URLs and strings against signed, federated IOC baselines from the release channel; reported in the IOC tier, outside the heuristic score |
 | **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
 | **Reviewer-directed instruction templates** in package metadata | Flags common reviewer-manipulation templates as a high-severity tripwire (R012); a match requires review, not an inference about author intent |
-| **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (R069) |
-| **Untrusted maintainer takeover** | A maintainer change to someone never seen before (R071) |
-| **Stale package revived** | A package with no updates for over a year suddenly gets one (R067) |
-| **Accelerated release cadence** | 3+ commits in the last 24 hours (R073, informational) |
+| **GPG verification removed** | Detects when `validpgpkeys` was populated and is now empty (H024) |
+| **Untrusted maintainer takeover** | A maintainer change to someone never seen before (H026) |
+| **Stale package revived** | A package with no updates for over a year suddenly gets one (H022) |
+| **Accelerated release cadence** | 3+ commits in the last 24 hours (H028, informational) |
 | **Sabotage payloads** (fork bombs, `rm -rf /`, disk wiping, permission sabotage, service disruption, coin miners, log wiping) | Command-position matching that distinguishes the build sandbox from the system: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not (S001-S008) |
-| **Orphan hijacking** (a package adopted from orphan, then its recipe rewritten with no upstream change) | The AUR maintainer field against the last recorded state, plus a recipe-only-change signature and the composition of both with an unpinned build fetch (R141-R143) |
+| **Orphan hijacking** (a package adopted from orphan, then its recipe rewritten with no upstream change) | The AUR maintainer field against the last recorded state, plus a recipe-only-change signature and the composition of both with an unpinned build fetch (H086-H088) |
 | **Build steps that fetch unpinned code** (`npm install`, `pip install`, `cargo fetch` in a build function) | Not scored - reported as the `unpinned_build_deps` coverage gap, because what the build will run is not in the analysed text and no checksum covers it |
 | **Risk in AUR dependencies** | Dependencies are analysed as packages in their own right, to a configurable [depth](#dependency-depth) |
 
@@ -245,7 +245,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 145 documented rules across five scoring namespaces: 119 detection rules (R-series, part TOML-configurable and part code-emitted), 7 code-structure rules (C001-C007), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 7 crossfire anti-evasion rules (X001-X007). A sixth namespace, declared practice (P001-P007), reports at weight 0 and never scores. Calibration uses a locked, point-in-time 3,246-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+Signals come from 171 documented rules across six scoring namespaces: 32 regex detection rules (R-series, every one of them defined in `rules.toml` and editable), 95 heuristics needing diff context a regex cannot see (H001-H095, code-emitted), 9 code-structure rules (C001-C009), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 23 crossfire anti-evasion rules (X001-X023). Two further namespaces report at weight 0 and never score: declared practice (P001-P008) and unverifiable findings (W001-W006). Calibration uses a locked, point-in-time 3,246-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 

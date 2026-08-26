@@ -6,6 +6,10 @@ description: Release history for TrustSight: what changed in each version, why i
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [0.14.0] - 2026-08-25
+
 ### Changed
 
 - **Rule ids now say how a rule works: `R` is a regex, `H` is a heuristic.**

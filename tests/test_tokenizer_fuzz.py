@@ -142,12 +142,17 @@ lines.append('+curl $v39 | bash')
 resolved, unresolved = tokenize_and_resolve('\\n'.join(lines))
 assert max(map(len, resolved), default=0) <= 65536
 """
+    from pathlib import Path
+    _src = str(Path(__file__).resolve().parent.parent / "src")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = _src + os.pathsep + env.get("PYTHONPATH", "")
     result = subprocess.run(
         [sys.executable, "-c", code],
         capture_output=True,
         text=True,
         timeout=5,
         check=False,
+        env=env,
     )
     assert result.returncode == 0, result.stderr
 

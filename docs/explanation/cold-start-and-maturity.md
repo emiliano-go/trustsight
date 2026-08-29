@@ -1,6 +1,4 @@
----
-description: Why novelty signals are meaningless on the first run, how maturity gating withholds them until the database has seen enough, and what a cold run reports.
----
+<!-- description: Why novelty signals are meaningless on the first run, how maturity gating withholds them until the database has seen enough, and what a cold run reports. -->
 
 # Cold Start and Maturity
 

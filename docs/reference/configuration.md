@@ -1,6 +1,4 @@
----
-description: Every TrustSight configuration file and environment variable: config.toml and its rule, host, pattern, naming, threshold and domain siblings.
----
+<!-- description: Every TrustSight configuration file and environment variable: config.toml and its rule, host, pattern, naming, threshold and domain siblings. -->
 
 # Configuration Reference
 

@@ -1,6 +1,4 @@
----
-description: Complete command reference for TrustSight: review, inspect, history, config, lint-rules and full-aur, with every flag and what it changes.
----
+<!-- description: Complete command reference for TrustSight: review, inspect, history, config, lint-rules and full-aur, with every flag and what it changes. -->
 
 # CLI Reference
 

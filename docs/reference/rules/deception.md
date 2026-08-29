@@ -1,6 +1,4 @@
----
-description: Rules targeting the reviewer rather than the shell: reviewer-directed template text and codepoints that make displayed text differ from executed text.
----
+<!-- description: Rules targeting the reviewer rather than the shell: reviewer-directed template text and codepoints that make displayed text differ from executed text. -->
 
 # Deception and Anti-Analysis
 

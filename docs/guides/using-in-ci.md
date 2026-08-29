@@ -1,6 +1,4 @@
----
-description: How to gate a CI/CD pipeline on a TrustSight review: the JSON contract, the fields to read, and why the exit code is not the signal to branch on.
----
+<!-- description: How to gate a CI/CD pipeline on a TrustSight review: the JSON contract, the fields to read, and why the exit code is not the signal to branch on. -->
 
 # Using TrustSight in CI
 

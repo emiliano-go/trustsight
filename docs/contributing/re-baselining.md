@@ -1,6 +1,4 @@
----
-description: When and how to regenerate the score-distribution baseline over the pinned corpus after a scoring change, and how to read the resulting diff.
----
+<!-- description: When and how to regenerate the score-distribution baseline over the pinned corpus after a scoring change, and how to read the resulting diff. -->
 
 # Re-baselining
 

@@ -1,6 +1,4 @@
----
-description: Rules for what survives the build: install hooks running as root, systemd units, pacman hooks and setuid bits that keep running after makepkg exits.
----
+<!-- description: Rules for what survives the build: install hooks running as root, systemd units, pacman hooks and setuid bits that keep running after makepkg exits. -->
 
 # Install and Persistence
 

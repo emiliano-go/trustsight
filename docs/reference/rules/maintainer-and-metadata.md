@@ -1,6 +1,4 @@
----
-description: Rules for a change of ownership, or for a property that held across a long run of observations changing. The longitudinal rules read history, not a diff.
----
+<!-- description: Rules for a change of ownership, or for a property that held across a long run of observations changing. The longitudinal rules read history, not a diff. -->
 
 # Maintainer and Metadata
 

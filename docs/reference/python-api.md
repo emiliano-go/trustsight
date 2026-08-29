@@ -1,6 +1,4 @@
----
-description: The supported programmatic interface: `trustsight.api` runs the same flows as the CLI in the same order and returns dataclasses instead of printing.
----
+<!-- description: The supported programmatic interface: `trustsight.api` runs the same flows as the CLI in the same order and returns dataclasses instead of printing. -->
 
 # Python API Reference
 

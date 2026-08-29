@@ -1,6 +1,4 @@
----
-description: Rules that fire when a count of same-kind indicators crosses a fixed threshold within one artifact or one cluster.
----
+<!-- description: Rules that fire when a count of same-kind indicators crosses a fixed threshold within one artifact or one cluster. -->
 
 # Count-Based
 

@@ -1,6 +1,4 @@
----
-description: Build and install TrustSight from the PKGBUILD in this repository. There is no AUR package yet; requirements are Arch Linux, Python 3.11 or later, and git.
----
+<!-- description: Build and install TrustSight from the PKGBUILD in this repository. There is no AUR package yet; requirements are Arch Linux, Python 3.11 or later, and git. -->
 
 # Installation
 

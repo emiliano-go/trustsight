@@ -1,6 +1,4 @@
----
-description: How to contribute to TrustSight: development setup, writing rules, re-baselining, releasing, security review and blinded evaluation.
----
+<!-- description: How to contribute to TrustSight: development setup, writing rules, re-baselining, releasing, security review and blinded evaluation. -->
 
 # Contributing to TrustSight
 

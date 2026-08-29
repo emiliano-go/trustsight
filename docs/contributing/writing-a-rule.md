@@ -1,6 +1,4 @@
----
-description: How to add a rule to TrustSight: choosing a namespace and id, writing the pattern, and the checks it must pass.
----
+<!-- description: How to add a rule to TrustSight: choosing a namespace and id, writing the pattern, and the checks it must pass. -->
 
 # Writing a Rule
 

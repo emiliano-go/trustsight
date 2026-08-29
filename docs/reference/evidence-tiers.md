@@ -1,6 +1,4 @@
----
-description: The A/B/C/D evidence taxonomy: structural findings, source priors, history and novelty, and declared verification, with the maturity gating that governs them.
----
+<!-- description: The A/B/C/D evidence taxonomy: structural findings, source priors, history and novelty, and declared verification, with the maturity gating that governs them. -->
 
 # Evidence Tiers
 

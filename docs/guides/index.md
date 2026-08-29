@@ -1,6 +1,4 @@
----
-description: Task-oriented guides for everyday TrustSight work: auditing before an update, gating CI, investigating a flag, configuring rules, and tuning false positives.
----
+<!-- description: Task-oriented guides for everyday TrustSight work: auditing before an update, gating CI, investigating a flag, configuring rules, and tuning false positives. -->
 
 # Guides
 

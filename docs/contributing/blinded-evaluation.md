@@ -1,6 +1,4 @@
----
-description: How to submit an independent evaluation of TrustSight's detection and false-positive rates, and why the committed fixtures cannot supply one.
----
+<!-- description: How to submit an independent evaluation of TrustSight's detection and false-positive rates, and why the committed fixtures cannot supply one. -->
 
 # Blinded Evaluation
 

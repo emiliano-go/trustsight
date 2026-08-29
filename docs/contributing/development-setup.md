@@ -1,6 +1,4 @@
----
-description: Setting up a TrustSight development environment: editable install, test suite, linter and docs build.
----
+<!-- description: Setting up a TrustSight development environment: editable install, test suite, linter and docs build. -->
 
 # Development Setup
 

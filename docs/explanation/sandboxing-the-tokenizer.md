@@ -1,6 +1,4 @@
----
-description: Why the tokenizer is the one component worth isolating, what isolation would and would not buy, and the conditions under which it should be built.
----
+<!-- description: Why the tokenizer is the one component worth isolating, what isolation would and would not buy, and the conditions under which it should be built. -->
 
 # Sandboxing the Tokenizer
 

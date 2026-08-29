@@ -1,6 +1,4 @@
----
-description: How to edit rules.toml and config.toml to match your threat model: enabling and reweighting individual rules, and adjusting the evidence-tier weights.
----
+<!-- description: How to edit rules.toml and config.toml to match your threat model: enabling and reweighting individual rules, and adjusting the evidence-tier weights. -->
 
 # Configuring Rules and Weights
 

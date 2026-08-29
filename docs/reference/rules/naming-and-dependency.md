@@ -1,6 +1,4 @@
----
-description: Rules for a name being claimed, or a dependency set changing, in a way that redirects what actually gets installed.
----
+<!-- description: Rules for a name being claimed, or a dependency set changing, in a way that redirects what actually gets installed. -->
 
 # Naming and Dependencies
 

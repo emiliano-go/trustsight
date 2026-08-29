@@ -1,6 +1,4 @@
----
-description: What to do when a package scores above the threshold or returns INCONCLUSIVE: how to investigate the evidence, and why a flag is a prompt to look, not a verdict.
----
+<!-- description: What to do when a package scores above the threshold or returns INCONCLUSIVE: how to investigate the evidence, and why a flag is a prompt to look, not a verdict. -->
 
 # Acting on a Flag
 

@@ -1,6 +1,4 @@
----
-description: Install TrustSight, run your first review, and read the output table: what each column means, why the first run reports nothing, and what a verdict claims.
----
+<!-- description: Install TrustSight, run your first review, and read the output table: what each column means, why the first run reports nothing, and what a verdict claims. -->
 
 # Quickstart
 

@@ -1,6 +1,4 @@
----
-description: Every part of a TrustSight report explained: score breakdown, evidence tiers, rule firings, novelty context, coverage gaps, and what a verdict does not claim.
----
+<!-- description: Every part of a TrustSight report explained: score breakdown, evidence tiers, rule firings, novelty context, coverage gaps, and what a verdict does not claim. -->
 
 # Reading a Report
 

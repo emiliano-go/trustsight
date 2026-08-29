@@ -1,6 +1,4 @@
----
-description: How TrustSight works end to end: parse the diff, analyse the end state, score the evidence, classify the risk band, and translate it into a verdict.
----
+<!-- description: How TrustSight works end to end: parse the diff, analyse the end state, score the evidence, classify the risk band, and translate it into a verdict. -->
 
 # How TrustSight Works
 

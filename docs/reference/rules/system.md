@@ -1,6 +1,4 @@
----
-description: How the rule engine works: the fields a rule carries, how severity becomes weight, what each series prefix means, and which identifiers are reserved.
----
+<!-- description: How the rule engine works: the fields a rule carries, how severity becomes weight, what each series prefix means, and which identifiers are reserved. -->
 
 # Rule System Reference
 

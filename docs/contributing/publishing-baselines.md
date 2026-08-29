@@ -1,6 +1,4 @@
----
-description: The maintainer workflow for building, signing and publishing the novelty seed, the IOC baselines and the corpus baseline to the release channel.
----
+<!-- description: The maintainer workflow for building, signing and publishing the novelty seed, the IOC baselines and the corpus baseline to the release channel. -->
 
 # Publishing Baselines
 

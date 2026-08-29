@@ -1,6 +1,4 @@
----
-description: TrustSight's threat model and invariants: what a result claims, what it never claims, how each guarantee is enforced by a gate, and how to report a vulnerability.
----
+<!-- description: TrustSight's threat model and invariants: what a result claims, what it never claims, how each guarantee is enforced by a gate, and how to report a vulnerability. -->
 
 # Security Model
 

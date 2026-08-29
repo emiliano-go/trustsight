@@ -1,6 +1,4 @@
----
-description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, W and P identifier.
----
+<!-- description: The complete TrustSight rule catalog by category, with severity, weight, match target and scope for every R, H, C, D, S, X, W and P identifier. -->
 
 # Rules Reference
 

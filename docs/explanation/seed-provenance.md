@@ -1,6 +1,4 @@
----
-description: Where the novelty seed comes from, why its trust anchor sits outside the AUR, and how to rebuild, audit and verify it against the pinned signing key.
----
+<!-- description: Where the novelty seed comes from, why its trust anchor sits outside the AUR, and how to rebuild, audit and verify it against the pinned signing key. -->
 
 # Seed Provenance
 

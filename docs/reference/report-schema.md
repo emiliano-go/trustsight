@@ -1,6 +1,4 @@
----
-description: The stored `PackageFact` and the CLI/API report body, field by field, including rule identifiers, coverage gaps and the JSON shapes consumers can rely on.
----
+<!-- description: The stored `PackageFact` and the CLI/API report body, field by field, including rule identifiers, coverage gaps and the JSON shapes consumers can rely on. -->
 
 # Report Schema
 

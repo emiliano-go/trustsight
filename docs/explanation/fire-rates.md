@@ -1,6 +1,4 @@
----
-description: Per-rule false-positive rates measured on the locked benign corpus: how each is measured, what a high rate costs, and which rules are gated on theirs.
----
+<!-- description: Per-rule false-positive rates measured on the locked benign corpus: how each is measured, what a high rate costs, and which rules are gated on theirs. -->
 
 # Fire Rates
 

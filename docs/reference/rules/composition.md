@@ -1,6 +1,4 @@
----
-description: Rules that fire when distinct kinds of finding co-occur. The combination is the signal and the points are already scored, so both carry weight 0 by design.
----
+<!-- description: Rules that fire when distinct kinds of finding co-occur. The combination is the signal and the points are already scored, so both carry weight 0 by design. -->
 
 # Composition
 

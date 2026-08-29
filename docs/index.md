@@ -1,6 +1,4 @@
----
-description: Full documentation for TrustSight, the deterministic AUR PKGBUILD audit tool: installation, guides, the complete rule catalog, and the security model behind it.
----
+<!-- description: Full documentation for TrustSight, the deterministic AUR PKGBUILD audit tool: installation, guides, the complete rule catalog, and the security model behind it. -->
 
 # TrustSight
 

@@ -164,6 +164,7 @@ Contributing = [
 tables = {}
 admonition = {}
 toc = { permalink = true }
+"zensical_extensions.description_meta" = {}
 "seoslug.contrib.zensical" = {
   canonical_host = "docs.trustsight.org",
   public_base_url = "https://docs.trustsight.org/",

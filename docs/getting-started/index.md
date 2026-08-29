@@ -1,6 +1,4 @@
----
-description: The fastest path from installing TrustSight to reading your first report: installation, quickstart, and the anatomy of a review.
----
+<!-- description: The fastest path from installing TrustSight to reading your first report: installation, quickstart, and the anatomy of a review. -->
 
 # Getting Started
 

@@ -1,6 +1,4 @@
----
-description: TrustSight is released under the MIT License, deliberately permissive to encourage adoption, auditing and fork-investigation.
----
+<!-- description: TrustSight is released under the MIT License, deliberately permissive to encourage adoption, auditing and fork-investigation. -->
 
 # License
 

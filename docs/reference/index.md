@@ -1,6 +1,4 @@
----
-description: Reference documentation for the TrustSight CLI, Python API, configuration files, report schema, evidence tiers and exit codes.
----
+<!-- description: Reference documentation for the TrustSight CLI, Python API, configuration files, report schema, evidence tiers and exit codes. -->
 
 # Reference
 

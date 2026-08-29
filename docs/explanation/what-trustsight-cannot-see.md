@@ -1,6 +1,4 @@
----
-description: The reasoned ceiling of the tool: what auditing a PKGBUILD cannot tell you about the artifacts it builds, and which limits are inherent rather than unfixed.
----
+<!-- description: The reasoned ceiling of the tool: what auditing a PKGBUILD cannot tell you about the artifacts it builds, and which limits are inherent rather than unfixed. -->
 
 # What TrustSight Cannot See
 

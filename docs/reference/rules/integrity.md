@@ -1,6 +1,4 @@
----
-description: Rules for a verification the recipe carried being weakened, removed, or unable to cover what it claims: checksums, signatures and build flags.
----
+<!-- description: Rules for a verification the recipe carried being weakened, removed, or unable to cover what it claims: checksums, signatures and build flags. -->
 
 # Integrity and Verification
 

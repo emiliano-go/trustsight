@@ -1,6 +1,4 @@
----
-description: The ed25519 public keys TrustSight verifies signed baselines against, the two distinct signing mechanisms, and the fingerprints recorded for each.
----
+<!-- description: The ed25519 public keys TrustSight verifies signed baselines against, the two distinct signing mechanisms, and the fingerprints recorded for each. -->
 
 # Baseline Keys
 

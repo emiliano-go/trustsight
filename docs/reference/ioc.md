@@ -1,6 +1,4 @@
----
-description: The IOC federation layer: signed indicator baselines, curator attribution, confidence tiers, and why a match is reported outside the heuristic score.
----
+<!-- description: The IOC federation layer: signed indicator baselines, curator attribution, confidence tiers, and why a match is reported outside the heuristic score. -->
 
 # IOC Federation
 

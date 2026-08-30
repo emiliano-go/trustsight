@@ -455,7 +455,7 @@ def test_x019_does_not_claim_a_banner_or_a_build_log(line):
     assert "X019" not in _x([line], fn="package"), line
 
 
-def test_an_evasion_only_chain_can_reach_the_stage_count():
+def test_an_evasion_only_chain_can_reach_the_stage_count(isolated):
     """H043's stage map was written when the R-series was the whole
     ruleset. A diff carrying nothing but evasion could not reach the stage
     count however many rules fired - which inverts the rule's purpose."""
@@ -472,7 +472,7 @@ def test_an_evasion_only_chain_can_reach_the_stage_count():
                       scan_diff(text, package_name="p").score_breakdown}
 
 
-def test_the_staged_attack_annotation_reaches_the_reader():
+def test_the_staged_attack_annotation_reaches_the_reader(isolated):
     """H043 says the diff holds a staged attack chain, which changes how
     every other finding should be read - and it was computed and then
     dropped before anyone saw it. Computing and hiding is the worst of the

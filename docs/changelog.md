@@ -6,6 +6,28 @@
 
 _No changes yet._
 
+## [0.14.1] - 2026-08-30
+
+### Fixed
+
+- **`makepkg -si` fails on upgrades from systems with trustsight already
+  installed.** The AUR `check()` function creates a test venv with
+  `--system-site-packages`, which inherits the system-installed trustsight
+  package. The installer then collides on the existing package files and
+  entry-point script, leaving the old version in place. The venv now has the
+  inherited package removed before the fresh wheel is installed.
+
+- **H043 regression tests fail when a stale `rules.toml` exists.**
+  `test_an_evasion_only_chain_can_reach_the_stage_count` and
+  `test_the_staged_attack_annotation_reaches_the_reader` call `scan_diff()`
+  with the default config, so they read the operator's
+  `~/.config/trustsight/rules.toml`. A stale file shipped before v0.13.2
+  carries a legacy R054 pattern that no longer matches, so the persistence
+  kill-chain stage never fires, the diff only reaches two of the three
+  required stages, and H043 stays below threshold. Both tests now take the
+  `isolated` fixture, which redirects `CONFIG_DIR` to a scratch directory so
+  the shipped defaults are always used.
+
 ## [0.14.0] - 2026-08-25
 
 ### Changed
@@ -4246,4 +4268,6 @@ reconciliation.
 [0.13.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.0
 [0.13.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.1
 [0.13.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.2
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.13.2...HEAD
+[0.14.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.14.0
+[0.14.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.14.1
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.14.1...HEAD

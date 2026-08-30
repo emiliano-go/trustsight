@@ -27,7 +27,7 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::https://codeload.github.com/emiliano-go/$pkgname/tar.gz/refs/tags/v$pkgver")
 
-sha256sums=('88c87a165664cc45dee893d059257ede464845c541a0834b0a9b8f3556d3009d')
+sha256sums=('1b3415cba0491f71086ac360f6e17e755a2a32e0ac9e830c4bc3ba9782826f41')
 
 build() {
   cd "$pkgname-$pkgver"

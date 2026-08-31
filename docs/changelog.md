@@ -6,6 +6,97 @@
 
 _No changes yet._
 
+## [0.15.0] - 2026-08-31
+
+### Changed
+
+- **Deferred imports for faster startup.** `rich`, `typer`, the analysis engine,
+  `discovery`, `ioc_baseline` and `review` are imported on first call rather
+  than at module scope, so `--version` and `--help` no longer load the rule
+  engine. `HAS_RICH` is now answered via `importlib.util.find_spec` instead of
+  a try/except import block. Applied across `display.py`, `review.py`,
+  `inspect.py`, `forget.py`, `ioc.py`, and `seed.py`.
+
+- **`review --sort` sorts results after analysis.** Accepts `score` (worst
+  first), `risk` (Critical, High, Medium, Inconclusive, Low), or `name`
+  (alphabetical). Default is discovery order.
+
+- **`list --sort` sorts packages.** Accepts `score`, `risk`, `name`, or
+  `last-checked`. The `--json` output now also carries a `verdict` field
+  (the stored risk band).
+
+- **Auto-sync shipped rules on startup.** `ensure_default_configs()` now calls
+  `sync_rules()`, appending any shipped rules the user's `rules.toml` is
+  missing. This prevents silent rule drift after upgrades; replacements still
+  require an explicit `config sync-rules`.
+
+- **Analysis hot-path functions are cached.** `_heredoc_body_indices` (called by
+  20 rule families), `_declared_source_basenames` (8 families),
+  `join_line_continuations` (10 call sites), and `_enclosing_function_map` are
+  now LRU-cached on their input. `_SCALAR_SOURCE_RE` is hoisted to module
+  level (was recompiled per call in 8 families).
+
+### Added
+
+- **`inspect --allow-uninstalled`** analyse a package not in the local pacman
+  set. The name is resolved against the AUR, cloned, and analysed. Without
+  `--record`, the analysis uses a read-only SQLite connection (A15), so auditing
+  a suspicious package cannot warm local state. With `--record`, observations
+  are written. Installed packages always record; `--record` without
+  `--allow-uninstalled` is refused.
+
+- **`inspect --last N`** analyse the N most recent content-bearing commits as
+  N separate results, newest first. Each diff is independently scored. Bounded:
+  `N <= 50`, combined diff bytes capped at `MAX_RUN_DIFF_BYTES`. Refuses
+  `--last` with `--depth > 0` in this version. When the walk is truncated,
+  `history_truncated` is attached as a coverage gap to the newest result.
+
+- **`history --from-date / --to-date`** filter history entries by date range.
+  Accepts `YYYY-MM-DD` or full ISO datetime. Inclusive: `--to-date 2026-06-01`
+  includes entries from that day.
+
+- **`forget --dry-run`** preview what would be removed without touching the
+  database. Shows rule counts for each package.
+
+- **Security gate A11 (freshness uses local marker).** `_is_current` in
+  `fetcher.py` must read the local `last_fetch_time` marker before consulting
+  the HEAD commit time. A gate asserts the pattern via AST analysis.
+
+- **Security gate A15 (audit does not warm state).** `--allow-uninstalled`
+  without `--record` opens a read-only SQLite connection (`mode=ro`). A gate
+  asserts the connection mode. A package with no local observations has
+  maturity 0, so a Medium-band score with no HIGH-or-worse finding renders
+  **Inconclusive**, not Low.
+
+- **Six new security gates** for the history walk: bounded walk, bounded run
+  diff assembly, truncated walk declared as gap, every diff scored
+  independently, and two structural checks.
+
+- **Two new coverage gaps.** `history_truncated` (walk stopped before yielding
+  N results) and `scan_truncated` (diff tail not matched by any rule).
+
+### Fixed
+
+- **Corpus size aligned across documentation.** All non-changelog doc references
+  updated from 3,246 to 3,739 to match `corpus.lock` and the on-disk count.
+
+- **`test_sort_option_accepted` network dependency.** The review sort test now
+  mocks `fetch_metadata` to avoid AUR network calls.
+
+### Security
+
+- **Pipeline hardened against crafted input.** Resource and parser boundaries
+  tightened; A4b (differ/companion bounds) and A4c (API input bounds) separated
+  as explicit security claims. A15 added to the security model.
+
+### Stats
+
+- 6 commits since v0.14.1
+- 51 files changed, +2,244 / -235
+- 3,664 tests, all passing
+- 71/71 security gates, 10/10 calibration gates
+- Package version 0.15.0
+
 ## [0.14.1] - 2026-08-30
 
 ### Fixed

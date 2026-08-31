@@ -18,6 +18,6 @@ pkgbase = trustsight
 	depends = python-cryptography
 	optdepends = pyalpm: native version comparison (faster discovery)
 	source = trustsight-0.15.0.tar.gz::https://github.com/emiliano-go/trustsight/releases/download/v0.15.0/trustsight-0.15.0.tar.gz
-	sha256sums = 1b56c490f9e9dcf142b876de964d9254fea792f2536b504d8fcdfcdda62edc0c
+	sha256sums = 945c406b477dcaa7ae32889d721c3923aa446e2cd7ff2d958ea273f8acdd5cc7
 
 pkgname = trustsight

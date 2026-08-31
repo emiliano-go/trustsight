@@ -10,7 +10,7 @@ authors = [
 license = "MIT"
 keywords = ["aur", "arch-linux", "security", "vetting", "pkgbuild"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: Security",

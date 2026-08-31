@@ -27,7 +27,7 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 
-sha256sums=('1b56c490f9e9dcf142b876de964d9254fea792f2536b504d8fcdfcdda62edc0c')
+sha256sums=('945c406b477dcaa7ae32889d721c3923aa446e2cd7ff2d958ea273f8acdd5cc7')
 
 build() {
   cd "$pkgname-$pkgver"

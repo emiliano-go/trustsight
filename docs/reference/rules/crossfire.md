@@ -187,7 +187,7 @@ the shell runs.
 MEDIUM, not FATAL: the line fails closed, the command is simply not found,
 and the realistic benign cause is a copy-paste from a web page.
 
-Zero hits on the benign corpus. One diff in 3,246 carries such a character at
+Zero hits on the benign corpus. One diff in 3,739 carries such a character at
 all, in a font licence, which is not a shell file.
 
 **Related:** [R013](deception.md#r013), which claims a disjoint set of
@@ -482,4 +482,4 @@ what runs is whatever the command printed.
 A trailing `|| true` ends the pipeline rather than voiding it, so
 `cmd | bash || true` is claimed.
 
-No package in the 3,246-diff benign corpus pipes anything into a shell.
+No package in the 3,739-diff benign corpus pipes anything into a shell.

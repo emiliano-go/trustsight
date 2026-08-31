@@ -381,7 +381,7 @@ or `pkgver` means the package points at different upstream bytes, which is an
 ordinary update however much else changed with it, and H087 stays silent.
 
 Both halves of the recipe have to move, and that is measured rather than
-assumed. Against the 3,246-diff locked benign corpus: `deps or build` fires on
+assumed. Against the 3,739-diff locked benign corpus: `deps or build` fires on
 11.53%, `deps only` on 4.36%, `build only` on 5.75%, and `deps and build` on
 **1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
 times the noise for no additional detection - the campaign changed both,
@@ -418,7 +418,7 @@ between; anything else is not something the diff knows.
 (`"$_pkgsrc"::"git+$url.git"`) is a single element. Elements are split on
 *unquoted* whitespace, not by a token pattern.
 
-Zero occurrences in the 3,246-diff benign corpus.
+Zero occurrences in the 3,739-diff benign corpus.
 
 ### H092: Metadata Names A Source The Recipe Does Not {#h092}
 

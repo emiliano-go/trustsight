@@ -213,7 +213,7 @@ here - the observable is the *destination*, not the code.
 
 Order-free, because the recipe may write the config and then name the path or
 the reverse, and anchored at `^` so each lookahead runs once. Zero
-occurrences in the 3,246-diff benign corpus: a package pointing its own
+occurrences in the 3,739-diff benign corpus: a package pointing its own
 config at `/tmp` is not something the ecosystem does.
 
 ### H089: Packaged File Names A Build-Only Path {#h089}
@@ -250,7 +250,7 @@ written. The rule splits a single-line write at its redirect and reads only
 the content half, and for a heredoc it reads the body against the target
 named on the opener.
 
-Zero occurrences in the 3,246-diff benign corpus.
+Zero occurrences in the 3,739-diff benign corpus.
 
 ### H093: Committed Config Points At A Build-Only Path {#h093}
 

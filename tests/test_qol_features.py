@@ -30,6 +30,8 @@ def _env(tmp_path, monkeypatch):
     ensure_default_configs()
     from trustsight.db import init_db
     init_db()
+    # Prevent review/list from reaching the AUR metadata dump.
+    monkeypatch.setattr("trustsight.full_aur.metadata.fetch_metadata", lambda **kw: {})
 
 
 def _insert_pkg(conn, name, version="1.0"):

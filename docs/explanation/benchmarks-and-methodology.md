@@ -68,7 +68,7 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,246** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
+Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,739** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|

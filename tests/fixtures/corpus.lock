@@ -1,7 +1,7 @@
 {
   "generated": "2026-07-16",
   "strata_file": "strata.toml",
-  "total_entries": 3246,
+  "total_entries": 3739,
   "xfuncname": "^((prepare|build|check|package[[:alnum:]_-]*|pkgver|(post|pre)_(install|upgrade|remove))[[:space:]]*\\(\\))[[:space:]]*\\{.*$",
   "diff_flags": [
     "-W"

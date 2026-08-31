@@ -26,3 +26,6 @@ packaging/aur/*.pkg.tar.*
 
 # Local probe-corpus replay output (scratch, not shipped)
 /probe*.json
+
+# Full AUR metadata dump (scratch, not shipped)
+/full-aur-meta.json

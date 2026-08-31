@@ -1,4 +1,5 @@
 import re
+from functools import lru_cache
 import shlex
 import threading
 
@@ -544,6 +545,16 @@ def _memoised(kind: str, key: str, compute):
 
 
 def join_line_continuations(lines: list[str]) -> list[str]:
+    """Cached on the lines: ten call sites join the same diff.
+
+    A fresh list is returned because the result is a plain list and a
+    caller is entitled to treat it as its own.
+    """
+    return list(_join_line_continuations_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _join_line_continuations_cached(lines: tuple[str, ...]) -> tuple[str, ...]:
     """Join shell line continuations into single logical lines.
 
     Rules are matched one line at a time, so a command split with a
@@ -592,7 +603,7 @@ def join_line_continuations(lines: list[str]) -> list[str]:
             parts, marker = None, ""
     if parts is not None:
         out.append(marker + flush())
-    return out
+    return tuple(out)
 
 
 # Assignments are frequently indented (every one inside a function body

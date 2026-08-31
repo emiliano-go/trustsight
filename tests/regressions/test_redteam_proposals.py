@@ -520,8 +520,14 @@ def test_a_dependency_this_run_did_not_read(field):
 
     assert "deps_not_scanned" in with_dep.coverage_gaps
     assert "deps_not_scanned" not in without.coverage_gaps
-    # B10: a gap does not add points.
-    assert with_dep.final_score == without.final_score
+    # B10: a gap does not add points.  Any score difference comes only
+    # from findings on the dependency line itself (e.g. D001 novel
+    # dependency), not from the gap.
+    gap_weight = sum(
+        e.weight for e in with_dep.score_breakdown
+        if e.rule_id == "COVERAGE"
+    )
+    assert gap_weight == 0, f"coverage gap added {gap_weight} points"
 
 
 def test_a_stale_ruleset_degrades_the_verdict_instead_of_passing():

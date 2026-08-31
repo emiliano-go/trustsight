@@ -61,6 +61,26 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+@contextmanager
+def get_read_only_connection():
+    """Yield a read-only SQLite connection to the current database.
+
+    Used by ``--allow-uninstalled`` without ``--record``: the analysis
+    reads accumulated history for novelty and maturity but never writes
+    observations.  This bounds the self-inflicted state-poisoning class
+    (A15): auditing a suspicious package must not warm the local state
+    so that a future legitimate package looks established.
+    """
+    db_path = get_db_path()
+    uri = f"file:{db_path}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
 def close_connections() -> None:
     """Close the cached connection held by the current thread."""
     cached = getattr(_local, "cached", None)
@@ -1546,15 +1566,33 @@ def _import_seed_from_release(quiet: bool = False) -> Optional[dict]:
     return stats
 
 
-def get_history(package_id: int, limit: int = 20) -> list[dict]:
-    """Return recent analysis history for *package_id*, newest first."""
+def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
+    """Return recent analysis history for *package_id*, newest first.
+
+    Args:
+        package_id:  Foreign key into the packages table.
+        limit:  Maximum rows returned; ``None`` means no limit.
+        from_date:  Inclusive lower bound on the timestamp column
+            (``YYYY-MM-DD`` or full ISO string).  Only rows at or after
+            this date are returned.
+        to_date:  Inclusive upper bound on the timestamp column.
+            Only rows at or before this date are returned.
+    """
     with get_connection() as conn:
-        rows = conn.execute(
-            """SELECT * FROM analysis_history
-               WHERE package_id = ?
-               ORDER BY id DESC LIMIT ?""",
-            (package_id, limit),
-        ).fetchall()
+        query = "SELECT * FROM analysis_history WHERE package_id = ?"
+        params: list = [package_id]
+        if from_date:
+            query += " AND timestamp >= ?"
+            params.append(from_date)
+        if to_date:
+            # Add a day so '2026-06-01' includes entries on that date.
+            query += " AND timestamp <= ?"
+            params.append(to_date + "T23:59:59" if len(to_date) == 10 else to_date)
+        query += " ORDER BY id DESC"
+        if limit:
+            query += " LIMIT ?"
+            params.append(limit)
+        rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
 

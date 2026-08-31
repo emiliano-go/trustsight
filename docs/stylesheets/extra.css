@@ -45,3 +45,107 @@
         pointer-events: auto;
     }
 }
+
+/*
+ * Tab submenus.
+ *
+ * `navigation.tabs` renders one link per top-level section and nothing
+ * below it, so on a wide screen the whole nav is six words and every other
+ * page is reachable only from the sidebar. `partials/tabs-item.html`
+ * renders the children; these rules make them a menu.
+ *
+ * Opened by :hover and by :focus-within, so the menu is reachable with the
+ * keyboard as well as the pointer. Below the tab breakpoint the tab bar is
+ * not displayed at all and the drawer is the navigation, so none of this
+ * applies there.
+ */
+@media screen and (min-width: 76.25em) {
+    .md-tabs__item--nested {
+        position: relative;
+    }
+
+    .md-tabs__menu,
+    .md-tabs__menu-group {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .md-tabs__menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 100;
+        min-width: 13rem;
+        max-width: 22rem;
+        max-height: 80vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 0.4rem 0;
+        background-color: var(--md-default-bg-color);
+        color: var(--md-default-fg-color);
+        border: 1px solid var(--md-default-fg-color--lightest);
+        border-radius: 0.2rem;
+        box-shadow: 0 0.2rem 0.5rem rgba(0, 0, 0, 0.2);
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-0.2rem);
+        transition:
+            opacity 0.15s,
+            transform 0.15s,
+            visibility 0s linear 0.15s;
+    }
+
+    .md-tabs__item--nested:hover > .md-tabs__menu,
+    .md-tabs__item--nested:focus-within > .md-tabs__menu {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition:
+            opacity 0.15s,
+            transform 0.15s,
+            visibility 0s;
+    }
+
+    .md-tabs__menu-link,
+    .md-tabs__menu-title {
+        display: block;
+        padding: 0.35rem 0.8rem;
+        font-size: 0.7rem;
+        line-height: 1.4;
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .md-tabs__menu-link:hover,
+    .md-tabs__menu-link:focus,
+    a.md-tabs__menu-title:hover,
+    a.md-tabs__menu-title:focus {
+        background-color: var(--md-default-fg-color--lightest);
+        color: var(--md-accent-fg-color);
+    }
+
+    /* A nested section: its title labels the group that follows. */
+    .md-tabs__menu-title {
+        margin-top: 0.2rem;
+        font-weight: 700;
+    }
+
+    .md-tabs__menu-item--group + .md-tabs__menu-item--group .md-tabs__menu-title,
+    .md-tabs__menu-item + .md-tabs__menu-item--group .md-tabs__menu-title {
+        border-top: 1px solid var(--md-default-fg-color--lightest);
+        padding-top: 0.5rem;
+    }
+
+    .md-tabs__menu-group .md-tabs__menu-link {
+        padding-left: 1.4rem;
+    }
+
+    /* The tab bar clips its own overflow by default, which would hide the
+       menu the moment it extends past the bar. */
+    .md-tabs,
+    .md-tabs__list,
+    .md-tabs .md-grid {
+        overflow: visible;
+    }
+}

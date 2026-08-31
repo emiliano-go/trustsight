@@ -1,14 +1,15 @@
 import json
+import sys
 
 import typer
 
-from ..analysis import analyze_package
 from ..config import ensure_default_configs, load_config
-from ..coverage import GAP_REASONS
+from ..coverage import GAP_REASONS, HISTORY_TRUNCATED
 from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
+from ..fetcher import MAX_HISTORY_DIFFS
 from ..scoring import (
     DECLARED_CAVEAT,
     DECLARED_DEFAULT,
@@ -30,6 +31,18 @@ from .display import (
     no_aur_change_note,
     version_transition,
 )
+
+# Imported on call rather than at module scope: `app.py` imports this module
+# to register `inspect`, and `trustsight.analysis` is the rule engine, so at
+# module scope every invocation - `--version` included - loaded the analyser
+# before doing anything.  The wrapper keeps the name patchable, which is how
+# the tests replace it.
+def analyze_package(*args, **kwargs):
+    from ..analysis import analyze_package as _analyze_package
+
+    return _analyze_package(*args, **kwargs)
+
+
 
 
 def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
@@ -289,6 +302,108 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print(f"  Risk: {verdict_label(fact)}")
 
 
+def _render_history_panel_rich(row: dict, show_score: bool, show_risk: bool, verbose: bool):
+    """Render one history result as a Rich panel with commit info."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
+
+    con = console()
+    risk = row.get("risk", "")
+    label = row.get("risk_label") or risk
+    border = RISK_COLORS.get(risk, "blue") if (show_score or show_risk) else "blue"
+
+    table = Table(show_header=False, box=None, padding=(0, 1))
+    table.add_column(no_wrap=True)
+    table.add_column()
+
+    commit_id = row.get("commit", "")[:8]
+    commit_msg = row.get("commit_message", "")
+    table.add_row("Commit", Text(f"{commit_id}  {commit_msg}", style="dim"))
+
+    findings = row.get("findings", [])
+    if findings:
+        for f in findings:
+            table.add_row("", Text(clean(_finding_line(f))))
+    else:
+        table.add_row("Status", "No findings")
+
+    for gap in row.get("coverage_gaps", []):
+        table.add_row("Not vetted", Text(
+            clean(GAP_REASONS.get(gap, gap)), style="yellow"))
+
+    changes = row.get("changes", [])
+    if changes:
+        table.add_row("Changed", Text(clean(changes[0])))
+        for entry in changes[1:]:
+            table.add_row("", Text(clean(entry)))
+
+    if show_score and not row.get("failed"):
+        table.add_row("Score", f"{row.get('score', 0)}/100 ({label})")
+    elif show_risk and not row.get("failed"):
+        table.add_row("Risk", clean(label))
+
+    panel = Panel(table, title=Text(clean(row.get("package", ""))), border_style=border)
+    con.print(panel)
+
+
+def _render_history_panel_plain(row: dict, show_score: bool, show_risk: bool):
+    """Render one history result as plain text."""
+    commit_id = row.get("commit", "")[:8]
+    commit_msg = row.get("commit_message", "")
+    print(f"\n--- {commit_id}  {commit_msg} ---")
+
+    findings = row.get("findings", [])
+    if findings:
+        for f in findings:
+            print(f"  {_finding_line(f)}")
+    else:
+        print("  No findings")
+
+    for gap in row.get("coverage_gaps", []):
+        print(f"  Not vetted: {GAP_REASONS.get(gap, gap)}")
+
+    changes = row.get("changes", [])
+    if changes:
+        print(f"  Changed: {changes[0]}")
+        for entry in changes[1:]:
+            print(f"    {entry}")
+
+    if show_score and not row.get("failed"):
+        label = row.get("risk_label") or row.get("risk", "")
+        print(f"  Score: {row.get('score', 0)}/100 ({label})")
+    elif show_risk and not row.get("failed"):
+        label = row.get("risk_label") or row.get("risk", "")
+        print(f"  Risk: {label}")
+
+
+def _finding_line(finding: dict) -> str:
+    """Format a finding dict as a one-line string for history panels."""
+    parts = []
+    if finding.get("file") and finding.get("line") is not None:
+        parts.append(f"{finding['file']}:{finding['line']}")
+    rule_id = finding.get("rule_id", "?")
+    reason = finding.get("reason", "")
+    parts.append(f"{rule_id}  {reason}")
+    return " ".join(parts)
+
+
+def _inspect_one(fact, *, show_score, show_risk, verbose, json_output):
+    """Render a single PackageFact to the appropriate surface."""
+    if json_output:
+        from ..reporting import evaluate_fact, report_body
+        return report_body(
+            evaluate_fact(fact),
+            include_score=show_score or show_risk,
+            verbose=verbose,
+        )
+    if HAS_RICH:
+        _inspect_rich(fact, verbose, show_score, show_risk)
+    else:
+        _inspect_plain(fact, verbose, show_score, show_risk)
+    return None
+
+
 def register_commands(app: typer.Typer):
     @app.command()
     def inspect(
@@ -302,6 +417,18 @@ def register_commands(app: typer.Typer):
             help="AUR dependency levels to analyse: 0 off, 1 default, n levels, "
                  "-1 every level (bounded).",
         ),
+        allow_uninstalled: bool = typer.Option(
+            False, "--allow-uninstalled",
+            help="Analyse a package not in the local pacman set",
+        ),
+        last: int = typer.Option(
+            None, "--last",
+            help="Analyse the N most recent content-bearing commits as N separate results",
+        ),
+        record: bool = typer.Option(
+            False, "--record",
+            help="Write observations to the database (default: read-only for uninstalled packages)",
+        ),
     ):
         """Show a detailed analysis of a single package."""
         _show_score = score
@@ -311,19 +438,82 @@ def register_commands(app: typer.Typer):
         if load_config().get("seed", {}).get("auto_import", True):
             maybe_auto_import_seed(quiet=json_output, allow_release_fetch=True)
 
+        # --record without --allow-uninstalled is a no-op: installed
+        # packages already record observations on every analysis.
+        if record and not allow_uninstalled:
+            msg = "--record is only meaningful with --allow-uninstalled"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red")
+            raise typer.Exit(code=2)
+
+        # --last validation
+        if last is not None and last < 1:
+            msg = f"--last must be >= 1 (got {last})"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+        if last is not None and last > MAX_HISTORY_DIFFS:
+            msg = f"--last cannot exceed {MAX_HISTORY_DIFFS} (got {last})"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+
+        # --last with --depth is refused in v1: N × MAX_DEPTH_NODES is
+        # the A14 product-composition shape.
+        if last is not None and depth is not None and depth != 0:
+            msg = "--last and --depth > 0 are not combined in this version"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+
+        # Check local installation status for the --allow-uninstalled gate.
+        from ..db import get_package as _get_pkg
+        local = _get_pkg(package)
+        if local is None and not allow_uninstalled:
+            msg = (
+                f"Package '{package}' is not installed and "
+                "--allow-uninstalled was not passed."
+            )
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red")
+            raise typer.Exit(code=2)
+
+        # Resolve the package name against the AUR.
         from ..discovery import get_aur_package_info
         info = get_aur_package_info([package])
-        if package not in info:
-            from ..db import get_package as _get_pkg
-            local = _get_pkg(package)
-            if local is None:
-                msg = f"Package '{package}' not found in the AUR."
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red")
-                raise typer.Exit(code=2)
+        if package not in info and local is None:
+            msg = f"Package '{package}' not found in the AUR."
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red")
+            raise typer.Exit(code=2)
 
+        # --last path: walk history and analyse N content-bearing diffs.
+        if last is not None:
+            _inspect_history(
+                package=package,
+                n_results=last,
+                allow_uninstalled=allow_uninstalled,
+                record=record,
+                show_score=_show_score,
+                show_risk=_show_risk,
+                verbose=verbose,
+                json_output=json_output,
+            )
+            return
+
+        # Single-result path (current behaviour).
         try:
             fact = analyze_package(package, depth=depth)
         except Exception as exc:
@@ -333,23 +523,173 @@ def register_commands(app: typer.Typer):
             else:
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
+        _inspect_one(
+            fact,
+            show_score=_show_score,
+            show_risk=_show_risk,
+            verbose=verbose,
+            json_output=json_output,
+        )
+
+
+def _inspect_history(
+    *,
+    package: str,
+    n_results: int,
+    allow_uninstalled: bool,
+    record: bool,
+    show_score: bool,
+    show_risk: bool,
+    verbose: bool,
+    json_output: bool,
+):
+    """Walk history and analyse the N most recent content-bearing diffs."""
+    import time
+
+    from ..differ import MAX_DIFF_BYTES, generate_diff_bounded
+    from ..coverage import HISTORY_TRUNCATED
+    from ..fetcher import (
+        MAX_HISTORY_COMMITS,
+        MAX_RUN_DIFF_BYTES,
+        clone_or_fetch,
+        get_head_commit,
+        walk_bounded,
+    )
+    from ..full_aur.analyze import TemporalContext, analyze_package_text
+    from ..reporting import evaluate_fact, report_body
+
+    # Resolve the upstream metadata.
+    from ..discovery import get_aur_package_info
+    info = get_aur_package_info([package])
+    pkg_info = info.get(package, {})
+    upstream_mtime = pkg_info.get("LastModified")
+
+    # Clone or fetch the repository.
+    try:
+        repo = clone_or_fetch(package, upstream_mtime)
+    except Exception as exc:
+        msg = f"Could not fetch '{package}' from AUR: {exc}"
         if json_output:
-            from ..reporting import evaluate_fact, report_body
-
-            # The same body `review --json` and the API emit.  This path used
-            # to build its own dict, which always carried `score`, `risk` and
-            # `risk_label` regardless of the flags - so `inspect --json`
-            # volunteered the number the CLI is documented to withhold, and
-            # disagreed with `review --json` on the same run.
-            data = report_body(
-                evaluate_fact(fact),
-                include_score=_show_score or _show_risk,
-                verbose=verbose,
-            )
-            typer.echo(json.dumps(data, indent=2))
-            return
-
-        if HAS_RICH:
-            _inspect_rich(fact, verbose, _show_score, _show_risk)
+            typer.echo(json.dumps({"error": msg}))
         else:
-            _inspect_plain(fact, verbose, _show_score, _show_risk)
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
+    head = get_head_commit(repo)
+    if not head:
+        msg = f"Package '{package}' has no commits."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red")
+        raise typer.Exit(code=2)
+
+    # Walk the history.
+    run_diff_bytes = 0
+    results: list[dict] = []
+    history_truncated = False
+    commits_seen = 0
+
+    for commit in walk_bounded(repo, head, limit=MAX_HISTORY_COMMITS):
+        commits_seen += 1
+        if len(results) >= n_results:
+            break
+
+        # Get parent commit.
+        parent = commit.parents[0] if commit.parents else None
+        if parent is None:
+            continue
+
+        # Read PKGBUILD content from each commit.
+        try:
+            new_tree = commit.tree
+            old_tree = parent.tree
+            # Check if PKGBUILD exists in new commit
+            if "PKGBUILD" not in new_tree:
+                continue
+            new_pkgbuild = new_tree["PKGBUILD"].data.decode("utf-8", errors="replace")
+            # Read old PKGBUILD (empty if not present)
+            if "PKGBUILD" in old_tree:
+                old_pkgbuild = old_tree["PKGBUILD"].data.decode("utf-8", errors="replace")
+            else:
+                old_pkgbuild = None
+        except Exception:
+            continue
+
+        # Skip if PKGBUILD didn't change.
+        if old_pkgbuild == new_pkgbuild:
+            continue
+
+        # Charge the run budget.
+        diff_bytes = len(new_pkgbuild.encode("utf-8", errors="replace"))
+        run_diff_bytes += diff_bytes
+        if run_diff_bytes > MAX_RUN_DIFF_BYTES:
+            history_truncated = True
+            break
+
+        # Build temporal context.
+        temporal = TemporalContext(
+            last_modified=commit.commit_time,
+            source="git_commit",
+        )
+
+        # Analyse the diff.
+        try:
+            fact = analyze_package_text(
+                pkg_name=package,
+                old_pkgbuild=old_pkgbuild,
+                new_pkgbuild=new_pkgbuild,
+                maintainer=pkg_info.get("Maintainer", ""),
+                temporal=temporal,
+            )
+        except Exception as _exc:
+            import traceback as _tb
+            print(f"ANALYSIS FAILED: {_exc}", file=sys.stderr, flush=True)
+            _tb.print_exc(file=sys.stderr)
+            continue
+
+        # Attach commit metadata.
+        fact_dict = report_body(
+            evaluate_fact(fact),
+            include_score=show_score or show_risk,
+            verbose=verbose,
+        )
+        fact_dict["commit"] = str(commit.id)
+        fact_dict["commit_time"] = commit.commit_time
+        fact_dict["commit_message"] = commit.message.strip().split("\n")[0]
+
+        results.append(fact_dict)
+
+    # Check if we got fewer results than requested.
+    if len(results) < n_results and not history_truncated:
+        history_truncated = True
+
+    # Attach run-level coverage gap to the newest result.
+    if history_truncated and results:
+        results[0].setdefault("coverage_gaps", [])
+        if HISTORY_TRUNCATED not in results[0]["coverage_gaps"]:
+            results[0]["coverage_gaps"].insert(0, HISTORY_TRUNCATED)
+
+    # Exit 2 when zero results could be produced (per spec §6 exit code).
+    if not results:
+        msg = f"No content-bearing diffs found for '{package}' (walked {commits_seen} commits)."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red")
+        raise typer.Exit(code=2)
+
+    if json_output:
+        typer.echo(json.dumps(results, indent=2))
+    else:
+        for r in results:
+            if HAS_RICH:
+                _render_history_panel_rich(r, show_score, show_risk, verbose)
+            else:
+                _render_history_panel_plain(r, show_score, show_risk)
+        if history_truncated:
+            _print_colored(
+                f"History walk stopped after {len(results)} result(s) "
+                f"({commits_seen} commits examined).",
+                "yellow",
+            )

@@ -24,18 +24,38 @@
 <script>
 (function() {
   var drawer = document.getElementById('__drawer');
-  if (drawer) {
-    drawer.addEventListener('change', function() {
-      document.body.classList.toggle('drawer-open', this.checked);
-    });
-    document.addEventListener('click', function(e) {
-      var pageLink = e.target.closest('.md-sidebar--primary a.md-nav__link[href]');
-      if (pageLink && drawer.checked) {
-        drawer.checked = false;
-        document.body.classList.remove('drawer-open');
-      }
-    });
-  }
+  if (!drawer) return;
+
+  drawer.addEventListener('change', function() {
+    document.body.classList.toggle('drawer-open', this.checked);
+  });
+
+  // Close the drawer on navigation, but never on the controls that open a
+  // submenu.  A section renders as three elements inside one container: an
+  // <a> for its index page, a <label> whose `for` flips the section's
+  // toggle checkbox, and the chevron <span> inside that label.  The
+  // container itself also carries `md-nav__link`, so a selector written as
+  // `.md-nav__link` matches the toggle as readily as the link and shuts the
+  // drawer the moment anyone reaches for a submenu - which is every attempt
+  // to browse the nav on a phone.
+  //
+  // A section link still navigates; it just leaves the drawer open, so the
+  // section it activates expands in place and its children are visible.
+  // Only a leaf closes the drawer, because only a leaf is a destination.
+  document.addEventListener('click', function(e) {
+    if (!drawer.checked) return;
+    if (e.target.closest('.md-sidebar--primary label.md-nav__link')) return;
+    if (e.target.closest('.md-sidebar--primary .md-nav__icon')) return;
+
+    var link = e.target.closest('.md-sidebar--primary a.md-nav__link[href]');
+    if (!link) return;
+
+    var item = link.closest('.md-nav__item');
+    if (item && item.classList.contains('md-nav__item--nested')) return;
+
+    drawer.checked = false;
+    document.body.classList.remove('drawer-open');
+  });
 })();
 
 (function() {

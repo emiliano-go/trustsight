@@ -31,7 +31,7 @@ The help output also documents `trustsight config show`, `trustsight config set 
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print one panel per package with a summary line.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps] [--sort score|risk|name]
 ```
 
 ### Flags
@@ -49,6 +49,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verb
 | `--repo` | `str` | - | Scan packages from a specific local repository. Can be repeated (`--repo aur --repo testing`). |
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
+| `--sort` | `str` | discovery order | Sort results after analysis. `score`: worst (highest) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. When omitted, results appear in discovery order (the order pacman or AUR returned them). |
 
 #### Flag precedence
 
@@ -116,10 +117,13 @@ trustsight inspect <package>
 | `--score` | Show aggregate trust score with weight contribution breakdown. |
 | `--risk` | Show risk level with per-rule severity labels. Implies a coloured border in rich mode. |
 | `--depth` | AUR dependency levels to analyse: `0` off, `1` (default) direct dependencies, `n` levels, `-1` every level (bounded). Each dependency is analysed as a package in its own right, with its own score and band, shown as a mini-card inside the package's card. |
+| `--allow-uninstalled` | Analyse a package that is not in the local pacman set. The name is resolved against the AUR and cloned. Without this flag, `inspect` refuses a name not present locally. |
+| `--last N` | Analyse the N most recent content-bearing commits as N separate results, newest first. `N >= 1` and `N <= 50`. Commits whose diff is empty after filtering (`.SRCINFO`- and `.gitignore`-only regenerations) are skipped and do not count toward N. Combined with `--depth > 0` is refused in this version. |
+| `--record` | Write observations to the database. Only meaningful with `--allow-uninstalled`; without it, installed packages already record on every analysis. |
 
 ### Output
 
-With `--json`, `inspect` writes one report body to stdout. Its optional score
+With `--json`, `inspect` writes one report body to stdout (or, with `--last N`, an array of bodies). Its optional score
 and verbose fields follow the same rules as `review --json`.
 
 When [rich](https://github.com/Textualize/rich) is available:
@@ -196,7 +200,7 @@ The analysis result (`PackageFact` serialised to JSON, triggered rules, raw diff
 Show analysis history for a package.
 
 ```
-trustsight history <package> [--limit N] [--score-breakdown] [--json]
+trustsight history <package> [--limit N] [--score-breakdown] [--json] [--from-date DATE] [--to-date DATE]
 ```
 
 ### Arguments
@@ -212,6 +216,8 @@ trustsight history <package> [--limit N] [--score-breakdown] [--json]
 | `--limit` | `int` | `20` | Maximum number of history entries to display. `0` means all entries; a negative value is an error. |
 | `--score-breakdown` | flag | `false` | When set, print the score breakdown for the latest (most recent) history entry. |
 | `--json` | flag | `false` | Emit history rows as JSON. With `--score-breakdown`, the latest row includes `triggered_rules` when rules were recorded. |
+| `--from-date` | `str` | - | Only show entries with a timestamp on or after this date. Accepts `YYYY-MM-DD` or full ISO datetime. Useful for "was this package safe three months ago?". |
+| `--to-date` | `str` | - | Only show entries with a timestamp on or before this date. Accepts `YYYY-MM-DD` or full ISO datetime. Inclusive: `--to-date 2026-06-01` includes entries from that day. |
 
 ### Output
 
@@ -226,7 +232,7 @@ If `--score-breakdown` is set, the triggered rules for the latest entry are prin
 List all packages tracked in the database with their latest score.
 
 ```
-trustsight list [--limit N]
+trustsight list [--limit N] [--sort score|risk|name|last-checked]
 ```
 
 ### Flags
@@ -234,12 +240,13 @@ trustsight list [--limit N]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--limit` | `int` | `0` | Maximum number of packages to show. `0` means unlimited. |
+| `--sort` | `str` | alphabetical | Sort results. `score`: highest (worst) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. `last-checked`: oldest first. Packages that have never been analysed sort last. |
 
 ### Output
 
 Table with columns: **Package**, **Version**, **Maintainer**, **Last Checked**, **Score**, **Risk**.
 
-Packages that have never been analysed show `-` for score.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
+With `--json`, each row also carries a **verdict** field: the stored risk band (e.g., `Low`, `Medium`, `High`, `Critical`, `Inconclusive`). Packages that have never been analysed show `-` for score and `-` for verdict.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
 
 ---
 

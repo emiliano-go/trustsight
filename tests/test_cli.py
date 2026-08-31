@@ -312,6 +312,15 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
 
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
+    from trustsight.db import init_db, get_connection
+    init_db()
+    # Insert a fake installed package so the --allow-uninstalled gate passes.
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO packages (name, current_version) VALUES (?, ?)",
+            ("testpkg", "1.0"),
+        )
+        conn.commit()
 
     with (
         patch("trustsight.cli.inspect.analyze_package") as mock_analyze,

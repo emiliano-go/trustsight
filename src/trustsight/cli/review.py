@@ -12,21 +12,6 @@ from ..db import (
     init_db,
     maybe_auto_import_seed,
 )
-# The pipeline itself lives in ``trustsight.review`` so the public API can
-# run it without importing typer.  These names are bound here under their
-# historical spellings because that is what the CLI, and the tests that
-# patch the CLI, address them by.
-from ..review import (  # noqa: F401
-    analyze_outdated_batch as _analyze_outdated_batch,
-    default_workers as _default_workers,
-    discover_packages as _discover_engine,
-    get_installed_packages as _get_installed_packages,
-    prefetch as _prefetch,
-    prefetch_deadline as _prefetch_deadline,
-    verdict_for as _verdict_for,
-    is_trivial_update as _is_trivial_update,
-    dependency_entries as _dependency_entries,
-)
 from .display import (
     DEPTH_TRUNCATED_NOTE,
     HAS_RICH,
@@ -37,6 +22,60 @@ from .display import (
     console,
     display_version,
 )
+# The pipeline itself lives in ``trustsight.review`` so the public API can
+# run it without importing typer.  These names are bound here under their
+# historical spellings because that is what the CLI, and the tests that
+# patch the CLI, address them by.
+#
+# Importing them here costs `trustsight.analysis` - the rule engine, the
+# tokenizer and every compiled pattern - and `app.py` imports this module to
+# register its commands, so `--version` and `--help` paid for the whole
+# analyser before printing a line.  The three names this module calls are
+# forwarding wrappers, which keeps them patchable by the tests that replace
+# them wholesale; the rest resolve through `__getattr__`, which keeps the
+# historical surface without loading anything until something asks.
+
+
+def _analyze_outdated_batch(*args, **kwargs):
+    from ..review import analyze_outdated_batch
+
+    return analyze_outdated_batch(*args, **kwargs)
+
+
+def _discover_engine(*args, **kwargs):
+    from ..review import discover_packages
+
+    return discover_packages(*args, **kwargs)
+
+
+def _dependency_entries(*args, **kwargs):
+    from ..review import dependency_entries
+
+    return dependency_entries(*args, **kwargs)
+
+
+#: Re-exported under their historical spellings; nothing in this module
+#: calls them.  A bare global lookup does not consult `__getattr__`, so if
+#: one of these ever gains a call site here it needs a wrapper like those
+#: above rather than a plain reference.
+_LAZY_REVIEW_NAMES = {
+    "_default_workers": "default_workers",
+    "_get_installed_packages": "get_installed_packages",
+    "_prefetch": "prefetch",
+    "_prefetch_deadline": "prefetch_deadline",
+    "_verdict_for": "verdict_for",
+    "_is_trivial_update": "is_trivial_update",
+}
+
+
+def __getattr__(name: str):
+    if name not in _LAZY_REVIEW_NAMES:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from .. import review as _review
+
+    value = getattr(_review, _LAZY_REVIEW_NAMES[name])
+    globals()[name] = value
+    return value
 
 log = logging.getLogger(__name__)
 
@@ -110,8 +149,28 @@ def _version_cell(result: dict) -> str:
 
 
 
+# Risk levels ordered worst-first for --sort risk.
+_RISK_SORT_ORDER = {"Critical": 0, "High": 1, "Medium": 2, "Inconclusive": 3, "Low": 4}
 
-def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None, required_by=None, deps_only=False):
+
+def _sort_key(sort_by: str | None, result: dict):
+    """Return a sort key tuple for *result* given a --sort value."""
+    if sort_by == "score":
+        # Ascending: worst (highest score) last so it appears at the top
+        # when the list is printed top-to-bottom.  Failed packages score 0
+        # but should sink to the bottom.
+        failed = 1 if result.get("failed") else 0
+        return (failed, -(result.get("score") or 0))
+    if sort_by == "risk":
+        failed = 1 if result.get("failed") else 0
+        risk = result.get("risk", "Low") or "Low"
+        return (failed, _RISK_SORT_ORDER.get(risk, 5))
+    if sort_by == "name":
+        return (0, (result.get("package") or "").lower())
+    return (0, 0)
+
+
+def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None, required_by=None, deps_only=False, sort_by=None):
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
     # How many needed reviewing, as opposed to how many were reviewed. The
     # caption used to report the second number under the first one's name:
@@ -163,6 +222,11 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     # difference in information B11 forbids.
     for result in results:
         result["required_by"] = list((required_by or {}).get(result.get("package"), ()))
+
+    # Sort results when --sort is given.  Applied before rendering so both
+    # JSON and terminal surfaces present the same order.
+    if sort_by and results:
+        results.sort(key=lambda r: _sort_key(sort_by, r))
 
     if json_output:
         from ..config import config_fingerprint
@@ -541,6 +605,11 @@ def register_commands(app: typer.Typer):
                  "instead of the packages themselves. Honours --depth, and "
                  "each dependency reports which packages require it.",
         ),
+        sort_by: str = typer.Option(
+            None, "--sort",
+            help="Sort results: score (worst first), risk, or name. "
+                 "Default: discovery order.",
+        ),
     ):
         """Review AUR packages for suspicious updates."""
         has_progress = HAS_RICH and not json_output and not quiet
@@ -601,6 +670,15 @@ def register_commands(app: typer.Typer):
 
             if limit < 0:
                 msg = "--limit must be 0 (unlimited) or a positive count"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+
+            _VALID_SORT = ("score", "risk", "name")
+            if sort_by is not None and sort_by not in _VALID_SORT:
+                msg = f"--sort must be one of: {', '.join(_VALID_SORT)} (got '{sort_by}')"
                 if json_output:
                     typer.echo(json.dumps({"error": msg}))
                 else:
@@ -706,7 +784,7 @@ def register_commands(app: typer.Typer):
                 # below each of them.
                 depth = 0
 
-            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only)
+            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by)
         finally:
             if init_progress is not None:
                 init_progress.stop()

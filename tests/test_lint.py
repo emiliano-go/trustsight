@@ -213,32 +213,36 @@ def test_a_shipped_toml_rule_is_not_treated_as_code_emitted(rule_id):
 
 
 def test_the_reserved_set_is_not_built_at_import():
-    """`lint` is imported on every CLI invocation; the set costs a TOML parse."""
-    import importlib
-    import sys
+    """`lint` is imported on every CLI invocation; the set costs a TOML parse.
 
-    # The import has to happen from scratch, and the damage has to be put
-    # back. Every other test module holds references bound at collection
-    # time - `from trustsight.db import init_db` - while `monkeypatch`
-    # resolves "trustsight.db.DATA_DIR" through `sys.modules` at call time.
-    # Leave a second set of module objects behind and those two stop being
-    # the same module: `init_db()` creates tables in a tmpdir and
-    # `get_connection()` opens the operator's real database. That is what
-    # this test used to do to eleven tests in `test_novelty` and nine in
-    # `test_watch`, none of which named it in their failure.
-    saved = {n: m for n, m in sys.modules.items() if n.startswith("trustsight")}
-    for name in saved:
-        del sys.modules[name]
-    try:
-        module = importlib.import_module("trustsight.lint")
-        assert "PROGRAMMATIC_IDS" not in module.__dict__
-        assert module._programmatic_ids_cache is None
-        assert len(module.PROGRAMMATIC_IDS) > 100
-        assert "PROGRAMMATIC_IDS" in module.__dict__
-    finally:
-        for name in [n for n in sys.modules if n.startswith("trustsight")]:
-            del sys.modules[name]
-        sys.modules.update(saved)
+    Checked in a subprocess because the question is about a *fresh*
+    interpreter. Clearing `trustsight.*` out of `sys.modules` in-process
+    answers it too, and then every later test in the run holds references to
+    the discarded modules while `monkeypatch` restores attributes on the
+    replacements: `config.CONFIG_DIR` reverts to the real one, and tests that
+    read `full-aur-meta.json` start parsing the developer's own 76 MB
+    snapshot instead of a fixture. That does not fail, it just takes hours.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    probe = """
+import sys
+sys.path.insert(0, %r)
+import trustsight.lint as lint
+assert "PROGRAMMATIC_IDS" not in lint.__dict__, "resolved at import"
+assert lint._programmatic_ids_cache is None, "cache filled at import"
+assert len(lint.PROGRAMMATIC_IDS) > 100, "reserved set is too small"
+assert "PROGRAMMATIC_IDS" in lint.__dict__, "not cached after first access"
+print("ok")
+""" % str(Path(__file__).resolve().parent.parent / "src")
+
+    result = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"
 
 
 def test_a_retired_rule_id_is_not_available_for_reuse():

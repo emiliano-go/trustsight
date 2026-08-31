@@ -197,6 +197,23 @@ class _DeadlineCallbacks(pygit2.RemoteCallbacks):
 #: signal and drops the tail no rule reads.
 MAX_HISTORY_COMMITS = 5_000
 
+#: Ceiling on ``--last N``: the most content-bearing diffs a single
+#: inspect run may produce.  A repository of a thousand ``.SRCINFO``-only
+#: commits would otherwise decide how far this machine walks in order to
+#: find five real diffs.
+MAX_HISTORY_DIFFS = 50
+
+#: Assembled diff text retained across *all* results in a single
+#: ``--last N`` run.  N per-diff caps compose to N × the cap; the
+#: budget is charged to the run rather than the repository, the way
+#: ``MAX_TOTAL_TRANSFER_BYTES`` charges the run rather than a single
+#: clone.  When exhausted the walk stops and fewer than N results are
+#: produced.
+# Inlined from differ.py to avoid a circular import (fetcher ->
+# analysis.pipeline -> fetcher).  Keep in sync with differ.MAX_DIFF_BYTES.
+_MAX_DIFF_BYTES = 5 * 1024 * 1024
+MAX_RUN_DIFF_BYTES = _MAX_DIFF_BYTES * 8
+
 
 def walk_bounded(repo: pygit2.Repository, head, *, sort=None, limit=None):
     """Yield at most *limit* commits from *head*, newest first.

@@ -22,6 +22,7 @@ import fnmatch
 import os
 import re
 import shlex
+from functools import lru_cache
 
 from ..config import (
     ANY_EXECUTOR as _ANY_EXECUTOR,
@@ -430,6 +431,14 @@ _HEREDOC_PIPED_RE = re.compile(
 
 
 def _heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Twenty rule families ask this of the same lines; the scan is cached
+    on them.  A fresh ``set`` is returned so no caller can reach another's.
+    """
+    return set(_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     """Indices of lines that are literal heredoc content, not commands.
 
     A heredoc's body is data being written to a file; treating it as build
@@ -477,7 +486,7 @@ def _heredoc_body_indices(lines: list[str]) -> set[int]:
                 )
                 delims.append((m.group(2), is_data))
                 break
-    return body
+    return frozenset(body)
 
 # An interpreter/compiler/source command must sit at a command position
 # (line start or after ``;``/``&``/``|``), never inside a filename like
@@ -653,6 +662,13 @@ def _source_basename(url: str) -> str:
     return base
 
 
+#: A scalar ``source = value`` line, the `.SRCINFO` spelling of the array.
+#: Module level because the function below is called once per rule family
+#: that needs the declared names, and compiling this per call was compiling
+#: it eight times for every diff.
+_SCALAR_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
+
+
 def _declared_source_basenames(diff_text: str) -> set[str]:
     """Filenames that arrive via the declared source array.
 
@@ -660,12 +676,18 @@ def _declared_source_basenames(diff_text: str) -> set[str]:
     filenames (`dkms.conf`, `postinst.sh`), honours ``name::url`` renames,
     and reads both the PKGBUILD ``source=(...)`` form and the per-line
     ``source = value`` form used in ``.SRCINFO``.
+
+    Eight rule families ask for this, all with the same diff, so the parse
+    is cached on the text.  A fresh ``set`` is returned rather than the
+    cached object: the result is documented as a set and handing every
+    caller the same one would let a future mutation reach the others.
     """
-    import shlex
+    return set(_declared_source_basenames_cached(diff_text))
 
+
+@lru_cache(maxsize=8)
+def _declared_source_basenames_cached(diff_text: str) -> frozenset[str]:
     from ..differ import _SOURCE_ARRAY_START_RE
-
-    _SCALAR_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 
     basenames: set[str] = set()
     in_array = False
@@ -724,7 +746,7 @@ def _declared_source_basenames(diff_text: str) -> set[str]:
                 basenames.add(base)
         if ")" in body:
             in_array = False
-    return basenames
+    return frozenset(basenames)
 
 
 def _collect_writes(body: str, fn: str) -> list[tuple[str, str]]:
@@ -1526,9 +1548,9 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
     sufficient:
 
     - the executed path references ``${startdir}``/``$startdir`` or walks
-      ``../`` — available even when the repository tree was not analyzed;
-    - the executed basename is present in the tree manifest — only when a
-      manifest was supplied; without one the rule never guesses.
+      ``../`` (available even when the repository tree was not analyzed);
+    - the executed basename is present in the tree manifest (only when a
+      manifest was supplied; without one the rule never guesses).
 
     Declared ``source=()`` basenames, files the recipe wrote earlier in the
     same function, and the configure/make artifact names H072 already

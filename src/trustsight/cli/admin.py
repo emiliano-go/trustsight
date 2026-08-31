@@ -32,7 +32,6 @@ from ..override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides
 from ..safe_text import clean
 from .display import (
     HAS_RICH,
-    SIMPLE_HEAD,
     _fmt_bytes,
     _print_colored,
     _weight_text,
@@ -86,6 +85,7 @@ def config_show(
         return
 
     if HAS_RICH:
+        from rich.box import SIMPLE_HEAD
         from rich.table import Table
         from rich.text import Text
 
@@ -226,6 +226,7 @@ def override_list(
         return
 
     if HAS_RICH:
+        from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
         table.add_column("Rule", style="cyan")
@@ -316,6 +317,7 @@ def override_wizard(
         return
 
     if available:
+        from rich.box import SIMPLE_HEAD
         from rich.table import Table
 
         con.print(f"\n[bold]Triggered rules for [cyan]{package}[/][/]\n")
@@ -714,6 +716,7 @@ def register_commands(app: typer.Typer):
             return
 
         if HAS_RICH:
+            from rich.box import SIMPLE_HEAD
             from rich.table import Table
             table = Table(title="Novelty seed imported", box=SIMPLE_HEAD)
             table.add_column("Item", style="dim")

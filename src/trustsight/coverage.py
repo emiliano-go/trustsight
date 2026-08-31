@@ -49,9 +49,11 @@ UNPINNED_SOURCE_REF = "unpinned_source_ref"
 DEPS_NOT_SCANNED = "deps_not_scanned"
 RULESET_DRIFTED = "ruleset_drifted"
 STAGE_DEGRADED = "stage_degraded"
+HISTORY_TRUNCATED = "history_truncated"
 
 GAPS = (
     DIFF_TRUNCATED,
+    SCAN_TRUNCATED,
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
     COMPANION_TRUNCATED,
@@ -62,6 +64,7 @@ GAPS = (
     RULESET_DRIFTED,
     DEPS_NOT_SCANNED,
     STAGE_DEGRADED,
+    HISTORY_TRUNCATED,
 )
 
 GAP_REASONS = {
@@ -114,6 +117,11 @@ GAP_REASONS = {
     STAGE_DEGRADED: (
         "an analysis stage could not complete on this input, so the checks it "
         "performs did not run over all of the change"
+    ),
+    HISTORY_TRUNCATED: (
+        "the history walk stopped before yielding the requested number of "
+        "results: a ceiling was reached, the run diff budget was exhausted, "
+        "or the repository had fewer content-bearing commits than requested"
     ),
 }
 
@@ -456,6 +464,7 @@ INCOMPLETE_SUFFIX = " (incomplete analysis)"
 # must read as more urgent than the cold-start case in inconclusive_label.
 GAP_INCONCLUSIVE_REASONS = {
     DIFF_TRUNCATED: "diff truncated: payload may be hidden",
+    SCAN_TRUNCATED: "scan truncated: tail of diff not matched by any rule",
     LINE_TRUNCATED: "line truncated: payload may be hidden",
     TREE_NOT_ANALYZED: "repository files not examined: payload may be hidden",
     COMPANION_TRUNCATED: (
@@ -482,6 +491,9 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     STAGE_DEGRADED: (
         "an analysis stage failed on this input: its checks did not run"
+    ),
+    HISTORY_TRUNCATED: (
+        "history walk stopped early: not all requested diffs were examined"
     ),
 }
 

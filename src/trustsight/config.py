@@ -1338,7 +1338,7 @@ def _refresh_legacy_iocs() -> bool:
 
 
 def ensure_default_configs():
-    """Write default config files if they do not exist"""
+    """Write default config files if they do not exist, and add missing shipped rules."""
     ensure_dirs()
     write_default_file(CONFIG_DIR / "config.toml", DEFAULT_CONFIG)
     write_default_file(CONFIG_DIR / "rules.toml", DEFAULT_RULES)
@@ -1349,6 +1349,13 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "thresholds.toml", DEFAULT_THRESHOLDS)
     write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
     _refresh_legacy_iocs()
+    # Append any shipped rules the user's file is missing.  The file is
+    # written once at install time, so an older install can lack rules
+    # that shipped after it.  Appending is always safe; replacements
+    # require an explicit `config sync-rules`.
+    added, _updated = sync_rules()
+    if added:
+        _log.info("added %d missing shipped rule(s) to rules.toml", len(added))
 
 
 # Parsed TOML keyed by (path, mtime_ns, size).  load_domains() used to be

@@ -1,5 +1,7 @@
+import importlib.util
 import logging
 import sys
+from typing import TYPE_CHECKING
 
 from ..coverage import GAP_REASONS
 from ..safe_text import clean
@@ -14,18 +16,46 @@ from ..verdict import (  # noqa: F401
     version_transition,
 )
 
-try:
-    from rich.box import SIMPLE_HEAD
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn, TransferSpeedColumn
-    from rich.rule import Rule
-    from rich.table import Table
-    from rich.text import Text
+# Whether rich is installed, answered without executing it.  `app.py`
+# imports every command module to register its commands, and each of those
+# imports this one, so importing rich here put its whole package on the path
+# of `--version`.  `find_spec` reads the import system's metadata and stops;
+# the objects themselves are imported where they are used, which is the
+# pattern the command modules already follow for `Table` and `Text`.
+HAS_RICH = importlib.util.find_spec("rich") is not None
 
-    HAS_RICH = True
-except ImportError:
-    HAS_RICH = False
+#: Rich objects re-exported for the command modules.  Resolved on first
+#: access, so a module can name one in an import list without paying for
+#: rich at import time.  A bare global lookup inside *this* module does not
+#: consult `__getattr__`, so the functions below import what they need.
+_RICH_EXPORTS = {
+    "SIMPLE_HEAD": "rich.box",
+    "Console": "rich.console",
+    "Panel": "rich.panel",
+    "Rule": "rich.rule",
+    "Table": "rich.table",
+    "Text": "rich.text",
+    "BarColumn": "rich.progress",
+    "DownloadColumn": "rich.progress",
+    "Progress": "rich.progress",
+    "SpinnerColumn": "rich.progress",
+    "TextColumn": "rich.progress",
+    "TimeElapsedColumn": "rich.progress",
+    "TransferSpeedColumn": "rich.progress",
+}
+
+
+def __getattr__(name: str):
+    module = _RICH_EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(module), name)
+    globals()[name] = value
+    return value
+
+if TYPE_CHECKING:  # annotations only; never imported at runtime
+    from rich.console import Console
+    from rich.text import Text
 
 log = logging.getLogger(__name__)
 _console = None
@@ -78,6 +108,8 @@ TIER_NAMES = {
 def console() -> "Console":
     if not HAS_RICH:
         raise RuntimeError("rich is not available")
+    from rich.console import Console
+
     global _console
     if _console is None:
         _console = Console(force_terminal=True)
@@ -89,10 +121,14 @@ def _tier_of(entry) -> str:
 
 
 def _severity_text(severity: str) -> "Text":
+    from rich.text import Text
+
     return Text(severity, style=SEVERITY_COLORS.get(severity, "white"))
 
 
 def _weight_text(weight: int) -> "Text":
+    from rich.text import Text
+
     if weight > 0:
         return Text(f"+{weight}", style="red")
     if weight < 0:
@@ -101,6 +137,8 @@ def _weight_text(weight: int) -> "Text":
 
 
 def _score_text(score: int, risk: str | None = None) -> "Text":
+    from rich.text import Text
+
     risk = risk or risk_level(score)
     return Text(f"{score}/100", style=RISK_COLORS.get(risk, "white"))
 

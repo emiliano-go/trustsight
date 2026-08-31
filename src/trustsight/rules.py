@@ -1,4 +1,5 @@
 import re
+from functools import lru_cache
 import threading
 import logging
 
@@ -486,6 +487,15 @@ def _classify_enclosing_function(lines: list[str]) -> dict[int, str]:
 
 
 def _enclosing_function_map(lines: list[str]) -> dict[int, str]:
+    """Cached on the lines: the scope resolver asks once per rule family.
+
+    A fresh dict is returned so a caller cannot mutate another's view.
+    """
+    return dict(_enclosing_function_map_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _enclosing_function_map_cached(lines: tuple[str, ...]) -> dict[int, str]:
     """Return ``{line_index: enclosing_function_name}``.
 
     Lines outside any function are absent from the mapping.  A bare

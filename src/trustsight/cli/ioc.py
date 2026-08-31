@@ -15,15 +15,7 @@ from ..safe_text import clean
 
 from ..config import ensure_default_configs, load_config
 from ..db import init_db
-from ..ioc_baseline import (
-    UnsignedBaselineError,
-    InvalidSignatureError,
-    MalformedBaselineError,
-    active_iocs,
-    all_ioc_sources,
-    import_baseline,
-)
-from .display import HAS_RICH, SIMPLE_HEAD, _print_colored, console
+from .display import HAS_RICH, _print_colored, console
 
 log = logging.getLogger(__name__)
 
@@ -60,6 +52,10 @@ def ioc_sources(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Show configured and imported IOC baseline sources."""
+    from ..ioc_baseline import (
+        all_ioc_sources,
+    )
+
     ensure_default_configs()
     init_db()
 
@@ -81,6 +77,7 @@ def ioc_sources(
         return
 
     if HAS_RICH:
+        from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="IOC baseline sources", box=SIMPLE_HEAD)
         table.add_column("Kind", style="dim")
@@ -124,6 +121,13 @@ def ioc_import(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Import an IOC federation baseline directory."""
+    from ..ioc_baseline import (
+        InvalidSignatureError,
+        MalformedBaselineError,
+        UnsignedBaselineError,
+        import_baseline,
+    )
+
     ensure_default_configs()
     init_db()
 
@@ -172,6 +176,13 @@ def _update_feed(feed: dict) -> dict:
     other URL is refused: there is no scheme in which an unverified remote
     baseline is imported.
     """
+    from ..ioc_baseline import (
+        InvalidSignatureError,
+        MalformedBaselineError,
+        UnsignedBaselineError,
+        import_baseline,
+    )
+
     from .. import release
 
     name = feed.get("name") or ""
@@ -219,6 +230,13 @@ def ioc_update(
     TrustSight release channel URL: the ``baseline-ioc-*`` assets are
     downloaded, verified against the pinned distribution key, and imported.
     """
+    from ..ioc_baseline import (
+        InvalidSignatureError,
+        MalformedBaselineError,
+        UnsignedBaselineError,
+        import_baseline,
+    )
+
     ensure_default_configs()
     init_db()
 
@@ -305,6 +323,10 @@ def ioc_list(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """List active IOC baseline entries."""
+    from ..ioc_baseline import (
+        active_iocs,
+    )
+
     ensure_default_configs()
     init_db()
 
@@ -343,6 +365,7 @@ def ioc_list(
         return
 
     if HAS_RICH:
+        from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="IOC baseline entries", box=SIMPLE_HEAD)
         table.add_column("Type", style="dim")
@@ -407,6 +430,10 @@ def ioc_export(
     baseline.  With ``--json`` and no directory, prints every active IOC as a
     JSON array to stdout, the debugging view from the spec.
     """
+    from ..ioc_baseline import (
+        active_iocs,
+    )
+
     ensure_default_configs()
     init_db()
 

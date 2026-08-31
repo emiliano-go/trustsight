@@ -478,8 +478,10 @@ def test_documented_series_ranges_end_at_the_highest_shipped_rule():
             series, number = match.group(1), int(match.group(2))
             bounds[series] = max(bounds.get(series, 0), number)
 
+    # The README makes the same family claims as the reference pages and
+    # drifted the same way, so it is checked with them.
     offenders = []
-    for path in sorted((ROOT / "docs").rglob("*.md")):
+    for path in [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]:
         if path.name == "changelog.md":
             continue
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
@@ -578,3 +580,93 @@ def test_the_llms_txt_generator_covers_every_page():
     bare = [line for line in index.splitlines()
             if line.startswith("- [") and "): " not in line]
     assert bare == [], f"llms.txt entries with no summary: {bare}"
+
+
+def test_the_top_navigation_exposes_every_page():
+    """`navigation.tabs` renders one link per section and drops the rest.
+
+    Stock, the top navigation is six words wide and every page below the
+    first level is reachable only from the sidebar.
+    `overrides/partials/tabs-item.html` renders the children as a menu, and
+    this pins that the menu is complete: a section's index page is the tab
+    itself, and every other page under it is an entry.
+
+    It also pins the tab target. A section's index is tracked as an item
+    rather than as its URL, because the site root's index page has an empty
+    URL and testing that URL for truthiness made the root section look like
+    it had no index at all, promoting `security.md` into the Overview tab.
+    """
+    site = (ROOT / "site").resolve()
+    home = site / "index.html"
+    if not home.exists():
+        pytest.skip("site/ is not built; run `zensical build` first")
+
+    html = home.read_text()
+    tabs = html[html.find('class="md-tabs"'):]
+    tabs = tabs[:tabs.find("</nav>")]
+
+    entries: set[str] = set()
+    for match in re.finditer(
+        r'<a href="([^"]*)" class="md-tabs__(?:menu-link|menu-title|link)"', tabs
+    ):
+        href = match.group(1)
+        target = (home.parent / href).resolve() if href else home.parent
+        if target.is_dir():
+            target = target / "index.html"
+        assert target.exists(), f"top-nav link to a missing page: {href!r}"
+        entries.add(str(target.relative_to(site)))
+
+    built = {str(p.relative_to(site)) for p in site.rglob("index.html")}
+    missing = sorted(built - entries)
+    assert missing == [], f"pages absent from the top navigation: {missing}"
+
+    # Reachability alone does not pin the tab's own target: when the index
+    # was resolved by URL truthiness the Overview tab pointed at
+    # `security.md` and listed the real index below it, so every page stayed
+    # reachable and only the tab was wrong. Each tab must lead to its
+    # section's index page.
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from build_llms_txt import _config, _sections
+
+    meta = _config()
+    tab_targets = [
+        match.group(1)
+        for match in re.finditer(r'<a href="([^"]*)" class="md-tabs__link"', tabs)
+    ]
+    sections = _sections(meta)
+    assert len(tab_targets) == len(sections), (
+        f"{len(tab_targets)} tabs for {len(sections)} nav sections"
+    )
+    for (title, pages), href in zip(sections, tab_targets):
+        index_page = next(
+            (path for _, path in pages
+             if path == "index.md" or path.endswith("/index.md")),
+            None,
+        )
+        if index_page is None:
+            continue
+        want = site / index_page.replace("index.md", "index.html")
+        got = (home.parent / href).resolve() if href else home.parent
+        if got.is_dir():
+            got = got / "index.html"
+        assert got == want.resolve(), (
+            f"the {title!r} tab points at {got.relative_to(site)}, "
+            f"but its section index is {want.relative_to(site)}"
+        )
+
+
+def test_the_readme_rule_count_matches_the_catalog():
+    """The README advertises a total; it drifted to 145 against 171."""
+    scoring = sum(
+        1 for rule_id in RULE_CATEGORIES
+        if category_of(rule_id) is not RuleCategory.UNVERIFIABLE
+    )
+    text = (ROOT / "README.md").read_text()
+    match = re.search(r"Signals come from ([\d,]+) documented rules", text)
+    assert match, "README.md no longer states a rule count"
+    claimed = int(match.group(1).replace(",", ""))
+    assert claimed == scoring, (
+        f"README.md claims {claimed} rules; the catalog holds {scoring}"
+    )

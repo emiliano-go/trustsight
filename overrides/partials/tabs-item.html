@@ -1,0 +1,113 @@
+{#-
+  Tabs with submenus.
+
+  The stock partial renders a section as a single link to its index page and
+  drops the children, so on a wide screen the whole top navigation is six
+  words and every page below the first level is reachable only from the
+  sidebar.  This renders the children as a menu under their tab.
+
+  `navigation.indexes` promotes a section's index page to the section
+  itself, exactly as the sidebar does, so the tab link and the sidebar entry
+  lead to the same page and the index is not repeated inside the menu.
+  Sections nested one level deeper (the rule categories) become a labelled
+  group rather than being flattened, so the menu keeps the sidebar's shape.
+
+  The index is tracked as an *item*, never as its URL: the site root's index
+  page has an empty URL, so testing the URL for truthiness silently treats
+  the root section as having no index and promotes its second page into the
+  tab.  That is how the Overview tab came to point at `/security/`.
+-#}
+
+{% macro render_content(nav_item, ref) %}
+  {% set ref = ref or nav_item %}
+  {{ ref.title or nav_item.title }}
+{% endmacro %}
+
+{#- One entry in a tab's menu: a page, or a nested section as a group. -#}
+{% macro render_entry(item) %}
+  {% if item.children %}
+    {% set inner = namespace(index = none) %}
+    {% if "navigation.indexes" in features %}
+      {% for child in item.children %}
+        {% if child.is_index and inner.index is none %}
+          {% set inner.index = child %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+    <li class="md-tabs__menu-item md-tabs__menu-item--group">
+      {% if inner.index %}
+        <a href="{{ inner.index.url | url }}" class="md-tabs__menu-title">
+          {{ item.title }}
+        </a>
+      {% else %}
+        <span class="md-tabs__menu-title">{{ item.title }}</span>
+      {% endif %}
+      <ul class="md-tabs__menu-group">
+        {% for child in item.children %}
+          {% if child is not sameas inner.index %}
+            {{ render_entry(child) }}
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </li>
+  {% elif item.url is not none %}
+    <li class="md-tabs__menu-item">
+      <a href="{{ item.url | url }}" class="md-tabs__menu-link">
+        {{ item.title }}
+      </a>
+    </li>
+  {% endif %}
+{% endmacro %}
+
+{% macro render(nav_item, ref) %}
+  {% set ref = ref or nav_item %}
+  {% set class = "md-tabs__item" %}
+  {% if ref.active %}
+    {% set class = class ~ " md-tabs__item--active" %}
+  {% endif %}
+
+  {% if nav_item.children %}
+    {% set _ = namespace(index = none) %}
+    {% if "navigation.indexes" in features %}
+      {% for item in nav_item.children %}
+        {% if item.is_index and _.index is none %}
+          {% set _.index = item %}
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    {#- Without an index page the tab points at the first child, which is
+        what the stock partial does; that child is then not repeated as the
+        menu's first entry. -#}
+    {% set head = _.index or (nav_item.children | first) %}
+    {% if head.children %}
+      {{ render(head, ref) }}
+    {% else %}
+      {% set _rest = namespace(items = []) %}
+      {% for item in nav_item.children %}
+        {% if item is not sameas head %}
+          {% set _rest.items = _rest.items + [item] %}
+        {% endif %}
+      {% endfor %}
+      <li class="{{ class }}{% if _rest.items %} md-tabs__item--nested{% endif %}">
+        <a href="{{ head.url | url }}" class="md-tabs__link"
+           {% if _rest.items %}aria-haspopup="true"{% endif %}>
+          {{ render_content(nav_item, ref) }}
+        </a>
+        {% if _rest.items %}
+          <ul class="md-tabs__menu" aria-label="{{ nav_item.title }}">
+            {% for item in _rest.items %}
+              {{ render_entry(item) }}
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </li>
+    {% endif %}
+  {% else %}
+    <li class="{{ class }}">
+      <a href="{{ nav_item.url | url }}" class="md-tabs__link">
+        {{ render_content(nav_item) }}
+      </a>
+    </li>
+  {% endif %}
+{% endmacro %}

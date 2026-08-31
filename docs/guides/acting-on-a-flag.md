@@ -54,7 +54,15 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `scan_truncated`: the diff had more than `rules.MAX_SCANNED_LINES` lines, so only its first lines were matched. This is independent of the byte cap.
 - `line_truncated`: a single line was longer than the matching limit, so its tail was never matched against any rule.
 - `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read.
+- `companion_truncated`: a committed file the recipe runs was larger than the companion read budget.
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
+- `unresolved_parse_time`: a command substitution runs when the recipe is parsed, so its result is not in the analysed text.
+- `snapshot_refused`: the snapshot archive exceeded a read bound and was refused.
+- `unpinned_build_deps`: a build step resolves dependencies from a package registry.
+- `deps_not_scanned`: the AUR dependency walk stopped before the closure was exhausted.
+- `ruleset_drifted`: the installed `rules.toml` differs from the shipped rule set.
+- `stage_degraded`: an analysis stage could not complete on this input.
+- `history_truncated`: the history walk stopped before yielding the requested results (when using `--last`).
 
 Here the verdict is telling you something sharper: the part it did read looked ordinary, and there is a part it did not read. Fetch the package yourself and look at what was left out. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 

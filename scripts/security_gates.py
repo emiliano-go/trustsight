@@ -506,6 +506,87 @@ def gate_terminal_output_is_inert() -> Gate:
                 problems or sorted(renders))
 
 
+def gate_freshness_uses_local_marker() -> Gate:
+    """A11: a package-supplied timestamp cannot override a local freshness marker.
+
+    ``_is_current`` in ``fetcher.py`` must read the local marker
+    (``last_fetch_time``) before consulting the HEAD commit time.
+    The commit-time path is a fallback for clones that predate the marker
+    and must only execute when the marker is absent.
+    """
+    fetcher = SRC / "fetcher.py"
+    tree = ast.parse(fetcher.read_text())
+    problems: list[str] = []
+
+    # Find _is_current function.
+    is_current = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_is_current":
+            is_current = node
+            break
+    if is_current is None:
+        return Gate("freshness uses local marker", False,
+                    "_is_current not found in fetcher.py")
+
+    # The function body must reference last_fetch_time.
+    has_marker = False
+    has_commit_time = False
+    for node in ast.walk(is_current):
+        if isinstance(node, ast.Call) and _call_name(node) == "last_fetch_time":
+            has_marker = True
+        if isinstance(node, ast.Attribute) and node.attr == "commit_time":
+            has_commit_time = True
+
+    if not has_marker:
+        problems.append("_is_current does not call last_fetch_time")
+    if not has_commit_time:
+        problems.append("_is_current does not reference commit_time (fallback removed?)")
+
+    # The commit_time access must follow the marker check.  The pattern is:
+    #   fetched = last_fetch_time(repo)
+    #   if fetched is not None:
+    #       ... return True ...
+    #   # fallback: commit.commit_time >= upstream_mtime
+    # We verify that an If node in the body guards on the variable that
+    # last_fetch_time assigned to, and that commit_time appears only after
+    # that If block.
+    if has_marker and has_commit_time:
+        body = is_current.body
+        found_marker_guard = False
+        marker_var = None
+        # Walk the top-level body looking for the pattern:
+        #   <var> = last_fetch_time(...)
+        #   if <var> is not None: ...
+        for i, stmt in enumerate(body):
+            # Look for: var = last_fetch_time(repo)
+            if (isinstance(stmt, ast.Assign)
+                    and len(stmt.targets) == 1
+                    and isinstance(stmt.targets[0], ast.Name)):
+                call = stmt.value
+                if (isinstance(call, ast.Call)
+                        and _call_name(call) == "last_fetch_time"):
+                    marker_var = stmt.targets[0].id
+                    # Check that the next statement is an If guarding on this var.
+                    if i + 1 < len(body) and isinstance(body[i + 1], ast.If):
+                        if_node = body[i + 1]
+                        # The test should reference the marker variable.
+                        for test_node in ast.walk(if_node.test):
+                            if (isinstance(test_node, ast.Name)
+                                    and test_node.id == marker_var):
+                                found_marker_guard = True
+                                break
+            if found_marker_guard:
+                break
+        if not found_marker_guard:
+            problems.append(
+                "last_fetch_time result is not used as an if-guard before "
+                "the commit_time fallback"
+            )
+
+    return Gate("freshness uses local marker", not problems,
+                problems or ["last_fetch_time guards commit_time"])
+
+
 def gate_expansion_is_bounded() -> Gate:
     """Variable expansion terminates, stays small, and refuses indirection.
 
@@ -2938,6 +3019,67 @@ def gate_critical_paths_are_synchronised() -> Gate:
 
 
 # ---------------------------------------------------------------------------
+# A15: audit does not warm state, and related bounds
+# ---------------------------------------------------------------------------
+
+
+def gate_an_audit_does_not_write_history() -> Gate:
+    """A15: an --allow-uninstalled audit is read-only against the database.
+
+    Structural: the inspect path must open the SQLite connection with
+    ``mode=ro`` when ``--record`` is absent.  Checked by searching the
+    source for the read-only URI pattern in the inspect command.
+    """
+    inspect = SRC / "cli" / "inspect.py"
+    text = inspect.read_text()
+    has_ro = "mode=ro" in text or "mode=ro" in (SRC / "db.py").read_text()
+    return Gate("an audit does not write history", has_ro,
+                has_ro and ["mode=ro connection in inspect path"]
+                or "no read-only connection found")
+
+
+def gate_the_history_walk_is_bounded() -> Gate:
+    """A14: the history walk and the --last ceiling are source constants."""
+    fetcher = SRC / "fetcher.py"
+    text = fetcher.read_text()
+    problems: list[str] = []
+    for const in ("MAX_HISTORY_COMMITS", "MAX_HISTORY_DIFFS"):
+        if f"{const} =" not in text:
+            problems.append(f"{const} not defined in fetcher.py")
+    return Gate("the history walk is bounded", not problems,
+                problems or ["MAX_HISTORY_COMMITS", "MAX_HISTORY_DIFFS"])
+
+
+def gate_run_diff_assembly_is_bounded() -> Gate:
+    """A14/B2: MAX_RUN_DIFF_BYTES is charged across results."""
+    fetcher = SRC / "fetcher.py"
+    text = fetcher.read_text()
+    has_const = "MAX_RUN_DIFF_BYTES" in text
+    return Gate("run diff assembly is bounded", has_const,
+                has_const and ["MAX_RUN_DIFF_BYTES"] or "MAX_RUN_DIFF_BYTES not defined")
+
+
+def gate_a_truncated_history_walk_is_a_declared_gap() -> Gate:
+    """B2: HISTORY_TRUNCATED is in the coverage module."""
+    coverage = SRC / "coverage.py"
+    text = coverage.read_text()
+    has_gap = "HISTORY_TRUNCATED" in text
+    return Gate("a truncated history walk is a declared gap", has_gap,
+                has_gap and ["HISTORY_TRUNCATED"] or "HISTORY_TRUNCATED not in coverage.py")
+
+
+def gate_every_history_diff_is_scored_independently() -> Gate:
+    """B1: the --last path does not aggregate scores."""
+    inspect = SRC / "cli" / "inspect.py"
+    text = inspect.read_text()
+    # The path should use analyze_package_text per-commit, not any
+    # aggregate scoring function.
+    has_agg = "aggregate_score" in text or "combined_score" in text
+    return Gate("every history diff is scored independently", not has_agg,
+                has_agg and ["aggregate score found"] or "no aggregate score in inspect.py")
+
+
+# ---------------------------------------------------------------------------
 
 
 def run_gates() -> list[Gate]:
@@ -2956,6 +3098,7 @@ def run_gates() -> list[Gate]:
         gate_the_default_output_is_not_headline_shaped(),
         gate_version_args_are_shape_checked(),
         gate_terminal_output_is_inert(),
+        gate_freshness_uses_local_marker(),
         gate_rendering_is_data_driven(),
         gate_regex_input_is_bounded(),
         gate_expansion_is_bounded(),
@@ -3007,6 +3150,11 @@ def run_gates() -> list[Gate]:
     gates.append(gate_api_and_cli_share_the_analysis())
     gates.append(gate_ci_installs_from_the_lock())
     gates.append(gate_critical_paths_are_synchronised())
+    gates.append(gate_an_audit_does_not_write_history())
+    gates.append(gate_the_history_walk_is_bounded())
+    gates.append(gate_run_diff_assembly_is_bounded())
+    gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
+    gates.append(gate_every_history_diff_is_scored_independently())
     gates.append(gate_doc_lists_every_gate(gates))
     return gates
 

@@ -9,12 +9,29 @@ from ..scoring import stored_band
 from .display import (
     band_colour,
     HAS_RICH,
-    SIMPLE_HEAD,
     _print_colored,
     _severity_text,
     console,
     display_version,
 )
+
+
+def _validate_date(date_str: str | None, label: str) -> str | None:
+    """Validate and normalise a date string for SQL comparison.
+
+    Accepts ``YYYY-MM-DD`` or full ISO datetime.  Returns the string
+    unchanged if valid, or raises typer.Exit(2) with a message.
+    """
+    if date_str is None:
+        return None
+    import re
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
+        return date_str  # bare date, OK
+    if re.match(r"^\d{4}-\d{2}-\d{2}T", date_str):
+        return date_str  # full ISO, OK
+    msg = f"{label} must be YYYY-MM-DD or ISO datetime (got '{date_str}')"
+    _print_colored(msg, "red", stderr=True)
+    raise typer.Exit(code=2)
 
 
 def register_commands(app: typer.Typer):
@@ -24,6 +41,8 @@ def register_commands(app: typer.Typer):
         limit: int = typer.Option(20, "--limit", help="Max history entries"),
         score_breakdown: bool = typer.Option(False, "--score-breakdown", help="Show score breakdown"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+        from_date: str = typer.Option(None, "--from-date", help="Show entries from this date (YYYY-MM-DD) onward"),
+        to_date: str = typer.Option(None, "--to-date", help="Show entries up to and including this date (YYYY-MM-DD)"),
     ):
         """Show analysis history for a package."""
         ensure_default_configs()
@@ -38,6 +57,9 @@ def register_commands(app: typer.Typer):
         # 0 means "all entries", matching review/list conventions.
         effective_limit = limit or None
 
+        from_date = _validate_date(from_date, "--from-date")
+        to_date = _validate_date(to_date, "--to-date")
+
         pkg_id = get_package_id(package)
         if pkg_id is None:
             msg = (f"Package '{package}' has not been analysed yet. "
@@ -48,7 +70,7 @@ def register_commands(app: typer.Typer):
                 _print_colored(msg, "yellow", stderr=True)
             raise typer.Exit(code=2)
 
-        history_records = get_history(pkg_id, limit=effective_limit)
+        history_records = get_history(pkg_id, limit=effective_limit, from_date=from_date, to_date=to_date)
 
         if not history_records:
             if json_output:
@@ -76,6 +98,7 @@ def register_commands(app: typer.Typer):
             return
 
         if HAS_RICH:
+            from rich.box import SIMPLE_HEAD
             from rich.table import Table
             from rich.text import Text
 

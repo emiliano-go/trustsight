@@ -86,7 +86,7 @@ What the tool promises, in one paragraph, is that its output is honest about the
 - **Transparent**: every point is attributable to a named entry in the score breakdown, and the breakdown is part of the output. Enforced by `positive evidence never changes the score` and `report rendering is data-driven`, which together fix where a number may come from and how it may be described.
 - **Fails closed on doubt**: an analysis that did not see the whole change cannot report UNFLAGGED, and its band is marked incomplete wherever a human sees it.
 - **Not headline-shaped**: the default output is evidence, not a verdict. The score exists, is deterministic, and is available on request; it is not what the tool leads with, because a number invites a decision the tool is not entitled to make. Enforced by `the default output is not headline-shaped`, which renders a scoring package and fails if the default output volunteers the number.
-- **Isolated**: it never fetches a URL the package named, never executes package code, never extracts archives to disk, and never renders untrusted text unescaped.
+- **Isolated**: it never fetches a URL the package named, never executes package code, never extracts a package-controlled archive to disk, and never renders untrusted text unescaped.
 - **Locked**: FATAL rules cannot be turned off, and suppression is always visible.
 - **Configuration is visible, not silently mutable**: the operator may tune the instrument, but not without a trace. The config fingerprint (B1) captures the effective ruleset, thresholds and overrides; FATAL rules cannot be removed without the shipped-rule fallback and a logged warning (B4); and suppressed findings are always reported (B5). A local attacker with filesystem access can edit `rules.toml` or `overrides.toml`, because local permissions are a trusted assumption, but they cannot make the change invisible: the run then carries a different fingerprint, and any suppressed or downgraded rule shows in the output. The model separates operator intent from silent tampering by observability, not by prevention.
 - **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 11.9% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
@@ -206,9 +206,9 @@ Both refuse rather than truncate. A truncated read is a complete-looking one wit
 
 Source URLs are bounded before they are classified. A hostname's real limits are DNS's - 253 bytes and 127 labels - and classification walked every label and computed every parent domain, which is quadratic in label count: one 8 KiB host of dots cost 421 ms, and with `MAX_URLS_PER_SIDE` allowing 4,096 URLs a single package could spend around half an hour there. `buckets.MAX_HOST_BYTES` and `MAX_HOST_LABELS` bound it, and labels are dropped from the *left* so the registrable domain - the part every classification decision reads - survives. Truncating rather than refusing is deliberate: refusing an over-length host would let a homograph domain be padded past the check.
 
-The differ has its own local bounds inside A4, and they bound what is *allocated* rather than what is kept. `patch.text` materialises a whole patch, so the cap that matters runs *before* that call: a delta whose declared file size on either side exceeds `differ.MAX_PATCH_SOURCE_BYTES` is skipped without its text ever being requested, which is the only bound available ahead of the allocation. A patch is at most the changed lines plus context, so a file small on both sides cannot yield a large one. Text that is read is then capped at `MAX_PATCH_BYTES`, the retained total at `MAX_GENERATED_DIFF_BYTES`, the number of patches visited at `MAX_DIFF_PATCHES`, and the summary at `MAX_DIFF_SUMMARY_FILES` - the summary walks every delta regardless of the text cap, so a wide repository would otherwise choose the size of a stored `fact_json`. Companion discovery is bounded the same way: the PKGBUILD blob's size is checked before `blob.data` is touched (`MAX_PKG_BUILD_BYTES`), the tree walk that selects companions stops at `MAX_COMPANION_TREE_ENTRIES`, and a referenced basename past `MAX_COMPANION_NAME_BYTES`, or carrying any path structure, is refused rather than rendered into a hunk header. The generator returns its own truncation flag rather than letting the caller infer one: a patch it declined to retain leaves the assembled text at or under the cap, so measuring that text would report a complete analysis while content had been skipped, which is the silent skip [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete) forbids. Policy omission is not truncation - a `.png` the filter never reads leaves nothing unexamined, while a `.install` dropped at a cap does, and only the second sets the flag. What these bounds do not cover is libgit2's own diff construction: `repo.diff()` builds the diff object before any of this runs, and its cost is a property of the repository rather than of TrustSight. That sits inside [the dependency assumption](#assumptions) - `pygit2` is trusted substrate - and it is stated here rather than implied, because the bounds above are on what *this* program allocates and it would be easy to read them as more. Companion files are capped at `MAX_COMPANION_BYTES` and `MAX_COMPANION_FILES`; companion files are capped at `MAX_COMPANION_BYTES` and `MAX_COMPANION_FILES`; paths and extracted URL tokens have fixed byte/count limits. Companion blobs are size-checked before their bytes are read. URL lists and file-change summaries are sorted before reporting, so repository traversal order cannot change a result. Malformed hunk headers and content outside a valid hunk are ignored rather than mapped to a fabricated location. If the pipeline's combined diff cap truncates output, `diff_truncated` remains a visible coverage gap and the result cannot read as clean.
+**A4b. The differ and companion reads are bounded.** The differ has its own local bounds, and they bound what is *allocated* rather than what is kept. `patch.text` materialises a whole patch, so the cap that matters runs *before* that call: a delta whose declared file size on either side exceeds `differ.MAX_PATCH_SOURCE_BYTES` is skipped without its text ever being requested, which is the only bound available ahead of the allocation. A patch is at most the changed lines plus context, so a file small on both sides cannot yield a large one. Text that is read is then capped at `MAX_PATCH_BYTES`, the retained total at `MAX_GENERATED_DIFF_BYTES`, the number of patches visited at `MAX_DIFF_PATCHES`, and the summary at `MAX_DIFF_SUMMARY_FILES` - the summary walks every delta regardless of the text cap, so a wide repository would otherwise choose the size of a stored `fact_json`. Companion discovery is bounded the same way: the PKGBUILD blob's size is checked before `blob.data` is touched (`MAX_PKG_BUILD_BYTES`), the tree walk that selects companions stops at `MAX_COMPANION_TREE_ENTRIES`, and a referenced basename past `MAX_COMPANION_NAME_BYTES`, or carrying any path structure, is refused rather than rendered into a hunk header. The generator returns its own truncation flag rather than letting the caller infer one: a patch it declined to retain leaves the assembled text at or under the cap, so measuring that text would report a complete analysis while content had been skipped, which is the silent skip [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete) forbids. Policy omission is not truncation - a `.png` the filter never reads leaves nothing unexamined, while a `.install` dropped at a cap does, and only the second sets the flag. What these bounds do not cover is libgit2's own diff construction: `repo.diff()` builds the diff object before any of this runs, and its cost is a property of the repository rather than of TrustSight. That sits inside [the dependency assumption](#assumptions) - `pygit2` is trusted substrate - and it is stated here rather than implied, because the bounds above are on what *this* program allocates and it would be easy to read them as more. Companion files are capped at `MAX_COMPANION_BYTES` and `MAX_COMPANION_FILES`; paths and extracted URL tokens have fixed byte/count limits. Companion blobs are size-checked before their bytes are read. URL lists and file-change summaries are sorted before reporting, so repository traversal order cannot change a result. Malformed hunk headers and content outside a valid hunk are ignored rather than mapped to a fabricated location. If the pipeline's combined diff cap truncates output, `diff_truncated` remains a visible coverage gap and the result cannot read as clean.
 
-The public API applies equivalent input bounds before initialization: package and indicator names are capped at 256 UTF-8 bytes, PKGBUILD and metadata text at 5 MiB, repositories at 256 names, and package/history collections at 10,000 entries. Invalid types, booleans used as numeric limits, negative values, and oversized inputs fail with `ValueError` before database or network work.
+**A4c. API inputs are bounded.** The public API applies equivalent input bounds before initialization: package and indicator names are capped at 256 UTF-8 bytes, PKGBUILD and metadata text at 5 MiB, repositories at 256 names, and package/history collections at 10,000 entries. Invalid types, booleans used as numeric limits, negative values, and oversized inputs fail with `ValueError` before database or network work.
 
 There is deliberately **no hook, callback, or notification command**: nothing in TrustSight spawns an operator-supplied program, with or without findings on stdin. That is worth stating because it is a natural thing to want from a watch loop, and a natural thing to add carelessly. If it is ever added it belongs in this part with its boundary written down, because such a hook would receive attacker-influenced JSON (package names, maintainer names, quoted evidence) and the operator's script would own what happens next. Today the only subprocesses are the `pacman`, `pacman-conf` and `vercmp` calls in A1.
 
@@ -284,6 +284,12 @@ Deriving a bound from the resource it is meant to protect, rather than from the 
 
 There is no GPU or accelerator bound because there is no such code: nothing in the tree imports CUDA, PyTorch, OpenCL or NumPy, and analysis is regex and string work on the CPU. The axis is empty rather than unbounded.
 
+**A15. An audit does not warm state.** Analysing a package the operator has not installed is read-only against the observation database unless `--record` is passed. A run cannot make an artifact look familiar as a side effect of having been examined. This bounds the self-inflicted variant of the state-poisoning class the adversary section names: novelty and maturity read accumulated history, and if auditing an uninstalled package recorded its URLs, hosts and maintainer identity, then every audit would warm local state using artifacts the operator went looking at *because they were suspicious of them*. Infrastructure seen once during an audit would read as established the next time it appeared under a package they do install.
+
+The connection is opened with the SQLite read-only URI (`mode=ro`), not by routing writes to a no-op. Schema migration runs first on a short-lived read-write connection; the analysis connection is then opened `ro`. A gate asserts the connection mode rather than auditing call sites, the same reasoning as `every stream read is bounded`.
+
+Consequence: a package with no local observations has maturity 0, so by B3 a Medium-band score with no HIGH-or-worse finding renders **Inconclusive**, not Low. The remedy is a warm corpus baseline (A13), which is exactly what baselines are for; it is not a lower maturity threshold and not a maturity exemption for this code path.
+
 ### What this part does not protect
 
 - **Building the package.** TrustSight never runs a PKGBUILD. Once you type `makepkg`, you are outside this model entirely.
@@ -320,7 +326,7 @@ The score is not a probability, not a confidence, and not a prediction. A score 
 
 ### B2. An unflagged verdict is never issued for an analysis that was incomplete
 
-Eleven things make a run partial, and all eleven are recorded as **coverage gaps** on the result:
+Thirteen things make a run partial, and all thirteen are recorded as **coverage gaps** on the result:
 
 | Gap | Meaning |
 |-----|---------|
@@ -335,10 +341,12 @@ Eleven things make a run partial, and all eleven are recorded as **coverage gaps
 | `unpinned_build_deps` | A build function resolves dependencies from a package registry (`npm install`, `pip install`, `cargo fetch`, …), so the code the build will fetch and execute is not in the analysed text and no checksum in the recipe covers it. |
 | `deps_not_scanned` | The AUR dependency walk stopped before the closure was exhausted - a ceiling cut it short, or a dependency could not be analysed - so some packages this build will pull in were never read. |
 | `stage_degraded` | An analysis stage raised on this input and returned a neutral value, so the checks it performs did not run over all of the change. Recorded by `coverage.note_stage_failure` from the handler itself. |
+| `history_truncated` | The history walk (`--last N`) stopped before yielding the requested N results: a ceiling was reached, the run diff budget was exhausted, or the repository had fewer content-bearing commits than requested. Attached to the newest result, with the run-level count also reported (A14). |
+| `ruleset_drifted` | The installed `rules.toml` differs from the shipped rule set in a field that changes what a rule detects, so this analysis did not run the checks this version documents. |
 
 `companion_truncated` is separate from `diff_truncated` for the reason `scan_truncated` is: they point at different dials. A companion is read on its own budget, and a reader told only "the diff was truncated" would raise `max_diff_bytes` and find it changed nothing. The bound itself is not the interesting part - every bound drops content. What made this one a vulnerability rather than a limit was that it dropped content *and said nothing*, so a payload past 64 KiB in a committed `Makefile` scored identically to a package with no companions at all.
 
-`stage_degraded` covers the other kind of shortfall. The nine gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
+`stage_degraded` covers the other kind of shortfall. The ten gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
 
 `deps_not_scanned` is the dependency walk's half of the same honesty. An AUR package's `depends` and `makedepends` can name other AUR packages, and `makepkg` builds those on the reviewer's machine in the same run, so a review that reads only the package you typed has read one recipe out of several that will execute. `--depth` decides how far the walk goes, and each dependency is analysed *as a package* - its own score, its own band, its own row in the database - never folded into the parent's number, because `depth` is deliberately absent from the config fingerprint and a score that moved with a flag would break [B1](#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for anyone comparing two runs.
 
@@ -388,6 +396,8 @@ So about one benign diff in eight lands above the threshold: in practice a revie
 
 The property the calibration gates actually enforce is the one that matters for separation: **benign p95 (35) stays below malicious p5 (60)**, a margin of 25. Twenty remains the published threshold because moving it is a calibration decision with its own evidence, not a bookkeeping fix to keep a sentence true.
 
+**The 11.9% benign flag rate is a security property, not just a workload characteristic.** One in eight benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because seven of eight flags were benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 35 < p5 60) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
+
 Be precise about what is automated here. `scripts/calibration_gates.py` re-computes **benign p95 and malicious p5 on every push** and fails the build if they cross. The other figures in the table above are a point-in-time measurement, not a per-push one; they are published in [fire rates](explanation/fire-rates.md) and have to be re-derived with `scripts/rebaseline.py` when scoring changes. A number in this table is only as current as the last person who ran that script.
 
 ### B3. Inconclusive is not presented as UNFLAGGED
@@ -408,13 +418,21 @@ A FATAL finding caps the score at 100 and is never suppressible, whichever of th
 
 The protected set is derived from the shipped rules, not hardcoded in this page. Today it is **R012** (prompt injection) and **R013** (unicode deception). H056 (exact match against a shipped `iocs.toml` indicator) also reaches FATAL at its **confirmed** confidence tier: each `iocs.toml` entry carries a confidence tier, and the `confirmed` tier maps to FATAL while weaker tiers map to lower severities, so an unsourced entry cannot quietly acquire a confirmed entry's weight. H056 is emitted from code rather than from `rules.toml`. This is the legacy exact-match rule and is distinct from the unscored IOC federation layer in [A13b](#part-a-trustsight-as-a-program-under-attack).
 
-The reason these two in particular are locked: the payload targets the *reviewer*, not the machine. A run that skips them is not a tuned run, it is a run whose output cannot be trusted at all.
+The reason these two in particular are locked: the payload targets the *reviewer*, not the machine. A run that skips them has no tuning justification; its output cannot be trusted at all.
 
 ### B5. Suppression is always visible
 
 A suppressed finding is returned and reported, never discarded. A silent suppression is indistinguishable from a missed detection, and those two must never look the same to a reviewer: one means a rule was switched off on purpose, the other means the tool failed.
 
 **No flag hides it.** `suppressed_rules` is emitted unconditionally on every JSON path. Behind `--verbose` it would be absent from the default machine-readable output with nothing to say so, which gives the consumer least able to notice the plainest possible reason to think nothing had been switched off. The `suppression is never hidden by a flag` gate fails the build if the key is moved back under a verbosity branch.
+
+### B6. What a result does not claim
+
+- **It does not claim the package is safe.** It claims no published rule matched the evidence it examined. An UNFLAGGED result is a *detection outcome*, not a certificate - absence of alerts is not a statement about airworthiness.
+- **It does not claim the ruleset is complete.** Fire rates and known gaps are published in [fire rates](explanation/fire-rates.md) and enforced by `scripts/calibration_gates.py`. Detection has documented ceilings.
+- **It does not claim runtime behaviour was observed.** Nothing is executed.
+- **It does not claim the build will fetch what the recipe says.** Where that cannot be determined statically, B2 applies.
+- **The exit code is not a verdict.** `trustsight review` exits 0 when the analysis completed and 2 when it could not. A package that flags is reported in the output, not in the exit status. Gate CI on the JSON, as [using TrustSight in CI](guides/using-in-ci.md) shows.
 
 ### B7. A result reports what changed, not only what fired
 
@@ -471,7 +489,7 @@ Declared verification
   TrustSight does not verify these claims. It reports that the recipe makes them.
 ```
 
-That last line is not a disclaimer, it is the finding's actual content. Without it the group reads as a safety certificate, which is the failure this page exists to prevent.
+That last line serves as the finding's actual content, not a disclaimer. Without it the group reads as a safety certificate, which is the failure this page exists to prevent.
 
 Not all of them are emitted every time. Seventeen INFO lines on every package buries the risk findings, which is the opposite of what the group is for, so the default set is the ones a reader would find surprising by their absence and the rest render under `--verbose`.
 
@@ -492,14 +510,6 @@ Reading an attribute is not the same act. `report.score` is always populated, be
 **And the terminal is a surface.** Comparing JSON with JSON says nothing about what a reviewer actually reads, and a reviewer reads whichever of the four renders their terminal gave them. So a field the body carries may not be dropped by a render: the coverage gap ([B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)), the suppressed rule ([B5](#b5-suppression-is-always-visible)) and the change summary ([B7](#b7-a-result-reports-what-changed-not-only-what-fired)) are each asserted on all four. Each of those three already had a gate, and each gate was aimed at the layer where the value is *set* rather than at the renders that have to show it - so all three were, in fact, false somewhere: `inspect` reported nothing about a partial read unless a band was requested, `review` carried suppressions only in its JSON body, and `inspect` without Rich had no change summary at all.
 
 The gates are behavioural where the property is about values and structural where it is about reachability, and the body gates run through the surfaces a caller actually reaches rather than through the shared helper: comparing `report_body` with itself would prove only that it equals itself. The render gate loops over all four renderers for the same reason `terminal output is inert` does.
-
-### B6. What a result does not claim
-
-- **It does not claim the package is safe.** It claims no published rule matched the evidence it examined. An UNFLAGGED result is a *detection outcome*, not a certificate - absence of alerts is not a statement about airworthiness.
-- **It does not claim the ruleset is complete.** Fire rates and known gaps are published in [fire rates](explanation/fire-rates.md) and enforced by `scripts/calibration_gates.py`. Detection has documented ceilings.
-- **It does not claim runtime behaviour was observed.** Nothing is executed.
-- **It does not claim the build will fetch what the recipe says.** Where that cannot be determined statically, B2 applies.
-- **The exit code is not a verdict.** `trustsight review` exits 0 when the analysis completed and 2 when it could not. A package that flags is reported in the output, not in the exit status. Gate CI on the JSON, as [using TrustSight in CI](guides/using-in-ci.md) shows.
 
 ---
 
@@ -527,11 +537,11 @@ python scripts/security_gates.py
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size |
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
-| `differ hostile input is bounded` | A4 | `differ` parser limits and hostile extraction gate |
-| `generated diff is bounded before assembly` | A4, B2 | `differ.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
-| `companion reads are bounded before data` | A4 | `differ.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |
+| `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
+| `generated diff is bounded before assembly` | A4b, B2 | `differ.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
+| `companion reads are bounded before data` | A4b | `differ.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |
 | `differ output is deterministic` | Guarantees | sorted differ summaries and URL extraction |
-| `API inputs are bounded before initialization` | A4 | `trustsight.api` input validators |
+| `API inputs are bounded before initialization` | A4c | `trustsight.api` input validators |
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
 | `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
@@ -541,6 +551,7 @@ python scripts/security_gates.py
 | `no path-based archive extraction` | A8 | `full_aur/fetch.py`, `db._extract_v2_archive` |
 | `SQL is parameterised` | A9 | `db.py` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/` |
+| `freshness uses local marker` | A11 | `fetcher._is_current`, `fetcher.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
 | `hashed maintainers protect privacy` | P1 | `db.maintainers_hashed`, `seed_meta.salt` |
 | `the seed hash is deterministic` | P1 | `seed_build._hash_value` |
@@ -580,8 +591,11 @@ python scripts/security_gates.py
 | `docs/security.md matches the gates` | this page | the table above |
 | `CI installs from the lock` | the CI assumption | `uv sync --locked` in every workflow, `uv.lock` |
 | `critical paths are synchronised` | `CODEOWNERS`, signature workflow and contributor policy | canonical `scripts/critical_paths.py` |
-
-A11 has no row of its own: freshness anchoring is enforced by `tests/test_fetcher.py` rather than by a gate, because the property is about which value a function reads, and is checked most directly by calling it.
+| `an audit does not write history` | A15 | connection opened `mode=ro` when `--record` is absent; behavioural, asserted by running the path against a fixture DB and diffing it |
+| `the history walk is bounded` | A14 | `fetcher.walk_bounded` is the only walker; `fetcher.MAX_HISTORY_COMMITS`, `fetcher.MAX_HISTORY_DIFFS` |
+| `run diff assembly is bounded` | A14, B2 | `fetcher.MAX_RUN_DIFF_BYTES` charged across results |
+| `a truncated history walk is a declared gap` | B2 | `coverage.HISTORY_TRUNCATED` set on every early stop |
+| `every history diff is scored independently` | B1 | no aggregate score reachable from the `--last` path |
 
 How each gate is scoped, and the recurring mistake that lets one pass while its invariant is broken, is set out in [reviewing a security control](contributing/security-review.md). Read it before adding an invariant or a gate.
 

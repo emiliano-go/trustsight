@@ -23,7 +23,7 @@ BACKTRACK_BUDGET_S = 0.02
 #: steps, tens of milliseconds) while a linear pattern stays in the
 #: microseconds, and probing every pattern at the full 8192 would put real
 #: time on the startup path for no extra signal.
-LONG_PROBE_LEN = 2048
+LONG_PROBE_LEN = 4096
 
 BACKTRACK_PROBES = (
     "a" * BACKTRACK_REPS + "!",

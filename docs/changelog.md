@@ -6,6 +6,23 @@
 
 _No changes yet._
 
+## [0.15.2] - 2026-09-01
+
+### Fixed
+
+- **Regex audit flakiness under build load.** The `is_superlinear()` check
+  in `regex_safety.py` compared wall-clock timing at 512 and 2048 chars;
+  CPU load during `makepkg` caused the ratio to exceed the 8x threshold
+  for patterns that are actually fine. Raised the threshold from 8x to 12x;
+  a ratio above 12x on 4x input is still clearly superlinear (true
+  quadratic would be 16x).
+
+- **`check()` FileExistsError on repeat builds.** The PKGBUILD `check()`
+  function created a venv with `--system-site-packages` but only cleaned
+  `trustsight*` paths. On repeat runs, `zensical_extensions/` from a
+  previous install collided with the new wheel. Now removes the entire
+  venv before recreating, and also cleans `zensical_extensions`.
+
 ## [0.15.1] - 2026-09-01
 
 ### Changed

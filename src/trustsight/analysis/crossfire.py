@@ -1748,6 +1748,76 @@ def _consumer_at(lines: list[str], index: int) -> bool:
     return False
 
 
+# ---------------------------------------------------------------------------
+# X024: indirect assignment to a sensitive variable
+# ---------------------------------------------------------------------------
+#
+# A sensitive makepkg variable (DLAGENTS, COMPRESS*, PACMAN_AUTH, CFLAGS,
+# LDFLAGS, MAKEFLAGS, PATH, LD_PRELOAD, LD_LIBRARY_PATH) is assigned a
+# value that comes from another variable, a command substitution, or an
+# array expansion.  The evasion: DLAGENTS=("${_agents[@]}") looks like a
+# pass-through but the actual value was set in a function.  Good PKGBUILDs
+# assign literal values to these variables.
+_SENSITIVE_VAR_RE = re.compile(
+    r"(?:DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
+    r"|PACMAN_AUTH|CFLAGS|CXXFLAGS|LDFLAGS|MAKEFLAGS|RUSTFLAGS"
+    r"|PATH|LD_PRELOAD|LD_LIBRARY_PATH|PYTHONPATH)"
+    r"\s*\+?=",
+    re.IGNORECASE,
+)
+_INDIRECT_VALUE_RE = re.compile(
+    r"\$\{?\w+[@\[\}]?|"   # ${var[@]}, ${var[}, ${var}, $var
+    r"\$\(|"                # $(
+    r"`"                     # backtick
+)
+
+X024_RE = re.compile(
+    r"(?:" + _SENSITIVE_VAR_RE.pattern + r")"
+    r"(?:\s*[\"'\(]*\s*)"  # optional quotes/parens between = and value
+    r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",
+    re.IGNORECASE,
+)
+
+
+# ---------------------------------------------------------------------------
+# X025: function shadow defined across multiple lines
+# ---------------------------------------------------------------------------
+#
+# H097 catches `msg() {` on a single line.  This catches the multi-line
+# variant where the function name and opening brace are on different lines,
+# connected by a backslash-newline continuation.  Good PKGBUILDs do not
+# split function definitions across lines.
+_FUNC_CONTINUATION_RE = re.compile(
+    r"^\s*(\w+)\s*\(\s*\)",
+    re.IGNORECASE,
+)
+_FUNC_CONTINUATION_BODY_RE = re.compile(
+    r"^\s*\{",
+)
+
+
+def _multiline_function_shadow_lines(lines):
+    """Yield line numbers where a shadowed function is defined across lines."""
+    from .build import _SHADOWED_NAMES
+    i = 0
+    while i < len(lines) - 1:
+        line = lines[i]
+        if not line.startswith("+"):
+            i += 1
+            continue
+        body = line[1:].strip()
+        m = _FUNC_CONTINUATION_RE.match(body)
+        if m and m.group(1) in _SHADOWED_NAMES:
+            j = i + 1
+            while j < len(lines) and not lines[j].startswith("+"):
+                j += 1
+            if j < len(lines) and _FUNC_CONTINUATION_BODY_RE.match(lines[j][1:]):
+                yield i + 1  # 1-indexed
+                i = j + 1
+                continue
+        i += 1
+
+
 def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]]:
     """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
 
@@ -1990,6 +2060,11 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X013", line_no, "fetch redirected or trust replaced",
                    body.strip())
 
+        if X024_RE.search(body):
+            record("X024", line_no,
+                   "sensitive variable assigned an indirect value",
+                   body.strip())
+
         # The stand-down is about *language* package managers, where a
         # local path means "install what this recipe just built".  For the
         # distribution's own tools it means the opposite: `pacman -U
@@ -2011,6 +2086,14 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X012", line_no,
                    f"{override.group('var')} points into the source tree",
                    body.strip())
+
+    # X025: multi-line function shadow.  H097 catches `msg() {` on one
+    # line; this catches the continuation variant where the brace is on
+    # the next line.  Must run on raw lines before joining continuations.
+    for shadow_line in _multiline_function_shadow_lines(raw_lines):
+        record("X025", shadow_line,
+               "function shadow defined across multiple lines",
+               raw_lines[shadow_line - 1].strip())
 
     return found
 
@@ -2038,6 +2121,8 @@ _NAMES = {
     "X021": ("Executor Runs A File Chosen At Runtime", "HIGH"),
     "X022": ("Generated Config Handed To The Tool That Reads It", "HIGH"),
     "X023": ("Command Output Executed As A Script", "HIGH"),
+    "X024": ("Indirect Sensitive Assignment", "HIGH"),
+    "X025": ("Multi-Line Function Shadow", "HIGH"),
 }
 
 #: How many distinct techniques make a diff X007.  Two, because one technique
@@ -2055,7 +2140,9 @@ def _crossfire_findings(diff_text, config, add) -> None:
     techniques = crossfire_techniques(diff_text)
 
     for rule_id in ("X001", "X002", "X003", "X004", "X005", "X006", "X008",
-                    "X009", "X010", "X011", "X012", "X013", "X014", "X015", "X016", "X017", "X018", "X019", "X020", "X021", "X022", "X023"):
+                    "X009", "X010", "X011", "X012", "X013", "X014", "X015",
+                    "X016", "X017", "X018", "X019", "X020", "X021", "X022",
+                    "X023", "X024", "X025"):
         hits = techniques.get(rule_id)
         if not hits:
             continue

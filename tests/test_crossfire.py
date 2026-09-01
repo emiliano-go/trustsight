@@ -844,3 +844,76 @@ def test_an_unbounded_span_stays_linear(label, probe):
     X001_RE.search(probe)
     worst = max(worst, time.perf_counter() - start)
     assert worst < 0.05, f"{label}: {worst * 1000:.0f}ms on one clamped line"
+
+
+# ---------------------------------------------------------------------------
+# X024: indirect assignment to a sensitive variable
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("command", [
+    'DLAGENTS=("${_agents[@]}")',
+    'COMPRESSZST=$(get_compress)',
+    'CFLAGS="${_cflags[*]}"',
+    'LDFLAGS=`echo $LDFLAGS`',
+    'PACMAN_AUTH="${_auth}"',
+    'MAKEFLAGS=("${_makeflags[@]}")',
+    'PATH="${_newpath}"',
+    'LD_PRELOAD="${_preload}"',
+])
+def test_x024_fires_on_indirect_assignment(command):
+    assert "X024" in _fire(command)
+
+
+@pytest.mark.parametrize("command", [
+    "DLAGENTS=('http::/usr/bin/curl')",
+    'CFLAGS="-O2 -march=x86-64"',
+    "LDFLAGS=\"-Wl,-O1 -Wl,--as-needed\"",
+    'MAKEFLAGS="-j$(nproc)"',
+])
+def test_x024_quiet_on_literal_assignment(command):
+    assert "X024" not in _fire(command)
+
+
+# ---------------------------------------------------------------------------
+# X025: multi-line function shadow
+# ---------------------------------------------------------------------------
+
+
+def test_x025_fires_on_multiline_msg_shadow():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=demo\n"
+            "+msg()\\\n"
+            "+{\n"
+            "+  echo 'clean'\n"
+            "+}\n")
+    assert "X025" in set(crossfire_techniques(diff))
+
+
+def test_x025_fires_on_multiline_cd_shadow():
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=demo\n"
+            "+cd()\\\n"
+            "+{\n"
+            "+  builtin cd \"$@\"\n"
+            "+}\n")
+    assert "X025" in set(crossfire_techniques(diff))
+
+
+def test_x025_quiet_on_multiline_build():
+    """build() split across lines is not a shadow."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=demo\n"
+            "+build()\\\n"
+            "+{\n"
+            "+  make\n"
+            "+}\n")
+    assert "X025" not in set(crossfire_techniques(diff))
+
+
+def test_x025_quiet_on_single_line_shadow():
+    """Single-line shadow is H097's job, not X025."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+            " pkgname=demo\n"
+            "+msg() { echo 'clean'; }\n")
+    assert "X025" not in set(crossfire_techniques(diff))

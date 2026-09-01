@@ -262,6 +262,21 @@ def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
     return bool(names - have)
 
 
+_NOEXTRACT_RE = re.compile(
+    r"^\+\s*noextract\s*=\s*\(", re.MULTILINE
+)
+
+
+def _has_noextract(diff_text: str) -> bool:
+    """True when the diff adds a noextract=() declaration.
+
+    noextract=() suppresses extraction of specific source archives.
+    When present, the contents of those archives are not available to
+    the analysis, so any rule that would examine them cannot fire.
+    """
+    return bool(_NOEXTRACT_RE.search(diff_text))
+
+
 def _adds_a_dependency(diff_text: str) -> bool:
     """True when the diff adds a runtime or build dependency."""
     from ..deps import extract_dependency_changes
@@ -577,6 +592,7 @@ def analyze_package(
         ),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
+        noextract_present=_has_noextract(diff_text),
     )
 
     score, breakdown, risk = calculate_score(
@@ -798,6 +814,7 @@ def scan_diff(
         deps_not_scanned=_adds_a_dependency(diff_text),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
+        noextract_present=_has_noextract(diff_text),
     )
 
     score, breakdown, risk = calculate_score(
@@ -935,6 +952,7 @@ def _make_fresh_analysis(
                            head_pkgbuild, tree_manifest)),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
+        noextract_present=_has_noextract(head_pkgbuild or ""),
     )
     # The same scorer the incremental path uses, on the findings this path
     # actually made.  Novelty is empty and stays empty - "first seen" means

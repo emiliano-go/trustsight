@@ -50,6 +50,7 @@ DEPS_NOT_SCANNED = "deps_not_scanned"
 RULESET_DRIFTED = "ruleset_drifted"
 STAGE_DEGRADED = "stage_degraded"
 HISTORY_TRUNCATED = "history_truncated"
+NOEXTRACT_SUPPRESSED = "noextract_suppressed"
 
 GAPS = (
     DIFF_TRUNCATED,
@@ -65,6 +66,7 @@ GAPS = (
     DEPS_NOT_SCANNED,
     STAGE_DEGRADED,
     HISTORY_TRUNCATED,
+    NOEXTRACT_SUPPRESSED,
 )
 
 GAP_REASONS = {
@@ -122,6 +124,10 @@ GAP_REASONS = {
         "the history walk stopped before yielding the requested number of "
         "results: a ceiling was reached, the run diff budget was exhausted, "
         "or the repository had fewer content-bearing commits than requested"
+    ),
+    NOEXTRACT_SUPPRESSED: (
+        "noextract=() suppresses extraction of source archives whose "
+        "contents could not be examined"
     ),
 }
 
@@ -380,6 +386,7 @@ def gaps_from(
     deps_not_scanned: bool = False,
     ruleset_drifted: bool = False,
     degraded_stages: list[str] | None = None,
+    noextract_present: bool = False,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
@@ -436,6 +443,11 @@ def gaps_from(
     # explains the same shortfall the reader wants that one first.
     if degraded_stages:
         gaps.append(STAGE_DEGRADED)
+    # noextract=() suppresses extraction of specific source archives.
+    # When present, the contents of those archives are not available to
+    # the analysis, so any rule that would examine them cannot fire.
+    if noextract_present:
+        gaps.append(NOEXTRACT_SUPPRESSED)
     return gaps
 
 
@@ -494,6 +506,9 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     HISTORY_TRUNCATED: (
         "history walk stopped early: not all requested diffs were examined"
+    ),
+    NOEXTRACT_SUPPRESSED: (
+        "noextract=() suppresses extraction: source archive contents not examined"
     ),
 }
 

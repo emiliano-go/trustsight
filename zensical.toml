@@ -139,6 +139,7 @@ Explanation = [
   {"Corpus and Priors" = "explanation/corpus-and-priors.md"},
   {"Fire Rates" = "explanation/fire-rates.md"},
   {"What TrustSight Cannot See" = "explanation/what-trustsight-cannot-see.md"},
+  {"Why Static Analysis" = "explanation/why-static-analysis.md"},
   {"Seed Provenance" = "explanation/seed-provenance.md"},
   {"Benchmarks and Methodology" = "explanation/benchmarks-and-methodology.md"},
   {"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"},

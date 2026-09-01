@@ -483,3 +483,40 @@ A trailing `|| true` ends the pipeline rather than voiding it, so
 `cmd | bash || true` is claimed.
 
 No package in the 3,246-diff benign corpus pipes anything into a shell.
+
+### X024: Indirect Sensitive Assignment {#x024}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a sensitive makepkg variable (`DLAGENTS`, `COMPRESS*`,
+`PACMAN_AUTH`, `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, `PATH`, `LD_PRELOAD`,
+`LD_LIBRARY_PATH`) is assigned a value that comes from another variable,
+a command substitution, or an array expansion.
+
+| Fires | Quiet |
+|---|---|
+| `DLAGENTS=("${_agents[@]}")` | `DLAGENTS=('http::/usr/bin/curl')` |
+| `COMPRESSZST=$(get_compress)` | `CFLAGS="-O2 -march=x86-64"` |
+| `CFLAGS="${_cflags[*]}"` | `LDFLAGS="-Wl,-O1 -Wl,--as-needed"` |
+| `PACMAN_AUTH="${_auth}"` | `MAKEFLAGS="-j$(nproc)"` |
+
+The evasion: `DLAGENTS=("${_agents[@]}")` looks like a pass-through but
+the actual value was set in a function. Good PKGBUILDs assign literal
+values to these variables.
+
+### X025: Multi-Line Function Shadow {#x025}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a function definition is split across multiple lines using
+backslash-newline continuations, specifically for functions in the
+shadowed set (shell builtins, makepkg helpers, common utilities).
+
+| Fires | Quiet |
+|---|---|
+| `msg()\` + `{` on next line | `build()\` + `{` on next line |
+| `cd()\` + `{` on next line | `helper()\` + `{` on next line |
+
+H097 catches `msg() {` on a single line; X025 catches the multi-line
+variant where the brace is on the next line. Good PKGBUILDs do not split
+function definitions across lines.

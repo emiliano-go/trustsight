@@ -133,6 +133,16 @@ TrustSight mitigates this in three ways:
 
 None of these mitigations eliminate the problem. A PKGBUILD that reuses well-known domains, has stable checksums, and contains no detectable command patterns will score 0 regardless of the tarball content at the other end of the checksum.
 
+## The noextract gap
+
+`noextract=()` tells makepkg not to extract certain source archives. When this is present, the contents of those archives are not available to the analysis. A payload inside a noextracted tarball is invisible: the checksum covers it, but the analysis cannot read it.
+
+This is reported as the `noextract_suppressed` coverage gap. A coverage gap forbids an UNFLAGGED verdict: the result is reported as `Inconclusive` rather than guessing about content the analysis never examined.
+
+## validpgpkeys as a declared fact
+
+Introducing `validpgpkeys` from scratch is reported as INFO (H078, "Signature Verification Introduced"). This is a neutral fact: the packager declares which keys they trust. TrustSight cannot verify whether a declared key is the distribution's key or an attacker's key without fetching the keyserver, which it never does. The security-relevant case (introducing a self-signed key to bypass distribution keyring trust) is an inherent limit of static analysis on declared metadata.
+
 ## The novelty ceiling (R103/R109)
 
 The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 tier codifies. H074 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.

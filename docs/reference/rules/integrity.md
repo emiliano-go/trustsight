@@ -442,3 +442,89 @@ the array either way.
 
 Measured across 50 real AUR repositories, no package has a `.SRCINFO` host
 its PKGBUILD does not also name.
+
+### R078: Compression Command Override {#r078}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `build`
+- **Pattern:** `(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)\s*\+?=`
+- **Condition:** Assignment to any `COMPRESS*` variable (`COMPRESSZST`,
+  `COMPRESSXZ`, `COMPRESSGZ`, `COMPRESSBZ2`, `COMPRESSLZ4`, etc.).
+
+These variables control makepkg's archive compression command. Overriding
+them can pipe decompressed content through an arbitrary binary. Legitimate
+uses are rare (custom compression tuning for size/performance).
+
+Fire rate: ~0.08% on the 3,246-diff benign corpus.
+
+### R091: Privilege Escalation Override {#r091}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `build`
+- **Pattern:** `(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?PACMAN_AUTH\s*\+?=`
+- **Condition:** Assignment to `PACMAN_AUTH`.
+
+This variable controls how pacman gains elevated privileges during
+`makepkg -S`. Overriding it in a PKGBUILD means the package is trying
+to control privilege escalation on the builder's machine.
+
+Fire rate: 0% on the 3,246-diff benign corpus.
+
+### R099: Trap Statement {#r099}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `build`
+- **Pattern:** `^(?:\+)?\s*trap\s+`
+- **Condition:** Any `trap` statement in the PKGBUILD.
+
+`trap` registers signal handlers. In a PKGBUILD it can suppress errors
+(`trap '' ERR`), run code on build completion (`trap 'payload' EXIT`),
+or perform legitimate cleanup. Legitimate cleanup traps exist but are
+uncommon enough to flag.
+
+Fire rate: ~0.80% on the 3,246-diff benign corpus. Excludes when R104
+already claimed the more specific form.
+
+### R104: Error Handling Suppressed {#r104}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `build`
+- **Pattern:** `trap '' (?:ERR|DEBUG)(?:[^a-zA-Z]|$)`
+- **Condition:** `trap '' ERR` or `trap '' DEBUG`.
+
+Suppresses error handling (`ERR`) or trace output (`DEBUG`), hiding
+build failures from the reviewer. These are subsets of R099 but carry
+higher severity because they actively conceal activity. Only the
+single-quote form is common; the double-quote form is rare and already
+caught by R099.
+
+Must come before R099 in the rule set so the more specific match fires
+first.
+
+### H096: Download Agent Override {#h096}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+- **Condition:** `DLAGENTS` is assigned or appended to.
+
+`DLAGENTS` controls how makepkg fetches sources for each protocol.
+Overriding it in a PKGBUILD redirects all source downloads through the
+attacker's chosen binary. Any change to DLAGENTS is flagged: legitimate
+recipes do not modify it.
+
+Fire rate: ~1.55% on the 3,246-diff benign corpus.
+
+### H097: Function Shadowing {#h097}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** A function or variable is redefined that suppresses or
+  hijacks makepkg logic.
+
+Redefining `msg()`, `error()`, or `die()` suppresses build output.
+Redefining `cd()` hijacks the working directory. Redefining `.()`
+redirects file inclusion. No benign PKGBUILD does any of these.
+
+Covers shell builtins, makepkg helpers, and common utilities. PKGBUILD
+array variables (`source`, `sha256sums`, `depends`, etc.) are excluded
+because `source=()` is a legitimate array declaration.

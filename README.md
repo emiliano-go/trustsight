@@ -50,6 +50,8 @@ Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC base
 
 TrustSight is **evidence-producing**, not proof-of-safety. Read the [full security model](https://docs.trustsight.org/security/) for the threat model, invariants, and enforcement gates. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured evidence report, not a gate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/).
 
+> **Why static analysis?** TrustSight is a SAST tool by design: it never executes PKGBUILDs, never fetches URLs, and runs before `makepkg`. For how to customize the detection surface, see [Why Static Analysis](https://docs.trustsight.org/explanation/why-static-analysis/).
+
 ---
 
 ## What it detects
@@ -245,7 +247,7 @@ Scoring is fully deterministic: same input always produces the same score. The p
 4. **Check novelty** against the local database of known URLs and maintainers
 5. **Calculate score** from 0-100 by summing weighted contributions across four evidence tiers
 
-Signals come from 171 documented rules across five scoring namespaces: 127 detection rules (R-series, part TOML-configurable and part code-emitted), 9 code-structure rules (C001-C009), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 23 crossfire anti-evasion rules (X001-X023). Two further namespaces report at weight 0 and never score: declared practice (P001-P008) and unverifiable (W001-W006), the latter naming what an analysis could not read. Calibration uses a locked, point-in-time 3,246-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
+Signals come from 179 documented rules across five scoring namespaces: 127 detection rules (R-series, part TOML-configurable and part code-emitted), 9 code-structure rules (C001-C009), 4 dependency-graph rules (D001-D004), 8 sabotage rules (S001-S008) and 25 crossfire anti-evasion rules (X001-X025). Two further namespaces report at weight 0 and never score: declared practice (P001-P008) and unverifiable (W001-W006), the latter naming what an analysis could not read. Calibration uses a locked, point-in-time 3,246-diff benign corpus of real AUR updates and 175 self-authored, labelled malicious fixtures; it is regression evidence, not an independent recall claim. See [Benchmarks and Methodology](https://docs.trustsight.org/explanation/benchmarks-and-methodology/) and the [blinded-evaluation intake](https://docs.trustsight.org/contributing/blinded-evaluation/) for scope.
 
 Verdicts are template-based, describing each triggered finding in plain English. The score is never influenced by the verdict text.
 

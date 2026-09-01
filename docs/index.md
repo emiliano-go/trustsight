@@ -41,7 +41,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 171 documented scoring rules across five families: 127 R-series detection rules, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 23 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 179 documented scoring rules across five families: 127 R-series detection rules, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 25 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 
@@ -66,6 +66,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Corpus and Priors](explanation/corpus-and-priors.md) | AUR-wide snapshot, global priors, local novelty weighting. |
 | [Fire Rates](explanation/fire-rates.md) | Per-rule false-positive rates on the benign corpus. |
 | [What TrustSight Cannot See](explanation/what-trustsight-cannot-see.md) | The reasoned ceiling of the tool. |
+| [Why Static Analysis](explanation/why-static-analysis.md) | SAST by design, customization surface. |
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
 
 ## Guides

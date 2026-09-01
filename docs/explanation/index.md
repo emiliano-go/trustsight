@@ -164,3 +164,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Seed Provenance](seed-provenance.md) | How the novelty seed is built, signed on the release channel, and audited |
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |
 | [Sandboxing the Tokenizer](sandboxing-the-tokenizer.md) | Why the tokenizer is the component worth isolating, and the conditions for doing it |
+| [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |

@@ -86,7 +86,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R144, H001-H095, S001-S008, X001-X023, C001-C009, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R144, H001-H095, S001-S008, X001-X025, C001-C009, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1042,7 +1042,7 @@ See [H074: Adopt-then-Modify](maintainer-and-metadata.md#h074).
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
 H086-H088 are per-package findings, not Class D corpus findings. S001-S008
-and X001-X023 are the sabotage and crossfire families; their category pages
+and X001-X025 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
 ### H086 {#h086}
@@ -1236,6 +1236,38 @@ See [S007: Cryptocurrency Miner](sabotage.md#s007).
 ### S008 {#s008}
 
 See [S008: Shell History Or Log Destruction](sabotage.md#s008).
+
+### R078 {#r078}
+
+See [R078: Compression Command Override](integrity.md#r078).
+
+### R091 {#r091}
+
+See [R091: Privilege Escalation Override](integrity.md#r091).
+
+### R099 {#r099}
+
+See [R099: Trap Statement](integrity.md#r099).
+
+### R104 {#r104}
+
+See [R104: Error Handling Suppressed](integrity.md#r104).
+
+### H096 {#h096}
+
+See [H096: Download Agent Override](integrity.md#h096).
+
+### H097 {#h097}
+
+See [H097: Function Shadowing](integrity.md#h097).
+
+### X024 {#x024}
+
+See [X024: Indirect Sensitive Assignment](crossfire.md#x024).
+
+### X025 {#x025}
+
+See [X025: Multi-Line Function Shadow](crossfire.md#x025).
 
 
 ---

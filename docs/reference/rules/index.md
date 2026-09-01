@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X023, integrity-change rules C001-C009, dependency rules
+rules X001-X025, integrity-change rules C001-C009, dependency rules
 D001-D004, declared-practice rules P001-P008, and unverifiable rules
 W001-W006.
 
@@ -189,6 +189,8 @@ is deliberately non-contiguous; see
 | [H090](fetch-and-execution.md#h090) | Committed Companion Carries A Fetch-Execute Payload | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [H091](integrity.md#h091) | Checksum Array Shorter Than Source Array | HIGH | [Integrity and Verification](integrity.md) |
 | [H092](integrity.md#h092) | Metadata Names A Source The Recipe Does Not | HIGH | [Integrity and Verification](integrity.md) |
+| [H096](integrity.md#h096) | Download Agent Override | MEDIUM | [Integrity and Verification](integrity.md) |
+| [H097](integrity.md#h097) | Function Shadowing | HIGH | [Integrity and Verification](integrity.md) |
 | [H093](install-and-persist.md#h093) | Committed Config Points At A Build-Only Path | HIGH | [Install and Persistence](install-and-persist.md) |
 | [H094](fetch-and-execution.md#h094) | Unread Script Executed During Packaging | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [H095](install-and-persist.md#h095) | Boot Or Image Artifact Built From The Source Tree | HIGH | [Install and Persistence](install-and-persist.md) |
@@ -223,6 +225,10 @@ is deliberately non-contiguous; see
 | [R057](fetch-and-execution.md#r057) | TLS Verification Disabled | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [R058](staging-and-recon.md#r058) | Write Outside Package Root | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
 | [R059](install-and-persist.md#r059) | Setuid Or Setgid Bit Set Outside Package Root | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R078](integrity.md#r078) | Compression Command Override | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R091](integrity.md#r091) | Privilege Escalation Override | HIGH | [Integrity and Verification](integrity.md) |
+| [R099](integrity.md#r099) | Trap Statement | MEDIUM | [Integrity and Verification](integrity.md) |
+| [R104](integrity.md#r104) | Error Handling Suppressed | HIGH | [Integrity and Verification](integrity.md) |
 | [R144](install-and-persist.md#r144) | Packaged File Points At A World-Writable Path | HIGH | [Install and Persistence](install-and-persist.md) |
 | [S001](sabotage.md#s001) | Recursive Self-Spawn | CRITICAL | [Sabotage](sabotage.md) |
 | [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | CRITICAL | [Sabotage](sabotage.md) |
@@ -261,6 +267,8 @@ is deliberately non-contiguous; see
 | [X021](crossfire.md#x021) | Executor Runs A File Chosen At Runtime | HIGH | [Crossfire](crossfire.md) |
 | [X022](crossfire.md#x022) | Generated Config Handed To The Tool That Reads It | HIGH | [Crossfire](crossfire.md) |
 | [X023](crossfire.md#x023) | Command Output Executed As A Script | HIGH | [Crossfire](crossfire.md) |
+| [X024](crossfire.md#x024) | Indirect Sensitive Assignment | HIGH | [Crossfire](crossfire.md) |
+| [X025](crossfire.md#x025) | Multi-Line Function Shadow | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001` to `P008`) are not detections

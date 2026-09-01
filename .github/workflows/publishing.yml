@@ -55,7 +55,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - run: uv sync --locked --extra dev --python 3.12
-      - run: uv run pytest
+      - run: uv run --extra dev pytest
       - run: uv build --out-dir dist
       - run: uv run --with twine twine check dist/*
 

@@ -6,6 +6,52 @@
 
 _No changes yet._
 
+## [0.15.1] - 2026-09-01
+
+### Changed
+
+- **AUR RPC queries retry on transient errors.** `get_aur_package_info()` in
+  `discovery.py` now retries up to three times with exponential backoff on HTTP
+  429, 5xx, and connection-reset errors, and honours `Retry-After` headers.
+  Previously a single transient failure discarded all uncached packages with no
+  retry.
+
+### Added
+
+- **`review --refresh` forces a fresh metadata snapshot.** The flag bypasses the
+  `[discovery] metadata_ttl_minutes` TTL and re-downloads the AUR metadata
+  dump immediately. Useful when the snapshot is stale but its age is still
+  within the TTL window.
+
+- **Snapshot age shown when reused.** When the AUR metadata snapshot is reused
+  without refreshing (TTL not exceeded, or TTL set to 0), the tool now prints
+  its age and a hint about `--refresh` or the config key.
+
+### Fixed
+
+- **PKGBUILD source URL uses release asset.** The AUR PKGBUILD source line
+  was inadvertently switched to GitHub's generated archive
+  (`/archive/refs/tags/`), whose gzip settings changed in 2023 and
+  invalidated recorded checksums across distributions. Reverted to the
+  immutable release asset (`/releases/download/`).
+
+- **Corpus lock aligned to on-disk count.** `corpus.lock` recorded 3,739
+  entries but only 3,246 `.diff` files exist in the benign corpus.
+  Updated `total_entries` and all 50+ doc references to 3,246.
+
+- **Regex warning includes rule ID.** The "refusing regex pattern with
+  excessive backtracking risk" log message now identifies the rule
+  (`(rule R013)`) so operators can diagnose which pattern was refused.
+
+- **CLI flag documented.** `--refresh` added to the CLI reference table.
+
+### Stats
+
+- 2 commits since v0.15.0
+- 24 files changed, +137 / -65
+- 3,644 tests, all passing
+- Package version 0.15.1
+
 ## [0.15.0] - 2026-08-31
 
 ### Changed

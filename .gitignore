@@ -29,3 +29,6 @@ packaging/aur/*.pkg.tar.*
 
 # Full AUR metadata dump (scratch, not shipped)
 /full-aur-meta.json
+
+# Release workflow scratch directory
+release/

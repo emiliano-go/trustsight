@@ -338,7 +338,7 @@ trustsight config sync-rules [--update]
 ### `sync-rules`
 
 ```
-trustsight config sync-rules [--update]
+trustsight config sync-rules [--update] [--full]
 ```
 
 `rules.toml` is written only when it does not exist, so upgrading the package
@@ -346,9 +346,14 @@ never changes it. An install that predates a rule addition silently never
 receives that rule, and a corrected pattern never reaches anyone who already
 has the file.
 
+Without flags, starts an interactive wizard that shows what changed (new
+rules, outdated patterns, drifted fields) and offers full update, safe
+update, or skip.
+
 | Flag | Description |
 |------|-------------|
 | `--update` | Also replace rules whose current pattern is one this project shipped previously. A rule whose pattern matches neither the current default nor a known earlier one has been edited by you and is never touched. |
+| `--full` | Fully overwrite all rules with shipped defaults. Overrides user customisations. |
 
 Adding is always safe and happens by default. Replacing is not, which is why it
 is opt-in and limited to rules you demonstrably have not customised.

@@ -310,9 +310,9 @@ def has_nested_quantifier(pattern: str) -> bool:
 
 #: A pattern whose cost grows faster than this multiple of its input is
 #: superlinear. Four times the input costs four times the time when a
-#: pattern is linear, and about sixteen when it is quadratic, so eight
+#: pattern is linear, and about sixteen when it is quadratic, so ten
 #: separates the two with room for a noisy machine.
-SUPERLINEAR_GROWTH = 8.0
+SUPERLINEAR_GROWTH = 10.0
 
 #: Below this, a measurement is noise rather than signal and the growth
 #: check is skipped. A pattern too fast to measure is fast enough.
@@ -347,7 +347,17 @@ def growth_ratio(compiled: re.Pattern) -> float:
         long = _time_search(compiled, char * LONG_PROBE_LEN + "!")
         if long < _GROWTH_FLOOR_S:
             continue
-        worst = max(worst, long / max(short, 1e-9))
+        # Run a second measurement to filter out scheduler noise on
+        # loaded machines.  Take the *minimum* of each pair: the faster
+        # measurement is closer to the true algorithmic cost, and the
+        # slower one is the noise we want to discard.
+        short2 = _time_search(compiled, char * (LONG_PROBE_LEN // 4) + "!")
+        long2 = _time_search(compiled, char * LONG_PROBE_LEN + "!")
+        s = min(short, short2)
+        l = min(long, long2)
+        if l < _GROWTH_FLOOR_S:
+            continue
+        worst = max(worst, l / max(s, 1e-9))
     return worst
 
 

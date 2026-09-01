@@ -824,14 +824,27 @@ def register_commands(app: typer.Typer):
             # attached to every finding; a single header saves the user
             # from scrolling past fifteen identical lines.
             if not json_output:
-                from ..config import drifted_shipped_rules
+                from ..config import drifted_shipped_rules, sync_rules
                 drifted = drifted_shipped_rules()
                 if drifted:
                     _print_colored(
-                        "Your rules.toml differs from the shipped rule set. "
-                        "Run 'trustsight config sync-rules' to update.",
+                        "Your rules.toml differs from the shipped rule set.",
                         "yellow",
                     )
+                    if sys.stdin.isatty() and typer.confirm("Sync rules now?", default=False):
+                        added, updated = sync_rules(update_outdated=True)
+                        if added or updated:
+                            parts = []
+                            if added:
+                                parts.append(f"added {len(added)} rule(s)")
+                            if updated:
+                                parts.append(f"updated {len(updated)} rule(s)")
+                            _print_colored(
+                                f"Rules synced: {', '.join(parts)}.",
+                                "green",
+                            )
+                        else:
+                            _print_colored("Rules are already up to date.", "green")
 
             _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by)
         finally:

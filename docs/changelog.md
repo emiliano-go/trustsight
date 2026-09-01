@@ -6,6 +6,22 @@
 
 _No changes yet._
 
+## [0.15.4] - 2026-09-01
+
+### Added
+
+- **`config sync-rules` wizard.** The command now starts an interactive
+  wizard that shows what changed (new rules, outdated patterns, drifted
+  fields) and offers three options: full update (overrides everything),
+  safe update (adds missing + updates superseded patterns only), or skip.
+  The `--full` flag runs full update non-interactively; `--update` runs
+  safe update.
+
+- **Review y/n prompt for rules sync.** When the installed `rules.toml`
+  differs from the shipped rule set, `trustsight review` now prompts
+  `Sync rules now? [y/N]` before scanning. In non-interactive mode
+  (piped output, CI), the prompt is skipped and the warning is shown.
+
 ## [0.15.3] - 2026-09-01
 
 ### Changed

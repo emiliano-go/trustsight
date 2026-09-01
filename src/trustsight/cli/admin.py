@@ -144,16 +144,26 @@ def config_sync_rules(
     update: bool = typer.Option(False, "--update",
                                 help="Also replace rules whose pattern is a superseded shipped one "
                                      "(rules you have edited are never touched)"),
+    full: bool = typer.Option(False, "--full",
+                              help="Fully overwrite all rules with shipped defaults "
+                                   "(overrides user customisations)"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
-    """Sync shipped rules to the user config."""
+    """Sync shipped rules to the user config.
+
+    Without flags, starts an interactive wizard that shows what changed
+    and lets you choose how to sync.
+    """
     ensure_default_configs()
-    added, updated = sync_rules(update_outdated=update)
     target = CONFIG_DIR / "rules.toml"
 
+    missing = missing_shipped_rules()
+    outdated = outdated_shipped_rules()
     drift = drifted_shipped_rules()
+    nothing_to_do = not missing and not outdated and not drift
 
     if json_output:
+        added, updated = sync_rules(update_outdated=update)
         typer.echo(json.dumps({
             "target": str(target),
             "added": added,
@@ -165,36 +175,129 @@ def config_sync_rules(
         }, indent=2))
         return
 
+    if nothing_to_do:
+        if HAS_RICH:
+            console().print("[green]rules.toml is already up to date.[/green]")
+        else:
+            print("rules.toml is already up to date.")
+        return
+
+    # --- non-interactive flags ---
+    if update or full:
+        if full:
+            # Full overwrite: rewrite every rule block with the shipped version.
+            from ..config import _rule_blocks, DEFAULT_RULES
+            blocks = _rule_blocks(DEFAULT_RULES)
+            text = Path(target).read_text().rstrip() + "\n"
+            for rid, block in blocks.items():
+                text = _replace_rule_block(text, rid, block) if rid in _current_rules(text) else text + "\n" + block
+            Path(target).write_text(text)
+            _print_sync_result("Full sync complete", [], [], drift)
+        else:
+            added, updated = sync_rules(update_outdated=True)
+            _print_sync_result("Sync complete", added, updated, drift)
+        return
+
+    # --- interactive wizard ---
+    _print_sync_wizard(target, missing, outdated, drift)
+
+
+def _current_rules(text: str) -> set[str]:
+    """Rule ids present in a rules.toml text."""
+    import re
+    return {m.group(1) for m in re.finditer(r'^id\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)}
+
+
+def _print_sync_result(title: str, added: list[str], updated: list[str], drift: list[tuple]):
     lines = []
     if updated:
         lines.append(f"Updated {len(updated)} superseded rule(s): {', '.join(updated)}")
     if added:
         lines.append(f"Added {len(added)} rule(s): {', '.join(added)}")
-    if not added and not updated:
-        pending = outdated_shipped_rules()
-        if pending:
-            lines.append(
-                f"{len(pending)} rule(s) use a superseded pattern: "
-                f"{', '.join(pending)}. Re-run with --update to replace them "
-                f"(only rules you have not edited are touched)."
-            )
-        elif not drift:
-            lines.append("rules.toml is already up to date.")
     if drift:
-        lines.append(
-            f"\n{len(drift)} rule field(s) differ from the shipped definition. "
-            f"A 'match_target' still set to raw_line means that rule does not "
-            f"see payloads assembled from shell variables:"
-        )
-        for rid, field, actual, shipped_value in drift:
-            lines.append(f"  {rid}.{field}: {actual!r} on disk, {shipped_value!r} shipped")
-        lines.append("Edit rules.toml to adopt these, keeping any pattern you rely on.")
-    body = "\n".join(lines)
+        lines.append(f"{len(drift)} drifted field(s) still differ (edit rules.toml manually).")
+    body = "\n".join(lines) if lines else "Nothing to do."
     if HAS_RICH:
         from rich.panel import Panel as RichPanel
-        console().print(RichPanel(body, title=str(target), border_style="cyan"))
+        console().print(RichPanel(body, title=title, border_style="green"))
     else:
-        print(body)
+        print(f"{title}: {body}")
+
+
+def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], drift: list[tuple]):
+    """Interactive wizard: show changes, let user choose how to sync."""
+    if HAS_RICH:
+        from rich.panel import Panel as RichPanel
+        from rich.table import Table as RichTable
+
+        # Summary
+        parts = []
+        if missing:
+            parts.append(f"[bold]{len(missing)}[/bold] new rule(s)")
+        if outdated:
+            parts.append(f"[bold]{len(outdated)}[/bold] outdated pattern(s)")
+        if drift:
+            parts.append(f"[bold]{len(drift)}[/bold] drifted field(s)")
+        console().print(RichPanel(
+            f"Your rules.toml is out of date: {', '.join(parts)}.",
+            title=str(target), border_style="yellow",
+        ))
+
+        # Detail table
+        table = RichTable(show_header=True, header_style="bold")
+        table.add_column("Rule", style="cyan", width=8)
+        table.add_column("Type", width=12)
+        table.add_column("Detail")
+
+        for rid in missing:
+            table.add_row(rid, "new", "Not in rules.toml; will be added")
+        for rid in outdated:
+            table.add_row(rid, "outdated", "Pattern is a superseded shipped version")
+        for rid, field, on_disk, shipped in drift:
+            table.add_row(rid, "drifted", f"{field}: {on_disk!r} (shipped: {shipped!r})")
+
+        console().print(table)
+    else:
+        print(f"rules.toml is out of date: {len(missing)} new, {len(outdated)} outdated, {len(drift)} drifted.")
+
+    # Wizard prompt
+    if HAS_RICH:
+        console().print()
+        console().print("[bold]How would you like to sync?[/bold]")
+        console().print("  [cyan]1[/cyan]  Full update    (overwrite all rules with shipped defaults)")
+        console().print("  [cyan]2[/cyan]  Safe update    (add missing + update superseded patterns only)")
+        console().print("  [cyan]3[/cyan]  Skip           (don't change anything)")
+        console().print()
+    else:
+        print("1) Full update  - overwrite all rules with shipped defaults")
+        print("2) Safe update  - add missing + update superseded patterns only")
+        print("3) Skip         - don't change anything")
+
+    choice = typer.prompt("Choice", type=int, default=3)
+
+    if choice == 1:
+        from ..config import _rule_blocks, DEFAULT_RULES
+        blocks = _rule_blocks(DEFAULT_RULES)
+        text = target.read_text().rstrip() + "\n"
+        existing = _current_rules(text)
+        for rid, block in blocks.items():
+            if rid in existing:
+                text = _replace_rule_block(text, rid, block)
+            else:
+                text += "\n" + block
+        target.write_text(text)
+        if HAS_RICH:
+            console().print("[green]Full sync complete.[/green]")
+        else:
+            print("Full sync complete.")
+    elif choice == 2:
+        added, updated = sync_rules(update_outdated=True)
+        _print_sync_result("Safe sync complete", added, updated, drift)
+    else:
+        if HAS_RICH:
+            console().print("[yellow]Skipped.[/yellow]")
+        else:
+            print("Skipped.")
 
 
 # --- override subcommands ---

@@ -672,3 +672,34 @@ def claims_pipe_to_shell(body: str) -> bool:
     to this signal.
     """
     return bool(_PIPE_TO_SHELL_RE.search(body))
+
+
+# ---------------------------------------------------------------------------
+# H096 - DLAGENTS override redirects source downloads
+# ---------------------------------------------------------------------------
+
+_DLAGENTS_VAR_RE = re.compile(
+    r"^\s*(?:export\s+|declare\s+-x\s+)?DLAGENTS\s*\+?=",
+    re.IGNORECASE,
+)
+
+
+def _dlagents_override_findings(diff_text, config, add) -> None:
+    """DLAGENTS is reassigned, redirecting source downloads (H096).
+
+    DLAGENTS controls how makepkg fetches sources for each protocol.
+    Overriding it in a PKGBUILD redirects all source downloads through
+    the attacker's chosen binary.  Any change to DLAGENTS is flagged:
+    legitimate recipes do not modify it.
+    """
+    lines = mask_to_recipe(resolve_added_lines(diff_text))
+    for i, line in enumerate(lines):
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        body = _strip_comment(line[1:])
+        if _DLAGENTS_VAR_RE.match(body):
+            add("H096", "Download Agent Override", "MEDIUM", "network",
+                "DLAGENTS is assigned, redirecting source downloads",
+                line=i + 1, body=body.strip()[:80],
+                detail="DLAGENTS override redirects all protocol fetches")
+            return

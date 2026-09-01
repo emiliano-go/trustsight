@@ -15,6 +15,7 @@ from .sabotage import _sabotage_findings
 from .build import (
     _build_findings,
     _build_flag_findings,
+    _function_shadow_findings,
     _indirect_expansion_findings,
     _indirect_remote_execution_findings,
     _reconstruction_findings,
@@ -26,6 +27,7 @@ from .dependencies import _dependency_findings
 from .ioc import _ioc_findings
 from .network import (
     _covert_egress_findings,
+    _dlagents_override_findings,
     _parse_time_fetch_findings,
     _paste_egress_findings,
     _exotic_protocol_findings,
@@ -317,6 +319,7 @@ def _structural_findings(
     _build_findings(diff_text, config or {}, add, current_text=current_text)
     _sudo_findings(diff_text, config or {}, add, current_text=current_text)
     _build_flag_findings(diff_text, config or {}, add)
+    _function_shadow_findings(diff_text, config or {}, add)
     _reconstruction_findings(diff_text, config or {}, add)
     _signing_key_findings(diff_text, add)
     _indirect_remote_execution_findings(diff_text, config or {}, add)
@@ -330,6 +333,7 @@ def _structural_findings(
     _exotic_protocol_findings(diff_text, config or {}, add)
     _version_in_url_findings(diff_text, config or {}, add)
     _parse_time_fetch_findings(diff_text, config or {}, add)
+    _dlagents_override_findings(diff_text, config or {}, add)
     _paste_egress_findings(diff_text, config or {}, add)
     # H033 asks the current file which variable feeds a git ref; the diff
     # alone shows only the hunk around the pin.

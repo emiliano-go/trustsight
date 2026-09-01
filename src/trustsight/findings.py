@@ -143,6 +143,13 @@ TEMPLATES: dict[str, str] = {
 
     # --- Class E indicator ---
     "H056": "{surface} matches known indicator {ioc_value} ({confidence}, {provenance})",
+    # --- Build environment overrides ---
+    "R078": "compression command override: {body}",
+    "R091": "privilege escalation override: {body}",
+    "R099": "trap statement: {body}",
+    "R104": "error handling suppressed: {body}",
+    "H096": "DLAGENTS is assigned, redirecting source downloads: {body}",
+    "H097": "function '{func_name}' is redefined: {body}",
 }
 
 

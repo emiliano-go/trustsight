@@ -214,7 +214,7 @@ def _compiled(pattern: str, rule_id: str = ""):
         # Named, truncated: a refused pattern stops matching silently, and
         # "some rule died" is not something an operator can act on.
         # `trustsight lint` reports the same condition as an ERROR.
-        _log.warning(
+        _log.debug(
             "refusing regex pattern with excessive backtracking risk%s: %.80s",
             f" (rule {rule_id})" if rule_id else "",
             pattern,

@@ -10,7 +10,7 @@ Fire rates measure the false-positive rate of each rule: how often it fires on a
 fire_rate = hits / n_diffs
 ```
 
-Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,739-diff locked corpus; individual historical hit counts are labelled with their source corpus.
+Where `hits` is the number of corpus diffs where the rule fired at least once, and `n_diffs` is the total number of diffs in the stratum (or corpus). The aggregate figures below use the current 3,246-diff locked corpus; individual historical hit counts are labelled with their source corpus.
 
 Fire rates are **false-positive rates within this corpus**: every diff in the benign corpus is a real package update that passed its maintainer's review. A hit is a rule that fired on ordinary packaging, not on malice. They are point-in-time corpus measurements, not a claim about all AUR updates.
 
@@ -30,7 +30,7 @@ Fire rates are measured against the one locked corpus:
 
 | Corpus | Diffs | Packages | What it covers |
 |--------|-------|----------|----------------|
-| Benign (lock) | 3,739 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
+| Benign (lock) | 3,246 | ~180 | Staged diffs from real AUR package updates across 9 strata (source_patched, bin_repack, vcs_git, lang_ecosystem, data_fonts, dkms_kernel, autotools, large_electron, unknown). |
 
 The corpus is pinned by `corpus.lock` and regenerated deterministically from
 the AUR git mirror (CI rebuilds it before the calibration gates; a local
@@ -39,7 +39,7 @@ Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-me
 
 ## Core rules (R001-R013)
 
-The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
+The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|
@@ -55,7 +55,7 @@ The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retai
 | R010 | Uses curl in PKGBUILD | LOW | <2 % | |
 | R011 | Uses wget in PKGBUILD | LOW | <2 % | |
 | R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
-| R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3739 benign diffs carry zero-width joiners in localized text; the ASCII-neighbour guard keeps them quiet |
+| R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs carry zero-width joiners in localized text; the ASCII-neighbour guard keeps them quiet |
 
 ## Expanded rules (R039-R059)
 
@@ -65,7 +65,7 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 
 | Measure | Value |
 |---------|-------|
-| benign corpus size | 3,739 diffs |
+| benign corpus size | 3,246 diffs |
 | benign median | 0 |
 | benign 95th percentile | 35 |
 | benign diffs scoring 0 | 68.4% |
@@ -87,7 +87,7 @@ benign corpus, about **1 in 8** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.
 
-Calibrated against the current 3,739-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+Calibrated against the current 3,246-diff locked corpus. 14 of 21 fire on zero benign diffs. Enabling the full set costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 | Rule | Name | Sev | Fire rate | Notes |
 |------|------|-----|-----------|-------|
@@ -115,27 +115,27 @@ Calibrated against the current 3,739-diff locked corpus. 14 of 21 fire on zero b
 
 ## D-series dependency rules
 
-Measured against the 3739-diff benign corpus with a 209,909-name dependency seed. All are enabled by default.
+Measured against the 3246-diff benign corpus with a 209,909-name dependency seed. All are enabled by default.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| D001 | Novel Dependency Added | HIGH | 0.15 % | 5/3739 | The 5 hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise |
-| D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3739 | Refined by D001; bounded by edit-distance threshold |
-| D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3739 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
-| D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3739 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
-| H030 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3739 | Measured with a seeded database (209,909-name seed). Well under the 30% gate. |
+| D001 | Novel Dependency Added | HIGH | 0.15 % | 5/3246 | The 5 hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise |
+| D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/3246 | Refined by D001; bounded by edit-distance threshold |
+| D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 15/3246 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
+| D004 | Dependency Hijack Via Provides | HIGH | 0.00 % | 0/3246 | 2084 corpus diffs declare `provides` or `replaces`; zero fire |
+| H030 | Dependency-Set Expansion | MEDIUM | 0.34 % | 11/3246 | Measured with a seeded database (209,909-name seed). Well under the 30% gate. |
 
 ## Code-emitted rules (H015-H019)
 
-Measured against the 3739-diff benign corpus. All are enabled by default.
+Measured against the 3246-diff benign corpus. All are enabled by default.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| H015 | Build Function Modified | INFO | 21.4 % | 694/3739 | INFO severity, weight 0. No narrowing reaches triage quality: restricting to unchanged `pkgver` still leaves 11.6 %; a version bump that also edits `build()` is 9.8 %. Harmless at weight 0, useful as reviewer context |
-| H016 | Hidden Network Fetch In Build | HIGH | 0.22 % | 7/3739 | Real build-time downloads (apple-fonts, ttf-ms-win-\*, gamescope-nvidia): the behaviour the rule exists to surface |
-| H017 | Install Hook Fetches/Executes | HIGH | 0.09 % | 3/3739 | All `mullvad-vpn-bin`, which sets a setuid bit and enables a systemd unit from `post_install()`. Real privileged behaviour |
-| H018 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3739 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
-| H019 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3739 | `transset-df`: a genuine https to http downgrade |
+| H015 | Build Function Modified | INFO | 21.4 % | 694/3246 | INFO severity, weight 0. No narrowing reaches triage quality: restricting to unchanged `pkgver` still leaves 11.6 %; a version bump that also edits `build()` is 9.8 %. Harmless at weight 0, useful as reviewer context |
+| H016 | Hidden Network Fetch In Build | HIGH | 0.22 % | 7/3246 | Real build-time downloads (apple-fonts, ttf-ms-win-\*, gamescope-nvidia): the behaviour the rule exists to surface |
+| H017 | Install Hook Fetches/Executes | HIGH | 0.09 % | 3/3246 | All `mullvad-vpn-bin`, which sets a setuid bit and enables a systemd unit from `post_install()`. Real privileged behaviour |
+| H018 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/3246 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
+| H019 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/3246 | `transset-df`: a genuine https to http downgrade |
 
 ## Temporal context rules (H020-H022)
 
@@ -163,11 +163,11 @@ they are not repeated here.
 
 | Rule | Name | Sev | Fire rate | Hits | Notes |
 |------|------|-----|-----------|------|-------|
-| H023 | Install Hook Present | INFO | 20.95 % | 680/3739 | INFO weight 0; 30% gate does not apply. 1 in 5 PKGBUILDs declare an install hook. |
-| H024 | GPG Verification Removed | HIGH | 0.03 % | 1/3739 | Near-zero; matches the predicted rate. Well under the 30% gate. |
-| H025 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3739 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
+| H023 | Install Hook Present | INFO | 20.95 % | 680/3246 | INFO weight 0; 30% gate does not apply. 1 in 5 PKGBUILDs declare an install hook. |
+| H024 | GPG Verification Removed | HIGH | 0.03 % | 1/3246 | Near-zero; matches the predicted rate. Well under the 30% gate. |
+| H025 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3246 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
 | H026 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
-| H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3739 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
+| H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3246 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | H029 | Package-Name Typosquat | HIGH | 1.12 % | 2/179 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
 | H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
 | H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |

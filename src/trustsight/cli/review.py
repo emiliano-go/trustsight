@@ -80,7 +80,8 @@ def __getattr__(name: str):
 log = logging.getLogger(__name__)
 
 
-def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn, json_output=False):
+def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _warn, json_output=False,
+                       force_refresh=False):
     """Engine discovery plus the download progress bar it cannot draw."""
     on_download = None
     progress_state = {}
@@ -115,6 +116,7 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
             on_warn=_warn,
             on_download=on_download,
             on_notice=None if json_output else lambda msg: _print_colored(msg, "green"),
+            force_refresh=force_refresh,
         )
     finally:
         progress = progress_state.get("progress")
@@ -610,6 +612,10 @@ def register_commands(app: typer.Typer):
             help="Sort results: score (worst first), risk, or name. "
                  "Default: discovery order.",
         ),
+        refresh: bool = typer.Option(
+            False, "--refresh",
+            help="Force refresh the AUR metadata snapshot regardless of TTL.",
+        ),
     ):
         """Review AUR packages for suspicious updates."""
         has_progress = HAS_RICH and not json_output and not quiet
@@ -733,6 +739,7 @@ def register_commands(app: typer.Typer):
                     all_packages=all_packages,
                     _warn=_warn,
                     json_output=json_output,
+                    force_refresh=refresh,
                 )
             except RuntimeError as exc:
                 if json_output:

@@ -1,13 +1,21 @@
 import json
 import logging
+import random
 import re
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 from typing import Optional
 
 AUR_RPC_BASE = "https://aur.archlinux.org/rpc"
 log = logging.getLogger(__name__)
+
+# Retry constants for AUR RPC queries (mirrors full_aur/fetch.py patterns).
+_RPC_MAX_RETRIES = 3
+_RPC_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+_RPC_BACKOFF_BASE = 1.0
+_RPC_BACKOFF_MAX = 15.0
 
 # A4: every response has a byte cap, the RPC included.  A realistic multiinfo
 # reply for any batch this tool sends is well under a megabyte; 64 MiB is far
@@ -155,6 +163,24 @@ def _aur_info_url(names: list[str]) -> str:
     return f"{AUR_RPC_BASE}?{urllib.parse.urlencode(params)}"
 
 
+def _rpc_backoff_delay(attempt: int) -> float:
+    """Exponential backoff with jitter for AUR RPC retries."""
+    return min(_RPC_BACKOFF_BASE * (2 ** attempt) + random.uniform(0, 0.5),
+               _RPC_BACKOFF_MAX)
+
+
+def _rpc_retry_after(http_error) -> Optional[float]:
+    """Parse Retry-After header from an HTTP error."""
+    headers = getattr(http_error, "headers", None)
+    value = headers.get("Retry-After") if headers else None
+    if not value:
+        return None
+    try:
+        return min(float(value), _RPC_BACKOFF_MAX)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
     """Return the full AUR RPC record for each of *pkg_names*, keyed by name.
 
@@ -183,15 +209,35 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
             for n, v in cached.items()
         }
 
-    # Query the AUR for packages not in cache
+    # Query the AUR for packages not in cache, with retry on transient errors.
     url = _aur_info_url(missed)
-    try:
-        with urllib.request.urlopen(url, timeout=30) as resp:
-            data = _load_rpc_json(resp)
-            results = {r["Name"]: r for r in data.get("results", [])}
-    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
-        log.warning("AUR RPC query failed for %d package(s)", len(missed))
-        results = {}
+    results = {}
+    for attempt in range(_RPC_MAX_RETRIES + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = _load_rpc_json(resp)
+                results = {r["Name"]: r for r in data.get("results", [])}
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code in _RPC_RETRYABLE_STATUS and attempt < _RPC_MAX_RETRIES:
+                delay = _rpc_retry_after(exc) or _rpc_backoff_delay(attempt)
+                log.debug("AUR RPC HTTP %d; retrying in %.1fs (attempt %d/%d)",
+                          exc.code, delay, attempt + 1, _RPC_MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("AUR RPC query failed for %d package(s): HTTP %s",
+                        len(missed), exc.code)
+            break
+        except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge) as exc:
+            if attempt < _RPC_MAX_RETRIES:
+                delay = _rpc_backoff_delay(attempt)
+                log.debug("AUR RPC error %s; retrying in %.1fs (attempt %d/%d)",
+                          exc, delay, attempt + 1, _RPC_MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("AUR RPC query failed for %d package(s): %s", len(missed), exc)
+            break
 
     # Write fresh results to cache (non-fatal on failure)
     if results:

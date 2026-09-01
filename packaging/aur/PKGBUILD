@@ -25,9 +25,9 @@ makedepends=(
 optdepends=(
   'pyalpm: native version comparison (faster discovery)'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 
-sha256sums=('1da1181da2a44b41e621d5dd1a6234288a4033cfc288a57711e84d8964c66f56')
+sha256sums=('018575a6e5daaf69fec36decc83586f35d7ddb8fecbb6e92d399f70bb2b3e85f')
 
 build() {
   cd "$pkgname-$pkgver"

@@ -50,6 +50,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verb
 | `--foreign` | flag | `false` | Also include foreign packages (`pacman -Qm`). When used with `--repo`, foreign packages are added to the set. |
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
 | `--sort` | `str` | discovery order | Sort results after analysis. `score`: worst (highest) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. When omitted, results appear in discovery order (the order pacman or AUR returned them). |
+| `--refresh` | flag | `false` | Force refresh the AUR metadata snapshot regardless of the configured TTL. Useful when the snapshot is stale but its age is still within the TTL window. |
 
 #### Flag precedence
 

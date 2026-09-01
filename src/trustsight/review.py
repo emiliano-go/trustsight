@@ -68,7 +68,8 @@ def _humanised_age(seconds: Optional[float]) -> str:
     return f"{int(seconds // 86400)} days old"
 
 
-def _refreshed_metadata(meta, snapshot_time, meta_path, on_download, on_notice, on_warn):
+def _refreshed_metadata(meta, snapshot_time, meta_path, on_download, on_notice, on_warn,
+                        force_refresh=False):
     """Return *meta*, refetched first if the snapshot has gone stale.
 
     A stale snapshot is not a degraded answer, it is a wrong one: every
@@ -83,15 +84,28 @@ def _refreshed_metadata(meta, snapshot_time, meta_path, on_download, on_notice, 
     from .full_aur.metadata import fetch_metadata, save_metadata, snapshot_age_seconds
 
     ttl = metadata_ttl_minutes()
-    if not ttl:
-        return meta
-
     age = snapshot_age_seconds(snapshot_time)
-    if age is not None and age < ttl * 60:
-        return meta
+
+    if not force_refresh:
+        if not ttl:
+            if on_notice and age is not None:
+                on_notice(
+                    f"Using AUR metadata snapshot {_humanised_age(age)} "
+                    "(auto-refresh disabled; set metadata_ttl_minutes > 0 "
+                    "or use --refresh)."
+                )
+            return meta
+
+        if age is not None and age < ttl * 60:
+            return meta
 
     if on_notice:
-        on_notice(f"AUR metadata snapshot is {_humanised_age(age)}; refreshing.")
+        if force_refresh:
+            on_notice(
+                f"Refreshing AUR metadata snapshot (forced; was {_humanised_age(age)})."
+            )
+        else:
+            on_notice(f"AUR metadata snapshot is {_humanised_age(age)}; refreshing.")
 
     try:
         fresh = fetch_metadata(on_progress=on_download) if on_download else fetch_metadata()
@@ -130,6 +144,7 @@ def discover_packages(
     on_warn: Optional[Callable[[str], None]] = None,
     on_download: Optional[Callable[[int, Optional[int]], None]] = None,
     on_notice: Optional[Callable[[str], None]] = None,
+    force_refresh: bool = False,
 ) -> tuple[Optional[list[dict]], int]:
     """Find installed packages that have a newer version in the AUR.
 
@@ -164,7 +179,8 @@ def discover_packages(
 
         meta, snapshot_time = snapshot
         meta = _refreshed_metadata(
-            meta, snapshot_time, meta_path, on_download, on_notice, on_warn
+            meta, snapshot_time, meta_path, on_download, on_notice, on_warn,
+            force_refresh=force_refresh,
         )
 
         installed = get_installed_packages(

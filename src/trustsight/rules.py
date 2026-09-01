@@ -193,7 +193,7 @@ def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]
     return "\n".join(kept), True
 
 
-def _compiled(pattern: str):
+def _compiled(pattern: str, rule_id: str = ""):
     """Return the compiled form of *pattern*, or None if it is invalid."""
     try:
         return _pattern_cache[pattern]
@@ -215,7 +215,8 @@ def _compiled(pattern: str):
         # "some rule died" is not something an operator can act on.
         # `trustsight lint` reports the same condition as an ERROR.
         _log.warning(
-            "refusing regex pattern with excessive backtracking risk: %.80s",
+            "refusing regex pattern with excessive backtracking risk%s: %.80s",
+            f" (rule {rule_id})" if rule_id else "",
             pattern,
         )
         compiled = None
@@ -807,7 +808,7 @@ def apply_rules(
                 else resolved_candidates + reader_candidates
             )
 
-        compiled = _compiled(rule["pattern"])
+        compiled = _compiled(rule["pattern"], rule_id=rule.get("id", ""))
         if compiled is None:
             continue
 

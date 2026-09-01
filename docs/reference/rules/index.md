@@ -70,7 +70,7 @@ Each entry states the same facts in the same order:
 - **Pattern** or **Condition**: what makes the rule fire. Quoted patterns
   are checked against the shipped `rules.toml` on every test run, so a
   pattern here cannot drift from the one that runs.
-- **Fire rate**, where measured: hits on the current 3,739-diff benign corpus, unless a page explicitly identifies a historical measurement.
+- **Fire rate**, where measured: hits on the current 3,246-diff benign corpus, unless a page explicitly identifies a historical measurement.
   These are false-positive rates. The full table is in
   [measured fire rates](system.md#experimental-fire-rates).
 

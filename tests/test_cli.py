@@ -121,6 +121,7 @@ def test_cli_review_flag_repo(tmp_path, monkeypatch):
             "all_packages": False,
             "json_output": False,
             "_warn": mock_disc.call_args[1]["_warn"],
+            "force_refresh": False,
         }
 
 

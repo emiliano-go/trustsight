@@ -6,6 +6,40 @@
 
 _No changes yet._
 
+## [0.15.3] - 2026-09-01
+
+### Changed
+
+- **`--deps` shows all reverse dependencies.** Each dependency now lists
+  every installed package that requires it, not just the roots that
+  triggered the walk. For example, `lib32-sdl2` shows `wine32,
+  lib32-gstreamer, lib32-mpg123` instead of only `wine32`.
+
+### Fixed
+
+- **Rich output no longer interleaves log messages.** Python's logging
+  handler printed directly to stderr, bypassing Rich's live display and
+  producing garbled progress bars. A `_suppress_logging()` context
+  manager now silences logging during Rich live displays.
+
+- **Rules.toml drift prompt.** When the installed `rules.toml` differs
+  from the shipped rule set, a one-time yellow header now says
+  `Run 'trustsight config sync-rules' to update` instead of repeating
+  the same "Not vetted" message on every package.
+
+- **Spinner stopped before download progress.** The "Discovering
+  packages..." spinner now stops before the download progress bar
+  starts, preventing two concurrent Rich live displays from fighting
+  over the terminal.
+
+- **Regex backtracking warnings demoted to DEBUG.** These messages
+  appeared inline with progress bars on every analysis run. Now only
+  visible with `--verbose` or debug logging.
+
+- **release/ added to .gitignore.** The publishing workflow creates a
+  `release/` scratch directory that caused `build_release_tarball.py`
+  to refuse building from a dirty tree.
+
 ## [0.15.2] - 2026-09-01
 
 ### Fixed

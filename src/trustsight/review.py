@@ -271,9 +271,8 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
     request was for their dependencies, and a package that is both a root
     and somebody's dependency is already being reviewed under its own name.
 
-    The closure is walked over metadata only - no analysis - so the cost of
-    deciding *what* to review stays proportional to the graph rather than to
-    the number of recipes in it.
+    ``required_by`` maps each dependency to *all* installed packages that
+    list it, not just the roots that triggered the walk.
 
     It lives here rather than in the CLI because the API offers the same
     review, and a field the API can carry (``Report.required_by``) but never
@@ -285,14 +284,12 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
     roots = [entry["name"] for entry in discovered]
     resolved = resolve_depth(depth, config)
     if resolved == 0:
-        # `--deps --depth 0` asks for the dependencies of nothing.
         return [], {}, ""
 
+    metadata = default_metadata()
     try:
-        closure = dependency_closure(
-            roots, depth=resolved, metadata=default_metadata()
-        )
-    except Exception as exc:  # metadata unavailable, RPC down
+        closure = dependency_closure(roots, depth=resolved, metadata=metadata)
+    except Exception as exc:
         log.warning("dependency closure failed", exc_info=True)
         if on_warn:
             on_warn(f"could not resolve the dependency closure ({exc})")
@@ -307,12 +304,31 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
     except Exception:
         log.debug("installed lookup failed for --deps", exc_info=True)
 
+    # Build reverse-dependency map: for every installed package, check
+    # whether any of its dependencies fall inside the closure.  This gives
+    # the user the full picture ("sdl2 is pulled in by wine32 *and*
+    # lib32-gstreamer") rather than just the roots that started the walk.
+    reverse: dict[str, list[str]] = {n: list(p) for n, p in closure.dependents.items()}
+    closure_names = closure.names
+    for pkg_name in installed:
+        if pkg_name in closure_names or pkg_name in roots:
+            continue
+        try:
+            deps = metadata.deps_of(pkg_name)
+        except Exception:
+            continue
+        for dep in deps:
+            if dep in closure_names and dep not in roots:
+                reverse.setdefault(dep, [])
+                if pkg_name not in reverse[dep]:
+                    reverse[dep].append(pkg_name)
+
     entries = [
         {"name": name, "current_version": installed.get(name, "")}
         for name in closure.names
     ]
     note = closure.reason if closure.truncated else ""
-    return entries, dict(closure.dependents), note
+    return entries, reverse, note
 
 
 def default_workers() -> int:

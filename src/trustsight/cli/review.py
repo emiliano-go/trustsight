@@ -1,6 +1,7 @@
 import json
 import logging
 import sys
+from contextlib import contextmanager
 
 import typer
 
@@ -34,6 +35,25 @@ from .display import (
 # forwarding wrappers, which keeps them patchable by the tests that replace
 # them wholesale; the rest resolve through `__getattr__`, which keeps the
 # historical surface without loading anything until something asks.
+
+
+@contextmanager
+def _suppress_logging():
+    """Suppress logging output while a Rich live display is active.
+
+    Python's default logging handler prints directly to stderr, which
+    bypasses Rich's live display and produces interleaved garbage.
+    """
+    handler = logging.root.handlers[0] if logging.root.handlers else None
+    if handler is not None:
+        old_level = handler.level
+        handler.setLevel(logging.CRITICAL)
+        try:
+            yield
+        finally:
+            handler.setLevel(old_level)
+    else:
+        yield
 
 
 def _analyze_outdated_batch(*args, **kwargs):
@@ -108,16 +128,17 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
             progress.update(progress_state["task"], total=total, completed=pos, refresh=True)
 
     try:
-        discovered = _discover_engine(
-            repos=repos,
-            include_foreign=include_foreign,
-            all_repos=all_repos_flag,
-            all_packages=all_packages,
-            on_warn=_warn,
-            on_download=on_download,
-            on_notice=None if json_output else lambda msg: _print_colored(msg, "green"),
-            force_refresh=force_refresh,
-        )
+        with _suppress_logging():
+            discovered = _discover_engine(
+                repos=repos,
+                include_foreign=include_foreign,
+                all_repos=all_repos_flag,
+                all_packages=all_packages,
+                on_warn=_warn,
+                on_download=on_download,
+                on_notice=None if json_output else lambda msg: _print_colored(msg, "green"),
+                force_refresh=force_refresh,
+            )
     finally:
         progress = progress_state.get("progress")
         if progress is not None:
@@ -193,7 +214,7 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
             TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
             TimeElapsedColumn(),
         ]
-        with Progress(*progress_columns, console=con, transient=False) as progress:
+        with Progress(*progress_columns, console=con, transient=False) as progress, _suppress_logging():
             task = progress.add_task("Connecting to AUR...", total=len(limited))
             progress.refresh()
 
@@ -663,6 +684,13 @@ def register_commands(app: typer.Typer):
                 print()
 
             _step("Discovering packages...")
+            # Stop the spinner before discovery starts: the download
+            # progress bar inside _discover_packages draws its own
+            # Progress, and two concurrent Rich live displays fight
+            # over the terminal, producing interleaved output.
+            if init_progress is not None:
+                init_progress.stop()
+                init_progress = None
             # The configured default applies only when the flag is absent.
             # `--limit 0` is an explicit request for all of them and must
             # not be overridden by a config value, which is why the option
@@ -790,6 +818,20 @@ def register_commands(app: typer.Typer):
                 # means two levels of dependencies to review, not two levels
                 # below each of them.
                 depth = 0
+
+            # Warn once if the user's rules.toml has drifted from the
+            # shipped set.  A per-package "Not vetted" note is already
+            # attached to every finding; a single header saves the user
+            # from scrolling past fifteen identical lines.
+            if not json_output:
+                from ..config import drifted_shipped_rules
+                drifted = drifted_shipped_rules()
+                if drifted:
+                    _print_colored(
+                        "Your rules.toml differs from the shipped rule set. "
+                        "Run 'trustsight config sync-rules' to update.",
+                        "yellow",
+                    )
 
             _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by)
         finally:

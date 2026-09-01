@@ -27,6 +27,10 @@ SHARED_RULES = [
     # rule gets from a field the fixture did not carry.
     {"id": "R012", "name": "LLM Prompt Injection", "pattern": r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)", "severity": "FATAL", "category": "injection", "match_target": "resolved", "include_comments": True},
     {"id": "R013", "name": "Unicode Bidi Override", "pattern": r"[\u202A-\u202E\u2066-\u2069\u200B-\u200D\uFEFF]", "severity": "FATAL", "category": "unicode", "match_target": "raw_line"},
+    {"id": "R078", "name": "Compression Command Override", "pattern": r"(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)\s*\+?=", "severity": "MEDIUM", "category": "build", "match_target": "raw_line", "added_only": True},
+    {"id": "R091", "name": "Privilege Escalation Override", "pattern": r"(?:^|\s|\+)(?:export\s+|declare\s+-x\s+)?PACMAN_AUTH\s*\+?=", "severity": "HIGH", "category": "build", "match_target": "raw_line", "added_only": True},
+    {"id": "R104", "name": "Error Handling Suppressed", "pattern": "trap '' (?:ERR|DEBUG)(?:[^a-zA-Z]|$)", "severity": "HIGH", "category": "build", "match_target": "raw_line", "added_only": True},
+    {"id": "R099", "name": "Trap Statement", "pattern": r"^(?:\+)?\s*trap\s+", "severity": "MEDIUM", "category": "build", "match_target": "raw_line", "added_only": True, "exclude_if_matches": ["R104"]},
 ]
 
 SHARED_CONFIG = {

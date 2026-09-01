@@ -12,6 +12,8 @@ import pytest
 
 from trustsight.analysis import _structural_findings
 from trustsight.differ import extract_urls_from_diff
+from trustsight.rules import apply_rules
+from tests.conftest import SHARED_RULES
 
 
 def structural(diff_text: str) -> list[dict]:
@@ -32,6 +34,25 @@ def sev(diff_text: str, rule_id: str) -> str | None:
 def recipe(*added: str) -> str:
     body = "".join("+" + line + "\n" for line in added)
     return "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n pkgname=demo\n pkgver=1.0\n" + body
+
+
+def toml_sev(diff_text: str, rule_id: str) -> str | None:
+    """Apply TOML rules to a diff and return the severity of the first match."""
+    from trustsight.rules import get_raw_diff_lines
+    raw_lines = get_raw_diff_lines(diff_text)
+    triggered = apply_rules([], raw_lines, SHARED_RULES)
+    for finding in triggered:
+        if finding["rule_id"] == rule_id:
+            return finding["severity"]
+    return None
+
+
+def toml_ids(diff_text: str) -> set[str]:
+    """Apply TOML rules to a diff and return the set of matched rule IDs."""
+    from trustsight.rules import get_raw_diff_lines
+    raw_lines = get_raw_diff_lines(diff_text)
+    triggered = apply_rules([], raw_lines, SHARED_RULES)
+    return {f["rule_id"] for f in triggered}
 
 
 # --- H077: network fetch at parse time ---
@@ -289,3 +310,123 @@ def test_h080_quiet_on_prefix_name_expansion():
 
 def test_h080_quiet_in_a_comment():
     assert "H080" not in ids(recipe("# ${!C} is how indirection is written"))
+
+
+# --- H096: DLAGENTS override ---
+
+
+def test_h096_fires_on_dlagents_override():
+    assert sev(recipe("DLAGENTS=('http::/usr/bin/evil %u %o')"), "H096") == "MEDIUM"
+
+
+def test_h096_fires_on_dlagents_append():
+    assert sev(recipe("DLAGENTS+=('https::/usr/bin/evil %u %o')"), "H096") == "MEDIUM"
+
+
+def test_h096_quiet_when_no_dlagents():
+    assert "H096" not in ids(recipe("source=('https://example.com/pkg.tar.gz')"))
+
+
+# --- H097: function shadowing ---
+
+
+@pytest.mark.parametrize("line", [
+    "msg() { echo 'clean'; }",
+    "error() { echo 'suppressed'; }",
+    "die() { return 1; }",
+    "warning() { :; }",
+    "plain() { echo \"$@\"; }",
+    "cd() { builtin cd \"$@\"; }",
+    "source() { builtin source \"$@\"; }",
+    "exec() { builtin exec \"$@\"; }",
+    "trap() { builtin trap \"$@\"; }",
+    "curl() { echo 'not curl'; }",
+    "wget() { echo 'not wget'; }",
+    "git() { echo 'not git'; }",
+])
+def test_h097_fires_on_function_shadow(line):
+    assert "H097" in ids(recipe(line))
+
+
+@pytest.mark.parametrize("line", [
+    "helper() { echo 'ok'; }",
+    "_fetch() { curl -O \"$1\"; }",
+    "build_custom() { make; }",
+])
+def test_h097_quiet_on_custom_function(line):
+    assert "H097" not in ids(recipe(line))
+
+
+def test_h097_fires_on_array_shadow():
+    assert "H097" in ids(recipe("msg=('clean' 'output')"))
+
+
+# --- R078: compression command override ---
+
+
+def test_r078_fires_on_compresszst():
+    assert toml_sev(recipe("COMPRESSZST=(zstd --threads=0 -)"), "R078") == "MEDIUM"
+
+
+def test_r078_fires_on_compressxz():
+    assert toml_sev(recipe("COMPRESSXZ=(xz -T 0 -)"), "R078") == "MEDIUM"
+
+
+def test_r078_fires_on_export():
+    assert toml_sev(recipe("export COMPRESSGZ=(gzip -c -)"), "R078") == "MEDIUM"
+
+
+def test_r078_quiet_on_config_option():
+    assert "R078" not in toml_ids(recipe("CONFIG_842_COMPRESS=m"))
+
+
+# --- R091: privilege escalation override ---
+
+
+def test_r091_fires_on_pacman_auth():
+    assert toml_sev(recipe("PACMAN_AUTH=doas"), "R091") == "HIGH"
+
+
+def test_r091_fires_on_export():
+    assert toml_sev(recipe("export PACMAN_AUTH=sudo"), "R091") == "HIGH"
+
+
+def test_r091_quiet_when_absent():
+    assert "R091" not in toml_ids(recipe("makepkg -s"))
+
+
+# --- R099: trap statement ---
+
+
+def test_r099_fires_on_trap():
+    assert toml_sev(recipe("trap _cleanup EXIT HUP INT QUIT TERM"), "R099") == "MEDIUM"
+
+
+def test_r099_fires_on_trap_err():
+    """R099 is excluded when R104 already claimed the more specific form."""
+    assert "R099" not in toml_ids(recipe("trap '' ERR"))
+
+
+def test_r099_quiet_when_absent():
+    assert "R099" not in toml_ids(recipe("make DESTDIR=\"$pkgdir\" install"))
+
+
+# --- R104: error handling suppressed ---
+
+
+def test_r104_fires_on_trap_err_empty():
+    assert toml_sev(recipe("trap '' ERR"), "R104") == "HIGH"
+
+
+def test_r104_fires_on_trap_debug_empty():
+    assert toml_sev(recipe("trap '' DEBUG"), "R104") == "HIGH"
+
+
+def test_r104_quiet_on_trap_cleanup():
+    """trap _cleanup EXIT is legitimate cleanup, not error suppression."""
+    assert "R104" not in toml_ids(recipe("trap _cleanup EXIT"))
+
+
+def test_r104_quiet_on_trap_with_command():
+    """trap 'echo error' ERR is not suppression."""
+    assert "R104" not in toml_ids(recipe("trap 'echo error' ERR"))

@@ -1239,6 +1239,62 @@ category = "system"
 match_target = "raw_line"
 scope = ["function_body", "other"]
 added_only = true
+
+# --- Build environment overrides ---
+
+[[rules]]
+id = "R078"
+name = "Compression Command Override"
+# COMPRESS* variables control makepkg's archive compression command.
+# Overriding them can pipe decompressed content through an arbitrary binary.
+pattern = '(?:^|\\s|\\+)(?:export\\s+|declare\\s+-x\\s+)?COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)\\s*\\+?='
+severity = "MEDIUM"
+category = "build"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R091"
+name = "Privilege Escalation Override"
+# PACMAN_AUTH controls how pacman gains elevated privileges during
+# makepkg -S.  Overriding it in a PKGBUILD means the package is trying
+# to control privilege escalation on the builder's machine.
+pattern = '(?:^|\\s|\\+)(?:export\\s+|declare\\s+-x\\s+)?PACMAN_AUTH\\s*\\+?='
+severity = "HIGH"
+category = "build"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R104"
+name = "Error Handling Suppressed"
+# trap empty-string ERR suppresses error handling, hiding build failures
+# from the reviewer.  trap empty-string DEBUG hides trace output.  These
+# are subsets of R099 but carry higher severity because they actively
+# conceal activity.  Only the single-quote form is common; the double-
+# quote form is rare and already caught by R099.
+# Must come before R099 so the more specific match fires first.
+# Pattern avoids backslash escapes to stay compatible with
+# _shipped_rule_fields() which extracts via regex, not TOML parsing.
+pattern = "trap '' (?:ERR|DEBUG)(?:[^a-zA-Z]|$)"
+severity = "HIGH"
+category = "build"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R099"
+name = "Trap Statement"
+# trap registers signal handlers.  In a PKGBUILD it can suppress errors
+# (trap '' ERR) or run code on build completion (trap 'payload' EXIT).
+# Legitimate cleanup traps exist but are uncommon enough to flag.
+# Excludes when R104 already claimed the more specific form.
+pattern = '^(?:\\+)?\\s*trap\\s+'
+severity = "MEDIUM"
+category = "build"
+match_target = "raw_line"
+added_only = true
+exclude_if_matches = ["R104"]
 """
 
 # The executor list is substituted rather than written out, so R001, R002

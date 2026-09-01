@@ -6,6 +6,16 @@
 
 _No changes yet._
 
+## [0.15.5] - 2026-09-01
+
+### Fixed
+
+- **Regex audit stability.** The superlinear growth check now runs two
+  measurements per probe and takes the minimum of each pair, filtering
+  out scheduler noise on loaded machines. Threshold raised from 8x to
+  10x for additional headroom while still catching quadratic patterns
+  (which cost ~16x).
+
 ## [0.15.4] - 2026-09-01
 
 ### Added

@@ -29,8 +29,16 @@ def _the_channel_is_the_subject(monkeypatch):
     tests assert that a refusal happened rather than that a download
     verifies. Every test here mocks the transport, so nothing leaves the
     machine; the socket guard in `conftest` still holds the line.
+
+    ``_resolve_baseline_tag`` is also mocked to prevent the GitHub API
+    call during URL construction; individual tests can override this
+    mock to exercise the baseline-tag path.
     """
     monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    # Reset the module-level cache so each test starts fresh.
+    release._BASELINE_TAG_RESOLVED = False
+    release._BASELINE_TAG_CACHE = None
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
 
 # ---------------------------------------------------------------------------
 # URL building
@@ -46,6 +54,30 @@ def test_asset_url_uses_the_declared_release_host():
 def test_asset_url_pins_a_tag_when_given():
     url = release.asset_url("baseline-seed.tar.gz", "v0.12.0")
     assert url.endswith("/download/v0.12.0/baseline-seed.tar.gz")
+
+
+def test_asset_url_discovers_baseline_tag_for_seed(monkeypatch):
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: "baseline-2026-08-10")
+    url = release.asset_url("baseline-seed.tar.gz")
+    assert url == (
+        "https://github.com/emiliano-go/trustsight/releases"
+        "/download/baseline-2026-08-10/baseline-seed.tar.gz"
+    )
+
+
+def test_asset_url_falls_back_to_latest_when_no_baseline_found(monkeypatch):
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    url = release.asset_url("baseline-seed.tar.gz")
+    assert url.endswith("/latest/download/baseline-seed.tar.gz")
+
+
+def test_asset_url_ignores_baseline_discovery_for_non_baseline_assets(monkeypatch):
+    """Non-baseline assets (e.g. source tarballs) always use /latest/."""
+    called = []
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: (called.append(1) or "baseline-2026-08-10"))
+    url = release.asset_url("trustsight-0.15.6.tar.gz")
+    assert called == []  # _resolve_baseline_tag was NOT called
+    assert url.endswith("/latest/download/trustsight-0.15.6.tar.gz")
 
 
 def test_is_release_url_accepts_only_the_channel():

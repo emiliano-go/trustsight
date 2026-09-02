@@ -69,6 +69,8 @@ evasion in a recipe is ordinary content there.
 | [X021](#x021) | Executor Runs A File Chosen At Runtime | HIGH |
 | [X022](#x022) | Generated Config Handed To The Tool That Reads It | HIGH |
 | [X023](#x023) | Command Output Executed As A Script | HIGH |
+| [X024](#x024) | Indirect Sensitive Assignment | HIGH |
+| [X025](#x025) | Multi-Line Function Shadow | HIGH |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}

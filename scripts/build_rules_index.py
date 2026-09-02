@@ -37,9 +37,20 @@ TABLE_END = "<!-- /generated: catalog -->"
 HEADING = re.compile(r"^### ([RCDSXWH]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
 SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
 
+SERIES_NAMES = {
+    "C": "Integrity-change",
+    "R": "Regex",
+    "H": "Heuristic",
+    "D": "Dependency",
+    "S": "Sabotage",
+    "X": "Crossfire",
+    "W": "Unverifiable",
+    "P": "Declared-practice",
+}
 
-def _catalog() -> list[tuple[str, str, str, RuleCategory, str]]:
-    """Every documented rule section, as (id, name, severity, category, anchor)."""
+
+def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
+    """Every documented rule section, as (id, name, severity, series, category, anchor)."""
     rows = []
     for category in RuleCategory:
         page = RULES_DIR / category.doc_page
@@ -51,12 +62,14 @@ def _catalog() -> list[tuple[str, str, str, RuleCategory, str]]:
             if not match:
                 continue
             rule_id, name, anchor = match.group(1), match.group(2), match.group(3)
+            prefix = rule_id[0]
+            series = SERIES_NAMES.get(prefix, prefix)
             rows.append(
                 (rule_id, name, _severity(lines[index:index + 12]),
-                 category, anchor or rule_id.lower())
+                 series, category, anchor or rule_id.lower())
             )
     # Sort by series then by number, so H052 follows R099 rather than R010.
-    rows.sort(key=lambda row: (row[0][0], int(row[0][1:]), row[4]))
+    rows.sort(key=lambda row: (row[0][0], int(row[0][1:]), row[5]))
     return rows
 
 
@@ -103,7 +116,7 @@ def _write_page_indexes(catalog) -> int:
     gives the page a second level, and it links straight to each anchor.
     """
     by_category: dict[RuleCategory, list] = {}
-    for rid, name, sev, cat, anchor in catalog:
+    for rid, name, sev, _series, cat, anchor in catalog:
         by_category.setdefault(cat, []).append((rid, name, sev, anchor))
 
     written = 0
@@ -145,14 +158,24 @@ def main() -> None:
         for c in RuleCategory
     )
     table = "\n".join(
-        f"| [{rid}]({cat.doc_page}#{anchor}) | {name} | {sev} | "
+        f"| [{rid}]({cat.doc_page}#{anchor}) | {name} | {series} | {sev} | "
         f"[{cat.title}]({cat.doc_page}) |"
-        for rid, name, sev, cat, anchor in catalog
+        for rid, name, sev, series, cat, anchor in catalog
     )
 
     text = INDEX.read_text()
-    text = _replace(text, LEGEND_START, LEGEND_END, legend)
-    text = _replace(text, TABLE_START, TABLE_END, table)
+    text = _replace(
+        text, LEGEND_START, LEGEND_END,
+        "| Category | Slug | Rules | What a rule here claims |\n"
+        "|----------|------|-------|-------------------------|\n"
+        + legend,
+    )
+    text = _replace(
+        text, TABLE_START, TABLE_END,
+        "| Id | Name | Series | Severity | Category |\n"
+        "|----|------|--------|----------|----------|\n"
+        + table,
+    )
     INDEX.write_text(text)
 
     pages = _write_page_indexes(catalog)

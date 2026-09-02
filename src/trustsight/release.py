@@ -18,6 +18,7 @@ analysis, and its payloads are signature-checked before they are read.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import urllib.request
@@ -82,14 +83,57 @@ def is_release_url(value: str) -> bool:
     )
 
 
+_BASELINE_TAG_CACHE: str | None = None
+_BASELINE_TAG_RESOLVED = False
+
+
+def _resolve_baseline_tag() -> str | None:
+    """Find the most recent ``baseline-*`` release tag that carries assets.
+
+    Queries the GitHub releases API once per process and caches the result.
+    Returns ``None`` when offline, on network failure, or when no baseline
+    release exists.
+    """
+    global _BASELINE_TAG_CACHE, _BASELINE_TAG_RESOLVED
+    if _BASELINE_TAG_RESOLVED:
+        return _BASELINE_TAG_CACHE
+    _BASELINE_TAG_RESOLVED = True
+    if offline():
+        return None
+    try:
+        url = (
+            "https://api.github.com/repos/emiliano-go/trustsight/releases"
+            "?per_page=30"
+        )
+        req = urllib.request.Request(
+            url, headers={"Accept": "application/vnd.github+json"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            releases = json.loads(resp.read())
+        for release in releases:
+            tag = release.get("tag_name", "")
+            if tag.startswith("baseline-") and release.get("assets"):
+                _BASELINE_TAG_CACHE = tag
+                return tag
+    except Exception:
+        pass
+    return None
+
+
 def asset_url(asset_name: str, tag: str | None = None) -> str:
     """Return the download URL for *asset_name*.
 
     Without *tag* the ``latest`` release is used; GitHub redirects to the
-    newest tag.  With *tag* the download is pinned to that exact release.
+    newest tag.  For ``baseline-*`` assets, the most recent ``baseline-*``
+    release is discovered automatically.  With *tag* the download is pinned
+    to that exact release.
     """
     if tag:
         return f"{RELEASE_BASE_URL}/download/{tag}/{asset_name}"
+    if asset_name.startswith("baseline-"):
+        baseline_tag = _resolve_baseline_tag()
+        if baseline_tag:
+            return f"{RELEASE_BASE_URL}/download/{baseline_tag}/{asset_name}"
     return f"{RELEASE_BASE_URL}/latest/download/{asset_name}"
 
 

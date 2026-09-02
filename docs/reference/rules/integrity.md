@@ -48,8 +48,14 @@ severity weights and the reserved identifier ranges.
 | [H087](#h087) | Recipe Changed Without Upstream | MEDIUM |
 | [H091](#h091) | Checksum Array Shorter Than Source Array | HIGH |
 | [H092](#h092) | Metadata Names A Source The Recipe Does Not | HIGH |
+| [H096](#h096) | Download Agent Override | MEDIUM |
+| [H097](#h097) | Function Shadowing | HIGH |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
+| [R078](#r078) | Compression Command Override | MEDIUM |
+| [R091](#r091) | Privilege Escalation Override | HIGH |
+| [R099](#r099) | Trap Statement | MEDIUM |
+| [R104](#r104) | Error Handling Suppressed | HIGH |
 <!-- /generated: page-index -->
 
 ### H001: Checksum Disabled {#h001}

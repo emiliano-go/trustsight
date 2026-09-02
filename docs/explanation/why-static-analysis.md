@@ -150,7 +150,7 @@ S-series sabotage rules (S001-S008) use command-position matching to distinguish
 
 X-series crossfire rules (X001-X025) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
-Two families report at weight 0 and never score: declared-practice findings (P001-P008) and unverifiable findings (W001-W006), the latter naming what an analysis could not read.
+Two families report at weight 0 and never score: declared-practice findings (P001-P008) and [unverifiable findings (W001-W006)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
 
 For the full rule catalog, see [Rules Reference](../reference/rules/index.md).
 

@@ -335,6 +335,11 @@ def growth_ratio(compiled: re.Pattern) -> float:
     constant: it is genuinely quadratic, and genuinely under the budget at
     the probe length, so it passes and then costs seconds at a full line.
     Shape is the more durable signal, and measuring it needs two lengths.
+
+    Each length is measured three times and the median is taken.  The
+    median is resistant to scheduler noise on loaded machines, unlike the
+    minimum which can still be inflated when both measurements land in a
+    noisy window.
     """
     worst = 0.0
     # ``or _FALLBACK_ALPHABET``: a pattern with no derivable alphabet has
@@ -343,18 +348,13 @@ def growth_ratio(compiled: re.Pattern) -> float:
     # some chance of being input the pattern can actually consume.
     alphabets = _representatives(compiled.pattern) or list(_FALLBACK_ALPHABET)
     for char in alphabets[:2]:
-        short = _time_search(compiled, char * (LONG_PROBE_LEN // 4) + "!")
-        long = _time_search(compiled, char * LONG_PROBE_LEN + "!")
-        if long < _GROWTH_FLOOR_S:
-            continue
-        # Run a second measurement to filter out scheduler noise on
-        # loaded machines.  Take the *minimum* of each pair: the faster
-        # measurement is closer to the true algorithmic cost, and the
-        # slower one is the noise we want to discard.
-        short2 = _time_search(compiled, char * (LONG_PROBE_LEN // 4) + "!")
-        long2 = _time_search(compiled, char * LONG_PROBE_LEN + "!")
-        s = min(short, short2)
-        l = min(long, long2)
+        short_text = char * (LONG_PROBE_LEN // 4) + "!"
+        long_text = char * LONG_PROBE_LEN + "!"
+        # Three measurements each; median filters out scheduler noise.
+        shorts = sorted(_time_search(compiled, short_text) for _ in range(3))
+        longs = sorted(_time_search(compiled, long_text) for _ in range(3))
+        s = shorts[1]  # median
+        l = longs[1]   # median
         if l < _GROWTH_FLOOR_S:
             continue
         worst = max(worst, l / max(s, 1e-9))

@@ -19,8 +19,8 @@ TrustSight has several rule families. Only the non-FATAL rules defined in `rules
 
 | Namespace | Location | Editable | Description |
 |-----------|----------|----------|-------------|
-| **R-series** (32 rules) | `rules.toml` | Non-FATAL rules only | Regex detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` set `enabled` and `weight_override`. Every R rule has a TOML definition, so every R rule reads these controls. |
-| **H-series** (95 rules) | Code only | No | Heuristics needing diff context a single regex cannot see. They have no `rules.toml` entry and do not read `[rules.H###]` controls. |
+| **R-series** (36 rules) | `rules.toml` | Non-FATAL rules only | Regex detection rules for PKGBUILD pattern matching. `[rules.R###]` controls in `config.toml` set `enabled` and `weight_override`. Every R rule has a TOML definition, so every R rule reads these controls. |
+| **H-series** (97 rules) | Code only | No | Heuristics needing diff context a single regex cannot see. They have no `rules.toml` entry and do not read `[rules.H###]` controls. |
 | **C-series** (C001-C009) | Code only | No | Structural invariants : checksum/source coherence and related diff anomalies. These cannot be disabled through `rules.toml`. |
 
 The C-series enforce invariants that the detection rules depend on. They fire automatically and their contribution is built into the scoring model. If you need to adjust their impact, modify the evidence tier weights in `config.toml` rather than trying to suppress them.

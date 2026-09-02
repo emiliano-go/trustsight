@@ -186,7 +186,7 @@ def config_sync_rules(
     if update or full:
         if full:
             # Full overwrite: rewrite every rule block with the shipped version.
-            from ..config import _rule_blocks, DEFAULT_RULES
+            from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
             blocks = _rule_blocks(DEFAULT_RULES)
             text = Path(target).read_text().rstrip() + "\n"
             for rid, block in blocks.items():
@@ -276,7 +276,7 @@ def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], dr
     choice = typer.prompt("Choice", type=int, default=3)
 
     if choice == 1:
-        from ..config import _rule_blocks, DEFAULT_RULES
+        from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
         blocks = _rule_blocks(DEFAULT_RULES)
         text = target.read_text().rstrip() + "\n"
         existing = _current_rules(text)

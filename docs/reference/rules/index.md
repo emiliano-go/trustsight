@@ -47,13 +47,13 @@ generated from it by `scripts/build_rules_index.py`.
 | [Composition](composition.md) | `composition` | 2 | Distinct kinds of finding co-occurred; the combination is the signal, and the points are already scored elsewhere. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 23 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 25 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 6 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
-23 rules detect tokenizer defeat and command reconstruction; see
+25 rules detect tokenizer defeat and command reconstruction; see
 [crossfire.md](crossfire.md) for the family boundary and rule descriptions.
 
 ## Reading a rule entry

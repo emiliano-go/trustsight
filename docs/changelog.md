@@ -6,6 +6,35 @@
 
 _No changes yet._
 
+## [0.15.6] - 2026-09-01
+
+### Added
+
+- **R078**: Compression command override detection (`COMPRESS*` variables)
+- **R091**: Privilege escalation override detection (`PACMAN_AUTH`)
+- **R099**: Trap statement detection
+- **R104**: Error suppression detection (`trap '' ERR/DEBUG`)
+- **H096**: DLAGENTS override detection (redirects source downloads)
+- **H097**: Function shadowing detection (redefines `msg`, `cd`, `source`, etc.)
+- **X024**: Indirect sensitive variable assignment detection
+- **X025**: Multi-line function shadow detection
+- **`noextract_suppressed`** coverage gap
+
+### Fixed
+
+- **`config sync-rules` crashes on "Full update"** (issue #7). `_replace_rule_block`
+  was not imported in `cli/admin.py`, causing a `NameError` when choosing option 1.
+- **Drift-aware sync.** `sync_rules(update_outdated=True)` now also replaces rules
+  whose non-pattern semantic fields (match_target, severity, category) differ from
+  shipped defaults. User-edited patterns are never overwritten.
+- **SQLite migration crash** (issue #7). `_migrate_plaintext_maintainers()` now
+  drops a leftover `maintainers_deprecated_backup` table before renaming, fixing
+  `OperationalError: there is already another table or index with this name`.
+- **Ctrl+C traceback.** Added `KeyboardInterrupt` handler around the analysis
+  ThreadPoolExecutor to prevent threading shutdown tracebacks.
+- **Doc counts updated.** Rule counts, ID ranges, and gap counts corrected across
+  9 documentation files.
+
 ## [0.15.5] - 2026-09-01
 
 ### Fixed

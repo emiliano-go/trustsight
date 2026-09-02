@@ -449,35 +449,39 @@ def analyze_outdated_batch(
     with ThreadPoolExecutor(max_workers=default_workers()) as pool:
         futures = {pool.submit(_pipeline_one, entry): i for i, entry in enumerate(pkgs)}
         done_count = 0
-        for future in as_completed(futures):
-            idx = futures[future]
-            result = future.result()
-            status = result[0]
-            entry = result[1]
-            done_count += 1
-            if progress_callback:
-                phase = f"Reviewing {entry['name']}" if status == "ok" else f"Failed {entry['name']}"
-                if verbose and status == "ok":
-                    phase += "  [dim]analysed[/]"
-                progress_callback(done_count, total, phase)
+        try:
+            for future in as_completed(futures):
+                idx = futures[future]
+                result = future.result()
+                status = result[0]
+                entry = result[1]
+                done_count += 1
+                if progress_callback:
+                    phase = f"Reviewing {entry['name']}" if status == "ok" else f"Failed {entry['name']}"
+                    if verbose and status == "ok":
+                        phase += "  [dim]analysed[/]"
+                    progress_callback(done_count, total, phase)
 
-            if status == "fail":
-                _, _, _, _, exc = result
-                failures.append({
-                    "package": entry["name"],
-                    "old_version": entry.get("current_version", ""),
-                    "new_version": entry.get("latest_version", ""),
-                    "score": None,
-                    "verdict": f"Analysis failed ({type(exc).__name__}): this package was NOT vetted.",
-                    "risk": "Error",
-                    "first_seen": False,
-                    "failed": True,
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                })
-            else:
-                _, _, fact, verdict, _ = result
-                analysed_by_idx[idx] = (entry, fact, verdict)
+                if status == "fail":
+                    _, _, _, _, exc = result
+                    failures.append({
+                        "package": entry["name"],
+                        "old_version": entry.get("current_version", ""),
+                        "new_version": entry.get("latest_version", ""),
+                        "score": None,
+                        "verdict": f"Analysis failed ({type(exc).__name__}): this package was NOT vetted.",
+                        "risk": "Error",
+                        "first_seen": False,
+                        "failed": True,
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                    })
+                else:
+                    _, _, fact, verdict, _ = result
+                    analysed_by_idx[idx] = (entry, fact, verdict)
+        except KeyboardInterrupt:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
 
     results = []
     for idx in range(total):

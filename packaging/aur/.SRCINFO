@@ -1,6 +1,6 @@
 pkgbase = trustsight
 	pkgdesc = Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals
-	pkgver = 0.15.5
+	pkgver = 0.15.6
 	pkgrel = 1
 	url = https://github.com/emiliano-go/trustsight
 	arch = any
@@ -17,7 +17,7 @@ pkgbase = trustsight
 	depends = python-typer
 	depends = python-cryptography
 	optdepends = pyalpm: native version comparison (faster discovery)
-	source = trustsight-0.15.5.tar.gz::https://github.com/emiliano-go/trustsight/releases/download/v0.15.5/trustsight-0.15.5.tar.gz
-	sha256sums = 9f5c15e93423285fc5c7c39995a7a00247e68454de3a9d9a59b2bfd070ec49f1
+	source = trustsight-0.15.6.tar.gz::https://github.com/emiliano-go/trustsight/releases/download/v0.15.6/trustsight-0.15.6.tar.gz
+	sha256sums = 91e6c98a67b0e908c61c32b3352e888c0ee3d162e46f4b33d3058b23374259d0
 
 pkgname = trustsight

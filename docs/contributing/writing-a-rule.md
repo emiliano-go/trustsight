@@ -6,8 +6,8 @@ TrustSight has two rule namespaces to avoid identifier collision:
 
 | Namespace | IDs          | Defined in       | Editable by users | Purpose                     |
 |-----------|--------------|------------------|-------------------|-----------------------------|
-| R-series  | R001-R003, R007-R008, R010-R013, R017, R039-R059, R144 | `rules.toml` | Yes | Regex-detectable patterns   |
-| H-series  | H001-H095   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
+| R-series  | R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144 | `rules.toml` | Yes | Regex-detectable patterns   |
+| H-series  | H001-H097   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
 | C-series  | C001-C009   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |

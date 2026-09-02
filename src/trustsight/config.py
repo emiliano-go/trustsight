@@ -1951,8 +1951,13 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
 
     Appending is always safe, so missing rules are added unconditionally.
     Replacing is not, so a rule is only rewritten when *update_outdated*
-    is set **and** its current pattern is one this project shipped before
-    (meaning the user never edited it).  Customised rules are left alone.
+    is set **and** either its current pattern is one this project shipped
+    before (meaning the user never edited it) **or** its semantic fields
+    other than ``pattern`` (match_target, severity, category) differ from
+    the shipped definition.
+
+    Rules whose pattern was intentionally edited by the user are never
+    overwritten, even if other fields drifted.
 
     Returns ``(added_ids, updated_ids)``.
     """
@@ -1966,9 +1971,21 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
 
     updated: list[str] = []
     if update_outdated:
+        # Update rules with superseded patterns (legacy shipped versions).
         for rid in outdated_shipped_rules():
             text = _replace_rule_block(text, rid, blocks[rid])
             updated.append(rid)
+        # Also update rules whose non-pattern semantic fields drifted from
+        # shipped defaults (match_target, severity, category).  Pattern
+        # drift is excluded: a pattern the user broadened would lose that
+        # work if overwritten.
+        _NON_PATTERN_FIELDS = ("match_target", "severity", "category")
+        for rid, field, on_disk, shipped_val in drifted_shipped_rules():
+            if rid in updated:
+                continue
+            if field in _NON_PATTERN_FIELDS:
+                text = _replace_rule_block(text, rid, blocks[rid])
+                updated.append(rid)
 
     added = missing_shipped_rules()
     for rid in added:

@@ -38,6 +38,7 @@ from .display import (
 # before doing anything.  The wrapper keeps the name patchable, which is how
 # the tests replace it.
 def analyze_package(*args, **kwargs):
+    """Thin wrapper that defers the analysis import until first call."""
     from ..analysis import analyze_package as _analyze_package
 
     return _analyze_package(*args, **kwargs)
@@ -405,6 +406,7 @@ def _inspect_one(fact, *, show_score, show_risk, verbose, json_output):
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``inspect`` and ``history`` subcommands on *app*."""
     @app.command()
     def inspect(
         package: str = typer.Argument(..., help="Package name"),

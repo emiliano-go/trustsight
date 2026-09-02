@@ -119,4 +119,5 @@ def _render_pivot(result: dict) -> None:
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``corpus`` subcommand group on *app*."""
     app.add_typer(corpus_app, name="corpus")

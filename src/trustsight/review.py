@@ -238,6 +238,7 @@ def get_installed_packages(
     all_packages: bool = False,
     on_warn: Optional[Callable[[str], None]] = None,
 ) -> list[dict]:
+    """Return installed packages matching the given filters as discovery dicts."""
     from .discovery import get_installed_foreign, get_installed_from_repo
     from .discovery import get_local_repos_from_pacman_conf, _repo_exists
 
@@ -336,6 +337,7 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
 
 
 def default_workers() -> int:
+    """Return the configured parallel worker count, defaulting to 8."""
     try:
         configured = int(load_config().get("limits", {}).get("workers", 0))
     except (TypeError, ValueError):
@@ -344,6 +346,7 @@ def default_workers() -> int:
 
 
 def prefetch_deadline() -> int:
+    """Return the prefetch timeout in seconds, defaulting to 120."""
     try:
         configured = int(load_config().get("limits", {}).get("prefetch_timeout", 0))
     except (TypeError, ValueError):
@@ -352,6 +355,7 @@ def prefetch_deadline() -> int:
 
 
 def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = None) -> dict[str, int]:
+    """Clone or fetch AUR repos for *pkgs* in parallel, returning {name: hint}."""
     from .fetcher import clone_or_fetch, last_fetch_time
 
     def fetch(entry: dict) -> tuple[str, int | None]:
@@ -399,10 +403,12 @@ def prefetch(pkgs: list[dict], progress_callback: Optional[ProgressCallback] = N
 
 
 def verdict_for(fact) -> str:
+    """Return the human-readable verdict string for a PackageFact."""
     return evaluate_fact(fact)["verdict"]
 
 
 def is_trivial_update(fact, findings: list[dict]) -> bool:
+    """Return True when the diff contains only trivial changes."""
     return is_trivial(fact, findings)
 
 

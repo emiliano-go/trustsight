@@ -602,6 +602,7 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``review`` subcommand on *app*."""
     @app.command()
     def review(
         limit: int = typer.Option(

@@ -32,6 +32,7 @@ seed_app = typer.Typer(
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``seed`` subcommand group on *app*."""
     app.add_typer(seed_app, name="seed")
 
 

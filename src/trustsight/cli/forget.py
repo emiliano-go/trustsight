@@ -24,6 +24,7 @@ def get_aur_package_info(*args, **kwargs):
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``forget`` subcommand on *app*."""
     @app.command()
     def forget(
         packages: list[str] = typer.Argument(None, help="Package name(s) to forget"),

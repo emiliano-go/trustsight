@@ -33,6 +33,7 @@ def _render(entry: ScoreEntry, fact: PackageFact) -> str:
 
 
 def display_version(v: str | None) -> str:
+    """Render a version string for display, normalizing empty or unparseable values."""
     if not v:
         return "-"
     if not _PLAUSIBLE_VERSION_RE.fullmatch(v):
@@ -116,6 +117,7 @@ def no_aur_change_note(fact) -> str | None:
 
 
 def fallback_verdict(fact: PackageFact) -> str:
+    """Build a human-readable verdict when scoring does not produce one."""
     if fact.first_seen:
         seen = "No prior history for this package"
         if not fact.old_version and not fact.new_version:

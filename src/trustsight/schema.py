@@ -7,6 +7,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class DiffSummary:
+    """Aggregate statistics for a PKGBUILD diff."""
+
     lines_added: int = 0
     lines_removed: int = 0
     files_changed: list[str] = field(default_factory=list)
@@ -16,6 +18,8 @@ class DiffSummary:
 
 @dataclass
 class SourceChanges:
+    """Source URL and checksum changes detected in a diff."""
+
     added_urls: list[str] = field(default_factory=list)
     removed_urls: list[str] = field(default_factory=list)
     checksum_behavior: str = ""
@@ -23,6 +27,8 @@ class SourceChanges:
 
 @dataclass
 class ExecutionChanges:
+    """Resolved command strings and suspicious patterns found in a diff."""
+
     resolved_commands: list[str] = field(default_factory=list)
     suspicious_patterns_detected: list[str] = field(default_factory=list)
     unresolved_patterns: list[str] = field(default_factory=list)
@@ -44,6 +50,8 @@ class TemporalContext:
 
 @dataclass
 class NoveltyContext:
+    """Novelty signals for URLs and maintainers relative to the observation database."""
+
     url_first_seen_in_this_package: bool = False
     url_first_seen_globally: bool = False
     maintainer_first_seen_for_this_package: bool = False
@@ -52,6 +60,8 @@ class NoveltyContext:
 
 @dataclass
 class ScoreEntry:
+    """A single rule firing that contributed to the analysis score."""
+
     rule_id: str = ""
     severity: str = ""
     weight: int = 0
@@ -65,6 +75,13 @@ class ScoreEntry:
 
 @dataclass
 class PackageFact:
+    """The complete analysis result for a single package diff.
+
+    This is the central data structure of the analysis pipeline.  Every
+    rule, signal, and coverage gap writes to this object; scoring,
+    classification, and reporting read from it.
+    """
+
     package_name: str = ""
     old_version: str = ""
     new_version: str = ""

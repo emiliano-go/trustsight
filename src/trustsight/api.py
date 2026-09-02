@@ -140,6 +140,7 @@ class Progress:
 
     @property
     def indeterminate(self) -> bool:
+        """True when the total count is unknown or the current count is negative."""
         return self.current < 0 or not self.total
 
 
@@ -160,6 +161,7 @@ class Finding:
     evidence: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
@@ -177,16 +179,20 @@ class SuppressedRule:
     override_package: Optional[str] = None
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class FileChange:
+    """A single file that was added, removed, or modified in a diff."""
+
     path: str
     status: str
     """One of "added", "removed", "modified"."""
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
@@ -339,6 +345,7 @@ class Report:
         )
 
     def to_json(self, indent: int | None = 2, **kwargs) -> str:
+        """Serialize to a JSON string."""
         return json.dumps(self.to_dict(**kwargs), indent=indent)
 
 
@@ -353,6 +360,7 @@ class FailedPackage:
     error_type: str = ""
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
@@ -376,6 +384,7 @@ class ReviewResult:
 
     @property
     def flagged(self) -> tuple[Report, ...]:
+        """Reports that crossed the review threshold."""
         return tuple(r for r in self.reports if r.flagged)
 
     def __iter__(self) -> Iterator[Report]:
@@ -411,6 +420,8 @@ class ReviewResult:
 
 @dataclass(frozen=True)
 class HistoryEntry:
+    """One scored revision in a package's analysis history."""
+
     timestamp: str
     old_version: str
     new_version: str
@@ -419,11 +430,14 @@ class HistoryEntry:
     triggered_rules: tuple[dict, ...] = ()
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class TrackedPackage:
+    """A package tracked in the local database with its latest score."""
+
     name: str
     version: str
     last_checked: str
@@ -432,11 +446,14 @@ class TrackedPackage:
     maintainer: str
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class Status:
+    """The global status summary shown by ``trustsight status``."""
+
     packages_tracked: int
     total_analyses: int
     effective_observations: int
@@ -447,6 +464,7 @@ class Status:
     config_fingerprint: str
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict, converting Path fields to strings."""
         data = asdict(self)
         data["config_dir"] = str(self.config_dir)
         data["database_path"] = str(self.database_path)
@@ -464,6 +482,7 @@ class ClusterFinding:
     members: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
@@ -485,8 +504,8 @@ class CycleReport:
     already reported on an earlier cycle is counted, not re-announced."""
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict for ``full-aur`` JSON output."""
         return {
-            "added": self.added,
             "changed": self.changed,
             "removed": self.removed,
             "processed": self.processed,
@@ -500,11 +519,14 @@ class CycleReport:
 
 @dataclass(frozen=True)
 class PivotMatch:
+    """A corpus package that references a pivot indicator."""
+
     package: str
     surface: str
     detail: str
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
         return asdict(self)
 
 
@@ -527,9 +549,11 @@ class PivotResult:
 
     @property
     def searched(self) -> bool:
+        """True when a corpus was available to search."""
         return bool(self.sources)
 
     def to_dict(self) -> dict:
+        """Serialize to a plain dict for ``trustsight pivot --json``."""
         return {
             "indicator": self.indicator,
             "type": self.type,
@@ -908,12 +932,14 @@ class TrustSight:
 
     @property
     def config_dir(self) -> Path:
+        """The TrustSight configuration directory (``~/.config/trustsight/``)."""
         from .config import CONFIG_DIR
 
         return CONFIG_DIR
 
     @property
     def database_path(self) -> Path:
+        """The path to the SQLite database file."""
         from .db import get_db_path
 
         return get_db_path()

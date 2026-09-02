@@ -35,6 +35,7 @@ def _validate_date(date_str: str | None, label: str) -> str | None:
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``history`` subcommand on *app*."""
     @app.command()
     def history(
         package: str = typer.Argument(..., help="Package name"),

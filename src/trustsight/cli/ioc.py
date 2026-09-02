@@ -488,4 +488,5 @@ def _now_iso() -> str:
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``ioc`` subcommand group on *app*."""
     app.add_typer(ioc_app, name="ioc")

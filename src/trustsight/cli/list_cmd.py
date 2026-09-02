@@ -40,6 +40,7 @@ def _sort_key(sort_by: str | None, row: dict):
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``list`` subcommand on *app*."""
     @app.command("list")
     def list_cmd(
         limit: int = typer.Option(0, "--limit", help="Max packages to show (0 = unlimited)"),

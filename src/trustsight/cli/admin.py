@@ -755,6 +755,7 @@ def _stale_rules_note(stale_patterns, missing, plain: bool = False) -> str:
 
 
 def register_commands(app: typer.Typer):
+    """Register the ``config``, ``override``, ``db``, and ``baseline`` subcommands on *app*."""
     app.add_typer(config_app, name="config")
     app.add_typer(override_app, name="override")
     app.add_typer(db_app, name="db")

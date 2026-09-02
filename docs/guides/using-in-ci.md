@@ -112,7 +112,7 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 |-------|--------|-------|
 | CRITICAL | p5 (5th percentile) | **60** |
 | Benign | p95 (95th percentile) | **35** |
-| Zero-rate (benign scored 0) | percentage | **68.3%** |
+| Zero-rate (benign scored 0) | percentage | **68.4%** |
 | Test count | total | Run `uv run pytest` for the current checkout |
 
 **The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (35), the classifier achieves clean separation with no overlap.

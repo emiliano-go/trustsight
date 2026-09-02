@@ -1085,6 +1085,10 @@ class _FakeMetadata:
         "libdeep": [],
     }
 
+    @property
+    def packages(self):
+        return {name: {"Version": "1.0"} for name in self.GRAPH}
+
     def deps_of(self, name):
         return list(self.GRAPH.get(name, []))
 

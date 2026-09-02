@@ -394,6 +394,10 @@ class SnapshotMetadata:
     def __init__(self, packages: dict):
         self._packages = packages
 
+    @property
+    def packages(self) -> dict:
+        return self._packages
+
     def is_aur(self, name: str) -> bool:
         return name in self._packages
 
@@ -434,6 +438,10 @@ class RpcMetadata:
 
         self._fetch = fetch or get_aur_package_info
         self._cache: dict[str, dict] = {}
+
+    @property
+    def packages(self) -> dict:
+        return self._cache
 
     def prime(self, names: Iterable[str]) -> None:
         """Fetch every unknown name in *names* in one request."""

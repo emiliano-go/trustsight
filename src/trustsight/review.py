@@ -324,7 +324,11 @@ def dependency_entries(discovered, depth, config=None, on_warn=None):
                     reverse[dep].append(pkg_name)
 
     entries = [
-        {"name": name, "current_version": installed.get(name, "")}
+        {
+            "name": name,
+            "current_version": installed.get(name) or None,
+            "latest_version": (metadata.packages.get(name) or {}).get("Version", ""),
+        }
         for name in closure.names
     ]
     note = closure.reason if closure.truncated else ""
@@ -494,8 +498,13 @@ def analyze_outdated_batch(
         entry, fact, verdict = item
 
         evaluated = evaluate_fact(fact)
-        evaluated["old_version"] = entry.get("current_version", "")
-        evaluated["new_version"] = entry.get("latest_version", "")
+        # Only overwrite fact versions when the entry provides a value;
+        # empty strings from missing installed/AUR data would discard the
+        # correct versions the analysis computed.
+        if entry.get("current_version"):
+            evaluated["old_version"] = entry["current_version"]
+        if entry.get("latest_version"):
+            evaluated["new_version"] = entry["latest_version"]
         evaluated["aur_note"] = no_aur_change_note(fact)
         evaluated.pop("raw", None)
         evaluated.pop("fact", None)

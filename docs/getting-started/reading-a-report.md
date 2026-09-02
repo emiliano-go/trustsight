@@ -19,19 +19,19 @@ The scoring is **deterministic**: same diff, same config, same database state �
 
 ## The three verdict states
 
-### UNFLAGGED (score ≤ 20)
+### Low (score ≤ 20)
 
 No significant risk signals. Routine version bumps with checksum updates, trusted forge sources, and unchanged build logic land here.
 
-An UNFLAGGED verdict does not mean "safe." It means "no detectable risk signals in this diff."
+An Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
 **68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
-### FLAGGED (score > 20)
+### Medium / High / Critical (score > 20)
 
-One or more risk signals fired. The severity category (Medium / High / Critical) tells you the strongest signal's tier:
+One or more risk signals fired. The severity category tells you the strongest signal's tier:
 
 | Range | Label | Interpretation |
 |-------|-------|----------------|
@@ -39,16 +39,16 @@ One or more risk signals fired. The severity category (Medium / High / Critical)
 | 51-80 | High | Multiple signals or strong structural changes |
 | 81-100 | Critical | Strong evidence, or FATAL rules (R012/R013) |
 
-#### How to use FLAGGED
+#### How to use these bands
 
 - Score 21-34: inspect with `trustsight inspect <name>` to understand context.
 - Score 35-50: manual review recommended before `yay -Syu`.
 - Score 51+: treat as suspicious. Investigate fully before updating.
 - Score 100: a FATAL rule fired. **Do not install** without understanding why.
 
-### INCONCLUSIVE
+### Inconclusive
 
-The score is in the Medium range (21-50), maturity is below 0.5 (fewer than 25 effective observations), and no HIGH, CRITICAL, or FATAL finding fired. The tool is telling you that weak signals, including novelty, are not yet mature enough to support that band. Any coverage gap can also produce INCONCLUSIVE unless a HIGH-or-worse finding stands on its own.
+The score is in the Low or Medium range (0-50), no HIGH, CRITICAL, or FATAL finding fired, and either maturity is below 0.5 (fewer than 25 effective observations) or a coverage gap prevented full analysis. Any coverage gap can also produce Inconclusive unless a HIGH-or-worse finding stands on its own.
 
 INCONCLUSIVE is **not** UNFLAGGED. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 

@@ -63,6 +63,7 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `ruleset_drifted`: the installed `rules.toml` differs from the shipped rule set.
 - `stage_degraded`: an analysis stage could not complete on this input.
 - `history_truncated`: the history walk stopped before yielding the requested results (when using `--last`).
+- `noextract_suppressed`: `noextract=()` suppressed extraction of specific source archives, so their contents were not available for rule matching.
 
 Here the verdict is telling you something sharper: the part it did read looked ordinary, and there is a part it did not read. Fetch the package yourself and look at what was left out. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 

@@ -85,11 +85,11 @@ evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
 
 ### What the scores mean in context
 
-- **0-20 (UNFLAGGED)**: No significant risk signals. Routine version bumps with checksum updates land here. **Most packages will score 0**; this is normal and expected.
-- **21-50 (FLAGGED: Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
-- **51-80 (FLAGGED: High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
-- **81-100 (FLAGGED: Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
-- **INCONCLUSIVE**: Either the score fell in the Medium range with nothing strong behind it and a cold database (fewer than 25 effective observations across the database; novelty reaches full weight at 50), or the run could not examine the whole change (a truncated diff, an over-long line, an unavailable repository tree, or a `source=` URL computed at build time). Both mean the tool does not have enough to answer; this is **not** the same as UNFLAGGED.
+- **0-20 (Low)**: No significant risk signals. Routine version bumps with checksum updates land here. **Most packages will score 0**; this is normal and expected.
+- **21-50 (Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
+- **51-80 (High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
+- **81-100 (Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
+- **Inconclusive**: Either the score fell in the Low or Medium range with nothing strong behind it and a cold database (fewer than 25 effective observations across the database; novelty reaches full weight at 50), or the run could not examine the whole change (a truncated diff, an over-long line, an unavailable repository tree, or a `source=` URL computed at build time). Both mean the tool does not have enough to answer; this is **not** the same as Low.
 
 ### Key teaching moments
 

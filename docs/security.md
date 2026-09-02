@@ -326,7 +326,7 @@ The score is not a probability, not a confidence, and not a prediction. A score 
 
 ### B2. An unflagged verdict is never issued for an analysis that was incomplete
 
-Thirteen things make a run partial, and all thirteen are recorded as **coverage gaps** on the result:
+Fourteen things make a run partial, and all fourteen are recorded as **coverage gaps** on the result:
 
 | Gap | Meaning |
 |-----|---------|
@@ -347,7 +347,7 @@ Thirteen things make a run partial, and all thirteen are recorded as **coverage 
 
 `companion_truncated` is separate from `diff_truncated` for the reason `scan_truncated` is: they point at different dials. A companion is read on its own budget, and a reader told only "the diff was truncated" would raise `max_diff_bytes` and find it changed nothing. The bound itself is not the interesting part - every bound drops content. What made this one a vulnerability rather than a limit was that it dropped content *and said nothing*, so a payload past 64 KiB in a committed `Makefile` scored identically to a package with no companions at all.
 
-`stage_degraded` covers the other kind of shortfall. The thirteen gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
+`stage_degraded` covers the other kind of shortfall. The fourteen gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
 
 `deps_not_scanned` is the dependency walk's half of the same honesty. An AUR package's `depends` and `makedepends` can name other AUR packages, and `makepkg` builds those on the reviewer's machine in the same run, so a review that reads only the package you typed has read one recipe out of several that will execute. `--depth` decides how far the walk goes, and each dependency is analysed *as a package* - its own score, its own band, its own row in the database - never folded into the parent's number, because `depth` is deliberately absent from the config fingerprint and a score that moved with a flag would break [B1](#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for anyone comparing two runs.
 

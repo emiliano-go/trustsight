@@ -57,8 +57,6 @@ The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retai
 | R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
 | R013 | Unicode Bidi Override | FATAL | 0.06 % | 2/3246 benign diffs carry zero-width joiners in localized text; the ASCII-neighbour guard keeps them quiet |
 
-## Expanded rules (R039-R059)
-
 ## Aggregate distribution
 
 Per-rule rates are below. The aggregate figures the security model cites are:

@@ -8,7 +8,7 @@ TrustSight groups scoring signals into four evidence tiers. Each tier represents
 Tier A : Structural            (strongest, always available)
 Tier B : Priors / Context      (domain reputation, always available)
 Tier C : History / Novelty     (first-seen tracking, maturity-gated)
-Tier D : Verification          (declared, weight 0, end-state only)
+Tier D : Verification          (declared, weight 0, reported never scored)
 ```
 
 ---
@@ -159,6 +159,8 @@ a signal an attacker can assert for free must not lower a score.
 | `validpgpkeys_declared` | `P002` | 0 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
 | `gpg_verify_present` | `P003` | 0 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
 | source pinning | `P005` / `P006` | 0 | Pinned to a commit hash, or to a tag (the weaker form: tags can be repointed). |
+| `trusted_forge` | `P007` | 0 | Source URL hosted on a trusted forge (github.com, gitlab.com, etc.) over HTTPS. |
+| `no_commit_pin` | `P008` | 0 | Source tracks a branch or unpinned ref; upstream decides at build time what this compiles and runs. |
 
 ### End-state, not delta
 

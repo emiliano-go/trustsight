@@ -329,7 +329,7 @@ def _aur_children(
     out: list[tuple[str, str, str]] = []
     try:
         children = metadata.deps_of(name)
-    except Exception:
+    except (OSError, json.JSONDecodeError, KeyError):
         return out
     for raw in sorted(children):
         dep = normalize_dependency(raw)
@@ -338,7 +338,7 @@ def _aur_children(
         try:
             if not metadata.is_aur(dep):
                 continue
-        except Exception:
+        except (OSError, json.JSONDecodeError, KeyError):
             continue
         out.append((dep, "depends", name))
     return out

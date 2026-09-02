@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import logging
+import threading
 import os
 import re
 import sqlite3
@@ -818,6 +819,7 @@ def top_dependency_pairs(limit: int = 5000) -> list[tuple[str, int]]:
 _ESTABLISHED_OBSERVATIONS = 10
 
 _official_names: Optional[frozenset] = None
+_official_names_lock = threading.Lock()
 
 
 def official_package_names() -> frozenset:
@@ -830,17 +832,19 @@ def official_package_names() -> frozenset:
     """
     global _official_names
     if _official_names is None:
-        try:
-            result = subprocess.run(
-                ["pacman", "-Slq"], capture_output=True, text=True,
-                check=False, timeout=30,
-            )
-            _official_names = frozenset(
-                line.strip().lower()
-                for line in result.stdout.splitlines() if line.strip()
-            )
-        except (OSError, subprocess.SubprocessError):
-            _official_names = frozenset()
+        with _official_names_lock:
+            if _official_names is None:
+                try:
+                    result = subprocess.run(
+                        ["pacman", "-Slq"], capture_output=True, text=True,
+                        check=False, timeout=30,
+                    )
+                    _official_names = frozenset(
+                        line.strip().lower()
+                        for line in result.stdout.splitlines() if line.strip()
+                    )
+                except (OSError, subprocess.SubprocessError):
+                    _official_names = frozenset()
     return _official_names
 
 
@@ -1629,7 +1633,7 @@ def read_aur_cache(names: list[str], ttl_minutes: int = 60) -> dict[str, dict]:
         hits = {}
         expired = []
         for r in rows:
-            age = (datetime.now() - _parse_ts(r["cached_at"])).total_seconds() / 60
+            age = (datetime.now(timezone.utc) - _parse_ts(r["cached_at"])).total_seconds() / 60
             if age < ttl_minutes:
                 hits[r["name"]] = {
                     "version": r["version"],
@@ -1668,11 +1672,14 @@ def write_aur_cache(entries: dict[str, tuple[str, int | None]]) -> None:
 def _parse_ts(ts: str | None) -> datetime:
     """Parse a SQLite datetime string, defaulting to epoch on garbage."""
     if not ts:
-        return datetime.fromtimestamp(0)
+        return datetime.fromtimestamp(0, tz=timezone.utc)
     try:
-        return datetime.fromisoformat(ts)
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
     except (ValueError, TypeError):
-        return datetime.fromtimestamp(0)
+        return datetime.fromtimestamp(0, tz=timezone.utc)
 
 
 def get_pkgbuild_snapshot(package_name: str) -> Optional[dict]:

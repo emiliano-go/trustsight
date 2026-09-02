@@ -418,6 +418,9 @@ def analyze_outdated_batch(
 
     # One visited set for the whole batch, so a dependency shared by many
     # installed packages costs one clone and one analysis rather than twenty.
+    # CPython's GIL makes set.add() and __contains__ individually atomic,
+    # so the check-then-add race is a performance issue (double analysis),
+    # not a correctness one.  Other implementations may need a lock.
     depth_seen: set[str] = set()
 
     if progress_callback:

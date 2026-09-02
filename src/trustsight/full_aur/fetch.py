@@ -104,6 +104,7 @@ def _http_get(url: str) -> Optional[bytes]:
     """
     for attempt in range(_MAX_RETRIES + 1):
         _throttle()
+        resp = None
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
             resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
@@ -143,6 +144,12 @@ def _http_get(url: str) -> Optional[bytes]:
         except Exception as e:
             log.warning("unexpected error fetching %s: %s", url, e)
             return None
+        finally:
+            if resp is not None:
+                try:
+                    resp.close()
+                except Exception:
+                    pass
     return None
 
 
@@ -217,8 +224,8 @@ def _pkgbuild_from_snapshot(name: str) -> Optional[str]:
         return None
 
     try:
-        tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
-        return _pkgbuild_from_tarfile(tf, name)
+        with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
+            return _pkgbuild_from_tarfile(tf, name)
     except ReadTooLarge as e:
         # A bound dropped content.  This entry point has no result object to
         # hang a gap on, so the refusal is at least logged loudly; the
@@ -285,11 +292,11 @@ def fetch_pkgbuild_with_tree(
     refused = False
     if body is not None:
         try:
-            tf = tarfile.open(fileobj=BytesIO(body), mode="r:gz")
-            pkgbuild = _pkgbuild_from_tarfile(tf, name)
-            manifest = _snapshot_manifest(tf)
-            if pkgbuild is not None:
-                return pkgbuild, manifest, check_archive_trailer(body), False
+            with tarfile.open(fileobj=BytesIO(body), mode="r:gz") as tf:
+                pkgbuild = _pkgbuild_from_tarfile(tf, name)
+                manifest = _snapshot_manifest(tf)
+                if pkgbuild is not None:
+                    return pkgbuild, manifest, check_archive_trailer(body), False
         except ReadTooLarge as e:
             # Not benign, and not silent: warning level, and the flag rides
             # out to the result so the analysis cannot read as complete.

@@ -113,19 +113,23 @@ def fetch_metadata(on_progress=None) -> dict:
         raise RuntimeError(
             f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
         ) from exc
-    total = int(resp.headers.get("Content-Length", 0))
-    buf = bytearray()
-    while True:
-        chunk = resp.read(65536)
-        if not chunk:
-            break
-        buf.extend(chunk)
-        if len(buf) > MAX_RESPONSE_BYTES:
-            raise ResponseTooLarge(
-                f"metadata response exceeds {MAX_RESPONSE_BYTES} bytes"
-            )
-        if on_progress:
-            on_progress(len(buf), total)
+    try:
+        total = int(resp.headers.get("Content-Length", 0))
+        buf = bytearray()
+        while True:
+            chunk = resp.read(65536)
+            if not chunk:
+                break
+            buf.extend(chunk)
+            if len(buf) > MAX_RESPONSE_BYTES:
+                raise ResponseTooLarge(
+                    f"metadata response exceeds {MAX_RESPONSE_BYTES} bytes"
+                )
+            if on_progress:
+                on_progress(len(buf), total)
+    finally:
+        if hasattr(resp, "close"):
+            resp.close()
     data = json.loads(gunzip_capped(bytes(buf)))
     metadata: dict[str, dict] = {}
     for entry in data:

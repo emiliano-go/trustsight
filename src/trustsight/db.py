@@ -1241,6 +1241,11 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
             ).fetchone()["n"]
             if row_count:
                 _hash_maintainer_rows(conn, salt)
+                # Drop any leftover backup from a previous failed migration
+                # before renaming.  A previous run may have hashed the rows
+                # but crashed before the RENAME, leaving both tables.
+                if "maintainers_deprecated_backup" in tables:
+                    conn.execute("DROP TABLE IF EXISTS maintainers_deprecated_backup")
                 conn.execute(
                     "ALTER TABLE maintainers RENAME TO maintainers_deprecated_backup"
                 )
@@ -1454,6 +1459,11 @@ def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:
             ).fetchone()["n"]
             if local_count:
                 _hash_maintainer_rows(conn, salt)
+                # Drop any leftover backup from a previous failed migration
+                # before renaming.  A previous run may have hashed the rows
+                # but crashed before the RENAME, leaving both tables.
+                if "maintainers_deprecated_backup" in local_tables:
+                    conn.execute("DROP TABLE IF EXISTS maintainers_deprecated_backup")
                 conn.execute(
                     "ALTER TABLE main.maintainers RENAME TO maintainers_deprecated_backup"
                 )

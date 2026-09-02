@@ -192,10 +192,10 @@ def config_sync_rules(
             for rid, block in blocks.items():
                 text = _replace_rule_block(text, rid, block) if rid in _current_rules(text) else text + "\n" + block
             Path(target).write_text(text)
-            _print_sync_result("Full sync complete", [], [], drift)
+            _print_sync_result("Full sync complete", [], [])
         else:
             added, updated = sync_rules(update_outdated=True)
-            _print_sync_result("Sync complete", added, updated, drift)
+            _print_sync_result("Sync complete", added, updated)
         return
 
     # --- interactive wizard ---
@@ -208,7 +208,11 @@ def _current_rules(text: str) -> set[str]:
     return {m.group(1) for m in re.finditer(r'^id\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)}
 
 
-def _print_sync_result(title: str, added: list[str], updated: list[str], drift: list[tuple]):
+def _print_sync_result(title: str, added: list[str], updated: list[str], drift: list[tuple] | None = None):
+    """Show sync results.  If drift is None, re-checks after sync."""
+    if drift is None:
+        from ..config import drifted_shipped_rules
+        drift = drifted_shipped_rules()
     lines = []
     if updated:
         lines.append(f"Updated {len(updated)} superseded rule(s): {', '.join(updated)}")
@@ -292,7 +296,7 @@ def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], dr
             print("Full sync complete.")
     elif choice == 2:
         added, updated = sync_rules(update_outdated=True)
-        _print_sync_result("Safe sync complete", added, updated, drift)
+        _print_sync_result("Safe sync complete", added, updated)
     else:
         if HAS_RICH:
             console().print("[yellow]Skipped.[/yellow]")

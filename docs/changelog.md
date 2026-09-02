@@ -6,6 +6,15 @@
 
 _No changes yet._
 
+## [0.15.7] - 2026-09-02
+
+### Fixed
+
+- **sync-rules wizard now re-checks drift after sync.** The "Safe sync
+  complete" message no longer falsely reports "drifted field(s) still
+  differ" when the drift was just fixed. The drift is re-evaluated
+  against the updated file.
+
 ## [0.15.6] - 2026-09-01
 
 ### Added

@@ -37,7 +37,7 @@ the AUR git mirror (CI rebuilds it before the calibration gates; a local
 checkout may carry a larger un-pruned superset on disk). See [Corpus and
 Priors](corpus-and-priors.md) and [Benchmarks and Methodology](benchmarks-and-methodology.md).
 
-## Core rules (R001-R013)
+## Core rules (R001-R013, excluding renamed R004-R006/R009)
 
 The aggregate baseline is current at 3,246 diffs. Detailed rule rows below retain their historical measurement source unless explicitly marked otherwise.
 

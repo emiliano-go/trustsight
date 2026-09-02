@@ -302,7 +302,7 @@ trustsight forget --prune                  # Remove all non-AUR packages
 Show database and system health statistics.
 
 ```
-trustsight status
+trustsight status [--json]
 ```
 
 ### Output
@@ -314,6 +314,7 @@ trustsight status
 | Effective observations | Max of real analyses and seed bootstrap (what maturity() actually sees). |
 | Seed observations | Bootstrap count from the novelty seed, or 0 if not imported. |
 | Dependency corpus | Whether the dependency observation table has been populated. |
+| Rule patterns | Whether shipped rule patterns match the installed `rules.toml`. Shows "Up to date" or "N stale". |
 
 ---
 
@@ -338,7 +339,7 @@ trustsight config sync-rules [--update]
 ### `sync-rules`
 
 ```
-trustsight config sync-rules [--update] [--full]
+trustsight config sync-rules [--update] [--full] [--json]
 ```
 
 `rules.toml` is written only when it does not exist, so upgrading the package

@@ -24,7 +24,7 @@ and the absence of a failure reads as a guarantee.
 
 | Invariant | Control | Entry point that was missed |
 |-----------|---------|------------------------------|
-| A5, matching is bounded | 8 KiB per-line clamp | applied in `apply_rules` (about 30 patterns from `rules.toml`), not to the roughly 88 patterns emitted from `analysis/`, which match the diff text directly. The gate measured `apply_rules`: 0.17s for a 5 MiB line. The real path took 15.06s. |
+| A5, matching is bounded | 8 KiB per-line clamp | applied in `apply_rules` (36 patterns from `rules.toml`), not to the 97 patterns emitted from `analysis/`, which match the diff text directly. The gate measured `apply_rules`: 0.17s for a 5 MiB line. The real path took 15.06s. |
 | A10, output is inert | `clean()` and `safe_markup()` | applied in `review`'s renderer, and the gate exercised that renderer. `_inspect_rich` interpolated a rule id raw and leaked escape sequences. |
 | A12/A13, seed and baseline containment | reserved-name guard | enforced in `upsert_package`; `save_package_profile` and `save_pkgbuild_snapshot` are keyed by `package_name` directly and had no guard, and both are on the baseline import path. |
 | B2, coverage accounting | `coverage_gaps` on the result | set by four of the five `PackageFact` producers. The first-analysis path declared `tree_analyzed=True` having read no tree at all. |

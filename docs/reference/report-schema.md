@@ -62,7 +62,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "changes": ["string"],
   "coverage_gaps": ["string"],
   "unresolved_sources": ["string"],
-  "dependency_changes": {"added": ["string"], "removed": ["string"]},
+  "dependency_changes": {"field_name": ["name1", "name2"]},
   "dependencies": [
     {
       "name": "string",
@@ -96,6 +96,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "confidence": "string",
       "provenance": "string",
       "campaign": "string",
+      "added": bool,
       "surface": "string",
       "line": "int or null",
       "expired": bool

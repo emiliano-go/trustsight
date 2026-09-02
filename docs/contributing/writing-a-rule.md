@@ -210,11 +210,11 @@ python -c "import json; d=json.load(open('/tmp/baseline-check.json')); \
 Add test cases in `tests/test_rules.py`. Each rule must have at least two tests:
 
 ```python
-def test_r001_curl_bash_detection():
+def test_r001_curl_bash():
     """Malicious fixture must fire."""
     ...
 
-def test_r001_curl_bash_benign():
+def test_r001_no_false_positive():
     """Benign fixture must NOT fire."""
     ...
 ```
@@ -222,8 +222,8 @@ def test_r001_curl_bash_benign():
 Run them with:
 
 ```bash
-pytest tests/test_rules.py::test_r001_curl_bash_detection -v
-pytest tests/test_rules.py::test_r001_curl_bash_benign -v
+pytest tests/test_rules.py::test_r001_curl_bash -v
+pytest tests/test_rules.py::test_r001_no_false_positive -v
 ```
 
 ## Common mistakes

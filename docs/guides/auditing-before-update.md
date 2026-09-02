@@ -60,7 +60,7 @@ Three verdict states are possible:
 |---------|-------|---------|
 | **UNFLAGGED** | ≤20 | No significant risk signals |
 | **FLAGGED** | >20 | One or more signals fired; investigate |
-| **INCONCLUSIVE** | 25-50, or any | Medium score with nothing strong behind it and a cold database, or an analysis with a coverage gap at any score |
+| **INCONCLUSIVE** | 21-50, or any | Medium score with nothing strong behind it and a cold database, or an analysis with a coverage gap at any score |
 
 See the [report schema](../reference/report-schema.md) for the full scoring breakdown.
 

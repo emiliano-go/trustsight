@@ -21,7 +21,7 @@ makepkg -si
 The PKGBUILD runs the packaged test suite during build, excluding
 `tests/test_fetcher.py` and `tests/test_rebaseline.py` because they require
 network and corpus fixtures unavailable in a clean package build. `makepkg -si`
-pulls in the dependencies (`pygit2`, `tldextract`, `rich`, `typer`) as proper
+pulls in the dependencies (`pygit2`, `tldextract`, `rich`, `typer`, `cryptography`) as proper
 system packages. The result is tracked by `pacman`, so it upgrades and
 uninstalls like anything else on the system.
 

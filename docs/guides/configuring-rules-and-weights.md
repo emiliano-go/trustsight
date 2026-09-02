@@ -42,19 +42,19 @@ enabled = false
 
 ```toml
 [severity_weights]
-INFO = 2
-LOW = 5
-MEDIUM = 10
-HIGH = 20
+FATAL = 0
 CRITICAL = 40
-FATAL = 100
+HIGH = 25
+MEDIUM = 15
+LOW = 5
+INFO = 0
 
 [source_bucket_weights]
-known = 0
-trusted = 3
-untrusted = 8
-unknown = 15
-malicious = 40
+trusted_forge = 0
+official = 0
+raw_hosting = 15
+unknown = 20
+homograph_attack = 30
 ```
 
 There is no block for verification or pinning. Declared checksums, PGP keys,
@@ -65,7 +65,7 @@ able to move a score. See
 
 ## Re-baselining after changes
 
-**Any change to weights or rules invalidates the current baseline.** Scores will shift; packages that were UNFLAGGED may become FLAGGED and vice versa.
+**Any change to weights or rules invalidates the current baseline.** Scores will shift; packages that were Low may become High and vice versa.
 
 After editing `rules.toml` or `config.toml`:
 

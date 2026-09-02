@@ -90,9 +90,11 @@ The score maps to a verdict class:
 
 | Score range | Verdict | Meaning |
 |-------------|---------|---------|
-| 0 to 20 | UNFLAGGED | No actionable signals detected, and the analysis was complete |
-| 21+ | FLAGGED | Signals warrant review before updating |
-| Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change |
+| 0 to 20 | Low | No actionable signals detected, and the analysis was complete |
+| 21 to 50 | Medium | Signals warrant review before updating |
+| 51 to 80 | High | Strong signals warrant review |
+| 81 to 100 | Critical | Almost certainly malicious if triggered |
+| Any | Inconclusive | A cold database, or an analysis that could not examine the whole change |
 
 INCONCLUSIVE is triggered by exactly two things: a coverage gap (the diff was truncated, a line was longer than the matching limit, or a `source=` entry is computed at build time), or a cold database (a Medium-band score held up entirely by novelty, with fewer than 25 recorded analyses). A HIGH, CRITICAL, or FATAL finding is never downgraded this way.
 
@@ -130,7 +132,7 @@ TrustSight's entire detection surface is configurable through files in `~/.confi
 
 ### rules.toml
 
-The primary tuning surface. Contains 32 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, weight, or disable any of them.
+The primary tuning surface. Contains 36 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, weight, or disable any of them.
 
 ```toml
 [[rules]]

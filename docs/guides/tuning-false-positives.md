@@ -45,15 +45,15 @@ Rules H004, R010, and R011 were scoped to `function_body` context in a previous 
 
 ```toml
 ## config.toml
-[rules.H001]
-weight_override = 5  # was HIGH/25; still fires, but contributes less score
+[rules.R010]
+weight_override = 5  # was LOW/5; still fires, but you can raise or lower it
 ```
 
 **Disable the rule:**
 
 ```toml
 ## config.toml
-[rules.R007]
+[rules.R010]
 enabled = false
 ```
 

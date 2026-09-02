@@ -15,7 +15,7 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 3. **It scales.** Analysing 50 packages in a review takes seconds, not minutes. No chroot, no root, no sandbox setup.
 4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe.
 
-The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](what-trustsight-cannot-see.md) (W001-W006) flag cases where code runs and the analysis could not read it, marking the result as having a coverage gap rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
+The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W006) flag cases where code runs and the analysis could not read it, marking the result as having a coverage gap rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
 
 ## What SAST means here
 

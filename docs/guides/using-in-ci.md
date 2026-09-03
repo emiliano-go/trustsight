@@ -54,7 +54,7 @@ flagged = [r for r in reports if (r.get("score") or 0) > 20]
 partial = [r for r in reports if r.get("coverage_gaps")]
 
 for r in flagged:
-    print(f"FLAGGED {r['package']}: {r['verdict']}")
+    print(f"HIGH/CRITICAL {r['package']}: {r['verdict']}")
 for r in partial:
     print(f"NOT FULLY VETTED {r['package']}: {', '.join(r['coverage_gaps'])}")
 
@@ -121,7 +121,7 @@ To set up your own gate:
 
 1. **Run a baseline** against your package set after initial configuration. See the [re-baselining guide](../contributing/re-baselining.md).
 2. **Choose a threshold**: typically 30-40, depending on your tolerance for benign novelty signals.
-3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from UNFLAGGED to FLAGGED without a corresponding PKGBUILD change is a regression.
+3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from Low to Medium or higher without a corresponding PKGBUILD change is a regression.
 
 The CRITICAL recall of **100%** means every labelled malice sample in the corpus fires the rules it is labelled for. A gate at 40 catches all known CRITICAL patterns and passes benign bumps that score below the 95th percentile.
 

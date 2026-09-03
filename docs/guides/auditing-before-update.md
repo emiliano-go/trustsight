@@ -14,8 +14,6 @@ Most packages score **0**. A clean version bump, checksums updated, no structura
 
 Some packages may score **5-15** from novelty. This includes a source URL first observed globally. The [maturity gate](../explanation/cold-start-and-maturity.md) uses the database-wide effective observation count and scales this contribution up to full weight over 50 observations.
 
-A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **UNFLAGGED** on every row; that is normal. Proceed with your update.
-
 ## What anomalies look like
 
 | Score range | What it means |
@@ -31,7 +29,7 @@ A table of 20 packages where 18 score 0, 2 score 8-12, and the verdict reads **U
 
 Run `trustsight inspect <package>` whenever:
 
-- The **score exceeds 20** (the verdict is FLAGGED).
+- The **score exceeds 20** (the verdict is Medium, High, or Critical).
 - The **verdict is INCONCLUSIVE**: even if the numeric score looks moderate.
 - A FATAL rule (R012/R013) fires: score becomes 100 regardless of other signals.
 
@@ -58,9 +56,9 @@ Three verdict states are possible:
 
 | Verdict | Score | Meaning |
 |---------|-------|---------|
-| **UNFLAGGED** | ≤20 | No significant risk signals |
-| **FLAGGED** | >20 | One or more signals fired; investigate |
-| **INCONCLUSIVE** | 21-50, or any | Medium score with nothing strong behind it and a cold database, or an analysis with a coverage gap at any score |
+| **Low** | ≤20 | No significant risk signals |
+| **Medium / High / Critical** | >20 | One or more signals fired; investigate |
+| **Inconclusive** | 21-50, or any | Medium score with nothing strong behind it and a cold database, or an analysis with a coverage gap at any score |
 
 See the [report schema](../reference/report-schema.md) for the full scoring breakdown.
 
@@ -70,4 +68,4 @@ See the [report schema](../reference/report-schema.md) for the full scoring brea
 - **2**: analysis could not run or complete, such as a network failure or malformed config.
 - **130**: interrupted with `Ctrl+C`.
 
-A FLAGGED or INCONCLUSIVE result still exits `0`: the exit code answers whether the tool ran, not whether a package is safe. When scripting, run `trustsight review --score --json` and gate on scores plus `coverage_gaps`; do not gate on the TrustSight exit code. See [exit codes](../reference/exit-codes.md) and [using TrustSight in CI](using-in-ci.md).
+A flagged or inconclusive result still exits `0`: the exit code answers whether the tool ran, not whether a package is safe. When scripting, run `trustsight review --score --json` and gate on scores plus `coverage_gaps`; do not gate on the TrustSight exit code. See [exit codes](../reference/exit-codes.md) and [using TrustSight in CI](using-in-ci.md).

@@ -71,8 +71,8 @@ Here the verdict is telling you something sharper: the part it did read looked o
 
 | Finding | Action |
 |---------|--------|
-| Clean diff, known domain, no rule fires | UNFLAGGED : update normally |
-| Medium score from novelty only, warm DB (>50 obs) | Note it : likely benign |
+| Clean diff, known domain, no rule fires | Review the diff manually; the tool presents data, not a verdict on safety |
+| Medium score from novelty only, warm DB (>50 obs) | Likely benign, but review the diff to confirm |
 | High score, multiple rule fires, or cold DB + any novelty | **Skip** this package. Inspect deeper or wait for the next release. |
 | FATAL rule | **Do not install.** |
 | INCONCLUSIVE | Manual inspection required. |

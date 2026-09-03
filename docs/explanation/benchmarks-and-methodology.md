@@ -92,11 +92,11 @@ The pinned corpus prevents a common failure mode in security tooling: benchmarks
 
 ## Per-stratum evaluation
 
-The test set is divided into 8 strata. Each stratum has a per-stratum 70% recall target:
+The test set is divided into 9 strata. Each stratum has a per-stratum 70% recall target:
 
 | Strata result | Count |
 |---------------|-------|
-| Strata clear | 6/8 |
+| Strata clear | 7/9 |
 | Target | 70% per stratum |
 
 The per-stratum requirement prevents the benchmark from optimizing for easy classes while ignoring hard ones. A benchmark that measures only aggregate recall can achieve high numbers by detecting all easy samples while missing every sample in a difficult stratum. Per-stratum evaluation catches this: a stratum that cannot reach 70% recall indicates a blind spot in that class of attack.

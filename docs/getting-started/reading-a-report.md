@@ -23,7 +23,7 @@ The scoring is **deterministic**: same diff, same config, same database state â†
 
 No significant risk signals. Routine version bumps with checksum updates, trusted forge sources, and unchanged build logic land here.
 
-An Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
+A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
 **68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
 
@@ -50,7 +50,7 @@ One or more risk signals fired. The severity category tells you the strongest si
 
 The score is in the Low or Medium range (0-50), no HIGH, CRITICAL, or FATAL finding fired, and either maturity is below 0.5 (fewer than 25 effective observations) or a coverage gap prevented full analysis. Any coverage gap can also produce Inconclusive unless a HIGH-or-worse finding stands on its own.
 
-INCONCLUSIVE is **not** UNFLAGGED. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
+Inconclusive is **not** Low. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
 The maturity gate scales novelty weights by the database-wide effective observation count divided by 50. At zero observations, novelty contributes zero weight. At 49, it contributes ~98 %. After 50, all novelty signals are at full weight. A signed seed can supply the bootstrap count, and analyses of any packages increase the same global history. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
 
@@ -245,7 +245,7 @@ Output:
 ```
 
 **Interpretation**: The total is 25 + 20 + 8 = **53**, and the panel shows the
-arithmetic under the score rather than asking you to trust it. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares checksums and PGP keys, reported as `P001` and `P002` at weight 0: they do not reduce the 53, because anyone can write those lines. Two `W` findings are shown because the analysis could not read everything the build will run: a script invoked from inside the source tree (`W001`) and `npm install` resolving dependencies from a registry (`W002`). They do not change the score; they mark boundaries you may want to look past. The verdict is FLAGGED at High severity. This package warrants manual inspection before update.
+arithmetic under the score rather than asking you to trust it. The checksum was disabled (Tier A, strong signal) without justification. The new source URL uses an unknown host (Tier B, moderate) and the exact URL has not been observed before (Tier C, weighted at 80 %). The recipe also declares checksums and PGP keys, reported as `P001` and `P002` at weight 0: they do not reduce the 53, because anyone can write those lines. Two `W` findings are shown because the analysis could not read everything the build will run: a script invoked from inside the source tree (`W001`) and `npm install` resolving dependencies from a registry (`W002`). They do not change the score; they mark boundaries you may want to look past. The verdict is High. This package warrants manual inspection before update.
 
 The weights and severities above appear because this run passed `--score` and
 `--risk`. Without them the same panel shows the findings and the verdict and no

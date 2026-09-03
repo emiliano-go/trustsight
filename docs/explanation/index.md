@@ -108,7 +108,7 @@ is mandatory, structurally uncheckable, or covered by declared PGP keys.
 |--------|-------------|-------------------|
 | `url_first_globally` | 10 | x min(1, observations/50) |
 | `url_first_in_package` | 5 | x min(1, observations/50) |
-| `maintainer_first` | 15 | x min(1, observations/50) |
+| `maintainer_first_in_package` | 15 | x min(1, observations/50) |
 
 The maturity gate exists because novelty is meaningless in a cold database. On
 first run, every URL is first-seen, every maintainer is first-seen. Full-weight

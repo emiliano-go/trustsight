@@ -80,7 +80,7 @@ Each severity level carries a weight reflecting its information value:
 
 FATAL rules (R012, R013) short-circuit scoring. When a FATAL rule fires, the score is immediately set to 100 regardless of any other signal. A CRITICAL finding floors the risk band at High: a lone fork bomb or `rm -rf /` would otherwise read as Medium on arithmetic that says nothing about severity.
 
-Source bucket modifiers adjust for domain trustworthiness: `unknown` adds 20, `homograph_attack` adds 30, `trusted_forge` and `official` add 0. Novelty weights add to the score when maturity allows: `url_first_globally` adds 10, `url_first_in_package` adds 5, `maintainer_first` adds 15, each scaled by `min(1, observations/50)`.
+Source bucket modifiers adjust for domain trustworthiness: `unknown` adds 20, `homograph_attack` adds 30, `trusted_forge` and `official` add 0. Novelty weights add to the score when maturity allows: `url_first_globally` adds 10, `url_first_in_package` adds 5, `maintainer_first_in_package` adds 15, each scaled by `min(1, observations/50)`.
 
 The final score is clamped to 0 to 100. A package with checksums, a trusted forge source, and no rule firings scores 0.
 

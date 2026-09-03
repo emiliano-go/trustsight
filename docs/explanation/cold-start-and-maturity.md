@@ -55,7 +55,7 @@ Below 50 observations, the novelty weight is linearly scaled. At 0 observations,
 |----------------|---------------------------|-----------------|
 | `url_first_globally` | 10 | A URL never seen in any package is genuinely unusual. This is the strongest novelty signal. |
 | `url_first_in_package` | 5 | A URL new to this specific package but seen elsewhere. Weaker because it may just reflect a new package in your set. |
-| `maintainer_first` | 15 | A maintainer never recorded for this package is a significant flag. Maintainer changes are a known attack vector (xz utils). The highest novelty weight reflects this. |
+| `maintainer_first_in_package` | 15 | A maintainer never recorded for this package is a significant flag. Maintainer changes are a known attack vector (xz utils). The highest novelty weight reflects this. |
 
 The maintainer-first weight is highest because a maintainer change without a corresponding announcement or discussion is a social-engineering red flag. Unlike URLs, which change routinely with version bumps, maintainer changes are rare and structurally significant.
 

@@ -99,9 +99,9 @@ evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
 
 **A package scoring 35+**: Worth inspecting with `trustsight inspect <name>`. The detailed breakdown shows exactly which rules fired and why.
 
-**No alerts is not a certificate**: An UNFLAGGED result means no published rule matched the evidence that was examined - nothing more. TrustSight is an instrument, not a judge; the update decision stays with you. The [security model](../security.md) is the exact statement of that boundary.
+**No alerts is not a certificate**: A Low result means no published rule matched the evidence that was examined - nothing more. TrustSight is an instrument, not a judge; the update decision stays with you. The [security model](../security.md) is the exact statement of that boundary.
 
-**INCONCLUSIVE is not UNFLAGGED**: When verdict reads "INCONCLUSIVE", the tool could not gather enough data to give a confident answer. Treat it as "look manually." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
+**Inconclusive is not Low**: When verdict reads "Inconclusive", the tool could not gather enough data to give a confident answer. Treat it as "look manually." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
 
 ---
 

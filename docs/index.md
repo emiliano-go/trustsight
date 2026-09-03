@@ -41,7 +41,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 !!! tip "Rules Reference"
 
-    TrustSight ships 179 documented scoring rules across five families: 36 R-series detection rules, 97 H-series heuristics, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 25 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
+    TrustSight ships 179 documented scoring rules across six families: 36 R-series detection rules, 97 H-series heuristics, nine C-series structural rules, four D-series dependency rules, eight S-series sabotage rules, and 25 X-series crossfire rules. The identifier space is intentionally non-contiguous, so a range is not a count; the [catalog](reference/rules/index.md) is authoritative. Two further families report without scoring: declared-practice findings P001-P008 (seven findings; P004 is skipped) and unverifiable findings W001-W006 are weight zero and never move a number. Each rule has a severity, weight, match target, and scope that determine how it fires and what it contributes to the score.
 
     [Browse the full rule catalog &rarr;](reference/rules/index.md)
 

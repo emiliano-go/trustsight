@@ -96,7 +96,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "confidence": "string",
       "provenance": "string",
       "campaign": "string",
-      "added": bool,
+      "added": "string",
       "surface": "string",
       "line": "int or null",
       "expired": bool

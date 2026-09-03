@@ -31,7 +31,7 @@ The help output also documents `trustsight config show`, `trustsight config set 
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print one panel per package with a summary line.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps] [--sort score|risk|name]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps] [--sort score|risk|name] [--refresh]
 ```
 
 ### Flags
@@ -585,8 +585,8 @@ containing analysis profiles for every AUR package, priors for novelty
 detection, and a metadata snapshot for delta computation.
 
 ```
-trustsight baseline build [--resume] [--export FILE]
-trustsight baseline import FILE
+trustsight baseline build [--resume] [--bootstrap] [--export FILE] [--sign PATH] [--json]
+trustsight baseline import FILE [--allow-unsigned] [--json]
 ```
 
 ### Subcommands
@@ -619,8 +619,8 @@ trustsight baseline import FILE
 Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs via codeload (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
 
 ```
-trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH]
-trustsight full-aur --watch [--interval SECONDS] [--cycles N]
+trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
+trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
 ```
 
 ### Flags

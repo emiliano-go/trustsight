@@ -84,6 +84,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | Page | What it covers |
 |------|----------------|
 | [Rules](reference/rules/index.md) | Complete R/H/C/D/S/X catalog with severity, weight, and description. |
+| [Rule Nature](reference/rules/nature.md) | How each series detects: Regex, Heuristic, Check, Dependency, Sabotage, Crossfire, Practice, and Warning. |
 | [CLI](reference/cli.md) | Full command reference for review, inspect, history, config. |
 | [Configuration](reference/configuration.md) | config.toml and its sibling rule, host, pattern, naming, threshold, and domain files. |
 | [Report Schema](reference/report-schema.md) | Stored PackageFact and CLI/API report JSON shapes. |

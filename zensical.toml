@@ -100,6 +100,7 @@ Guides = [
 [[project.nav]]
 Rules = [
   {"Rules Overview" = "reference/rules/index.md"},
+  {"Rule Nature" = "reference/rules/nature.md"},
   {"Rule System" = "reference/rules/system.md"},
   {"Fetch and Execution" = "reference/rules/fetch-and-execution.md"},
   {Obfuscation = "reference/rules/obfuscation.md"},

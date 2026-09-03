@@ -9361,6 +9361,8 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
+Rule definitions in `rules.toml` control matching behavior (pattern, target, scope). `config.toml` controls runtime overrides (severity, weight, enablement). When both set the same field, `config.toml` wins.
+
 **What you cannot tune:**
 - The rule ID (immutable)
 - The series assignment (R means regex, always)
@@ -9369,100 +9371,101 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 
 **When it fires:** On every diff line (or resolved line) that matches the pattern. No diff context needed; no history needed.
 
-## H-series: Heuristic Analysis
+## H-series: **Heuristic** Behavioral Analysis
 
 **Count:** 97 rules (H001-H097)
 
-**Mechanism:** Python code in `analysis/*.py` examines the diff, the repository file tree, the dependency graph, or the local observation database. H-series rules need context a single regex cannot see: what changed relative to, what the corpus has seen before, or what files exist outside the diff hunk.
+**Mechanism:** Engine-defined logic in `analysis/*.py` examines behavioral signals: what changed relative to, what the corpus has seen before, what files exist outside the diff hunk, or what the observation database records. H-series rules need context a single regex cannot see, but unlike C-series and D-series, they reason about *behavioral suspicion* rather than structural invariants or graph properties.
 
 **What you can tune:**
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
-- The detection logic (it is compiled code, not a pattern)
+- The detection logic (engine-defined, not a pattern)
 - The rule ID
 - The match target (always `programmatic`)
 
 **Example:** H015 fires when `build()` was modified between commits. It needs the old and new commit trees, not just the diff. H022 fires when a package gap exceeds 365 days. It needs the observation database.
 
-**When it fires:** When the code-level condition is met. The finding carries a line number and body extracted from the diff, but the decision required multi-line or cross-commit context.
+**When it fires:** When the behavioral condition is met. The finding carries a line number and body extracted from the diff, but the decision required multi-line or cross-commit context.
 
-## C-series: Structural Checks
+## C-series: **Check** Structural Invariants
 
 **Count:** 9 rules (C001-C009)
 
-**Mechanism:** Multi-condition checks across the PKGBUILD structure. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent.
+**Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
 **What you can tune:**
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
-- The structural invariant (it is compiled code)
+- The structural invariant (engine-defined logic)
 - The rule ID
 
 **Example:** C003 fires when source URLs changed without a version bump. It needs both the URL diff and the version diff to exist (or not exist) in the same change.
 
 **When it fires:** When two or more structural conditions co-occur in a way that violates an invariant.
 
-## D-series: Dependency Graph Analysis
+## D-series: **Dependency** Graph Analysis
 
 **Count:** 4 rules (D001-D004)
 
-**Mechanism:** Examines the AUR dependency graph to detect naming anomalies, typosquatting, or suspicious dependency additions. D-series rules walk the dependency tree and compare package names against known-good lists or edit-distance thresholds.
+**Mechanism:** Graph algorithms walk the AUR dependency tree to detect naming anomalies, typosquatting, or suspicious dependency additions. D-series rules compare package names against known-good lists or edit-distance thresholds, and flag new network-using makedepends. Unlike H-series (which examines behavioral context) and C-series (which checks structural invariants), D-series operates specifically on the dependency graph topology.
 
 **What you can tune:**
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
-- The graph-walking logic
+- The graph-walking logic (engine-defined)
 - The rule ID
 
 **Example:** D002 fires when a dependency name is an edit-distance neighbor of a popular package (typosquatting). D003 fires when a new `makedepends` entry uses a network client.
 
 **When it fires:** During the dependency closure walk, when a naming or composition anomaly is detected.
 
-## S-series: Sabotage Detection
+## S-series: **Sabotage** Hostile Impact Detection
 
 **Count:** 8 rules (S001-S008)
 
-**Mechanism:** Detects payloads aimed at the operator's machine rather than at exfiltrating data. S-series rules look for resource exhaustion (fork bombs, disk fill), file deletion, permission sabotage, service disruption, and resource theft.
+**Mechanism:** Detects payloads intended to harm, abuse, compromise, or exploit the operator environment. These rules are distinguished from general payload detection because they specifically identify actions intended to negatively impact the host: resource exhaustion (fork bombs, disk fill), file deletion, privilege abuse, service disruption, data exfiltration, and resource theft.
 
 **What you can tune:**
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
-- The detection logic
+- The detection logic (engine-defined)
 - The rule ID
 
-**Example:** S001 fires on fork bombs (`:(){ :|:& };:`). S004 fires on outbound data exfiltration patterns.
+**Example:** S001 fires on fork bombs (`:(){ :|:& };:`). S004 fires on outbound data exfiltration patterns (the payload exfiltrates data from the operator's machine).
 
 **When it fires:** When a sabotage pattern is found in the diff or the committed file tree.
 
-## X-series: Crossfire (Evasion Detection)
+## X-series: **Crossfire** Evasion Detection
 
 **Count:** 25 rules (X001-X025)
 
 **Mechanism:** Detects evasion techniques, not the payloads they hide. X-series rules fire on *how* a thing was written rather than *what* it does. The tokenizer could not resolve the command, so the evasion technique itself is the signal.
 
+"The key distinction"
+    A **payload rule** (R001, H075) fires on what the command *does*. A **crossfire rule** (X017) fires on how the command was *hidden*. Both can fire on the same line; they score independently. This is why a single diff can legitimately produce findings from both families.
+
 **What you can tune:**
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
-- The detection logic (it is compiled code)
+- The detection logic (engine-defined)
 - The rule ID
 
 **Example:** X007 fires when the tokenizer found multiple evasion techniques in one diff. X017 fires when `enable -f` loads an arbitrary ELF into bash as a builtin. X024 fires when a sensitive variable (DLAGENTS, COMPRESS*, PACMAN_AUTH) is assigned an indirect value.
 
 **When it fires:** When the tokenizer reports that it could not resolve a command, and the evasion technique is identifiable.
 
-**Key distinction:** A payload rule (R001, H075) fires on what the command *does*. A crossfire rule (X017) fires on how the command was *hidden*. Both can fire on the same line; they score independently.
-
-## P-series: Declared Practice
+## P-series: **Practice** Declared Practices
 
 **Count:** 7 rules (P001-P003, P005-P008; P004 is skipped)
 
@@ -9480,11 +9483,11 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 
 **When it fires:** On every analysis, for every package that declares the practice. P findings are present or absent, not triggered by a diff.
 
-## W-series: **Warning** (Unverifiable)
+## W-series: **Warning** Analysis Boundaries
 
 **Count:** 6 rules (W001-W006)
 
-**Mechanism:** Reports what the analysis *could not read*. W-series findings are emitted at weight 0 and always shown. They **warn** the reviewer that a package will run code the analysis did not examine, and silence about that would be dishonest.
+**Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
 **What you can tune:**
 - `enabled`: switch off entirely (not recommended)
@@ -9503,13 +9506,13 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 | Series | Full Name | Mechanism | Configurable | Weight | When it fires |
 |--------|-----------|-----------|-------------|--------|---------------|
 | R | **Regex** | Pattern match | Pattern, target, scope, severity | Severity-based | On every matching line |
-| H | **Heuristic** | Code-level analysis | Severity only | Severity-based | When code condition is met |
-| C | **Check** (Structural) | Multi-condition | Severity only | Severity-based | When invariant is violated |
-| D | **Dependency** | Graph walk | Severity only | Severity-based | During closure walk |
-| S | **Sabotage** | Pattern match | Severity only | Severity-based | When sabotage pattern found |
-| X | **Crossfire** (Evasion) | Technique detection | Severity only | Severity-based | When tokenizer reports evasion |
-| P | **Practice** (Declared) | Report | Visibility only | 0 (always) | On every analysis |
-| W | **Warning** (Unverifiable) | Boundary report | Visibility only | 0 (always) | When boundary encountered |
+| H | **Heuristic** | Behavioral analysis | Severity only | Severity-based | When behavioral condition is met |
+| C | **Check** | Structural invariant | Severity only | Severity-based | When invariant is violated |
+| D | **Dependency** | Graph algorithm | Severity only | Severity-based | During closure walk |
+| S | **Sabotage** | Hostile impact detection | Severity only | Severity-based | When sabotage pattern found |
+| X | **Crossfire** | Evasion detection | Severity only | Severity-based | When tokenizer reports evasion |
+| P | **Practice** | Declared practice | Visibility only | 0 (always) | On every analysis |
+| W | **Warning** | Analysis boundary | Visibility only | 0 (always) | When boundary encountered |
 
 ## See Also
 

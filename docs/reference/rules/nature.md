@@ -171,6 +171,6 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 
 ## See Also
 
-- [Rules Reference](index.md) — complete catalog by category
-- [Rule System Reference](system.md) — engine internals, severity weights, field definitions
-- [Configuring Rules and Weights](../../guides/configuring-rules-and-weights.md) — how to tune R-series rules
+- [Rules Reference](index.md); complete catalog by category
+- [Rule System Reference](system.md); engine internals, severity weights, field definitions
+- [Configuring Rules and Weights](../../guides/configuring-rules-and-weights.md); how to tune R-series rules

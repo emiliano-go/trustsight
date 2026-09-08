@@ -13,7 +13,7 @@ A **score** is a measurement of how many risk signals fired during analysis and 
 - A package scoring **0** has no detectable risk signals. That does not mean it is safe: only that nothing in the diff triggered a rule. Attackers can use subtle techniques that leave no trace in PKGBUILD structure. See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
 - A package scoring **100** has one or more FATAL signals (R012 prompt injection, R013 unicode bidi override, or a confirmed IOC match) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
 
-The scoring is **deterministic**: same diff, same config, same database state → same score, every time.
+The scoring is **deterministic**: same diff, same instrument, same database state → same score, every time.
 
 ---
 

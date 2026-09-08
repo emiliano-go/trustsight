@@ -89,7 +89,7 @@ What the tool promises, in one paragraph, is that its output is honest about the
 - **Isolated**: it never fetches a URL the package named, never executes package code, never extracts a package-controlled archive to disk, and never renders untrusted text unescaped.
 - **Locked**: FATAL rules cannot be turned off, and suppression is always visible.
 - **Configuration is visible, not silently mutable**: the operator may tune the instrument, but not without a trace. The config fingerprint (B1) captures the effective ruleset, thresholds and overrides; FATAL rules cannot be removed without the shipped-rule fallback and a logged warning (B4); and suppressed findings are always reported (B5). A local attacker with filesystem access can edit `rules.toml` or `overrides.toml`, because local permissions are a trusted assumption, but they cannot make the change invisible: the run then carries a different fingerprint, and any suppressed or downgraded rule shows in the output. The model separates operator intent from silent tampering by observability, not by prevention.
-- **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 11.9% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
+- **Calibrated**: the gates enforce *separation*, that the benign 95th percentile stays below the malicious 5th percentile, not that one workload policy is universally correct. Fire rates against a published benign corpus are measured; the default 20-point profile and its 13.1% benign queue rate are disclosed separately (see B2). Other profiles are operator choices, not new calibration claims.
 
 Each of these stops being a promise the moment the machine breaks it. The gates in [Part C](#part-c-the-enforcement-map) are what turn them from sentences into structural commitments.
 
@@ -117,7 +117,7 @@ Every result reduces to one of four places in a taxonomy, and the taxonomy has t
 | What the tool has | Example | How it is presented |
 |-------------------|---------|---------------------|
 | **Known risk** | a rule matched (e.g. R013 confusable unicode) | FLAGGED, with the matching rule, file and line |
-| **Declared safe evidence** | checksums declared, PGP keys declared, commit pinned | INFO, reported, never scored (B10) |
+| **Declared verification practice** | checksums declared, PGP keys declared, commit pinned | INFO, reported, never scored (B10) |
 | **Evidence that is contextually uncertain** | a `source=` URL computed at build time; a file the manifest did not list | **INCONCLUSIVE** |
 | **None known** | history too short to trust novelty at full weight | **INCONCLUSIVE** until warm |
 
@@ -266,7 +266,7 @@ The bound matters more than the signature, because a signature says who built th
 
 `MAX_RULE_LINE_BYTES` and `rules.MAX_SCANNED_LINES` are the two halves of A5 and neither is sufficient alone: the first bounds how long a line may be, the second how many there are. Only the first existed for a long time, and rule matching costs roughly 0.46 ms per line, so a 5 MiB diff of four-byte lines was about 1.3 million lines and ten minutes of CPU for a single package - multiplied again by `depth.MAX_DEPTH_NODES` on a full-depth walk. The cap is 20,000, five times the largest diff in the locked benign corpus (3,839 lines, p99.9 of 2,117), so it truncates nothing real.
 
-**A14. An attacker cannot force unbounded resource use.** A4 bounds what arrives, A5 bounds what is matched, A6 bounds what is expanded. Together: no package-controlled input decides how much CPU, memory, network or disk this process consumes. Every bound is a constant in the source rather than a function of the input, and every bound that drops content records a coverage gap, so bounded never means silently truncated.
+**A14. An attacker cannot force unbounded resource use in TrustSight-controlled paths.** A4 bounds what arrives, A5 bounds what is matched, A6 bounds what is expanded. Together: no TrustSight-controlled input path decides how much CPU, memory, network or disk this process consumes. Every bound is a constant in the source rather than a function of the input, and every bound that drops content records a coverage gap, so bounded never means silently truncated. What these bounds do not cover is libgit2's own diff construction (`repo.diff()` builds the diff object before any of this runs, and its cost is a property of the repository rather than of TrustSight — see [A4b](#a4b-the-differ-and-companion-reads-are-bounded)).
 
 That last clause is what makes A14 more than a summary of the three. It ties the resource guarantee to [B2](#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete), so a bound can never be used as a quiet skip.
 
@@ -388,8 +388,8 @@ Twenty was originally the 95th percentile of the benign corpus. It is not any mo
 | benign median | 0 |
 | benign 95th percentile | 35 |
 | benign diffs scoring 0 | 68.4% |
-| benign diffs above 20 | 11.9% |
-| percentile that 20 now sits at | 88.1th |
+| benign diffs above 20 | 13.1% |
+| percentile that 20 now sits at | 86.9th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 40 |
 
@@ -397,7 +397,7 @@ So about one benign diff in eight lands above the threshold: in practice a revie
 
 The property the calibration gates actually enforce is the one that matters for separation: **benign p95 (35) stays below malicious p5 (60)**, a margin of 25. Twenty remains the published threshold because moving it is a calibration decision with its own evidence, not a bookkeeping fix to keep a sentence true.
 
-**The 11.9% benign flag rate is a security property, not just a workload characteristic.** One in eight benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because seven of eight flags were benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 35 < p5 60) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
+**The 13.1% benign flag rate is a security property, not just a workload characteristic.** About one in eight benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because seven of eight flags were benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 35 < p5 60) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
 
 Be precise about what is automated here. `scripts/calibration_gates.py` re-computes **benign p95 and malicious p5 on every push** and fails the build if they cross. The other figures in the table above are a point-in-time measurement, not a per-push one; they are published in [fire rates](explanation/fire-rates.md) and have to be re-derived with `scripts/rebaseline.py` when scoring changes. A number in this table is only as current as the last person who ran that script.
 

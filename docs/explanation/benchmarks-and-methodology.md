@@ -74,7 +74,7 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 |--------|-------|------------------|
 | Benign zero-rate | 68.4% | no minimum; fire-rate cap controls FPs |
 | Ruleset trigger rate | 31.6% | benign diffs that fire at least one non-INFO rule |
-| Benign flag rate | 11.9% | about **1 in 8** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign flag rate | 13.1% | about **1 in 8** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 35 | < CRITICAL p5 (margin: 25) |

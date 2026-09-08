@@ -13,6 +13,7 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 **Mechanism:** A Python regex is applied to either the resolved command text or the raw diff line. The pattern lives in `~/.config/trustsight/rules.toml` and is loaded at runtime by `load_rules()`.
 
 **What you can tune:**
+
 - The pattern itself (edit `rules.toml`)
 - `match_target`: `resolved` (post-variable-expansion) or `raw_line` (literal diff line)
 - `scope`: restrict to `function_body`, `message`, `other`, or a named function
@@ -22,6 +23,7 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 Rule definitions in `rules.toml` control matching behavior (pattern, target, scope). `config.toml` controls runtime overrides (severity, weight, enablement). When both set the same field, `config.toml` wins.
 
 **What you cannot tune:**
+
 - The rule ID (immutable)
 - The series assignment (R means regex, always)
 
@@ -36,10 +38,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Engine-defined logic in `analysis/*.py` examines behavioral signals: what changed relative to, what the corpus has seen before, what files exist outside the diff hunk, or what the observation database records. H-series rules need context a single regex cannot see, but unlike C-series and D-series, they reason about *behavioral suspicion* rather than structural invariants or graph properties.
 
 **What you can tune:**
+
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
+
 - The detection logic (engine-defined, not a pattern)
 - The rule ID
 - The match target (always `programmatic`)
@@ -55,10 +59,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
 **What you can tune:**
+
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
+
 - The structural invariant (engine-defined logic)
 - The rule ID
 
@@ -73,10 +79,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Graph algorithms walk the AUR dependency tree to detect naming anomalies, typosquatting, or suspicious dependency additions. D-series rules compare package names against known-good lists or edit-distance thresholds, and flag new network-using makedepends. Unlike H-series (which examines behavioral context) and C-series (which checks structural invariants), D-series operates specifically on the dependency graph topology.
 
 **What you can tune:**
+
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
+
 - The graph-walking logic (engine-defined)
 - The rule ID
 
@@ -91,10 +99,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Detects payloads intended to harm, abuse, compromise, or exploit the operator environment. These rules are distinguished from general payload detection because they specifically identify actions intended to negatively impact the host: resource exhaustion (fork bombs, disk fill), file deletion, privilege abuse, service disruption, data exfiltration, and resource theft.
 
 **What you can tune:**
+
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
+
 - The detection logic (engine-defined)
 - The rule ID
 
@@ -112,10 +122,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
     A **payload rule** (R001, H075) fires on what the command *does*. A **crossfire rule** (X017) fires on how the command was *hidden*. Both can fire on the same line; they score independently. This is why a single diff can legitimately produce findings from both families.
 
 **What you can tune:**
+
 - `severity` and `weight`: adjust via `config.toml` overrides
 - `enabled`: switch the rule off entirely
 
 **What you cannot tune:**
+
 - The detection logic (engine-defined)
 - The rule ID
 
@@ -130,10 +142,12 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Reports practices the recipe *declares*, not risks that were found. P-series findings are emitted at weight 0 and never contribute to the score. They exist so a reviewer can see what the recipe claims (checksums, PGP keys, pinned sources) without those claims being able to lower the score.
 
 **What you can tune:**
+
 - Which P findings render (default vs `--verbose`)
 - `enabled`: switch off entirely
 
 **What you cannot tune:**
+
 - The weight (always 0, by design: B10)
 - The rule ID
 
@@ -148,9 +162,11 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Mechanism:** Reports what the analysis *could not read*. W-series findings mark visibility boundaries in the analysis: a package will run code the examination did not cover, and silence about that would be dishonest. They **warn** the reviewer where the analysis stopped.
 
 **What you can tune:**
+
 - `enabled`: switch off entirely (not recommended)
 
 **What you cannot tune:**
+
 - The weight (always 0)
 - The rule ID
 - The fact that the gap exists (it is a property of the input, not the rule)

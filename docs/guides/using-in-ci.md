@@ -135,6 +135,7 @@ The CRITICAL recall of **100%** means every labelled malice sample in the corpus
 Check in your `config.toml`, `rules.toml`, and the TrustSight database alongside your code. The `trustsight review` command respects the local config tree automatically.
 
 See also:
+
 - [Configuring rules and weights](configuring-rules-and-weights.md)
 - [Exit codes reference](../reference/exit-codes.md)
 - [The security model](../security.md), for what a verdict does and does not claim

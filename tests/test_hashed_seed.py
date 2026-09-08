@@ -357,7 +357,7 @@ def test_provenance_file_ships_inside_the_seed_dir(tmp_path):
 
 def test_provenance_missing_input_is_an_error(tmp_path):
     """A dangling --provenance must fail loudly, not ship an empty record."""
-    with pytest.raises(SystemExit):
+    with pytest.raises(FileNotFoundError):
         build_seed(
             [{"name": "Alice Example", "source": "aur"}],
             tmp_path / "out",

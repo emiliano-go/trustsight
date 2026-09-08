@@ -10,7 +10,6 @@ import sqlite3
 import subprocess
 import tarfile
 import tempfile
-import threading
 import warnings
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -1550,9 +1549,10 @@ def maybe_auto_import_seed(
         return None
     if not quiet:
         total = stats['urls_total']
-        print(
-            f"Imported {total:,} known source URLs and {stats['maintainers']} maintainers "
-            f"for novelty detection."
+        log.info(
+            "Imported %s known source URLs and %s maintainers "
+            "for novelty detection.",
+            f"{total:,}", stats['maintainers'],
         )
     return stats
 
@@ -1578,9 +1578,10 @@ def _import_seed_from_release(quiet: bool = False) -> Optional[dict]:
         shutil.rmtree(tmp_dir, ignore_errors=True)
     if not quiet:
         total = stats['urls_total']
-        print(
-            f"Imported {total:,} known source URLs and {stats['maintainers']} maintainers "
-            f"for novelty detection (release baseline)."
+        log.info(
+            "Imported %s known source URLs and %s maintainers "
+            "for novelty detection (release baseline).",
+            f"{total:,}", stats['maintainers'],
         )
     return stats
 

@@ -162,7 +162,6 @@ def discover_packages(
             fetch_metadata,
             load_snapshot,
             save_metadata,
-            snapshot_age_seconds,
         )
         from .discovery import _vercmp
 

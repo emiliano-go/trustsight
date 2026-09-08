@@ -39,6 +39,7 @@ version is that legitimate PKGBUILDs do not do these things.
 
 from __future__ import annotations
 
+import logging
 import re
 
 from ..config import (
@@ -53,6 +54,8 @@ from ..coverage import note_stage_failure
 from ..deps import _strip_comment
 from ..tokenizer import split_lines
 from ..rules import clamp_text, join_line_continuations
+
+log = logging.getLogger(__name__)
 
 #: Functions makepkg runs, plus the scriptlets pacman runs as root. A
 #: technique only matters where something executes.
@@ -1845,6 +1848,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # Without the table every command word reads as unresolvable, which
         # is X002's whole trigger condition inverted: the family goes quiet
         # exactly when the recipe is hardest to parse.
+        log.debug("variable table resolution failed", exc_info=True)
         note_stage_failure("variable-resolution")
         resolvable = frozenset(_path_lookup_names(readable))
     carried = _continuation_lines(raw_lines, len(lines))

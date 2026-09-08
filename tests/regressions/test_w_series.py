@@ -106,6 +106,22 @@ def test_w001_stands_down_where_a_scoring_rule_can_speak():
     assert "W001" not in ids
 
 
+@pytest.mark.parametrize("line,src", [
+    ('  node "$srcdir/payload.js"', "https://e.example/payload.js"),
+    ('  php "$srcdir/payload.php"', "https://e.example/payload.php"),
+    ('  lua "$srcdir/payload.lua"', "https://e.example/payload.lua"),
+    ('  tclsh "$srcdir/payload.tcl"', "https://e.example/payload.tcl"),
+    ('  julia "$srcdir/payload.jl"', "https://e.example/payload.jl"),
+    ('  Rscript "$srcdir/payload.R"', "https://e.example/payload.R"),
+    ('  bun "$srcdir/payload.js"', "https://e.example/payload.js"),
+    ('  deno "$srcdir/payload.ts"', "https://e.example/payload.ts"),
+])
+def test_h083_interpreter_runs_declared_source(line, src):
+    """Every script executor that names a declared source file must be
+    claimed by H083 so that W001 (the only gap) does not misfire."""
+    assert "H083" in _shipped_ids([line], declared=True, source=src), line
+
+
 @pytest.mark.parametrize("line", [
     "  npm install --production",
     "  pip install -r requirements.txt",

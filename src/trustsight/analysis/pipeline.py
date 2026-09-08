@@ -56,7 +56,6 @@ from .adoption import adoption_findings
 from .buildfetch import has_unpinned_build_deps
 from ..coverage import (
     begin_stage_tracking,
-    fail_closed,
     gaps_from,
     note_stage_failure,
     stage_failures,
@@ -64,7 +63,7 @@ from ..coverage import (
     parse_time_substitution_lines,
     unresolved_source_lines,
 )
-from ..scoring import calculate_score, risk_level
+from ..scoring import calculate_score
 from ..schema import (
     with_changes,
     DiffSummary,

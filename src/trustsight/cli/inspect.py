@@ -546,10 +546,7 @@ def _inspect_history(
     json_output: bool,
 ):
     """Walk history and analyse the N most recent content-bearing diffs."""
-    import time
 
-    from ..differ import MAX_DIFF_BYTES, generate_diff_bounded
-    from ..coverage import HISTORY_TRUNCATED
     from ..fetcher import (
         MAX_HISTORY_COMMITS,
         MAX_RUN_DIFF_BYTES,

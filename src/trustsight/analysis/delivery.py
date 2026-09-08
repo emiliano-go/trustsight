@@ -1201,7 +1201,9 @@ _SOURCE_EXEC_RE = re.compile(
     # `(?![<>])`: a redirect is not a filename argument. Without it this
     # arm captured the `<` of `sh < file` and the redirect arm below never
     # got a turn - the same trap `_EXECUTION_RE` documents.
-    r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)\s+(?![<>])(\S+)"
+    r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|php|lua(?:jit)?"
+    r"|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh"
+    r"|julia|Rscript|bun|deno)\s+(?![<>])(\S+)"
     r"|source\s+(\S+)"
     r"|\.\s+(\S+)"
     r")"
@@ -1209,7 +1211,9 @@ _SOURCE_EXEC_RE = re.compile(
     # `sh < file` - the interpreter reads the script from its stdin.
     # `(?!\(|<)` keeps process substitution and here-strings out: those are
     # different constructs that H075 owns.
-    r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby)"
+    r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby"
+    r"|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish"
+    r"|xonsh|nu|osh|julia|Rscript|bun|deno)"
     r"\s*<\s*(?!\(|<)(\S+)"
     # A bare `"$srcdir/x"` in command position: the file is the command.
     r"|(?:\A\s*+|[;&|]\s*+)[\"']?(\$\{?(?:srcdir|startdir)\}?/[^\"'\s;&|]+)"
@@ -2012,12 +2016,13 @@ _W001_RE = re.compile(
     # The whole command may be one quoted argument: `xterm -e "bash
     # $PWD/x.sh"` puts the executor inside the quotes, not the path.
     r"[\"']?(?:/(?:usr/)?bin/)?"
-    r"(?:bash|sh|zsh|dash|ksh|python[23]?|perl|ruby|node|php|lua)\s+"
+    r"(?:bash|sh|zsh|dash|ksh|python[23]?|perl|ruby|node|php|lua(?:jit)?"
+    r"|tclsh|wish|julia|Rscript|bun|deno)\s+"
         # `$PWD` is the build directory under another name, and a recipe that
     # runs `$PWD/x.sh` is running tree content exactly as `$srcdir/x.sh`
     # does.
     r"[\"']?((?:\$\{?(?:srcdir|startdir|PWD|BUILDDIR)\}?/|\./|[\w.-]+/)[\w./-]+"
-    r"|[\w.-]+\.(?:sh|bash|py|pl|rb|js|lua|php))"
+    r"|[\w.-]+\.(?:sh|bash|py|pl|rb|js|lua|php|tcl|jl|R|ts))"
     r"|\./([\w.-]+(?:/[\w.-]+)*)"
     # A sandbox wrapper establishes a new root, so an *absolute* path after
     # it is a path inside that root - which is tree content, not a system
@@ -2025,7 +2030,7 @@ _W001_RE = re.compile(
     # unpacked tree and names it `/x.sh`; without this arm the leading
     # slash made it look like `/usr/bin/foo.sh`, which is not this rule's
     # subject at all.
-    r"|(?<=\s)(/[\w.-]+(?:/[\w.-]+)*\.(?:sh|bash|py|pl|rb|js|lua|php))"
+    r"|(?<=\s)(/[\w.-]+(?:/[\w.-]+)*\.(?:sh|bash|py|pl|rb|js|lua|php|tcl|jl|R|ts))"
     r")[\"']?(?:\s|;|$)",
     re.IGNORECASE,
 )

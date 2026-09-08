@@ -4,7 +4,15 @@
 
 ## [Unreleased]
 
-_No changes yet._
+### Fixed
+
+- **H083/W001 interpreter list expanded.** Added `node`, `php`, `lua`,
+  `tclsh`, `wish`, `julia`, `Rscript`, `bun`, `deno`, and missing shells
+  (`fish`, `tcsh`, `csh`, `rc`, `es`, `elvish`, `xonsh`, `nu`, `osh`) to
+  the regex in `delivery.py` that matches "interpreter runs a declared
+  source file". W001's file extension list also expanded to include
+  `.tcl`, `.jl`, `.R`, `.ts`. Closes 8 known bypasses (node, php, lua,
+  tclsh, julia, rscript, bun, deno).
 
 ## [0.15.7] - 2026-09-02
 

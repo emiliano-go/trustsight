@@ -120,7 +120,8 @@ def _vercmp(v1: str, v2: str) -> int:
 
     try:
         result = subprocess.run(
-            ["vercmp", v1, v2], capture_output=True, text=True, check=False
+            ["vercmp", v1, v2], capture_output=True, text=True, check=False,
+            timeout=30,
         )
         return int(result.stdout.strip())
     except FileNotFoundError:
@@ -134,7 +135,8 @@ def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:
     """Run a pacman subcommand, or fail with a message instead of a bare
     FileNotFoundError when pacman is not on PATH (containers, non-Arch)."""
     try:
-        return subprocess.run(args, capture_output=True, text=True, check=False)
+        return subprocess.run(args, capture_output=True, text=True, check=False,
+                              timeout=30)
     except FileNotFoundError:
         raise RuntimeError(
             f"{args[0]} is required but was not found on PATH; install "

@@ -109,14 +109,14 @@ def _resolve_baseline_tag() -> str | None:
             url, headers={"Accept": "application/vnd.github+json"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            releases = json.loads(resp.read())
+            releases = json.loads(resp.read(10 * 1024 * 1024))
         for release in releases:
             tag = release.get("tag_name", "")
             if tag.startswith("baseline-") and release.get("assets"):
                 _BASELINE_TAG_CACHE = tag
                 return tag
     except Exception:
-        pass
+        log.debug("failed to resolve baseline tag via GitHub API", exc_info=True)
     return None
 
 

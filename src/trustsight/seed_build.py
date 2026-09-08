@@ -133,7 +133,7 @@ def build_seed(
     seed_dir.mkdir(parents=True, exist_ok=True)
 
     if provenance is not None and not Path(provenance).is_file():
-        raise SystemExit(f"provenance file not found: {provenance}")
+        raise FileNotFoundError(f"provenance file not found: {provenance}")
 
     salt = _generate_salt()
     now = datetime.now(timezone.utc).isoformat()

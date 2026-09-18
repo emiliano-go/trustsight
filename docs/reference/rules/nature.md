@@ -137,7 +137,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## P-series: **Practice** Declared Practices
 
-**Count:** 7 rules (P001-P003, P005-P008; P004 is skipped)
+**Count:** 7 rules (P001-P008; P004 is skipped)
 
 **Mechanism:** Reports practices the recipe *declares*, not risks that were found. P-series findings are emitted at weight 0 and never contribute to the score. They exist so a reviewer can see what the recipe claims (checksums, PGP keys, pinned sources) without those claims being able to lower the score.
 

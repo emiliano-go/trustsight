@@ -34,7 +34,7 @@ PROGRAMMATIC_RULES = ["H001", "H002", "C001", "C002", "C003",
 # Pages under RULES_DIR that hold no rule definitions.  `index.md` is the
 # map and `system.md` is everything that is not an individual rule, so a
 # rule section appearing on either is a routing bug rather than content.
-NON_RULE_PAGES = {"index.md", "system.md"}
+NON_RULE_PAGES = {"index.md", "nature.md", "system.md"}
 
 # A rule section, as opposed to the prose headings that share the level.
 #

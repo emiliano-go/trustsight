@@ -234,7 +234,7 @@ def test_authentication_and_session_hooks_are_persistence(path):
     """A PAM line runs on every authentication, a dispatcher script on every
     network change, an xinetd entry on every connection.
 
-    Each appears in zero of the 3,246 benign diffs: an AUR package that
+    Each appears in zero of the 3,739 benign diffs: an AUR package that
     needs one ships it as a declared source file, which R054 reads either
     way.
     """

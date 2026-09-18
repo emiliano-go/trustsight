@@ -23,8 +23,8 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [H012](#h012) | Strace detection attempt (TracerPid check) | CRITICAL |
-| [H013](#h013) | Strace log truncated (possible flood evasion) | HIGH |
+| [H012](#h012) | Strace detection attempt (TracerPid check) | - |
+| [H013](#h013) | Strace log truncated (possible flood evasion) | - |
 | [H067](#h067) | Anti-Analysis Check | HIGH |
 | [R012](#r012) | Prompt Injection Detection | FATAL |
 | [R013](#r013) | Unicode Bidi Override | FATAL |
@@ -37,7 +37,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `injection`
 - **Pattern:** `\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b`
 - **Comments:** scanned (`include_comments`)
-- **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical 3,246-diff benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. Score hard-stops at 100 regardless of other signals.
+- **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical 3,739-diff benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. Score hard-stops at 100 regardless of other signals.
 
 ### R013: Unicode Bidi Override {#r013}
 
@@ -57,19 +57,14 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 
 ### H012: Strace detection attempt (TracerPid check) {#h012}
 
-- **Target:** `runtime` (resolved execution path)
-- **Severity:** CRITICAL (weight 40)
-- **Category:** `evasion`
-- **Pattern:** `(?!)` (never matches)
-- **Description:** Reading `/proc/self/status` `TracerPid` to detect a debugger or sandbox. Anti-analysis behaviour. Reserved `never-match` runtime placeholder.
+H012 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it: reading `TracerPid` is post-install behaviour a static diff
+cannot observe. [H067](#h067) claims the static anti-analysis probe.
 
 ### H013: Strace log truncated (possible flood evasion) {#h013}
 
-- **Target:** `runtime` (resolved execution path)
-- **Severity:** HIGH (weight 25)
-- **Category:** `evasion`
-- **Pattern:** `(?!)` (never matches)
-- **Description:** A beacon/timestamp flood that forces an audit log to truncate. Reserved `never-match` runtime placeholder; complements the H012 debugger probe.
+H013 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it; it is held alongside [H012](#h012).
 
 ### H067: Anti-Analysis Check {#h067}
 
@@ -81,4 +76,4 @@ A build script checking whether it is being watched has no legitimate purpose.
 Architecture and feature detection (`uname -m`, `getconf`) is not a probe and
 does not fire.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.

@@ -382,7 +382,7 @@ DEFAULT_ANTI_ANALYSIS_PROBES = [
 # expressions and variable values never do.  `env`, `dmidecode` and
 # `systemd-detect-virt` are excluded: `env VAR=val` is overwhelmingly benign,
 # and the latter two already belong to H067.  Calibrated to zero benign
-# fires across the 3,246-diff corpus.  A lone `uname -m` (arch check) fires
+# fires across the 3,739-diff corpus.  A lone `uname -m` (arch check) fires
 # H040 at INFO by design.
 DEFAULT_RECON_COMMANDS = [
     r"(?:\A\s*|[;&|]\s*)uname\b",
@@ -713,7 +713,7 @@ experimental = false
 [experimental_rules]
 # Rules emitted from code rather than rules.toml, so the [rules]
 # experimental flag above cannot reach them.  All default to true since
-# v0.7.0 after each was measured against the 3246-diff benign corpus
+# v0.7.0 after each was measured against the 3739-diff benign corpus
 # (see docs/explanation/fire-rates.md).
 #
 # D001  novel dependency: a name never seen anywhere in the AUR
@@ -871,7 +871,7 @@ name = "LLM Prompt Injection"
 # always a comment, and comment lines are filtered out for every rule
 # that describes what the shell *executes*.
 #
-# Calibrated: 22/22 injection fixtures, 0 fires across 3,246 benign
+# Calibrated: 22/22 injection fixtures, 0 fires across 3,739 benign
 # corpus diffs (every alternative measured separately).
 pattern = '''\\b(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\\b|^[^\\S\\n]*(?:#[^\\S\\n]*)?(?:system|assistant)[^\\S\\n]*:[^\\S\\n]*\\S|</?(?:system|instructions?|admin|prompt|assistant)\\s*>|\\byou\\s+are\\s+(?:an?|the)\\s+[^.\\n]{0,48}?(?:model|assistant|ai\\b)|\\bnew\\s+instructions?\\s*:|\\bdo(?:\\s+not|n['’]t)\\s+(?:flag|warn|analy[sz]e|review|scan)\\b|\\bdo(?:\\s+not|n['’]t)\\s+report\\s+(?:any\\s+|the\\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\\b|\\b(?:mark|classify|report|treat|label|approve)\\b[^.\\n]{0,24}?\\bas\\s+(?:safe|benign|clean|harmless|trusted|ok)\\b|\\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\\s+assistant)\\b[^.\\n]{0,60}?\\b(?:ignore|approve|skip|overlook|flag)\\b'''
 severity = "FATAL"
@@ -1141,13 +1141,13 @@ name = "Persistence Unit Outside Package Root"
 # join on the same test: a PAM line runs on every authentication, a
 # dispatcher script on every network change, an xinetd entry on every
 # connection, and a logrotate `postrotate` block on every rotation. Each
-# appears in *zero* of the 3,246 benign diffs - an AUR package that needs
+# appears in *zero* of the 3,739 benign diffs - an AUR package that needs
 # one of these ships it as a declared source file, which R054 reads either
 # way.
 #
 # `ld.so.conf.d` is here on its own measurement: a directory added to the
 # loader search path is code loaded into every process that starts
-# afterwards, and it appears in *zero* of the 3,246 benign diffs.  It was
+# afterwards, and it appears in *zero* of the 3,739 benign diffs.  It was
 # excluded in a first pass that measured five paths together and read the
 # aggregate as if it applied to each.
 #
@@ -1195,7 +1195,7 @@ name = "Packaged File Points At A World-Writable Path"
 #
 # Order-free: the recipe may write the config and then name the path
 # (`printf SCRIPT=/tmp/e.sh > "$pkgdir/etc/conf.d/x"`) or the reverse.
-# Zero occurrences in the 3,246-diff benign corpus - a package pointing
+# Zero occurrences in the 3,739-diff benign corpus - a package pointing
 # its own config at /tmp is not something the ecosystem does.
 #
 # Anchored at `^` so each lookahead runs once.  Unanchored, `search` retries

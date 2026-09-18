@@ -75,7 +75,7 @@ After editing `rules.toml` or `config.toml`:
 
 ## Warnings
 
-> **Changing weights changes scores.** A small adjustment to `MEDIUM` from 10 to 12 shifts every package that fires a MEDIUM rule. Always validate against your package set before committing config changes.
+> **Changing weights changes scores.** A small adjustment to `MEDIUM` from 15 to 17 shifts every package that fires a MEDIUM rule. Always validate against your package set before committing config changes.
 
 > **Only TOML-defined non-FATAL rules accept `[rules.R###]` controls.** C-series and code-emitted rules cannot be disabled or reweighted that way. Their logic is structural or programmatic and requires the documented dedicated setting, if one exists, or a code change.
 

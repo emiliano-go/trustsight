@@ -1,7 +1,7 @@
 """D-series and H015/H016.
 
 Every "must not fire" case here was an observed false positive when the
-D001 fire rate was measured against the 3246-diff benign corpus, so they
+D001 fire rate was measured against the 3739-diff benign corpus, so they
 are regressions rather than hypotheticals.
 """
 

@@ -27,8 +27,8 @@ severity weights and the reserved identifier ranges.
 | [C007](#c007) | Command Substitution In Source Array | CRITICAL |
 | [H003](#h003) | Insecure Download Protocol | LOW |
 | [H004](#h004) | Privilege Escalation | CRITICAL |
-| [H009](#h009) | Network connection attempt | CRITICAL |
-| [H011](#h011) | Sensitive binary execution | HIGH |
+| [H009](#h009) | Network connection attempt | - |
+| [H011](#h011) | Sensitive binary execution | - |
 | [H015](#h015) | Critical Build Function Modified | INFO |
 | [H016](#h016) | Hidden Network Fetch In Build | HIGH |
 | [H031](#h031) | Version-In-URL Injection | MEDIUM |
@@ -98,12 +98,11 @@ severity weights and the reserved identifier ranges.
 
 ### H004: Privilege Escalation {#h004}
 
-- **Target:** `raw_line`
+- **Target:** programmatic (`analysis/build.py`)
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `privilege`
-- **Pattern:** `\bsudo\b`
-- **Scope:** `["function_body"]` only
-- **Description:** Detects `sudo` inside function bodies. Does not fire in comments, plain messages (`echo`, `printf`, `note`), or top-level declarations. Scope restriction prevents false positives from `groups=('sudo')` or `echo "sudo required"`. It *does* fire on `echo "x"; sudo ...`, since a message followed by a separator is an execution context.
+- **Condition:** `sudo`, `doas`, `pkexec` or `run0` at a command position: line start, after `;`/`&&`/`||`/`|`, or inside `$(...)`, with or without arguments.
+- **Description:** Detects a privilege tool that is *executed* rather than mentioned. Command position is what separates the two: `groups=('sudo')`, an `optdepends` name, and `echo "sudo required"` place the word at an argument position and stay quiet, while `echo "x"; sudo ...` is an execution context and fires. Naming `doas`, `pkexec` and `run0` as well as `sudo` tests what the recipe does rather than which tool its author preferred.
 
 ### R010: Uses curl in PKGBUILD {#r010}
 
@@ -125,19 +124,15 @@ severity weights and the reserved identifier ranges.
 
 ### H009: Network connection attempt {#h009}
 
-- **Target:** `runtime` (resolved execution path)
-- **Severity:** CRITICAL (weight 40)
-- **Category:** `network`
-- **Pattern:** `(?!)` (never matches)
-- **Description:** A network socket opening at execution time. Shipped with a never-matching placeholder pattern because the current model cannot observe post-install behaviour from a static diff; the identifier is reserved so a future runtime probe can emit it without a baseline change.
+H009 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it: the current model cannot observe post-install behaviour from a
+static diff, so the identifier is held so a future runtime probe can use it
+without a baseline change.
 
 ### H011: Sensitive binary execution {#h011}
 
-- **Target:** `runtime` (resolved execution path)
-- **Severity:** HIGH (weight 25)
-- **Category:** `execution`
-- **Pattern:** `(?!)` (never matches)
-- **Description:** Execution of a sensitive binary in an unexpected position. Reserved `never-match` placeholder, as H009/H010.
+H011 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 
 ### C007: Command Substitution In Source Array {#c007}
 
@@ -264,7 +259,7 @@ stays quiet, and an interpolated version made only of version characters is
 ordinary packaging. What the rule describes is a value carrying delimiters
 (`;`, whitespace, `/`) being substituted into something the build fetches.
 
-Fire rate: 0 on all 3246 benign-corpus diffs.
+Fire rate: 0 on all 3739 benign-corpus diffs.
 
 ### H034: Exotic Source Protocol {#h034}
 
@@ -276,7 +271,7 @@ Fire rate: 0 on all 3246 benign-corpus diffs.
 `data:` URIs carry no `://` and are not scheme tokens, which is an accepted
 gap rather than a silent pass.
 
-Fire rate: 6 of 3246 (0.18 %).
+Fire rate: 6 of 3739 (0.18 %).
 
 ### H041: Upload To Paste Or File-Drop Host {#h041}
 
@@ -302,7 +297,7 @@ twice.
 The destination is an auditable list rather than a guess about what an endpoint
 is for, so an upload to a project's own CI host does not fire.
 
-Fire rate: 0 of 3246. The corpus contains one paste-host reference, a gist
+Fire rate: 0 of 3739. The corpus contains one paste-host reference, a gist
 download in `gamescope-nvidia`, which stays H016's.
 
 ### H071: Covert Egress {#h071}
@@ -315,7 +310,7 @@ download in `gamescope-nvidia`, which stays H016's.
 The command-position anchor is what separates use from mention: a client named
 in a string or listed in `makedepends` never fires.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H077: Parse-time Network Fetch {#h077}
 
@@ -338,7 +333,7 @@ than fetching. An assignment that *runs* one through a command substitution
 straight into a shell belongs to R001/R002, whose claim is heavier, so H077
 yields rather than scoring the same line twice.
 
-Fire rate: 3 of 3246 (0.09 %), all one package resolving a redirect with
+Fire rate: 3 of 3739 (0.09 %), all one package resolving a redirect with
 `curl` at the top level, which really does reach the network on a metadata
 refresh.
 
@@ -352,7 +347,7 @@ This is a type check on the decoder's output, which is why one rule covers
 every encoded-payload variant without naming the encoding. Encoded text assets,
 checksums and keys decode to none of those magics.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H069: Build-time Generation Then Execution {#h069}
 
@@ -363,7 +358,7 @@ Fire rate: 0 of 3246.
 Writing a config file, a `.desktop` entry or a patch that a declared build step
 consumes is not generation-then-execution and does not fire.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H072: Write Then Execute {#h072}
 
@@ -376,7 +371,7 @@ absolute path at a command position, with or without arguments. Files that
 arrived through a declared `source=` and the project's own configure/make
 artefacts are exempt.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H075: Indirect Remote Execution {#h075}
 

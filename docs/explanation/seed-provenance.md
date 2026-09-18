@@ -67,9 +67,9 @@ The bound on the damage is invariant
 [A12](../security.md#the-invariants), enforced by the
 `a seed cannot rewrite the database` gate against `db.import_seed`:
 
-- The import is **additive and idempotent**. Every merge uses `INSERT OR
-  IGNORE` (or its equivalent), so a row learned from a real analysis always
-  wins. A seed can never overwrite local history.
+- The import is **additive and idempotent**. Source URL and maintainer imports
+  preserve existing rows, so a row learned from a real analysis always wins. A
+  seed can never overwrite local history.
 - A seed may set **only the two metadata keys it owns**
   (`seed_observation_count`, `seed_version`). It cannot touch rules, patterns,
   severities, weights, thresholds, or any other metadata key.
@@ -135,7 +135,7 @@ reconstructed from the corpus lockfile. The fallback is auditable but smaller
 than the canonical full-mirror seed, and never overwrites an uploaded one.
 
 The gap is not cosmetic. The lock is a calibration corpus, not a sample of
-the AUR: a seed built from the lock (3,739 packages) contains about 137
+the AUR: a seed built from the lock (202 packages) contains about 137
 distinct maintainers, while the canonical seed built from the full AUR
 mirror (about 116,000 package branches) contains about 35,903. Shipping the
 lock-derived seed would reduce novelty coverage by 99.6%, flagging
@@ -175,13 +175,14 @@ cannot drift apart.
 
 ## What is recorded at import time
 
-`db.import_seed()` hashes the artifact **as delivered** - the exact bytes
-whose signature was verified - and writes it into the user database's
-`metadata` table:
+For the shipped v2 format, `db.import_seed()` records the `seed_hash` carried
+in the archive's `seed_meta.json`, falling back to a computed digest when that
+field is absent, and writes it into the user database's `metadata` table. A
+legacy `.db` or `.db.gz` seed, which carries no such metadata, records the
+SHA-256 of the imported file instead.
 
-- `seed_sha256`: the SHA-256 of the imported artifact;
-- `seed_origin`: `bundled` when imported from the packaged location,
-  otherwise the path it was imported from.
+- `seed_sha256`: the recorded digest of the imported seed;
+- `seed_origin`: the path the seed was imported from.
 
 Both are queryable after the fact:
 

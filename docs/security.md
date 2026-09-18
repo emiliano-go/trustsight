@@ -55,13 +55,13 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 
 TrustSight does three things, and only three: it reads, it computes, it reports.
 
-- **Reads** the reviewed repository, the single AUR endpoint, and the signed release assets an operator explicitly asks for.
+- **Reads** the reviewed repository, the single AUR endpoint, and signed release assets an operator explicitly fetches or an eligible first `review` or `inspect` run auto-imports.
 - **Computes** evidence scores, entirely locally, deterministically, and never by executing a PKGBUILD.
 - **Reports** findings and their reasons, and what it could not examine.
 
 It does **not** build, run, install, or sandbox. The moment you run `makepkg`, you are outside this model.
 
-Two of the things it never does are worth stating on their own, because each removes an attack surface rather than defending one. It never fetches a URL a package declares, so there is no SSRF primitive to turn a reviewer into a probe. It never connects to a host a package names; the only hosts it can reach are the two declared endpoints, the literal `https://aur.archlinux.org` and the release channel at `github.com`, which is confined to `release.py` and refuses any download whose signature does not verify against the pinned key.
+Two of the things it never does are worth stating on their own, because each removes an attack surface rather than defending one. It never fetches a URL a package declares, so there is no SSRF primitive to turn a reviewer into a probe. It never connects to a host a package names; the only hosts it can reach are the AUR endpoint at `https://aur.archlinux.org` and the GitHub release channel at `api.github.com` and `github.com`, which is confined to `release.py` and refuses any download whose signature does not verify against the pinned key.
 
 ### Assumptions
 
@@ -166,7 +166,7 @@ The attacker also knows which rules exist, what they match, and what they do not
 | The novelty seed | **Verified, conditionally** | No longer bundled in the package: it is fetched from the release channel and imported only when its detached signature verifies against the pinned distribution key. On machines without the seed it is simply absent, and first runs degrade to cold start instead of importing something unverified. The build procedure and the way the digest is checked are in [seed provenance](explanation/seed-provenance.md). It carries no plaintext identity ([P1](#part-a-trustsight-as-a-program-under-attack)). |
 | Release-channel assets (`baseline-*`) | **Verified, conditionally** | Downloaded from the declared release endpoint only, with a byte cap applied while downloading. The detached Ed25519 signature then verifies against the pinned distribution key before the payload is parsed, imported, or used; verification failure is a refusal. |
 | A seed or baseline given on the command line | **Operator's decision** | Passing a path is an explicit act of trust. The baseline importer verifies a signature; the seed importer records the digest of what was imported. |
-| A file in the current working directory | **No** | Nothing is read from a relative path. Config and snapshots resolve under the config directory. |
+| A file passed on the command line | **Operator's decision** | `seed-db --file` and `lint-rules --file` may read an explicit relative or absolute path. Config and snapshots otherwise resolve under the config directory. |
 
 ### The invariants
 
@@ -188,7 +188,7 @@ The analysis package is not transport-free, and it is worth being exact about wh
 
 That is enforced rather than asserted: the gate parses every module under `src/trustsight/analysis/` and fails if any imports a raw transport library (`urllib.request`, `http.client`, `socket`, `requests`, `httpx`, `ftplib`), and it checks every name imported from a fetch module (`fetcher`, `discovery`, `full_aur.fetch`, `full_aur.metadata`) against a name-keyed allowlist so a URL-taking helper cannot be pulled in. Adding such a helper to that allowlist is the change that would reintroduce SSRF, and it fails the gate.
 
-**A3. Two declared network hosts.** Every endpoint is a literal constant: `https://aur.archlinux.org` (the RPC, the metadata dump, the git clone, and cgit) and the release channel `https://github.com/emiliano-go/trustsight/releases` (only `release.py`, only `baseline-*` assets, only on explicit commands or the first-run auto-import of a missing seed). TrustSight never connects to a host named by the package under review, and the release host is unreachable from analysis: `release.py` is in the fetch-module allowlist that nothing under `analysis/` may import. The analysis itself is local and deterministic, as the thesis describes; fetching is a separate stage, with those two destinations, and the release channel's one rule is that a download that does not verify against the pinned key is refused, never imported.
+**A3. Declared network hosts.** Every endpoint is a literal constant: `https://aur.archlinux.org` (the RPC, the metadata dump, the git clone, and cgit), plus the GitHub release channel at `https://api.github.com` for baseline-release discovery and `https://github.com/emiliano-go/trustsight/releases` for assets. Release access is confined to `release.py`, only reaches `baseline-*` assets, and occurs only on explicit commands or the first-run auto-import of a missing seed. TrustSight never connects to a host named by the package under review, and the release host is unreachable from analysis: `release.py` is in the fetch-module allowlist that nothing under `analysis/` may import. The analysis itself is local and deterministic, as the thesis describes; fetching is a separate stage, and a release download that does not verify against the pinned key is refused, never imported.
 
 Cloning executes nothing. Repositories are fetched through `pygit2` (libgit2) with a working tree, because the diff is computed against the fetched checkout; libgit2 runs no git hooks on clone, and TrustSight configures no `clean`, `smudge` or `fsmonitor` filter, the git-config-driven paths where a fetch can otherwise become an execution. This documents a property the library already has rather than a control this project adds; per the assumptions, a compromised `pygit2` is outside the model.
 
@@ -347,7 +347,7 @@ Fourteen things make a run partial, and all fourteen are recorded as **coverage 
 
 `companion_truncated` is separate from `diff_truncated` for the reason `scan_truncated` is: they point at different dials. A companion is read on its own budget, and a reader told only "the diff was truncated" would raise `max_diff_bytes` and find it changed nothing. The bound itself is not the interesting part - every bound drops content. What made this one a vulnerability rather than a limit was that it dropped content *and said nothing*, so a payload past 64 KiB in a committed `Makefile` scored identically to a package with no companions at all.
 
-`stage_degraded` covers the other kind of shortfall. The fourteen gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,246 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
+`stage_degraded` covers the other kind of shortfall. The fourteen gaps above are all *anticipated* - a configured bound was reached, a value was not statically resolvable - and each one is raised by the code that knows it hit the limit. `stage_degraded` is raised where a stage that was meant to run could not: an unbalanced quote that makes `shlex` refuse a `source=` array, a git walk that raises part-way, a blob past the streaming ceiling. Every one of those handlers returned a neutral value, which reads identically to a stage that ran and found nothing, so the shortfall was invisible in the verdict. It fires on 0 of the 3,739 diffs in the locked benign corpus, which is the property that makes it worth reading: it means something went wrong, not that the input was unusual.
 
 `deps_not_scanned` is the dependency walk's half of the same honesty. An AUR package's `depends` and `makedepends` can name other AUR packages, and `makepkg` builds those on the reviewer's machine in the same run, so a review that reads only the package you typed has read one recipe out of several that will execute. `--depth` decides how far the walk goes, and each dependency is analysed *as a package* - its own score, its own band, its own row in the database - never folded into the parent's number, because `depth` is deliberately absent from the config fingerprint and a score that moved with a flag would break [B1](#b1-a-score-is-a-sum-of-matched-evidence-nothing-more) for anyone comparing two runs.
 
@@ -381,7 +381,7 @@ Machine output keeps the two facts separate rather than in a sentence: `risk` is
 
 **Where the threshold comes from.** UNFLAGGED is at or below 20 points (`scoring.FLAG_THRESHOLD`). The number is stated here because a reader cannot otherwise tell whether it is measured or chosen, and the honest answer is: it was measured, then the measurement moved underneath it.
 
-Twenty was originally the 95th percentile of the benign corpus. It is not any more. Against the locked 3,246-diff corpus as currently calibrated:
+Twenty was originally the 95th percentile of the benign corpus. It is not any more. Against the locked 3,739-diff corpus as currently calibrated:
 
 | Measure | Value |
 |---------|-------|
@@ -533,7 +533,7 @@ python scripts/security_gates.py
 | `every JSON report carries the fingerprint` | B1 | `schema.fact_to_dict`, `reporting.report_body` |
 | `suppression is never hidden by a flag` | B5 | `suppressed_rules` outside any verbosity branch in `cli/review.py` |
 | `the default output is not headline-shaped` | Guarantees | the default inspect render volunteers no score |
-| `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `github.com` only in `release.py` |
+| `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size |
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
@@ -630,7 +630,7 @@ TrustSight is an evidence tool with published limits, so "it missed something" i
 **In scope. Violations of Part A:**
 
 - Code execution, file write, or file read outside the data/cache/config dirs, triggered by analysing a package.
-- Any outbound connection to a host other than the two declared endpoints (`aur.archlinux.org`, the release channel), or any fetch of a URL a PKGBUILD declares.
+- Any outbound connection to a host other than the declared AUR endpoint and GitHub release channel (`aur.archlinux.org`, `api.github.com`, and `github.com`), or any fetch of a URL a PKGBUILD declares.
 - Terminal escape sequences or markup reaching a terminal from package-controlled text, including a crash of the renderer.
 - Unbounded memory or CPU from a crafted package: a decompression bomb, a pathological regex input, a response with no cap.
 - SQL injection or any write to the database driven by package-controlled text outside the columns it belongs in.

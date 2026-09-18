@@ -11,7 +11,7 @@ A misread verdict is worse than no verdict. This page explains exactly what ever
 A **score** is a measurement of how many risk signals fired during analysis and how much those signals weigh. It is **not** a probability of malice, and it is **not** a guarantee of safety.
 
 - A package scoring **0** has no detectable risk signals. That does not mean it is safe: only that nothing in the diff triggered a rule. Attackers can use subtle techniques that leave no trace in PKGBUILD structure. See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
-- A package scoring **100** has one or more FATAL signals (R012 prompt injection, R013 unicode bidi override, or a confirmed IOC match) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
+- A package scoring **100** has one or more FATAL signals (R012 prompt injection or R013 unicode bidi override) that hard-stop at maximum severity. The score floors at 0 and caps at 100.
 
 The scoring is **deterministic**: same diff, same instrument, same database state → same score, every time.
 
@@ -25,9 +25,9 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
+**68.4 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
 
-The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 88.1th, so about **11.9 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### Medium / High / Critical (score > 20)
 
@@ -48,7 +48,7 @@ One or more risk signals fired. The severity category tells you the strongest si
 
 ### Inconclusive
 
-The score is in the Low or Medium range (0-50), no HIGH, CRITICAL, or FATAL finding fired, and either maturity is below 0.5 (fewer than 25 effective observations) or a coverage gap prevented full analysis. Any coverage gap can also produce Inconclusive unless a HIGH-or-worse finding stands on its own.
+Either the score is in the Medium band (21-50), no HIGH, CRITICAL, or FATAL finding fired, and maturity is below 0.5 (fewer than 25 effective observations), or a coverage gap prevented full analysis. A cold-start downgrade applies only to Medium, while a coverage gap downgrades a Low or Medium result; either way, a HIGH-or-worse finding stands on its own.
 
 Inconclusive is **not** Low. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
@@ -165,7 +165,7 @@ Declared verification
 
 When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than an UNFLAGGED score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
 
-Unresolved patterns are listed in the inspect output under "Unresolved Patterns." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) for the full list of analysis blind spots.
+The tokenizer's `unresolved_patterns` field is diagnostic: it is carried on the stored result and the JSON report, and nothing reads it to decide a verdict. The subset that matters to a verdict is a `source=` entry, reported as the `unresolved_source` coverage gap and quoted in `unresolved_sources`. See [report schema](../reference/report-schema.md) and [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
 
 ### W findings: a gap attached to a line
 
@@ -228,7 +228,7 @@ Output:
 │                        SOURCE_BUCKET +20 MEDIUM Source URL classified as   │
 │                        unknown                                             │
 │                        (https://sketchy-cdn.example.com/payload.tar.gz)    │
-│                        NOVELTY +8 HIGH Source URL first seen globally      │
+│                        NOVELTY +8 MEDIUM Source URL first seen globally    │
 │                        (maturity 0.80)                                     │
 │                                                                            │
 │    Unverifiable findings                                                   │

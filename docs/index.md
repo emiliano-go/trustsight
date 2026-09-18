@@ -29,13 +29,13 @@ The scoring system is organized into four evidence tiers:
 | Tier | Name | What it measures |
 |------|------|-----------------|
 | A | Structural | Pattern-matched rules against PKGBUILD commands (curl pipe bash, checksum disabled, sudo in functions) |
-| B | Priors/Context | Domain reputation of new source URLs (trusted forge, official, unknown, homograph) |
+| B | Priors/Context | Domain reputation of new source URLs (trusted forge, official, raw hosting, unknown, homograph) |
 | C | History/Novelty | First-seen URLs and maintainers, scaled by observation count |
 | D | Verification | Declared integrity metadata (checksums, PGP keys, GPG verify) reported at weight 0, never scored |
 
-A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 75+. FATAL rule findings (prompt injection or Unicode deception) hard-stop at 100. Confirmed IOC matches are reported separately with their curator attribution; they do not change the score or risk band.
+A package with checksums, a trusted forge source, and no rule firings scores 0. A package with `curl | bash` on an unknown domain with no checksum scores 60+. FATAL rule findings (prompt injection or Unicode deception) hard-stop at 100. Confirmed IOC matches are reported separately with their curator attribution; they do not change the score or risk band.
 
-**Key numbers:** 68.4% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,246-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
+**Key numbers:** 68.4% benign zero-rate, benign p95 = 35 against malicious p5 = 60 on the 3,739-diff locked corpus, 100% CRITICAL recall. The novelty seed recognises 86% of source URLs in a package's most recent update.
 
 See [How TrustSight Works](explanation/index.md) for the full pipeline explanation and [Rules Reference](reference/rules/index.md) for the complete rule catalog.
 

@@ -37,7 +37,7 @@ For a development checkout with the test dependencies, use a virtualenv instead 
 
 ## Verdicts
 
-Verdicts are template-based descriptions of each triggered finding. The score is always deterministic and calculated locally. No external API or LLM is needed.
+Verdicts are template-based descriptions of each triggered finding. The score is calculated locally and deterministically. No LLM is needed.
 
 ---
 
@@ -62,4 +62,4 @@ trustsight config show
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `trustsight review` prints "No outdated packages found." | No AUR packages installed, or all are up to date | Install an AUR package or wait for updates |
-| `ModuleNotFoundError: No module named 'pygit2'` | System git not found or libgit2 headers missing | `sudo pacman -S libgit2`, then reinstall |
+| `ModuleNotFoundError: No module named 'pygit2'` | The `python-pygit2` package is missing or the installation is incomplete | `sudo pacman -S python-pygit2`, then reinstall |

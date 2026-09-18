@@ -189,7 +189,7 @@ the shell runs.
 MEDIUM, not FATAL: the line fails closed, the command is simply not found,
 and the realistic benign cause is a copy-paste from a web page.
 
-Zero hits on the benign corpus. One diff in 3,246 carries such a character at
+Zero hits on the benign corpus. One diff in 3,739 carries such a character at
 all, in a font licence, which is not a shell file.
 
 **Related:** [R013](deception.md#r013), which claims a disjoint set of
@@ -420,7 +420,7 @@ array element, or a glob.
 
 | Fires | Quiet |
 |---|---|
-| `set -- *.sh; bash "$1"` | `bash setup.sh` |
+| `set --	*.sh; bash "$1"` | `bash setup.sh` |
 | `mapfile -t A < <(ls *.sh); bash "${A[0]}"` | `exec "$@"` |
 | `IFS=:; bash $*` | `for f in *.sh; do echo "$f"; done` |
 | `bash *.sh` | |
@@ -429,7 +429,7 @@ X002 asks whether the *command* can be read from the text; this asks the same
 of its argument. `bash` is literal in every firing case, so X002 stands down
 and every path-pairing rule looks for a filename that is not there.
 
-`set -- *.sh` followed by a bare `"$@"` is a **pairing**: neither line is
+`set --	*.sh` followed by a bare `"$@"` is a **pairing**: neither line is
 suspicious alone, and `exec "$@"` is how a wrapper forwards its arguments.
 
 Zero occurrences in the benign corpus.
@@ -484,16 +484,17 @@ what runs is whatever the command printed.
 A trailing `|| true` ends the pipeline rather than voiding it, so
 `cmd | bash || true` is claimed.
 
-No package in the 3,246-diff benign corpus pipes anything into a shell.
+No package in the 3,739-diff benign corpus pipes anything into a shell.
 
 ### X024: Indirect Sensitive Assignment {#x024}
 
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a sensitive makepkg variable (`DLAGENTS`, `COMPRESS*`,
-`PACMAN_AUTH`, `CFLAGS`, `LDFLAGS`, `MAKEFLAGS`, `PATH`, `LD_PRELOAD`,
-`LD_LIBRARY_PATH`) is assigned a value that comes from another variable,
-a command substitution, or an array expansion.
+`PACMAN_AUTH`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `MAKEFLAGS`, `RUSTFLAGS`,
+`PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `PYTHONPATH`) is assigned a value
+that comes from another variable, a command substitution, or an array
+expansion.
 
 | Fires | Quiet |
 |---|---|

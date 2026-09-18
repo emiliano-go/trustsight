@@ -22,19 +22,19 @@ The corpus is **not** committed: `*.diff` is gitignored, so `tests/fixtures/beni
 Rebuild it from the lock first:
 
 ```bash
-python scripts/build_corpus.py --from-manifest \
+uv run python scripts/build_corpus.py --from-manifest \
   --manifest tests/fixtures/corpus.lock \
   --out tests/fixtures/benign-corpus
 ```
 
-This regenerates the exact diffs recorded in the lock (~180 packages, ~11 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). It is deterministic: the same lock produces byte-identical diffs on any machine.
+This regenerates the exact diffs recorded in the lock (~200 packages, ~11 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). It is deterministic: the same lock produces byte-identical diffs on any machine.
 
 Do **not** use plain `build_corpus.py --strata ...` for this. That mode re-selects packages by current AUR popularity and rewrites the lock, producing a different corpus each run.
 
 ## How to run
 
 ```bash
-python scripts/rebaseline.py
+uv run python scripts/rebaseline.py
 ```
 
 The script:
@@ -53,7 +53,9 @@ The script:
 
 ## Reading the strata table
 
-The script prints a line per stratum:
+The script prints a line per stratum. The counts scale with the corpus snapshot
+and the `p95`/`zero` values with the ruleset, so the numbers here are an example
+from an earlier corpus snapshot rather than a fixed expectation:
 
 ```
   source_patched: 554 diffs, p95=15, zero=86.6%

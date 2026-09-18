@@ -10,7 +10,7 @@
 | `~/.config/trustsight/rules.toml` | Definitions for every R-series rule. H-series heuristics are emitted from code and have no entry here. Per-rule `enabled` and `weight_override` controls live in `config.toml`. |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
 | `~/.config/trustsight/iocs.toml` | H056 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
-| `~/.cache/trustsight/repos/` | Cloned AUR package repositories (bare git repos). |
+| `~/.cache/trustsight/repos/` | Cloned AUR package repositories. |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
 
 All directories and default files are created on first run by `ensure_default_configs()` in `src/trustsight/config.py`.

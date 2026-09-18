@@ -6,13 +6,13 @@ No rule is perfect. Some may fire on patterns that are normal for your package s
 
 ## Step 1: Check fire rates
 
-Run a full review and check how often each rule fires:
+Start from the measured corpus fire rates in [Fire Rates](../explanation/fire-rates.md), then check how often the rule fires across your own reviewed packages:
 
 ```bash
 trustsight review --verbose
 ```
 
-For each rule, note the **fire rate**: the percentage of packages where it triggered.
+For each rule, note the **fire rate**: the percentage of your reviewed packages where it triggered. Re-derive the corpus rates with `scripts/rebaseline.py` after changing rules or weights.
 
 > **The >30% heuristic:** A rule firing on more than 30% of your packages is not detecting anomalies; it is describing a property of your package set. That rule is now a **census**, not a signal.
 
@@ -26,14 +26,14 @@ trustsight inspect <package>
 
 Look for patterns:
 
-- **H004/R010/R011** (command-structure rules): these now fire only in `function_body` context. If they are still over-firing, the package may use unconventional but legitimate helper functions.
+- **H004/R010/R011** (command-structure rules): H004 requires `sudo` at command position; R010 and R011 are restricted to function bodies. If they are still over-firing, the package may use unconventional but legitimate helper functions.
 - **H001** (checksum removal): some AUR packages legitimately skip checksums for binary blobs.
 - **H002** (checksum array emptied): inspect why a recipe changed `sha256sums` to an empty array.
 - **H003** (insecure download protocol): inspect an added `http://` source and whether the same change added or updated checksum backing.
 
 ### Scope constraints already applied
 
-Rules H004, R010, and R011 were scoped to `function_body` context in a previous release specifically to reduce false positives on top-level variable assignments and sourced library files. If they still over-fire, your further options are:
+R010 and R011 are scoped to `function_body` context to reduce false positives on top-level variable assignments and sourced library files. H004 is code-emitted and requires `sudo` at command position. If they still over-fire, your further options are:
 
 1. Demote the severity to INFO.
 2. Disable the rule entirely (not recommended; you lose signal).
@@ -61,10 +61,13 @@ Only disable a TOML-defined, non-FATAL rule if you are certain the pattern it de
 
 **Constrain scope** (where supported):
 
+`scope` is a field of the rule definition in `rules.toml`, not a `config.toml` override. Edit it on the rule itself:
+
 ```toml
-[rules.R010]
-enabled = true
-scope = "function_body"  # already the default
+[[rules]]
+id = "R010"
+# ...existing fields...
+scope = ["function_body"]  # already the default
 ```
 
 ## Step 4: Re-baseline
@@ -82,7 +85,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 TrustSight's current test suite has a zero-rate of **68.4%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
-pytest tests/
+uv run pytest tests/
 ```
 
 Ensure CRITICAL recall stays at **100%**: every known malicious pattern must still fire. The corpus benchmarks in the [explanation section](../explanation/benchmarks-and-methodology.md) define the expected p5/p95 separations:

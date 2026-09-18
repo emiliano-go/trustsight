@@ -10,8 +10,8 @@ labels are not available to the people tuning the rules.
 
 ## Intake
 
-Open a private security report using the repository's reporting channel and
-title it `Blinded evaluation intake`. Do not include live credentials,
+Email the security contact listed in [the security model](../security.md#how-to-report) with
+the subject `Blinded evaluation intake`. Do not include live credentials,
 malware binaries, private package contents, or identifying data in a public
 issue.
 

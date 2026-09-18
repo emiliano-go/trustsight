@@ -129,7 +129,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `scan_truncated` | `bool` | `true` when the diff held more lines than `rules.MAX_SCANNED_LINES` and only its first lines were matched. Distinct from `diff_truncated` because they name different caps: rule matching costs per line, so a diff of many short lines stays under `[diff] max_diff_bytes` and is still cut here. A reader who saw only `diff_truncated` would raise the byte limit and find it changed nothing. |
-| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"unpinned_build_deps"`, `"unpinned_source_ref"`, `"deps_not_scanned"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
+| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"unpinned_build_deps"`, `"deps_not_scanned"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
@@ -217,7 +217,7 @@ The sum of all `weight` values, floored at 0 and capped at 100, equals `final_sc
 
 ## Database storage
 
-The `PackageFact` JSON is stored in the `analysis_history` table under the `fact_json` column (TEXT containing JSON). Triggered rules are stored in the separate `triggered_rules` table keyed by `analysis_history.id`. See `insert_analysis()` in `src/trustsight/analysis/pipeline.py`.
+The `PackageFact` JSON is stored in the `analysis_history` table under the `fact_json` column (TEXT containing JSON). Triggered rules are stored in the separate `triggered_rules` table keyed by `analysis_history.id`. See `insert_analysis()` in `src/trustsight/db.py`.
 
 ---
 
@@ -238,7 +238,7 @@ There are two JSON shapes, and they are not the same object.
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `suppressed_rules`,
   `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
-  `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
+  `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
   `review_threshold`, `flagged`, `config_fingerprint`.
 
   On request only:

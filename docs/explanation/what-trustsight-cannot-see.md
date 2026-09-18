@@ -63,7 +63,7 @@ Every verb here is the most ordinary thing a PKGBUILD does. The code that runs i
 
 It is not about `make` specifically. Every driver has this property - `cmake --build`, `ninja -C`, `autoreconf && ./configure`, `python setup.py build`, and equally `sh p-1.0/bootstrap.sh` or `perl p-1.0/Makefile.PL`. An execution is paired with a file this analysis can read only when that file is *individually declared* in `source=()` (H083) or *committed to the AUR repository* (H081). A script inside a declared tarball is neither: the tarball is declared as one entry, its contents are never read, and no rule knows the script exists.
 
-Nor is the answer to add the verbs. Measured against the 3,246-diff locked benign corpus, executing a path that is neither declared nor committed is what **half** of all packages do - `python setup.py build`, `bash ./autogen.sh`, `./configure` are the ordinary shape of building software. A rule over that would fire on the corpus more often than not, and a coverage gap over it would put most packages into Inconclusive permanently. Either would replace a precise instrument with a warning nobody can act on.
+Nor is the answer to add the verbs. Measured against the 3,739-diff locked benign corpus, executing a path that is neither declared nor committed is what **half** of all packages do - `python setup.py build`, `bash ./autogen.sh`, `./configure` are the ordinary shape of building software. A rule over that would fire on the corpus more often than not, and a coverage gap over it would put most packages into Inconclusive permanently. Either would replace a precise instrument with a warning nobody can act on.
 
 There is a third option, and it is the one taken: **say it without pricing it.** `W001` reports that a build function runs a script whose content this analysis never read, and contributes nothing to the score, the risk band or the flagged decision. It is not a risk claim - it is a statement about what could not be checked, attached to the line it applies to, which is the same act as a coverage gap moved from the run to the line. See [Unverifiable](../reference/rules/unverifiable.md).
 
@@ -93,7 +93,7 @@ Running the PKGBUILD to resolve variables would produce accurate resolution but 
 
 ## Build-dependency blind spot
 
-Dependency changes (`depends`, `makedepends`, `optdepends`) are filtered out of *pattern* matching: `rules.py` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
+Dependency changes (`depends`, `makedepends`, `optdepends`, `checkdepends`) are filtered out of *pattern* matching: `rules.py` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
 
 The [D-series rules](../reference/rules/system.md#d-series) narrow the resulting gap by asking a different question. Rather than pattern-matching the text, they compare the dependency arrays before and after the diff and check each newly added name against every dependency name ever observed in the AUR. A name nobody has ever depended on is rare and worth attention, where "this line mentions a package" is not.
 
@@ -127,7 +127,7 @@ This is not a theoretical risk. TrustSight's rules are public (defined in `rules
 
 TrustSight mitigates this in three ways:
 
-1. **Novelty signals (tier C) catch patterns the rules do not anticipate.** An attacker who carefully avoids every known pattern but adds a URL from an unknown domain is caught by the source bucket classifier. An attacker who reuses a known domain but changes the path may be caught by URL novelty tracking.
+1. **Context and novelty signals (tiers B and C) catch patterns the rules do not anticipate.** An attacker who carefully avoids every known pattern but adds a URL from an unknown domain is caught by the source bucket classifier. An attacker who reuses a known domain but changes the path may be caught by URL novelty tracking.
 2. **The scoring model is additive, not a pass/fail gate.** An UNFLAGGED verdict means no structural patterns were detected and no gaps were recorded; it does not mean the package is safe. The score is a continuous measure, and low scores still warrant review if the reviewer is concerned.
 3. **Deterministic verdicts ensure full disclosure.** Rule-based templates describe every triggered signal; a compromised package that triggers no rules but has a novel URL on an unknown domain will still score above 0 and the verdict will still flag the unknown domain.
 
@@ -145,7 +145,7 @@ Introducing `validpgpkeys` from scratch is reported as INFO (H078, "Signature Ve
 
 ## The novelty ceiling (R103/R109)
 
-The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 tier codifies. H074 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.
+The ruleset detects *known patterns and reuse*: commands, hosts, checksums, maintainers, and dependency names that match a documented signature or have been observed before. It does not detect novelty in general. An attacker with fresh infrastructure and no known pattern is not caught by most rules; that ceiling is what the R103/R109 ceiling description codifies. H074 (adopt-then-immediately-modify) is the exception: it fires on the *first* package of a campaign timeline, from the maintainer field and commit times, before any novel payload shape appears.
 
 The composition rules that narrow this ceiling are grounded in real events. H043 (attack-chain composition) exists because both the 2018 acroread supply-chain attack and the 2026 Atomic Arch campaign progressed through multiple distinct kill-chain stages, and requiring several stages to co-occur is how the rule separates a genuine chain from single-stage noise.
 

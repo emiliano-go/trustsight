@@ -68,7 +68,7 @@ The gates together enforce three distinct properties: detection (no missed label
 
 ### Current numbers
 
-Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,246** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
+Measured against the locked benign corpus as `tests/fixtures/corpus.lock` records it - **3,739** diffs - with the same code path the calibration gates use. Re-derive with `scripts/rebaseline.py` when scoring changes; `test_the_documented_corpus_size_matches_the_lock` keeps the figure and the lock from drifting apart.
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
@@ -86,24 +86,17 @@ The numbers are not aspirational; they are the measured state of the current rul
 
 - **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. Two runs on different machines with the same lock file produce identical results.
 - **Baseline committed** as `baseline.json`: benchmark results are checked into the repository. Every commit can be compared against the baseline to detect regressions.
-- **Regeneration** is weekly, with pinned snapshots kept for reproducibility. The previous snapshot is archived so that past benchmarks remain reproducible.
+- **Regeneration** is monthly: `corpus-drift.yml` rebuilds the locked corpus, re-derives the baseline and compares it against the committed `baseline.json`, filing an issue on any change. Reproducibility comes from that committed baseline plus git history.
 
 The pinned corpus prevents a common failure mode in security tooling: benchmarks that improve over time because the corpus drifted toward easier samples. Pinning freezes the corpus, so any improvement or regression is from the tool, not the data.
 
 ## Per-stratum evaluation
 
-The test set is divided into 9 strata. Each stratum has a per-stratum 70% recall target:
+The benign corpus is divided into eight strata (`source_patched`, `bin_repack`, `vcs_git`, `lang_ecosystem`, `data_fonts`, `dkms_kernel`, `autotools`, `large_electron`). Breaking the corpus down by package shape keeps a rule that is loud on one shape from hiding inside an aggregate rate: `scripts/rebaseline.py` records fire rates per stratum under `strata.<name>.rules` in `baseline.json`, and [Fire Rates](fire-rates.md) reports them per rule.
 
-| Strata result | Count |
-|---------------|-------|
-| Strata clear | 7/9 |
-| Target | 70% per stratum |
+The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-The per-stratum requirement prevents the benchmark from optimizing for easy classes while ignoring hard ones. A benchmark that measures only aggregate recall can achieve high numbers by detecting all easy samples while missing every sample in a difficult stratum. Per-stratum evaluation catches this: a stratum that cannot reach 70% recall indicates a blind spot in that class of attack.
-
-Two strata currently fall below the 70% target. These are documented in the benchmark output and represent known difficult classes (unicode bidi variants and non-standard prompt-injection patterns). Improving these strata is an active area of work, and progress is measured by the per-stratum recall numbers.
-
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.4% zero-rate means 68.4% of benign diffs score 0, while **13.1% exceed the 20-point threshold**: roughly one reviewer workload item per eight benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 68.4% zero-rate means 68.4% of benign diffs score 0, while **11.9% exceed the 20-point threshold**: roughly one reviewer workload item per eight benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 21.4% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

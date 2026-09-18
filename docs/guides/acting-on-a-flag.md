@@ -12,8 +12,8 @@ trustsight inspect <package>
 
 This shows:
 
-- The **diff summary**: every line added, removed, or changed between the installed and candidate PKGBUILD.
-- **Resolved commands**: the expanded `source=()`, `sha256sums=()`, `validpgpkeys=()`, etc., as they would execute during the build.
+- The **diff summary**: a summary of detected changes between the installed and candidate PKGBUILD.
+- **Resolved commands**: statically reconstructed values where resolution is supported.
 - **Triggered rules**: which published R/H/C/D/S/X rules fired, with the specific lines that matched.
 - **Evidence breakdown**: contribution from each [evidence tier](../reference/evidence-tiers.md): structural (A), priors (B), novelty (C), verification (D).
 
@@ -42,7 +42,7 @@ Every rule in the output references the line(s) that triggered it. Cross-referen
 
 **A cold database**, when all three hold:
 
-- The score sits in the **25-50** range (Medium).
+- The score sits in the **21-50** range (Medium).
 - No HIGH, CRITICAL, or FATAL signals fired.
 - The database is **cold**: fewer than 25 effective observations across the database, so maturity is below 0.5 and novelty weight is not at full strength. Novelty reaches full weight at 50.
 

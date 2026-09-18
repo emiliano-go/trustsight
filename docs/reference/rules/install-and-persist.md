@@ -147,7 +147,7 @@ expected scope of an install hook; foreign package managers are not.
 - **Category:** `persistence`
 - **Condition:** A build or install function writes into `$HOME`, `.bashrc`, `.zshrc`, `.profile` or `.config`, outside `$pkgdir` staging.
 
-Fire rate: 1 of 3246 (0.03 %), a legitimate log path written from `post_upgrade`.
+Fire rate: 1 of 3739 (0.03 %), a legitimate log path written from `post_upgrade`.
 
 The severity is contextual. A write into a user's home during `build()` is
 HIGH; the same write from an **install scriptlet** is CRITICAL, because pacman
@@ -164,7 +164,7 @@ categorical rather than suspicious.
 The rule reads the unit's *content*, including a heredoc body, not the unit's
 filename. A name proves nothing; the `ExecStart` line is the fact.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H062: Pacman Hook Installed {#h062}
 
@@ -175,7 +175,7 @@ Fire rate: 0 of 3246.
 A pacman hook runs on every later transaction, which is why it is reported;
 packages legitimately ship them, which is why it is MEDIUM.
 
-Fire rate: 4 of 3246 (0.12 %), all packages that legitimately ship hooks.
+Fire rate: 4 of 3739 (0.12 %), all packages that legitimately ship hooks.
 
 ### H084: Service ExecStart Targets Undeclared Binary {#h084}
 
@@ -213,7 +213,7 @@ here - the observable is the *destination*, not the code.
 
 Order-free, because the recipe may write the config and then name the path or
 the reverse, and anchored at `^` so each lookahead runs once. Zero
-occurrences in the 3,246-diff benign corpus: a package pointing its own
+occurrences in the 3,739-diff benign corpus: a package pointing its own
 config at `/tmp` is not something the ecosystem does.
 
 ### H089: Packaged File Names A Build-Only Path {#h089}
@@ -250,7 +250,7 @@ written. The rule splits a single-line write at its redirect and reads only
 the content half, and for a heredoc it reads the body against the target
 named on the opener.
 
-Zero occurrences in the 3,246-diff benign corpus.
+Zero occurrences in the 3,739-diff benign corpus.
 
 ### H093: Committed Config Points At A Build-Only Path {#h093}
 

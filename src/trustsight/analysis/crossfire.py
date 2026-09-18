@@ -32,7 +32,7 @@ calibration the project measures.  X008 exists for the codepoints R013 does
 *not* cover - whitespace a shell will not split on - which is a disjoint
 set, so it doubles nothing.
 
-Every rule here was measured against the 3,246-diff locked benign corpus
+Every rule here was measured against the 3,739-diff locked benign corpus
 before it was given a weight. The rates are in the reference page; the short
 version is that legitimate PKGBUILDs do not do these things.
 """
@@ -2013,7 +2013,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         #
         # A fetch head is left to R001/R002 and X009, which say the more
         # specific thing. Everything else is claimed here, because no
-        # package in the 3,246-diff benign corpus pipes anything at all
+        # package in the 3,739-diff benign corpus pipes anything at all
         # into a shell.
         if (sink
                 and _X016_KNOWN_EXECUTOR_RE.match(sink)

@@ -3,9 +3,8 @@
 # Corpus Behavioral
 
 The package's position in the corpus, or its deviation from a corpus
-baseline. These are Class D and Class E: they run once per metadata cycle
-in `trustsight full-aur`, after the per-package loop, and each returns one
-finding per cluster with the members in `params.members`.
+baseline. H046, H057, H060, H061, and H073 are Class D rules that run once
+per metadata cycle in `trustsight full-aur`.
 
 They are silent without a prior snapshot, which is enforced rather than
 assumed: the calibration gate is `fire_rate(no_baseline) == 0`. H061 and
@@ -33,32 +32,10 @@ severity weights and the reserved identifier ranges.
 
 ### H028: Accelerated Release Cadence {#h028}
 
-- **Target:** programmatic (git commit graph)
-- **Severity:** metadata field, **never a scored finding**
-- **Category:** `temporal-metadata`
-- **Condition:** The HEAD commit has 3+ ancestors within the last 24 hours
-  (rapid-fire pushes).
-
-**Why it does not score:** Bursts of commits are overwhelmingly benign
-activity - a maintainer fixing a bad checksum, then a typo, then a rebuild
-bump. This is precisely the "measuring activity, not risk" failure the
-accuracy work's CI gate (`|pearson(score, diff_lines)| < 0.3`) exists to
-catch. At any non-zero weight it becomes a census on active maintainers.
-
-H028 is therefore **metadata only**: recorded as a boolean on the
-`PackageFact` (`recent_commit_burst: bool`). It is not appended to
-`triggered_rules` and contributes nothing to the score. If future corpus
-analysis shows that burst cadence *pairs with* other signals (burst +
-maintainer takeover + verification removal), the burst multiplier can be
-applied to those signals alone - never as a standalone finding.
-
-**Origin:** pnpm's `minimumReleaseAge` (24-hour cooldown on new versions) and
-uv's `exclude-newer` (reject packages published within a configurable window).
-Both tools impose a *registry-side cooldown*: do not install a version until
-it has existed long enough for the community to vet it. H028 takes the
-opposite perspective - instead of blocking recent versions, it notes that
-multiple commits landed in a short window, recording the cadence as context
-for other signals to use.
+H028 is **metadata, never a scored finding**. The pipeline records whether the
+HEAD commit has 3+ ancestors within 24 hours as the `recent_commit_burst`
+boolean on `PackageFact`; it is not appended to `triggered_rules` and
+contributes nothing to the score.
 
 ### H046: Orphan/Adoption Dependency {#h046}
 
@@ -99,9 +76,8 @@ for other signals to use.
 Four surfaces are read: the package's own name; names added to
 `depends`/`makedepends`/`optdepends`/`checkdepends`/`provides`/`replaces`; the
 host of any URL and any bare host token; and any hex digest of digest length.
-H056 also reads the current PKGBUILD, not only the diff, so a dependency on a
-package later published as malware is reported on every review rather than only
-on the one that introduced it.
+The IOC federation stage is separate and reports attributed matches through
+`PackageFact.ioc_matches`; see [IOC Federation](../ioc.md).
 
 Matching is **exact**. Normalisation is limited to what is not part of the
 identity: case, a trailing root dot, IDNA spelling, surrounding quotes. A host

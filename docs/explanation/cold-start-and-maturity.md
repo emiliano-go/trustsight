@@ -53,7 +53,7 @@ Below 50 observations, the novelty weight is linearly scaled. At 0 observations,
 
 | Novelty signal | Full weight (at maturity) | Why this weight |
 |----------------|---------------------------|-----------------|
-| `url_first_globally` | 10 | A URL never seen in any package is genuinely unusual. This is the strongest novelty signal. |
+| `url_first_globally` | 10 | A URL never seen in any package is genuinely unusual. This is the strongest URL-novelty signal. |
 | `url_first_in_package` | 5 | A URL new to this specific package but seen elsewhere. Weaker because it may just reflect a new package in your set. |
 | `maintainer_first_in_package` | 15 | A maintainer never recorded for this package is a significant flag. Maintainer changes are a known attack vector (xz utils). The highest novelty weight reflects this. |
 
@@ -63,9 +63,9 @@ The maintainer-first weight is highest because a maintainer change without a cor
 
 Novelty signals do not fire in isolation. They are evaluated alongside:
 
-- **Structural signals (tier A)**: a novel URL from a trusted forge with a valid checksum is less concerning than a novel URL from an unknown domain with checksums disabled.
+- **Structural signals (tier A) and context signals (tier B)**: a novel URL from a trusted forge is less concerning than a novel URL from an unknown domain.
 - **Context signals (tier B)**: a `trusted_forge` domain adds nothing of its own (its bucket modifier is 0). Novelty on an `unknown` or `homograph` domain compounds with the bucket weight.
-- **Verification signals (tier D)**: a novel URL with a checksum and PGP signature is less concerning than one without.
+- **Verification signals (tier D)**: declared checksums and PGP signatures are report context only and do not affect novelty or score.
 
 The interaction is additive, not multiplicative. Each signal contributes independently, so a package with a novel URL on an unknown domain with no checksum accumulates contributions from all three.
 

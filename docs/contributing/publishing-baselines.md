@@ -27,14 +27,14 @@ prefix, and **a baseline release ships the whole family**:
 and carry the program and its release notes, never baseline assets. Channel
 releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
 and carry the `baseline-*` assets. A channel release is published **after**
-its software release, so it becomes the repository's `latest` release and
-the tool's default `/releases/latest/download/...` channel resolves to it
-without any per-tag plumbing. The intended cadence: publish a software
+its software release. The tool discovers the newest asset-bearing
+`baseline-*` release through the GitHub API, with `latest` only as a fallback.
+The intended cadence: publish a software
 release, then publish a fresh `baseline-<date>` right behind it whenever the
 baselines need refreshing.
 
-**Pinning.** The default channel follows `latest`, which moves the next time
-a newer release is published. `trustsight seed fetch --tag baseline-2026-08-10`
+**Pinning.** The default channel follows the newest asset-bearing
+`baseline-*` release. `trustsight seed fetch --tag baseline-2026-08-10`
 pins a specific channel release, and `release.asset_url(name, tag)` resolves
 it; keep the tag of the channel release you verified if you want a
 reproducible seed.
@@ -52,10 +52,9 @@ for every curated IOC input. The baseline workflow refuses to proceed without
 the corpus asset. It uses the canonical seed already attached to the channel
 release, or builds the documented fallback when that asset is absent.
 
-The seed and IOC assets are built and uploaded **automatically** by
-[`.github/workflows/baselines.yml`](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml),
-which only runs for `baseline-*` releases and manual dispatch (software
-releases skip it entirely). The workflow checks the release for an existing
+Maintainers manually dispatch
+[`.github/workflows/baselines.yml`](https://github.com/emiliano-go/trustsight/blob/master/.github/workflows/baselines.yml)
+for a draft baseline release. The workflow checks the release for an existing
 `baseline-seed.tar.gz` first: the **canonical seed is maintainer-built from
 the full AUR mirror**, signed, and uploaded to the channel release, and CI
 never overwrites it. If the seed is missing, CI builds a **lock-derived
@@ -145,12 +144,9 @@ Path.home().joinpath("trustsight-release.raw").write_bytes(p.private_bytes_raw()
 chmod 600 ~/trustsight-release.raw
 ```
 
-Attach it to the **channel** release (tag `baseline-<date>`, not the software
-tag), keeping the `baseline-` prefix:
-
-```bash
-gh release upload baseline-2026-08-10 dist/baseline-corpus.tar.zst dist/baseline-corpus.tar.zst.sig
-```
+Build the transport-signed family into `dist/` and attach it to the **channel**
+release (tag `baseline-<date>`, not the software tag), keeping the
+`baseline-` prefix:
 
 ```bash
 python scripts/build_release_baselines.py --out dist/ \

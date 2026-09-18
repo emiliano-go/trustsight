@@ -128,9 +128,9 @@ Checksum integrity is foundational to the entire scoring system. Every other sig
 
 These rules are hard-coded in `src/trustsight/analysis/structural.py` and cannot be disabled through configuration. H001 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
 
-### H004: why sudo detection is scoped to function_body
+### H004: why sudo detection requires command position
 
-A naive `sudo` rule that matches anywhere in the PKGBUILD fires on comments, on text in `pkgdesc`, and on top-level variable assignments like `groups=('sudo')`. The `function_body` scope restricts matching to the build functions (`build()`, `package()`, `check()`), where a `sudo` command has real effect. Corpus fire-rate analysis is what settles it: unfiltered `sudo` matching is a census signal rather than a risk signal.
+A naive `sudo` rule that matches anywhere in the PKGBUILD fires on comments, on text in `pkgdesc`, and on top-level variable assignments like `groups=('sudo')`. H004 is code-emitted and requires `sudo` at command position, where it has an effect. Corpus fire-rate analysis is what settles it: unfiltered `sudo` matching is a census signal rather than a risk signal.
 
 ### C001, C002, C003: why code rules exist
 

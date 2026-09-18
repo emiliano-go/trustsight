@@ -18,7 +18,7 @@ Corpora:
     Source: https://github.com/archlinux/aur.git
     Fetched: 2026-07-16
     Selection: stratified by package shape (see scripts/strata.toml,
-               tests/fixtures/corpus.lock). 8 strata, ~190 packages total.
+               tests/fixtures/corpus.lock). 8 strata, ~200 packages total.
     Purpose: PR-blocking calibration gates.
     Status: NOT COMMITTED; *.diff is gitignored. Rebuild the exact
             pinned corpus from the lock with:

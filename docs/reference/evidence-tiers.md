@@ -40,7 +40,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 ### Benchmark
 
-CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (267 tests) is detected.
+CRITICAL recall: **100%**; every CRITICAL-class sample in the benchmark corpus (175 labelled fixtures) is detected.
 
 ---
 
@@ -164,7 +164,7 @@ a signal an attacker can assert for free must not lower a score.
 
 ### End-state, not delta
 
-Verification evidence is computed over the **resolved end-state of the PKGBUILD (what the file looks like after the diff is applied), not over the diff delta. A checksum that was already present before the diff and unchanged still counts. This reflects the actual protection in place when the package is installed.
+Verification evidence is computed over the **resolved end-state of the PKGBUILD** (what the file looks like after the diff is applied), not over the diff delta. A checksum that was already present before the diff and unchanged still counts. This reflects the actual protection in place when the package is installed.
 
 Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha256_to_skip"` or `"checksum_array_emptied"`; an intentionally disabled checksum does not count as present even if the array declaration remains.
 

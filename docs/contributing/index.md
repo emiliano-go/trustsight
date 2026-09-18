@@ -43,8 +43,9 @@ that is not done. The list is stated in full in
 [the enforcement map](../security.md#part-c-the-enforcement-map). The ones most
 likely to be touched by a rule or pipeline change:
 
-- **Determinism.** The same input produces the same score and evidence record.
-  Nondeterminism in scoring is a mandatory-review bug at any scale.
+- **Determinism.** The same diff, effective configuration, and observation
+  history produce the same score and evidence record. Nondeterminism in scoring
+  is a mandatory-review bug at any scale.
 - **Fail-closed on doubts.** A bound that drops input must record a coverage
   gap; a run that did not see the whole change can never present an UNFLAGGED
   verdict. Adding a new truncation seam without a gap is a vulnerability, not a
@@ -79,6 +80,6 @@ benign corpus and real case reports are the arguments that matter.
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |
-| Rules              | 179 scoring rules across R/H/C/D/S/X, plus P001-P008 declared practice and W001-W006 unverifiable |
+| Rules              | 179 scoring rules across R/H/C/D/S/X, plus P001-P008 declared practice (P004 is skipped) and W001-W006 unverifiable |
 | Rule config        | `rules.toml`                    |
 | Benign corpus lock | `tests/fixtures/corpus.lock`    |

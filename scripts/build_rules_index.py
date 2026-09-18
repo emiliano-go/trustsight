@@ -65,7 +65,7 @@ def _catalog() -> list[tuple[str, str, str, str, RuleCategory, str]]:
             prefix = rule_id[0]
             series = SERIES_NAMES.get(prefix, prefix)
             rows.append(
-                (rule_id, name, _severity(lines[index:index + 12]),
+                (rule_id, name, _severity(lines[index:]),
                  series, category, anchor or rule_id.lower())
             )
     # Sort by series then by number, so H052 follows R099 rather than R010.
@@ -80,7 +80,13 @@ def _severity(section: list[str]) -> str:
     on addition"); the table shows the worst one it opens with, which is
     what the full entry then qualifies.
     """
-    for line in section:
+    for index, line in enumerate(section):
+        # Stop at the next rule heading. A section with no severity line of
+        # its own (a retired or reserved anchor) would otherwise inherit the
+        # severity of whichever rule follows it, which is how H005 once
+        # rendered as H008's MEDIUM.
+        if index and line.startswith("### "):
+            break
         # Two spellings: the list form (`- **Severity:** HIGH (weight 25)`)
         # and the reference form, where the severity opens the entry
         # (`**HIGH** (weight 25) - category evasion`).

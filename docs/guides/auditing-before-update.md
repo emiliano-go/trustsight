@@ -18,12 +18,12 @@ Some packages may score **5-15** from novelty. This includes a source URL first 
 
 | Score range | What it means |
 |-------------|---------------|
-| **25-40** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or an [R-series or H-series rule](../reference/rules/index.md) matched. |
-| **41-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
+| **21-50** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or an [R-series or H-series rule](../reference/rules/index.md) matched. |
+| **51-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
 | **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules/system.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
 | **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the database-wide maturity is below 0.5 (fewer than 25 effective observations), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
 
-> **Practical threshold:** score **25+** warrants attention. **40+** means skip the update and inspect first.
+> **Practical threshold:** score **20+** warrants attention. **40+** means skip the update and inspect first.
 
 ## When to dig deeper
 
@@ -37,7 +37,7 @@ The inspect command shows the raw diff summary, every rule that fired, and the r
 
 ## The scoring model in brief
 
-TrustSight scores are deterministic; the same inputs always produce the same score. See the [scoring philosophy](../explanation/scoring-philosophy.md) for details.
+TrustSight scores are deterministic; the same diff, effective configuration, and observation history produce the same score. See the [scoring philosophy](../explanation/scoring-philosophy.md) for details.
 
 The final score is the weighted sum of all triggered rules across four [evidence tiers](../reference/evidence-tiers.md):
 

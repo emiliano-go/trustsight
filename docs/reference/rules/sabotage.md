@@ -46,7 +46,7 @@ So every rule here is written against a distinction rather than a command:
 - **A package's own service is not the system's.** Stopping a daemon before
   replacing its binary is standard packaging. Only *system* services count.
 
-Against the 3,246-diff locked benign corpus, every rule in this family fires
+Against the 3,739-diff locked benign corpus, every rule in this family fires
 on **zero** diffs. That is not a target that was aimed for; it is what the
 distinctions above produce, and it is the reason these can carry CRITICAL and
 HIGH weights without spending fire-rate budget the rest of the ruleset needs.
@@ -87,7 +87,7 @@ and does not fire.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `sabotage`
-- **Condition:** `rm -rf` (in either flag order) whose target is a system path or the operator's home, on a line that names no build-sandbox variable.
+- **Condition:** `rm -rf` (in either flag order) whose dangerous target is not a build-sandbox path.
 
 The conjunction is the rule. `rm -rf` alone is housekeeping; a target of `/`,
 `/*`, `/etc`, `/usr`, `/var`, `/boot`, `/home`, `/root`, `~` or `$HOME` is
@@ -132,7 +132,7 @@ packaging, not this rule's business.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `sabotage`
-- **Condition:** `systemctl stop`/`disable`/`mask` of a **system** unit, `systemctl isolate`/`poweroff`/`reboot`/`halt`, `killall`/`pkill` of a system daemon, `ufw disable`, `firewall-cmd --panic-off`, or `setenforce 0`.
+- **Condition:** `systemctl stop`/`disable`/`mask` of a **system** unit, `systemctl isolate`/`poweroff`/`reboot`/`halt`, `killall`/`pkill` of a system daemon, `ufw disable`, `firewall-cmd --panic-off`/`--remove-service`, or `setenforce 0`.
 
 The unit list is the whole precision of this rule. A package stopping or
 disabling **its own** service is standard packaging - you stop a daemon before

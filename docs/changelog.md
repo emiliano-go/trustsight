@@ -764,7 +764,7 @@
 
 - **X021: the executor is literal and the file it runs is not.** X002 asks
   whether the *command* can be read from the text; this asks the same of
-  its argument, which was the open half. `set -- *.sh; bash "$1"`,
+  its argument, which was the open half. `set --	*.sh; bash "$1"`,
   `mapfile -t A < <(ls *.sh); bash "${A[0]}"`, `IFS=:; bash $*` - `bash` is
   perfectly literal in every one, so X002 stands down and every
   path-pairing rule looks for a filename that is not there. An executor
@@ -4300,6 +4300,8 @@
   gate, and per-rule tables for core, expanded, D-series, and build-function
   rules.
 
+## [0.6.0] - 2026-07-25
+
 ### Added
 
 - **Four more supply-chain rules**, all off by default, each measured against the 3246-diff benign corpus before being designed. **D004 0.00 %, R062 0.09 %, R063 0.00 %, R064 0.03 %.**
@@ -4433,9 +4435,9 @@ a package upgrade alone does not update it. The command is additive and never
 overwrites a rule you have edited.
 
 Note: `v0.2.1` was already tagged at the previous commit, and the `[0.3.0]`
-section below is recorded in this changelog but was never tagged. This release
-takes the next free patch number; the 0.3.0 discrepancy is left for a separate
-reconciliation.
+section below was recorded ahead of the `v0.3.0` tag that now carries it. This
+release takes the next free patch number; the 0.3.0 ordering is left for a
+separate reconciliation.
 
 ### Fixed
 
@@ -4514,6 +4516,7 @@ reconciliation.
 [0.4.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.4.1
 [0.5.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.5.0
 [0.5.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.5.1
+[0.6.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.6.0
 [0.6.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.6.1
 [0.7.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.7.0
 [0.7.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.7.1
@@ -4530,4 +4533,12 @@ reconciliation.
 [0.13.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.13.2
 [0.14.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.14.0
 [0.14.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.14.1
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.14.1...HEAD
+[0.15.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.0
+[0.15.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.1
+[0.15.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.2
+[0.15.3]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.3
+[0.15.4]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.4
+[0.15.5]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.5
+[0.15.6]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.6
+[0.15.7]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.7
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.15.7...HEAD

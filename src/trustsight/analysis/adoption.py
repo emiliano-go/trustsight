@@ -116,7 +116,7 @@ def is_recipe_only_change(diff_text: str) -> bool:
 
     "The recipe gained capability" means a dependency array changed **and** a
     build function changed. Requiring both is what makes this specific, and
-    the numbers are the reason: against the 3,246-diff locked benign corpus,
+    the numbers are the reason: against the 3,739-diff locked benign corpus,
     ``deps or build`` fires on 11.53%, ``deps only`` on 4.36%, ``build only``
     on 5.75%, and ``deps and build`` on **1.42%**. The disjunction is under
     the 30% ceiling but it is eight times the noise for no extra detection -

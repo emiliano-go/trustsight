@@ -2,9 +2,9 @@
 
 # Maintainer and Metadata
 
-Who owns the package changed (H026, H044, H058, H074, C006), or a property
-that held for a long run of observations changed (H037, H047, H049, H050,
-H051, H054, H063).
+Who owns the package changed (H026, H044, H074, C006), or a property
+that held for a long run of observations changed (H037, H049, H050,
+H051, H054, H058, H063).
 
 The longitudinal rules do not read a diff at all. They read `PropertyBreak`
 records from the corpus property layer, gated by `[longitudinal]
@@ -85,7 +85,7 @@ An epoch overrides normal version comparison, so introducing one forces an
 upgrade regardless of what the version numbers say. A pre-existing epoch never
 surfaces in a hunk, so bumping one is quiet.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H037: Long-Stable Property Changed {#h037}
 

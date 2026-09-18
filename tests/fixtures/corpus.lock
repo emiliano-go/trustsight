@@ -1,7 +1,7 @@
 {
   "generated": "2026-07-16",
   "strata_file": "strata.toml",
-  "total_entries": 3246,
+  "total_entries": 3739,
   "xfuncname": "^((prepare|build|check|package[[:alnum:]_-]*|pkgver|(post|pre)_(install|upgrade|remove))[[:space:]]*\\(\\))[[:space:]]*\\{.*$",
   "diff_flags": [
     "-W"
@@ -1505,6 +1505,12 @@
     {
       "pkg": "betterbird-bin",
       "stratum": "bin_repack",
+      "old_sha": "16505880c06d1be15eaf8a67527d96b1aafdbc41",
+      "new_sha": "cd413c8e8a0ff0606062ad26771849a8a7d6a2ba"
+    },
+    {
+      "pkg": "betterbird-bin",
+      "stratum": "bin_repack",
       "old_sha": "27d10030b1fb4f5503f2b0516938f9e96358d7c3",
       "new_sha": "777326998ff56cb4be058e8cd2b84442ae589efa"
     },
@@ -1721,6 +1727,12 @@
     {
       "pkg": "brave-bin",
       "stratum": "bin_repack",
+      "old_sha": "2a708c5a5a3314aa99ab43e9cbe067d139c71053",
+      "new_sha": "dc0abcb12605862ed32dccc5f4c0702472249d94"
+    },
+    {
+      "pkg": "brave-bin",
+      "stratum": "bin_repack",
       "old_sha": "2dd1ac6b8153ed3419af4cc5d96ce86066278819",
       "new_sha": "2759a0681d9999b5baf62a6f595b4928153866e0"
     },
@@ -1829,6 +1841,12 @@
     {
       "pkg": "brave-bin",
       "stratum": "bin_repack",
+      "old_sha": "dc0abcb12605862ed32dccc5f4c0702472249d94",
+      "new_sha": "8d64af9db87d367ae6583d8bc644f016b2ce3228"
+    },
+    {
+      "pkg": "brave-bin",
+      "stratum": "bin_repack",
       "old_sha": "e28c865ff7e8db8a0897daaabc8f1b3deab09142",
       "new_sha": "d0f22bbc166126b768387ec07150bbfd4d6bab29"
     },
@@ -1861,6 +1879,12 @@
       "stratum": "bin_repack",
       "old_sha": "0f8272ff799ca8b094698906f2a4e8cb9a5965ac",
       "new_sha": "b25cdfe7697fe9bddbee166ce5d30ff0680c248e"
+    },
+    {
+      "pkg": "brave-origin-bin",
+      "stratum": "bin_repack",
+      "old_sha": "21d10c7be552303a0b960849c1badc7eba0ffd6e",
+      "new_sha": "13f7b0d730dfd4aae8918b0cd248be3138c19ca3"
     },
     {
       "pkg": "brave-origin-bin",
@@ -1937,6 +1961,12 @@
     {
       "pkg": "brave-origin-bin",
       "stratum": "bin_repack",
+      "old_sha": "e2c734027d525f51140bf7b0bdecabf9a0f39e90",
+      "new_sha": "21d10c7be552303a0b960849c1badc7eba0ffd6e"
+    },
+    {
+      "pkg": "brave-origin-bin",
+      "stratum": "bin_repack",
       "old_sha": "f81660880cb42ca3af0f5c133886c9fef366f028",
       "new_sha": "68547ff37ccf076c7f5788cf6e5c44cb86bd8c3d"
     },
@@ -1957,6 +1987,12 @@
       "stratum": "bin_repack",
       "old_sha": "051b62dbe4c925b94efeed38c04958f00dfcb73c",
       "new_sha": "5b1860b07e8f617dbf8a7f327ac119882ff21dbd"
+    },
+    {
+      "pkg": "brave-origin-nightly-bin",
+      "stratum": "bin_repack",
+      "old_sha": "08e47a60634c5af16dd612a928b1ce5647c37bce",
+      "new_sha": "6b00c6fe2a190adf024d87ce8ae45b27306ae1be"
     },
     {
       "pkg": "brave-origin-nightly-bin",
@@ -1997,6 +2033,12 @@
     {
       "pkg": "brave-origin-nightly-bin",
       "stratum": "bin_repack",
+      "old_sha": "410e52dd12d9a4a070f5f9389a8b8eb59681269f",
+      "new_sha": "5c79bb2f09653005ccfe7af258b8434a11af364f"
+    },
+    {
+      "pkg": "brave-origin-nightly-bin",
+      "stratum": "bin_repack",
       "old_sha": "4270f81e698b71ca564fc846a5b439c550f8bb68",
       "new_sha": "aa1c9a7f7da76da94cb7b76d3d94492a1eadd797"
     },
@@ -2017,6 +2059,18 @@
       "stratum": "bin_repack",
       "old_sha": "5c61ff846f60d9cfbc69d13b7977bdb8ca8cf740",
       "new_sha": "4d1a0b4471cc92ee9f5a6c5b6b094d675dcd38c9"
+    },
+    {
+      "pkg": "brave-origin-nightly-bin",
+      "stratum": "bin_repack",
+      "old_sha": "5c79bb2f09653005ccfe7af258b8434a11af364f",
+      "new_sha": "abf92a2479fe333aa496d0ffb6a85e4de9871e45"
+    },
+    {
+      "pkg": "brave-origin-nightly-bin",
+      "stratum": "bin_repack",
+      "old_sha": "6b00c6fe2a190adf024d87ce8ae45b27306ae1be",
+      "new_sha": "808f25fad3f225172cbf2d8fa0bff22e32f34ee8"
     },
     {
       "pkg": "brave-origin-nightly-bin",
@@ -2077,6 +2131,12 @@
       "stratum": "bin_repack",
       "old_sha": "aa32d4f0c312e229d95f36611c7ea5760400ee3e",
       "new_sha": "dc0f2c55b5d89ec18898417cd35b509b45d97bd7"
+    },
+    {
+      "pkg": "brave-origin-nightly-bin",
+      "stratum": "bin_repack",
+      "old_sha": "abf92a2479fe333aa496d0ffb6a85e4de9871e45",
+      "new_sha": "08e47a60634c5af16dd612a928b1ce5647c37bce"
     },
     {
       "pkg": "brave-origin-nightly-bin",
@@ -2309,8 +2369,20 @@
     {
       "pkg": "claude-desktop-bin",
       "stratum": "bin_repack",
+      "old_sha": "01c07916ef4e97445d37245c4c896fd7634929a1",
+      "new_sha": "547babd068a57eff9f78c99523c1838b6a4359cb"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
       "old_sha": "05f17528188eee8c7c7d425ef95eb7ff764814ed",
       "new_sha": "903b05016f9315d209723e97453a5440364b486d"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
+      "old_sha": "095ac7a11716825d824f69c9c48f8938ca962783",
+      "new_sha": "50175cdd3adc210306198a83a201f4726fb5f63f"
     },
     {
       "pkg": "claude-desktop-bin",
@@ -2351,8 +2423,26 @@
     {
       "pkg": "claude-desktop-bin",
       "stratum": "bin_repack",
+      "old_sha": "450bf234cf2d363c700cac4f70aedd53e983ad84",
+      "new_sha": "01c07916ef4e97445d37245c4c896fd7634929a1"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
       "old_sha": "46658f38a476253790363f149200b8a0be617e9e",
       "new_sha": "7e2644656ed241f0a84c47039ca301b4ec1b64a1"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
+      "old_sha": "50175cdd3adc210306198a83a201f4726fb5f63f",
+      "new_sha": "a730c62a1ee1cc5d6d1fb3252e8ad221cd535147"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
+      "old_sha": "547babd068a57eff9f78c99523c1838b6a4359cb",
+      "new_sha": "095ac7a11716825d824f69c9c48f8938ca962783"
     },
     {
       "pkg": "claude-desktop-bin",
@@ -2435,6 +2525,12 @@
     {
       "pkg": "claude-desktop-bin",
       "stratum": "bin_repack",
+      "old_sha": "a702508adc8d40e494425eedf01436df99efa1b5",
+      "new_sha": "450bf234cf2d363c700cac4f70aedd53e983ad84"
+    },
+    {
+      "pkg": "claude-desktop-bin",
+      "stratum": "bin_repack",
       "old_sha": "b5c34802cf4ef73469795038e33966413b1e2b82",
       "new_sha": "1bf0dcc3fe1a05edde84f99f2b1eb29bbc43fbce"
     },
@@ -2497,6 +2593,12 @@
       "stratum": "bin_repack",
       "old_sha": "0b1095073b329a85ea1008dbda29678e01815e81",
       "new_sha": "5239b95c2e9024b1c3779ce7da47ba6eb1190ef5"
+    },
+    {
+      "pkg": "cursor-bin",
+      "stratum": "bin_repack",
+      "old_sha": "0d70f8f153964797e108ac5c72457a1bb626972c",
+      "new_sha": "e7ecd5fb0ae59935e60ce999a79330fd78d59f31"
     },
     {
       "pkg": "cursor-bin",
@@ -2609,6 +2711,12 @@
     {
       "pkg": "cursor-bin",
       "stratum": "bin_repack",
+      "old_sha": "7ddd7b50108d909a315047b4fbb7d553401ad028",
+      "new_sha": "065e1de93fb7dd0192bc04bb09bfdb2c4afc6230"
+    },
+    {
+      "pkg": "cursor-bin",
+      "stratum": "bin_repack",
       "old_sha": "7ef07a2b6b0697ace362f3e5c807be8ad8051faa",
       "new_sha": "761fe32b96da9027104039d324be31853f9783a2"
     },
@@ -2623,6 +2731,18 @@
       "stratum": "bin_repack",
       "old_sha": "8dcfc714e83985bbdef9824615f5a35d99a9801d",
       "new_sha": "65543a5688b0c2708e1e7a5275837387ba20dd6f"
+    },
+    {
+      "pkg": "cursor-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a83575fc9a0cefdba1367f1067778c03ebdd76d4",
+      "new_sha": "b3eb44f11e0a459d9cbd249df7a4f3eb4ebf903a"
+    },
+    {
+      "pkg": "cursor-bin",
+      "stratum": "bin_repack",
+      "old_sha": "b3eb44f11e0a459d9cbd249df7a4f3eb4ebf903a",
+      "new_sha": "0d70f8f153964797e108ac5c72457a1bb626972c"
     },
     {
       "pkg": "cursor-bin",
@@ -2647,6 +2767,12 @@
       "stratum": "bin_repack",
       "old_sha": "e27f992baca4d5e0aa92fdef520f7f29972cd4d9",
       "new_sha": "fb859b057428d32f54a38571db90366e83fa2162"
+    },
+    {
+      "pkg": "cursor-bin",
+      "stratum": "bin_repack",
+      "old_sha": "e7ecd5fb0ae59935e60ce999a79330fd78d59f31",
+      "new_sha": "7ddd7b50108d909a315047b4fbb7d553401ad028"
     },
     {
       "pkg": "cursor-bin",
@@ -2847,6 +2973,186 @@
       "new_sha": "9d634fef07ef9df9292227735092d9489e8a0421"
     },
     {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "0e269a369fc8f50d4e4cced7ea272441dadc3395",
+      "new_sha": "fc1e6357ae9da804ff8e58951c420f97c60dedf8"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "0e353aae6f8077aac927cfa50e90b274fcbaafcc",
+      "new_sha": "54059cf20caa55bcd779aa36c5458876dee4fcd3"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1ee4c30694e82601a89dea01f16412950fd0f5e2",
+      "new_sha": "6baae87b27549cc1445f3ebe4d81f00b3cc4b66d"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2072319a79831b552572626daa1e850f76e7ecd0",
+      "new_sha": "b0002662c2af9c468aaef4f841778c00b0c3fb02"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2d72a34f2af40ced5cfec1c79f20c26d8bdd14e3",
+      "new_sha": "94b448849970c6de55ee3fde9daa2bdba41edc71"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "3cd1a1d0a0a4d2e77f494cb5eea4e3676e3b3680",
+      "new_sha": "462a1e518faf6f926d13fde437122de1530ea8c8"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "3e719a258defaf5accd1d1fcc4a360050ba05b84",
+      "new_sha": "0e353aae6f8077aac927cfa50e90b274fcbaafcc"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "462a1e518faf6f926d13fde437122de1530ea8c8",
+      "new_sha": "74144a547c1d946b47c60a9d293c0ed02175fba3"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "48632edd98862fc96c0792f91a8c30a1c72d87e8",
+      "new_sha": "f2c3d95c5eac6edf365e7a6a47805a3e86cfa806"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "4eafbe94540a8197e025c6b0a0b81dd313bb5127",
+      "new_sha": "ae9e44c26b3770c1dad34960f38fb93c6c3927e1"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "50775f6211ca8341b7eb63710e224dc1099d8825",
+      "new_sha": "ae68d9ea89aba2249673bf7991b0630363709300"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "54059cf20caa55bcd779aa36c5458876dee4fcd3",
+      "new_sha": "0e269a369fc8f50d4e4cced7ea272441dadc3395"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "6ac301e166d81e3ac7f191f45a210caed4e38a82",
+      "new_sha": "f0b4d5fdb43b0479a468a3d1499eaabbd01a3487"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "6baae87b27549cc1445f3ebe4d81f00b3cc4b66d",
+      "new_sha": "3e719a258defaf5accd1d1fcc4a360050ba05b84"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "74144a547c1d946b47c60a9d293c0ed02175fba3",
+      "new_sha": "4eafbe94540a8197e025c6b0a0b81dd313bb5127"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "79c8fcd55c12852ec95da0328c7e73d9680e01d4",
+      "new_sha": "c75c5f9f26bb061f684147112687a172f4fe1d73"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "7c75103c33d9e6cdef5fa3c9747143902360118d",
+      "new_sha": "79c8fcd55c12852ec95da0328c7e73d9680e01d4"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "92d98d1f9ff74e6c57a441623d1e6db504895865",
+      "new_sha": "a509cdb85d78be9839488ee1f146bcd5e419ad51"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "94b448849970c6de55ee3fde9daa2bdba41edc71",
+      "new_sha": "c68462d2d9afa75586a34617aab9bc8efa376ec8"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a509cdb85d78be9839488ee1f146bcd5e419ad51",
+      "new_sha": "d54a14188b5af734825fa76d2b4da682045c3d29"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "ae68d9ea89aba2249673bf7991b0630363709300",
+      "new_sha": "7c75103c33d9e6cdef5fa3c9747143902360118d"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "ae9e44c26b3770c1dad34960f38fb93c6c3927e1",
+      "new_sha": "2072319a79831b552572626daa1e850f76e7ecd0"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "b0002662c2af9c468aaef4f841778c00b0c3fb02",
+      "new_sha": "bbba5064bc38571de5bf104b41fab511592b6c5b"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "bbba5064bc38571de5bf104b41fab511592b6c5b",
+      "new_sha": "48632edd98862fc96c0792f91a8c30a1c72d87e8"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c68462d2d9afa75586a34617aab9bc8efa376ec8",
+      "new_sha": "1ee4c30694e82601a89dea01f16412950fd0f5e2"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c75c5f9f26bb061f684147112687a172f4fe1d73",
+      "new_sha": "6ac301e166d81e3ac7f191f45a210caed4e38a82"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "d54a14188b5af734825fa76d2b4da682045c3d29",
+      "new_sha": "50775f6211ca8341b7eb63710e224dc1099d8825"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "f0b4d5fdb43b0479a468a3d1499eaabbd01a3487",
+      "new_sha": "2d72a34f2af40ced5cfec1c79f20c26d8bdd14e3"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "f2c3d95c5eac6edf365e7a6a47805a3e86cfa806",
+      "new_sha": "354c174545e04beffb11fb1c836e2f93444f21eb"
+    },
+    {
+      "pkg": "freetube-bin",
+      "stratum": "bin_repack",
+      "old_sha": "fc1e6357ae9da804ff8e58951c420f97c60dedf8",
+      "new_sha": "3cd1a1d0a0a4d2e77f494cb5eea4e3676e3b3680"
+    },
+    {
       "pkg": "helium-browser-bin",
       "stratum": "bin_repack",
       "old_sha": "1c321b1c0e5bb9eb8cf4f3c7f0dc809fd1b6cb67",
@@ -2875,6 +3181,12 @@
       "stratum": "bin_repack",
       "old_sha": "2c1e5744fa878b374442a2bd5270cc37331419ad",
       "new_sha": "8b57d81579239bdfae98cc12bfdff7ba4ce65dc8"
+    },
+    {
+      "pkg": "helium-browser-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2f225a426841e88f03814300e377e0eab93fc3d8",
+      "new_sha": "65bbcbc7bb9e74b14a0207031ec0cf61751927fc"
     },
     {
       "pkg": "helium-browser-bin",
@@ -2977,6 +3289,12 @@
       "stratum": "bin_repack",
       "old_sha": "d3e585b0b2928f8e32378158ab783289f8f74793",
       "new_sha": "b13406b266eec1201f1547d3a51ba05419e6e451"
+    },
+    {
+      "pkg": "helium-browser-bin",
+      "stratum": "bin_repack",
+      "old_sha": "d9094b9cdde578aab034ac131f0640441428806f",
+      "new_sha": "2f225a426841e88f03814300e377e0eab93fc3d8"
     },
     {
       "pkg": "helium-browser-bin",
@@ -3383,6 +3701,12 @@
     {
       "pkg": "librewolf-bin",
       "stratum": "bin_repack",
+      "old_sha": "ec6dbb422455fe46382790ba12655d32c84b2a17",
+      "new_sha": "0d0478da9009f499dcd285a7a8cd0ce2aa83b6f0"
+    },
+    {
+      "pkg": "librewolf-bin",
+      "stratum": "bin_repack",
       "old_sha": "f9de81842fecf2d8755c19506e057bdfe795397c",
       "new_sha": "c6774382dfde1318c3270b42ce05b3f1936f4daa"
     },
@@ -3475,6 +3799,12 @@
       "stratum": "bin_repack",
       "old_sha": "94026d3a96d5685eb741184cc024dd4c69955fec",
       "new_sha": "f5390945e7bb4fe16a418197a027caea1bfa5341"
+    },
+    {
+      "pkg": "lmstudio-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a98ed25f8bdee793cfdcd707abec0ad80c661e5b",
+      "new_sha": "0ce6239d87643836f86a5c04b7f5be4deaaaef4d"
     },
     {
       "pkg": "lmstudio-bin",
@@ -3925,6 +4255,12 @@
       "stratum": "bin_repack",
       "old_sha": "12aa21fcb51596800df4b88338e7ca8e1fe7c54f",
       "new_sha": "b9591839dd67e9aafb7d7c5952b3e43268531872"
+    },
+    {
+      "pkg": "mullvad-browser-bin",
+      "stratum": "bin_repack",
+      "old_sha": "22521af44bc476f683c2bf0836ea7a39585cd5c5",
+      "new_sha": "1b6b7c82bea1f0d8b452799556246056e0d8fb9f"
     },
     {
       "pkg": "mullvad-browser-bin",
@@ -4595,6 +4931,12 @@
     {
       "pkg": "opencode-bin",
       "stratum": "bin_repack",
+      "old_sha": "c7fd30aa8e0d0f9bda612a78ad273c233cf1bbca",
+      "new_sha": "87851afb1d200844a65ae5f7beecfc0fdf9c009b"
+    },
+    {
+      "pkg": "opencode-bin",
+      "stratum": "bin_repack",
       "old_sha": "c8d7f65cd9103eef6891014ba91b94ff685f3ed9",
       "new_sha": "dc85cb4c5bb85b714f5d3d9ee91a618742146e59"
     },
@@ -4815,6 +5157,186 @@
       "new_sha": "2b0b9601ed384c453b25a8d65360301240466f66"
     },
     {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "004e9eca04d224a74153a3ee42dabcc0c37979ec",
+      "new_sha": "4519ab2abd2c71ff2ba000a1c53179288257a8bd"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "01684d8fedcb134d28a753b9716ffcfccc64ce2d",
+      "new_sha": "3f4cc52e3c4171f410650c9801ece7b6522e3f1f"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "07682f1b3c91d7fc7393fac787ff7ed4bc0a50bd",
+      "new_sha": "4521c8f894019c1803fc39e17172553da65f71f7"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "12d57c48c664679f4ed045a4d37df7ffddcb3f1b",
+      "new_sha": "76277dcf6340395583621ee863a2465aec0b18e9"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1bbd3a5a310231374cccd7743033bd3c67ef28be",
+      "new_sha": "a8b2d3871aef1e66b6f954987f0089d7dfaa9485"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1c42356ab6c8b5451ad75043f0751abcafed03e5",
+      "new_sha": "a3f25f246e6ee54455eab70537fefdc1ad6f9914"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1fa69030ff17eb16d9ce64f41b0096bc9bff3d13",
+      "new_sha": "a73abedea77f1ae3315dd482918fc459f3b0d785"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2337d3a4d55fc747df82b98d11fb6d2073454b82",
+      "new_sha": "9624b00fd2170a7bd7c1b9fdf0ee6af820bf341d"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "35dc1e70cf62a9f5b54cf25e332909a14e205243",
+      "new_sha": "44ec7d0c5246c52680005749502126b653458b85"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "390e5889ea1a023c90d2366c99f65594d650d694",
+      "new_sha": "687d58489943678530bddc0ea95cf344adba191e"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "3c5c75a0079685e6098c6cbc8c611221b1c49d19",
+      "new_sha": "1bbd3a5a310231374cccd7743033bd3c67ef28be"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "3f4cc52e3c4171f410650c9801ece7b6522e3f1f",
+      "new_sha": "59be72a391316dd2fc20f95fdb935c6aa36b2eed"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "44ec7d0c5246c52680005749502126b653458b85",
+      "new_sha": "57bcf4fedf321d7a348c962d88ea12a61f9531f7"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "4519ab2abd2c71ff2ba000a1c53179288257a8bd",
+      "new_sha": "a25d2114bca8ad9d0200e93f48a7d1ead5264c1a"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "4521c8f894019c1803fc39e17172553da65f71f7",
+      "new_sha": "e2f07c66f6d064e4f43904a75d58144a0a762c44"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "57bcf4fedf321d7a348c962d88ea12a61f9531f7",
+      "new_sha": "12d57c48c664679f4ed045a4d37df7ffddcb3f1b"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "59be72a391316dd2fc20f95fdb935c6aa36b2eed",
+      "new_sha": "c504f4f01a99848f0e07631f3a66422c5a88ec61"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "67ccfce3c637c96465545e50beebdae5c3b78576",
+      "new_sha": "b6ed16841810518dccecaf5f7edd16bc99441010"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "687d58489943678530bddc0ea95cf344adba191e",
+      "new_sha": "8b16740b85bed3c67f19d4011008b9de535e6864"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "6af587e29890f73317779b6dbbcd7000ae906e52",
+      "new_sha": "2337d3a4d55fc747df82b98d11fb6d2073454b82"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "7139541e6a514f782b8fda8dd126f8b5e5beae3c",
+      "new_sha": "67ccfce3c637c96465545e50beebdae5c3b78576"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "76277dcf6340395583621ee863a2465aec0b18e9",
+      "new_sha": "004e9eca04d224a74153a3ee42dabcc0c37979ec"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "8b16740b85bed3c67f19d4011008b9de535e6864",
+      "new_sha": "6af587e29890f73317779b6dbbcd7000ae906e52"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a25d2114bca8ad9d0200e93f48a7d1ead5264c1a",
+      "new_sha": "1fa69030ff17eb16d9ce64f41b0096bc9bff3d13"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a3f25f246e6ee54455eab70537fefdc1ad6f9914",
+      "new_sha": "7139541e6a514f782b8fda8dd126f8b5e5beae3c"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a73abedea77f1ae3315dd482918fc459f3b0d785",
+      "new_sha": "1c42356ab6c8b5451ad75043f0751abcafed03e5"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a8b2d3871aef1e66b6f954987f0089d7dfaa9485",
+      "new_sha": "390e5889ea1a023c90d2366c99f65594d650d694"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "b6ed16841810518dccecaf5f7edd16bc99441010",
+      "new_sha": "3c5c75a0079685e6098c6cbc8c611221b1c49d19"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c504f4f01a99848f0e07631f3a66422c5a88ec61",
+      "new_sha": "07682f1b3c91d7fc7393fac787ff7ed4bc0a50bd"
+    },
+    {
+      "pkg": "osu-lazer-bin",
+      "stratum": "bin_repack",
+      "old_sha": "e2f07c66f6d064e4f43904a75d58144a0a762c44",
+      "new_sha": "35dc1e70cf62a9f5b54cf25e332909a14e205243"
+    },
+    {
       "pkg": "pandoc-bin",
       "stratum": "bin_repack",
       "old_sha": "01571d205176f00ab4dd996c10bb55c21ccf1cc3",
@@ -4961,6 +5483,12 @@
     {
       "pkg": "pandoc-bin",
       "stratum": "bin_repack",
+      "old_sha": "ca35523a6cd803f0c4d67cb474053ec9390d22ac",
+      "new_sha": "b57b88ab0857694e93c11b277901aac708282d9e"
+    },
+    {
+      "pkg": "pandoc-bin",
+      "stratum": "bin_repack",
       "old_sha": "e207fec28d91dbaffce4f356fdf64ab0cffef2cb",
       "new_sha": "58c1759617e13dbf999a0853c4af0911fe918fda"
     },
@@ -4993,6 +5521,54 @@
       "stratum": "bin_repack",
       "old_sha": "f389124e7e09014820e1d2fa0c053d8c1742304c",
       "new_sha": "6f09e344dd1d3392ada37a2334294608695c822a"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "0bd91359e5764bfc94a672d37c065d63604a4c53",
+      "new_sha": "6dfaaf62de3dc2587bf949c9c381c9c36f36126a"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1fc0566dda5b2e65cf295b6949d854c68b2d216d",
+      "new_sha": "5b0de270896c8608f7412476e51d21bf4f78ed25"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "5b0de270896c8608f7412476e51d21bf4f78ed25",
+      "new_sha": "c3654282f7191c9cc2adec7200a5385df6ba765c"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "67d33bddfdf34128fad59c1973ca1ed2243e0cbb",
+      "new_sha": "0bd91359e5764bfc94a672d37c065d63604a4c53"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "6dfaaf62de3dc2587bf949c9c381c9c36f36126a",
+      "new_sha": "bb3f276bb403f119bc6233fed83e442774ba5719"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "b15a8095dd15058ffe767a687771acbb2fe42db2",
+      "new_sha": "cb03c35495076f374bed7b2ccb237b4ee64fd03d"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "bb3f276bb403f119bc6233fed83e442774ba5719",
+      "new_sha": "b15a8095dd15058ffe767a687771acbb2fe42db2"
+    },
+    {
+      "pkg": "proton-drive-cli-bin",
+      "stratum": "bin_repack",
+      "old_sha": "cb03c35495076f374bed7b2ccb237b4ee64fd03d",
+      "new_sha": "1fc0566dda5b2e65cf295b6949d854c68b2d216d"
     },
     {
       "pkg": "r2modman-bin",
@@ -5927,6 +6503,12 @@
     {
       "pkg": "ungoogled-chromium-bin",
       "stratum": "bin_repack",
+      "old_sha": "12e9c3be9723d1a3dbdfcc86183b777b8cbcf255",
+      "new_sha": "29fc973af24fc75620bb90041f5ec6dcd32b0673"
+    },
+    {
+      "pkg": "ungoogled-chromium-bin",
+      "stratum": "bin_repack",
       "old_sha": "187eb98af4776bb02d2e868db6fb0ab8739b7ffa",
       "new_sha": "d96f4031e3ec7b5a4b903cfd83c0e1e2dcbb7945"
     },
@@ -6509,6 +7091,12 @@
     {
       "pkg": "visual-studio-code-bin",
       "stratum": "bin_repack",
+      "old_sha": "34468552c5ddf9ec62e2f433990149f2d978513a",
+      "new_sha": "f3241e83aeba1c2135a8936c88677b33522e2b77"
+    },
+    {
+      "pkg": "visual-studio-code-bin",
+      "stratum": "bin_repack",
       "old_sha": "35b7418000c3ab0cd3c6341699e6c4f552cf6c9b",
       "new_sha": "049b8acb7ecc9c04c059b4aa5049bdb06dc90a17"
     },
@@ -6613,6 +7201,12 @@
       "stratum": "bin_repack",
       "old_sha": "ed1c32969b54d89217053c19f55ea4bc6b761767",
       "new_sha": "042a78c33795d701b81227f0049352a5e65d1c14"
+    },
+    {
+      "pkg": "visual-studio-code-bin",
+      "stratum": "bin_repack",
+      "old_sha": "f3241e83aeba1c2135a8936c88677b33522e2b77",
+      "new_sha": "2a940c1556c297f3a5624e4e8b903de6b46830ef"
     },
     {
       "pkg": "visual-studio-code-bin",
@@ -7259,6 +7853,12 @@
     {
       "pkg": "zen-browser-bin",
       "stratum": "bin_repack",
+      "old_sha": "955bafbbd4d05ec104555c0467b86f0bac88656a",
+      "new_sha": "d545212ecda7435292f236b5ec89047408636757"
+    },
+    {
+      "pkg": "zen-browser-bin",
+      "stratum": "bin_repack",
       "old_sha": "992c261ea508ac47a069b8e8a2c3068f614b5a60",
       "new_sha": "4dd72dc4e3fc0024e5f4e9a80871384ac53d4a26"
     },
@@ -7325,6 +7925,12 @@
     {
       "pkg": "zen-browser-bin",
       "stratum": "bin_repack",
+      "old_sha": "d545212ecda7435292f236b5ec89047408636757",
+      "new_sha": "ff19d7fc0cc63a0131644d8b31a8a77d7e9379eb"
+    },
+    {
+      "pkg": "zen-browser-bin",
+      "stratum": "bin_repack",
       "old_sha": "f4657f95a532b8d192dce98207076d4fb965d8b7",
       "new_sha": "4a78c109c3e6a4d60e6b72fb2ad391a5205a432b"
     },
@@ -7339,6 +7945,186 @@
       "stratum": "bin_repack",
       "old_sha": "ffa5c1414d9c1dcb27ec63100afa5ff962bcaf02",
       "new_sha": "639fe10700d82efd4a921c65111398e2532fa12d"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "10b0d44100d44e44c5651c0bca33b3918516cb45",
+      "new_sha": "47dd7a50480af0336a69d2d13ba81e6151e95b22"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "1cfdc3c0eef5b0077ff78219c026bbb8938a3a93",
+      "new_sha": "3205dc975e87229af0f36e1f69df92767184cccc"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "208b23fe139fadd616b11ce5918892b57855b4af",
+      "new_sha": "71e2ba6359d56d7437bfd46f0983e5066dd926ad"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2212752f28bad6b65e6b87ea13f8ad22adc5ee42",
+      "new_sha": "d41e5a518b83c2b81974df7b064f049f88a78a5d"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "232ba88957e747dfdfbd7ca11d7f604271625845",
+      "new_sha": "93ff2153fb5c540d403c241803d2a761c205d693"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "2aa39309d376db0ad819e0aec90bbdbb6dcb94d1",
+      "new_sha": "81506ac9cccdb9fe1b7ddf7026f09a42afe2fb77"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "3205dc975e87229af0f36e1f69df92767184cccc",
+      "new_sha": "334975fc5847c1e1194eb01dc6a32c50448bcc30"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "321daf41a8739d920e72fda26d1db418ea930157",
+      "new_sha": "5a1066499a3c715e78ada8c44fc69374488bceb5"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "334975fc5847c1e1194eb01dc6a32c50448bcc30",
+      "new_sha": "c76c2126a00ccb20dc8197cb859538832e4ac196"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "47dd7a50480af0336a69d2d13ba81e6151e95b22",
+      "new_sha": "da5c826245fb4761c807d472f0bd8baddeaf2fa3"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "558156a6a4d146bce6feae5ca8cc5d443a992ebb",
+      "new_sha": "1cfdc3c0eef5b0077ff78219c026bbb8938a3a93"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "5a1066499a3c715e78ada8c44fc69374488bceb5",
+      "new_sha": "c60784486b3684432374972a26ba890bfcd955ec"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "5c2f4dee0541d4d2adce7027869c02f102a4ea68",
+      "new_sha": "c5e6732878a5a6cfa4eaedd1bafe0265898a0a35"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "71e2ba6359d56d7437bfd46f0983e5066dd926ad",
+      "new_sha": "e04f0a07288b7cdfd7a3f923205f7e9c24eb6f86"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "74ce39b2af93adcc2bed092aefbae3693b0a85ba",
+      "new_sha": "ff3e2cb780f18bc57051ffe548ebb6c99dc1834d"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "81506ac9cccdb9fe1b7ddf7026f09a42afe2fb77",
+      "new_sha": "208b23fe139fadd616b11ce5918892b57855b4af"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "93ff2153fb5c540d403c241803d2a761c205d693",
+      "new_sha": "c306bb6301a29bcd04978dc2a2eba5b19edfda34"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "9cce894aa336ee2834c587fd9c883cf3a8da27cf",
+      "new_sha": "5c2f4dee0541d4d2adce7027869c02f102a4ea68"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "a3b8aaa9a3a72bba102090a8f31df8bae28080f9",
+      "new_sha": "c9eb81b069e0a46cae6d781c35ca6343e23cf778"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "afa74daac968c50185a2bfc8cb8274dca3f23804",
+      "new_sha": "232ba88957e747dfdfbd7ca11d7f604271625845"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "b171e458988ce55efa9c270e55de8fae83f2a21b",
+      "new_sha": "afa74daac968c50185a2bfc8cb8274dca3f23804"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c306bb6301a29bcd04978dc2a2eba5b19edfda34",
+      "new_sha": "c86c0162b670656702f20858fde8464fb86746fc"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c5e6732878a5a6cfa4eaedd1bafe0265898a0a35",
+      "new_sha": "74ce39b2af93adcc2bed092aefbae3693b0a85ba"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c60784486b3684432374972a26ba890bfcd955ec",
+      "new_sha": "b171e458988ce55efa9c270e55de8fae83f2a21b"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c76c2126a00ccb20dc8197cb859538832e4ac196",
+      "new_sha": "2aa39309d376db0ad819e0aec90bbdbb6dcb94d1"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c86c0162b670656702f20858fde8464fb86746fc",
+      "new_sha": "a3b8aaa9a3a72bba102090a8f31df8bae28080f9"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "c9eb81b069e0a46cae6d781c35ca6343e23cf778",
+      "new_sha": "2212752f28bad6b65e6b87ea13f8ad22adc5ee42"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "d41e5a518b83c2b81974df7b064f049f88a78a5d",
+      "new_sha": "10b0d44100d44e44c5651c0bca33b3918516cb45"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "e04f0a07288b7cdfd7a3f923205f7e9c24eb6f86",
+      "new_sha": "321daf41a8739d920e72fda26d1db418ea930157"
+    },
+    {
+      "pkg": "zotero-bin",
+      "stratum": "bin_repack",
+      "old_sha": "ff3e2cb780f18bc57051ffe548ebb6c99dc1834d",
+      "new_sha": "558156a6a4d146bce6feae5ca8cc5d443a992ebb"
     },
     {
       "pkg": "apple-fonts",
@@ -7921,6 +8707,186 @@
       "stratum": "data_fonts",
       "old_sha": "f9cc09b6cefc9ccc64ea37f104ce183af7b1ac0f",
       "new_sha": "babd3741cfc511a6e94c6b8f18768cd0408aeea1"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "04cc6a54bd3493534f9cdd0f3a4197881fc92082",
+      "new_sha": "14c3529b765abda8b4c4daf770184cc3cb31ecf3"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "121ea4aaddc1f99a220b45b6b9969181c1c830a4",
+      "new_sha": "1f01de69326d46cbd77684f5bc47a0fc5ca2905a"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "1278b7fa1aef334aac6df3ee920af22ea7f9e6a5",
+      "new_sha": "b700f3ee713a723f03c7dd2b3a6b3d34be9c6b15"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "14c3529b765abda8b4c4daf770184cc3cb31ecf3",
+      "new_sha": "bdb4736790f5199c4a5fe6cb58f20c9574f1760d"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "1da245ce60918b36d73547cc99aecd53da24a911",
+      "new_sha": "c18212699f90afadd3d79a209111aa42b55fdebb"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "1f01de69326d46cbd77684f5bc47a0fc5ca2905a",
+      "new_sha": "7638a218eeb414a36b91bcbaf595140f92c52f3f"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "274db093597b46bf893681e722ed80baaa5ae3ed",
+      "new_sha": "60a69c0598783dc32e86e40a2f17d6d570d6b721"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "328c4dda642f9e839c01262df8ff0b908d6c5d22",
+      "new_sha": "3aa5fec1cc40ff9156bc438eaf50c0fd758e71bc"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "3347edf0f6ac01af5c675a93911a2f32de0449fc",
+      "new_sha": "c941a42592c02ff3c739e5fe48be46131e3d8bc9"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "37a01aa0e4fc0e883a8f59d3214fbf12bc732047",
+      "new_sha": "e6b0f6d6fa084e6d0d84b0137c7205aefa0e7796"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "3aa5fec1cc40ff9156bc438eaf50c0fd758e71bc",
+      "new_sha": "43106bc60bb12091278a62019f60af9c60100586"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "43106bc60bb12091278a62019f60af9c60100586",
+      "new_sha": "e72a0b40fed43b51fb6702299186d52c5f587d2e"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "44b3a1eee9af9f704e66c4e8c670c9679436729f",
+      "new_sha": "eb1e8aa53c69a893d9e185f987130b0b5af0b477"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "558d1f9b896b56d9c5455b651476a102205ffb65",
+      "new_sha": "1da245ce60918b36d73547cc99aecd53da24a911"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "5b0a0fc1635ae39c1d18db9901f74c1a0238567b",
+      "new_sha": "5fdc5c4361ecf4b52ecc3b56cb47816f7086a10c"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "5fdc5c4361ecf4b52ecc3b56cb47816f7086a10c",
+      "new_sha": "121ea4aaddc1f99a220b45b6b9969181c1c830a4"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "60a69c0598783dc32e86e40a2f17d6d570d6b721",
+      "new_sha": "558d1f9b896b56d9c5455b651476a102205ffb65"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "7638a218eeb414a36b91bcbaf595140f92c52f3f",
+      "new_sha": "274db093597b46bf893681e722ed80baaa5ae3ed"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "94b1329474d9722d8021abe7e9ce4a4779a98cdd",
+      "new_sha": "328c4dda642f9e839c01262df8ff0b908d6c5d22"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "ac063a2869cd4edab7d1558ef35d533d077374ac",
+      "new_sha": "37a01aa0e4fc0e883a8f59d3214fbf12bc732047"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "b700f3ee713a723f03c7dd2b3a6b3d34be9c6b15",
+      "new_sha": "94b1329474d9722d8021abe7e9ce4a4779a98cdd"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "bdb4736790f5199c4a5fe6cb58f20c9574f1760d",
+      "new_sha": "ff5d0e8fec479b042068c2ebbb6353fad34c6d40"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "be15127712d437046416f82c3897c3f766841736",
+      "new_sha": "5b0a0fc1635ae39c1d18db9901f74c1a0238567b"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "c18212699f90afadd3d79a209111aa42b55fdebb",
+      "new_sha": "e89a772099e1b39fcb629db8aaa18b26c41f9ecb"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "d1d4011f283cb09fa930b3185349f7fb1e2f0eb4",
+      "new_sha": "1278b7fa1aef334aac6df3ee920af22ea7f9e6a5"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "e6b0f6d6fa084e6d0d84b0137c7205aefa0e7796",
+      "new_sha": "44b3a1eee9af9f704e66c4e8c670c9679436729f"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "e72a0b40fed43b51fb6702299186d52c5f587d2e",
+      "new_sha": "be15127712d437046416f82c3897c3f766841736"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "e89a772099e1b39fcb629db8aaa18b26c41f9ecb",
+      "new_sha": "04cc6a54bd3493534f9cdd0f3a4197881fc92082"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "eb1e8aa53c69a893d9e185f987130b0b5af0b477",
+      "new_sha": "d1d4011f283cb09fa930b3185349f7fb1e2f0eb4"
+    },
+    {
+      "pkg": "ttf-juliamono",
+      "stratum": "data_fonts",
+      "old_sha": "ff5d0e8fec479b042068c2ebbb6353fad34c6d40",
+      "new_sha": "3347edf0f6ac01af5c675a93911a2f32de0449fc"
     },
     {
       "pkg": "ttf-ms-fonts",
@@ -9645,6 +10611,126 @@
       "new_sha": "b40cbf8441cf27a88b2e7647ebdcedb3ec4d9f93"
     },
     {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "01e7ba902a60bace30cf010ca22be8a1424fadfc",
+      "new_sha": "bc912d1b58cff6322f6095e76f96239938ea964c"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "0450f17f3d7053ee287bafa8a657d952b97fdf42",
+      "new_sha": "5fa2da3eea81a75bf9338c09be3174ed990f65c0"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "17a845cdd99164dac5a275858cc867e2ab5bddc4",
+      "new_sha": "d909d82814802789723562692240ff71204052c1"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "19ffd633752029a034b814f9e1d3df95593abe43",
+      "new_sha": "b4cbd2b96eaf61dceab85e0991a23f3c70c3413c"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "1b5d6c0ecf87c0678ac63854c773a9fb07f2252f",
+      "new_sha": "1b8e596857237c1f986ce83610dd5a9e6e9f83d2"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "1b8e596857237c1f986ce83610dd5a9e6e9f83d2",
+      "new_sha": "4b01e72b9b2a057d7abc7175a65db60d8e63aa84"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "4940b5c92d3f7809854c8be0424446c78b6adb92",
+      "new_sha": "dc7b851a9568db9bf7f81537846cba94fb8bc4da"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "4b01e72b9b2a057d7abc7175a65db60d8e63aa84",
+      "new_sha": "512d3522e3b356eda749dc2cf3316f7553a1d1bb"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "512d3522e3b356eda749dc2cf3316f7553a1d1bb",
+      "new_sha": "db674e591426c90ca036747a07fa54aaba76f351"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "59710674d346000b0fa1d55bd2d98d7bbeb5bb41",
+      "new_sha": "d7a9914b6f3ad6ef2fc9c6fab4f8114f674d1b62"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "5fa2da3eea81a75bf9338c09be3174ed990f65c0",
+      "new_sha": "4940b5c92d3f7809854c8be0424446c78b6adb92"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "8190affb72dded2a36d77cab63dede7c3862e44b",
+      "new_sha": "19ffd633752029a034b814f9e1d3df95593abe43"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "b14351180d38ccf16861ea0ba9bbace74d839170",
+      "new_sha": "c5d367db3c37674236c136b7602218d0f0217a38"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "b4cbd2b96eaf61dceab85e0991a23f3c70c3413c",
+      "new_sha": "17a845cdd99164dac5a275858cc867e2ab5bddc4"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "bc912d1b58cff6322f6095e76f96239938ea964c",
+      "new_sha": "b14351180d38ccf16861ea0ba9bbace74d839170"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "c5d367db3c37674236c136b7602218d0f0217a38",
+      "new_sha": "8190affb72dded2a36d77cab63dede7c3862e44b"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "d7a9914b6f3ad6ef2fc9c6fab4f8114f674d1b62",
+      "new_sha": "01e7ba902a60bace30cf010ca22be8a1424fadfc"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "d909d82814802789723562692240ff71204052c1",
+      "new_sha": "ecde30c4af0d85b703141c2af6779d224b6926c2"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "db674e591426c90ca036747a07fa54aaba76f351",
+      "new_sha": "0450f17f3d7053ee287bafa8a657d952b97fdf42"
+    },
+    {
+      "pkg": "rtw88-dkms-git",
+      "stratum": "dkms_kernel",
+      "old_sha": "dc7b851a9568db9bf7f81537846cba94fb8bc4da",
+      "new_sha": "59710674d346000b0fa1d55bd2d98d7bbeb5bb41"
+    },
+    {
       "pkg": "ryzen_smu-dkms-git",
       "stratum": "dkms_kernel",
       "old_sha": "093456ca9acc82cd3bb86862805b5d4fa5f24e67",
@@ -9793,6 +10879,156 @@
       "stratum": "dkms_kernel",
       "old_sha": "e98ec9e3083f11b678c390da2eedca6c78919bbf",
       "new_sha": "deff8339253a5acb790ecd4c94848f52a752b09f"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "0ad3da35173cd7a91ee1c38751d7ba6597ba26fa",
+      "new_sha": "97506c0aed4fce225e7fd3a4240ee7d2c185d7df"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "132d306f8042526be2ffa33cad6343c0c52275fa",
+      "new_sha": "33c4bd34d0a385e61efc3e37abd285415fb1024a"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "16a3deb053e184717a2084a334d3199008c5886e",
+      "new_sha": "33b3f73c131a1c9722f7ab2b60158847e41a4535"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "33b3f73c131a1c9722f7ab2b60158847e41a4535",
+      "new_sha": "b2fa657c311a2fb878bf3b68257cb90ab33b00d7"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "33c4bd34d0a385e61efc3e37abd285415fb1024a",
+      "new_sha": "403f8551845a90325780baee564f9964e5dc54bb"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "3828e066d39047655587d7448a09972178e4a874",
+      "new_sha": "b0f87093547dfd3a5603ee7f5d3ef7010f8bcf33"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "403f8551845a90325780baee564f9964e5dc54bb",
+      "new_sha": "ad1c7af9c1bcfe52c77e0c1626d9a28cc8fef6eb"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "4586966807ed0cbcd1b8e1491acdff53ad724907",
+      "new_sha": "bf96949d6a5522d51469755c8a0c0985e47bb852"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "85d2c546808f5138052e12257d9ff51e68aa9367",
+      "new_sha": "16a3deb053e184717a2084a334d3199008c5886e"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "93b279647cc09eeea49621c080396aa4378ca2b6",
+      "new_sha": "4afcfbd2c368e154cdda593e3907a02be0cb3572"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "96550c3c926b10980c24bc87c500e384e98b94f6",
+      "new_sha": "132d306f8042526be2ffa33cad6343c0c52275fa"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "97506c0aed4fce225e7fd3a4240ee7d2c185d7df",
+      "new_sha": "a9e6ce047393a77942ee4571edfc1f9ede97d7d0"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "98315b815fb1d95cb222cbc69f1fdba331dbc2ee",
+      "new_sha": "a17cf43fe2daac8fef13ee5369aeb22fe0648562"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "a17cf43fe2daac8fef13ee5369aeb22fe0648562",
+      "new_sha": "93b279647cc09eeea49621c080396aa4378ca2b6"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "a23da2bf804739cd21ba75d05676e1a63ef7e835",
+      "new_sha": "e44a4fca46fad88422b227b8100dbc96105b65ba"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "a54c3f00581ab1379c13bf1e329f60babbe8d7e6",
+      "new_sha": "98315b815fb1d95cb222cbc69f1fdba331dbc2ee"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "a9e6ce047393a77942ee4571edfc1f9ede97d7d0",
+      "new_sha": "3828e066d39047655587d7448a09972178e4a874"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "ad1c7af9c1bcfe52c77e0c1626d9a28cc8fef6eb",
+      "new_sha": "cd4657ce369367518137ac15454adc500863a283"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "b0f87093547dfd3a5603ee7f5d3ef7010f8bcf33",
+      "new_sha": "4586966807ed0cbcd1b8e1491acdff53ad724907"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "b2fa657c311a2fb878bf3b68257cb90ab33b00d7",
+      "new_sha": "a23da2bf804739cd21ba75d05676e1a63ef7e835"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "bf96949d6a5522d51469755c8a0c0985e47bb852",
+      "new_sha": "85d2c546808f5138052e12257d9ff51e68aa9367"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "cd4657ce369367518137ac15454adc500863a283",
+      "new_sha": "f5f6ecb34e391addb329a289f8e84f63e07de822"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "e1764d6dbbbb7816338cd8ed0c92a0550e100a92",
+      "new_sha": "0ad3da35173cd7a91ee1c38751d7ba6597ba26fa"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "e44a4fca46fad88422b227b8100dbc96105b65ba",
+      "new_sha": "a54c3f00581ab1379c13bf1e329f60babbe8d7e6"
+    },
+    {
+      "pkg": "v4l2loopback-dc-dkms",
+      "stratum": "dkms_kernel",
+      "old_sha": "f5f6ecb34e391addb329a289f8e84f63e07de822",
+      "new_sha": "e1764d6dbbbb7816338cd8ed0c92a0550e100a92"
     },
     {
       "pkg": "wmo_oc-dkms",
@@ -10905,6 +12141,84 @@
       "new_sha": "abf8dd16d7f0f133fc4639af22431699b1423b9f"
     },
     {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "21f787d7c11a046c38abf93a836c080b64563b25",
+      "new_sha": "91f7054601056a3359b5a77b7ce6dc1317aceedf"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "62a976f50ca75e9d11d2c5f0db859beaadef44b3",
+      "new_sha": "fe026510af448122a92a6b776d358d50698af268"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "724fd118432b0cb3ba517c1932b3ad25b3d8628f",
+      "new_sha": "76d00076324882b2a3bf150ccf450e41d7a415f5"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "72a2b86a22875cffffa434002c879561f404a2ec",
+      "new_sha": "e6cc046a4ac8e59b71f090c4f36b17e367aaf3f1"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "74b5894611da0cbd1442a5c76769cfc5f498d6b2",
+      "new_sha": "b1f2661a59017e4ef89fb4c8b6a4af21661322c9"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "76d00076324882b2a3bf150ccf450e41d7a415f5",
+      "new_sha": "72a2b86a22875cffffa434002c879561f404a2ec"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "78449c220e46239b3a5de044d0b6b0e67ef89528",
+      "new_sha": "fa69564609a5645bec17464c8c9e2caccdaa599c"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "79bae96666003d8a25e95a11a453111db0c01e0e",
+      "new_sha": "21f787d7c11a046c38abf93a836c080b64563b25"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "91f7054601056a3359b5a77b7ce6dc1317aceedf",
+      "new_sha": "e9219b254b7b4bf8b4f7a50896a46c9495179635"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "e6cc046a4ac8e59b71f090c4f36b17e367aaf3f1",
+      "new_sha": "78449c220e46239b3a5de044d0b6b0e67ef89528"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "e9219b254b7b4bf8b4f7a50896a46c9495179635",
+      "new_sha": "74b5894611da0cbd1442a5c76769cfc5f498d6b2"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "fa69564609a5645bec17464c8c9e2caccdaa599c",
+      "new_sha": "62a976f50ca75e9d11d2c5f0db859beaadef44b3"
+    },
+    {
+      "pkg": "python-elgato-streamdeck",
+      "stratum": "lang_ecosystem",
+      "old_sha": "fe026510af448122a92a6b776d358d50698af268",
+      "new_sha": "79bae96666003d8a25e95a11a453111db0c01e0e"
+    },
+    {
       "pkg": "python-fpdf2",
       "stratum": "lang_ecosystem",
       "old_sha": "013fe20c79d40e9cf873a9f3fea2bc66642423fc",
@@ -11137,6 +12451,72 @@
       "stratum": "lang_ecosystem",
       "old_sha": "eb37f746bc1af7cc3e97cdb93cb23bc422a0c70d",
       "new_sha": "ea5ca3740d3640e57dead794a1e110157766c020"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "0da52f517bcef1129bbf5d9d9fe2f7f9b3113b24",
+      "new_sha": "116f6ec0ca05cea1b7bc0098d1430b29a2725020"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "116f6ec0ca05cea1b7bc0098d1430b29a2725020",
+      "new_sha": "12fc8ecffc699b5919b69c199224e2fbf7916995"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "12fc8ecffc699b5919b69c199224e2fbf7916995",
+      "new_sha": "971f08ab5f859fe177808bc3f3f7807bc0447fa6"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "14a0f23a6ae4363a7fcb15cc88d3874074cfa985",
+      "new_sha": "588634778cad8c8318852b5a05b49ca39bfb0d0f"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "3e1e2f7ed7cf53369d2062b9a10d71d8b3569183",
+      "new_sha": "5f0af18d61032431928f8dab89a9ab556ed70533"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "416eeffcc4f858e83ac89ffd1bd0444d6392fbb4",
+      "new_sha": "836c14979437f057e26371eac913f5f6939c9554"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "588634778cad8c8318852b5a05b49ca39bfb0d0f",
+      "new_sha": "0da52f517bcef1129bbf5d9d9fe2f7f9b3113b24"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "5f0af18d61032431928f8dab89a9ab556ed70533",
+      "new_sha": "23842a7269685e73cbf413571dbc344c84ec14c3"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "79b094c46ada616353805fc8c591c28f06cafacd",
+      "new_sha": "416eeffcc4f858e83ac89ffd1bd0444d6392fbb4"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "836c14979437f057e26371eac913f5f6939c9554",
+      "new_sha": "14a0f23a6ae4363a7fcb15cc88d3874074cfa985"
+    },
+    {
+      "pkg": "python-hermes-agent",
+      "stratum": "lang_ecosystem",
+      "old_sha": "971f08ab5f859fe177808bc3f3f7807bc0447fa6",
+      "new_sha": "3e1e2f7ed7cf53369d2062b9a10d71d8b3569183"
     },
     {
       "pkg": "python-imageio-ffmpeg",
@@ -11811,6 +13191,186 @@
       "new_sha": "424a1a75abb43f0e9879189ca8c3227a5ff27a97"
     },
     {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "06a5852313e4b6cb2d577ecf6d9a1828cb7835c6",
+      "new_sha": "c74a090cdc1c988176e4d3ec74326aa889607ec3"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "079efa6148238a5749d5f05761da3d3c29010b0f",
+      "new_sha": "3e72db34271826ded12f852d5bd79956003de34b"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "07de453bf64a76437c49869f2285ada52f504c61",
+      "new_sha": "dd37c8a682b9c3a1fdac39ae7a6aa3adff1ce648"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "09b1a348cb6bbc4430705840ccfcb477dee9e93b",
+      "new_sha": "817d962007940bc148a58bb4e8a92636c8af2fc0"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "25b996f03aea8aca921efaacfede6e304e21b98a",
+      "new_sha": "66f0c1162fd7f74e1f1c19873c961c1bba5c7458"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "34466c523e471d502d30a73a7f158e5360edfeb9",
+      "new_sha": "bd97b6b79fe2fa496a3f94d4c9c930b8d4975012"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "3e72db34271826ded12f852d5bd79956003de34b",
+      "new_sha": "09b1a348cb6bbc4430705840ccfcb477dee9e93b"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "4764d431396f34995eec4197082b9e52d05d192e",
+      "new_sha": "75dc9abadd78b4e58a18eff4c11ee31bd28df131"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "4fb814ae2c6c773a8b769c69136df0c92a5966ad",
+      "new_sha": "07de453bf64a76437c49869f2285ada52f504c61"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "55efb5eaa6d21e52a313be8cf65693ad7a1d60cf",
+      "new_sha": "a0f62cf5358cee04ee9d16bf33e502ebe9af0ced"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "5670607bdf8fa3f3642b49b0f481113cd91d9a05",
+      "new_sha": "25b996f03aea8aca921efaacfede6e304e21b98a"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "66f0c1162fd7f74e1f1c19873c961c1bba5c7458",
+      "new_sha": "7cc679b66e8c5eb2ae11130760a099326637ed0a"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "6996437c579984462d8db88181957b862d37a955",
+      "new_sha": "55efb5eaa6d21e52a313be8cf65693ad7a1d60cf"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "700cdcc53ffac4b21d7912afb282e5578efe5984",
+      "new_sha": "8a2d9c5bc4b341d4e9ea2d78d87f7e93c7a1f9dd"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "75dc9abadd78b4e58a18eff4c11ee31bd28df131",
+      "new_sha": "700cdcc53ffac4b21d7912afb282e5578efe5984"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "79c715b002eef3e257aa82d096c090a294e16197",
+      "new_sha": "a90f22df65e286d2d6280f08809cfe1fab139877"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "7cc679b66e8c5eb2ae11130760a099326637ed0a",
+      "new_sha": "4764d431396f34995eec4197082b9e52d05d192e"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "817d962007940bc148a58bb4e8a92636c8af2fc0",
+      "new_sha": "06a5852313e4b6cb2d577ecf6d9a1828cb7835c6"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "8a2d9c5bc4b341d4e9ea2d78d87f7e93c7a1f9dd",
+      "new_sha": "ffe840c42a4d19b63982d2ca34d80c449f913537"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "a0f62cf5358cee04ee9d16bf33e502ebe9af0ced",
+      "new_sha": "34466c523e471d502d30a73a7f158e5360edfeb9"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "a90f22df65e286d2d6280f08809cfe1fab139877",
+      "new_sha": "c65392a5e093b0126454b79e1b46b25bcb290b3c"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "ba7c98869245883658ed4ae349314286a1dd218a",
+      "new_sha": "6996437c579984462d8db88181957b862d37a955"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "bd97b6b79fe2fa496a3f94d4c9c930b8d4975012",
+      "new_sha": "c8e460d978210453c37bfd972ed653dc4d12da10"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "c65392a5e093b0126454b79e1b46b25bcb290b3c",
+      "new_sha": "079efa6148238a5749d5f05761da3d3c29010b0f"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "c74a090cdc1c988176e4d3ec74326aa889607ec3",
+      "new_sha": "d96354382898d52c0170b2d8c75d2b30ef7b61aa"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "c8e460d978210453c37bfd972ed653dc4d12da10",
+      "new_sha": "79c715b002eef3e257aa82d096c090a294e16197"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "d96354382898d52c0170b2d8c75d2b30ef7b61aa",
+      "new_sha": "4fb814ae2c6c773a8b769c69136df0c92a5966ad"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "dd37c8a682b9c3a1fdac39ae7a6aa3adff1ce648",
+      "new_sha": "5670607bdf8fa3f3642b49b0f481113cd91d9a05"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "f20b06137d4de10e41c4476800013cbed8559245",
+      "new_sha": "4a99a2f5d8403d8f484cc818bdde180dec880679"
+    },
+    {
+      "pkg": "python-pytest-runner",
+      "stratum": "lang_ecosystem",
+      "old_sha": "ffe840c42a4d19b63982d2ca34d80c449f913537",
+      "new_sha": "f20b06137d4de10e41c4476800013cbed8559245"
+    },
+    {
       "pkg": "python-pywalfox",
       "stratum": "lang_ecosystem",
       "old_sha": "05d65e0d8e67dfbc9fc6aea9d02c94cb03fdd7cb",
@@ -12325,6 +13885,12 @@
       "stratum": "large_electron",
       "old_sha": "b3c80a8c53b1b10cc4bc0f182a35b872df92958e",
       "new_sha": "75afe12e54443d78dc811858c9db6722191de6bb"
+    },
+    {
+      "pkg": "discord_arch_electron",
+      "stratum": "large_electron",
+      "old_sha": "bbc998b2274eaae67f6b09830ac17a521154227d",
+      "new_sha": "17174dfec552a2def84166bbf09e47cc7f6caa68"
     },
     {
       "pkg": "discord_arch_electron",
@@ -13311,6 +14877,84 @@
       "new_sha": "ad8d0e953448dc224a5e4294108b1fe8ceb4a9ad"
     },
     {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "0c6ae51963f9a863da819936d0887acf63d89242",
+      "new_sha": "20bc2a58cfc89cb7acf9b38d8da7a7995f25ce1e"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "10c2e87254fb502d0016af629bbcb9a51a65c040",
+      "new_sha": "df89ae1836760fc62aef9553dc8a588f5e97573a"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "20bc2a58cfc89cb7acf9b38d8da7a7995f25ce1e",
+      "new_sha": "6f5371aed952ed440047076271237d93ac169cea"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "3ef4b0158e269f08d9169985df639d213a3970d0",
+      "new_sha": "e05e1216eae242d9009ef918a05217d9482497f6"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "4f99ffe6e9d28f8288b37780523bda8885ffc724",
+      "new_sha": "10c2e87254fb502d0016af629bbcb9a51a65c040"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "51b8670a4f96803e202442f6b670fe4a4fd20df3",
+      "new_sha": "4f99ffe6e9d28f8288b37780523bda8885ffc724"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "6a9b1e27e3fa167437a300a12d593825536ab86f",
+      "new_sha": "0c6ae51963f9a863da819936d0887acf63d89242"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "6f5371aed952ed440047076271237d93ac169cea",
+      "new_sha": "e1f7b1f0371803a8dcc3defc4329733e00ae6b7b"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "adf6a842b8d01d1a340f5fd8fdaeb004f8b99a28",
+      "new_sha": "6a9b1e27e3fa167437a300a12d593825536ab86f"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "d2fc478898ebde74b978feb91e2e7ab2403800ea",
+      "new_sha": "3ef4b0158e269f08d9169985df639d213a3970d0"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "df89ae1836760fc62aef9553dc8a588f5e97573a",
+      "new_sha": "adf6a842b8d01d1a340f5fd8fdaeb004f8b99a28"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "e05e1216eae242d9009ef918a05217d9482497f6",
+      "new_sha": "51b8670a4f96803e202442f6b670fe4a4fd20df3"
+    },
+    {
+      "pkg": "electron38",
+      "stratum": "large_electron",
+      "old_sha": "e1f7b1f0371803a8dcc3defc4329733e00ae6b7b",
+      "new_sha": "29bc6ac7065c190ef3d1178d848e58cc197352c3"
+    },
+    {
       "pkg": "electron39-bin",
       "stratum": "large_electron",
       "old_sha": "0976c83b33c5fc032a1db26f5740d41dee8495fa",
@@ -13817,6 +15461,12 @@
     {
       "pkg": "electron41-bin",
       "stratum": "large_electron",
+      "old_sha": "d6d97c147c9e5656473947c66b8fe787dbd56789",
+      "new_sha": "ce4bc64904b5dd9e21449c934b756dcff80398e4"
+    },
+    {
+      "pkg": "electron41-bin",
+      "stratum": "large_electron",
       "old_sha": "deeef88775bcf11f313606e21e8a650a479f7f15",
       "new_sha": "3e3a8817a9d6e6e08d268849460019b8e74ce748"
     },
@@ -13849,6 +15499,186 @@
       "stratum": "large_electron",
       "old_sha": "f532a64d9544b917ba4ed8b68ffa5388ccd9c263",
       "new_sha": "5e86a5d244dc0b6a9077a3ebca3c5043ed64d3df"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "017d1ed55ebfc92fa45a5f11e6db91dced7e5a31",
+      "new_sha": "4717645626daffbf2f5f0452d6367d1aaa6c811a"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "019f297551a50dcf8d67448a6660d284ef1da11c",
+      "new_sha": "ebe0c42ed70d761dd87f771fc2b63e78caec3355"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "08d197fa56d1ecfa09080197d09bd61f49201a4b",
+      "new_sha": "3e8481b986ffdeb98be70321b546accad8cbd27e"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "248e9ca261b27fee34eeb271ce7a6ca8525de5e7",
+      "new_sha": "fe6d175e5f11ded85c35ea23e52d50d2e39f2365"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "2daf6caabca623cfa9251ce5e05fea82c8ad9c5f",
+      "new_sha": "21cfec379cec705d34930d680f1ca3d9610337e8"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "3e8481b986ffdeb98be70321b546accad8cbd27e",
+      "new_sha": "b46720fffc5ff3af53cdb668cdb611a6c34df743"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "4717645626daffbf2f5f0452d6367d1aaa6c811a",
+      "new_sha": "6d96f6b6d47a3929478fb597481cd0fe353d71ea"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "5b2a8b0de86fb2b2a83c49107203804338bafcf8",
+      "new_sha": "c2ff8debfe7e7f5b9b4146860573d413d72369ea"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "6d96f6b6d47a3929478fb597481cd0fe353d71ea",
+      "new_sha": "c143e55adddabc9e508f7572f31b7ad211efdfc2"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "79b44ebe70ab949c24e12561b9af1dca6a659fe7",
+      "new_sha": "d9ff24fd3cfe6d05df3403422749a6fed6ff9b8e"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "913c37a15759e1400cc4f0d67f70366236101985",
+      "new_sha": "08d197fa56d1ecfa09080197d09bd61f49201a4b"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "a10951a207311ee06e40aceb4a88d9a7180fd1e2",
+      "new_sha": "017d1ed55ebfc92fa45a5f11e6db91dced7e5a31"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "a2234229bf3ba1c70276dddc927038044791f69c",
+      "new_sha": "c230a67d48e79396f0199a4876442d9fffa20e3c"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "b0fff947c9c4e7014e5738a47ff0d87ad5030092",
+      "new_sha": "ca1cc38ddf45c6757a3a3d68bfbd8131b82d1a93"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "b46720fffc5ff3af53cdb668cdb611a6c34df743",
+      "new_sha": "f5e44254d9ac6956ccbd406bd33a5e388f1ae159"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "b5567f8d9c84fd171667b5e6aa0492427ea5e215",
+      "new_sha": "019f297551a50dcf8d67448a6660d284ef1da11c"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "c011a410ae11bd725a4134ac396f4f5f30e511b5",
+      "new_sha": "248e9ca261b27fee34eeb271ce7a6ca8525de5e7"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "c143e55adddabc9e508f7572f31b7ad211efdfc2",
+      "new_sha": "e6cc55dcad0d66abb646b45332297e3455c53217"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "c230a67d48e79396f0199a4876442d9fffa20e3c",
+      "new_sha": "cd1f0f4566af04ade5aaa2940b94e1336c2de3bb"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "c2ff8debfe7e7f5b9b4146860573d413d72369ea",
+      "new_sha": "fc130c689a06de13fcf8663f601b0a85ed5590c5"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "ca1cc38ddf45c6757a3a3d68bfbd8131b82d1a93",
+      "new_sha": "2daf6caabca623cfa9251ce5e05fea82c8ad9c5f"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "cd1f0f4566af04ade5aaa2940b94e1336c2de3bb",
+      "new_sha": "b5567f8d9c84fd171667b5e6aa0492427ea5e215"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "d9ff24fd3cfe6d05df3403422749a6fed6ff9b8e",
+      "new_sha": "5b2a8b0de86fb2b2a83c49107203804338bafcf8"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "e5f87a03dac9bae7727e8e6267936cd8b600b643",
+      "new_sha": "a10951a207311ee06e40aceb4a88d9a7180fd1e2"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "e6cc55dcad0d66abb646b45332297e3455c53217",
+      "new_sha": "eee459823695203a0fd5618948f448aa8114b330"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "ebe0c42ed70d761dd87f771fc2b63e78caec3355",
+      "new_sha": "e5f87a03dac9bae7727e8e6267936cd8b600b643"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "eee459823695203a0fd5618948f448aa8114b330",
+      "new_sha": "913c37a15759e1400cc4f0d67f70366236101985"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "f5e44254d9ac6956ccbd406bd33a5e388f1ae159",
+      "new_sha": "b0fff947c9c4e7014e5738a47ff0d87ad5030092"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "fc130c689a06de13fcf8663f601b0a85ed5590c5",
+      "new_sha": "c011a410ae11bd725a4134ac396f4f5f30e511b5"
+    },
+    {
+      "pkg": "notion-app-electron",
+      "stratum": "large_electron",
+      "old_sha": "fe6d175e5f11ded85c35ea23e52d50d2e39f2365",
+      "new_sha": "a2234229bf3ba1c70276dddc927038044791f69c"
     },
     {
       "pkg": "advcpmv",
@@ -14981,6 +16811,12 @@
     {
       "pkg": "htop-vim",
       "stratum": "source_patched",
+      "old_sha": "0e2347cf666b39faf0fcb54473b8721d21b3442e",
+      "new_sha": "606c1353104c75a99f6751bd38c8d88ac03b3bd7"
+    },
+    {
+      "pkg": "htop-vim",
+      "stratum": "source_patched",
       "old_sha": "0ecec2dfdaae33fd1f7349901260f94bcc8f27db",
       "new_sha": "edb2cf2aae1fcdf02a1618eec89ee13ec52b0390"
     },
@@ -15085,6 +16921,12 @@
       "stratum": "source_patched",
       "old_sha": "0d6185344074a93cb0935827986c02f8fef00add",
       "new_sha": "ea0ca97e19ae4a653610e663ade3e3c66d824b7c"
+    },
+    {
+      "pkg": "linux-cachyos",
+      "stratum": "source_patched",
+      "old_sha": "276df6721eb8b15fc75dfa791e1db35b3a4a9e23",
+      "new_sha": "c66ec6903336111bc2b0177a4087dfe5ac86efeb"
     },
     {
       "pkg": "linux-cachyos",
@@ -15209,6 +17051,12 @@
     {
       "pkg": "linux-cachyos",
       "stratum": "source_patched",
+      "old_sha": "c66ec6903336111bc2b0177a4087dfe5ac86efeb",
+      "new_sha": "3fd035a583f2efa2961cfa9aa873b8e7aa5db9c7"
+    },
+    {
+      "pkg": "linux-cachyos",
+      "stratum": "source_patched",
       "old_sha": "cb9ddcd48f68944784a393b7ed38c8ea964a6a3c",
       "new_sha": "276df6721eb8b15fc75dfa791e1db35b3a4a9e23"
     },
@@ -15275,6 +17123,12 @@
     {
       "pkg": "linux-cachyos-bore",
       "stratum": "source_patched",
+      "old_sha": "3497183bbc782a9086aa930a3e0ed8a1bcb49239",
+      "new_sha": "96ae91cdc4d05ec7e0e3b61d3261cef59f5989c0"
+    },
+    {
+      "pkg": "linux-cachyos-bore",
+      "stratum": "source_patched",
       "old_sha": "3786380978ff6270a285879fb72e78771c24e918",
       "new_sha": "6a5bd8bf89e17ac31e3de4e5f01876db0a09c351"
     },
@@ -15319,6 +17173,12 @@
       "stratum": "source_patched",
       "old_sha": "8dbe23549264259d9375df413187738a05c063a1",
       "new_sha": "b4deb1c87374712d4f7fe5d9d446a1ae7d653eff"
+    },
+    {
+      "pkg": "linux-cachyos-bore",
+      "stratum": "source_patched",
+      "old_sha": "96ae91cdc4d05ec7e0e3b61d3261cef59f5989c0",
+      "new_sha": "c5b69454dac9b45c0f6769edd21e8daef2ed09c1"
     },
     {
       "pkg": "linux-cachyos-bore",
@@ -16529,6 +18389,12 @@
     {
       "pkg": "uudeck-bwrap",
       "stratum": "source_patched",
+      "old_sha": "76b31edea4f202cdcffc56ab50fe412aeea9a931",
+      "new_sha": "bd9ad9677711c58798a110a4829973307157231f"
+    },
+    {
+      "pkg": "uudeck-bwrap",
+      "stratum": "source_patched",
       "old_sha": "84ef711f61b637eb944d068c76087c31bfd37c30",
       "new_sha": "edaf7b2380f0acf9ad56829aba0f32c308cbd75c"
     },
@@ -17619,6 +19485,576 @@
       "new_sha": "5aff00529f353b69f32050e61a3a5dea62f2b2a5"
     },
     {
+      "pkg": "cht.sh-git",
+      "stratum": "vcs_git",
+      "old_sha": "1509a993f887505a5f4347778a78fe492a278f08",
+      "new_sha": "8c035aca7f1c9b3a1e99d8655b90599a5ac82ab9"
+    },
+    {
+      "pkg": "cht.sh-git",
+      "stratum": "vcs_git",
+      "old_sha": "8c035aca7f1c9b3a1e99d8655b90599a5ac82ab9",
+      "new_sha": "4b3dbb707ad4aadb4ba200c200b6e2d18e4445d1"
+    },
+    {
+      "pkg": "cht.sh-git",
+      "stratum": "vcs_git",
+      "old_sha": "a00e0c38efe9960567e93527486e84b91f855280",
+      "new_sha": "1509a993f887505a5f4347778a78fe492a278f08"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "169e9c1d37121bf46d23c76bf9eb1266de75beb2",
+      "new_sha": "52e8cacfc23f4cc644c32344134be9339ed23189"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "2207365e26101d1c49b6b15fe623f824c332ccfc",
+      "new_sha": "ef3916d9af71a7f578ab239e9b549bf39cd4e1ac"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "27443d31ebeb0bd55cfaa18702359e1c03725bb7",
+      "new_sha": "adda24e28b4f441b8b614f802eae900053ab7423"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "2db1fe8c6ac949bc33417f8bd9c2e53dce542b9c",
+      "new_sha": "4efe7465089723344bde92223d6b69adc915a8c3"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "2f8275bd139e7061625998934f352665c2d23312",
+      "new_sha": "538886ee3cefb58115f3caada854148f7b6e01c6"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "33b0185a9652e1fd337275fd6d620626c6e784a3",
+      "new_sha": "b17248182c2a840887570f2dfb5dea35f325ddd4"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "4efe7465089723344bde92223d6b69adc915a8c3",
+      "new_sha": "5ded0541145269acc688a67cacdd260dfd7d317c"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "504db833e2125ff0cd68b4d476c80f27a47b67ea",
+      "new_sha": "e0a712cb8acb0a4f9c5a4abe98729e68af4c1eec"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "52e8cacfc23f4cc644c32344134be9339ed23189",
+      "new_sha": "5a444d7e60aea3be4c7e2c595fb124a06edd722c"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "538886ee3cefb58115f3caada854148f7b6e01c6",
+      "new_sha": "33b0185a9652e1fd337275fd6d620626c6e784a3"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "5a444d7e60aea3be4c7e2c595fb124a06edd722c",
+      "new_sha": "f35e1d608fca4ba55fdcac0868bb54bea86c3188"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "5ded0541145269acc688a67cacdd260dfd7d317c",
+      "new_sha": "169e9c1d37121bf46d23c76bf9eb1266de75beb2"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "6c252474f971c4f8d570a53e823adb71dc882976",
+      "new_sha": "fe5f488551df762e5c40ad7dd28f06118dccb773"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "6cda4a7e0c68019239ff63afe262c0f61f74d7bf",
+      "new_sha": "dde8813d200d2da87e382074df58a483d95c9692"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "717eae4eb8ac5e7401d5c6fe7900bea48efefaf3",
+      "new_sha": "2207365e26101d1c49b6b15fe623f824c332ccfc"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "755dfcec263d2f1339ab65ea0479f9b4acea45bd",
+      "new_sha": "717eae4eb8ac5e7401d5c6fe7900bea48efefaf3"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "8a40f7d6ff2961eb82ddb0dc485da97a3923e474",
+      "new_sha": "755dfcec263d2f1339ab65ea0479f9b4acea45bd"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "9317dd46fd34067d497e11b0498b614d04d75d09",
+      "new_sha": "cd0bcf51254cb49c87cda57a4f9e86b7bcef4986"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "a6180e8e29e31087fadac044d545bcd2c1f00fd3",
+      "new_sha": "c73504a216b23c75696929e970cd2bec4afb68df"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "ace90f939e76a0bb61aa0f2b714fb8b151237349",
+      "new_sha": "6c252474f971c4f8d570a53e823adb71dc882976"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "adda24e28b4f441b8b614f802eae900053ab7423",
+      "new_sha": "ace90f939e76a0bb61aa0f2b714fb8b151237349"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "b17248182c2a840887570f2dfb5dea35f325ddd4",
+      "new_sha": "fbdb8b69ff38a9edde2d3de2fd99645c3f7da844"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "c73504a216b23c75696929e970cd2bec4afb68df",
+      "new_sha": "6cda4a7e0c68019239ff63afe262c0f61f74d7bf"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "cd0bcf51254cb49c87cda57a4f9e86b7bcef4986",
+      "new_sha": "2db1fe8c6ac949bc33417f8bd9c2e53dce542b9c"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "dde8813d200d2da87e382074df58a483d95c9692",
+      "new_sha": "3aeabf5b4c81142078ed460f05e22cb0551d54bb"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "e0a712cb8acb0a4f9c5a4abe98729e68af4c1eec",
+      "new_sha": "27443d31ebeb0bd55cfaa18702359e1c03725bb7"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "ef3916d9af71a7f578ab239e9b549bf39cd4e1ac",
+      "new_sha": "9317dd46fd34067d497e11b0498b614d04d75d09"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "f35e1d608fca4ba55fdcac0868bb54bea86c3188",
+      "new_sha": "504db833e2125ff0cd68b4d476c80f27a47b67ea"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "fbdb8b69ff38a9edde2d3de2fd99645c3f7da844",
+      "new_sha": "8a40f7d6ff2961eb82ddb0dc485da97a3923e474"
+    },
+    {
+      "pkg": "dms-shell-git",
+      "stratum": "vcs_git",
+      "old_sha": "fe5f488551df762e5c40ad7dd28f06118dccb773",
+      "new_sha": "a6180e8e29e31087fadac044d545bcd2c1f00fd3"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "30b6ee540b00a591bee49d8b41bf513107b8ebb6",
+      "new_sha": "bcb47acea73d2e38e0bd87752905a22168999f93"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "394ffa982539b86cd8840c1296eaff52b01762ac",
+      "new_sha": "e5d39558d88976398ffaad3183f8d4f520ce292b"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "4be5b3512b44baf011ac8d3990b2392be3aaf04c",
+      "new_sha": "d09f96eae1cb1b631bbe70e3e3577e9cfb0ebfa9"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "681b04080d2ff4f0a2aedc4c3f956aa58cffdb82",
+      "new_sha": "e94f945576ff46cf0df8def7d4e6a1f1764ae049"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "6e22eeb3eaa6fb335daaff8acc85a98c14b4ea63",
+      "new_sha": "aeaa2f8983457efd7c9ad8d41d216d57f14e09e6"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "87d4f872c4fcc63a824aa9e0d888ba8c469fd035",
+      "new_sha": "6e22eeb3eaa6fb335daaff8acc85a98c14b4ea63"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "aeaa2f8983457efd7c9ad8d41d216d57f14e09e6",
+      "new_sha": "681b04080d2ff4f0a2aedc4c3f956aa58cffdb82"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "bcb47acea73d2e38e0bd87752905a22168999f93",
+      "new_sha": "ead1b1ebd3172cf42e55fa2ce7e6b8248adf44d8"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "c2c7ed13bd775f79a587651bfbb7bce804742c7c",
+      "new_sha": "4be5b3512b44baf011ac8d3990b2392be3aaf04c"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "d09f96eae1cb1b631bbe70e3e3577e9cfb0ebfa9",
+      "new_sha": "394ffa982539b86cd8840c1296eaff52b01762ac"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "e5d39558d88976398ffaad3183f8d4f520ce292b",
+      "new_sha": "87d4f872c4fcc63a824aa9e0d888ba8c469fd035"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "e94f945576ff46cf0df8def7d4e6a1f1764ae049",
+      "new_sha": "339ef14da24ac06e937c9bbf373ce8f79419cf7b"
+    },
+    {
+      "pkg": "fluxcast-git",
+      "stratum": "vcs_git",
+      "old_sha": "ead1b1ebd3172cf42e55fa2ce7e6b8248adf44d8",
+      "new_sha": "c2c7ed13bd775f79a587651bfbb7bce804742c7c"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "0adcc0ba576358b7bc78d1e1bb05513ee5dfa6a9",
+      "new_sha": "156972d22d3bf4315d940f3226d39339ef166225"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "0ebe94111fbdf3d57be21a1cd9b54d2822a28547",
+      "new_sha": "27dc99426ce1f48fbc144a7d0b0cfc2e1a8f35e7"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "156972d22d3bf4315d940f3226d39339ef166225",
+      "new_sha": "4710de9dd36c7814edaf94c41e5d2d49194342a0"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "27dc99426ce1f48fbc144a7d0b0cfc2e1a8f35e7",
+      "new_sha": "2b5a2d8f47625ec5f17f155d5903d9726c7384cf"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "2b26b04ab0a6f4d62d1ef98fde5b42234ef43d02",
+      "new_sha": "3983279ea51a93da3c656a3958bc53f4dd0667b9"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "2b5a2d8f47625ec5f17f155d5903d9726c7384cf",
+      "new_sha": "2b26b04ab0a6f4d62d1ef98fde5b42234ef43d02"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "2ba6f0e030202dc7bbe3c762be4ab6b4b3dfd966",
+      "new_sha": "524337523b069e9cce5185d950353bc16fad48e5"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "3983279ea51a93da3c656a3958bc53f4dd0667b9",
+      "new_sha": "0adcc0ba576358b7bc78d1e1bb05513ee5dfa6a9"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "3a9316eccc23be3c83b9404688252835c4b5d14b",
+      "new_sha": "bc56ba92cf3232e3065b7dffc3ae6d12b6ff4093"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "3d3f1eafe49bac408d78c8a9cca79e6f74fb7b0d",
+      "new_sha": "0ebe94111fbdf3d57be21a1cd9b54d2822a28547"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "40553aacd96305927481bfa56a9ac9e1571fbda3",
+      "new_sha": "f9f31df2188ef769720612dda8fa6122c2f5ccf2"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "4710de9dd36c7814edaf94c41e5d2d49194342a0",
+      "new_sha": "ff072b4d58e88d39eefbb8b1530933d3b4178bc7"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "524337523b069e9cce5185d950353bc16fad48e5",
+      "new_sha": "3a9316eccc23be3c83b9404688252835c4b5d14b"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "89a5b7417776a0ca5ba06658b54e6c5872c8a611",
+      "new_sha": "f5d2fbe62436df66a204ac3a10a4d241fa220734"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "bc56ba92cf3232e3065b7dffc3ae6d12b6ff4093",
+      "new_sha": "2cdf2851ce059acd8368a678ce4d6fa36e5f0849"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "c5bd3ac8b1b802bd47e8358429cfecd05ea2199e",
+      "new_sha": "dc61a1ad3fb41c9e61dd39ff1f2755c33df23be2"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "dc61a1ad3fb41c9e61dd39ff1f2755c33df23be2",
+      "new_sha": "ecaa8375700eb463317d37bb84d813c8daf8b6fc"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "dec0f11df25d9c69ff901d6c738f9b9333d26cd3",
+      "new_sha": "3d3f1eafe49bac408d78c8a9cca79e6f74fb7b0d"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "ecaa8375700eb463317d37bb84d813c8daf8b6fc",
+      "new_sha": "2ba6f0e030202dc7bbe3c762be4ab6b4b3dfd966"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "f5d2fbe62436df66a204ac3a10a4d241fa220734",
+      "new_sha": "40553aacd96305927481bfa56a9ac9e1571fbda3"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "f9f31df2188ef769720612dda8fa6122c2f5ccf2",
+      "new_sha": "c5bd3ac8b1b802bd47e8358429cfecd05ea2199e"
+    },
+    {
+      "pkg": "fsearch-git",
+      "stratum": "vcs_git",
+      "old_sha": "ff072b4d58e88d39eefbb8b1530933d3b4178bc7",
+      "new_sha": "89a5b7417776a0ca5ba06658b54e6c5872c8a611"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "01c45faee691465aeb8167ceab4be14e59ce620a",
+      "new_sha": "b8ef1aa5a0b00871c2ecf3e6079bae2a4bf862cc"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "0945a4e43ca35fe0543c89190988692499b2695d",
+      "new_sha": "96d58afc17c1f84825caf4812651f1b81ebe7af5"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "28a12b73860651fe98d22cf522f7c296f0727cd6",
+      "new_sha": "0945a4e43ca35fe0543c89190988692499b2695d"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "4c1e6bf299764944b5a07610b7fb928247b2e3f9",
+      "new_sha": "f6612d3a64b1d1ed2c4625c7a6225a5ce0f2d81c"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "5e73ec850042e4f321b2ed125c6ac939b29d5031",
+      "new_sha": "549e148676696fc9d466f9c0a2fd83370a5834cf"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "64c7ad768f2f4a610467e0faca0a09549895719c",
+      "new_sha": "fa19e23a17c78a7d258c276484cff49150de5878"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "674a0db98e8419559c974b310aea9d8691b9c315",
+      "new_sha": "64c7ad768f2f4a610467e0faca0a09549895719c"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "6cb90e661fedf5f4cd48b191e1c43b37fc9849fc",
+      "new_sha": "4c1e6bf299764944b5a07610b7fb928247b2e3f9"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "7a06f58b6100b1eae6e60ba13e240ed194093e1c",
+      "new_sha": "5e73ec850042e4f321b2ed125c6ac939b29d5031"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "96d58afc17c1f84825caf4812651f1b81ebe7af5",
+      "new_sha": "f607bb6cbfac793fbbeab343d3600b3f504085cd"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "a34b6e56f059e0c14e16126b9723a138797df96a",
+      "new_sha": "ee60e709637b1c335bd304a34e2356f639405fbe"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "a5faa4e8d3b9255c02c6135c57209f0464b17199",
+      "new_sha": "6cb90e661fedf5f4cd48b191e1c43b37fc9849fc"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "b8ef1aa5a0b00871c2ecf3e6079bae2a4bf862cc",
+      "new_sha": "a5faa4e8d3b9255c02c6135c57209f0464b17199"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "ce44fbe0941e714424f004ef6276b4e5d69c8ef7",
+      "new_sha": "28a12b73860651fe98d22cf522f7c296f0727cd6"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "e44d4795c6b36a8226664b873def1cc32239f187",
+      "new_sha": "7a06f58b6100b1eae6e60ba13e240ed194093e1c"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "ee60e709637b1c335bd304a34e2356f639405fbe",
+      "new_sha": "01c45faee691465aeb8167ceab4be14e59ce620a"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "f607bb6cbfac793fbbeab343d3600b3f504085cd",
+      "new_sha": "e44d4795c6b36a8226664b873def1cc32239f187"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "f6612d3a64b1d1ed2c4625c7a6225a5ce0f2d81c",
+      "new_sha": "674a0db98e8419559c974b310aea9d8691b9c315"
+    },
+    {
+      "pkg": "gamescope-nvidia-git",
+      "stratum": "vcs_git",
+      "old_sha": "fa19e23a17c78a7d258c276484cff49150de5878",
+      "new_sha": "ce44fbe0941e714424f004ef6276b4e5d69c8ef7"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "047ee3322ff61d29ba28c5398a029465723cef49",
+      "new_sha": "4ec23b20990dc94c55141fc027e3f78112a60a4b"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "1362923d8c0cca8face5d4fdcf0d3793e5bb1fd4",
+      "new_sha": "2c8447652124e6894f718215b48ce591f32ae863"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "2c8447652124e6894f718215b48ce591f32ae863",
+      "new_sha": "41ff38b24c9d74067c8841615c503c7dc54ba76f"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "4ec23b20990dc94c55141fc027e3f78112a60a4b",
+      "new_sha": "a2c02566c3250e86fe74ceab0edbb3e06b308868"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "8c329ea405e569b7e45dce369cb7a4a0f08116f4",
+      "new_sha": "9cbe070c69b599613602830b4731d65d5cec186d"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "94de015e789268fdb7a607162a6b406797cd7cd5",
+      "new_sha": "047ee3322ff61d29ba28c5398a029465723cef49"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "9cbe070c69b599613602830b4731d65d5cec186d",
+      "new_sha": "94de015e789268fdb7a607162a6b406797cd7cd5"
+    },
+    {
+      "pkg": "greetd-dms-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "a2c02566c3250e86fe74ceab0edbb3e06b308868",
+      "new_sha": "1362923d8c0cca8face5d4fdcf0d3793e5bb1fd4"
+    },
+    {
       "pkg": "gtk2-ng-git",
       "stratum": "vcs_git",
       "old_sha": "0dd4945080a004e80bf717d08a3f62fa0b022ed9",
@@ -18213,6 +20649,30 @@
       "new_sha": "96c853ffc7799f9d6b9c108d330cf589db781dee"
     },
     {
+      "pkg": "jpegli-git",
+      "stratum": "vcs_git",
+      "old_sha": "0914d836067ffa87e3ddc5a8b9b8934f610197fa",
+      "new_sha": "aaf78534f10d73213757935637ba3ab204bf1764"
+    },
+    {
+      "pkg": "jpegli-git",
+      "stratum": "vcs_git",
+      "old_sha": "2e8debadd881772e1dfd05efd5db68f8d07b2d59",
+      "new_sha": "0914d836067ffa87e3ddc5a8b9b8934f610197fa"
+    },
+    {
+      "pkg": "jpegli-git",
+      "stratum": "vcs_git",
+      "old_sha": "9745fa98e775231032e6b278d5ad2ccd8ad298ef",
+      "new_sha": "2e8debadd881772e1dfd05efd5db68f8d07b2d59"
+    },
+    {
+      "pkg": "jpegli-git",
+      "stratum": "vcs_git",
+      "old_sha": "aaf78534f10d73213757935637ba3ab204bf1764",
+      "new_sha": "ac7fa67603eb66ca963c2189206575036489c9e5"
+    },
+    {
       "pkg": "kwin-effect-rounded-corners-git",
       "stratum": "vcs_git",
       "old_sha": "06c64044dbd84b636fde166a8b0ae37854c4bbab",
@@ -18533,6 +20993,12 @@
     {
       "pkg": "noctalia-git",
       "stratum": "vcs_git",
+      "old_sha": "19c69df96a278b933b82c0955ca639085a69749a",
+      "new_sha": "deed1c414bb9dddca918edd6a389c07821e162d6"
+    },
+    {
+      "pkg": "noctalia-git",
+      "stratum": "vcs_git",
       "old_sha": "1fa3717f13163ba497d583766645ddc75c18b1b0",
       "new_sha": "b3519ebeae7b8e6929e1f4e443c275a9597f0155"
     },
@@ -18593,6 +21059,12 @@
     {
       "pkg": "noctalia-git",
       "stratum": "vcs_git",
+      "old_sha": "8ba46369b7c0f23df434bfdb36c777bbb7251533",
+      "new_sha": "c2b1e35f159608995af0368b71443fb11013e166"
+    },
+    {
+      "pkg": "noctalia-git",
+      "stratum": "vcs_git",
       "old_sha": "8c9502010bf461fea555f37c5271c4415f7ff2d0",
       "new_sha": "727e792a59d1dc3cafab45791afe7bea2f152c5e"
     },
@@ -18647,14 +21119,68 @@
     {
       "pkg": "noctalia-git",
       "stratum": "vcs_git",
+      "old_sha": "deed1c414bb9dddca918edd6a389c07821e162d6",
+      "new_sha": "fec2740b48f8488a68853e752ae413083c2b0e51"
+    },
+    {
+      "pkg": "noctalia-git",
+      "stratum": "vcs_git",
       "old_sha": "e771ae8921347a316f74cf6c6d84332ed68b39eb",
       "new_sha": "a0280024d2ec8849ed344fc7231fc05d389c8db7"
     },
     {
       "pkg": "noctalia-git",
       "stratum": "vcs_git",
+      "old_sha": "e88e5d3703ad9b91c22985d47069a540da48e7d4",
+      "new_sha": "19c69df96a278b933b82c0955ca639085a69749a"
+    },
+    {
+      "pkg": "noctalia-git",
+      "stratum": "vcs_git",
       "old_sha": "fa19c421107ee0cd192ff919baeee68a52143f1c",
       "new_sha": "a874f2e616d2f0d42309c2b2c6bf327c889064a5"
+    },
+    {
+      "pkg": "noctalia-git",
+      "stratum": "vcs_git",
+      "old_sha": "fec2740b48f8488a68853e752ae413083c2b0e51",
+      "new_sha": "8ba46369b7c0f23df434bfdb36c777bbb7251533"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "0de43367d3df8350d159c9bba0910c4f8278d8e5",
+      "new_sha": "07f77a3863bb993f5c42ee95518e89a06700a7c7"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "69c7ceb7f390fb67271c9b04a3661492242193f9",
+      "new_sha": "8da8885270a6c5041cb0015e3e359fb1e1c129c9"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "8da8885270a6c5041cb0015e3e359fb1e1c129c9",
+      "new_sha": "0de43367d3df8350d159c9bba0910c4f8278d8e5"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "a079482bf2463e9120182453ebc87c70cbe8e93a",
+      "new_sha": "69c7ceb7f390fb67271c9b04a3661492242193f9"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "c0595168dfd03c7bf11b5d6667f110588a7ebda1",
+      "new_sha": "fabf8687cfff42012c17e2ef356441c74df1cdec"
+    },
+    {
+      "pkg": "noctalia-greeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "fabf8687cfff42012c17e2ef356441c74df1cdec",
+      "new_sha": "a079482bf2463e9120182453ebc87c70cbe8e93a"
     },
     {
       "pkg": "oh-my-zsh-git",
@@ -18909,6 +21435,186 @@
       "new_sha": "d6e461ca4e56c51d2fa0d4600673c433a8531b51"
     },
     {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "01aea34b50951392aa8b608da3ce5b0981af6902",
+      "new_sha": "f550c11f9b631d4fe59f917c533ac1a9e2894438"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "043a581088d957fada53f5f80bc257576aa2f8c2",
+      "new_sha": "6c4d26a9d78f97062ccc129154d5d76208b93efe"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "0ff168e0092311c1a93c0d5a8087b459f097e808",
+      "new_sha": "13d0ae71409a74691d5d91458e805c733e3878c8"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "13d0ae71409a74691d5d91458e805c733e3878c8",
+      "new_sha": "043a581088d957fada53f5f80bc257576aa2f8c2"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "1f50bd2968234a85f2a5d8f05a95317688df4b08",
+      "new_sha": "d07bcd563cf0e1e9457afe82d6069a8f50083c54"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "261079b8987aa66f60e7dada2e45e26dea214178",
+      "new_sha": "c12c48d8fd25e55f8df758ad2382466ace152e4e"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "37de02a37ee1ecfb7f32833fff6e436534cc674e",
+      "new_sha": "a3fb5146f0eabf69c36a141965c4ae3b8907fc34"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "3f14db3c697c0800b426815b6aa6584bd0c3b2c2",
+      "new_sha": "5420805a290b4d910849cac64184d9a6c26e80de"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "46b716117a67dbe6b9903d026da4415cdafea186",
+      "new_sha": "261079b8987aa66f60e7dada2e45e26dea214178"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "47555620d28c083cb294e11633ad79ba4da4020f",
+      "new_sha": "a4a6452d615311b48bfa7e119a6d8976698c849c"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "5420805a290b4d910849cac64184d9a6c26e80de",
+      "new_sha": "7cd4247daa46620fe8521373a00dabef7645b367"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "6c4d26a9d78f97062ccc129154d5d76208b93efe",
+      "new_sha": "6e4467754706f38449558bdfedac5bed2d079f33"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "6c91e0fff3c0f06dd86e2d6a2080591551c6cafb",
+      "new_sha": "cebd51bbf4ceda5e9e1a17fa3667472fc977633f"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "6e4467754706f38449558bdfedac5bed2d079f33",
+      "new_sha": "46b716117a67dbe6b9903d026da4415cdafea186"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "6e9336e9f4b62d941669efa1f06d6372629ab508",
+      "new_sha": "01aea34b50951392aa8b608da3ce5b0981af6902"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "6f43423ded32c2cee960c3435667c002c0b83421",
+      "new_sha": "47555620d28c083cb294e11633ad79ba4da4020f"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "7c331db164a93efe25316fa99874a63f2a2a3bff",
+      "new_sha": "c971bf8104e1e23edaaca15668ad25f3f788254d"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "7cd4247daa46620fe8521373a00dabef7645b367",
+      "new_sha": "1d3f02af8a42917b4c6bc82d874c565b0dce0c9e"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "7f360df6e1ca689efc2fdf0e8953319ef621606f",
+      "new_sha": "37de02a37ee1ecfb7f32833fff6e436534cc674e"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "8f6026d92260884fbbaeb985a37eb9176593b47a",
+      "new_sha": "1f50bd2968234a85f2a5d8f05a95317688df4b08"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "a3fb5146f0eabf69c36a141965c4ae3b8907fc34",
+      "new_sha": "e94b2bbcb189376cec191292a907cf4da5f71c0f"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "a4a6452d615311b48bfa7e119a6d8976698c849c",
+      "new_sha": "8f6026d92260884fbbaeb985a37eb9176593b47a"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "c12c48d8fd25e55f8df758ad2382466ace152e4e",
+      "new_sha": "6e9336e9f4b62d941669efa1f06d6372629ab508"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "c971bf8104e1e23edaaca15668ad25f3f788254d",
+      "new_sha": "6f43423ded32c2cee960c3435667c002c0b83421"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "cebd51bbf4ceda5e9e1a17fa3667472fc977633f",
+      "new_sha": "3f14db3c697c0800b426815b6aa6584bd0c3b2c2"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "d07bcd563cf0e1e9457afe82d6069a8f50083c54",
+      "new_sha": "e383c03a55c34a28b8b2a7a874624c088c8a3e90"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "e383c03a55c34a28b8b2a7a874624c088c8a3e90",
+      "new_sha": "7f360df6e1ca689efc2fdf0e8953319ef621606f"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "e94b2bbcb189376cec191292a907cf4da5f71c0f",
+      "new_sha": "0ff168e0092311c1a93c0d5a8087b459f097e808"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "ef0b1a419952c0ad2b324a7c930b4e01e036a38d",
+      "new_sha": "6c91e0fff3c0f06dd86e2d6a2080591551c6cafb"
+    },
+    {
+      "pkg": "pulsemeeter-git",
+      "stratum": "vcs_git",
+      "old_sha": "f550c11f9b631d4fe59f917c533ac1a9e2894438",
+      "new_sha": "ef0b1a419952c0ad2b324a7c930b4e01e036a38d"
+    },
+    {
       "pkg": "quickshell-git",
       "stratum": "vcs_git",
       "old_sha": "1ca67eea557cce9c3a48f0447dade1eba2932d3e",
@@ -19047,6 +21753,186 @@
       "new_sha": "9bdb0d61c106bbbcc374170b976fa4279c7faeeb"
     },
     {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "01c52492550096bd367079147818df8941a2610c",
+      "new_sha": "41d599d62717a4e7ae6f9a616f7ad84fa9714ab7"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "0c96e8e898cb181d088b78546bf05340cfb00eb8",
+      "new_sha": "ffd058d7fefc20af9a37837c274895d6cacf6604"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "2544c4f2af509ce7a94065c0613aa6158678c549",
+      "new_sha": "82bf81ef4eea3294d6fe9137831ef746e8aa06f0"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "28d2e48bc4e8d63b3159ca5e1a979b781949ad0a",
+      "new_sha": "d2a6f4bc034f61a9458381c7350084bd866b7708"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "3437f9ed91ddd48c3d7356b7a826941602ca5291",
+      "new_sha": "c03ca16c5274edb0963607e789bb40f6c62ce1ea"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "41d599d62717a4e7ae6f9a616f7ad84fa9714ab7",
+      "new_sha": "6d23d5bd43f7c66dc8e2f6b16f2c19ecb026a13c"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "698d0f572ad088310dabba72acff58b8c0042be9",
+      "new_sha": "28d2e48bc4e8d63b3159ca5e1a979b781949ad0a"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "6d23d5bd43f7c66dc8e2f6b16f2c19ecb026a13c",
+      "new_sha": "8f3eee2c8476099370ca2cb1484ec182372ef749"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "7fcbbbfc83c63a6e0f4ae42e6a2afd7bcceac758",
+      "new_sha": "94a0619e20d111906fb24d8fa94f6ffd250de733"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "82bf81ef4eea3294d6fe9137831ef746e8aa06f0",
+      "new_sha": "efdc2706a2e110e6d00bcfc91cd0d9a6885879f8"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "830795197e5d767d99a8850ade8e16754bee810d",
+      "new_sha": "c85723d148da074f87b32eb65f6500b28e1236a0"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "8a059d007f8b575f802d04664345eda11cf0ef43",
+      "new_sha": "698d0f572ad088310dabba72acff58b8c0042be9"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "8f3eee2c8476099370ca2cb1484ec182372ef749",
+      "new_sha": "9906fad52fb0aa57b4df40d789d613d055f9d2ca"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "94a0619e20d111906fb24d8fa94f6ffd250de733",
+      "new_sha": "f56411a33c08c35b0c277d74dde37cc3d4ad2aec"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "9906fad52fb0aa57b4df40d789d613d055f9d2ca",
+      "new_sha": "7fcbbbfc83c63a6e0f4ae42e6a2afd7bcceac758"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "9a0aef4e771d293c72c8822c7de56329a46d90e9",
+      "new_sha": "e6b01a49a81158330462c1f7f2e35c02debbf79e"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "9fbfea991bda7f307e5cd9d4db60c6fb20f4b8ce",
+      "new_sha": "2544c4f2af509ce7a94065c0613aa6158678c549"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "c03ca16c5274edb0963607e789bb40f6c62ce1ea",
+      "new_sha": "e00c65bb9e2919c6efc74aa3b7dd21ce685d2e1d"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "c85723d148da074f87b32eb65f6500b28e1236a0",
+      "new_sha": "3437f9ed91ddd48c3d7356b7a826941602ca5291"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "d2a6f4bc034f61a9458381c7350084bd866b7708",
+      "new_sha": "830795197e5d767d99a8850ade8e16754bee810d"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "e00c65bb9e2919c6efc74aa3b7dd21ce685d2e1d",
+      "new_sha": "ff5101bd909102bdeaf7368f107031e18fc00685"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "e199a7c8748a4f84d1d5ed7714f4d345c3aa0c41",
+      "new_sha": "9a0aef4e771d293c72c8822c7de56329a46d90e9"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "e6b01a49a81158330462c1f7f2e35c02debbf79e",
+      "new_sha": "f441a253ce4d902dfb3a5220dc4e48a5c1620bee"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "efdc2706a2e110e6d00bcfc91cd0d9a6885879f8",
+      "new_sha": "8a059d007f8b575f802d04664345eda11cf0ef43"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "f441a253ce4d902dfb3a5220dc4e48a5c1620bee",
+      "new_sha": "0c96e8e898cb181d088b78546bf05340cfb00eb8"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "f56411a33c08c35b0c277d74dde37cc3d4ad2aec",
+      "new_sha": "969815fc539a9d88d1bbaec7c6c42542e201c2bc"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "fa173c7c69f0b37c268980ce99f6f74a0f1e57eb",
+      "new_sha": "e199a7c8748a4f84d1d5ed7714f4d345c3aa0c41"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "fca869ff349a61e789143f5fa016878aa49d86fd",
+      "new_sha": "9fbfea991bda7f307e5cd9d4db60c6fb20f4b8ce"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "ff5101bd909102bdeaf7368f107031e18fc00685",
+      "new_sha": "01c52492550096bd367079147818df8941a2610c"
+    },
+    {
+      "pkg": "rpcs3-git",
+      "stratum": "vcs_git",
+      "old_sha": "ffd058d7fefc20af9a37837c274895d6cacf6604",
+      "new_sha": "fca869ff349a61e789143f5fa016878aa49d86fd"
+    },
+    {
       "pkg": "systemd-liberated-git",
       "stratum": "vcs_git",
       "old_sha": "090bdad541d9868db9be4e1c65eff0a8e6ee50d7",
@@ -19075,6 +21961,12 @@
       "stratum": "vcs_git",
       "old_sha": "8fddc3d9777e2b6e3c2a3166c9913d713ade159b",
       "new_sha": "b62ad45ffb1f563eb6a35d3173aaed722cf5563a"
+    },
+    {
+      "pkg": "systemd-liberated-git",
+      "stratum": "vcs_git",
+      "old_sha": "b62ad45ffb1f563eb6a35d3173aaed722cf5563a",
+      "new_sha": "0674da25976161e1f11e018437fba0c0bb1e87f1"
     },
     {
       "pkg": "systemd-liberated-git",
@@ -19195,6 +22087,72 @@
       "stratum": "vcs_git",
       "old_sha": "f03181e1694c971c373b71b166ac9ec02215d901",
       "new_sha": "6cebf831e10b059190267a36dd2976b12d3f9f60"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "0bea688c053012d8d58e305b9b0dd97499f2bb10",
+      "new_sha": "b50d9180392b724145cd2ed5cf98725227d1ab4f"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "34a01b70695a4d841ec0d7833d2e5b5a35af88c8",
+      "new_sha": "0bea688c053012d8d58e305b9b0dd97499f2bb10"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "3adc950bed750851d05ca7b83a62d76538f5cfea",
+      "new_sha": "53a36f31f6f6dcadea09d56606bbfc4117fda85e"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "3bd28cf666d3fa847706caa3cf3e0debf721d1f3",
+      "new_sha": "3adc950bed750851d05ca7b83a62d76538f5cfea"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "439fd0a9334fb0ec6232f7e160e578e33f332a0c",
+      "new_sha": "6268f38d2e947dc7a61604d2de3c2003806cc6fc"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "53a36f31f6f6dcadea09d56606bbfc4117fda85e",
+      "new_sha": "da2bd6077cf50e19a67578351fde0800efc72f29"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "6268f38d2e947dc7a61604d2de3c2003806cc6fc",
+      "new_sha": "f285aab5fbfc87245b9e53b9f533d80d7ac86ae7"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "b50d9180392b724145cd2ed5cf98725227d1ab4f",
+      "new_sha": "3bd28cf666d3fa847706caa3cf3e0debf721d1f3"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "bbedc500f3e2afab677bd0c6e1bb2625cfd5ff17",
+      "new_sha": "d60326cb1cfad60133db8f3a91d88c47d7d421e0"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "d60326cb1cfad60133db8f3a91d88c47d7d421e0",
+      "new_sha": "439fd0a9334fb0ec6232f7e160e578e33f332a0c"
+    },
+    {
+      "pkg": "waydroid-script-git",
+      "stratum": "vcs_git",
+      "old_sha": "f285aab5fbfc87245b9e53b9f533d80d7ac86ae7",
+      "new_sha": "34a01b70695a4d841ec0d7833d2e5b5a35af88c8"
     },
     {
       "pkg": "wayvr-git",

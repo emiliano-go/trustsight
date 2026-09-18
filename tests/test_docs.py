@@ -393,11 +393,11 @@ def test_docs_use_standard_punctuation():
 def test_the_documented_corpus_size_matches_the_lock():
     """A published figure has to be measurable from the tree that ships it.
 
-    The docs cited a 3,739-diff locked corpus in fifteen places. The lock
-    has only ever recorded 3,332 and then 3,246, and the fixtures directory
-    holds exactly 3,246 diffs - so no checkout of this repository could ever
-    reproduce the number every calibration claim rested on. It drifted
-    silently because nothing tied the prose to the manifest.
+    Every calibration claim rests on a corpus size, and the prose that
+    cites it must agree with the manifest that pins it. The figure has
+    drifted before: the docs cited 3,739 while the lock recorded 3,246,
+    and nothing tied the two together. The lock now records the count the
+    fixtures directory holds, and this test keeps it tied to the prose.
 
     This is the tie. If the corpus grows, the lock changes and the figure
     has to follow it; the alternative is a benchmark table that says

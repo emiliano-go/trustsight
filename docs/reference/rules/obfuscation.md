@@ -3,7 +3,7 @@
 # Obfuscation
 
 The recipe hides what it does from whoever reads it. Encoding (R003, R043,
-R045), runtime assembly (H014, R039, R040) and name indirection (H080) are
+R045), runtime assembly (R039, R040) and name indirection (H080) are
 all the same move: the line a reviewer sees is not the command that runs.
 
 H065 is the counterpart rather than a detection. The tokenizer rebuilds
@@ -27,7 +27,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [H014](#h014) | Eval or Exec Usage | MEDIUM |
+| [H014](#h014) | Eval or Exec Usage | - |
 | [H065](#h065) | Obfuscated Literal Reconstructed | INFO |
 | [H080](#h080) | Indirect Command Expansion | CRITICAL |
 | [R003](#r003) | Base64 Decode and Execute | CRITICAL |
@@ -48,12 +48,9 @@ severity weights and the reserved identifier ranges.
 
 ### H014: Eval or Exec Usage {#h014}
 
-- **Target:** `raw_line`
-- **Severity:** MEDIUM (weight 15)
-- **Category:** `obfuscation`
-- **Pattern:** `\b(?:eval|exec)\s`
-- **Scope:** `["function_body", "install_script"]`
-- **Description:** Detects `eval` or `exec` at the start of a command inside `build()`, `package()`, or an install script. `eval` re-parses its argument at runtime, so the executed content cannot be guaranteed statically; `exec` replaces the current process. Scoped out of declarations and comments, which routinely spell the same words in messages.
+H014 is retained as a documentation anchor for a retired rule. It emits no
+finding: `eval` of a substitution is [R039](#r039), and a top-level fetch
+that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 
 ### R039: Eval With Dynamic Content {#r039}
 
@@ -103,7 +100,7 @@ looking at.
 A literal that cannot be rebuilt is reported as the inconclusive case.
 Unreconstructable input is never read as UNFLAGGED.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H080: Indirect Command Expansion {#h080}
 

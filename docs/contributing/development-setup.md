@@ -56,8 +56,8 @@ rather than to allow the call:
 | Reaching for | Patch |
 |---|---|
 | The release channel (seed, IOC baselines, corpus) | Nothing - `TRUSTSIGHT_OFFLINE` already covers it |
-| The AUR metadata snapshot | `trustsight.full_aur.pipeline.fetch_metadata` |
-| A package's PKGBUILD | `trustsight.full_aur.pipeline.fetch_pkgbuild_with_tree` |
+| The AUR metadata snapshot | `trustsight.full_aur.metadata.fetch_metadata` |
+| A package's PKGBUILD | `trustsight.full_aur.fetch.fetch_pkgbuild_with_tree` |
 | Dependency resolution | Already stubbed suite-wide; override it with your own data |
 
 A test whose subject *is* the online path opts back in with
@@ -104,7 +104,7 @@ See [Re-baselining](re-baselining.md) for details.
 ## Debug a single package
 
 ```bash
-python -m trustsight inspect <package-name>
+uv run python -m trustsight inspect <package-name>
 ```
 
 This runs the full analysis pipeline on one AUR package and prints the per-rule breakdown, evidence, and final score.

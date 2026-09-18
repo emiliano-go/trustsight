@@ -8,11 +8,14 @@ popular one; D002 covers the same attack against a dependency name; H064
 and D004 cover `provides`/`replaces` claiming a name that belongs to
 something else.
 
-Every rule here needs the dependency corpus, which is seeded from every
-`depends` entry in the AUR plus every package name and `provides` alias.
-Without the seed they stay silent rather than treating an empty table as
-"nothing has ever been seen". Aggregate expansion is counted rather than
-named, so it lives in [count-based](count-based.md#h030-rule).
+Most rules here need the dependency corpus, which is seeded from every
+`depends`/`makedepends`/`optdepends`/`checkdepends` entry in the AUR plus every
+package name and `provides` alias. Without the seed they stay silent rather
+than treating an empty table as "nothing has ever been seen". The exceptions
+read other sources: D003 uses the static `[patterns] network_tools` list, and
+H053 and H059 compare the name against host and repository data. Aggregate
+expansion is counted rather than named, so it lives in
+[count-based](count-based.md#h030-rule).
 
 See [the rule system reference](system.md) for the field table, the
 severity weights and the reserved identifier ranges.
@@ -28,7 +31,7 @@ severity weights and the reserved identifier ranges.
 | [D002](#d002) | Typosquatted Dependency | HIGH |
 | [D003](#d003) | New Network-Using Makedepends | MEDIUM |
 | [D004](#d004) | Dependency Hijack Via Provides | HIGH |
-| [H006](#h006) | New Make/Opt/Check Dependency | INFO |
+| [H006](#h006) | New Make/Opt/Check Dependency | - |
 | [H029](#h029-rule) | Package-Name Typosquat | HIGH |
 | [H048](#h048) | Dependency Vendored Into Source | HIGH |
 | [H053](#h053) | Name/Host Consensus Divergence | MEDIUM |
@@ -38,12 +41,10 @@ severity weights and the reserved identifier ranges.
 
 ### H006: New Make/Opt/Check Dependency {#h006}
 
-- **Target:** `raw_line`
-- **Severity:** INFO (weight 0); see Note
-- **Category:** `dependency`
-- **Pattern:** `(?:makedepends|optdepends|checkdepends)\s*=`
-- **Scope:** All lines
-- **Description:** Fires when a `makedepends=`, `optdepends=`, or `checkdepends=` array is added or modified. At INFO it contributes weight 0 and reports context only. Sources a dependency-extraction exclusion: the dependency declaration itself is metadata, not a command, and must not be read for command-position matching.
+H006 is retained as a documentation anchor for a retired rule. It emits no
+finding: a network-capable `makedepends` addition is scored by [D003](#d003),
+and an `optdepends` addition is reported as a fact, never scored, without
+corpus state.
 
 ### H029: Package-Name Typosquat {#h029-rule}
 
@@ -132,7 +133,7 @@ either branch, since neither corpus nor pacman data exists to establish what is
 established. H064 always runs; the experimental D004 covers the same ground and
 may double-report when experimental rules are enabled.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H048: Dependency Vendored Into Source {#h048}
 

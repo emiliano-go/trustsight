@@ -2,7 +2,7 @@
 
 # How TrustSight Works
 
-TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the **end-state** of a diff: the post-patch PKGBUILD, not the delta. Every decision is reproducible: same input always produces the same score and the same evidence record.
+TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the **end-state** of a diff: the post-patch PKGBUILD, not the delta. Every decision is reproducible: the same diff, effective configuration, and observation history produce the same score and the same evidence record.
 
 These explanation pages describe *why* the tool makes the decisions it does. If you are looking for how to use it, start with the getting-started guide. If you want the reference, see the reference section.
 
@@ -31,7 +31,7 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 **Structural signals (Tier A)** come from rule matching. Two match targets exist because PKGBUILDs have two surfaces:
 
-- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
+- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
 - **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions. H004 (sudo) was later moved out of the TOML ruleset entirely, because "inside a function body" still admitted `optdepends` names and `echo` strings; it is now a code rule that requires `sudo` at a command position.
@@ -99,6 +99,7 @@ is mandatory, structurally uncheckable, or covered by declared PGP keys.
 |--------|----------|-----------|
 | `trusted_forge` | 0 | A forge is neutral: reported as `P007`, never credited |
 | `official` | 0 | Known upstream domains are neutral |
+| `raw_hosting` | +15 | Configured raw-content host requires scrutiny |
 | `unknown` | +20 | Never-before-seen domain requires scrutiny |
 | `homograph` | +30 | Visually confusable domain is high risk |
 
@@ -135,7 +136,7 @@ The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
 1. **Cold database.** The score is in the Medium band (21 to 50), maturity is below 0.5 (fewer than 25 recorded analyses; novelty reaches full weight at 50), and no HIGH, CRITICAL or FATAL finding fired. Novelty is the only thing holding the score up, and novelty is not trustworthy on a cold database.
-2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `companion_truncated`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, `deps_not_scanned`, or `stage_degraded`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
+2. **Incomplete coverage.** The run recorded any coverage gap: `diff_truncated`, `scan_truncated`, `line_truncated`, `tree_not_analyzed`, `companion_truncated`, `unresolved_source`, `unresolved_parse_time`, `snapshot_refused`, `unpinned_build_deps`, `ruleset_drifted`, `deps_not_scanned`, `stage_degraded`, `history_truncated`, or `noextract_suppressed`. When a HIGH or worse *did* fire, the band survives but is shown qualified, as `High (incomplete analysis)`.
 
 In both cases a HIGH, CRITICAL or FATAL finding keeps its own band: an analysis that found something does not get to hide it behind "inconclusive".
 
@@ -145,7 +146,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- The current test suite, **68.4% zero-rate** on the 3,246-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
+- The current test suite, **68.4% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

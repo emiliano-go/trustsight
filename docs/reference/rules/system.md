@@ -59,7 +59,7 @@ Rules match one line at a time, so without this the pipe-to-shell patterns would
 
 ### How scope reduces false positives
 
-Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like H004 (`sudo`) would fire on every line containing the word `sudo`, including comments (`# sudo is required`), messages (`echo "sudo needed"`), and top-level declarations (`groups=('sudo')`). The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
+Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like R010 (`curl`) would fire on every line containing the word `curl`, including comments and messages that merely mention it. The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
 
 Scope is set per-rule in `rules.toml`. When absent, the rule matches all lines. Scope has no effect on `resolved`-target rules because resolution already strips comments and top-level declarations.
 
@@ -130,8 +130,9 @@ The set is `DECLARED_DEFAULT` in `src/trustsight/scoring.py`.
 one that tracks a branch produced no line at all, and "nothing" reads exactly
 like "pinned" to anyone scanning the group. It is deliberately not a coverage
 gap: the statement is true of every VCS package by design, and raising a gap
-would put 20.1% of the locked benign corpus (653 of 3,246 diffs) into
-Inconclusive, which buys alert fatigue rather than information. The band is
+would put about a fifth of the corpus into Inconclusive (653 of 3,246 diffs, as
+measured on the original locked corpus), which buys alert fatigue rather than
+information. The band is
 left alone and the reader is told what the recipe declares. The
 rest render under `--verbose`. The P namespace contrasts with H033/H049/H059:
 those fire when a practice is *changed*, these report when one is *present*.
@@ -157,14 +158,14 @@ Each rule supports these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier. Every id in `rules.toml` is an `R` id: `R001`-`R003`, `R007`-`R008`, `R010`-`R013`, `R017`, `R039`-`R059` and `R144`. |
+| `id` | `string` | Rule identifier. Every id in `rules.toml` is an `R` id: `R001`-`R003`, `R007`-`R008`, `R010`-`R013`, `R017`, `R039`-`R059`, `R078`, `R091`, `R099`, `R104`, and `R144`. |
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `category` | `string` | Semantic category (`network_execution`, `obfuscation`, `installer`, `privilege`, `network_usage`, `injection`, `unicode`, `integrity`). |
 | `match_target` | `string` | `"resolved"` : apply to variable-resolved command strings after tokenization. `"raw_line"` : apply to raw diff lines after stripping the `+`/`-` prefix. |
 | `scope` | `list[string]` | (Optional, `raw_line` only) Restrict matching to line contexts (`["function_body"]`, `["message"]`, `["other"]`) or to a named PKGBUILD function (`["pkgver"]`, `["package"]`, `["package_foo"]`). When absent, matches all lines. |
-| `added_only` | `bool` | (Optional, `raw_line` only) Match only added (`+`) lines. Raw diff lines include removals, so without this a maintainer *deleting* a suspicious line raises the score. All `R039`+ rules set it. |
+| `added_only` | `bool` | (Optional, `raw_line` only) Match only added (`+`) lines. Raw diff lines include removals, so without this a maintainer *deleting* a suspicious line raises the score. All `raw_line` `R039`+ rules set it. |
 | `experimental` | `bool` | (Optional) Skip the rule unless `[rules] experimental = true` in `config.toml`. Used for rules whose false-positive rate has not been measured against the benign corpus. |
 | `include_comments` | `bool` | (Optional) Also match comment lines, which are filtered out for every other rule. Only for rules whose target is the *reader* rather than the shell (R012, R013): a commented-out command does not run, but a comment is exactly where an injection or a hidden character lives. |
 
@@ -361,7 +362,7 @@ See [C007: Command Substitution In Source Array](fetch-and-execution.md#c007).
 
 ## Expanded ruleset (R039+) {#expanded-ruleset}
 
-These rules roughly double the pattern-based detection surface. They are **enabled by default**, having been calibrated against a 3246-diff stratified benign corpus: fourteen fire on zero benign diffs, and every remaining hit was inspected individually; all but one were true positives. Enabling them costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
+These rules roughly double the pattern-based detection surface. They are **enabled by default**, having been calibrated against a 3739-diff stratified benign corpus: fourteen fire on zero benign diffs, and every remaining hit was inspected individually; all but one were true positives. Enabling them costs 0.5 percentage points of zero-rate and leaves p95 unchanged.
 
 The `experimental` flag remains supported for future additions. A rule carrying `experimental = true` is skipped unless `config.toml` sets:
 
@@ -370,7 +371,7 @@ The `experimental` flag remains supported for future additions. A rule carrying 
 experimental = true
 ```
 
-Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `H005` and `H006`-`H014` shipped as TOML rules and are documented above; `R015` and `R026`-`R038` are **reserved**: they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
+Numbering jumps over `R015`, `R026`-`R038` to keep the core and expanded ranges readable. `H005` and `H006`-`H014` are not shipped TOML rules; `R015` and `R026`-`R038` are **reserved**: they are referenced by nothing in the shipped config and must not be assigned casually, because a maintainer rule that reuses an id already present in a user's `rules.toml` would silently change what the user's override means.
 
 Every `raw_line` rule below sets `added_only = true`.
 
@@ -495,7 +496,7 @@ See [H016: Hidden Network Fetch In Build](fetch-and-execution.md#h016).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below were measured against the 3,246-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below were measured against the 3,739-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -515,7 +516,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H025 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
 | H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
 | H027 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
-| H029 | HIGH | 2/179 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
+| H029 | HIGH | 2/202 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
 | H030 | MEDIUM | 11 | 0.34 % | Measured with seeded DB (209,909-name seed). Well under the 30% gate. |
 | D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
@@ -1293,10 +1294,9 @@ in the shipped config or the code-emitted rule set:
 
 - `R015`, `R026`-`R038`: held apart so the core and expanded ranges stay
   readable, and reassigning them could clash with user `rules.toml` overrides.
-- `R078`, `R091`, `R099`, `R103`-`R104`, `R109`, `R113`: unassigned in the
-  current shipped configuration. `R103`/`R109` are claimed above as the
-  novelty ceiling; the rest are simply unused and may be returned to service
-  when a detection needs them.
+- `R103`, `R109`, `R113`: unassigned in the current shipped configuration.
+  `R103`/`R109` are claimed above as the novelty ceiling; the rest are simply
+  unused and may be returned to service when a detection needs them.
 - The ninety-five ids retired by the R/H split are **retired, not
   recycled**. A stored report, a published baseline and a user's
   `[rules.R###]` override can all still name an old id; handing that number
@@ -1315,7 +1315,7 @@ Measured against the TrustSight test corpus.
 
 !!! warning "Two rows measure a narrower configuration"
 
-    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 3,246-diff corpus on every push.
+    The recall rows above were measured with `observation_count` unpopulated, so Tier C novelty contributed zero to every score (see [Cold Start and Maturity](../../explanation/cold-start-and-maturity.md)), and against a smaller ruleset than the one documented here. Read them as a floor, not as current recall. The three distribution rows below are re-measured by the calibration gates against the current 3,739-diff corpus on every push.
 
 | Rule | Recall | Notes |
 |------|--------|-------|

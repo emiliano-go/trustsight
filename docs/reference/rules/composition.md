@@ -62,7 +62,10 @@ Stages: takeover (H026, H044, H074), mass adoption (H045, H073), install hook
 (H023, H017), foreign fetch (R001, H035, H066, H034), payload (H068, H069),
 obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072),
 staging (H038), recon (H040), persistence (H039, H062, H076), exfil (H041,
-H071), hidden drop (H042).
+H071), hidden drop (H042), integrity removed (H091) and sabotage (S001-S008).
+Later rules also map onto these stages, including R041, R054, R144, the
+H080-H083/H089-H091 additions and the X001-X025 crossfire rules; the
+authoritative rule-to-stage map is `_STAGE_OF` in `analysis/composition.py`.
 
 Each stage counts once however many rules in it fired, and H043's own finding
 is excluded from its own count. It is a composition annotation, not an additive
@@ -70,5 +73,5 @@ score: the point is that several independent stages co-occurred, which is what
 separated the 2018 acroread attack and the 2026 Atomic Arch campaign from
 single-signal noise.
 
-Fire rate: 0 of 3246. A benign diff with one or two rule hits cannot reach
+Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot reach
 three distinct stages.

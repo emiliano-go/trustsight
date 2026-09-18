@@ -15,7 +15,7 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 3. **It scales.** Analysing 50 packages in a review takes seconds, not minutes. No chroot, no root, no sandbox setup.
 4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe.
 
-The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W006) flag cases where code runs and the analysis could not read it, marking the result as having a coverage gap rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
+The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W006) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
 
 ## What SAST means here
 
@@ -50,8 +50,8 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 **Structural signals (Tier A)** come from rule matching. Two match targets exist because PKGBUILDs have two surfaces:
 
-- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
-- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
+- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
+- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R012, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions.
 
@@ -128,11 +128,11 @@ For the full list of limitations, see [What TrustSight Cannot See](what-trustsig
 
 ## Customization
 
-TrustSight's entire detection surface is configurable through files in `~/.config/trustsight/`, without touching source code. The files are written on first run and never rewritten, so an edited file is always kept. A `trustsight config sync-rules` command brings a stale `rules.toml` in line with the shipped defaults.
+TrustSight's configurable detection surface is controlled through files in `~/.config/trustsight/`, without touching source code. The files are written on first run and never rewritten, so an edited file is always kept. A `trustsight config sync-rules` command brings a stale `rules.toml` in line with the shipped defaults.
 
 ### rules.toml
 
-The primary tuning surface. Contains 36 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, weight, or disable any of them.
+The primary tuning surface. Contains 36 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, or disable any of them. Use `weight_override` in `config.toml` to change an R-series rule's weight.
 
 ```toml
 [[rules]]
@@ -144,7 +144,7 @@ category = "network_execution"
 match_target = "resolved"
 ```
 
-R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (97 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their severities and weights are adjustable through `thresholds.toml` and `config.toml`.
+R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (97 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
 
 C-series rules (C001-C009) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
@@ -172,7 +172,7 @@ LOW = 5
 INFO = 0
 ```
 
-**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 13% of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
+**`[review]`** selects a profile and its flagging threshold. Three profiles ship: `default` (threshold 20, about 11.9 % of benign diffs enter the review queue), `quiet` (threshold 40, smaller queue), and `strict` (threshold 10, broader queue for operators who prefer sensitivity). Changing a profile does not change a score, risk band, or calibration result; it changes only the reports marked for review.
 
 ```toml
 [review]
@@ -203,9 +203,9 @@ levels = 1
 Suppress a specific finding for a specific package. Managed through the `trustsight override` command:
 
 ```bash
-trustsight override add R001 some-package "Legitimately bootstraps its own installer"
+trustsight override add R001 --package some-package --reason "Legitimately bootstraps its own installer"
 trustsight override list
-trustsight override remove R001 some-package
+trustsight override rm R001 --package some-package
 ```
 
 A FATAL finding (R012, R013) cannot be overridden. Suppressed findings are always visible in the output as non-scoring audit data; a silent suppression is indistinguishable from a missed one.

@@ -14,10 +14,25 @@ import pytest
 
 
 def _fresh(name: str):
-    """Import *name* with no cached module, and return it."""
-    for mod in [m for m in sys.modules if m == name or m.startswith(name + ".")]:
+    """Import *name* with no cached module, and return it.
+
+    The original modules are put back before returning.  Leaving a
+    discarded module in ``sys.modules`` means every later test holds a
+    reference to the old object while a new import hands out a different
+    one, and ``monkeypatch`` then restores attributes on the replacement:
+    ``test_lint.py`` documents that failure mode.
+    """
+    saved = {
+        mod: module for mod, module in sys.modules.items()
+        if mod == name or mod.startswith(name + ".")
+    }
+    for mod in saved:
         del sys.modules[mod]
-    return importlib.import_module(name)
+    fresh = importlib.import_module(name)
+    for mod in [m for m in list(sys.modules) if m == name or m.startswith(name + ".")]:
+        del sys.modules[mod]
+    sys.modules.update(saved)
+    return fresh
 
 
 def test_importing_unicode_does_not_run_the_codepoint_scan():

@@ -347,7 +347,7 @@ def test_ld_so_conf_d_is_a_persistence_plant():
 
     It was excluded in a first pass that measured five paths together and
     read the aggregate as if it applied to each; on its own it appears in
-    zero of the 3,246 benign diffs.
+    zero of the 3,739 benign diffs.
     """
     assert "R054" in _shipped_ids(
         ['  install -Dm644 e.conf "$pkgdir/etc/ld.so.conf.d/e.conf"'],

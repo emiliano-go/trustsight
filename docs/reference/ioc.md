@@ -12,8 +12,8 @@ no band, and no probability language. This is detection, not inference.
 The design rests on four principles:
 
 - **State, not rules.** IOCs are observations about the world, so they live in
-  the baseline layer next to the corpus baseline ([A13/A13b](../security.md#part-a-trustsight-as-a-program-under-attack)),
-  never in the rule config. An override or a weight cannot reach them.
+  the baseline layer next to the corpus baseline ([A13/A13b](../security.md#the-invariants)),
+  never in the rule config. A rule override or weight cannot reach them.
 - **Attribution, not aggregation.** Every match names the curator that flagged
   the artifact. The user sees who called it bad, and can follow the incident
   and evidence.
@@ -88,8 +88,8 @@ A dedicated **IOC Match** stage runs after rule matching and before scoring:
 Parse -> Tokenize -> Rule Match -> IOC Match -> Score -> Verdict
 ```
 
-It reads the diff's added lines (or the whole PKGBUILD text when available)
-and queries the stored indicators for every source-URL host, every checksum
+It reads added diff lines and the current package text used for package-level
+checks, then queries the stored indicators for every source-URL host, every checksum
 and hex digest, and the package/pkgbase/dependency names. Hits are attached to
 `PackageFact.ioc_matches`; see the [report schema](report-schema.md).
 

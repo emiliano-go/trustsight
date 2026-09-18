@@ -14,8 +14,10 @@ Global entry point defined in the `src/trustsight/cli/` package.
 
 | Flag | Description |
 |------|-------------|
-| `-h`, `--help` | Show help message, including config subcommands and usage examples. |
+| `--help` | Show help message, including config subcommands and usage examples. |
 | `-v`, `--version` | Print version number (`trustsight X.Y.Z`) and exit. |
+| `--install-completion SHELL` | Install shell completion for `bash`, `zsh`, `fish`, or `powershell`. |
+| `--show-completion SHELL` | Print shell completion for `bash`, `zsh`, `fish`, or `powershell`. |
 | `--json` | Output JSON on commands that expose this option. It is a command option, not a global flag. |
 
 The help output also documents `trustsight config show`, `trustsight config set <key> <value>`, and `trustsight config sync-rules` with inline examples.
@@ -31,7 +33,7 @@ The help output also documents `trustsight config show`, `trustsight config set 
 Scan packages for newer versions on the AUR, produce a diff for each outdated package, run the full analysis pipeline, and print one panel per package with a summary line.
 
 ```
-trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--verbose] [--score] [--risk] [--depth N] [--deps] [--sort score|risk|name] [--refresh]
+trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--all] [--verbose] [--quiet] [--score] [--risk] [--depth N] [--deps] [--sort score|risk|name] [--refresh]
 ```
 
 ### Flags
@@ -442,6 +444,7 @@ uses, so a routine version bump matches a seeded entry.
 | `--import` | Import the seed. This is the default action; the flag is accepted for explicitness. |
 | `--file PATH` | Import a specific seed file (`.db`, `.db.gz`, or a `.tar.gz` v2 seed) instead of the default. |
 | `--force` | Re-import even if a seed has already been imported. |
+| `--json` | Output JSON. |
 
 ### Automatic import
 
@@ -601,6 +604,7 @@ trustsight baseline import FILE [--allow-unsigned] [--json]
 | Flag | Description |
 |------|-------------|
 | `--resume` | Resume an interrupted bootstrap. The bootstrap saves progress after each package. |
+| `--bootstrap` | Allow a from-scratch bootstrap of the whole AUR when no snapshot exists. |
 | `--export PATH` | Write the signed baseline artifact to this path. |
 | `--sign PATH` | Path to an ed25519 private key to sign the artifact. |
 | `--json` | Output JSON. |
@@ -616,7 +620,7 @@ trustsight baseline import FILE [--allow-unsigned] [--json]
 
 ## trustsight full-aur
 
-Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs via codeload (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
+Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs from the AUR cgit snapshot endpoint (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
 
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]

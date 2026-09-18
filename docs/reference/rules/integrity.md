@@ -4,8 +4,8 @@
 
 A verification the recipe carried is weakened, removed, or cannot cover
 what it claims to. The checksum rules (H001, H002, C001 to C005) and the
-signature rules (H005, H024, H078) are the core; the build-flag rules
-(H008, R049, R050, H025, H047, H079) are the same claim applied to
+signature rules (H024, H078) are the core; the build-flag rules
+(R049, R050, H025, H047, H079) are the same claim applied to
 mitigations rather than to sources.
 
 The asymmetry is deliberate throughout. Declaring verification costs an
@@ -33,8 +33,8 @@ severity weights and the reserved identifier ranges.
 | [C009](#c009) | Unread Content Moved With The Version | INFO |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
-| [H005](#h005) | validpgpkeys Added | MEDIUM |
-| [H008](#h008) | Suspicious Environment Variable | MEDIUM |
+| [H005](#h005) | validpgpkeys Added | - |
+| [H008](#h008) | Suspicious Environment Variable | - |
 | [H018](#h018) | Patch Applied From Outside The Build Tree | HIGH |
 | [H019](#h019) | Source URL Downgraded To HTTP | MEDIUM |
 | [H024](#h024) | GPG Verification Removed | HIGH |
@@ -63,7 +63,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25), downgraded to INFO (weight 0) if justified
 - **Category:** `integrity`
-- **Condition:** Fires when `sha256sums=SKIP` appears in the diff.
+- **Condition:** Fires when a prior SHA-256 checksum is changed to `SKIP`.
 - **Justification:** Severity is downgraded to INFO if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), `validpgpkeys` declaration, or DKMS reference. Justification checked via `is_skip_justified()` in `src/trustsight/differ.py`.
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml` because checksum integrity is foundational to the scoring model.
 
@@ -72,7 +72,7 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (not TOML-configurable)
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
-- **Condition:** Fires when `sha256sums=()` appears in the diff (array set to empty).
+- **Condition:** Fires when an existing SHA-256 checksum array is emptied.
 - **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml`.
 
 ### H005: validpgpkeys Added {#h005}
@@ -84,11 +84,9 @@ handled by H078, and removal is handled by H024.
 
 ### H008: Suspicious Environment Variable {#h008}
 
-- **Target:** `raw_line`
-- **Severity:** MEDIUM (weight 15)
-- **Category:** `build`
-- **Pattern:** `(?:CFLAGS|CXXFLAGS|LDFLAGS)\s*=\s*"[^"]`
-- **Description:** Detects a quoted build-flag assignment that does not begin with an empty string, the shape of a fertilizer injected into an existing flags string (e.g. `CFLAGS="$(…)"` carries a substitution). Pairs with the R049/R050 compiler-flag rules in the expanded scope, which match the `+=` form.
+H008 is retained as a documentation anchor for a retired rule. It emits no
+finding: the indirect `CFLAGS="$(...)"` shape is [X024](crossfire.md#x024), and
+a top-level flag-set replacement is [H079](#h079).
 
 ### C001: Checksum Changed Without Source Change With Stable Version {#c001}
 
@@ -123,7 +121,7 @@ handled by H078, and removal is handled by H024.
 ### C008: Unread Content Moved Under A Stable Version {#c008}
 
 - **Severity:** HIGH (weight 25)
-- **Condition:** A submodule gitlink or a Git-LFS object id changed, and `pkgver`/`pkgrel`/`epoch` did not.
+- **Condition:** A submodule gitlink, Git-LFS object id, or committed opaque/binary member changed, and `pkgver`/`pkgrel`/`epoch` did not.
 
 The [upstream-payload gap](../../explanation/what-trustsight-cannot-see.md)
 is real: a checksummed tarball's bytes are not in the diff, so a recipe can
@@ -283,7 +281,7 @@ replaced by a digest, is tightening and stays quiet. A digest variable that
 feeds a patch URL rather than a git ref is not a checkout pin, and the edit it
 belongs to is C003's neutral fact.
 
-Fire rate: 4 of 3246 benign diffs (0.12 %), all maintainers tracking a moving
+Fire rate: 4 of 3739 benign diffs (0.12 %), all maintainers tracking a moving
 patch branch under a fixed version, which is the shape the rule describes.
 
 ### H066: Embedded Binary In Tree {#h066}
@@ -336,7 +334,7 @@ existing set widens who may sign. Introducing `validpgpkeys` where there was
 none is signature checking being switched on, so it is reported as a neutral
 fact rather than as a finding against the package.
 
-Fire rate: 6 of 3246 (0.18 %), two introductions and four upstream key
+Fire rate: 6 of 3739 (0.18 %), two introductions and four upstream key
 rotations.
 
 ### H079: Build Flags Weakened {#h079}
@@ -358,7 +356,7 @@ value carrying no literal flag (`CFLAGS="${_cflags[@]}"`) is a set this rule
 cannot read, so it says nothing about it. Only the recipe's own lines count; a
 vendored Makefile inside a shipped patch is not the packager's assignment.
 
-Fire rate: 3 of 3246 (0.09 %), all one wine package that genuinely disables
+Fire rate: 3 of 3739 (0.09 %), all one wine package that genuinely disables
 FORTIFY_SOURCE.
 
 ### H047: Security-Relevant Build Flag Change {#h047}
@@ -387,7 +385,7 @@ or `pkgver` means the package points at different upstream bytes, which is an
 ordinary update however much else changed with it, and H087 stays silent.
 
 Both halves of the recipe have to move, and that is measured rather than
-assumed. Against the 3,246-diff locked benign corpus: `deps or build` fires on
+assumed. Against the 3,739-diff locked benign corpus: `deps or build` fires on
 11.53%, `deps only` on 4.36%, `build only` on 5.75%, and `deps and build` on
 **1.42%**. The disjunction passes the 30% ceiling comfortably, but it is eight
 times the noise for no additional detection - the campaign changed both,
@@ -424,7 +422,7 @@ between; anything else is not something the diff knows.
 (`"$_pkgsrc"::"git+$url.git"`) is a single element. Elements are split on
 *unquoted* whitespace, not by a token pattern.
 
-Zero occurrences in the 3,246-diff benign corpus.
+Zero occurrences in the 3,739-diff benign corpus.
 
 ### H092: Metadata Names A Source The Recipe Does Not {#h092}
 
@@ -461,7 +459,7 @@ These variables control makepkg's archive compression command. Overriding
 them can pipe decompressed content through an arbitrary binary. Legitimate
 uses are rare (custom compression tuning for size/performance).
 
-Fire rate: ~0.08% on the 3,246-diff benign corpus.
+Fire rate: ~0.08% on the 3,739-diff benign corpus.
 
 ### R091: Privilege Escalation Override {#r091}
 
@@ -474,7 +472,7 @@ This variable controls how pacman gains elevated privileges during
 `makepkg -S`. Overriding it in a PKGBUILD means the package is trying
 to control privilege escalation on the builder's machine.
 
-Fire rate: 0% on the 3,246-diff benign corpus.
+Fire rate: 0% on the 3,739-diff benign corpus.
 
 ### R099: Trap Statement {#r099}
 
@@ -488,7 +486,7 @@ Fire rate: 0% on the 3,246-diff benign corpus.
 or perform legitimate cleanup. Legitimate cleanup traps exist but are
 uncommon enough to flag.
 
-Fire rate: ~0.80% on the 3,246-diff benign corpus. Excludes when R104
+Fire rate: ~0.80% on the 3,739-diff benign corpus. Excludes when R104
 already claimed the more specific form.
 
 ### R104: Error Handling Suppressed {#r104}
@@ -518,7 +516,7 @@ Overriding it in a PKGBUILD redirects all source downloads through the
 attacker's chosen binary. Any change to DLAGENTS is flagged: legitimate
 recipes do not modify it.
 
-Fire rate: ~1.55% on the 3,246-diff benign corpus.
+Fire rate: ~1.55% on the 3,739-diff benign corpus.
 
 ### H097: Function Shadowing {#h097}
 

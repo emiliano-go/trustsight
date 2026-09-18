@@ -12,7 +12,7 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | C-series  | C001-C009   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
 | X-series  | X001-X025   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
-| P-series  | P001-P008 (P004 skipped) | `analysis/*.py`  | No                | Declared practice, reported at weight 0 |
+| P-series  | P001-P008 (P004 skipped) | `scoring.py`, `differ.py` | No          | Declared practice, reported at weight 0 |
 | W-series  | W001-W006   | `analysis/*.py`  | No                | Unverifiable: what this run could not read, weight 0 |
 
 ## R-series rules (TOML)
@@ -33,7 +33,7 @@ diff lines is an H-series heuristic instead. Each R rule has:
 Example:
 
 ```toml
-[rules.R001]
+[[rules]]
 id = "R001"
 name = "curl-pipe-bash"
 pattern = "curl .* \\| bash"
@@ -125,7 +125,7 @@ Then regenerate the index, whose legend and quick-reference table are both
 derived rather than hand-maintained:
 
 ```bash
-python scripts/build_rules_index.py
+uv run python scripts/build_rules_index.py
 ```
 
 `tests/test_docs.py` fails if any of those is missing, if the section lands
@@ -140,45 +140,51 @@ the shipped one, or if the id is absent from the quick-reference table.
 | A single regex matches a resolved string       | R-series |
 | The signal needs diff context a line cannot show | H-series |
 | Logic spans multiple fields / conditions       | C-series |
-| Rule must always run (cannot be disabled)      | C-series |
+| Needs a structural or multi-condition invariant | C-series |
 
 ## Fixtures
 
-Every new scored rule needs two fixture pairs:
+Every new scored rule needs a benign case and a malicious case. Fixtures are
+grouped by theme, with one `expected.json` per group, and each entry is keyed by
+the diff's filename.
 
 ### Benign fixture
 
-Place under `tests/fixtures/benign/`:
-
-```
-tests/fixtures/benign/<rule-id>-no-false-positive/
-├── PKGBUILD.diff
-└── expected.json
-```
-
-The `.diff` must be a real or plausible benign change. The `expected.json` must contain a score of **0** for this rule.
-
-### Malicious fixture
-
-Place under `tests/fixtures/malicious/synthetic/`:
-
-```
-tests/fixtures/malicious/synthetic/<rule-id>-detection/
-├── PKGBUILD.diff
-└── expected.json
-```
-
-The `.diff` must trigger the rule. The `expected.json` must contain a non-zero score for this rule.
-
-### expected.json schema
+Add the diff under the matching `tests/fixtures/benign/<group>/` directory
+(`dependency-changes`, `recipe-only-changes`, `sabotage-lookalikes` or
+`crossfire-lookalikes`) and add an entry to that group's `expected.json`. The
+`.diff` must be a real or plausible benign change; the entry asserts that it
+does not fire and does not score:
 
 ```json
 {
-  "expected_score": <0-100>,
-  "expected_rule": "<rule-id>",
-  "expected_severity": "<severity>"
+  "<file>.diff": {
+    "must_fire": [],
+    "max_score": 0
+  }
 }
 ```
+
+### Malicious fixture
+
+Add the diff under `tests/fixtures/malicious/synthetic/` (or the `historical`,
+`holdout`, `evasion` or `campaign` group) and add an entry to that category's
+`expected.json`. The `.diff` must trigger the rule; the entry asserts a minimum
+score and the ids that must fire:
+
+```json
+{
+  "<file>.diff": {
+    "min_score": 25,
+    "must_fire": ["H001"],
+    "relabelled": "optional note when a rule id or expectation changed"
+  }
+}
+```
+
+`scripts/verify_fixtures.py` checks that every record has a `.diff` body and
+that every `.diff` is referenced by a record, so neither half can drift
+silently.
 
 ## Fire-rate gate
 
@@ -192,10 +198,10 @@ Any new **scored** rule (severity other than `INFO`) must pass the benign-corpus
 To check the fire rate, re-baseline and read the per-rule rates it records. Rebuild the corpus first, as it is gitignored (see [Re-baselining](re-baselining.md)):
 
 ```bash
-python scripts/build_corpus.py --from-manifest \
+uv run python scripts/build_corpus.py --from-manifest \
   --manifest tests/fixtures/corpus.lock \
   --out tests/fixtures/benign-corpus
-python scripts/rebaseline.py --baseline /tmp/baseline-check.json
+uv run python scripts/rebaseline.py --baseline /tmp/baseline-check.json
 ```
 
 Each stratum's `rules` map in the output holds that rule's fire rate:
@@ -222,8 +228,8 @@ def test_r001_no_false_positive():
 Run them with:
 
 ```bash
-pytest tests/test_rules.py::test_r001_curl_bash -v
-pytest tests/test_rules.py::test_r001_no_false_positive -v
+uv run pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run pytest tests/test_rules.py::test_r001_no_false_positive -v
 ```
 
 ## Common mistakes

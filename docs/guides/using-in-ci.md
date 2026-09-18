@@ -4,7 +4,7 @@
 
 The default terminal output is the findings list, not a score: the score exists
 and is deterministic, but the tool leads with evidence. Automation therefore
-runs on the JSON contract below, the only machine-readable surface, and the one
+runs on the JSON contract below, the CLI machine-readable surface, and the one
 this guide uses throughout.
 
 ## Exit codes
@@ -99,8 +99,8 @@ independent of the score and should be checked whatever threshold you pick.
 
 ## Deeper output
 
-`trustsight inspect <pkg> --json` exposes the full `PackageFact` for one package:
-the whole score breakdown, bucket classifications, novelty context and evidence.
+`trustsight inspect <pkg> --json --score --verbose` exposes a detailed report body for one package:
+the score breakdown, bucket classifications, novelty context and evidence.
 Field by field, it is documented in the
 [report schema](../reference/report-schema.md).
 
@@ -132,7 +132,7 @@ The CRITICAL recall of **100%** means every labelled malice sample in the corpus
 
 ## Config in CI
 
-Check in your `config.toml`, `rules.toml`, and the TrustSight database alongside your code. The `trustsight review` command respects the local config tree automatically.
+Provision `~/.config/trustsight` in CI, for example by setting `HOME` to a controlled workspace-local home. Check in the configuration files and initialize the database there before running `trustsight review`.
 
 See also:
 

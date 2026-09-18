@@ -148,9 +148,11 @@ def gate_network_is_confined() -> Gate:
 # request is built from it, so that is what is checked.
 _URL_LITERAL_RE = re.compile(r"https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,})")
 _ENDPOINT_HOST = "aur.archlinux.org"
-_RELEASE_HOST = "github.com"
+#: The release channel is two hosts: the REST API used to discover the
+#: newest asset-bearing ``baseline-*`` release, and the asset host itself.
+_RELEASE_HOSTS = frozenset({"github.com", "api.github.com"})
 #: Source modules (relative to src/trustsight) that may name the release
-#: host.  The AUR host is allowed everywhere; the release host only here.
+#: hosts.  The AUR host is allowed everywhere; the release hosts only here.
 _RELEASE_MODULES = {"release.py"}
 
 
@@ -174,7 +176,7 @@ def gate_single_network_host() -> Gate:
                 found.add(host)
                 if host == _ENDPOINT_HOST:
                     continue
-                if host == _RELEASE_HOST and rel in _RELEASE_MODULES:
+                if host in _RELEASE_HOSTS and rel in _RELEASE_MODULES:
                     continue
                 hits.append(f"{_rel(path)}:{node.lineno} {host}")
     if not found:

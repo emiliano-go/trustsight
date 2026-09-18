@@ -292,8 +292,19 @@ def _branches_overlap(left: str, right: str) -> bool:
 
 
 def is_superlinear(compiled: re.Pattern) -> bool:
-    """Whether *compiled* costs more than linearly in its input length."""
-    return growth_ratio(compiled) > SUPERLINEAR_GROWTH
+    """Whether *compiled* costs more than linearly in its input length.
+
+    A ratio over budget is re-measured once. Scheduler contention inflates a
+    timing and never deflates one, so a linear pattern measured beside a busy
+    test suite can produce a single inflated ratio while a genuinely
+    quadratic pattern stays over budget on every measurement. Without the
+    second reading the linter reported a clean ruleset as unlinted depending
+    on what else was running.
+    """
+    ratio = growth_ratio(compiled)
+    if ratio <= SUPERLINEAR_GROWTH:
+        return False
+    return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
 
 
 def has_nested_quantifier(pattern: str) -> bool:

@@ -9,7 +9,8 @@ verifies against the pinned distribution key.  Anything that fails any of
 those checks is refused; there is no fallback that accepts an unverified
 download.
 
-Security model note: the release host (github.com) is the second declared
+Security model note: the release channel (``api.github.com`` for release
+discovery, ``github.com`` for asset downloads) is the second declared
 endpoint of the program, beside the AUR.  It is confined to this module by
 ``scripts/security_gates.py``, it is reached only by explicit commands
 (``seed fetch``, ``ioc update``, first-run auto-import) and never during
@@ -32,13 +33,20 @@ log = logging.getLogger(__name__)
 # The declared endpoint
 # ---------------------------------------------------------------------------
 
-#: The one release endpoint the program is allowed to reach.  ``latest``
-#: follows GitHub's redirect to the newest release; a tag pins the exact
-#: release an operator asked for.
+#: The release asset endpoint.  ``latest`` follows GitHub's redirect to the
+#: newest release; a tag pins the exact release an operator asked for.
 RELEASE_BASE_URL = "https://github.com/emiliano-go/trustsight/releases"
+
+#: The GitHub REST API, used once per process to discover the newest
+#: asset-bearing ``baseline-*`` release.  The second declared release host.
+GITHUB_API_URL = "https://api.github.com"
 
 #: Every outbound request carries an explicit timeout (security gate A4).
 _REQUEST_TIMEOUT_SECONDS = 60
+
+#: The releases listing is small JSON, but the read is still capped so a
+#: hostile or malfunctioning response cannot be materialised whole (A4).
+_MAX_RELEASES_JSON_BYTES = 1 * 1024 * 1024
 
 #: A release asset is never read past this bound (security gate A5-style
 #: bound on hostile input; the corpus baseline is the largest asset).
@@ -101,15 +109,17 @@ def _resolve_baseline_tag() -> str | None:
     if offline():
         return None
     try:
-        url = (
-            "https://api.github.com/repos/emiliano-go/trustsight/releases"
-            "?per_page=30"
-        )
+        url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
         req = urllib.request.Request(
             url, headers={"Accept": "application/vnd.github+json"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            releases = json.loads(resp.read(10 * 1024 * 1024))
+            body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
+        # A truncated JSON body must not be parsed as if it were complete:
+        # fall back to ``latest`` instead of reading a cut-off listing.
+        if len(body) > _MAX_RELEASES_JSON_BYTES:
+            return None
+        releases = json.loads(body)
         for release in releases:
             tag = release.get("tag_name", "")
             if tag.startswith("baseline-") and release.get("assets"):

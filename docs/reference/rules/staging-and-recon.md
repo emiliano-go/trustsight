@@ -23,8 +23,8 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [H007](#h007) | Symlink Redirect | MEDIUM |
-| [H010](#h010) | Suspicious file write | HIGH |
+| [H007](#h007) | Symlink Redirect | - |
+| [H010](#h010) | Suspicious file write | - |
 | [H038](#h038) | World-Writable Staging | HIGH |
 | [H040](#h040) | Host Reconnaissance | INFO |
 | [H042](#h042) | Hidden Drop | HIGH |
@@ -35,19 +35,14 @@ severity weights and the reserved identifier ranges.
 
 ### H007: Symlink Redirect {#h007}
 
-- **Target:** `raw_line`
-- **Severity:** MEDIUM (weight 15)
-- **Category:** `filesystem`
-- **Pattern:** `ln\s+-sf`
-- **Description:** Detects `ln -sf` (force-symlink) invocations. Re-pointing a symlink to a new target can redirect what a later step writes or reads, including replacing a config file or a cacheable binary path with a copy the attacker controls.
+H007 is retained as a documentation anchor for a retired rule. It emits no
+finding; a symlink written outside `$pkgdir` is one shape of [H076](#h076).
 
 ### H010: Suspicious file write {#h010}
 
-- **Target:** `runtime` (resolved execution path)
-- **Severity:** HIGH (weight 25)
-- **Category:** `filesystem`
-- **Pattern:** `(?!)` (never matches)
-- **Description:** A write to a sensitive filesystem location (services, `cron.d`, `$HOME/.config/autostart`). Same treatment as H009: shipped as a reserved `runtime` placeholder, never emitted by the static diff engine.
+H010 is retained as a documentation anchor for a reserved `runtime` id. No
+code emits it; a write to a sensitive location is claimed by the static rules
+when the diff shows it, such as [H076](#h076) and [R058](#r058).
 
 ### R058: Write Outside Package Root {#r058}
 
@@ -63,7 +58,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `persistence`
 - **Condition:** `/tmp`, `/var/tmp` or `/dev/shm` is used as a working or execution directory. `mktemp -d` is excluded wholesale: a random private directory is not a fixed world-writable path.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H042: Hidden Drop {#h042}
 
@@ -76,7 +71,7 @@ not fire three times: a hidden write that is later executed belongs to
 H069/H072, one in a world-writable directory to H038, one in the user's home to
 H032. H042 claims only the hidden drop none of those own.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H076: Build Writes Outside Staging Root {#h076}
 
@@ -92,7 +87,7 @@ are excluded, since H032/H038/H039/H062 own the target system. Devices
 (`> /dev/null`) and extractor artefacts are excluded by requiring a plain
 absolute path.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.
 
 ### H085: PATH Injection With Undeclared Directory {#h085}
 
@@ -116,4 +111,4 @@ A lone `uname -m` is an architecture check and is reported at INFO by design.
 `env`, `dmidecode` and `systemd-detect-virt` are deliberately absent: the first
 produced a false positive on a `sed` expression, and the other two are H067's.
 
-Fire rate: 0 of 3246.
+Fire rate: 0 of 3739.

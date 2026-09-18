@@ -145,7 +145,7 @@ MAX_RULE_LINE_BYTES = 8192
 #: roughly ten minutes of CPU for a single package - multiplied again by
 #: `depth.MAX_DEPTH_NODES` on a full-depth run.
 #:
-#: 20,000 is five times the largest diff in the 3,246-diff locked benign
+#: 20,000 is five times the largest diff in the 3,739-diff locked benign
 #: corpus (3,839 lines; p99.9 is 2,117), so it truncates nothing real while
 #: holding the worst case near nine seconds.
 MAX_SCANNED_LINES = 20_000
@@ -194,7 +194,18 @@ def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]
 
 
 def _compiled(pattern: str, rule_id: str = ""):
-    """Return the compiled form of *pattern*, or None if it is invalid."""
+    """Return the compiled form of *pattern*, or None if it is invalid.
+
+    A refusal from :func:`has_nested_quantifier` is structural, so it is
+    deterministic and cached.  The other two checks measure wall-clock time
+    (:data:`BACKTRACK_BUDGET_S`, :func:`~trustsight.regex_safety.is_superlinear`)
+    and are load-sensitive: a busy machine can make a safe pattern look
+    dangerous for a single probe.  A timing-only refusal is therefore
+    honoured for this call but deliberately **not** memoised, because
+    ``_pattern_cache`` is process-global and one slow probe would otherwise
+    disable the rule until the process exits.  That is how R013's large
+    generated pattern would go silently blind part-way through a test run.
+    """
     try:
         return _pattern_cache[pattern]
     except KeyError:
@@ -202,15 +213,10 @@ def _compiled(pattern: str, rule_id: str = ""):
     try:
         compiled = re.compile(pattern, re.IGNORECASE)
     except re.error:
-        compiled = None
-    if compiled is not None and (
-        has_nested_quantifier(pattern)
-        or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
-        # Growth as well as absolute cost: a quadratic pattern with a small
-        # constant sits under the budget at the probe length and still
-        # costs seconds at a full line.
-        or is_superlinear(compiled)
-    ):
+        _pattern_cache[pattern] = None
+        return None
+
+    def _refuse() -> None:
         # Named, truncated: a refused pattern stops matching silently, and
         # "some rule died" is not something an operator can act on.
         # `trustsight lint` reports the same condition as an ERROR.
@@ -219,7 +225,24 @@ def _compiled(pattern: str, rule_id: str = ""):
             f" (rule {rule_id})" if rule_id else "",
             pattern,
         )
-        compiled = None
+
+    if has_nested_quantifier(pattern):
+        _refuse()
+        _pattern_cache[pattern] = None
+        return None
+
+    # Growth as well as absolute cost: a quadratic pattern with a small
+    # constant sits under the budget at the probe length and still costs
+    # seconds at a full line.
+    risk = backtracking_risk(compiled)
+    if risk > BACKTRACK_BUDGET_S:
+        # Re-probe once.  The probe is wall-clock, so a transiently loaded
+        # machine can overshoot for a single measurement on a safe pattern.
+        risk = min(risk, backtracking_risk(compiled))
+    if risk > BACKTRACK_BUDGET_S or is_superlinear(compiled):
+        _refuse()
+        return None
+
     _pattern_cache[pattern] = compiled
     return compiled
 

@@ -70,7 +70,7 @@ Each entry states the same facts in the same order:
 - **Pattern** or **Condition**: what makes the rule fire. Quoted patterns
   are checked against the shipped `rules.toml` on every test run, so a
   pattern here cannot drift from the one that runs.
-- **Fire rate**, where measured: hits on the current 3,246-diff benign corpus, unless a page explicitly identifies a historical measurement.
+- **Fire rate**, where measured: hits on the current 3,739-diff benign corpus, unless a page explicitly identifies a historical measurement.
   These are false-positive rates. The full table is in
   [measured fire rates](system.md#experimental-fire-rates).
 
@@ -100,16 +100,16 @@ is deliberately non-contiguous; see
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |
 | [H004](fetch-and-execution.md#h004) | Privilege Escalation | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
-| [H005](integrity.md#h005) | validpgpkeys Added | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
-| [H006](naming-and-dependency.md#h006) | New Make/Opt/Check Dependency | Heuristic | INFO | [Naming and Dependencies](naming-and-dependency.md) |
-| [H007](staging-and-recon.md#h007) | Symlink Redirect | Heuristic | MEDIUM | [Staging and Reconnaissance](staging-and-recon.md) |
-| [H008](integrity.md#h008) | Suspicious Environment Variable | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
-| [H009](fetch-and-execution.md#h009) | Network connection attempt | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
-| [H010](staging-and-recon.md#h010) | Suspicious file write | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
-| [H011](fetch-and-execution.md#h011) | Sensitive binary execution | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
-| [H012](deception.md#h012) | Strace detection attempt (TracerPid check) | Heuristic | CRITICAL | [Deception and Anti-Analysis](deception.md) |
-| [H013](deception.md#h013) | Strace log truncated (possible flood evasion) | Heuristic | HIGH | [Deception and Anti-Analysis](deception.md) |
-| [H014](obfuscation.md#h014) | Eval or Exec Usage | Heuristic | MEDIUM | [Obfuscation](obfuscation.md) |
+| [H005](integrity.md#h005) | validpgpkeys Added | Heuristic | - | [Integrity and Verification](integrity.md) |
+| [H006](naming-and-dependency.md#h006) | New Make/Opt/Check Dependency | Heuristic | - | [Naming and Dependencies](naming-and-dependency.md) |
+| [H007](staging-and-recon.md#h007) | Symlink Redirect | Heuristic | - | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H008](integrity.md#h008) | Suspicious Environment Variable | Heuristic | - | [Integrity and Verification](integrity.md) |
+| [H009](fetch-and-execution.md#h009) | Network connection attempt | Heuristic | - | [Fetch and Execution](fetch-and-execution.md) |
+| [H010](staging-and-recon.md#h010) | Suspicious file write | Heuristic | - | [Staging and Reconnaissance](staging-and-recon.md) |
+| [H011](fetch-and-execution.md#h011) | Sensitive binary execution | Heuristic | - | [Fetch and Execution](fetch-and-execution.md) |
+| [H012](deception.md#h012) | Strace detection attempt (TracerPid check) | Heuristic | - | [Deception and Anti-Analysis](deception.md) |
+| [H013](deception.md#h013) | Strace log truncated (possible flood evasion) | Heuristic | - | [Deception and Anti-Analysis](deception.md) |
+| [H014](obfuscation.md#h014) | Eval or Exec Usage | Heuristic | - | [Obfuscation](obfuscation.md) |
 | [H015](fetch-and-execution.md#h015) | Critical Build Function Modified | Heuristic | INFO | [Fetch and Execution](fetch-and-execution.md) |
 | [H016](fetch-and-execution.md#h016) | Hidden Network Fetch In Build | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [H017](install-and-persist.md#h017) | Install Hook Fetches Or Executes | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |

@@ -228,8 +228,8 @@ def test_r001_no_false_positive():
 Run them with:
 
 ```bash
-uv run pytest tests/test_rules.py::test_r001_curl_bash -v
-uv run pytest tests/test_rules.py::test_r001_no_false_positive -v
+uv run --with pytest python -m pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run --with pytest python -m pytest tests/test_rules.py::test_r001_no_false_positive -v
 ```
 
 ## Common mistakes

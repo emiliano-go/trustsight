@@ -85,7 +85,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 TrustSight's current test suite has a zero-rate of **68.4%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
-uv run pytest tests/
+uv run --with pytest python -m pytest tests/
 ```
 
 Ensure CRITICAL recall stays at **100%**: every known malicious pattern must still fire. The corpus benchmarks in the [explanation section](../explanation/benchmarks-and-methodology.md) define the expected p5/p95 separations:

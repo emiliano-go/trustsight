@@ -10,7 +10,7 @@ If you only want to use the tool, start with the README and the getting started 
 git clone https://github.com/emiliano-go/trustsight.git
 cd trustsight
 uv sync --locked --extra dev
-uv run pytest
+uv run --with pytest python -m pytest
 uv run ruff check
 uv run python scripts/security_gates.py
 ```
@@ -21,7 +21,7 @@ If you change rules, scoring, tokenizer behavior, or calibration fixtures, also 
 uv run python scripts/build_corpus.py --from-manifest \
   --manifest tests/fixtures/corpus.lock \
   --out tests/fixtures/benign-corpus
-TRUSTSIGHT_FULL_CALIBRATION=1 uv run pytest tests/test_calibration_gates.py
+TRUSTSIGHT_FULL_CALIBRATION=1 uv run --with pytest python -m pytest tests/test_calibration_gates.py
 ```
 
 The benign corpus is gitignored, so a fresh checkout must reconstruct the

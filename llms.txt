@@ -91,15 +91,15 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 ## Run the test suite
 
 ```bash
-uv run pytest
+uv run --with pytest python -m pytest
 ```
 
-Run `uv run pytest` for the current test count; it changes as coverage is added.
+Run `uv run --with pytest python -m pytest` for the current test count; it changes as coverage is added.
 
 ### Run a single test
 
 ```bash
-uv run pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run --with pytest python -m pytest tests/test_rules.py::test_r001_curl_bash -v
 ```
 
 ### The suite does not reach the network
@@ -276,7 +276,7 @@ benign corpus and real case reports are the arguments that matter.
 
 | Metric             | Value                           |
 |--------------------|---------------------------------|
-| Tests              | Run `uv run pytest` for the current checkout |
+| Tests              | Run `uv run --with pytest python -m pytest` for the current checkout |
 | Python             | 3.11+                           |
 | Test runner        | pytest                          |
 | Linter             | ruff                            |
@@ -1242,7 +1242,7 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 35 | < CRITICAL p5 (margin: 25) |
-| Tests | Run `uv run pytest` for the current checkout | n/a |
+| Tests | Run `uv run --with pytest python -m pytest` for the current checkout | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 
@@ -3086,7 +3086,7 @@ No significant risk signals. Routine version bumps with checksum updates, truste
 
 A Low verdict does not mean "safe." It means "no detectable risk signals in this diff."
 
-**68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run pytest` for the current test count.
+**68.4 % of diffs score 0** (zero-rate) across the 3,246-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **40**. The calibration gates re-measure both distributions against the shipped configuration on every push and fail the build if they overlap (see [using TrustSight in CI](../guides/using-in-ci.md)). Run `uv run --with pytest python -m pytest` for the current test count.
 
 The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 86.9th, so about **13 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
@@ -3825,7 +3825,7 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 | CRITICAL | p5 (5th percentile) | **60** |
 | Benign | p95 (95th percentile) | **35** |
 | Zero-rate (benign scored 0) | percentage | **68.4%** |
-| Test count | total | Run `uv run pytest` for the current checkout |
+| Test count | total | Run `uv run --with pytest python -m pytest` for the current checkout |
 
 **The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (35), the classifier achieves clean separation with no overlap.
 

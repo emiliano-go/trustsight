@@ -26,15 +26,15 @@ This installs the package in editable mode along with `pytest`, `ruff`, and othe
 ## Run the test suite
 
 ```bash
-uv run pytest
+uv run --with pytest python -m pytest
 ```
 
-Run `uv run pytest` for the current test count; it changes as coverage is added.
+Run `uv run --with pytest python -m pytest` for the current test count; it changes as coverage is added.
 
 ### Run a single test
 
 ```bash
-uv run pytest tests/test_rules.py::test_r001_curl_bash -v
+uv run --with pytest python -m pytest tests/test_rules.py::test_r001_curl_bash -v
 ```
 
 ### The suite does not reach the network

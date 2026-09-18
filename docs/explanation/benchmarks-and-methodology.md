@@ -78,7 +78,7 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 35 | < CRITICAL p5 (margin: 25) |
-| Tests | Run `uv run pytest` for the current checkout | n/a |
+| Tests | Run `uv run --with pytest python -m pytest` for the current checkout | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
 

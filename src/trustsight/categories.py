@@ -174,7 +174,7 @@ _SUMMARIES: dict[RuleCategory, str] = {
 _C = RuleCategory
 
 RULE_CATEGORIES: dict[str, RuleCategory] = {
-    # -- fetch and execution -------------------------------------------
+    # --- fetch and execution -------------------------------------------
     "R001": _C.FETCH_AND_EXECUTION,
     "R002": _C.FETCH_AND_EXECUTION,
     "H003": _C.FETCH_AND_EXECUTION,
@@ -209,7 +209,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "H082": _C.FETCH_AND_EXECUTION,
     "H083": _C.FETCH_AND_EXECUTION,
     "C007": _C.FETCH_AND_EXECUTION,
-    # -- obfuscation ---------------------------------------------------
+    # --- obfuscation ---------------------------------------------------
     "R003": _C.OBFUSCATION,
     "H014": _C.OBFUSCATION,
     "R039": _C.OBFUSCATION,
@@ -218,13 +218,13 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "R045": _C.OBFUSCATION,
     "H065": _C.OBFUSCATION,
     "H080": _C.OBFUSCATION,
-    # -- deception and anti-analysis -----------------------------------
+    # --- deception and anti-analysis -----------------------------------
     "R012": _C.DECEPTION,
     "R013": _C.DECEPTION,
     "H012": _C.DECEPTION,
     "H013": _C.DECEPTION,
     "H067": _C.DECEPTION,
-    # -- install and persistence ---------------------------------------
+    # --- install and persistence ---------------------------------------
     "R007": _C.INSTALL_AND_PERSIST,
     "R017": _C.INSTALL_AND_PERSIST,
     "R052": _C.INSTALL_AND_PERSIST,
@@ -238,7 +238,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "H039": _C.INSTALL_AND_PERSIST,
     "H062": _C.INSTALL_AND_PERSIST,
     "H084": _C.INSTALL_AND_PERSIST,
-    # -- staging and reconnaissance ------------------------------------
+    # --- staging and reconnaissance ------------------------------------
     "H007": _C.STAGING_AND_RECON,
     "H010": _C.STAGING_AND_RECON,
     "R058": _C.STAGING_AND_RECON,
@@ -297,7 +297,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "S006": _C.SABOTAGE,
     "S007": _C.SABOTAGE,
     "S008": _C.SABOTAGE,
-    # -- integrity and verification ------------------------------------
+    # --- integrity and verification ------------------------------------
     "H001": _C.INTEGRITY,
     "H002": _C.INTEGRITY,
     "H005": _C.INTEGRITY,
@@ -327,7 +327,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "C005": _C.INTEGRITY,
     "C008": _C.INTEGRITY,
     "C009": _C.INTEGRITY,
-    # -- naming and dependencies ---------------------------------------
+    # --- naming and dependencies ---------------------------------------
     "H006": _C.NAMING_AND_DEPENDENCY,
     "H029": _C.NAMING_AND_DEPENDENCY,
     "H048": _C.NAMING_AND_DEPENDENCY,
@@ -338,7 +338,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "D002": _C.NAMING_AND_DEPENDENCY,
     "D003": _C.NAMING_AND_DEPENDENCY,
     "D004": _C.NAMING_AND_DEPENDENCY,
-    # -- maintainer and metadata ---------------------------------------
+    # --- maintainer and metadata ---------------------------------------
     "H026": _C.MAINTAINER_AND_METADATA,
     "H037": _C.MAINTAINER_AND_METADATA,
     "H044": _C.MAINTAINER_AND_METADATA,
@@ -350,20 +350,20 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "H063": _C.MAINTAINER_AND_METADATA,
     "H074": _C.MAINTAINER_AND_METADATA,
     "C006": _C.MAINTAINER_AND_METADATA,
-    # -- temporal context ----------------------------------------------
+    # --- temporal context ----------------------------------------------
     "H020": _C.TEMPORAL,
     "H021": _C.TEMPORAL,
     "H022": _C.TEMPORAL,
-    # -- composition ---------------------------------------------------
+    # --- composition ---------------------------------------------------
     "H027": _C.COMPOSITION,
     "H043": _C.COMPOSITION,
-    # -- count-based ---------------------------------------------------
+    # --- count-based ---------------------------------------------------
     "H030": _C.COUNT_BASED,
     "H036": _C.COUNT_BASED,
     "H045": _C.COUNT_BASED,
     "H052": _C.COUNT_BASED,
     "H055": _C.COUNT_BASED,
-    # -- corpus behavioral ---------------------------------------------
+    # --- corpus behavioral ---------------------------------------------
     "H028": _C.CORPUS_BEHAVIORAL,
     "H046": _C.CORPUS_BEHAVIORAL,
     "H056": _C.CORPUS_BEHAVIORAL,

@@ -1,7 +1,7 @@
 # Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
 
 pkgname=trustsight
-pkgver=0.15.7
+pkgver=0.16.0
 pkgrel=1
 pkgdesc='Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals'
 arch=('any')
@@ -27,7 +27,7 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 
-sha256sums=('7bf66b1c6c79cb2f64f634f1692e8bab102bf0a34a15383fc14cc613b58246ed')
+sha256sums=('276a087353bc06c7fc2d6214668f07b7aac0f8ae42ceb5fae71fa3ad2063c051')
 
 build() {
   cd "$pkgname-$pkgver"

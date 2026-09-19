@@ -12,7 +12,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
     <img src="https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge" alt="License">
   </a>
   <a href="https://deepwiki.com/emiliano-go/trustsight">
-    <img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" width="153">
+    <img src="https://img.shields.io/badge/Ask-DeepWiki-007ec6?style=for-the-badge" alt="Ask DeepWiki">
   </a>
   <a href="https://github.com/emiliano-go/trustsight/actions/workflows/test.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests" alt="Tests">

@@ -4,15 +4,159 @@
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [0.16.0] - 2026-09-19
+
+This release is about the edges of the tool rather than its centre: what it
+emits when it is not writing to a terminal, what a caller outside the CLI can
+rely on, and the crash, leak and thread-safety defects underneath both. No
+detection rule changes meaning, no stored state or baseline needs migration,
+and a database written by 0.15.x is read unchanged.
+
+### Added
+
+- **The public API is a documented contract.** `trustsight.api` had always
+  been the supported surface, but its docstrings were thin enough that an IDE
+  hover told a caller almost nothing. Every export now carries reST fields:
+  `:ivar:` on each dataclass, `:returns:`, `:raises:` and an `Example:` block
+  on the entry points, and the `MAX_API_*` constants are part of `__all__`.
+  `TYPE_CHECKING` re-exports and a `py.typed` marker let type checkers and
+  completion resolve the surface without importing the analysis stack.
+  `tests/test_api_docs.py` fails when a new export, dataclass field or method
+  ships without a docstring, an annotation, or its `:ivar:` entry, so the
+  documentation cannot drift from the code it describes. The package
+  classifiers were extended to Python 3.14.
+
+- **Output is pipe-safe.** Every renderer and progress display now targets
+  stderr, and Rich renders only when stdout is a TTY, so `trustsight ... | jq`
+  and `trustsight ... > report.txt` receive the document and nothing else.
+  `NO_COLOR` and `FORCE_COLOR` override the TTY guess. Download progress and
+  human notices are withheld entirely under `--json`, which emits one clean
+  JSON body. `tests/test_streams.py` pins the split.
+
+- **H083 and W001 cover eight more interpreters.** `node`, `php`, `lua`,
+  `tclsh`, `wish`, `julia`, `Rscript`, `bun` and `deno` were missing from the
+  regex in `delivery.py` that matches "interpreter runs a declared source
+  file", as were the shells `fish`, `tcsh`, `csh`, `rc`, `es`, `elvish`,
+  `xonsh`, `nu` and `osh`. W001's file-extension list also gained `.tcl`,
+  `.jl`, `.R` and `.ts`. Closes eight known bypasses in which a recipe ran an
+  unread script through an interpreter no rule recognised.
+
+### Changed
+
+- **`cli/admin.py` was split into four modules.** The 1,084-line file is now
+  `cli/config.py`, `cli/override.py`, `cli/db.py` and `cli/baseline.py`, with
+  `admin.py` keeping the maintenance commands and the registrar. The commands
+  are unchanged; the split only gives each surface a file a reviewer can hold
+  in their head.
+
 ### Fixed
 
-- **H083/W001 interpreter list expanded.** Added `node`, `php`, `lua`,
-  `tclsh`, `wish`, `julia`, `Rscript`, `bun`, `deno`, and missing shells
-  (`fish`, `tcsh`, `csh`, `rc`, `es`, `elvish`, `xonsh`, `nu`, `osh`) to
-  the regex in `delivery.py` that matches "interpreter runs a declared
-  source file". W001's file extension list also expanded to include
-  `.tcl`, `.jl`, `.R`, `.ts`. Closes 8 known bypasses (node, php, lua,
-  tclsh, julia, rscript, bun, deno).
+- **`depth.py` crashed with a `NameError`.** The module used `json` without
+  importing it (F821). Any run that walked an AUR dependency graph reached the
+  line and died.
+
+- **HTTP responses and tarfiles were left open.** `_http_get` and
+  `fetch_metadata` never closed the response on the success path, leaking a
+  socket per call, and two `tarfile.open()` calls relied on garbage collection
+  to release the archive. All four now use `try/finally` or a `with` block.
+
+- **Shared state and clocks were made safe.** `db.official_package_names()`
+  is guarded by a `threading.Lock` with double-checked locking; the broad
+  `except Exception` in `depth._aur_children` was narrowed to the errors the
+  call can actually raise; and `db.py` timestamps are now timezone-aware
+  (`datetime.now(timezone.utc)`, with `_parse_ts` returning aware datetimes),
+  so a report written in one zone is read the same in another.
+
+- **The regex audit tolerates a loaded machine.** `growth_ratio` compared the
+  minimum of two timings per probe length, and under build load both could
+  land in a noisy window and inflate the ratio until a safe pattern looked
+  superlinear. It now takes the median of three measurements. Separately, a
+  load-sensitive refusal is no longer memoised, so one slow probe cannot
+  disable a rule for the rest of the run.
+
+- **`release.py` is bounded and no longer silent.** `resp.read()` is capped at
+  10 MiB so a hostile release listing cannot exhaust memory, the swallowed
+  exception in tag resolution is logged, and `discovery.py` subprocess calls
+  carry `timeout=30`.
+
+- **`build_release_tarball.py --check` wrote the artifact it was checking.**
+  A successful check fell through to the write path and dropped the release
+  tarball over `dist/trustsight-<pkgver>.tar.gz`, which is where `uv build`
+  had just put the source distribution. `verify_release.py` calls the script
+  with `--check`, so it then read a file with no `PKG-INFO` and died with a
+  `StopIteration` instead of verifying the release. A check now returns
+  without writing, and a regression test pins both the success and mismatch
+  paths.
+
+- **Seed download 404 and the broken rules table.** `seed fetch` resolved
+  `/latest/`, which 404s because the newest release is a baseline tag rather
+  than a software tag; the baseline tag is now discovered through the GitHub
+  API. The generated rules reference table emitted its headers outside the
+  generation markers and rendered broken; headers now sit inside them, and the
+  catalog gained a Series column and the missing W-series link.
+
+- **Seed import dropped the leftover backup table.** The v2 and legacy SQLite
+  seed paths shared the migration bug fixed for issue #7: a failed run could
+  leave `maintainers_deprecated_backup` in the schema, and the next import
+  died on `RENAME` with `OperationalError`. Both paths now drop the table
+  before renaming.
+
+- **`--deps` reported empty versions.** Dependency entries read
+  `latest_version` from the AUR snapshot and passed a missing installed
+  version through as an empty string, which suppressed the `pacman -Q`
+  fallback. Missing versions are now `None`, and empty entry values no longer
+  overwrite an observed fact version.
+
+- **Library code stopped using `print` and `SystemExit`.** `db.py` messages
+  go through `log.info()`, and `seed_build.py` raises `FileNotFoundError`
+  rather than `SystemExit`, so a caller can handle the failure instead of
+  having the interpreter exit under it.
+
+- **The README lost an incorrect attribution.** It had credited R008 for a
+  pattern that belongs to another rule, and counted five scoring namespaces
+  where there are six. The AUR publication note was also corrected, and the
+  DeepWiki badge now uses the same for-the-badge style as the rest of the
+  header instead of a width-scaled image.
+
+### Security
+
+- **A hardening pass over the trust boundaries.** The interpreter expansion
+  above is the detection half; the rest is resource and error handling at the
+  edges: the 10 MiB release-listing cap, the 30-second discovery timeout,
+  exception logging where a broad catch previously swallowed failure, and a
+  `py.typed` marker that makes the typed surface checkable. `tests/regressions/`
+  carries regression tests for the new H083 patterns and the seed error type.
+
+### Docs
+
+- **A Rule Nature page explains what a rule id means.** One page now states,
+  for each series (`R`, `H`, `C`, `D`, `S`, `X`, `P`, `W`), how it detects,
+  whether it is tunable from `rules.toml`, what weight it can carry and when
+  it fires, so a reader no longer has to infer the difference between a regex
+  rule and a heuristic one from the id.
+
+- **Every page was audited against the source.** The rule catalog, coverage
+  gaps, evidence tiers, severity and source-bucket weights, CLI synopses, flag
+  and zero rates, and the retired-rule anchors were checked page by page and
+  corrected where they had drifted, including the `UNFLAGGED`/`FLAGGED`
+  terminology left over from before the Low/Medium/High/Critical bands. The
+  rules index was regenerated, `corpus.lock` was realigned to the 3,739-diff
+  on-disk corpus, and `network.py` now declares `api.github.com` and bounds
+  the releases-listing read.
+
+- **The public docstrings and `llms.txt`.** Every public function, class and
+  CLI registrar gained a docstring, and an `llms.txt` companion now gives an
+  LLM the same map of the documentation that the site navigation provides.
+
+### Stats
+
+- 23 commits since v0.15.7
+- 125 files changed, +5,964 / -1,598
+- 3,967 tests (one corpus-consistency check skips without the local
+  calibration corpus); 71/71 security gates, 11/11 calibration gates
+- Package version 0.16.0
 
 ## [0.15.7] - 2026-09-02
 
@@ -4541,4 +4685,5 @@ separate reconciliation.
 [0.15.5]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.5
 [0.15.6]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.6
 [0.15.7]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.7
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.15.7...HEAD
+[0.16.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.0
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.16.0...HEAD

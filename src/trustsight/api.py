@@ -1087,7 +1087,7 @@ class TrustSight:
         self._auto_import_seed = auto_import_seed
         self._ready = False
 
-    # -- lifecycle ---------------------------------------------------
+    # --- lifecycle ---------------------------------------------------
 
     def _ensure_ready(self, quiet: bool = True) -> None:
         if self._ready:
@@ -1121,7 +1121,7 @@ class TrustSight:
     def __exit__(self, *exc: Any) -> None:
         self.close()
 
-    # -- introspection -----------------------------------------------
+    # --- introspection -----------------------------------------------
 
     @property
     def config_dir(self) -> Path:
@@ -1184,7 +1184,7 @@ class TrustSight:
             config_fingerprint=config_fingerprint(),
         )
 
-    # -- analysis ----------------------------------------------------
+    # --- analysis ----------------------------------------------------
 
     def inspect(self, package: str, *, check_aur: bool = True,
                 depth: Optional[int] = None) -> Report:
@@ -1439,7 +1439,7 @@ class TrustSight:
             total_installed=total_installed,
         )
 
-    # -- corpus ------------------------------------------------------
+    # --- corpus ------------------------------------------------------
 
     def refresh_corpus(
         self,
@@ -1582,7 +1582,7 @@ class TrustSight:
             sources=tuple(result.get("sources", [])),
         )
 
-    # -- stored state ------------------------------------------------
+    # --- stored state ------------------------------------------------
 
     def history(
         self,

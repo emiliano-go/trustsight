@@ -978,8 +978,8 @@ def companion_source_hunks(
     used to drop content and say nothing, so a payload past the budget
     scored the same as a package with no companions at all.
 
-    Every committed text file the PKGBUILD names -- a declared ``source=()``
-    entry or one it merely executes/sources/patches by path -- is emitted as
+    Every committed text file the PKGBUILD names (a declared ``source=()``
+    entry or one it merely executes/sources/patches by path) is emitted as
     a ``+++ b/<name>`` hunk whose whole current content is added lines, so the
     ordinary line rules, the tokenizer and ``map_diff_lines`` see it with
     correct file attribution.  Binary and ELF files are left out: H066-tree

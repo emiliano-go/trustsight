@@ -195,10 +195,13 @@ def main() -> int:
     pkgver = args.pkgver or version()
     blob, digest = build(args.rev, pkgver)
 
-    if args.check is not None and args.check != digest:
-        print(f"::error::tarball sha256 {digest} does not match expected {args.check}",
-              file=sys.stderr)
-        return 1
+    if args.check is not None:
+        if args.check != digest:
+            print(f"::error::tarball sha256 {digest} does not match expected {args.check}",
+                  file=sys.stderr)
+            return 1
+        print(f"tarball sha256 matches {args.check}")
+        return 0
 
     if args.print_sha256:
         print(digest)

@@ -2,6 +2,7 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -87,6 +88,38 @@ def test_no_workflow_weakens_the_release_build(flag):
             if not line.lstrip().startswith("#") and flag in line:
                 offenders.append(f"{workflow.name}:{lineno}")
     assert offenders == [], f"{flag} used in: {offenders}"
+
+
+def test_check_verifies_without_writing(tmp_path, monkeypatch):
+    """`--check` is a check, so it must not write an artifact.
+
+    ``verify_release.py`` runs ``build_release_tarball.py --check <sha>``
+    with no ``--output``, so the implicit destination is
+    ``dist/trustsight-<pkgver>.tar.gz``.  When a successful check fell
+    through to the write path it overwrote the source distribution that
+    ``uv build`` had just placed there with the release tarball, and the
+    metadata comparison that followed crashed on a file with no
+    ``PKG-INFO``.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import build_release_tarball as brt
+
+    _, digest = brt.build("WORKTREE", brt.version())
+    target = tmp_path / "trustsight-0.0.0.tar.gz"
+
+    monkeypatch.setattr(
+        sys, "argv",
+        ["build_release_tarball.py", "--check", digest, "--output", str(target)],
+    )
+    assert brt.main() == 0
+    assert not target.exists()
+
+    monkeypatch.setattr(
+        sys, "argv",
+        ["build_release_tarball.py", "--check", "0" * 64, "--output", str(target)],
+    )
+    assert brt.main() == 1
+    assert not target.exists()
 
 
 def test_a_worktree_build_refuses_untracked_files(tmp_path):

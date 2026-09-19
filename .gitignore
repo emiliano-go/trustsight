@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.totem/
 .ruff_cache/
 .pytest_cache/
 *.egg-info/

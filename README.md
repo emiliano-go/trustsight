@@ -26,7 +26,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ## Setup
 
-> Not published to the AUR yet: `aur.archlinux.org/trustsight.git` does not exist. Build from the PKGBUILD in this repository.
+> Not published officialy to the AUR yet: `aur.archlinux.org/trustsight.git` does not exist. Build from the PKGBUILD in this repository.
 
 ```bash
 # 1. Install

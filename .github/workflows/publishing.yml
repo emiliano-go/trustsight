@@ -112,6 +112,7 @@ jobs:
       - name: Build, test, and install the package users receive
         run: |
           set -eu
+          echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
           useradd -m builder
           mkdir -p /tmp/srcdest /tmp/pkgbuild
           cp artifacts/release/*.tar.gz /tmp/srcdest/

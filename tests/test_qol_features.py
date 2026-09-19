@@ -1,13 +1,9 @@
 """Tests for --sort on review/list, history date filtering, and list verdict."""
 
 import json
-from unittest.mock import patch
 
-import pygit2
-import pytest
 from typer.testing import CliRunner
 
-from trustsight import fetcher
 from trustsight.cli.app import app
 
 runner = CliRunner()

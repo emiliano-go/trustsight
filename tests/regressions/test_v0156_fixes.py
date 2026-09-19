@@ -7,9 +7,6 @@ Covers:
 - Ctrl+C handling: KeyboardInterrupt during analysis pool doesn't traceback
 """
 
-import sqlite3
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -101,7 +98,7 @@ def test_sync_rules_wizard_full_update_does_not_crash(tmp_path, monkeypatch):
     monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
     monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
-    monkeypatch.setattr("trustsight.cli.admin.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.cli.config.CONFIG_DIR", tmp_path / ".config")
 
     from trustsight.config import ensure_default_configs, shipped_rules
 
@@ -134,7 +131,6 @@ def test_sync_rules_fixes_drifted_match_target(tmp_path, monkeypatch):
     drifted from the shipped default."""
     from trustsight.config import (
         ensure_default_configs,
-        load_rules,
         shipped_rules,
     )
 
@@ -179,7 +175,6 @@ def test_sync_rules_preserves_custom_patterns(tmp_path, monkeypatch):
     """A rule whose pattern was intentionally edited is NOT overwritten."""
     from trustsight.config import (
         ensure_default_configs,
-        load_rules,
         shipped_rules,
     )
 

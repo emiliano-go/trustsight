@@ -24,6 +24,8 @@ Internal: everything else under `trustsight.`, including `schema.PackageFact`, `
 
 Every result object has `to_dict()`, which returns the same JSON body the corresponding `--json` flag emits, so a consumer written against the [report schema](report-schema.md) works unchanged. That is an enforced invariant, not a convention: `the API and CLI emit the same JSON body` compares the two bodies key by key on every push.
 
+`Report.to_json()` is the same body already encoded, with `indent=2` by default; it forwards `include_score` and `verbose` to `to_dict()`.
+
 The defaults match the CLI's too. `score`, `risk` and `risk_label` are **withheld** unless you ask, exactly as the CLI withholds them without `--score` or `--risk`; `to_dict(include_score=True)` is this API's spelling of that flag, and `to_dict(verbose=True)` of `--verbose`, which adds `score_breakdown`. Everything else - `findings`, `changes`, `coverage_gaps`, `suppressed_rules`, `verdict` - is in the default body, because withholding the number must not withhold the evidence.
 
 Reading an attribute is a different act from serialising. `report.score` is always populated: naming the field *is* the request. What `to_dict()` will not do is volunteer the number to a caller who only asked to serialise the result.
@@ -119,6 +121,8 @@ Construction does no I/O. The config directory and database are prepared on the 
 The API validates caller-controlled collection and loop bounds before it initializes analysis state. `review(limit=...)` and `packages(limit=...)` accept at most 10,000 items; `history(limit=...)` accepts at most 10,000 entries; explicit `review(packages=...)` lists contain at most 10,000 non-empty names; and `review(repos=...)` accepts at most 256 non-empty names. Limits must be integers, not booleans, and cannot be negative. `watch(cycles=...)` and `watch(interval=...)` reject negative or non-integer values. Invalid values raise `ValueError` before database or network work begins.
 
 `inspect()` package names and `pivot()` indicators are limited to 256 UTF-8 bytes. `analyze_text()` limits `new_pkgbuild`, `old_pkgbuild`, and `srcinfo` to 5 MiB each; maintainer names are limited to 256 UTF-8 bytes. Oversized or non-string values are rejected before initialization.
+
+The bounds are exported as `MAX_API_PACKAGES`, `MAX_API_HISTORY`, `MAX_API_REPOS`, `MAX_API_TEXT_BYTES` and `MAX_API_NAME_BYTES`, so a caller can check a value before passing it. `FLAG_THRESHOLD` (20) is the Low-band ceiling, and `RISK_LEVELS` is the closed band set; `COVERAGE_GAP_REASONS` maps each gap identifier to its plain-English reason.
 
 These are process-safety bounds, not pagination guarantees. Use smaller limits for interactive callers, and consume `watch()` incrementally rather than materialising an unbounded cycle stream.
 

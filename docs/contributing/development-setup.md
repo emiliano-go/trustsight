@@ -112,6 +112,7 @@ This runs the full analysis pipeline on one AUR package and prints the per-rule 
 ## Build the documentation
 
 ```bash
+uv run --extra docs zensical serve          # build and serve with live reload
 uv run --extra docs zensical build          # renders docs/ into site/
 uv run --extra docs python scripts/build_llms_txt.py
 ```

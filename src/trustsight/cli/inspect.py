@@ -20,7 +20,6 @@ from ..safe_text import clean, safe_markup
 from ..unicode import describe_fatal_codepoints
 from .display import (
     DEPTH_TRUNCATED_NOTE,
-    HAS_RICH,
     dependency_cards_rich,
     dependency_lines_plain,
     RISK_COLORS,
@@ -29,6 +28,7 @@ from .display import (
     _weight_text,
     console,
     no_aur_change_note,
+    use_rich,
     version_transition,
 )
 
@@ -398,7 +398,7 @@ def _inspect_one(fact, *, show_score, show_risk, verbose, json_output):
             include_score=show_score or show_risk,
             verbose=verbose,
         )
-    if HAS_RICH:
+    if use_rich():
         _inspect_rich(fact, verbose, show_score, show_risk)
     else:
         _inspect_plain(fact, verbose, show_score, show_risk)
@@ -682,7 +682,7 @@ def _inspect_history(
         typer.echo(json.dumps(results, indent=2))
     else:
         for r in results:
-            if HAS_RICH:
+            if use_rich():
                 _render_history_panel_rich(r, show_score, show_risk, verbose)
             else:
                 _render_history_panel_plain(r, show_score, show_risk)

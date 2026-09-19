@@ -589,7 +589,7 @@ def test_forget_package_deletes_everything(db):
     """forget_package removes a package and all its related rows."""
     from trustsight.db import forget_package, get_connection
     pid = upsert_package("goner", "1.0")
-    hid = insert_analysis(
+    insert_analysis(
         pid, "1.0", "2.0", "aaa", "bbb", 50, "+diff", "{}",
         [{"rule_id": "R001", "severity": "CRITICAL"}],
     )

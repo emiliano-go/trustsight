@@ -15,7 +15,7 @@ from ..safe_text import clean
 
 from ..config import ensure_default_configs, load_config
 from ..db import init_db
-from .display import HAS_RICH, _print_colored, console
+from .display import _print_colored, console, use_rich
 
 log = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def ioc_sources(
         }, indent=2))
         return
 
-    if HAS_RICH:
+    if use_rich():
         from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="IOC baseline sources", box=SIMPLE_HEAD)
@@ -364,7 +364,7 @@ def ioc_list(
         print("No IOC entries match the selected criteria.")
         return
 
-    if HAS_RICH:
+    if use_rich():
         from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="IOC baseline entries", box=SIMPLE_HEAD)

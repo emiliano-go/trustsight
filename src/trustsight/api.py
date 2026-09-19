@@ -63,6 +63,11 @@ __all__ = [
     "FLAG_THRESHOLD",
     "RISK_LEVELS",
     "COVERAGE_GAP_REASONS",
+    "MAX_API_PACKAGES",
+    "MAX_API_HISTORY",
+    "MAX_API_REPOS",
+    "MAX_API_TEXT_BYTES",
+    "MAX_API_NAME_BYTES",
 ]
 
 # Bands, worst last.  ``Inconclusive`` is not on the scale: it is what a
@@ -73,10 +78,15 @@ RISK_LEVELS = ("Low", "Medium", "High", "Critical")
 # review_policy.review_policy(), which may select a different threshold.
 FLAG_THRESHOLD = 20
 MAX_API_PACKAGES = 10_000
+"""Most package names one call accepts (``review``, ``packages``)."""
 MAX_API_HISTORY = 10_000
+"""Most history entries one ``history`` call returns."""
 MAX_API_REPOS = 256
+"""Most repository names one ``review`` call accepts."""
 MAX_API_TEXT_BYTES = 5 * 1024 * 1024
+"""Most UTF-8 bytes one PKGBUILD text argument may hold."""
 MAX_API_NAME_BYTES = 256
+"""Most UTF-8 bytes one package, maintainer or indicator name may hold."""
 
 
 class TrustSightError(Exception):
@@ -132,6 +142,11 @@ class Progress:
 
     ``current`` is -1 when the phase changed but there is nothing countable
     yet (the AUR metadata download reports no total until it starts).
+
+    :ivar current: items completed so far, or -1 when the phase changed
+        without a countable total.
+    :ivar total: items expected, or 0 when the total is not yet known.
+    :ivar phase: human-readable description of the current step.
     """
 
     current: int
@@ -149,7 +164,18 @@ ProgressHook = Callable[[Progress], None]
 
 @dataclass(frozen=True)
 class Finding:
-    """One rule that fired, with the evidence that made it fire."""
+    """One rule that fired, with the evidence that made it fire.
+
+    :ivar rule_id: rule identifier, such as ``R010``.
+    :ivar severity: ``FATAL``, ``CRITICAL``, ``HIGH``, ``MEDIUM``, ``LOW``
+        or ``INFO``.
+    :ivar weight: signed contribution this finding made to the score.
+    :ivar description: plain-English explanation of what matched.
+    :ivar file: file the match was found in, or "" when not file-specific.
+    :ivar line: 1-based line number in that file, or ``None``.
+    :ivar template: the rule template that produced the description.
+    :ivar evidence: rule-specific match detail, as a plain dict.
+    """
 
     rule_id: str
     severity: str
@@ -171,6 +197,12 @@ class SuppressedRule:
 
     It contributed nothing to the score.  It is reported anyway: a
     suppression a caller cannot see is a suppression it cannot audit.
+
+    :ivar rule_id: rule identifier that was suppressed.
+    :ivar severity: severity the rule would have contributed.
+    :ivar override_reason: the reason recorded with the override.
+    :ivar override_package: package the override is scoped to, or ``None``
+        for an override that applies to every package.
     """
 
     rule_id: str
@@ -185,7 +217,11 @@ class SuppressedRule:
 
 @dataclass(frozen=True)
 class FileChange:
-    """A single file that was added, removed, or modified in a diff."""
+    """A single file that was added, removed, or modified in a diff.
+
+    :ivar path: path of the file within the package tree.
+    :ivar status: one of ``"added"``, ``"removed"`` or ``"modified"``.
+    """
 
     path: str
     status: str
@@ -198,7 +234,63 @@ class FileChange:
 
 @dataclass(frozen=True)
 class Report:
-    """The analysis of one package: what ``trustsight inspect`` shows."""
+    """The analysis of one package: what ``trustsight inspect`` shows.
+
+    :ivar package: package name.
+    :ivar old_version: version the diff starts from.
+    :ivar new_version: version the diff ends at.
+    :ivar old_commit: commit the previous analysis recorded.
+    :ivar new_commit: commit this analysis examined.
+    :ivar score: heuristic score, 0 to 100.
+    :ivar risk: the band the analysis supports.  Use this, never
+        ``risk_level(score)``.
+    :ivar risk_label: ``risk``, qualified in prose when coverage was
+        incomplete.
+    :ivar verdict: plain-English summary.  Always ends with a direction to
+        review.
+    :ivar findings: rules that fired, with the evidence that made them fire.
+    :ivar suppressed: rules that matched but an override silenced.
+    :ivar changes: what the diff did, whether or not a rule matched.
+        Context, not findings.
+    :ivar coverage_gaps: non-empty means part of the change was not read.
+        See :data:`COVERAGE_GAP_REASONS`.
+    :ivar file_changes: each file the diff added, removed or modified.
+    :ivar added_urls: URLs the change introduced.
+    :ivar removed_urls: URLs the change removed.
+    :ivar source_buckets: source categories the change touched, with counts.
+    :ivar checksum_behavior: how the update affects package checksums.
+    :ivar resolved_commands: shell commands the PKGBUILD resolves to.
+    :ivar maintainer: current AUR maintainer, cleaned of control bytes.
+    :ivar previous_maintainer: maintainer the previous analysis recorded.
+    :ivar maintainer_changed: whether the maintainer changed in this update.
+    :ivar dependency_changes: dependencies added or removed by this update.
+    :ivar first_seen: no prior history, so novelty signals carry no weight
+        yet.
+    :ivar is_trivial: the change was too small to warrant findings.
+    :ivar diff_truncated: the diff was clamped before the rules read it.
+    :ivar tree_analyzed: the AUR git tree was walked, not only the diff.
+    :ivar version_comparison: how the installed version relates to the AUR
+        pkgver, or "" if nothing compared them.
+    :ivar adapter: which adapter produced this, ``git`` or ``corpus``.
+    :ivar review_profile: review workload profile in force.
+    :ivar review_threshold: score above which :attr:`flagged` is true.
+    :ivar config_fingerprint: which rules, weights and overrides produced
+        this.  Results are only comparable across runs with the same
+        fingerprint.
+    :ivar dependencies: analysed AUR dependencies, each with its own score
+        and band.  Never folded into this package's :attr:`score`: depth is
+        not part of the config fingerprint, so a score that moved with
+        ``--depth`` would break comparability between runs.
+    :ivar depth_truncated: the dependency walk stopped before the closure
+        was exhausted.
+    :ivar ioc_matches: signed-baseline indicator hits, reported outside the
+        heuristic score.
+    :ivar scan_truncated: the diff was clamped by line count before the
+        rules read it.
+    :ivar required_by: packages in the reviewed set that declare this one a
+        dependency.  The reverse of :attr:`dependencies`, populated by
+        ``review --deps``; empty on an ordinary review.
+    """
 
     package: str
     old_version: str = ""
@@ -335,6 +427,8 @@ class Report:
         available, because reading a named field *is* the explicit request.
         What this method will not do is volunteer the number to a caller who
         only asked to serialise the result.
+
+        :returns: the report as the CLI's JSON body.
         """
         from .reporting import report_body
 
@@ -345,13 +439,26 @@ class Report:
         )
 
     def to_json(self, indent: int | None = 2, **kwargs) -> str:
-        """Serialize to a JSON string."""
+        """Serialize to a JSON string.
+
+        Keyword arguments are passed to :meth:`to_dict`, so
+        ``include_score`` and ``verbose`` behave exactly as they do there.
+
+        :returns: the report as JSON text.
+        """
         return json.dumps(self.to_dict(**kwargs), indent=indent)
 
 
 @dataclass(frozen=True)
 class FailedPackage:
-    """A package whose analysis raised.  It was NOT vetted."""
+    """A package whose analysis raised.  It was NOT vetted.
+
+    :ivar package: package name.
+    :ivar old_version: version the review started from.
+    :ivar new_version: version the AUR advertised.
+    :ivar error: the error message the analysis raised with.
+    :ivar error_type: the exception class name.
+    """
 
     package: str
     old_version: str = ""
@@ -366,7 +473,18 @@ class FailedPackage:
 
 @dataclass(frozen=True)
 class ReviewResult:
-    """The outcome of one ``review`` call."""
+    """The outcome of one ``review`` call.
+
+    :ivar reports: one report per package that was vetted.
+    :ivar failures: packages that could not be vetted.  A caller that
+        iterates :attr:`reports` alone is looking at a partial review;
+        :attr:`complete` says whether it was one.
+    :ivar total_installed: installed packages considered, whether or not
+        they needed a review.
+    :ivar metadata_bootstrapped: this call did nothing but download the
+        first AUR metadata snapshot.  There was no prior copy to diff
+        against, so there is no delta yet; call ``review`` again.
+    """
 
     reports: tuple[Report, ...] = ()
     failures: tuple[FailedPackage, ...] = ()
@@ -400,6 +518,8 @@ class ReviewResult:
 
         ``include_score=True`` corresponds to ``--score`` or ``--risk``;
         ``verbose=True`` corresponds to ``--verbose``.
+
+        :returns: one JSON body per report, failures included.
         """
         from .reporting import report_body
 
@@ -420,7 +540,16 @@ class ReviewResult:
 
 @dataclass(frozen=True)
 class HistoryEntry:
-    """One scored revision in a package's analysis history."""
+    """One scored revision in a package's analysis history.
+
+    :ivar timestamp: when the analysis ran.
+    :ivar old_version: version the analysis started from.
+    :ivar new_version: version the analysis examined.
+    :ivar score: score that run produced.
+    :ivar risk: band that run produced.
+    :ivar triggered_rules: rules that fired, when ``with_rules`` asked for
+        them.
+    """
 
     timestamp: str
     old_version: str
@@ -436,7 +565,15 @@ class HistoryEntry:
 
 @dataclass(frozen=True)
 class TrackedPackage:
-    """A package tracked in the local database with its latest score."""
+    """A package tracked in the local database with its latest score.
+
+    :ivar name: package name.
+    :ivar version: version last recorded.
+    :ivar last_checked: when the package was last analysed.
+    :ivar score: score of the latest analysis, or ``None`` if never scored.
+    :ivar risk: band of the latest analysis, or "" if never scored.
+    :ivar maintainer: last recorded maintainer.
+    """
 
     name: str
     version: str
@@ -452,7 +589,19 @@ class TrackedPackage:
 
 @dataclass(frozen=True)
 class Status:
-    """The global status summary shown by ``trustsight status``."""
+    """The global status summary shown by ``trustsight status``.
+
+    :ivar packages_tracked: packages in the database.
+    :ivar total_analyses: analyses recorded.
+    :ivar effective_observations: observations the novelty signals count.
+    :ivar seed_observations: observations that came from the bundled seed.
+    :ivar dependency_corpus_loaded: whether the dependency corpus is
+        populated.
+    :ivar config_dir: TrustSight configuration directory.
+    :ivar database_path: path to the SQLite database file.
+    :ivar config_fingerprint: identifies the rules, weights and overrides in
+        force.
+    """
 
     packages_tracked: int
     total_analyses: int
@@ -473,7 +622,14 @@ class Status:
 
 @dataclass(frozen=True)
 class ClusterFinding:
-    """A corpus-wide pattern spanning several packages."""
+    """A corpus-wide pattern spanning several packages.
+
+    :ivar rule_id: rule that matched across the cluster.
+    :ivar name: human-readable name of the pattern.
+    :ivar severity: severity the cluster is reported at.
+    :ivar match: what the member packages have in common.
+    :ivar members: packages that make up the cluster.
+    """
 
     rule_id: str
     name: str
@@ -488,7 +644,22 @@ class ClusterFinding:
 
 @dataclass(frozen=True)
 class CycleReport:
-    """One corpus cycle: what ``full-aur`` does once, or ``--watch`` repeats."""
+    """One corpus cycle: what ``full-aur`` does once, or ``--watch`` repeats.
+
+    :ivar added: packages new to the corpus this cycle.
+    :ivar changed: packages whose corpus entry changed this cycle.
+    :ivar removed: packages dropped from the corpus this cycle.
+    :ivar processed: packages analysed this cycle.
+    :ivar bootstrap: whether this cycle was part of an initial whole-AUR
+        build.
+    :ivar elapsed: wall-clock seconds the cycle took.
+    :ivar flagged: ``(package, score)`` for everything this cycle scored 40
+        or above, worst first.
+    :ivar cluster_findings: corpus-wide patterns this cycle found.
+    :ivar new_alerts: ``(package, rule_id)`` for clusters seen for the
+        first time.  A cluster already reported on an earlier cycle is
+        counted, not re-announced.
+    """
 
     added: int = 0
     changed: int = 0
@@ -519,7 +690,12 @@ class CycleReport:
 
 @dataclass(frozen=True)
 class PivotMatch:
-    """A corpus package that references a pivot indicator."""
+    """A corpus package that references a pivot indicator.
+
+    :ivar package: package that references the indicator.
+    :ivar surface: where in the package the reference appears.
+    :ivar detail: the matched reference itself.
+    """
 
     package: str
     surface: str
@@ -538,6 +714,14 @@ class PivotResult:
     network.  An empty ``matches`` means the corpus holds no reference, not
     that the indicator is harmless; if ``sources`` is empty there was no
     corpus to search at all.
+
+    :ivar indicator: the indicator that was searched for.
+    :ivar type: classified indicator type, such as ``package``, ``domain``
+        or ``hash``.
+    :ivar listed: whether the indicator appears in a signed baseline.
+    :ivar confidence: confidence of the baseline listing, or "".
+    :ivar matches: packages that reference the indicator.
+    :ivar sources: corpora that were searched.
     """
 
     indicator: str
@@ -888,6 +1072,15 @@ class TrustSight:
         run against a cold database on purpose; note that a cold database
         makes every novelty signal meaningless, and TrustSight reports the
         band as ``Inconclusive`` rather than pretending otherwise.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            with TrustSight() as ts:
+                report = ts.inspect("some-package")
+                print(report.package, report.risk, report.verdict)
     """
 
     def __init__(self, *, auto_import_seed: Optional[bool] = None):
@@ -956,14 +1149,20 @@ class TrustSight:
         return config_fingerprint()
 
     def config(self) -> dict:
-        """The effective configuration, defaults merged with the user's file."""
+        """The effective configuration, defaults merged with the user's file.
+
+        :returns: the merged config as a plain dict.
+        """
         from .config import load_config
 
         self._ensure_ready()
         return load_config()
 
     def status(self) -> Status:
-        """Database and corpus health: what ``trustsight status`` reports."""
+        """Database and corpus health: what ``trustsight status`` reports.
+
+        :returns: the current :class:`Status`.
+        """
         from .config import config_fingerprint
         from .db import (
             count_observations,
@@ -1007,8 +1206,20 @@ class TrustSight:
             the config.  Each dependency is a full analysis with its own
             score on ``Report.dependencies``; none of it moves this
             report's ``score``.
+        :returns: the analysis of *package*.
         :raises PackageNotFound: the name is in neither the AUR nor the
             local database.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                report = TrustSight().inspect("some-package")
+                if report.flagged:
+                    print(report.verdict)
+                    for finding in report.findings:
+                        print(finding.rule_id, finding.description)
         """
         from .analysis import analyze_package
 
@@ -1047,6 +1258,20 @@ class TrustSight:
         age-based rules have no clock and stay silent, which is why
         ``Report.adapter`` reads ``corpus`` here: this is a narrower look at
         the package than :meth:`inspect` gets.
+
+        :returns: the analysis of the supplied text.
+
+        Example:
+            .. code-block:: python
+
+                from pathlib import Path
+
+                from trustsight import TrustSight
+
+                report = TrustSight().analyze_text(
+                    "some-package",
+                    Path("PKGBUILD").read_text(),
+                )
         """
         from .full_aur.analyze import analyze_package_text
         from .schema import TemporalContext
@@ -1122,6 +1347,18 @@ class TrustSight:
             ``review --deps`` does.  Each report then carries
             :attr:`Report.required_by`.  Honours *depth* as the number of
             dependency levels to review.
+        :returns: every report and every failure from the run.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                result = TrustSight().review(limit=10)
+                for report in result.flagged:
+                    print(report.package, report.verdict)
+                for failure in result.failures:
+                    print(failure.package, "NOT vetted:", failure.error)
         """
         from .review import analyze_outdated_batch, dependency_entries, discover_packages
 
@@ -1219,6 +1456,8 @@ class TrustSight:
         adoption feed. ``bootstrap=True`` permits the initial whole-AUR
         build when no snapshot exists; it takes hours. ``resume=True``
         continues an interrupted build.
+
+        :returns: what the cycle added, changed, removed and flagged.
         """
         from .full_aur.pipeline import run_baseline_build
 
@@ -1255,6 +1494,15 @@ class TrustSight:
             regenerated yet.
         :param cycles: stop after this many cycles (0 = until the caller
             stops iterating).
+        :returns: an iterator of one :class:`CycleReport` per cycle.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                for cycle in TrustSight().watch(cycles=2):
+                    print(cycle.processed, cycle.flagged)
         """
         if interval is not None:
             _validate_nonnegative(interval, name="interval")
@@ -1282,6 +1530,8 @@ class TrustSight:
         which is for local builds only: an unsigned baseline is data of
         unknown provenance being written into the database that every
         subsequent novelty judgement reads.
+
+        :returns: None.  The import raises on any failure.
         """
         from .full_aur.export import import_baseline
 
@@ -1297,6 +1547,7 @@ class TrustSight:
 
         :param type: force the indicator type (``package``, ``domain`` or
             ``hash``) when the shape is ambiguous.
+        :returns: which corpus packages reference *indicator*.
         :raises TrustSightError: the indicator type is unknown or the
             indicator could not be classified.
         """
@@ -1344,6 +1595,8 @@ class TrustSight:
 
         Returns an empty list when the package has never been analysed:
         that is a fact about this database, not an error.
+
+        :returns: past analyses, newest first.
         """
         from .db import get_history, get_package_id, get_triggered_rules
         from .scoring import stored_band
@@ -1372,6 +1625,8 @@ class TrustSight:
         """Every package in the database with its latest score.
 
         What ``trustsight list`` shows.
+
+        :returns: one :class:`TrackedPackage` per tracked package.
         """
         from .db import get_all_packages, get_last_analysis
         from .scoring import stored_band
@@ -1403,6 +1658,8 @@ class TrustSight:
         Returns ``{package: {table: rows_deleted}}``.  A package that was
         not tracked maps to an empty dict.  This is not reversible: the
         observations it removes are what the novelty signals count.
+
+        :returns: per-package, per-table counts of what was deleted.
         """
         from .db import forget_package
 
@@ -1420,6 +1677,8 @@ class TrustSight:
 
         Set *dry_run* to see what would go without deleting it.
 
+        :returns: per-package, per-table counts of what would be or was
+            deleted.
         :raises TrustSightError: the AUR RPC returned nothing, so which
             packages still exist could not be determined.  Deleting on that
             answer would forget the whole database over a network blip.

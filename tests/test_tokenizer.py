@@ -354,7 +354,7 @@ def test_resolve_added_lines_nested_expansion():
     from trustsight.tokenizer import resolve_added_lines
     diff = "+_ver=1.1.1.w\n+pkgver=${_ver//.${_ver//[0-9.]/}}\n"
     lines = resolve_added_lines(diff)
-    assert any("1.1.1" in l for l in lines)
+    assert any("1.1.1" in line for line in lines)
 
 
 def test_resolve_added_lines_glob_delete():
@@ -362,7 +362,7 @@ def test_resolve_added_lines_glob_delete():
     from trustsight.tokenizer import resolve_added_lines
     diff = "+v=1.2.3a\n+echo ${v//[0-9.]/}\n"
     lines = resolve_added_lines(diff)
-    assert any("echo a" in l for l in lines)
+    assert any("echo a" in line for line in lines)
 
 
 # --- H065: obfuscated literal reconstruction ---

@@ -2,7 +2,6 @@
 
 import json
 import re
-import shutil
 from unittest.mock import patch
 
 
@@ -11,7 +10,6 @@ def _strip_ansi(text: str) -> str:
     return re.sub(r'\x1b\[[0-9;]*m', '', text)
 
 import pygit2
-import pytest
 from typer.testing import CliRunner
 
 from trustsight.cli.app import app
@@ -36,7 +34,6 @@ def _multi_commit_repo(tmp_path, monkeypatch, commits=5):
 
     path = cache / "testpkg"
     repo = pygit2.init_repository(str(path))
-    author = pygit2.Signature("Tester", "tester@example.com", 1_700_000_000, 0)
     repo.remotes.create("origin", "https://aur.archlinux.org/testpkg.git")
 
     for i in range(commits):
@@ -174,7 +171,7 @@ class TestLastN:
     def test_last_1_returns_one_result(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
-        head = fetcher.get_head_commit(repo)
+        fetcher.get_head_commit(repo)
         fetcher._record_fetch(repo)
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):

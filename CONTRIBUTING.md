@@ -98,6 +98,23 @@ signature workflow:
 
 If you are unsure whether a change touches one of these paths, ask first.
 
+## Public API Docstrings
+
+`trustsight.api` is the supported surface, so its docstrings are the user
+documentation an IDE shows on hover. Use reST fields:
+
+- `:param name:` on every public method parameter.
+- `:returns:` and `:raises SomeError:` where they apply.
+- `:ivar field:` on every dataclass field. Attribute descriptions live in the
+  class docstring, not in a bare string after the assignment.
+- An `Example:` section with an indented `.. code-block:: python` block on the
+  entry points.
+
+Every public name and method is annotated so type checkers and completion
+work; `src/trustsight/py.typed` tells them to read the package. The
+`tests/test_api_docs.py` check fails when a new export, field or method ships
+without a docstring, an annotation, or its `:ivar:` entry.
+
 ## Getting Help
 
 - Architecture questions: open a GitHub Discussion

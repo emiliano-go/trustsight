@@ -226,7 +226,7 @@ def unpinned_source_refs(text: str) -> list[str]:
 
     Reported as P008, a declared-practice fact at weight 0, not as a
     coverage gap: the statement is true of every VCS package by design, and
-    a gap fires 12.2% of the locked benign corpus into Inconclusive, which
+    a gap fires 20.1% of the locked benign corpus into Inconclusive, which
     buys alert fatigue rather than information.  The reader is told what the
     recipe declares and the band is left alone.
 

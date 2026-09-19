@@ -1,5 +1,6 @@
 import importlib.util
 import logging
+import os
 import sys
 from typing import TYPE_CHECKING
 
@@ -59,6 +60,48 @@ if TYPE_CHECKING:  # annotations only; never imported at runtime
 
 log = logging.getLogger(__name__)
 _console = None
+_err_console = None
+
+
+def _isatty(stream) -> bool:
+    try:
+        return bool(stream.isatty())
+    except (AttributeError, ValueError):
+        return False
+
+
+def _rich_forced() -> bool:
+    return bool(os.environ.get("FORCE_COLOR") or os.environ.get("TRUSTSIGHT_FORCE_RICH"))
+
+
+def use_rich() -> bool:
+    """Whether to render stdout with Rich.
+
+    Rich is for a terminal.  A pipe, a redirect or a captured stream gets
+    the plain renderer, so ``trustsight ... | cat`` carries text rather than
+    box drawing and escape sequences.  ``NO_COLOR`` turns it off everywhere;
+    ``FORCE_COLOR`` (or ``TRUSTSIGHT_FORCE_RICH``) turns it back on for a
+    pipe that does want the styled form.
+    """
+    if not HAS_RICH:
+        return False
+    if _rich_forced():
+        return True
+    if os.environ.get("NO_COLOR"):
+        return False
+    return _isatty(sys.stdout)
+
+
+def use_rich_progress() -> bool:
+    """Whether to draw Rich progress bars, which are written to stderr."""
+    if not HAS_RICH:
+        return False
+    if _rich_forced():
+        return True
+    if os.environ.get("NO_COLOR"):
+        return False
+    return _isatty(sys.stderr)
+
 
 def band_colour(label: str) -> str:
     """Colour for a possibly-qualified band such as "High (incomplete analysis)".
@@ -93,15 +136,6 @@ TIER_OF = {
     "PINNING": ("D", "Verification"),
     "VERIFICATION": ("D", "Verification"),
 }
-TIER_ORDER = ["A", "B", "C", "D"]
-TIER_NAMES = {
-    "A": "Structural (rules)",
-    "B": "Priors / context",
-    "C": "History / novelty",
-    "D": "Verification (subtractive)",
-}
-
-
 
 
 
@@ -112,8 +146,20 @@ def console() -> "Console":
 
     global _console
     if _console is None:
-        _console = Console(force_terminal=True)
+        _console = Console()
     return _console
+
+
+def err_console() -> "Console":
+    """The Rich console for diagnostics and progress, on stderr."""
+    if not HAS_RICH:
+        raise RuntimeError("rich is not available")
+    from rich.console import Console
+
+    global _err_console
+    if _err_console is None:
+        _err_console = Console(stderr=True)
+    return _err_console
 
 
 def _tier_of(entry) -> str:
@@ -156,7 +202,8 @@ def _print_colored(msg: str, color: str = "", stderr: bool = False):
         from rich.markup import escape
 
         style = f"[{color}]" if color else ""
-        console().print(f"{style}{escape(msg)}[/]")
+        target = err_console() if stderr else console()
+        target.print(f"{style}{escape(msg)}[/]")
     else:
         kwargs = {"file": sys.stderr} if stderr else {}
         print(msg, **kwargs)

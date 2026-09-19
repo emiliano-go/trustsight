@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
@@ -57,6 +58,15 @@ packages = ["src/trustsight", "zensical_extensions"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint.per-file-ignores]
+# E402 is deliberate where a module must build or patch state before importing
+# its dependencies: the CLI app registers command modules after constructing
+# the Typer app, and tests put `src` on sys.path before importing trustsight.
+"scripts/calibration_gates.py" = ["E402"]
+"src/trustsight/cli/app.py" = ["E402"]
+"tests/test_api.py" = ["E402"]
+"tests/test_inspect_history.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

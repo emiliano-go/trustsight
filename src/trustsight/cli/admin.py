@@ -1,728 +1,36 @@
 import json
 import logging
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
 import typer
 
 from ..config import (
     CONFIG_DIR,
-    ensure_default_configs,
     drifted_shipped_rules,
-    load_config,
+    ensure_default_configs,
     load_rules,
     missing_shipped_rules,
     outdated_shipped_rules,
-    set_config,
-    sync_rules,
 )
 from ..db import (
     count_observations,
     dependency_table_populated,
     effective_observation_count,
     get_all_packages,
-    get_db_path,
     init_db,
     seed_observation_count,
     import_seed,
 )
 from ..lint import SEVERITY_ERROR, lint_rules
-from ..override import FATAL_RULES, OVERRIDES_PATH, add_override, list_overrides, remove_override
 from ..safe_text import clean
 from .display import (
-    HAS_RICH,
-    _fmt_bytes,
     _print_colored,
-    _weight_text,
     console,
+    use_rich,
 )
 
 log = logging.getLogger(__name__)
-
-config_app = typer.Typer(
-    help="Manage configuration (aliases: show, set, sync-rules)",
-    no_args_is_help=True, add_completion=False,
-)
-override_app = typer.Typer(
-    help="Suppress a rule that misfires on your packages",
-    no_args_is_help=True, add_completion=False,
-)
-db_app = typer.Typer(
-    help="Database maintenance (check, vacuum, backup)",
-    no_args_is_help=True, add_completion=False,
-)
-baseline_app = typer.Typer(
-    help="Build or import a full-AUR baseline corpus",
-    no_args_is_help=True, add_completion=False,
-)
-
-
-# --- config subcommands ---
-
-@config_app.command("show")
-def config_show(
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Display current configuration."""
-    ensure_default_configs()
-    cfg = load_config()
-    rows = [
-        ("config file", str(CONFIG_DIR / "config.toml")),
-        ("seed.auto_import", str(cfg.get("seed", {}).get("auto_import", True))),
-        ("rules.experimental", str(cfg.get("rules", {}).get("experimental", False))),
-    ]
-
-    if json_output:
-        data = dict(rows)
-        data["scoring_weights"] = {}
-        for group in (
-            "severity_weights", "source_bucket_weights",
-            "novelty_weights",
-        ):
-            data["scoring_weights"][group] = (cfg.get(group) or {}).copy()
-        typer.echo(json.dumps(data, indent=2))
-        return
-
-    if HAS_RICH:
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        from rich.text import Text
-
-        table = Table(title="TrustSight configuration", box=SIMPLE_HEAD)
-        table.add_column("Key", style="cyan")
-        table.add_column("Value", overflow="fold")
-        for k, v in rows:
-            table.add_row(k, v)
-        console().print(table)
-
-        weights = Table(title="Scoring weights", box=SIMPLE_HEAD)
-        weights.add_column("Group", style="dim")
-        weights.add_column("Key", style="cyan")
-        weights.add_column("Weight", justify="right")
-        for group in (
-            "severity_weights", "source_bucket_weights",
-            "novelty_weights",
-        ):
-            for key, value in (cfg.get(group) or {}).items():
-                try:
-                    weight_int = int(value)
-                except (TypeError, ValueError):
-                    weights.add_row(group, key, Text(str(value), style="dim"))
-                else:
-                    weights.add_row(group, key, _weight_text(weight_int))
-        console().print(weights)
-    else:
-        for k, v in rows:
-            print(f"  {k}: {v}")
-
-
-@config_app.command("set")
-def config_set(
-    key: str = typer.Argument(..., help="Config key (seed.auto_import, rules.experimental)"),
-    value: str = typer.Argument(..., help="Config value"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Set a configuration value."""
-    try:
-        set_config(key, value)
-    except ValueError as exc:
-        if json_output:
-            typer.echo(json.dumps({"error": str(exc)}))
-        else:
-            _print_colored(str(exc), "red")
-        raise typer.Exit(code=2)
-    msg = f"Set {key} in {CONFIG_DIR / 'config.toml'}"
-    if json_output:
-        typer.echo(json.dumps({"status": "ok", "key": key}))
-    else:
-        _print_colored(msg, "green")
-
-
-@config_app.command("sync-rules")
-def config_sync_rules(
-    update: bool = typer.Option(False, "--update",
-                                help="Also replace rules whose pattern is a superseded shipped one "
-                                     "(rules you have edited are never touched)"),
-    full: bool = typer.Option(False, "--full",
-                              help="Fully overwrite all rules with shipped defaults "
-                                   "(overrides user customisations)"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Sync shipped rules to the user config.
-
-    Without flags, starts an interactive wizard that shows what changed
-    and lets you choose how to sync.
-    """
-    ensure_default_configs()
-    target = CONFIG_DIR / "rules.toml"
-
-    missing = missing_shipped_rules()
-    outdated = outdated_shipped_rules()
-    drift = drifted_shipped_rules()
-    nothing_to_do = not missing and not outdated and not drift
-
-    if json_output:
-        added, updated = sync_rules(update_outdated=update)
-        typer.echo(json.dumps({
-            "target": str(target),
-            "added": added,
-            "updated": updated,
-            "drift": [
-                {"rule_id": r, "field": f, "on_disk": a, "shipped": s}
-                for r, f, a, s in drift
-            ],
-        }, indent=2))
-        return
-
-    if nothing_to_do:
-        if HAS_RICH:
-            console().print("[green]rules.toml is already up to date.[/green]")
-        else:
-            print("rules.toml is already up to date.")
-        return
-
-    # --- non-interactive flags ---
-    if update or full:
-        if full:
-            # Full overwrite: rewrite every rule block with the shipped version.
-            from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
-            blocks = _rule_blocks(DEFAULT_RULES)
-            text = Path(target).read_text().rstrip() + "\n"
-            for rid, block in blocks.items():
-                text = _replace_rule_block(text, rid, block) if rid in _current_rules(text) else text + "\n" + block
-            Path(target).write_text(text)
-            _print_sync_result("Full sync complete", [], [])
-        else:
-            added, updated = sync_rules(update_outdated=True)
-            _print_sync_result("Sync complete", added, updated)
-        return
-
-    # --- interactive wizard ---
-    _print_sync_wizard(target, missing, outdated, drift)
-
-
-def _current_rules(text: str) -> set[str]:
-    """Rule ids present in a rules.toml text."""
-    import re
-    return {m.group(1) for m in re.finditer(r'^id\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)}
-
-
-def _print_sync_result(title: str, added: list[str], updated: list[str], drift: list[tuple] | None = None):
-    """Show sync results.  If drift is None, re-checks after sync."""
-    if drift is None:
-        from ..config import drifted_shipped_rules
-        drift = drifted_shipped_rules()
-    lines = []
-    if updated:
-        lines.append(f"Updated {len(updated)} superseded rule(s): {', '.join(updated)}")
-    if added:
-        lines.append(f"Added {len(added)} rule(s): {', '.join(added)}")
-    if drift:
-        lines.append(f"{len(drift)} drifted field(s) still differ (edit rules.toml manually).")
-    body = "\n".join(lines) if lines else "Nothing to do."
-    if HAS_RICH:
-        from rich.panel import Panel as RichPanel
-        console().print(RichPanel(body, title=title, border_style="green"))
-    else:
-        print(f"{title}: {body}")
-
-
-def _print_sync_wizard(target: Path, missing: list[str], outdated: list[str], drift: list[tuple]):
-    """Interactive wizard: show changes, let user choose how to sync."""
-    if HAS_RICH:
-        from rich.panel import Panel as RichPanel
-        from rich.table import Table as RichTable
-
-        # Summary
-        parts = []
-        if missing:
-            parts.append(f"[bold]{len(missing)}[/bold] new rule(s)")
-        if outdated:
-            parts.append(f"[bold]{len(outdated)}[/bold] outdated pattern(s)")
-        if drift:
-            parts.append(f"[bold]{len(drift)}[/bold] drifted field(s)")
-        console().print(RichPanel(
-            f"Your rules.toml is out of date: {', '.join(parts)}.",
-            title=str(target), border_style="yellow",
-        ))
-
-        # Detail table
-        table = RichTable(show_header=True, header_style="bold")
-        table.add_column("Rule", style="cyan", width=8)
-        table.add_column("Type", width=12)
-        table.add_column("Detail")
-
-        for rid in missing:
-            table.add_row(rid, "new", "Not in rules.toml; will be added")
-        for rid in outdated:
-            table.add_row(rid, "outdated", "Pattern is a superseded shipped version")
-        for rid, field, on_disk, shipped in drift:
-            table.add_row(rid, "drifted", f"{field}: {on_disk!r} (shipped: {shipped!r})")
-
-        console().print(table)
-    else:
-        print(f"rules.toml is out of date: {len(missing)} new, {len(outdated)} outdated, {len(drift)} drifted.")
-
-    # Wizard prompt
-    if HAS_RICH:
-        console().print()
-        console().print("[bold]How would you like to sync?[/bold]")
-        console().print("  [cyan]1[/cyan]  Full update    (overwrite all rules with shipped defaults)")
-        console().print("  [cyan]2[/cyan]  Safe update    (add missing + update superseded patterns only)")
-        console().print("  [cyan]3[/cyan]  Skip           (don't change anything)")
-        console().print()
-    else:
-        print("1) Full update  - overwrite all rules with shipped defaults")
-        print("2) Safe update  - add missing + update superseded patterns only")
-        print("3) Skip         - don't change anything")
-
-    choice = typer.prompt("Choice", type=int, default=3)
-
-    if choice == 1:
-        from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
-        blocks = _rule_blocks(DEFAULT_RULES)
-        text = target.read_text().rstrip() + "\n"
-        existing = _current_rules(text)
-        for rid, block in blocks.items():
-            if rid in existing:
-                text = _replace_rule_block(text, rid, block)
-            else:
-                text += "\n" + block
-        target.write_text(text)
-        if HAS_RICH:
-            console().print("[green]Full sync complete.[/green]")
-        else:
-            print("Full sync complete.")
-    elif choice == 2:
-        added, updated = sync_rules(update_outdated=True)
-        _print_sync_result("Safe sync complete", added, updated)
-    else:
-        if HAS_RICH:
-            console().print("[yellow]Skipped.[/yellow]")
-        else:
-            print("Skipped.")
-
-
-# --- override subcommands ---
-
-@override_app.command("list")
-def override_list(
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """List all rule overrides."""
-    ensure_default_configs()
-    overrides = list_overrides()
-    if not overrides:
-        msg = (
-            f"No overrides configured. File: {OVERRIDES_PATH}\n"
-            f"Add one with: trustsight override add R010 --reason \"...\""
-        )
-        if json_output:
-            typer.echo(json.dumps({"overrides": []}))
-        else:
-            console().print(msg) if HAS_RICH else print(msg)
-        return
-
-    if json_output:
-        data = [
-            {"rule_id": o.rule_id, "package": o.package, "reason": o.reason, "created_at": o.created_at}
-            for o in overrides
-        ]
-        typer.echo(json.dumps(data, indent=2))
-        return
-
-    if HAS_RICH:
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-        table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
-        table.add_column("Rule", style="cyan")
-        table.add_column("Scope")
-        table.add_column("Reason", overflow="fold")
-        table.add_column("Added", style="dim")
-        from rich.text import Text
-        for o in overrides:
-            # `Text`, not a bare string: Rich reads markup in a plain str,
-            # so a `[green]` in the value recolours the row and an
-            # unbalanced tag aborts the render of everything after it.
-            table.add_row(Text(clean(o.rule_id)),
-                          Text(clean(o.package or "all packages")),
-                          Text(clean(o.reason)), Text(clean(o.created_at)))
-        console().print(table)
-        console().print(
-            f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
-            f"finding is never suppressed.[/]"
-        )
-    else:
-        for o in overrides:
-            print(f"{clean(o.rule_id):<8} {clean(o.package or 'all'):<20} "
-                  f"{clean(o.reason)}")
-
-
-@override_app.command("add")
-def override_add(
-    rule_id: str = typer.Argument(..., help="Rule to suppress, e.g. R010"),
-    reason: str = typer.Option(..., "--reason", help="Why this rule is being suppressed (required)"),
-    package: str | None = typer.Option(None, "--package", help="Limit to one package"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Add a rule override to suppress a finding."""
-    ensure_default_configs()
-    try:
-        ov = add_override(rule_id, reason, package)
-    except ValueError as exc:
-        msg = str(exc)
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-    scope = ov.package or "all packages"
-    msg = f"Override added: {ov.rule_id} for {scope}"
-    if json_output:
-        typer.echo(json.dumps({
-            "status": "ok",
-            "rule_id": ov.rule_id,
-            "package": ov.package,
-            "reason": ov.reason,
-        }))
-    else:
-        _print_colored(msg, "green")
-
-
-@override_app.command("wizard")
-def override_wizard(
-    package: str = typer.Argument(..., help="Package to configure overrides for"),
-):
-    """Interactive wizard to suppress rules that misfire on a package."""
-    ensure_default_configs()
-    init_db()
-
-    from ..analysis import analyze_package
-    from ..override import get_active_overrides
-
-    con = console()
-
-    try:
-        with con.status(f"Analyzing {package}...", spinner="dots"):
-            fact = analyze_package(package)
-    except Exception as exc:
-        msg = f"Could not analyze '{package}': {exc}"
-        _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-
-    existing = get_active_overrides(package=package)
-    existing_ids = {o.rule_id for o in existing}
-
-    non_fatal = [e for e in fact.score_breakdown if e.rule_id not in FATAL_RULES]
-    already_suppressed = [e for e in non_fatal if e.rule_id in existing_ids]
-    available = [e for e in non_fatal if e.rule_id not in existing_ids]
-
-    if not non_fatal:
-        con.print(f"[yellow]No suppressible rules triggered for '{package}'.[/] "
-                  f"(FATAL rules cannot be overridden.)")
-        return
-
-    if available:
-        from rich.box import SIMPLE_HEAD
-        from rich.table import Table
-
-        con.print(f"\n[bold]Triggered rules for [cyan]{package}[/][/]\n")
-        table = Table(box=SIMPLE_HEAD)
-        table.add_column("#", style="dim", justify="right")
-        table.add_column("Rule", style="cyan")
-        table.add_column("Severity")
-        table.add_column("Reason", overflow="fold")
-        from rich.text import Text
-        for i, e in enumerate(available, 1):
-            # `e.reason` carries package-controlled text: a tree member
-            # name, a quoted diff fragment. The weaker `unicode` helper
-            # used here before leaves C1 control bytes, BEL and newlines
-            # behind, and \x9b2J is the 8-bit spelling of "clear screen".
-            table.add_row(Text(str(i)), Text(clean(e.rule_id)),
-                          Text(clean(e.severity)), Text(clean(e.reason)))
-        con.print(table)
-
-        if already_suppressed:
-            con.print(f"\n[dim](Already suppressed: {', '.join(e.rule_id for e in already_suppressed)})[/]")
-
-        con.print()
-        added = []
-        while True:
-            try:
-                pick = typer.prompt(
-                    "Enter rule ID or # to suppress (or q to quit)",
-                    default="q",
-                    show_default=False,
-                )
-            except EOFError:
-                # stdin is not interactive (piped/CI): stop cleanly.
-                con.print("[yellow]Input closed; no more overrides added.[/]")
-                break
-            if pick.lower() in ("q", "quit", ""):
-                break
-
-            matched = None
-            if pick.isdigit():
-                idx = int(pick) - 1
-                if 0 <= idx < len(available):
-                    matched = available[idx]
-            else:
-                pick_upper = pick.upper()
-                for e in available:
-                    if e.rule_id == pick_upper:
-                        matched = e
-                        break
-
-            if matched is None:
-                con.print(f"[red]No rule matches '{pick}'.[/] Try again or enter q to quit.")
-                continue
-
-            reason = None
-            try:
-                reason = typer.prompt(f"Reason for suppressing {matched.rule_id}")
-            except EOFError:
-                con.print("[yellow]Input closed; override not added.[/]")
-                break
-            if not reason or not reason.strip():
-                con.print("[red]Reason cannot be empty.[/]")
-                continue
-
-            add_override(matched.rule_id, reason, package=package)
-            added.append(matched.rule_id)
-            available = [e for e in available if e.rule_id != matched.rule_id]
-            con.print(f"[green]Override added: {matched.rule_id} for {package}[/]")
-
-            if not available:
-                con.print("[dim]All suppressible rules have been handled.[/]")
-                break
-
-        if added:
-            con.print(f"\n[bold green]Done.[/] Added {len(added)} override(s) for '{package}':")
-            for rid in added:
-                con.print(f"  [green]\u2713[/] {rid}")
-        else:
-            con.print("[yellow]No overrides were added.[/]")
-    else:
-        con.print(f"[yellow]All triggered rules for '{package}' are already suppressed.[/]")
-        if already_suppressed:
-            con.print(f"  Existing: {', '.join(e.rule_id for e in already_suppressed)}")
-
-
-@override_app.command("rm")
-def override_rm(
-    rule_id: str = typer.Argument(..., help="Rule to stop suppressing"),
-    package: str | None = typer.Option(None, "--package", help="Scope the removal to one package"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Remove a rule override."""
-    ensure_default_configs()
-    if remove_override(rule_id.upper(), package):
-        msg = f"Override removed: {rule_id.upper()}"
-        if json_output:
-            typer.echo(json.dumps({"status": "ok", "rule_id": rule_id.upper()}))
-        else:
-            _print_colored(msg, "green")
-    else:
-        msg = f"No matching override for {rule_id.upper()}"
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "yellow")
-        raise typer.Exit(code=2)
-
-
-# --- db subcommands ---
-
-@db_app.command("check")
-def db_check(
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Run integrity check on the database."""
-    ensure_default_configs()
-    from ..db import get_connection
-    try:
-        init_db()
-    except sqlite3.DatabaseError:
-        # A corrupt database is exactly what this command must diagnose;
-        # crashing on the schema init would defeat the point.
-        pass
-
-    errors = []
-    try:
-        with get_connection() as conn:
-            rows = conn.execute("PRAGMA integrity_check").fetchall()
-            for r in rows:
-                if r[0] != "ok":
-                    errors.append(r[0])
-    except sqlite3.DatabaseError as exc:
-        errors.append(str(exc))
-
-    if json_output:
-        typer.echo(json.dumps({
-            "status": "ok" if not errors else "corrupt",
-            "errors": errors,
-        }, indent=2))
-        if errors:
-            raise typer.Exit(code=2)
-        return
-
-    if not errors:
-        _print_colored("Database integrity check passed.", "green")
-    else:
-        for err in errors:
-            _print_colored(err, "red", stderr=True)
-        raise typer.Exit(code=2)
-
-
-@db_app.command("vacuum")
-def db_vacuum(
-    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Reclaim disk space by rebuilding the database file."""
-    ensure_default_configs()
-    init_db()
-    from ..db import get_connection
-
-    if not force and not json_output:
-        typer.confirm("Vacuum the database? This may take a while.", abort=True)
-
-    with get_connection() as conn:
-        before = get_db_path().stat().st_size
-        conn.execute("VACUUM")
-        after = get_db_path().stat().st_size
-
-    if json_output:
-        typer.echo(json.dumps({
-            "status": "ok",
-            "bytes_before": before,
-            "bytes_after": after,
-            "bytes_reclaimed": before - after,
-        }, indent=2))
-        return
-
-    reclaimed = before - after
-    _print_colored(
-        f"Database vacuumed: {_fmt_bytes(before)} -> {_fmt_bytes(after)} "
-        f"({_fmt_bytes(reclaimed)} reclaimed)", "green",
-    )
-
-
-@db_app.command("backup")
-def db_backup(
-    output: str | None = typer.Option(None, "--output", "-o", help="Output path (default: auto-named)"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Create a safe online backup of the database."""
-    ensure_default_configs()
-    init_db()
-    from ..db import get_connection
-
-    db_path = get_db_path()
-    if not output:
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-        output = str(db_path) + f".{ts}.bak"
-
-    out_path = Path(output)
-    if out_path.exists() and db_path != out_path and out_path.samefile(db_path):
-        msg = f"backup path must differ from the live database: {output}"
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-    if not out_path.parent.exists():
-        msg = f"backup directory does not exist: {out_path.parent}"
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-
-    try:
-        with get_connection() as conn:
-            backup_conn = sqlite3.connect(output)
-            try:
-                conn.backup(backup_conn, pages=0)
-            finally:
-                backup_conn.close()
-    except sqlite3.Error as exc:
-        msg = f"backup failed: {exc}"
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-
-    size = Path(output).stat().st_size
-    if json_output:
-        typer.echo(json.dumps({
-            "status": "ok",
-            "path": output,
-            "bytes": size,
-        }, indent=2))
-        return
-
-    _print_colored(f"Database backed up to {output} ({_fmt_bytes(size)})", "green")
-
-
-# --- baseline subcommands ---
-
-@baseline_app.command("build")
-def baseline_build(
-    resume: bool = typer.Option(False, "--resume", help="Continue an interrupted bootstrap (now implied: cycles resume automatically)"),
-    bootstrap: bool = typer.Option(False, "--bootstrap", help="Allow a from-scratch bootstrap of the whole AUR when no snapshot exists (capped per cycle, resumes)"),
-    export: str | None = typer.Option(None, "--export", help="Path to write the baseline artifact"),
-    sign: str | None = typer.Option(None, "--sign", help="Path to ed25519 private key for signing"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Bootstrap or update the full-AUR baseline corpus."""
-    from .. import release
-    from ..full_aur.pipeline import run_baseline_build
-    ensure_default_configs()
-    init_db()
-    if release.offline():
-        msg = "baseline build needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
-    result = run_baseline_build(resume=resume, export_path=export, sign_key=sign, json_output=json_output, bootstrap=bootstrap)
-    if result.refused:
-        raise typer.Exit(code=2)
-
-
-@baseline_app.command("import")
-def baseline_import(
-    path: str = typer.Argument(..., help="Path to the baseline artifact (.tar.zst)"),
-    allow_unsigned: bool = typer.Option(False, "--allow-unsigned", help="Allow unsigned artifacts (local builds only)"),
-    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-):
-    """Import a signed baseline corpus artifact."""
-    ensure_default_configs()
-    init_db()
-    _import_baseline_wrapped(path, json_output, allow_unsigned)
-
-
-def _import_baseline_wrapped(path: str, json_output: bool, allow_unsigned: bool) -> None:
-    """Import a corpus baseline, turning failure into a structured exit 2.
-
-    Errors (missing file, malformed artifact, bad signature, missing
-    cryptography) are reported like every other failure path: as JSON when
-    ``--json`` is set, otherwise as a single colored line.
-    """
-    from ..full_aur.export import import_baseline
-    try:
-        import_baseline(path, json_output=json_output, allow_unsigned=allow_unsigned)
-    except Exception as exc:
-        msg = str(exc) or exc.__class__.__name__
-        if json_output:
-            typer.echo(json.dumps({"error": msg}))
-        else:
-            _print_colored(msg, "red", stderr=True)
-        raise typer.Exit(code=2)
 
 
 # --- seed-db ---
@@ -755,11 +63,16 @@ def _stale_rules_note(stale_patterns, missing, plain: bool = False) -> str:
 
 
 def register_commands(app: typer.Typer):
-    """Register the ``config``, ``override``, ``db``, and ``baseline`` subcommands on *app*."""
-    app.add_typer(config_app, name="config")
-    app.add_typer(override_app, name="override")
-    app.add_typer(db_app, name="db")
-    app.add_typer(baseline_app, name="baseline")
+    """Register the subcommand groups and maintenance commands on *app*."""
+    from .baseline import register_commands as _register_baseline
+    from .config import register_commands as _register_config
+    from .db import register_commands as _register_db
+    from .override import register_commands as _register_override
+
+    _register_config(app)
+    _register_override(app)
+    _register_db(app)
+    _register_baseline(app)
 
     @app.command()
     def seed_db(
@@ -798,12 +111,14 @@ def register_commands(app: typer.Typer):
             )
             if json_output:
                 typer.echo(json.dumps({"status": "already_imported", "observations": already}))
+            elif use_rich():
+                console().print(msg)
             else:
-                console().print(msg) if HAS_RICH else print(msg)
+                print(msg)
             return
 
         try:
-            if HAS_RICH and not json_output:
+            if use_rich() and not json_output:
                 with console().status(f"Importing seed from {seed.name}...", spinner="dots"):
                     stats = import_seed(seed)
             else:
@@ -823,7 +138,7 @@ def register_commands(app: typer.Typer):
             typer.echo(json.dumps(stats, indent=2))
             return
 
-        if HAS_RICH:
+        if use_rich():
             from rich.box import SIMPLE_HEAD
             from rich.table import Table
             table = Table(title="Novelty seed imported", box=SIMPLE_HEAD)
@@ -891,7 +206,7 @@ def register_commands(app: typer.Typer):
             typer.echo(json.dumps(data, indent=2))
             return
 
-        if HAS_RICH:
+        if use_rich():
             from rich.table import Table
             from rich.text import Text
 
@@ -928,7 +243,7 @@ def register_commands(app: typer.Typer):
                 f"Run 'trustsight config sync-rules' to append them "
                 f"(additive; your edits are preserved)."
             )
-            if HAS_RICH:
+            if use_rich():
                 console().print(f"\n[yellow]{msg}[/]")
             else:
                 print(f"\n{msg}")
@@ -938,7 +253,7 @@ def register_commands(app: typer.Typer):
                 f"{len(outdated)} rule(s) use a superseded pattern: {', '.join(outdated)}.\n"
                 f"These were corrected upstream. Run 'trustsight config sync-rules --update'."
             )
-            if HAS_RICH:
+            if use_rich():
                 console().print(f"\n[red]{msg}[/]")
             else:
                 print(f"\n{msg}")
@@ -981,7 +296,7 @@ def register_commands(app: typer.Typer):
             }, indent=2))
             return
 
-        if HAS_RICH:
+        if use_rich():
             from rich.table import Table
             from rich.text import Text
 
@@ -1071,14 +386,3 @@ def register_commands(app: typer.Typer):
         )
         if result.refused:
             raise typer.Exit(code=2)
-
-    @app.command("import-baseline")
-    def import_baseline_cmd(
-        path: str = typer.Argument(..., help="Path to the baseline artifact (.tar.zst)"),
-        allow_unsigned: bool = typer.Option(False, "--allow-unsigned", help="Allow unsigned artifacts (local builds only)"),
-        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
-    ):
-        """Import a signed baseline corpus artifact."""
-        ensure_default_configs()
-        init_db()
-        _import_baseline_wrapped(path, json_output, allow_unsigned)

@@ -12,7 +12,7 @@ import typer
 from ..config import ensure_default_configs
 from ..db import init_db
 from ..safe_text import clean
-from .display import HAS_RICH, _print_colored, console
+from .display import _print_colored, console, use_rich
 
 corpus_app = typer.Typer(
     name="corpus",
@@ -93,7 +93,7 @@ def _render_pivot(result: dict) -> None:
         )
         return
 
-    if HAS_RICH:
+    if use_rich():
         from rich.table import Table
         from rich.text import Text
 

@@ -8,11 +8,11 @@ from ..safe_text import clean
 from ..scoring import stored_band
 from .display import (
     band_colour,
-    HAS_RICH,
     _print_colored,
     _severity_text,
     console,
     display_version,
+    use_rich,
 )
 
 
@@ -98,7 +98,7 @@ def register_commands(app: typer.Typer):
             typer.echo(json.dumps(data, indent=2))
             return
 
-        if HAS_RICH:
+        if use_rich():
             from rich.box import SIMPLE_HEAD
             from rich.table import Table
             from rich.text import Text

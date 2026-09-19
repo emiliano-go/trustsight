@@ -22,7 +22,7 @@ from ..db import (
     init_db,
     seed_observation_count,
 )
-from .display import HAS_RICH, _print_colored, console
+from .display import _print_colored, console, use_rich
 
 seed_app = typer.Typer(
     help="Inspect and manage the hashed maintainer seed",
@@ -68,7 +68,7 @@ def seed_info(
         typer.echo(json.dumps(data, indent=2))
         return
 
-    if HAS_RICH:
+    if use_rich():
         from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="TrustSight seed", box=SIMPLE_HEAD)
@@ -191,7 +191,7 @@ def seed_stats(
         typer.echo(json.dumps(data, indent=2))
         return
 
-    if HAS_RICH:
+    if use_rich():
         from rich.box import SIMPLE_HEAD
         from rich.table import Table
         table = Table(title="Hashed maintainer corpus", box=SIMPLE_HEAD)

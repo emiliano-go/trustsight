@@ -364,11 +364,11 @@ def growth_ratio(compiled: re.Pattern) -> float:
         # Three measurements each; median filters out scheduler noise.
         shorts = sorted(_time_search(compiled, short_text) for _ in range(3))
         longs = sorted(_time_search(compiled, long_text) for _ in range(3))
-        s = shorts[1]  # median
-        l = longs[1]   # median
-        if l < _GROWTH_FLOOR_S:
+        short_med = shorts[1]  # median
+        long_med = longs[1]    # median
+        if long_med < _GROWTH_FLOOR_S:
             continue
-        worst = max(worst, l / max(s, 1e-9))
+        worst = max(worst, long_med / max(short_med, 1e-9))
     return worst
 
 

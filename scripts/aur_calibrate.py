@@ -113,7 +113,7 @@ def print_table(results: dict):
         rid for s in results.values() for rid in s.get("rules", {})
     ))
 
-    header = f"{'rule \\ stratum':<20}"
+    header = "{:<20}".format("rule \\ stratum")
     strata_list = [s for s in STRATA_ORDER if s in results]
     unknown = [s for s in results if s not in STRATA_ORDER]
     display_strata = strata_list + unknown

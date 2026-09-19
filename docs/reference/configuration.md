@@ -364,12 +364,20 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads one environment variable. Everything else that changes
+TrustSight reads four environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
+| `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
+| `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
+| `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
+
+Rich output is the default only when the target stream is a terminal:
+renderers look at stdout, and progress bars look at stderr. A pipe, a
+redirect or a captured stream therefore gets plain text with no escape
+sequences. If `NO_COLOR` and `FORCE_COLOR` are both set, `FORCE_COLOR` wins.
 
 Every path that would reach the release channel checks it first, so an
 air-gapped machine or a CI runner is pinned to what is already on disk. The

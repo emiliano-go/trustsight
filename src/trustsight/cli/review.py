@@ -22,6 +22,9 @@ from .display import (
     _print_colored,
     console,
     display_version,
+    err_console,
+    use_rich,
+    use_rich_progress,
 )
 # The pipeline itself lives in ``trustsight.review`` so the public API can
 # run it without importing typer.  These names are bound here under their
@@ -106,13 +109,13 @@ def _discover_packages(repos, include_foreign, all_repos_flag, all_packages, _wa
     on_download = None
     progress_state = {}
 
-    if HAS_RICH:
+    if use_rich_progress() and not json_output:
         from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn, TimeElapsedColumn, TransferSpeedColumn
 
         def on_download(pos, total):
             progress = progress_state.get("progress")
             if progress is None:
-                con = console()
+                con = err_console()
                 columns = [
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
@@ -202,11 +205,11 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
     # did. The 35 it skipped went unmentioned.
     outdated_total = len(outdated_pkgs)
 
-    has_progress = HAS_RICH and not json_output and not quiet
+    has_progress = use_rich_progress() and not json_output and not quiet
 
     if has_progress:
         from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
-        con = console()
+        con = err_console()
         progress_columns = [
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -279,7 +282,7 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
             _print_colored("No outdated packages found.", "green")
         return
 
-    if HAS_RICH and not json_output:
+    if use_rich() and not json_output:
         _render_results_rich(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
     else:
         _render_results_plain(results, total_installed, all_packages, show_score, show_risk, verbose, outdated_total, deps_only)
@@ -640,14 +643,14 @@ def register_commands(app: typer.Typer):
         ),
     ):
         """Review AUR packages for suspicious updates."""
-        has_progress = HAS_RICH and not json_output and not quiet
+        has_progress = use_rich_progress() and not json_output and not quiet
         init_progress = None
         if has_progress:
             from rich.progress import Progress, SpinnerColumn, TextColumn
             init_progress = Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
-                console=console(), transient=True,
+                console=err_console(), transient=True,
             )
             init_progress.start()
             init_task = init_progress.add_task("Loading config...", total=None)

@@ -302,7 +302,8 @@ def test_cli_history_no_history(tmp_path, monkeypatch):
     ensure_default_configs()
 
     result = CliRunner().invoke(app, ["history", "nonexistentpkg"])
-    assert "has not been analysed yet" in result.stdout
+    assert result.exit_code == 2
+    assert "has not been analysed yet" in result.output
 
 
 def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):

@@ -1,6 +1,7 @@
 """Regression checks for release workflow separation and packaging integrity."""
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -101,7 +102,7 @@ def test_check_verifies_without_writing(tmp_path, monkeypatch):
     metadata comparison that followed crashed on a file with no
     ``PKG-INFO``.
     """
-    if not (ROOT / ".git").exists():
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
         pytest.skip("no git checkout; a WORKTREE build is unavailable")
     sys.path.insert(0, str(ROOT / "scripts"))
     import build_release_tarball as brt
@@ -142,6 +143,8 @@ def test_a_worktree_build_refuses_untracked_files(tmp_path):
 
     repo = tmp_path / "repo"
     repo.mkdir()
+    if shutil.which("git") is None:
+        pytest.skip("git is not available")
     run = lambda *args: subprocess.run(  # noqa: E731
         args, cwd=repo, check=True, capture_output=True,
     )

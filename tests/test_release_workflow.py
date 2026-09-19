@@ -101,6 +101,8 @@ def test_check_verifies_without_writing(tmp_path, monkeypatch):
     metadata comparison that followed crashed on a file with no
     ``PKG-INFO``.
     """
+    if not (ROOT / ".git").exists():
+        pytest.skip("no git checkout; a WORKTREE build is unavailable")
     sys.path.insert(0, str(ROOT / "scripts"))
     import build_release_tarball as brt
 

@@ -138,6 +138,13 @@ jobs:
           name: release-assets
           path: artifacts
 
+      # This job never checks the repository out: it downloads the verified
+      # artifacts and drives `gh`. `gh release create` still needs a
+      # repository to resolve, and without a checkout it infers one from
+      # the working directory, which fails with "not a git repository".
+      - name: Tell gh which repository this is
+        run: echo "GH_REPO=$GITHUB_REPOSITORY" >> "$GITHUB_ENV"
+
       - name: Create a private draft and upload verified assets
         env:
           GH_TOKEN: ${{ github.token }}

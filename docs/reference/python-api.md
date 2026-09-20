@@ -177,7 +177,7 @@ report = ts.analyze_text(
 )
 ```
 
-### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False) -> ReviewResult`
+### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False, record=False) -> ReviewResult`
 
 Review installed AUR packages. Equivalent to `trustsight review`.
 
@@ -194,6 +194,7 @@ review(
     on_warning: Callable[[str], None] | None = None,
     depth: int | None = None,
     deps: bool = False,
+    record: bool = False,
 ) -> ReviewResult
 ```
 
@@ -211,13 +212,12 @@ With no arguments this discovers installed foreign packages, works out which hav
 | `on_warning` | Called with a string for each non-fatal discovery problem. |
 | `depth` | AUR dependency levels to analyse. See below. |
 | `deps` | Review the AUR *dependencies* of the discovered packages instead of the packages themselves, as `trustsight review --deps` does. Each report then carries `required_by`. `depth` becomes the number of dependency *levels to review*: `deps=True, depth=2` reviews direct dependencies and theirs. The discovered packages are not reviewed - that is what you get without it. |
+| `record` | Persist observations and analysis history. `False` (the default) is read-only: repeated calls against the same database return the same reports. |
 
-The first call on a machine with no local AUR metadata snapshot downloads one and returns `metadata_bootstrapped=True` with no reports. There was no prior snapshot to diff against, so there is no delta to report yet. Call again.
+The first call on a machine with no local AUR metadata snapshot downloads one and reviews against it in the same call.
 
 ```python
 result = ts.review(limit=25, on_progress=lambda p: print(p.phase))
-if result.metadata_bootstrapped:
-    result = ts.review(limit=25)
 for report in result:
     print(report.package, report.risk_label)
 ```

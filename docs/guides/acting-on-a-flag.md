@@ -53,7 +53,7 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `diff_truncated`: the diff was larger than the size cap, so only its prefix was read.
 - `scan_truncated`: the diff had more than `rules.MAX_SCANNED_LINES` lines, so only its first lines were matched. This is independent of the byte cap.
 - `line_truncated`: a single line was longer than the matching limit, so its tail was never matched against any rule.
-- `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read.
+- `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read. This matters because the files committed beside the recipe - `.install` scriptlets, patches - run as root; a text-only result did not look at them.
 - `companion_truncated`: a committed file the recipe runs was larger than the companion read budget.
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
 - `unresolved_parse_time`: a command substitution runs when the recipe is parsed, so its result is not in the analysed text.

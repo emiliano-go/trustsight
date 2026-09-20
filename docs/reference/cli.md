@@ -53,6 +53,7 @@ trustsight review [--limit N] [--repo REPO]... [--foreign] [--all-repos] [--all]
 | `--all-repos` | flag | `false` | Automatically detect all local repositories from `/etc/pacman.conf` (excludes official repos: `core`, `extra`, `community`, `multilib`, `testing`, etc.) and scan packages from all of them. |
 | `--sort` | `str` | discovery order | Sort results after analysis. `score`: worst (highest) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. When omitted, results appear in discovery order (the order pacman or AUR returned them). |
 | `--refresh` | flag | `false` | Force refresh the AUR metadata snapshot regardless of the configured TTL. Useful when the snapshot is stale but its age is still within the TTL window. |
+| `--record` | flag | `false` | Persist observations and analysis history. Runs are read-only by default, so repeated reviews against the same database return the same reports; only `--record` changes the next run's history. |
 
 #### Flag precedence
 
@@ -77,7 +78,7 @@ trustsight review --all-repos --foreign
 Discovery uses a local AUR metadata snapshot by default:
 
 1. Collects package names and versions from the requested sources (repo contents via `pacman -Sl <repo>` intersected with `pacman -Q`, foreign via `pacman -Qm`, or auto-detected repos via `pacman-conf --repo-list`).
-2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded and the run stops there, since there is nothing to compare against yet. Later runs reuse the snapshot until it is older than `[discovery] metadata_ttl_minutes` (default 60), then refetch it: the version a review compares against is the snapshot's, so a snapshot left to age reports a machine with pending updates as fully current. A refresh that cannot reach the AUR keeps the snapshot on disk and warns that a package updated since then will not be reported.
+2. Looks up each installed package in the AUR metadata snapshot (`full-aur-meta.json`, an offline copy of the AUR package database). On the first run the snapshot is downloaded and used in the same invocation. Later runs reuse it until it is older than `[discovery] metadata_ttl_minutes` (default 60), then refetch it: the version a review compares against is the snapshot's, so a snapshot left to age reports a machine with pending updates as fully current. A refresh that cannot reach the AUR keeps the snapshot on disk and warns that a package updated since then will not be reported.
 3. Filters to packages whose installed version is older than the snapshot version (using `vercmp`).
 4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the published R/H/C/D/S/X rule families, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints one panel per package, and a summary line counting what needed review separately from what was read.
@@ -122,7 +123,7 @@ trustsight inspect <package>
 | `--depth` | AUR dependency levels to analyse: `0` off, `1` (default) direct dependencies, `n` levels, `-1` every level (bounded). Each dependency is analysed as a package in its own right, with its own score and band, shown as a mini-card inside the package's card. |
 | `--allow-uninstalled` | Analyse a package that is not in the local pacman set. The name is resolved against the AUR and cloned. Without this flag, `inspect` refuses a name not present locally. |
 | `--last N` | Analyse the N most recent content-bearing commits as N separate results, newest first. `N >= 1` and `N <= 50`. Commits whose diff is empty after filtering (`.SRCINFO`- and `.gitignore`-only regenerations) are skipped and do not count toward N. Combined with `--depth > 0` is refused in this version. |
-| `--record` | Write observations to the database. Only meaningful with `--allow-uninstalled`; without it, installed packages already record on every analysis. |
+| `--record` | Persist observations and analysis history. Runs are read-only by default, so nothing is written unless this flag is passed. |
 
 ### Output
 

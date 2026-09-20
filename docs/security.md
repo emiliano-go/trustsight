@@ -56,7 +56,7 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 TrustSight does three things, and only three: it reads, it computes, it reports.
 
 - **Reads** the reviewed repository, the single AUR endpoint, and signed release assets an operator explicitly fetches or an eligible first `review` or `inspect` run auto-imports.
-- **Computes** evidence scores, entirely locally, deterministically, and never by executing a PKGBUILD.
+- **Computes** evidence scores locally, deterministically, and never by executing a PKGBUILD. Analysis-time egress is limited to the AUR metadata snapshot and, when a baseline is fetched, the signed release channel; the packaged diff itself is computed from bytes already on disk, though discovery and novelty baselines may be downloaded.
 - **Reports** findings and their reasons, and what it could not examine.
 
 It does **not** build, run, install, or sandbox. The moment you run `makepkg`, you are outside this model.

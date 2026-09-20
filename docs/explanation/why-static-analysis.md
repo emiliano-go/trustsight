@@ -11,9 +11,9 @@ A PKGBUILD is a recipe, not a binary. It declares what the build will fetch, how
 The AUR is an unmoderated, user-submitted repository. Anyone can publish, and whoever maintains a package can modify it at will. The strongest realistic adversary controls every byte of every artifact TrustSight reads about a package, and knows the source code. In that environment, TrustSight chose static analysis for four reasons:
 
 1. **It runs before `makepkg`.** The whole point is to decide whether to build. Running the PKGBUILD to inspect it would defeat the purpose: a malicious PKGBUILD could detect execution and behave differently, or perform harmful actions during the attempted resolution.
-2. **It is deterministic.** The same diff, against the same stored history, always produces the same score and the same evidence record. There is no randomness, no remote service, and no model in the loop. (See [Security Model](../security.md) for the full invariant.)
+2. **It is deterministic.** The same diff, against the same stored history, always produces the same score and the same evidence record. There is no randomness, no remote service, and no model in the loop. Runs are read-only by default, so asking twice against the same database does not change the answer; `--record` is the explicit opt-in that makes the next run's history different. (See [Security Model](../security.md) for the full invariant.)
 3. **It scales.** Analysing 50 packages in a review takes seconds, not minutes. No chroot, no root, no sandbox setup.
-4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe.
+4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe. The tool does use the network for two things that are not the package: it downloads the AUR metadata snapshot to discover updates, and (when a baseline is available) the signed seed from the release channel. It never contacts a source the recipe names.
 
 The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W006) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
 
@@ -27,7 +27,7 @@ TrustSight reads the PKGBUILD and its companion files (`.install` hooks, committ
 4. **Classify** the result into a risk band.
 5. **Report** the findings through a template.
 
-Every step is local and deterministic. No PKGBUILD is executed. No URL is fetched. No archive is extracted. The tool reads, computes, and reports. That is all.
+Every step is local and deterministic. No PKGBUILD is executed. No URL a package declares is fetched. No archive is extracted. The tool reads, computes, and reports. That is all. The one exception to "no network" is fetching the AUR metadata snapshot (discovery) and the signed baseline seed (priors), neither of which the package controls.
 
 ### 1. Parse
 
@@ -55,7 +55,7 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions.
 
-**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. No network calls are made at analysis time.
+**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. The classification makes no network calls; a run's only egress is the AUR metadata snapshot and the signed baseline channel.
 
 **History signals (Tier C)** compare new URLs and maintainers against the local database. A URL that has never been observed before in any package is globally novel; one never seen for this specific package is locally novel. Novelty is definitionally meaningless on first run, so its contribution is maturity-gated: it phases in linearly as observations accumulate, reaching full weight at 50 observations.
 

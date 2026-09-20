@@ -4,6 +4,93 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **The verdict no longer contradicts the version rules.** `verdict.py`
+  prefixed every non-fatal result with the literal `"Version bump. "`, so a
+  diff that changed the source but left `pkgver` at `1.2.3` read as a bump
+  while C001/C003 fired underneath. The prefix is now derived from whether
+  the diff actually moved `pkgver`, and the version-move check resolves the
+  recipe's own variables: `pkgver=${_gtkver}` is judged by the value the
+  diff assigns, so a real `_gtkver` bump reports C002 rather than the
+  spurious C001 (HIGH) it used to.
+- **A checksum change under a context declaration is detected, in both
+  directions.** When a commit added or removed a hash in a multiline array
+  whose `sha256sums=(` opener did not move, no detector saw it: adding one
+  reported "no structural changes", and removing one was invisible to every
+  checksum rule and to the change summary. The array is now tracked across
+  context and added/removed lines, a removed entry fires C004 (CRITICAL),
+  and a whole array deleted while the source is unchanged is reported
+  through the same `checksum_behavior` value the summary and the
+  verification-evidence path read - so the rule, the summary and the
+  evidence cannot disagree about whether a checksum changed.
+- **A `validpgpkeys` removal under a context opener disables GPG
+  verification visibly.** `detect_gpg_verification_removed` looked for a
+  removed line that itself carried a key; when the opener was context and
+  only the keys were deleted, H024 stayed silent and the end state read as
+  having no GPG verification. It now compares the reconstructed pre- and
+  post-states.
+- **A deleted `.sig`/`.asc` entry no longer justifies `SKIP`.** The
+  signature-file check in `is_skip_justified` had no diff-side anchor, so a
+  signature the diff removed - or one on a context line in another file's
+  hunk - downgraded H001 from HIGH to INFO. It now reads the post-diff text.
+- **H033 cannot be silenced by a no-op version line.** "Did the version
+  move?" was a lexical match for `pkgver|pkgrel|epoch|…` on a changed line,
+  so adding a no-op `+epoch=0` suppressed H033 on a real commit-pin move,
+  and a variable-driven bump fired it falsely. The guard now compares the
+  *resolved value* of `pkgver`, `pkgrel` and `epoch`, so a real rebuild
+  still suppresses and a no-op line does not.
+- **H087, the change summary and the FATAL verdict read the canonical
+  version facts.** H087's "upstream did not move" used its own literal
+  `pkgver =` scan (so a `pkgver=${_gtkver}` bump was missed); the change
+  summary recomputed the move from the diff without the post-diff text (so
+  the move could vanish from "What changed"); and the FATAL verdict branch
+  dropped the version prefix the other two branches carry. All three now
+  read `pkgver_changed` / `pkgver_old` / `pkgver_new` from the fact.
+- **Host identity is one spelling everywhere.** The change summary, C006's
+  domain comparison and the IOC host matcher computed the host differently
+  from `buckets.canonical_host`, so `https://user@github.com:443/…` was
+  `trusted_forge` to the classifier and a *new host* to the summary. All
+  now route through `canonical_host`.
+- **`DiffSummary` is built the same way on every producer.** The text paths
+  counted `+++`/`---` header lines in `lines_added` and never populated
+  `files_changed`/`file_changes`, so `is_trivial` returned true for any
+  change on the bare-diff and corpus paths, and "new file"/"file removed"
+  never appeared in the summary. One construction
+  (`differ.diff_summary_from_text`) now serves them, matching the git
+  producer's shape.
+- **The corpus and git diff adapters split lines the same way.** The corpus
+  path used Python's `splitlines`, which breaks on U+2028 - an ordinary
+  character to makepkg - so identical recipes produced different hunks
+  depending on the adapter. Both now use the shell-aware `split_lines`.
+- **Maintainer identity across paths.** The git path reads
+  `Name <email>` from the PKGBUILD comment while the seed and corpus store
+  the bare AUR account name; hashing both whole made every git-path lookup
+  miss the seed, so H026 and maintainer novelty could read one person as
+  globally novel on one path and known on the other. The hashing
+  chokepoint now strips the angle-bracket suffix, leaving bare names (and
+  the shipped seed's existing hashes) unchanged.
+- **The first run reviews instead of asking you to run again.** `review`
+  downloaded the AUR metadata snapshot and returned after doing nothing;
+  it now continues into discovery in the same invocation.
+- **Runs are read-only by default.** Novelty observations, analysis history
+  and version updates were written on every analysis, so two runs over the
+  same diff could disagree and `--record` was effectively decorative.
+  `review`, `inspect` and the API now persist nothing unless `--record` is
+  given (`record=True` on the API), restoring the determinism promise. The
+  corpus builder remains a writer by definition.
+
+### Added
+
+- `baseline-seed.tar.gz` now ships the source-URL and dependency-name
+  corpora alongside the hashed maintainers. The v2 builder and the release
+  workflow packed maintainers only, so a fresh install imported zero known
+  URLs and URL novelty had nothing to compare against.
+- The README and installation page state that TrustSight is not officially
+  published on the AUR, that any AUR `trustsight` package is unaffiliated
+  and unreviewed, and that contact is being attempted with the uploader
+  toward a secure and correct official AUR packaging arrangement.
+
 ### Security
 
 - **The whole tokenizer runs in a sandboxed child process.** The tokenizer

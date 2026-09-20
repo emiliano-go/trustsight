@@ -74,8 +74,9 @@ contributes nothing to the score.
 - **Condition:** A declared surface exactly matches an entry in `iocs.toml`.
 
 Four surfaces are read: the package's own name; names added to
-`depends`/`makedepends`/`optdepends`/`checkdepends`/`provides`/`replaces`; the
-host of any URL and any bare host token; and any hex digest of digest length.
+`depends`/`makedepends`/`optdepends`/`checkdepends`/`provides`/`replaces`/
+`conflicts`; the host of any URL and any bare host token; and any hex digest of
+digest length.
 The IOC federation stage is separate and reports attributed matches through
 `PackageFact.ioc_matches`; see [IOC Federation](../ioc.md).
 

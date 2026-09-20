@@ -91,19 +91,19 @@ a top-level flag-set replacement is [H079](#h079).
 ### C001: Checksum Changed Without Source Change With Stable Version {#c001}
 
 - **Severity:** HIGH (weight 25)
-- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** `pkgver` did not change.
+- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** `pkgver`, `pkgrel` and `epoch` did not change.
 - **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise.
 
 ### C002: Checksum Updated With Version Bump {#c002}
 
 - **Severity:** INFO (weight 0)
-- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** `pkgver` did change.
+- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** at least one of `pkgver`, `pkgrel` or `epoch` changed.
 - **Description:** Normal during routine version bumps. Recorded for audit trail; contributes no weight.
 
 ### C003: Source URL Changed Without Version Bump {#c003}
 
 - **Severity:** INFO (weight 0)
-- **Condition:** Source URLs were both added **and** removed (the sets differ) **and** `pkgver` did not change.
+- **Condition:** Source URLs were both added **and** removed (the sets differ) **and** `pkgver`, `pkgrel` and `epoch` did not change.
 - **Description:** Source URLs swapped without a version bump is noteworthy but not necessarily malicious. Recorded for audit trail; contributes no weight.
 
 ### C004: Checksum Removed For Unchanged Source {#c004}
@@ -295,6 +295,14 @@ is this one: it needs the file manifest, so it runs on the git path, where the
 clone is always available, and on the corpus path when the AUR snapshot tarball
 was fetched. When the corpus path has no snapshot, the result reports
 `tree_analyzed = false` rather than reading as a full-coverage UNFLAGGED result.
+
+Because what runs as root includes `.install` scriptlets and patches committed
+beside the recipe, the tree-reading path is the default wherever a repository
+is available: a "read the PKGBUILD" review that stopped at the recipe text
+would miss exactly the files the build runs. Text-only analysis is the
+exception (a caller supplying PKGBUILD text with no tree), and it announces
+itself with the `tree_not_analyzed` coverage gap rather than reading as
+complete.
 **H066-blob**, an ELF blob encoded inside the PKGBUILD, is H068 with a magic
 check, so an encoded ELF fires H068.
 

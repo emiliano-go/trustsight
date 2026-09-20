@@ -38,7 +38,7 @@ Scope constraints further refine matching. R010 (curl) and R011 (wget) are restr
 
 The top-level position is not ignored, it is a separate claim: [H077](../reference/rules/fetch-and-execution.md#h077) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
 
-**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. No network calls are made at analysis time.
+**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. The classification makes no network calls; a run's only egress is the AUR metadata snapshot and the signed baseline channel.
 
 **History signals (Tier C)** compare new URLs and maintainers against the local database. A URL that has never been observed before in any package is globally novel; one never seen for this specific package is locally novel. Novelty is definitionally meaningless on first run, so its contribution is maturity-gated (see step 3).
 

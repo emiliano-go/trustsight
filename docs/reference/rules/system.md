@@ -113,7 +113,7 @@ rendered from `DECLARED_REASONS`.
 | `P001` | Checksums declared for all non-VCS sources (`sha256sums`) |
 | `P002` | `validpgpkeys` declared |
 | `P003` | A signature source accompanies a source, with PGP keys declared |
-| `P005` | Source pinned to a full commit hash (`checksum_pinned`) |
+| `P005` | Source pinned to a full commit hash (`commit_pinned`) |
 | `P006` | Source pinned to a tag - the weaker pin, which `H033` exists to flag because a tag can be repointed |
 | `P007` | Source hosted on a trusted forge over HTTPS (`trusted_forge` bucket) |
 | `P008` | Source tracks a branch or unpinned ref, so upstream decides at build time what this compiles and runs |

@@ -1,8 +1,21 @@
-<!-- description: Build and install TrustSight from the PKGBUILD in this repository. There is no AUR package yet; requirements are Arch Linux, Python 3.11 or later, and git. -->
+<!-- description: Build and install TrustSight from the PKGBUILD in this repository. TrustSight is not officially published on the AUR; requirements are Arch Linux, Python 3.11 or later, and git. -->
 
 # Installation
 
 TrustSight requires **Arch Linux**, **Python 3.11 or later**, and **git** (for cloning AUR repositories during analysis).
+
+!!! warning "TrustSight is not officially published on the AUR"
+
+    Any AUR package named `trustsight` is **unaffiliated** with this project
+    and is not maintained, reviewed, or endorsed by its author. TrustSight is
+    an AUR-review tool; distributing it through the AUR is circular, and an
+    unaffiliated upload is itself an unreviewed package. Install from this
+    repository's PKGBUILD or the signed release tarball instead, as below.
+
+    Contact is being attempted with the uploader with the aim of reaching a
+    secure, correct, and official AUR packaging arrangement. Until that exists,
+    treat any AUR `trustsight` package as third-party code and review it
+    yourself.
 
 ---
 
@@ -16,7 +29,7 @@ makepkg -si
 
 !!! note "Repository PKGBUILD only"
 
-    `aur.archlinux.org/trustsight.git` does not exist. There is no AUR package yet: build the PKGBUILD in this repository, as above. PyPI distributions are available for isolated virtual environments, but not for installation into Arch's system Python.
+    Build the PKGBUILD in this repository, as above. PyPI distributions are available for isolated virtual environments, but not for installation into Arch's system Python.
 
 The PKGBUILD runs the packaged test suite during build, excluding
 `tests/test_fetcher.py` and `tests/test_rebaseline.py` because they require

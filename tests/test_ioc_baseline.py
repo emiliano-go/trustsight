@@ -218,6 +218,34 @@ def test_reimport_keeps_expired_rows_of_the_source(baseline_dir, isolated_db):
     assert "other.example" in values
 
 
+def test_a_renewed_indicator_becomes_active_again(baseline_dir, isolated_db):
+    """A source re-issuing an expired indicator renews the kept row.
+
+    The row is kept for attribution, but skipping the re-import left its
+    stale ``expires_at`` behind, so a renewed indicator stayed invisible to
+    ``active_iocs`` forever.
+    """
+    manifest = json.loads((baseline_dir / "manifest.json").read_text())
+    manifest["source"] = "renewing-feed"
+    (baseline_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    rows = [{"type": "domain", "value": "renew.example", "source": "renewing-feed",
+             "expires_at": yesterday}]
+    (baseline_dir / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8"
+    )
+    import_baseline(baseline_dir, allow_unsigned=True)
+    assert active_iocs(source="renewing-feed") == []
+
+    rows = [{"type": "domain", "value": "renew.example", "source": "renewing-feed"}]
+    (baseline_dir / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8"
+    )
+    result = import_baseline(baseline_dir, allow_unsigned=True)
+    assert result["entries_imported"] == 1
+    assert [e.value for e in active_iocs(source="renewing-feed")] == ["renew.example"]
+
+
 def test_import_duplicate_rows_are_deduped_not_crash(baseline_dir, isolated_db):
     """Two identical (type, value, source) rows in one baseline must import
     once, not raise IntegrityError."""

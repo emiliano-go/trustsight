@@ -319,3 +319,15 @@ def test_url_trailing_comma_stripped():
 def test_url_trailing_comma_in_removed_line():
     sc = extract_urls_from_diff("-source=('https://old.example/a.tar.gz',)\n")
     assert set(sc.removed_urls) == {"https://old.example/a.tar.gz"}
+
+
+def test_source_host_identity_is_the_canonical_one():
+    """A URL spelling change is the same host to the summary and the classifier."""
+    from trustsight.analysis.base import _url_domain
+    from trustsight.changes import _host
+    from trustsight.buckets import canonical_host
+
+    url = "https://user@GITHUB.com:443/x/y.tar.gz"
+    assert _host(url) == "github.com"
+    assert _url_domain(url) == "github.com"
+    assert canonical_host("user@GITHUB.com:443") == "github.com"

@@ -233,3 +233,48 @@ def test_h033_ignores_a_non_digest_revision_counter():
 
 def test_h033_quiet_on_an_unrelated_diff():
     assert "H033" not in ids('+build() {\n+  make\n+}\n')
+
+
+# --- H033 cannot be silenced by a no-op version token ----------------------
+#
+# Reported family: a rule computed "did the version move?" with its own
+# lexical scan, independent of the engine.  Adding a no-op `+epoch=0` to a
+# diff whose commit pin moved under a stable pkgver returned early and H033
+# never fired; a variable-driven bump fired it falsely.
+
+_NOOP_OLD = "a" * 40
+_NOOP_NEW = "b" * 40
+
+
+def _repin(extra: str = "") -> str:
+    return (
+        f"{extra}"
+        f"-_commit={_NOOP_OLD}\n+_commit={_NOOP_NEW}\n"
+        ' source=("git+https://h.example/r.git#commit=$_commit")\n'
+    )
+
+
+def test_h033_not_silenced_by_a_noop_epoch_line():
+    assert sev(_repin("+epoch=0\n"), "H033") != ""
+
+
+def test_h033_not_silenced_by_a_noop_pkgrel_line():
+    assert sev(_repin("+pkgrel=1\n"), "H033") != ""
+
+
+def test_h033_still_quiet_on_a_real_pkgrel_bump():
+    assert "H033" not in ids(_repin("-pkgrel=1\n+pkgrel=2\n"))
+
+
+def test_h033_still_quiet_on_a_real_epoch_bump():
+    assert "H033" not in ids(_repin("-epoch=0\n+epoch=1\n"))
+
+
+def test_h033_quiet_on_a_variable_driven_version_bump():
+    d = (
+        "-_gtkver=1.2.3\n+_gtkver=1.2.4\n"
+        " pkgver=${_gtkver}\n"
+        f'-_commit={_NOOP_OLD}\n+_commit={_NOOP_NEW}\n'
+        ' source=("git+https://h.example/r.git#commit=$_commit")\n'
+    )
+    assert "H033" not in ids(d)

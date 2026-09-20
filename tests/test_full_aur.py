@@ -292,3 +292,23 @@ def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
 
     assert result.processed == 0
     assert saved.get("processed") == []
+
+
+def test_corpus_diff_uses_the_shell_aware_line_splitter():
+    """A U+2028 is not a line break to the corpus diff, as it is not to makepkg.
+
+    Python's ``splitlines`` breaks on U+2028; the shell-aware ``split_lines``
+    does not.  The corpus adapter used the former and the git adapter the
+    latter, so identical recipe texts produced different hunk boundaries and
+    rules could fire on one path and not the other.
+    """
+    from trustsight.full_aur.analyze import _make_diff_text
+    from trustsight.tokenizer import split_lines as shell_split
+
+    old = "pkgver=1.0\n"
+    new = "pkgver=1.1  # \u2028 note\n"
+    corpus = _make_diff_text(old, new)
+    # The U+2028 stays inside the added line rather than splitting it, which
+    # is what Python's splitlines would have done.
+    added = [ln for ln in shell_split(corpus) if ln.startswith("+") and "note" in ln]
+    assert len(added) == 1 and "\u2028" in added[0]

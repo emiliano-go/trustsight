@@ -292,10 +292,20 @@ def test_verification_evidence_in_breakdown():
 def test_pinning_is_reported_never_credited():
     score, breakdown, level = calculate_score(
         [], {}, NoveltyContext(), SHARED_CONFIG,
-        pinning_level="checksum_pinned",
+        pinning_level="commit_pinned",
     )
     assert score == 0
     assert any(e.rule_id == "P005" and e.weight == 0 for e in breakdown)
+
+
+def test_a_checksum_pin_is_not_reported_as_a_commit_pin():
+    """P005 claims a commit hash; a checksummed tarball has none."""
+    score, breakdown, level = calculate_score(
+        [], {}, NoveltyContext(), SHARED_CONFIG,
+        pinning_level="checksum_pinned",
+    )
+    assert score == 0
+    assert not any(e.rule_id == "P005" for e in breakdown)
 
 
 def test_a_tag_pin_is_reported_as_the_weaker_form():

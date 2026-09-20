@@ -125,6 +125,22 @@ def test_pinning_checksum():
     assert classify_pinning_level("https://example.com/pkg.tar.gz", checksum_present=True) == "checksum_pinned"
 
 
+def test_pinning_commit_fragment_is_its_own_level():
+    """A `#commit=` ref is a commit pin, not a checksummed tarball."""
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#commit=" + "a" * 40
+    ) == "commit_pinned"
+    # A variable that feeds the commit fragment is still a commit pin.
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#commit=$_commit"
+    ) == "commit_pinned"
+    # A checksum does not turn a commit pin into a checksum pin.
+    assert classify_pinning_level(
+        "git+https://github.com/user/proj.git#commit=" + "a" * 40,
+        checksum_present=True,
+    ) == "commit_pinned"
+
+
 def test_pinning_tag_archive():
     assert classify_pinning_level("https://github.com/user/proj/archive/v1.0.0.tar.gz") == "tag_pinned"
 

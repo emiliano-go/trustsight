@@ -822,9 +822,15 @@ def test_the_declared_group_honours_verbose():
     import trustsight.cli.display as display
     import trustsight.cli.inspect as inspect_cli
 
+    # A commit pin is the declared practice that renders unprompted (P005);
+    # the checksums declared beside it are the one --verbose reveals (P001).
+    # Before the commit-pin level existed, a checksum-pinned tarball was
+    # mislabelled as a commit pin and supplied the visible half by accident.
+    digest = "3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
     diff = HEADER + (
-        '+source=("https://github.com/d/d/archive/v1.tar.gz")\n'
-        "+sha256sums=('3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8')\n"
+        '+source=("https://github.com/d/d/files/stable.tar.gz" '
+        '"git+https://github.com/d/d.git#commit=' + "a" * 40 + '")\n'
+        f"+sha256sums=('{digest}' '{digest}')\n"
     )
     fact = scan_diff(diff, package_name="demo")
 

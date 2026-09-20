@@ -369,3 +369,59 @@ def test_json_output_carries_the_comparison():
         version_comparison=COMPARISON_INCONCLUSIVE,
     )))
     assert data["version_comparison"] == COMPARISON_INCONCLUSIVE
+
+
+# --- the version move is read from the recipe, not its reference -----------
+#
+# Reported: gtk3-classic keeps its version in ``pkgver=${_gtkver}``.  Both
+# sides of the diff read the same reference, so the move was invisible, and
+# C001 (checksum changed without a version change, HIGH) fired where C002
+# belonged on 4 of 5 real version updates.
+
+
+def test_pkgver_variable_move_is_resolved():
+    from trustsight.analysis.version import pkgver_move_in_diff
+
+    diff = (
+        "@@ -1,4 +1,4 @@\n"
+        "-_gtkver=1.2.3\n"
+        "+_gtkver=1.2.4\n"
+        " pkgver=${_gtkver}\n"
+        " pkgrel=1\n"
+    )
+    moved, old, new = pkgver_move_in_diff(diff)
+    assert moved is True
+    assert (old, new) == ("1.2.3", "1.2.4")
+
+
+def test_pkgver_variable_move_reads_the_post_diff_file():
+    from trustsight.analysis.version import pkgver_move_in_diff
+
+    diff = "@@ -1 +1 @@\n-_gtkver=1.2.3\n+_gtkver=1.2.4\n"
+    moved, old, new = pkgver_move_in_diff(diff, "pkgver=${_gtkver}\npkgrel=1\n")
+    assert moved is True
+    assert (old, new) == ("1.2.3", "1.2.4")
+
+
+def test_a_stable_pkgver_is_not_a_move():
+    from trustsight.analysis.version import pkgver_move_in_diff
+
+    diff = "@@ -1 +1 @@\n pkgver=1.2.3\n-pkgrel=1\n+pkgrel=2\n"
+    assert pkgver_move_in_diff(diff)[0] is False
+
+
+def test_a_changed_variable_does_not_claim_a_bump_when_nothing_moves():
+    from trustsight.analysis.version import pkgver_move_in_diff
+
+    diff = "@@ -1 +1 @@\n pkgver=${_gtkver}\n pkgrel=1\n"
+    assert pkgver_move_in_diff(diff)[0] is False
+
+
+def test_any_version_scalar_moved_reads_values_not_tokens():
+    from trustsight.analysis.version import any_version_scalar_moved
+
+    assert any_version_scalar_moved("-pkgrel=1\n+pkgrel=2\n") is True
+    assert any_version_scalar_moved("-pkgver=1\n+pkgver=2\n") is True
+    assert any_version_scalar_moved("-epoch=0\n+epoch=1\n") is True
+    # A no-op token that changes no value must not read as a move.
+    assert any_version_scalar_moved("+epoch=0\n") is False

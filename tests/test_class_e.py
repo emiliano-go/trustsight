@@ -267,6 +267,13 @@ def test_fires_on_a_declared_dependency():
     assert findings[0]["params"]["field"] == "depends"
 
 
+def test_fires_on_a_declared_conflict():
+    """`conflicts` removes the real package just as `replaces` does."""
+    findings = _fire("+conflicts=('evil-pkg')", indicators=_set(_package()))
+    assert len(findings) == 1
+    assert findings[0]["params"]["field"] == "conflicts"
+
+
 def test_a_similar_package_name_is_not_the_indicator():
     assert _fire("+depends=('evil-pkg-git')", indicators=_set(_package())) == []
     assert _fire("+pkgver=1", package_name="evil-pkg2",

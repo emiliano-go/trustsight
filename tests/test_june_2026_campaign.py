@@ -261,3 +261,17 @@ def test_the_payload_names_are_extracted_from_the_build_command():
 def test_registry_name_extraction_edge_cases(command, expected):
     diff = f"diff --git a/PKGBUILD b/PKGBUILD\n build() {{\n+  {command}\n }}\n"
     assert [n for _f, _c, n in registry_install_names(diff)] == expected
+
+
+def test_a_variable_driven_version_bump_silences_h087():
+    """`pkgver=${_gtkver}` with the variable bumped is an upstream move.
+
+    The lexical scan for `pkgver =` saw no edit, so H087 claimed "pkgver did
+    not move" about a version that did.  The canonical move is passed in.
+    """
+    diff = """diff --git a/PKGBUILD b/PKGBUILD
++makedepends=('npm')
+-_gtkver=1.2.3
++_gtkver=1.2.4
+"""
+    assert not is_recipe_only_change(diff, pkgver_moved=True)

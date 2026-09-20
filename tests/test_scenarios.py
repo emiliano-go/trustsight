@@ -439,3 +439,123 @@ def test_fallback_verdict_on_a_clean_package():
     ]
     # B9: the no-findings case states a fact and still directs to review.
     assert "No published rule matched. Review the diff before building." in fallback_verdict(fact)
+
+
+# --- the verdict and the version rules agree -------------------------------
+#
+# Reported: a diff that left ``pkgver`` at 1.2.3 and changed the source still
+# opened its verdict with "Version bump. ", contradicting C003 in the same
+# report and the one sentence a hurried reader takes away.
+
+
+def test_verdict_does_not_claim_a_bump_when_pkgver_is_stable():
+    from trustsight.schema import PackageFact
+    from trustsight.verdict import fallback_verdict
+
+    fact = PackageFact(package_name="p", pkgver_changed=False)
+    verdict = fallback_verdict(fact)
+    assert "Version bump" not in verdict
+    assert "Version unchanged" in verdict
+
+
+def test_verdict_claims_the_bump_when_pkgver_moved():
+    from trustsight.schema import PackageFact
+    from trustsight.verdict import fallback_verdict
+
+    fact = PackageFact(package_name="p", pkgver_changed=True)
+    assert fallback_verdict(fact).startswith("Version bump.")
+
+
+def test_a_variable_version_bump_is_c002_not_c001():
+    from tests.conftest import SHARED_CONFIG
+    from trustsight.analysis.pipeline import scan_diff
+
+    diff = (
+        "--- a/PKGBUILD\n"
+        "+++ b/PKGBUILD\n"
+        "@@ -1,4 +1,4 @@\n"
+        "-_gtkver=1.2.3\n"
+        "+_gtkver=1.2.4\n"
+        " pkgver=${_gtkver}\n"
+        " pkgrel=1\n"
+        "-sha256sums=('aaaa')\n"
+        "+sha256sums=('bbbb')\n"
+    )
+    fact = scan_diff(diff, rules=[], config=SHARED_CONFIG,
+                     package_name="gtk3-classic")
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert fact.pkgver_changed is True
+    assert "C002" in ids
+    assert "C001" not in ids
+
+
+# --- a checksum deletion is visible to the summary, not only the rule ------
+#
+# C004 fired while the change summary said "no declared facts changed", and
+# verification evidence read the end state as having a checksum.  Two
+# notions of "checksum changed" existed; the summary and evidence used one,
+# the rule the other.
+
+
+def test_a_removed_checksum_entry_reaches_the_summary():
+    from tests.conftest import SHARED_CONFIG
+    from trustsight.analysis.pipeline import scan_diff
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
+        " pkgver=1.0\n"
+        " sha256sums=(\n"
+        "-  'aaaa'\n"
+        "   'bbbb'\n"
+        " )\n"
+    )
+    fact = scan_diff(diff, rules=[], config=SHARED_CONFIG, package_name="p")
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "C004" in ids
+    assert any("checksum" in entry for entry in fact.changes), fact.changes
+
+
+def test_a_checksum_entry_removal_is_critical():
+    from tests.conftest import SHARED_CONFIG
+    from trustsight.analysis.pipeline import scan_diff
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,3 @@\n"
+        " pkgver=1.0\n"
+        " sha256sums=(\n"
+        "-  'aaaa'\n"
+        "   'bbbb'\n"
+        " )\n"
+    )
+    fact = scan_diff(diff, rules=[], config=SHARED_CONFIG, package_name="p")
+    c004 = [e for e in fact.score_breakdown if e.rule_id == "C004"]
+    assert c004 and c004[0].severity == "CRITICAL"
+
+
+def test_a_replaced_checksum_array_stays_c001_not_c004():
+    from tests.conftest import SHARED_CONFIG
+    from trustsight.analysis.pipeline import scan_diff
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " pkgver=1.0\n"
+        "-sha256sums=('aaaa')\n"
+        "+sha256sums=('bbbb')\n"
+    )
+    fact = scan_diff(diff, rules=[], config=SHARED_CONFIG, package_name="p")
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "C001" in ids
+    assert "C004" not in ids
+
+
+def test_a_fatal_verdict_still_states_the_version_fact():
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.verdict import fallback_verdict
+
+    fact = PackageFact(package_name="p", pkgver_changed=False)
+    fact.score_breakdown = [
+        ScoreEntry(rule_id="R013", severity="FATAL", weight=0, reason="bidi override"),
+    ]
+    verdict = fallback_verdict(fact)
+    assert "Version unchanged" in verdict
+    assert "deceive" in verdict.lower()

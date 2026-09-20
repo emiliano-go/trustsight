@@ -93,10 +93,13 @@ class TestValidation:
         assert result.exit_code == 2
         assert "cannot exceed" in _strip_ansi(result.output)
 
-    def test_record_without_allow_uninstalled_rejected(self):
+    def test_record_is_not_gated_on_allow_uninstalled(self, tmp_path, monkeypatch):
+        """--record is a persistence switch, not an uninstalled-only flag."""
+        _env(tmp_path, monkeypatch, package_name="other")
         result = runner.invoke(app, ["inspect", "--record", "pkg"])
-        assert result.exit_code == 2
-        assert "--record is only meaningful" in _strip_ansi(result.output)
+        out = _strip_ansi(result.output)
+        assert "--record is only meaningful" not in out
+        assert "not installed" in out
 
     def test_last_with_depth_positive_refused(self):
         result = runner.invoke(app, ["inspect", "--last", "1", "--depth", "1", "pkg"])
@@ -156,7 +159,8 @@ class TestValidation:
         assert "error" in data
         assert ">= 1" in data["error"]
 
-    def test_record_json_output(self):
+    def test_record_json_error_is_valid_json(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch, package_name="other")
         result = runner.invoke(app, ["inspect", "--record", "--json", "pkg"])
         assert result.exit_code == 2
         data = json.loads(result.output)
@@ -318,13 +322,21 @@ class TestRecordFlag:
                 )
                 result = runner.invoke(app, ["inspect", "--allow-uninstalled", "--record", "testpkg"])
                 assert result.exit_code == 0, result.output
+                assert mock_an.call_args.kwargs.get("record") is True
 
-    def test_record_rejected_without_allow_uninstalled(self, tmp_path, monkeypatch):
+    def test_record_accepted_without_allow_uninstalled(self, tmp_path, monkeypatch):
+        """--record is a persistence switch, not an uninstalled-only flag."""
         _env(tmp_path, monkeypatch)
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
-            result = runner.invoke(app, ["inspect", "--record", "testpkg"])
-            assert result.exit_code == 2
-            assert "--record is only meaningful" in result.output
+            with patch("trustsight.cli.inspect.analyze_package") as mock_an:
+                from trustsight.schema import PackageFact, DiffSummary
+                mock_an.return_value = PackageFact(
+                    package_name="testpkg", new_version="1.1",
+                    diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+                )
+                result = runner.invoke(app, ["inspect", "--record", "testpkg"])
+                assert result.exit_code == 0, result.output
+                assert mock_an.call_args.kwargs.get("record") is True
 
 
 # ---------------------------------------------------------------------------

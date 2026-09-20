@@ -287,3 +287,35 @@ def test_package_typosquat_target_ignores_short_names(db):
 
     record_dependency_names(["yay"] * 100)
     assert package_typosquat_target("yak") is None
+
+
+def test_build_novelty_context_is_read_only_by_default(db):
+    """The same input against the same database gives the same answer.
+
+    Novelty used to record every observation it looked at, so the first run
+    wrote the URL and the second run returned a different context - a
+    deterministic tool whose answer depended on how many times you asked.
+    """
+    url = "https://readonly.example/pkg.tar.gz"
+    first = build_novelty_context([url], 1, maintainer="freshdev")
+    second = build_novelty_context([url], 1, maintainer="freshdev")
+
+    assert first.url_first_seen_globally is True
+    assert second == first
+    with get_connection() as conn:
+        persisted = conn.execute(
+            "SELECT COUNT(*) AS n FROM source_urls WHERE url = ?",
+            (normalize_url(url),),
+        ).fetchone()["n"]
+    assert persisted == 0
+
+
+def test_record_true_persists_the_observation(db):
+    url = "https://recorded.example/pkg.tar.gz"
+    build_novelty_context([url], 1, maintainer="freshdev", record=True)
+    with get_connection() as conn:
+        persisted = conn.execute(
+            "SELECT COUNT(*) AS n FROM source_urls WHERE url = ?",
+            (normalize_url(url),),
+        ).fetchone()["n"]
+    assert persisted == 1

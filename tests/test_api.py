@@ -182,7 +182,7 @@ def test_api_methods_return_dataclasses_and_not_rendered_text(ts, monkeypatch):
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False, depth=None: [{
+        lambda entries, cb=None, verbose=False, depth=None, record=False: [{
             "package": "alpha", "old_version": "1.0", "new_version": "1.1",
             "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",
             "findings": [], "file_changes": [], "changes": [], "coverage_gaps": [],
@@ -230,7 +230,7 @@ def test_api_methods_do_not_render_to_stdout_or_stderr(ts, monkeypatch, capsys):
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False, depth=None: [{
+        lambda entries, cb=None, verbose=False, depth=None, record=False: [{
             "package": "alpha", "old_version": "1.0", "new_version": "1.1",
             "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",
             "findings": [], "file_changes": [], "changes": [], "coverage_gaps": [],
@@ -562,7 +562,7 @@ def _stub_review(monkeypatch, rows, discovered=None, total=3):
     )
     monkeypatch.setattr(
         "trustsight.review.analyze_outdated_batch",
-        lambda entries, cb=None, verbose=False, depth=None: rows,
+        lambda entries, cb=None, verbose=False, depth=None, record=False: rows,
     )
 
 
@@ -622,7 +622,7 @@ def test_review_of_an_explicit_list_skips_discovery(ts, monkeypatch):
     monkeypatch.setattr("trustsight.review.discover_packages", no_discovery)
     seen = {}
 
-    def batch(entries, cb=None, verbose=False, depth=None):
+    def batch(entries, cb=None, verbose=False, depth=None, record=False):
         seen["entries"] = entries
         return []
 
@@ -635,7 +635,7 @@ def test_review_of_an_explicit_list_skips_discovery(ts, monkeypatch):
 def test_review_honours_the_limit(ts, monkeypatch):
     seen = {}
 
-    def batch(entries, cb=None, verbose=False, depth=None):
+    def batch(entries, cb=None, verbose=False, depth=None, record=False):
         seen["count"] = len(entries)
         return []
 
@@ -650,7 +650,7 @@ def test_review_honours_the_limit(ts, monkeypatch):
 
 
 def test_review_reports_progress_through_the_hook(ts, monkeypatch):
-    def batch(entries, cb=None, verbose=False, depth=None):
+    def batch(entries, cb=None, verbose=False, depth=None, record=False):
         cb(1, 2, "Fetching alpha")
         cb(-1, 0, "Reviewing packages...")
         return []

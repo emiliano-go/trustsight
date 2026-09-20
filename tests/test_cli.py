@@ -337,7 +337,7 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
         )
         result = CliRunner().invoke(app, ["inspect", "testpkg"])
         assert result.exit_code == 0, result.stdout
-        mock_analyze.assert_called_once_with("testpkg", depth=None)
+        mock_analyze.assert_called_once_with("testpkg", depth=None, record=False)
 
 
 # --- batch orchestration ---
@@ -507,7 +507,7 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
     monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
     monkeypatch.setattr(
         cli.review, "_analyze_outdated_batch",
-        lambda pkgs, cb=None, verbose=False, depth=None: [
+        lambda pkgs, cb=None, verbose=False, depth=None, record=False: [
             {"package": "ok", "score": 5, "risk": "Low", "verdict": "fine",
              "first_seen": False},
             {"package": "bad", "score": None, "risk": "Error", "failed": True,
@@ -522,25 +522,35 @@ def test_failed_packages_render_without_crashing(monkeypatch, tmp_path):
 # --- Regression tests for metadata-dispatch bugs ---
 
 
+@patch("trustsight.review.get_installed_packages")
+@patch("trustsight.review.load_config")
 @patch("trustsight.full_aur.metadata.load_snapshot")
 @patch("trustsight.full_aur.metadata.fetch_metadata")
 @patch("trustsight.full_aur.metadata.save_metadata")
-def test_discover_packages_first_run_returns_none(
-    mock_save, mock_fetch, mock_load
+def test_discover_packages_first_run_reviews_in_same_call(
+    mock_save, mock_fetch, mock_load, mock_config, mock_installed
 ):
-    """First metadata fetch returns (None, 0). ``_discover_packages``
-    must not emit "No outdated" when there is no baseline yet."""
+    """A first run fetches the snapshot and reviews against it.
+
+    It used to return ``(None, 0)`` and tell the user to run again; the
+    first invocation now continues with the snapshot it just saved.
+    """
     from trustsight.cli.review import _discover_packages
 
     mock_load.return_value = None
     mock_fetch.return_value = {"some-pkg": {"Version": "2.0"}}
+    mock_config.return_value = {"discovery": {"show_unmatched": True}}
+    mock_installed.return_value = [
+        {"name": "some-pkg", "current_version": "1.0"}
+    ]
 
     result, total = _discover_packages(
         repos=[], include_foreign=True, all_repos_flag=False,
         all_packages=False, _warn=lambda msg: None,
     )
-    assert result is None
-    assert total == 0
+    assert result is not None
+    assert [p["name"] for p in result] == ["some-pkg"]
+    assert total == 1
     mock_fetch.assert_called_once()
     mock_save.assert_called_once()
 
@@ -1152,7 +1162,7 @@ def _deps_review(argv, batch):
         return CliRunner().invoke(app, argv)
 
 
-def _row_batch(pkgs, progress, verbose, depth=None):
+def _row_batch(pkgs, progress, verbose, depth=None, record=False):
     return [{
         "package": p["name"], "old_version": "1.0", "new_version": "1.1",
         "score": 0, "risk": "Low", "risk_label": "Low", "verdict": "ok",

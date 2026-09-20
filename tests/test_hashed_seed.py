@@ -363,3 +363,41 @@ def test_provenance_missing_input_is_an_error(tmp_path):
             tmp_path / "out",
             provenance=tmp_path / "does-not-exist.json",
         )
+
+
+def test_build_seed_ships_source_urls_and_dependencies(tmp_path, db):
+    """The v2 builder used to drop the URL and dependency corpora.
+
+    The importer already read ``source_urls.jsonl`` and
+    ``dependency_names.jsonl``; nothing produced them, so a fresh install
+    imported "0 known source URLs" and URL novelty had nothing to compare
+    against.
+    """
+    seed_dir = tmp_path / "seed-v2"
+    build_seed(
+        [{"name": "Alice Example", "packages": ["pkg-a"], "source": "aur"}],
+        seed_dir,
+        raw_source_urls=[{"url": "https://example.com/a.tar.gz", "total_uses": 2}],
+        raw_dependency_names=[{"name": "glibc", "observation_count": 10}],
+    )
+    v2 = seed_dir / "trustsight-seed-v2"
+    assert (v2 / "source_urls.jsonl").exists()
+    assert (v2 / "dependency_names.jsonl").exists()
+
+    stats = import_seed(seed_dir)
+    assert stats["urls_total"] >= 1
+
+
+def test_maintainer_identity_ignores_the_email_comment_form():
+    """`Name <email>` and the bare account name are one identity.
+
+    The git path reads the PKGBUILD comment while the seed/corpus stores the
+    bare AUR account name.  Hashing both whole made every git-path lookup
+    miss, so one person read as globally novel on one path and known on the
+    other.
+    """
+    from trustsight.seed_build import _hash_value
+
+    salt = "a" * 64
+    assert _hash_value("Alice <alice@example.org>", salt) == _hash_value("alice", salt)
+    assert _hash_value("Alice", salt) == _hash_value("alice", salt)

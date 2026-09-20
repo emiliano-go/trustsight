@@ -34,6 +34,7 @@ from ..deps import _strip_comment
 from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls, mask_to_recipe
+from .version import any_version_scalar_moved
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from .delivery import _find_line
 from ..tokenizer import split_lines
@@ -164,13 +165,6 @@ _PIN_VAR_RE = re.compile(
     r"\s*=\s*[\"']?([0-9a-fA-F]{7,40})[\"']?\s*(#.*)?$",
     re.IGNORECASE,
 )
-# The version the package *claims*.  If any of these moved, the maintainer
-# declared a new version and a new commit is what a new version means.
-_VERSION_TOKEN_RE = re.compile(
-    r"^\s*(pkgver|pkgrel|epoch|_pkgver|_tag|_gittag|_version|_gitver)\s*=", re.IGNORECASE
-)
-
-
 def _repo_base(url: str) -> str:
     return url.split("#", 1)[0].rstrip("/").lower()
 
@@ -267,11 +261,14 @@ def _moved_git_ref_findings(diff_text, config, add, current_text=None) -> None:
                 repo=repo[:70], detail=f"commit pin dropped for {movable[0]}")
             return
 
-    if any(
-        _VERSION_TOKEN_RE.match(line[1:])
-        for line in split_lines(diff_text)
-        if line[:1] in ("+", "-") and not line.startswith(("+++", "---"))
-    ):
+    # "Did the maintainer declare a new build?" - judged by the *value* of
+    # pkgver, pkgrel or epoch, resolving the recipe's own variables.  This
+    # used to be a lexical match for any of those token names on a changed
+    # line, which disagrees with the engine both ways: an added no-op
+    # `+epoch=0` silenced H033 on a real pin move, and a variable-driven bump
+    # (`-_gtkver=1.2.3/+_gtkver=1.2.4`, context `pkgver=${_gtkver}`) fired it
+    # on a version that did move.  Resolution, not text, is what decides.
+    if any_version_scalar_moved(diff_text):
         return
 
     # --- ref moved under a stable version ---------------------------------

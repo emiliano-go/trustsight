@@ -20,8 +20,9 @@ import os
 import re
 
 from ..deps import _strip_comment
-from ..rules import _classify_enclosing_function
+from ..rules import ScopeResolver
 from ..tokenizer import resolve_added_lines
+from .build import _recipe_lines
 from .delivery import (
     _SCOPE_FUNCTIONS,
     _collect_executions,
@@ -147,29 +148,29 @@ _ES_RE = re.compile(r"^\s*Exec(?:Start|StartPre|StartPost|StopPost|Stop)=\s*(\S+
 # ---------------------------------------------------------------------------
 
 
-def _libalpm_hook_findings(diff_text, config, add) -> None:
+def _libalpm_hook_findings(diff_text, config, add, current_text=None) -> None:
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         if i in heredoc_body:
             continue
         for t in _raw_targets(_strip_comment(line[1:])):
             if _PACMAN_HOOK_RE.search(_norm_path(t)):
                 add("H062", "Pacman Hook Installed", "MEDIUM", "persistence",
-                    f"{enclosing[i]}() installs a pacman hook: {t}",
-                    line=i + 1, position=enclosing[i], path=t)
+                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() installs a pacman hook: {t}",
+                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
 
 
-def _home_rc_findings(diff_text, config, add) -> None:
+def _home_rc_findings(diff_text, config, add, current_text=None) -> None:
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         if i in heredoc_body:
             continue
@@ -184,20 +185,20 @@ def _home_rc_findings(diff_text, config, add) -> None:
                 # different act from the same write during build: nothing a
                 # package installs belongs in somebody's home directory, and
                 # root reaching into it is categorical rather than suspicious.
-                in_scriptlet = enclosing[i] in _INSTALL_SCRIPTLETS
+                in_scriptlet = scopes.direct(i) in _INSTALL_SCRIPTLETS
                 severity = "CRITICAL" if in_scriptlet else "HIGH"
                 add("H032", "Write To User Home Or RC", severity, "persistence",
-                    f"{enclosing[i]}() writes into the user's home/rc: {t}",
-                    line=i + 1, position=enclosing[i], path=t)
+                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() writes into the user's home/rc: {t}",
+                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
 
 
-def _worldwritable_staging_findings(diff_text, config, add) -> None:
+def _worldwritable_staging_findings(diff_text, config, add, current_text=None) -> None:
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         if i in heredoc_body:
             continue
@@ -207,39 +208,39 @@ def _worldwritable_staging_findings(diff_text, config, add) -> None:
         for t in _raw_targets(body):
             if _WW_DIR_RE.search(t.strip().strip("\"'")):
                 add("H038", "World-Writable Staging", "HIGH", "persistence",
-                    f"{enclosing[i]}() stages work in a world-writable path: {t}",
-                    line=i + 1, position=enclosing[i], path=t)
+                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() stages work in a world-writable path: {t}",
+                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
         for t in _collect_executions(body):
             if _WW_DIR_RE.search(t):
                 add("H038", "World-Writable Staging", "HIGH", "persistence",
-                    f"{enclosing[i]}() executes from a world-writable path: {t}",
-                    line=i + 1, position=enclosing[i], path=t)
+                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() executes from a world-writable path: {t}",
+                    line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), path=t)
                 return
         if _WW_CD_RE.search(body):
             add("H038", "World-Writable Staging", "HIGH", "persistence",
-                f"{enclosing[i]}() works from a world-writable directory: {body.strip()[:80]}",
-                line=i + 1, position=enclosing[i], body=body.strip()[:80])
+                f"{scopes.label(i, _SCOPE_FUNCTIONS)}() works from a world-writable directory: {body.strip()[:80]}",
+                line=i + 1, position=scopes.within(i, _SCOPE_FUNCTIONS), body=body.strip()[:80])
             return
 
 
-def _hidden_drop_findings(diff_text, config, add) -> None:
+def _hidden_drop_findings(diff_text, config, add, current_text=None) -> None:
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
 
     execs_by_fn: dict[str, set[str]] = {}
     for i, line in enumerate(lines):
-        fn = enclosing.get(i)
-        if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS or i in heredoc_body:
+        fn = scopes.within(i, _SCOPE_FUNCTIONS)
+        if not line.startswith("+") or fn is None or i in heredoc_body:
             continue
         execs_by_fn.setdefault(fn, set()).update(
             os.path.basename(p) for p in _collect_executions(_strip_comment(line[1:]))
         )
 
     for i, line in enumerate(lines):
-        fn = enclosing.get(i)
-        if not line.startswith("+") or fn not in _SCOPE_FUNCTIONS:
+        fn = scopes.within(i, _SCOPE_FUNCTIONS)
+        if not line.startswith("+") or fn is None:
             continue
         if i in heredoc_body:
             continue
@@ -260,7 +261,7 @@ def _hidden_drop_findings(diff_text, config, add) -> None:
             return
 
 
-def _systemd_unit_findings(diff_text, config, add) -> None:
+def _systemd_unit_findings(diff_text, config, add, current_text=None) -> None:
     """A systemd unit whose ExecStart points at a runtime-writable path.
 
     Scans unit *content* (the ExecStart line itself, which can live in a
@@ -290,7 +291,7 @@ _PLAIN_ABS_PATH_RE = re.compile(r"^/(?:[\w.+@-]+/)*[\w.+@-]+$")
 _BUILD_TIME_FUNCTIONS = frozenset({"prepare", "build", "check", "package"})
 
 
-def _outside_staging_findings(diff_text, config, add) -> None:
+def _outside_staging_findings(diff_text, config, add, current_text=None) -> None:
     """H076 - a build-time function writes outside the staging root.
 
     ``prepare``/``build``/``check``/``package`` run on the *builder's*
@@ -310,16 +311,18 @@ def _outside_staging_findings(diff_text, config, add) -> None:
     target system, and its writes are H032/H038/H039/H062's territory.
     """
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        fn = enclosing.get(i)
         if not line.startswith("+"):
             continue
+        fn = scopes.within(i, _BUILD_TIME_FUNCTIONS)
         if fn is None:
+            # A helper that build functions call is build-time code; only a
+            # line no build function reaches is genuinely "top level".
+            if scopes.direct(i) is not None:
+                continue
             fn = "top level"
-        elif fn not in _BUILD_TIME_FUNCTIONS:
-            continue
         if i in heredoc_body:
             continue
         for target in _raw_targets(_strip_comment(line[1:])):
@@ -340,11 +343,11 @@ def _outside_staging_findings(diff_text, config, add) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _persistence_findings(diff_text, config, add) -> None:
+def _persistence_findings(diff_text, config, add, current_text=None) -> None:
     """Run the install-path persistence rules (H032/H038/H039/H062/H042/H076)."""
-    _systemd_unit_findings(diff_text, config, add)
-    _libalpm_hook_findings(diff_text, config, add)
-    _home_rc_findings(diff_text, config, add)
-    _worldwritable_staging_findings(diff_text, config, add)
-    _hidden_drop_findings(diff_text, config, add)
-    _outside_staging_findings(diff_text, config, add)
+    _systemd_unit_findings(diff_text, config, add, current_text=current_text)
+    _libalpm_hook_findings(diff_text, config, add, current_text=current_text)
+    _home_rc_findings(diff_text, config, add, current_text=current_text)
+    _worldwritable_staging_findings(diff_text, config, add, current_text=current_text)
+    _hidden_drop_findings(diff_text, config, add, current_text=current_text)
+    _outside_staging_findings(diff_text, config, add, current_text=current_text)

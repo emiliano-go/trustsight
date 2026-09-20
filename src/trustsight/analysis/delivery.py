@@ -669,7 +669,9 @@ def _source_basename(url: str) -> str:
 _SCALAR_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 
 
-def _declared_source_basenames(diff_text: str) -> set[str]:
+def _declared_source_basenames(
+    diff_text: str, current_text: str | None = None
+) -> set[str]:
     """Filenames that arrive via the declared source array.
 
     Unlike ``extract_source_array_urls`` (scheme URLs only), this keeps bare
@@ -677,21 +679,35 @@ def _declared_source_basenames(diff_text: str) -> set[str]:
     and reads both the PKGBUILD ``source=(...)`` form and the per-line
     ``source = value`` form used in ``.SRCINFO``.
 
-    Eight rule families ask for this, all with the same diff, so the parse
-    is cached on the text.  A fresh ``set`` is returned rather than the
-    cached object: the result is documented as a set and handing every
-    caller the same one would let a future mutation reach the others.
+    Eight rule families ask for this.  *current_text* is the post-diff
+    PKGBUILD: the declaration routinely sits outside the changed hunk, so
+    reading only the diff found an empty array and then reported a declared
+    file as undeclared (H083 missed, H016 false-positived).  The diff is
+    still the fallback when no post-diff text is available - the corpus path
+    with no stored snapshot.
+
+    The parse is cached on the text.  A fresh ``set`` is returned rather
+    than the cached object: the result is documented as a set and handing
+    every caller the same one would let a future mutation reach the others.
     """
-    return set(_declared_source_basenames_cached(diff_text))
+    return set(_declared_source_basenames_cached(
+        current_text if current_text is not None else diff_text,
+        current_text is not None,
+    ))
 
 
 @lru_cache(maxsize=8)
-def _declared_source_basenames_cached(diff_text: str) -> frozenset[str]:
+def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[str]:
     from ..differ import _SOURCE_ARRAY_START_RE
 
+    lines = split_lines(text)
+    # A whole PKGBUILD has no diff markers; a diff does, and a removed or
+    # added line there is not part of the declared end state.
+    if whole_file:
+        lines = [" " + ln for ln in lines]
     basenames: set[str] = set()
     in_array = False
-    for line in split_lines(diff_text):
+    for line in lines:
         if line.startswith(("+++", "---", "@@")):
             continue
         if line.startswith("-"):
@@ -940,7 +956,7 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
 
     writes_by_fn: dict[str, list[tuple[str, str]]] = {}
@@ -1125,7 +1141,7 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
 
     fetched_by_fn: dict[str, list[str]] = {}
@@ -1232,7 +1248,7 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
         fn = scopes.within(i, _BUILD_FUNCTIONS)
@@ -1297,8 +1313,11 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
         if not _INSTALL_CMD_RE.search(body):
             continue
         # Mode: explicit 7xx or no -m flag (install defaults to 755).
+        # `install -m 0755` and `install -m0755` spell the same mode as
+        # `-m755`; the leading zero is a width convention, not a different
+        # permission bit, so it is stripped before the 7 test.
         mode_match = re.search(r"\s-[a-zA-Z]*[mM]\s*(\d+)", body)
-        if mode_match and not mode_match.group(1).startswith("7"):
+        if mode_match and not mode_match.group(1).lstrip("0").startswith("7"):
             continue
         try:
             tokens = shlex.split(body)
@@ -1317,7 +1336,7 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
     return found
 
 
-def _service_binary_findings(diff_text, tree_manifest, add) -> None:
+def _service_binary_findings(diff_text, tree_manifest, add, current_text=None) -> None:
     """A systemd service's ExecStart points at an undeclared binary (H084).
 
     Service units are read from the tree manifest when one is supplied, and
@@ -1325,12 +1344,12 @@ def _service_binary_findings(diff_text, tree_manifest, add) -> None:
     from a file that is neither a declared source nor part of the repository
     manifest, the binary is invisible to static review.
     """
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     manifest_basenames = (
         None if tree_manifest is None
         else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
     )
-    installed = _installed_executables(diff_text)
+    installed = _installed_executables(diff_text, current_text)
     if not installed:
         return
 
@@ -1341,12 +1360,24 @@ def _service_binary_findings(diff_text, tree_manifest, add) -> None:
                 # `errors="replace"` cannot raise, so the handler that used
                 # to sit here could only ever have hidden a bug.
                 service_texts.append(data.decode("utf-8", errors="replace"))
-    for line in resolve_added_lines(diff_text):
-        if line.startswith("+") and ".service" in line:
-            # Heuristic: if the diff contains the whole service file, parse it.
-            # Real service files are usually committed, so the manifest branch
-            # above is the normal case.
-            service_texts.append(line[1:])
+    # Diff fallback: an added service file arrives as a `+++ b/x.service`
+    # header followed by its added body.  Collecting only lines that contain
+    # the string ".service" saw the header and none of the `ExecStart=` lines
+    # it introduces, so H084 was blind without a tree manifest.  Real service
+    # files are usually committed, so the manifest branch above is the normal
+    # case; this is the text-only one.
+    current_service = False
+    body_lines: list[str] = []
+    for raw in split_lines(diff_text):
+        if raw.startswith("+++ "):
+            if current_service and body_lines:
+                service_texts.append("\n".join(body_lines))
+            current_service = raw[4:].strip().endswith(".service")
+            body_lines = []
+        elif current_service and raw.startswith("+") and not raw.startswith("+++"):
+            body_lines.append(raw[1:])
+    if current_service and body_lines:
+        service_texts.append("\n".join(body_lines))
 
     exec_targets: set[str] = set()
     for text in service_texts:
@@ -1391,7 +1422,7 @@ def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -
     plain source root is common enough that it stays silent; adding a
     subdirectory whose content cannot be attributed is the signal.
     """
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     manifest_basenames = (
         None if tree_manifest is None
         else {os.path.basename(name.rstrip("/")) for name, _ in tree_manifest}
@@ -1564,7 +1595,7 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
     manifest_basenames = (
         None if tree_manifest is None
@@ -1847,8 +1878,11 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
         payload = (_committed_payload_finding(name, head)
                    or _committed_build_path_finding(name, head))
         if payload is not None:
+            # Every carrier, not just the first.  The early `break` let a
+            # HIGH on an earlier file hide a CRITICAL on a later one - a
+            # `.desktop` naming `$srcdir` stopped the scan before the
+            # `.service` that pipes a download into a shell was ever read.
             findings.append(payload)
-            break
     for name, head in files:
         if not head.startswith(_ELF_MAGIC):
             continue
@@ -2049,7 +2083,7 @@ def _unread_execution_findings(diff_text, config, add, tree_manifest=None,
     """Code from the unpacked tree runs and nobody read it (W001)."""
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     committed = {os.path.basename(name.rstrip("/"))
                  for name, _head in (tree_manifest or ())}
     heredoc_body = _heredoc_body_indices(lines)
@@ -2175,7 +2209,7 @@ def _unread_manifest_findings(diff_text, add, tree_manifest=None,
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
-    source_basenames = _declared_source_basenames(diff_text)
+    source_basenames = _declared_source_basenames(diff_text, current_text)
     committed = {os.path.basename(name.rstrip("/"))
                  for name, _head in (tree_manifest or ())}
     heredoc_body = _heredoc_body_indices(lines)
@@ -2389,7 +2423,7 @@ def _unverifiable_findings(diff_text, config, add, tree_manifest=None,
 
     from .buildfetch import registry_resolutions
 
-    resolutions = registry_resolutions(diff_text)
+    resolutions = registry_resolutions(diff_text, current_text)
     if resolutions:
         function, command = resolutions[0]
         others = len(resolutions) - 1
@@ -2463,7 +2497,7 @@ def _delivery_findings(
     _write_execute_findings(diff_text, config, add, current_text=current_text)
     _fetch_then_execute_findings(diff_text, config, add, current_text=current_text)
     _source_file_execution_findings(diff_text, config, add, current_text=current_text)
-    _service_binary_findings(diff_text, tree_manifest, add)
+    _service_binary_findings(diff_text, tree_manifest, add, current_text=current_text)
     _path_injection_findings(diff_text, tree_manifest, add, current_text=current_text)
     _committed_execution_findings(
         diff_text, tree_manifest, add, current_text=current_text,

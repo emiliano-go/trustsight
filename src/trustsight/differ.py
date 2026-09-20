@@ -288,6 +288,83 @@ def generate_diff(
     return text, summary
 
 
+def diff_summary_from_text(diff_text: str) -> DiffSummary:
+    """Build a ``DiffSummary`` from raw unified-diff text.
+
+    The git producer reads ``diff.deltas`` for its file list and ``diff.stats``
+    for its line counts.  The text producers (``scan_diff`` and the corpus
+    adapter) counted ``+``/``-`` lines with ``startswith``, which also counts
+    the ``+++``/``---`` headers, and never populated ``files_changed`` /
+    ``file_changes`` at all.  That made ``is_trivial`` return True on the text
+    path for any change whatsoever - a diff adding an untrusted source URL
+    read as a trivial update - and dropped the "new file"/"file removed"
+    summary entries.  One construction serves every producer now.
+    """
+    if not diff_text:
+        return DiffSummary()
+
+    files_changed: set[str] = set()
+    file_changes: list[dict] = []
+    seen: set[str] = set()
+    lines_added = 0
+    lines_removed = 0
+
+    for line in split_lines(diff_text):
+        if line.startswith("+++ "):
+            path = _diff_file_path(line[4:])
+            if path and path not in seen:
+                seen.add(path)
+                if path not in (".SRCINFO", ".gitignore"):
+                    file_changes.append({"path": path, "status": "modified"})
+                files_changed.add(path)
+            continue
+        if line.startswith("--- ") or line.startswith("@@"):
+            continue
+        if line.startswith("+"):
+            lines_added += 1
+        elif line.startswith("-"):
+            lines_removed += 1
+
+    # Statuses the text diff cannot express in one line: a path that has only
+    # a `+++ b/...` side is added, one that has only a `--- a/...` side is
+    # removed.
+    old_paths: set[str] = set()
+    new_paths: set[str] = set()
+    for line in split_lines(diff_text):
+        if line.startswith("--- ") and not line.startswith("--- /dev/null"):
+            old_paths.add(_diff_file_path(line[4:]))
+        elif line.startswith("+++ ") and not line.startswith("+++ /dev/null"):
+            new_paths.add(_diff_file_path(line[4:]))
+    added_paths = new_paths - old_paths
+    removed_paths = old_paths - new_paths
+    for entry in file_changes:
+        path = entry["path"]
+        if path in added_paths:
+            entry["status"] = "added"
+        elif path in removed_paths:
+            entry["status"] = "removed"
+
+    file_changes.sort(key=lambda item: (item["path"], item["status"]))
+    return DiffSummary(
+        lines_added=lines_added,
+        lines_removed=lines_removed,
+        files_changed=sorted(files_changed),
+        file_changes=file_changes,
+    )
+
+
+def _diff_file_path(header: str) -> str:
+    """The path from a `---`/`+++` header, git's `a/`,`b/` prefix stripped."""
+    path = header.strip()
+    if "\t" in path:
+        path = path.split("\t", 1)[0]
+    for prefix in ("a/", "b/"):
+        if path.startswith(prefix):
+            path = path[len(prefix):]
+            break
+    return path
+
+
 # `^[+ ]`, not `^\+`: a VCS source is a fact about the package whether or
 # not *this* diff changed the line.  Anchoring on added lines meant a
 # `-git` package whose `source=(git+...)` sat on a context line had its
@@ -300,13 +377,18 @@ _VCS_SOURCE_RE = re.compile(
     re.IGNORECASE,
 )
 _GIT_PKG_RE = re.compile(r"^[+ ]\s*source\s*=.*\.git\b", re.IGNORECASE)
-_SIG_SRC_RE = re.compile(r"\.(?:sig|asc)[\'\"]?\s*$", re.IGNORECASE)
+# A `.sig`/`.asc` entry anywhere in the post-diff text.  Deliberately not
+# side-anchored per line: the entry may sit inside a `source=(...)` line
+# that also carries the archive, and the question is whether the signature
+# exists *after* the diff, not whether this commit touched it.  A signature
+# the diff deletes must not justify `SKIP`, so this is tested against the
+# reconstructed post-diff lines rather than every diff line.
+_SIG_SRC_RE = re.compile(r"\.(?:sig|asc)[\'\"]?(?:\s|\)|$)", re.IGNORECASE)
 _VALIDPGPKEYS_RE = re.compile(r"^[+ ]\s*validpgpkeys\s*=\s*\(", re.IGNORECASE)
 _DKMS_RE = re.compile(r"^[+ ]\s*DKMS", re.IGNORECASE)
 
 _SKIP_JUSTIFICATION_CHECKS = [
     ("vcs source", lambda t: bool(_VCS_SOURCE_RE.search(t) or _GIT_PKG_RE.search(t) or _DKMS_RE.search(t))),
-    ("signature file", lambda t: bool(_SIG_SRC_RE.search(t))),
     ("validpgpkeys present", lambda t: bool(_VALIDPGPKEYS_RE.search(t))),
 ]
 
@@ -315,7 +397,13 @@ def is_skip_justified(diff_text: str) -> str:
     """Check whether a ``SKIP`` checksum has a valid justification.
 
     Returns a short reason string (truthy) or ``""`` (falsy).
+
+    The signature check reads the post-diff text, so a `.sig` entry the diff
+    removes cannot justify a new `SKIP`.
     """
+    post = "\n".join(_post_diff_lines(diff_text))
+    if _SIG_SRC_RE.search(post):
+        return "signature file"
     for reason, check in _SKIP_JUSTIFICATION_CHECKS:
         if any(check(line) for line in split_lines(diff_text)):
             return reason
@@ -348,6 +436,15 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
                     removed_urls.add(_clean_url(u))
 
     checksum_behavior = detect_checksum_changes(diff_text)
+    # A declaration deleted with no replacement is also a checksum change,
+    # and the strongest one: the end state verifies nothing.  It used to
+    # live only in `detect_checksum_removed`, a second notion the summary
+    # and verification-evidence paths never consulted, so C004 fired while
+    # `changes` said "no declared facts changed" and the end-state was read
+    # as having a checksum at all.  Checked before `checksum_entry_removed`
+    # because a removed declaration also trips the entry-removal signal.
+    if detect_checksum_removed(diff_text):
+        checksum_behavior = "checksum_array_removed"
 
     return SourceChanges(
         added_urls=sorted(added_urls),
@@ -367,42 +464,71 @@ _CHK_DECL_RE = re.compile(
 )
 
 
-def _added_checksum_arrays(diff_text: str) -> list[tuple[str, str]]:
-    """``(var, contents)`` for each added checksum declaration.
+def _touched_checksum_arrays(
+    diff_text: str,
+) -> list[tuple[str, str, bool, bool, bool]]:
+    """``(var, added_contents, added_any, removed_any, decl_removed)``.
 
     A declaration's array may span several lines (the usual PKGBUILD
-    formatting splits ``sha256sums=(``, one quoted hash per ``+`` line, and
-    a closing ``)``), so *contents* accumulates continuation lines until the
-    array's closing ``)``.  Only added (``+``) lines contribute.
+    formatting splits ``sha256sums=(``, one quoted hash per line, and a
+    closing ``)``), and the declaration line is frequently *context*: a
+    commit adds one hash to an array whose ``sha256sums=(`` opener did not
+    move.  Tracking only added declarations therefore read a real checksum
+    change as ``unchanged``, and a package that swapped a checksum under a
+    stable version reported no integrity finding at all.
+
+    *contents* accumulates only added (``+``) lines, so ``added_any`` says
+    whether any part of the array moved in this diff.  ``removed_any`` says
+    whether an entry was deleted from it.  ``decl_removed`` says the
+    declaration line itself was on the ``-`` side, which distinguishes an
+    entry removed from a surviving array from a whole array replaced - the
+    replacement is an ordinary change, not a removal of one entry.
     """
-    arrays: list[tuple[str, str]] = []
+    arrays: list[tuple[str, str, bool, bool, bool]] = []
     cur_var: str | None = None
     cur_content: list[str] = []
+    cur_added = False
+    cur_removed = False
+    cur_decl_removed = False
 
     def flush() -> None:
-        nonlocal cur_var, cur_content
+        nonlocal cur_var, cur_content, cur_added, cur_removed, cur_decl_removed
         if cur_var is not None:
-            arrays.append((cur_var, "\n".join(cur_content)))
+            arrays.append((
+                cur_var, "\n".join(cur_content),
+                cur_added, cur_removed, cur_decl_removed,
+            ))
         cur_var = None
         cur_content = []
+        cur_added = False
+        cur_removed = False
+        cur_decl_removed = False
 
     for line in split_lines(diff_text):
-        if line.startswith(("-", "+++", "---", "@@")):
+        if line.startswith(("+++", "---", "@@")):
             continue
-        if not line.startswith("+"):
-            continue
-        body = line[1:]
+        sign = line[:1]
+        body = line[1:] if sign in "+- " else line
         m = _CHK_DECL_RE.match(body)
         if m:
             flush()
             cur_var = m.group(0).split("=", 1)[0].strip()
             rest = body[m.end():]
-            cur_content.append(rest)
+            if sign == "+":
+                cur_content.append(rest)
+                cur_added = True
+            elif sign == "-":
+                cur_removed = True
+                cur_decl_removed = True
             if ")" in rest:
                 flush()
             continue
         if cur_var is not None:
-            cur_content.append(body)
+            if sign == "+":
+                cur_content.append(body)
+                cur_added = True
+            elif sign == "-":
+                cur_removed = True
             if ")" in body:
                 flush()
     flush()
@@ -564,8 +690,17 @@ def detect_checksum_changes(diff_text: str) -> str:
     """
     seen = False
     emptied = False
-    for _var, contents in _added_checksum_arrays(diff_text):
+    entry_removed = False
+    for _var, contents, added_any, removed_any, decl_removed in _touched_checksum_arrays(diff_text):
+        if not (added_any or removed_any):
+            # The array is fully context: it did not move in this diff.
+            continue
         seen = True
+        # An entry removed from an array that survives is the integrity
+        # event.  A declaration removed as part of replacing the whole array
+        # is an ordinary change: the new array carries the hashes.
+        if removed_any and not decl_removed:
+            entry_removed = True
         contents = _resolve_checksum_text(diff_text, contents)
         if _CHK_SKIP_WORD_RE.search(contents):
             return "changed_from_sha256_to_skip"
@@ -573,6 +708,8 @@ def detect_checksum_changes(diff_text: str) -> str:
             emptied = True
     if emptied:
         return "checksum_array_emptied"
+    if entry_removed:
+        return "checksum_entry_removed"
     return "checksum_added_or_changed" if seen else "unchanged"
 
 
@@ -712,6 +849,35 @@ def local_source_names(pkgbuild_text: str) -> set[str]:
         if ")" in line:
             in_array = False
     return names
+
+
+def urls_from_pkgbuild_text(pkgbuild_text: str) -> set[str]:
+    """URLs declared in ``source=()`` anywhere in a whole PKGBUILD.
+
+    The post-diff counterpart of :func:`extract_source_array_urls`, which
+    reads one side of a diff and therefore misses a declaration outside the
+    changed hunk.  A rule that asks "is this fetch already declared?" must
+    read the file as it now stands; reading only the diff found an empty
+    array and reported a declared URL as undeclared (H016 false positive).
+    """
+    if not pkgbuild_text:
+        return set()
+    urls: set[str] = set()
+    in_array = False
+    for raw in split_lines(pkgbuild_text):
+        if not in_array:
+            if not _SOURCE_ARRAY_START_RE.match(raw):
+                continue
+            in_array = True
+            raw = raw[raw.index("(") + 1:]
+        segment = raw.split(")", 1)[0] if ")" in raw else raw
+        for candidate in re.findall(r"https?://[^\s'\"\)]+", segment):
+            urls.add(_clean_url(candidate))
+        # A `name::url` rename keeps its URL after the `::`; the token scan
+        # above already catches the scheme, so nothing extra is needed.
+        if ")" in raw:
+            in_array = False
+    return urls
 
 
 def _top_level_blob(tree, name: str):
@@ -1122,14 +1288,36 @@ def _has_checksum_in_post_diff(diff_text: str) -> bool:
     return bool(_CHECKSUM_ARRAY_RE.search(post))
 
 
-def detect_gpg_verification_removed(diff_text: str) -> bool:
-    """Detect whether GPG verification was removed in a diff."""
-    had_content = False
+def _pre_diff_lines(diff_text: str) -> list[str]:
+    """Reconstruct the pre-diff file content lines.
+
+    The mirror of :func:`_post_diff_lines`: keeps context (`` ``) and
+    removal (``-``) lines, drops additions (``+``) and headers.  Needed to
+    answer "was this declared *before*?" when the declaration's own line is
+    context and only its contents changed.
+    """
+    out: list[str] = []
     for line in split_lines(diff_text):
-        if line.startswith("-") and _VALIDPGPKEYS_WITH_CONTENT_RE.search(line):
-            had_content = True
-            break
-    if not had_content:
+        if line.startswith(("+++", "---", "@@")):
+            continue
+        if line.startswith("+"):
+            continue
+        if line.startswith("-") or line.startswith(" "):
+            out.append(line[1:])
+    return out
+
+
+def detect_gpg_verification_removed(diff_text: str) -> bool:
+    """Detect whether GPG verification was removed in a diff.
+
+    Reads the reconstructed pre-state and post-state rather than looking for
+    a ``-`` line that carries a key.  When ``validpgpkeys=(`` is context and
+    only the key entries are deleted, no removed line matches the
+    declaration, so the old check missed the removal entirely and H024/H078
+    stayed silent while verification was gone.
+    """
+    pre = "\n".join(_pre_diff_lines(diff_text))
+    if not _VALIDPGPKEYS_WITH_CONTENT_RE.search(pre):
         return False
     post = "\n".join(_post_diff_lines(diff_text))
     return not bool(_VALIDPGPKEYS_WITH_CONTENT_RE.search(post))
@@ -1146,7 +1334,11 @@ def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") ->
     """
     evidence: list[str] = []
 
-    if checksum_behavior not in ("changed_from_sha256_to_skip", "checksum_array_emptied"):
+    if checksum_behavior not in (
+        "changed_from_sha256_to_skip",
+        "checksum_array_emptied",
+        "checksum_array_removed",
+    ):
         if _has_checksum_in_post_diff(diff_text):
             evidence.append("checksum_present")
 

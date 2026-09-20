@@ -12,6 +12,7 @@ from ..db import (
     effective_observation_count,
     get_last_analysis,
     get_package,
+    get_package_id,
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
@@ -21,6 +22,7 @@ from ..db import (
     upsert_package,
 )
 from ..differ import (
+    diff_summary_from_text,
     generate_diff_bounded,
     changed_opaque_members,
     companion_source_hunks,
@@ -75,7 +77,6 @@ from ..schema import (
 from ..tokenizer import split_lines, tokenize_and_resolve_indexed
 from .base import (
     _GLOBAL_URL_KEY,
-    _pkgver_changed_in_diff,
     _aggregate_pinning,
     _ensure_init,
     _get_installed_version,
@@ -86,9 +87,11 @@ from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import _structural_findings
 from .version import (
+    any_version_scalar_moved,
     compare_installed_to_aur,
     full_version_from_pkgbuild,
     is_vcs_package,
+    pkgver_move_in_diff,
 )
 from .temporal import _package_is_new, _recent_update, _stale_revival
 
@@ -288,7 +291,7 @@ def _adds_a_dependency(diff_text: str) -> bool:
                ("depends", "makedepends", "checkdepends", "optdepends"))
 
 
-def _walk_dependencies(pkg_name, depth, config, seen):
+def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False):
     """Analyse the AUR dependency closure of *pkg_name*.
 
     A dependency is analysed by ``analyze_package`` with ``depth=0``: the
@@ -304,9 +307,25 @@ def _walk_dependencies(pkg_name, depth, config, seen):
         pkg_name,
         depth=resolved,
         metadata=default_metadata(),
-        analyse=lambda name: analyze_package(name, depth=0),
+        analyse=lambda name: analyze_package(name, depth=0, record=record),
         already_seen=seen,
     )
+
+
+def _parent_commit(repo, head_commit: str) -> str:
+    """The first parent of *head_commit*, or ``""`` when there is none.
+
+    Used only when no analysis has been recorded: the repository's own
+    history supplies the base a read-only first review compares against.
+    """
+    if not head_commit:
+        return ""
+    try:
+        commit = repo[head_commit]
+        parents = commit.parents
+    except (KeyError, IndexError, AttributeError, pygit2.GitError, TypeError):
+        return ""
+    return str(parents[0].id) if parents else ""
 
 
 def analyze_package(
@@ -318,6 +337,7 @@ def analyze_package(
     aur_orphaned: bool | None = None,
     depth: int | None = None,
     _depth_seen: set | None = None,
+    record: bool = False,
 ) -> PackageFact:
     _ensure_init()
     begin_stage_tracking()
@@ -350,10 +370,16 @@ def analyze_package(
     if not head_version:
         head_version = new_version
 
-    package_id = upsert_package(pkg_name, head_version)
+    # Read-only runs must not create or touch the package row either: the
+    # id is only needed to key novelty lookups and the history write that
+    # is skipped, so an unknown package reads against the seed's row (0).
+    if record:
+        package_id = upsert_package(pkg_name, head_version)
+    else:
+        package_id = get_package_id(pkg_name) or 0
 
     if not head_commit:
-        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild)
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record)
 
     if not old_commit:
         last = get_last_analysis(package_id)
@@ -375,7 +401,14 @@ def analyze_package(
                 if not old_commit:
                     old_commit = head_commit
         else:
-            return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild)
+            # No recorded baseline.  A read-only run never writes one, so
+            # without this the first review of a package would have no diff
+            # to look at at all.  The previous commit in the AUR repository
+            # is the honest base: it is what "changes since last review"
+            # means when there is no review yet.
+            old_commit = _parent_commit(repo, head_commit)
+            if not old_commit:
+                return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record)
 
     # The generator's own truncation has to travel: a patch it declined to
     # retain leaves the assembled text at or under the cap, so measuring the
@@ -404,6 +437,10 @@ def analyze_package(
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
 
     source_changes = extract_urls_from_diff(diff_text)
+    pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
+        diff_text, head_pkgbuild
+    )
+    version_moved = any_version_scalar_moved(diff_text)
 
     old_maintainer = get_maintainer_from_commit(repo, old_commit) or ""
     new_maintainer = get_maintainer_from_commit(repo, head_commit) or ""
@@ -419,6 +456,7 @@ def analyze_package(
         source_changes.added_urls,
         package_id,
         maintainer=new_maintainer,
+        record=record,
     )
 
     source_buckets = classify_urls(source_changes.added_urls)
@@ -441,7 +479,6 @@ def analyze_package(
     # is a content hash and both trees are already open.
     swapped = changed_opaque_members(repo, old_commit, head_commit)
     if swapped:
-        version_moved = _pkgver_changed_in_diff(diff_text)
         triggered_rules.append(stamp({
             "rule_id": "C009" if version_moved else "C008",
             "name": ("Unread Content Moved With The Version" if version_moved
@@ -451,7 +488,7 @@ def analyze_package(
             "match": (
                 f"committed file(s) replaced with no diff body: "
                 f"{', '.join(swapped[:3])}"
-                + ("" if version_moved else "; pkgver did not change")
+                + ("" if version_moved else "; pkgver/pkgrel/epoch did not change")
             ),
             "file": swapped[0], "line": None,
             "params": {"carrier": "committed-binary",
@@ -516,6 +553,8 @@ def analyze_package(
         package_name=pkg_name,
         was_orphaned=was_orphaned,
         currently_maintained=bool(new_maintainer) or aur_orphaned is False,
+        pkgver_moved=pkgver_changed,
+        current_text=head_pkgbuild,
         add=lambda rid, name, severity, category, match, **params: (
             triggered_rules.append(stamp({
                 "rule_id": rid, "name": name, "severity": severity,
@@ -565,7 +604,9 @@ def analyze_package(
     # Before scoring, because a truncated walk has to reach `gaps_from`:
     # the band downgrade is decided once inside calculate_score and carried
     # on the fact, so a gap appended afterwards would never fail closed.
-    depth_result = _walk_dependencies(pkg_name, depth, config, _depth_seen)
+    depth_result = _walk_dependencies(
+        pkg_name, depth, config, _depth_seen, record=record
+    )
 
     gaps = gaps_from(
         diff_truncated=diff_truncated,
@@ -577,7 +618,7 @@ def analyze_package(
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
-        unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        unpinned_build_deps=has_unpinned_build_deps(diff_text, head_pkgbuild),
         # A dependency this diff *adds* and this run did not analyse is
         # unread code the package now pulls in. Dependency findings never
         # move the parent's score (B1: the score is this package's own
@@ -624,6 +665,10 @@ def analyze_package(
         maintainer_changed=maintainer_changed,
         previous_maintainer=old_maintainer,
         current_maintainer=new_maintainer,
+        pkgver_changed=pkgver_changed,
+        version_moved=version_moved,
+        pkgver_old=_pkgver_old or "",
+        pkgver_new=_pkgver_new or "",
         dependencies=list(depth_result.reports),
         depth_truncated=depth_result.truncated,
         depth_note=depth_result.reason,
@@ -653,30 +698,31 @@ def analyze_package(
     )
 
     with_changes(fact, diff_text)
-    insert_analysis(
-        package_id=package_id,
-        old_version=installed_version,
-        new_version=head_version,
-        old_commit=old_commit,
-        new_commit=head_commit,
-        final_score=score,
-        raw_diff=diff_text,
-        fact_json=json.dumps(fact_to_dict(fact)),
-        triggered_rules=triggered_rules,
-    )
+    if record:
+        insert_analysis(
+            package_id=package_id,
+            old_version=installed_version,
+            new_version=head_version,
+            old_commit=old_commit,
+            new_commit=head_commit,
+            final_score=score,
+            raw_diff=diff_text,
+            fact_json=json.dumps(fact_to_dict(fact)),
+            triggered_rules=triggered_rules,
+        )
 
-    update_package_version(pkg_name, head_version)
-    if new_maintainer:
-        update_package_maintainer(pkg_name, new_maintainer)
-    update_aur_orphan_state(pkg_name, aur_orphaned)
-
+        update_package_version(pkg_name, head_version)
+        if new_maintainer:
+            update_package_maintainer(pkg_name, new_maintainer)
+        update_aur_orphan_state(pkg_name, aur_orphaned)
 
     dependency_changes = extract_dependency_changes(diff_text, pkg_name)
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
     with_changes(fact, diff_text)
-    record_dependency_names(sorted(
-        name for names in dependency_changes.values() for name in names
-    ))
+    if record:
+        record_dependency_names(sorted(
+            name for names in dependency_changes.values() for name in names
+        ))
     return fact
 
 
@@ -710,6 +756,10 @@ def scan_diff(
     diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
 
     source_changes = extract_urls_from_diff(diff_text)
+    pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
+        diff_text, current_text
+    )
+    version_moved = any_version_scalar_moved(diff_text)
 
     source_buckets = classify_urls(source_changes.added_urls)
 
@@ -748,6 +798,8 @@ def scan_diff(
         package_name=package_name or "",
         was_orphaned=-1,
         currently_maintained=False,
+        pkgver_moved=pkgver_changed,
+        current_text=current_text,
         add=lambda rid, name, severity, category, match, **params: (
             triggered_rules.append(stamp({
                 "rule_id": rid, "name": name, "severity": severity,
@@ -806,7 +858,7 @@ def scan_diff(
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
-        unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        unpinned_build_deps=has_unpinned_build_deps(diff_text, current_text),
         # This path analyses no dependencies at all, so any dependency the
         # diff adds is code the package now pulls in and this run did not
         # read. See the note on the incremental path above.
@@ -835,14 +887,15 @@ def scan_diff(
 
     fact = PackageFact(
         package_name=package_name,
-        diff_summary=DiffSummary(
-            lines_added=sum(1 for line in split_lines(diff_text) if line.startswith("+")),
-            lines_removed=sum(1 for line in split_lines(diff_text) if line.startswith("-")),
-        ),
+        diff_summary=diff_summary_from_text(diff_text),
         source_changes=source_changes,
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        pkgver_changed=pkgver_changed,
+        version_moved=version_moved,
+        pkgver_old=_pkgver_old or "",
+        pkgver_new=_pkgver_new or "",
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         tree_analyzed=(bool(tree_manifest) and tree_complete
@@ -899,7 +952,7 @@ def analyze_package_text(
 
 def _make_fresh_analysis(
     pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
-    installed_version: str = "", head_pkgbuild: str = "",
+    installed_version: str = "", head_pkgbuild: str = "", record: bool = False,
 ) -> PackageFact:
     """A first analysis: no prior commit to diff against.
 
@@ -924,7 +977,7 @@ def _make_fresh_analysis(
     findings and the score that follows from them, the maintainer, and the
     IOC matches against the recipe as it stands.
     """
-    novelty = build_novelty_context([], package_id)
+    novelty = build_novelty_context([], package_id, record=record)
     triggered_rules: list[dict] = []
     recent = _recent_update(repo, commit)
     if recent:
@@ -985,19 +1038,20 @@ def _make_fresh_analysis(
         final_score=score,
     )
     with_changes(fact)
-    insert_analysis(
-        package_id=package_id,
-        old_version=installed_version,
-        new_version=version,
-        old_commit="",
-        new_commit=commit,
-        # The stored score is the reported one. It was hardcoded to 0 while
-        # the rules that fired went into the same row, so the history said
-        # "clean" about an analysis that had found something.
-        final_score=score,
-        raw_diff="",
-        fact_json=json.dumps(fact_to_dict(fact)),
-        triggered_rules=triggered_rules,
-    )
-    update_package_version(pkg_name, version)
+    if record:
+        insert_analysis(
+            package_id=package_id,
+            old_version=installed_version,
+            new_version=version,
+            old_commit="",
+            new_commit=commit,
+            # The stored score is the reported one. It was hardcoded to 0 while
+            # the rules that fired went into the same row, so the history said
+            # "clean" about an analysis that had found something.
+            final_score=score,
+            raw_diff="",
+            fact_json=json.dumps(fact_to_dict(fact)),
+            triggered_rules=triggered_rules,
+        )
+        update_package_version(pkg_name, version)
     return fact

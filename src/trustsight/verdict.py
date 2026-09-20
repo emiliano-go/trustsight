@@ -116,6 +116,23 @@ def no_aur_change_note(fact) -> str | None:
     return note
 
 
+def _version_prefix(fact: PackageFact) -> str:
+    """Open the verdict with the version fact, never with a false claim.
+
+    The prefix used to be the literal ``"Version bump."``, so a diff that
+    changed the source but left ``pkgver`` at 1.2.3 still read as a version
+    bump - contradicting C001/C002 in the same report and the change
+    summary beside it.      It is derived from the fact's ``version_moved`` - any of pkgver, pkgrel
+    or epoch by resolved value - so a pkgrel rebuild is not reported as
+    "Version unchanged", and the sentence and C001/C002 cannot disagree.
+    """
+    if getattr(fact, "version_moved", False):
+        return "Version bump. "
+    if getattr(fact, "pkgver_changed", False):
+        return "Version bump. "
+    return "Version unchanged. "
+
+
 def fallback_verdict(fact: PackageFact) -> str:
     """Build a human-readable verdict when scoring does not produce one."""
     if fact.first_seen:
@@ -144,7 +161,7 @@ def fallback_verdict(fact: PackageFact) -> str:
         # fired" on its own reads as a clearance, and no output may grant
         # permission to skip review, least of all when nothing fired.
         return (
-            f"Version bump. {change_summary}. No published rule matched. "
+            f"{_version_prefix(fact)}{change_summary}. No published rule matched. "
             "Review the diff before building."
         )
 
@@ -156,7 +173,7 @@ def fallback_verdict(fact: PackageFact) -> str:
     if worst.severity == "FATAL":
         detail = _render(worst, fact)
         return (
-            f"{change_summary}. {detail}. "
+            f"{_version_prefix(fact)}{change_summary}. {detail}. "
             f"The package is attempting to deceive the reviewer, so the score "
             f"is capped at maximum regardless of other evidence. "
             f"{FATAL_DIRECTION}"
@@ -166,4 +183,7 @@ def fallback_verdict(fact: PackageFact) -> str:
     if len(fired) > 5:
         details.append(f"and {len(fired) - 5} more signal(s)")
     signals = "; ".join(details)
-    return f"Version bump. {change_summary}. Signals: {signals}. {REVIEW_DIRECTION}"
+    return (
+        f"{_version_prefix(fact)}{change_summary}. Signals: {signals}. "
+        f"{REVIEW_DIRECTION}"
+    )

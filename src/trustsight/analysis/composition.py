@@ -27,8 +27,9 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..findings import stamp
-from ..rules import _classify_enclosing_function
+from ..rules import ScopeResolver
 from ..tokenizer import resolve_added_lines
+from .build import _recipe_lines
 from .delivery import (
     _SCOPE_FUNCTIONS,
     _find_line,
@@ -47,22 +48,25 @@ def _recon_probes(config=None) -> list[re.Pattern]:
     return [re.compile(p, re.IGNORECASE) for p in frags]
 
 
-def _recon_findings(diff_text, config, add) -> None:
+def _recon_findings(diff_text, config, add, current_text=None) -> None:
     """A build/install line runs a host-profiling command (H040, INFO).
 
     The probe list is config-driven (patterns.toml ``recon_commands``).  The
     fragments carry a command-position anchor, so a mention inside a string,
     sed expression or variable value never fires.  Only one finding per line
     is emitted; the first matching probe wins.
+
+    The scope is the call closure, so a probe in a helper a build function
+    calls is build-time code too.
     """
     probes = _recon_probes(config)
     if not probes:
         return
     lines = resolve_added_lines(diff_text)
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     heredoc_body = _heredoc_body_indices(lines)
     for i, line in enumerate(lines):
-        if not line.startswith("+") or enclosing.get(i) not in _SCOPE_FUNCTIONS:
+        if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         if i in heredoc_body:
             continue
@@ -71,9 +75,9 @@ def _recon_findings(diff_text, config, add) -> None:
             m = probe.search(body)
             if m:
                 add("H040", "Host Reconnaissance", "INFO", "recon",
-                    f"{enclosing[i]}() profiles the host: {body.strip()[:80]}",
+                    f"{scopes.label(i, _SCOPE_FUNCTIONS)}() profiles the host: {body.strip()[:80]}",
                     line=_find_line(diff_text, m.group(0)),
-                    position=enclosing[i],
+                    position=scopes.within(i, _SCOPE_FUNCTIONS),
                     probe=m.group(0)[:60])
                 return
 

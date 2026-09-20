@@ -53,19 +53,27 @@ _PKGVER_RE = re.compile(r"^\s*pkgver\s*=", re.IGNORECASE)
 _FUNCTION_OPEN_RE = re.compile(r"^\s*(\w+)\s*\(\s*\)\s*\{")
 
 
-def _changed_kinds(diff_text: str) -> dict[str, bool]:
+def _changed_kinds(
+    diff_text: str, pkgver_moved: bool = False
+) -> dict[str, bool]:
     """Which parts of the recipe this diff touches.
 
     Read off added *and* removed lines: a checksum that was edited shows as
     one of each, and "the checksums did not move" has to mean neither side
     touched them.
+
+    *pkgver_moved* is the canonical ``pkgver_move_in_diff`` result.  A
+    variable-driven bump (``_gtkver=1.2.3`` -> ``1.2.4`` with
+    ``pkgver=${_gtkver}`` context) edits no ``pkgver=`` line, so the lexical
+    scan below missed it and H087 claimed "pkgver did not [move]" about a
+    version that did.
     """
     lines = join_line_continuations(split_lines(clamp_text(diff_text)))
     kinds = {
         "deps": False,
         "source": False,
         "checksums": False,
-        "pkgver": False,
+        "pkgver": pkgver_moved,
         "build_function": False,
     }
     depth = 0
@@ -104,7 +112,7 @@ def _changed_kinds(diff_text: str) -> dict[str, bool]:
     return kinds
 
 
-def is_recipe_only_change(diff_text: str) -> bool:
+def is_recipe_only_change(diff_text: str, pkgver_moved: bool = False) -> bool:
     """True when the recipe gained build inputs *and* build steps, upstream unmoved.
 
     Two conjunctions, both measured rather than guessed.
@@ -129,7 +137,7 @@ def is_recipe_only_change(diff_text: str) -> bool:
     21.4% of benign diffs; a MEDIUM twin of it would be the same mistake with
     a different id.
     """
-    kinds = _changed_kinds(diff_text)
+    kinds = _changed_kinds(diff_text, pkgver_moved=pkgver_moved)
     upstream_moved = kinds["source"] or kinds["checksums"] or kinds["pkgver"]
     gained_capability = kinds["deps"] and kinds["build_function"]
     return gained_capability and not upstream_moved
@@ -142,16 +150,25 @@ def adoption_findings(
     was_orphaned: int,
     currently_maintained: bool,
     add,
+    pkgver_moved: bool = False,
+    current_text: str | None = None,
 ) -> None:
     """Emit H086, H087 and the H088 composition.
 
     *was_orphaned* is the tri-state from :func:`db.get_aur_orphan_state`:
     1 orphaned, 0 maintained, -1 never recorded. H086 requires 1, so a
     database with no prior observation says nothing rather than guessing.
+
+    *pkgver_moved* is the canonical version move, so "upstream did not
+    move" is judged by the same answer the rest of the engine uses.
+
+    *current_text* is the post-diff PKGBUILD: the registry-resolution
+    scope has to follow the call graph, and the call graph is only complete
+    when the whole file is visible.
     """
     adopted = was_orphaned == 1 and currently_maintained
-    recipe_only = is_recipe_only_change(diff_text)
-    resolutions = registry_resolutions(diff_text)
+    recipe_only = is_recipe_only_change(diff_text, pkgver_moved=pkgver_moved)
+    resolutions = registry_resolutions(diff_text, current_text)
 
     if adopted:
         add("H086", "Adopted From Orphan", "MEDIUM", "maintainer",

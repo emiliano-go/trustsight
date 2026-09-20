@@ -34,7 +34,8 @@ from functools import lru_cache
 
 from ..deps import _strip_comment
 from ..tokenizer import split_lines
-from ..rules import _classify_enclosing_function, clamp_text, join_line_continuations
+from ..rules import ScopeResolver, clamp_text, join_line_continuations
+from .build import _recipe_lines
 
 #: Functions makepkg runs while building.  ``package()`` is included: it
 #: runs too, and a dependency resolved there is no more verifiable than one
@@ -105,20 +106,26 @@ _RESOLUTION_CACHE = 4
 
 
 @lru_cache(maxsize=_RESOLUTION_CACHE)
-def _registry_resolutions_cached(diff_text: str) -> tuple[tuple[str, str], ...]:
-    return tuple(_registry_resolutions_uncached(diff_text))
+def _registry_resolutions_cached(
+    diff_text: str, current_text: str | None
+) -> tuple[tuple[str, str], ...]:
+    return tuple(_registry_resolutions_uncached(diff_text, current_text))
 
 
-def registry_resolutions(diff_text: str) -> list[tuple[str, str]]:
+def registry_resolutions(
+    diff_text: str, current_text: str | None = None
+) -> list[tuple[str, str]]:
     """``(function, command)`` for each build-time registry resolution added.
 
     A thin cached wrapper: see :func:`_registry_resolutions_uncached` for
     what it computes.
     """
-    return list(_registry_resolutions_cached(diff_text))
+    return list(_registry_resolutions_cached(diff_text, current_text))
 
 
-def _registry_resolutions_uncached(diff_text: str) -> list[tuple[str, str]]:
+def _registry_resolutions_uncached(
+    diff_text: str, current_text: str | None = None
+) -> list[tuple[str, str]]:
     """``(function, command)`` for each build-time registry resolution added.
 
     Only *added* lines count: a resolution that was already in the recipe is
@@ -126,15 +133,19 @@ def _registry_resolutions_uncached(diff_text: str) -> list[tuple[str, str]]:
     analysis of this change could not see. A package that has always fetched
     from npm still gets the gap on the run that first sees the recipe,
     because ``first_seen`` analyses read the whole file as added.
+
+    The scope is the call closure: a resolution in a helper a build function
+    calls is build-time code, and the direct lexical owner missed the same
+    shape the delivery rules were fixed for.
     """
     lines = join_line_continuations(split_lines(clamp_text(diff_text)))
-    enclosing = _classify_enclosing_function(lines)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
     found: list[tuple[str, str]] = []
     for i, line in enumerate(lines):
         if not line.startswith("+"):
             continue
-        function = enclosing.get(i)
-        if function not in BUILD_FUNCTIONS:
+        function = scopes.within(i, BUILD_FUNCTIONS)
+        if function is None:
             continue
         body = _strip_comment(line[1:])
         if not body.strip():
@@ -147,9 +158,11 @@ def _registry_resolutions_uncached(diff_text: str) -> list[tuple[str, str]]:
     return found
 
 
-def has_unpinned_build_deps(diff_text: str) -> bool:
+def has_unpinned_build_deps(
+    diff_text: str, current_text: str | None = None
+) -> bool:
     """True when this change adds a build step that resolves from a registry."""
-    return bool(registry_resolutions(diff_text))
+    return bool(registry_resolutions(diff_text, current_text))
 
 
 # Subcommand words that precede the package list, so they are not mistaken

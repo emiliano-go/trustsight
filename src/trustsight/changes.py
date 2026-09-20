@@ -15,35 +15,54 @@ corrupt the calibration and the reader's sense of what a finding means.
 # Files that regenerate on nearly every bump.  Listing them trains the
 # reader to skim the section, which costs more than the information is
 # worth.
-import re
-
 ALWAYS_NOISY = frozenset({".SRCINFO", ".gitignore"})
 
 
 def _host(url: str) -> str:
+    """The host of *url*, in the one spelling the program agrees on.
+
+    Routed through ``buckets.canonical_host`` so the change summary names
+    the same host the classifier buckets: a URL with userinfo or a default
+    port (``https://user@github.com:443/…``) is ``github.com`` to both, not
+    ``github.com`` to the classifier and ``user@github.com:443`` to the
+    reader.
+    """
     rest = url.split("://", 1)[-1]
-    return rest.split("/", 1)[0].lower()
+    netloc = rest.split("/", 1)[0]
+    from .buckets import canonical_host
+
+    return canonical_host(netloc)
 
 
-_PKGVER_RE = re.compile(r"^([+-])\s*pkgver\s*=\s*(.+?)\s*$", re.MULTILINE)
-
-
-def _pkgver_move(diff_text: str) -> str | None:
-    """``pkgver`` as the diff itself shows it changing.
+def _pkgver_move(fact, diff_text: str) -> str | None:
+    """``pkgver`` as the analysis resolved it changing.
 
     The bare-diff path (``scan_diff``, the corpus adapter) has no installed
     version to compare against, so the fact's version fields are empty and
     the move is only visible in the text.  A change summary that missed
     "the version moved" on that path would be missing the single most
     common change there is.
+
+    The resolved values come from the fact (``pkgver_old``/``pkgver_new``),
+    which the pipeline computed *with* the post-diff text.  Recomputing
+    here from the diff alone lost the move whenever the ``pkgver=`` line
+    sat outside the hunk and only its variable was visible - the summary
+    said nothing changed while the rules fired.
     """
-    old = new = None
-    for sign, value in _PKGVER_RE.findall(diff_text or ""):
-        if sign == "-":
-            old = value.strip("\"'")
-        else:
-            new = value.strip("\"'")
-    if new and old and old != new:
+    if getattr(fact, "pkgver_changed", False):
+        old = getattr(fact, "pkgver_old", "")
+
+        new = getattr(fact, "pkgver_new", "")
+        if old and new:
+            return f"pkgver {old} -> {new}"
+        if new:
+            return f"pkgver set to {new}"
+    # No canonical value on the fact (a hand-built fact, or a diff-only
+    # caller): fall back to reading the diff.
+    from .analysis.version import pkgver_move_in_diff
+
+    moved, old, new = pkgver_move_in_diff(diff_text or "")
+    if moved and old and new:
         return f"pkgver {old} -> {new}"
     if new and not old:
         return f"pkgver set to {new}"
@@ -65,7 +84,7 @@ def summarise(fact, diff_text: str = "") -> list[str]:
 
     old, new = fact.old_version, fact.new_version
     if not (old and new and old != new):
-        moved = _pkgver_move(diff_text)
+        moved = _pkgver_move(fact, diff_text)
         if moved:
             entries.append(moved)
     if old and new and old != new:
@@ -86,6 +105,8 @@ def summarise(fact, diff_text: str = "") -> list[str]:
     _CHECKSUM_WORDING = {
         "checksum_added_or_changed": "checksums added or changed",
         "checksum_array_emptied": "checksums emptied",
+        "checksum_entry_removed": "checksum entry removed",
+        "checksum_array_removed": "checksum array removed",
         "changed_from_sha256_to_skip": "checksums changed from sha256 to SKIP",
     }
     behaviour = getattr(fact.source_changes, "checksum_behavior", "")

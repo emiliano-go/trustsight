@@ -143,6 +143,25 @@ class PackageFact:
     # One of analysis.version.COMPARISON_*; "" when nothing compared them.
     version_comparison: str = ""
 
+    # True when the diff itself moved ``pkgver``, resolving variables the
+    # recipe assigns (``pkgver=${_gtkver}``).  The verdict prefix and the
+    # C001/C002 split read this, so they cannot disagree.
+    pkgver_changed: bool = False
+    # The resolved old/new ``pkgver`` behind ``pkgver_changed``, so every
+    # surface that renders the move reads the same values instead of
+    # recomputing them from the diff (which lacks the post-diff text the
+    # resolution may need).
+    pkgver_old: str = ""
+    pkgver_new: str = ""
+
+    # True when *any* scalar of the pacman version moved - pkgver, pkgrel or
+    # epoch.  This is the integrity rules' and the verdict's definition of
+    # "the version moved": a pkgrel rebuild is a declared new build, so a
+    # checksum change beside it is C002, not C001, and the verdict must not
+    # say "Version unchanged".  `pkgver_changed` stays pkgver-only for
+    # display and for H087's separate "did upstream move?" question.
+    version_moved: bool = False
+
     # Which clock produced the temporal findings.
     temporal_source: str = "unknown"
 
@@ -197,6 +216,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "maintainer_changed": fact.maintainer_changed,
         "previous_maintainer": fact.previous_maintainer,
         "current_maintainer": fact.current_maintainer,
+        "pkgver_changed": fact.pkgver_changed,
         "diff_summary": {
             "lines_added": fact.diff_summary.lines_added,
             "lines_removed": fact.diff_summary.lines_removed,

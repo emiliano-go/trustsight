@@ -203,6 +203,143 @@ def compare_installed_to_aur(
         return COMPARISON_BEHIND
     return COMPARISON_SAME
 
+# ---------------------------------------------------------------------------
+# Did the version move?  (C001/C002 and the verdict prefix)
+# ---------------------------------------------------------------------------
+
+# A ``pkgver=`` line anywhere in the diff, on either side or as context.  A
+# context line is the common case: the version is usually carried by a
+# variable assigned a few lines above, so ``pkgver=${_gtkver}`` itself does
+# not appear on a ``+`` or ``-`` line at all.
+_PKGVER_LINE_RE = re.compile(r"^([+\- ])\s*pkgver\s*=\s*(.+?)\s*$")
+_ASSIGN_LINE_RE = re.compile(
+    r"^([+\- ])\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?)\s*$"
+)
+_VAR_REF_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+
+# Bounded because a crafted recipe can chain substitutions; eight links is
+# far past anything makepkg packaging does in practice.
+_RESOLVE_MAX_DEPTH = 8
+
+
+def _strip_value(value: str) -> str:
+    return value.strip().strip("'\"")
+
+
+def _variable_table(lines: list[str], prefixes: frozenset[str]) -> dict[str, str]:
+    """Assignments visible in the diff, from the lines carrying *prefixes*."""
+    table: dict[str, str] = {}
+    for line in lines:
+        match = _ASSIGN_LINE_RE.match(line)
+        if match and match.group(1) in prefixes:
+            table[match.group(2)] = _strip_value(match.group(3))
+    return table
+
+
+def _resolve_value(value: str, table: dict[str, str], depth: int = 0) -> str:
+    """Substitute the diff's own variables into *value*, bounded."""
+    if "$" not in value or depth >= _RESOLVE_MAX_DEPTH:
+        return value
+    replaced = _VAR_REF_RE.sub(
+        lambda m: table.get(m.group(1), m.group(0)), value
+    )
+    if replaced == value:
+        return value
+    return _resolve_value(replaced, table, depth + 1)
+
+
+_SCALAR_LINE_RE = re.compile(
+    r"^([+\- ])\s*(pkgver|pkgrel|epoch)\s*=\s*(.+?)\s*$", re.IGNORECASE
+)
+
+
+def any_version_scalar_moved(diff_text: str) -> bool:
+    """True when ``pkgver``, ``pkgrel`` or ``epoch`` genuinely changed value.
+
+    H033 asks "did the maintainer declare a new version?", and a ``pkgrel``
+    rebuild or an epoch bump is a declared new build just as a ``pkgver``
+    move is, so a repinned commit alongside any of them is expected.  The
+    check is by *resolved value*, not by token presence: an added no-op
+    ``+epoch=0`` (the value was already 0) must not suppress the finding,
+    which a lexical token match would allow.
+    """
+    lines = split_lines(diff_text or "")
+    old_table = _variable_table(lines, frozenset({"-", " "}))
+    new_table = _variable_table(lines, frozenset({"+", " "}))
+    old_prefixes = frozenset({"-", " "})
+    new_prefixes = frozenset({"+", " "})
+
+    def resolved(scalar: str, table: dict[str, str], prefixes: frozenset[str]) -> str | None:
+        for line in lines:
+            match = _SCALAR_LINE_RE.match(line)
+            if match and match.group(1) in prefixes and match.group(2).lower() == scalar:
+                return _resolve_value(_strip_value(match.group(3)), table)
+        return None
+
+    for scalar in ("pkgver", "pkgrel", "epoch"):
+        old_val = resolved(scalar, old_table, old_prefixes)
+        new_val = resolved(scalar, new_table, new_prefixes)
+        if old_val is not None and new_val is not None and old_val != new_val:
+            return True
+    return False
+
+
+def pkgver_move_in_diff(
+    diff_text: str, current_text: str | None = None
+) -> tuple[bool, str | None, str | None]:
+    """Return ``(moved, old, new)`` for the diff's ``pkgver``.
+
+    Reading only the literal ``-pkgver=`` / ``+pkgver=`` lines treated
+    ``pkgver=${_gtkver}`` as a stable version, so a routine variable-driven
+    update fired C001 (checksum changed without a version move, HIGH)
+    instead of C002.  The recipe assigns the variable in the same diff, so
+    the value is knowable without executing anything.
+
+    *current_text* is the post-diff PKGBUILD, used when the ``pkgver=`` line
+    falls outside the hunk; it lets the reference be read even then.
+    """
+    lines = split_lines(diff_text or "")
+    old_ref = new_ref = context_ref = None
+    for line in lines:
+        match = _PKGVER_LINE_RE.match(line)
+        if match is None:
+            continue
+        sign, raw = match.group(1), _strip_value(match.group(2))
+        if sign == "-":
+            old_ref = raw
+        elif sign == "+":
+            new_ref = raw
+        else:
+            context_ref = raw
+
+    if old_ref is None and new_ref is None and context_ref is None:
+        if current_text:
+            match = re.search(
+                r"^\s*pkgver\s*=\s*(.+?)\s*(?:#.*)?$", current_text, re.MULTILINE
+            )
+            if match:
+                old_ref = new_ref = _strip_value(match.group(1))
+        if old_ref is None:
+            return False, None, None
+
+    if context_ref is not None:
+        if old_ref is None:
+            old_ref = context_ref
+        if new_ref is None:
+            new_ref = context_ref
+
+    old_table = _variable_table(lines, frozenset({"-", " "}))
+    new_table = _variable_table(lines, frozenset({"+", " "}))
+    resolved_old = _resolve_value(old_ref, old_table) if old_ref is not None else None
+    resolved_new = _resolve_value(new_ref, new_table) if new_ref is not None else None
+    moved = (
+        resolved_old is not None
+        and resolved_new is not None
+        and resolved_old != resolved_new
+    )
+    return moved, resolved_old, resolved_new
+
+
 # MULTILINE so the same expression serves both readers: ``_epoch_introduced``
 # searches one diff line at a time, ``full_version_from_pkgbuild`` searches a
 # whole file.

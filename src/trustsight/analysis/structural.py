@@ -2,14 +2,11 @@ import re
 
 from ..differ import (
     checksum_array_parity,
-    detect_checksum_removed,
     is_skip_justified,
     source_array_has_command_substitution,
 )
-from .base import (
-    _pkgver_changed_in_diff,
-    _url_domain,
-)
+from .base import _url_domain
+from .version import any_version_scalar_moved
 from .crossfire import _crossfire_findings
 from .sabotage import _sabotage_findings
 from .build import (
@@ -226,9 +223,16 @@ def _structural_findings(
     cs_behavior = source_changes.checksum_behavior
     added = source_changes.added_urls
     removed = source_changes.removed_urls
-    pkgver_changed = _pkgver_changed_in_diff(diff_text)
+    # The integrity rules' one definition of "the version moved": pkgver,
+    # pkgrel or epoch by resolved value.  A pkgrel rebuild with a changed
+    # checksum is C002, not the HIGH C001 that claims the version stood still.
+    version_moved = any_version_scalar_moved(diff_text)
 
-    if cs_behavior != "checksum_added_or_changed":
+    # H003 is about sources that arrive with *no* checksum backing at all.
+    # Removing one hash still leaves the array in place, so it is not this
+    # rule's business; a whole array removed, or emptied, or set to SKIP,
+    # does leave the source unbacked.
+    if cs_behavior not in ("checksum_added_or_changed", "checksum_entry_removed"):
         http_sources = [url for url in added if url.startswith("http://")]
         if http_sources:
             add("H003", "Insecure Download Protocol", "LOW", "integrity",
@@ -260,27 +264,39 @@ def _structural_findings(
             sources=n_src, sums=n_sum, var=var)
 
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
-        if not pkgver_changed:
+        if not version_moved:
             add("C001", "Checksum Changed Without Source Change With Stable Version",
                 "HIGH", "integrity",
-                "sha256sums changed but source URLs and pkgver unchanged",
+                "sha256sums changed but source URLs and pkgver/pkgrel/epoch unchanged",
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
             add("C002", "Checksum Updated With Version Bump", "INFO", "integrity",
-                "sha256sums updated alongside pkgver",
+                "sha256sums updated alongside a version move",
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
 
-    if removed and added and not pkgver_changed and set(removed) != set(added):
+    if removed and added and not version_moved and set(removed) != set(added):
         add("C003", "Source URL Changed Without Version Bump", "INFO", "integrity",
             f"URLs changed: {removed} -> {added}",
             line=find_line_in_diff(diff_text, r"source(?:_[a-z0-9_]+)?\s*=\s*\("),
             added=str(added), removed=str(removed))
 
-    _unread_carrier_findings(diff_text, pkgver_changed, add)
+    _unread_carrier_findings(diff_text, version_moved, add)
 
-    if detect_checksum_removed(diff_text) and set(removed) == set(added):
+    # C004 covers both ways verification is weakened with the source left
+    # alone: the whole array deleted, and one hash removed from an array
+    # that stays.  They were two notions of "checksum removed", and the
+    # entry-removal half was invisible on every detector - a multiline array
+    # whose opener is a context line lost a hash silently while *adding* one
+    # fired.  Both now arrive through `checksum_behavior`, so the rule, the
+    # summary and the verification evidence cannot disagree about whether a
+    # checksum change happened at all.
+    if set(removed) == set(added) and cs_behavior in (
+        "checksum_array_removed", "checksum_entry_removed",
+    ):
         add("C004", "Checksum Removed For Unchanged Source", "CRITICAL", "integrity",
-            "checksum array deleted while source URLs stayed the same",
+            "checksum array deleted while source URLs stayed the same"
+            if cs_behavior == "checksum_array_removed" else
+            "checksum entry removed while source URLs stayed the same",
             line=find_line_in_diff(diff_text, r"sha256sums", prefix=r"\-"))
 
     for url in added:
@@ -328,8 +344,8 @@ def _structural_findings(
         diff_text, config or {}, add, tree_manifest=tree_manifest,
         current_text=current_text,
     )
-    _persistence_findings(diff_text, config or {}, add)
-    _recon_findings(diff_text, config or {}, add)
+    _persistence_findings(diff_text, config or {}, add, current_text=current_text)
+    _recon_findings(diff_text, config or {}, add, current_text=current_text)
     _exotic_protocol_findings(diff_text, config or {}, add)
     _version_in_url_findings(diff_text, config or {}, add)
     _parse_time_fetch_findings(diff_text, config or {}, add)

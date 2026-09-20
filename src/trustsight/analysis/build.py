@@ -527,7 +527,17 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         # one way at import time.
         from .network import claims_upload_line, claims_pipe_to_shell
 
-        declared = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
+        # The declared set is a fact about the post-diff file, not the hunk:
+        # `source=()` routinely sits outside it, and reading only the diff
+        # made H016 fire on a URL the recipe does declare.
+        from ..differ import urls_from_pkgbuild_text
+
+        declared_src = (
+            urls_from_pkgbuild_text(current_text)
+            if current_text
+            else extract_source_array_urls(diff_text)
+        )
+        declared = {normalize_url(u) for u in declared_src}
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
@@ -568,7 +578,14 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
                 break
 
     if "H018" in wanted:
-        declared_urls = {normalize_url(u) for u in extract_source_array_urls(diff_text)}
+        from ..differ import urls_from_pkgbuild_text
+
+        declared_src = (
+            urls_from_pkgbuild_text(current_text)
+            if current_text
+            else extract_source_array_urls(diff_text)
+        )
+        declared_urls = {normalize_url(u) for u in declared_src}
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue

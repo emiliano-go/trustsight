@@ -6,7 +6,6 @@ from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
-from ..tokenizer import split_lines
 
 _initialized = False
 
@@ -24,15 +23,18 @@ def _rarities_of(deps: list[str]) -> list[float]:
     return [1.0 / (1.0 + counts.get(d, 0)) for d in deps]
 
 
-def _pkgver_changed_in_diff(diff_text: str) -> bool:
-    old_val: str | None = None
-    new_val: str | None = None
-    for line in split_lines(diff_text):
-        if line.startswith("-pkgver="):
-            old_val = line.removeprefix("-pkgver=").strip().strip("'\"")
-        elif line.startswith("+pkgver="):
-            new_val = line.removeprefix("+pkgver=").strip().strip("'\"")
-    return old_val is not None and new_val is not None and old_val != new_val
+def _pkgver_changed_in_diff(
+    diff_text: str, current_text: str | None = None
+) -> bool:
+    """True when the diff moved ``pkgver``, resolving its own variables.
+
+    Delegates to :func:`trustsight.analysis.version.pkgver_move_in_diff` so
+    ``pkgver=${_gtkver}`` is judged by the value the recipe assigns, not by
+    the unchanged reference text.
+    """
+    from .version import pkgver_move_in_diff
+
+    return pkgver_move_in_diff(diff_text, current_text)[0]
 
 
 _GLOBAL_URL_KEY = "\x00__global__"
@@ -69,7 +71,11 @@ def iter_scheme_urls(text: str, stop_chars: frozenset = _DEFAULT_URL_STOP):
                 yield text[start:index], text[start:end]
         index = text.find("://", index + 3)
 
-_NO_CHECKSUM_BEHAVIORS = ("changed_from_sha256_to_skip", "checksum_array_emptied")
+_NO_CHECKSUM_BEHAVIORS = (
+    "changed_from_sha256_to_skip",
+    "checksum_array_emptied",
+    "checksum_array_removed",
+)
 
 _EXPERIMENTAL_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
@@ -94,8 +100,16 @@ def _has_install_hook(diff_text: str) -> bool:
 
 
 def _url_domain(url: str) -> str:
-    parsed = urlparse(url)
-    return parsed.netloc.lower()
+    """The host of *url*, through the one canonical spelling.
+
+    C006 compares old and new source domains.  Computing ``netloc.lower()``
+    here while the classifier used ``canonical_host`` meant a URL with
+    userinfo or a default port read as a *new* domain to C006 while the
+    classifier called it the same trusted host.
+    """
+    from ..buckets import canonical_host
+
+    return canonical_host(urlparse(url).netloc)
 
 
 def _aggregate_pinning(

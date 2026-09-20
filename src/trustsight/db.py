@@ -1548,11 +1548,11 @@ def maybe_auto_import_seed(
     except (FileNotFoundError, sqlite3.Error):
         return None
     if not quiet:
-        total = stats['urls_total']
+        added = stats['urls_added']
         log.info(
             "Imported %s known source URLs and %s maintainers "
             "for novelty detection.",
-            f"{total:,}", stats['maintainers'],
+            f"{added:,}", stats['maintainers'],
         )
     return stats
 
@@ -1577,11 +1577,11 @@ def _import_seed_from_release(quiet: bool = False) -> Optional[dict]:
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
     if not quiet:
-        total = stats['urls_total']
+        added = stats['urls_added']
         log.info(
             "Imported %s known source URLs and %s maintainers "
             "for novelty detection (release baseline).",
-            f"{total:,}", stats['maintainers'],
+            f"{added:,}", stats['maintainers'],
         )
     return stats
 

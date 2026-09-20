@@ -181,8 +181,18 @@ def package_typosquat_target(pkg_name: str) -> str | None:
     return typosquat_target(pkg_name, filtered)
 
 
-def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
-    """Record a URL in the novelty database and return whether it is novel for the package and globally"""
+def check_url_novelty(
+    url: str, package_id: int, record: bool = True
+) -> tuple[bool, bool]:
+    """Return ``(first_for_package, first_globally)`` for *url*.
+
+    The read and the write are separate on purpose.  This function used to
+    record the observation unconditionally, so two runs over the same diff
+    returned different novelty because the first run had written the URL
+    into the database - a deterministic tool whose answer depended on how
+    many times you asked.  Persistence is now the caller's explicit choice
+    (``record=True``), which is what ``--record`` sets.
+    """
     nurl = normalize_url(url)
     with get_connection() as conn:
         cur = conn.cursor()
@@ -199,25 +209,31 @@ def check_url_novelty(url: str, package_id: int) -> tuple[bool, bool]:
         ).fetchone()
         url_first_global = global_row is None
 
-        if url_first_global:
-            cur.execute(
-                """INSERT INTO source_urls (url, first_seen_package_id, first_seen_globally_timestamp, total_uses)
-                   VALUES (?, ?, datetime('now'), 1)""",
-                (nurl, package_id),
-            )
-        else:
-            cur.execute(
-                "UPDATE source_urls SET total_uses = total_uses + 1, last_seen_timestamp = datetime('now') WHERE id = ?",
-                (global_row[0],),
-            )
-
-        conn.commit()
+        if record:
+            if url_first_global:
+                cur.execute(
+                    """INSERT INTO source_urls (url, first_seen_package_id, first_seen_globally_timestamp, total_uses)
+                       VALUES (?, ?, datetime('now'), 1)""",
+                    (nurl, package_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE source_urls SET total_uses = total_uses + 1, last_seen_timestamp = datetime('now') WHERE id = ?",
+                    (global_row[0],),
+                )
+            conn.commit()
 
     return url_first_package, url_first_global
 
 
-def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
-    """Record a maintainer in the novelty database and return whether it is novel for the package"""
+def check_maintainer_novelty(
+    maintainer_name: str, package_id: int, record: bool = True
+) -> bool:
+    """Return whether *maintainer_name* is first seen for *package_id*.
+
+    Writes only when *record* is set, for the same reason as
+    :func:`check_url_novelty`.
+    """
     if not maintainer_name:
         return False
     with get_connection() as conn:
@@ -232,7 +248,7 @@ def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
                 (name_hash, package_id),
             ).fetchone()
 
-            if existing is None:
+            if existing is None and record:
                 now = datetime.now(timezone.utc).isoformat()
                 cur.execute(
                     """INSERT INTO package_maintainers_hashed
@@ -241,7 +257,7 @@ def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
                     (name_hash, package_id, now),
                 )
                 conn.commit()
-                return True
+            return existing is None
         else:
             # No salt yet: fall back to the legacy plaintext table so the
             # first-seen-for-this-package semantics stay intact.
@@ -251,23 +267,27 @@ def check_maintainer_novelty(maintainer_name: str, package_id: int) -> bool:
                 (maintainer_name, package_id),
             ).fetchone()
 
-            if existing is None:
+            if existing is None and record:
                 cur.execute(
                     "INSERT INTO maintainers (name, first_seen_package_id) VALUES (?, ?)",
                     (maintainer_name, package_id),
                 )
                 conn.commit()
-                return True
-
-    return False
+            return existing is None
 
 
 def build_novelty_context(
     added_urls: list[str],
     package_id: int,
     maintainer: str = "",
+    record: bool = False,
 ) -> NoveltyContext:
-    """Build a NoveltyContext by checking URL and maintainer novelty"""
+    """Build a NoveltyContext by checking URL and maintainer novelty.
+
+    ``record=False`` (the default) is read-only: the context is computed
+    from the database as it stands and left unchanged, so the same diff
+    against the same state always produces the same context.
+    """
     ctx = NoveltyContext()
 
     # Read maturity before this analysis is recorded, so a package is
@@ -277,11 +297,13 @@ def build_novelty_context(
 
     if maintainer:
         ctx.maintainer_first_seen_for_this_package = check_maintainer_novelty(
-            maintainer, package_id
+            maintainer, package_id, record=record
         )
 
     for url in added_urls:
-        first_for_pkg, first_global = check_url_novelty(url, package_id)
+        first_for_pkg, first_global = check_url_novelty(
+            url, package_id, record=record
+        )
         if first_for_pkg:
             ctx.url_first_seen_in_this_package = True
         if first_global:

@@ -148,10 +148,12 @@ def discover_packages(
 ) -> tuple[Optional[list[dict]], int]:
     """Find installed packages that have a newer version in the AUR.
 
-    Returns ``(packages, total_installed)``.  ``packages`` is ``None`` when
-    this call did nothing but download the first metadata snapshot: there
-    was no prior copy to diff against, so there is no delta to report and
-    the caller should say so and stop rather than print "nothing changed".
+    Returns ``(packages, total_installed)``.  A previous build returned
+    ``(None, 0)`` on the first run - the call downloaded the metadata
+    snapshot and stopped, telling the user to run again.  Discovery does
+    not diff snapshots, so there was never a reason to wait: the first run
+    now continues with the snapshot it just fetched.  ``None`` is still
+    reserved for a caller that genuinely could not discover anything.
 
     *on_download* receives ``(bytes_so_far, total_bytes_or_None)`` during
     that first snapshot fetch; *on_notice* receives one-line status text.
@@ -172,15 +174,14 @@ def discover_packages(
             save_metadata(meta, path=meta_path)
             if on_notice:
                 on_notice(
-                    "Downloaded AUR metadata snapshot. Run again to review changes."
+                    "Downloaded AUR metadata snapshot; reviewing against it now."
                 )
-            return None, 0
-
-        meta, snapshot_time = snapshot
-        meta = _refreshed_metadata(
-            meta, snapshot_time, meta_path, on_download, on_notice, on_warn,
-            force_refresh=force_refresh,
-        )
+        else:
+            meta, snapshot_time = snapshot
+            meta = _refreshed_metadata(
+                meta, snapshot_time, meta_path, on_download, on_notice, on_warn,
+                force_refresh=force_refresh,
+            )
 
         installed = get_installed_packages(
             repos, include_foreign, all_repos, all_packages, on_warn=on_warn
@@ -416,6 +417,7 @@ def analyze_outdated_batch(
     progress_callback: Optional[ProgressCallback] = None,
     verbose: bool = False,
     depth: Optional[int] = None,
+    record: bool = False,
 ) -> list[dict]:
     """Prefetch, analyse and summarise *pkgs*, one result dict per package.
 
@@ -447,6 +449,7 @@ def analyze_outdated_batch(
                 # Shared across roots: one dependency is analysed once even
                 # when twenty installed packages all need it.
                 _depth_seen=depth_seen,
+                record=record,
             )
         except Exception as exc:
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)

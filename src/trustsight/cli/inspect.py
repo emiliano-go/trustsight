@@ -429,7 +429,7 @@ def register_commands(app: typer.Typer):
         ),
         record: bool = typer.Option(
             False, "--record",
-            help="Write observations to the database (default: read-only for uninstalled packages)",
+            help="Persist observations and analysis history (default: read-only)",
         ),
     ):
         """Show a detailed analysis of a single package."""
@@ -439,16 +439,6 @@ def register_commands(app: typer.Typer):
         init_db()
         if load_config().get("seed", {}).get("auto_import", True):
             maybe_auto_import_seed(quiet=json_output, allow_release_fetch=True)
-
-        # --record without --allow-uninstalled is a no-op: installed
-        # packages already record observations on every analysis.
-        if record and not allow_uninstalled:
-            msg = "--record is only meaningful with --allow-uninstalled"
-            if json_output:
-                typer.echo(json.dumps({"error": msg}))
-            else:
-                _print_colored(msg, "red")
-            raise typer.Exit(code=2)
 
         # --last validation
         if last is not None and last < 1:
@@ -517,7 +507,7 @@ def register_commands(app: typer.Typer):
 
         # Single-result path (current behaviour).
         try:
-            fact = analyze_package(package, depth=depth)
+            fact = analyze_package(package, depth=depth, record=record)
         except Exception as exc:
             msg = f"Analysis of '{package}' failed: {exc}"
             if json_output:
@@ -640,6 +630,7 @@ def _inspect_history(
                 new_pkgbuild=new_pkgbuild,
                 maintainer=pkg_info.get("Maintainer", ""),
                 temporal=temporal,
+                record=record,
             )
         except Exception as _exc:
             import traceback as _tb

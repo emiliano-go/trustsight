@@ -17,6 +17,11 @@ from .bounded_io import read_file_capped
 DEFAULT_HASH_ALGORITHM = "sha256"
 SEED_FORMAT_VERSION = "2.0.0"
 
+#: Fixed timestamp for bulk corpora, matching scripts/generate_seed.py.
+#: The seed records *that* a URL or dependency was observed, not when; a
+#: wall-clock value would make the same build differ between runs.
+SEED_TIMESTAMP = "2024-01-01T00:00:00"
+
 # Ceiling on the provenance file copied into a seed.  It is a short JSON
 # record of how the seed was built; the bound is here because every read of
 # a path an operator supplied is bounded, not because this one is risky.
@@ -61,11 +66,40 @@ _CONFUSABLE_FOLD = {
 }
 
 
+def _strip_angle_suffix(value: str) -> str:
+    """Drop a trailing ``<...>`` from *value*, once.
+
+    `Name <email>` from a PKGBUILD's `# Maintainer:` comment is the same
+    person as the bare AUR account name the metadata dump and the seed carry.
+    Hashing both whole made every git-path lookup miss the seed/corpus
+    record: H026 and maintainer novelty read one person as globally novel on
+    the git path and known on the corpus path.
+
+    Written as a scan rather than a regex: ``<[^>]*>`` is quadratic on a run
+    of opening brackets (each start position scans to the end before
+    failing), which the adversarial audit rejects.  An email is the last
+    ``<...>`` group, so the rightmost ``<`` with a ``>`` after it is the one.
+    """
+    close = value.rfind(">")
+    if close == -1:
+        return value
+    open_ = value.rfind("<", 0, close)
+    if open_ == -1:
+        return value
+    return value[:open_] + value[close + 1:]
+
+
 def _identity_key(value: str) -> str:
-    """The one spelling of an identity, for hashing and comparison."""
+    """The one spelling of an identity, for hashing and comparison.
+
+    A ``Name <email>`` value is reduced to its name first, because that is
+    what the AUR metadata and the seed store.  A bare name is unchanged, so
+    the shipped seed's existing hashes keep matching.
+    """
     import unicodedata
 
-    text = unicodedata.normalize("NFKC", value)
+    text = _strip_angle_suffix(value)
+    text = unicodedata.normalize("NFKC", text)
     text = text.translate(_ZERO_WIDTH)
     text = text.translate(_CONFUSABLE_FOLD)
     return text.strip().lower()
@@ -112,6 +146,8 @@ def build_seed(
     out_dir: Path,
     hash_algorithm: str = DEFAULT_HASH_ALGORITHM,
     provenance: Path | None = None,
+    raw_source_urls: list[dict] | None = None,
+    raw_dependency_names: list[dict] | None = None,
 ) -> dict:
     """Build a v2 hashed maintainer seed under *out_dir*.
 
@@ -125,6 +161,12 @@ def build_seed(
     *provenance* is given, the file is copied verbatim into the seed
     directory as ``seed-provenance.json``; it is metadata about the build,
     never part of the hashed content.
+
+    *raw_source_urls* and *raw_dependency_names* are optional public-data
+    corpora (URLs are not identities, so they are not hashed).  The
+    importer already reads ``source_urls.jsonl`` and
+    ``dependency_names.jsonl``; omitting them here is what left a fresh
+    install with zero known URLs and made URL novelty vacuous.
 
     Returns the seed metadata dict.
     """
@@ -209,6 +251,38 @@ def build_seed(
         for line in maintainer_lines:
             fh.write(json.dumps(line, separators=(",", ":")) + "\n")
 
+    if raw_source_urls:
+        urls_path = seed_dir / "source_urls.jsonl"
+        with open(urls_path, "w", encoding="utf-8") as fh:
+            for record in raw_source_urls:
+                url = (record.get("url") or "").strip()
+                if not url:
+                    continue
+                row = {
+                    "url": url,
+                    "first_seen_package_id": 0,
+                    "first_seen_globally_timestamp": SEED_TIMESTAMP,
+                    "total_uses": int(record.get("total_uses", 1) or 1),
+                    "last_seen_timestamp": SEED_TIMESTAMP,
+                }
+                fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+    if raw_dependency_names:
+        deps_path = seed_dir / "dependency_names.jsonl"
+        with open(deps_path, "w", encoding="utf-8") as fh:
+            for record in raw_dependency_names:
+                name = (record.get("name") or "").strip()
+                if not name:
+                    continue
+                row = {
+                    "name": name,
+                    "first_seen_globally_timestamp": SEED_TIMESTAMP,
+                    "observation_count": int(
+                        record.get("observation_count", 1) or 1
+                    ),
+                }
+                fh.write(json.dumps(row, separators=(",", ":")) + "\n")
+
     if provenance is not None:
         prov_dst = seed_dir / "seed-provenance.json"
         prov_dst.write_bytes(
@@ -268,10 +342,32 @@ def main() -> None:
         default=None,
         help="seed-provenance.json to copy into the seed directory verbatim",
     )
+    parser.add_argument(
+        "--source-urls",
+        type=Path,
+        default=None,
+        help="JSON/JSONL of source URL records to ship in the seed",
+    )
+    parser.add_argument(
+        "--dependencies",
+        type=Path,
+        default=None,
+        help="JSON/JSONL of dependency name records to ship in the seed",
+    )
     args = parser.parse_args()
 
     raw = _read_raw_maintainers(args.input)
-    result = build_seed(raw, args.out, args.algorithm, args.provenance)
+    source_urls = (
+        _read_raw_maintainers(args.source_urls) if args.source_urls else None
+    )
+    dependencies = (
+        _read_raw_maintainers(args.dependencies) if args.dependencies else None
+    )
+    result = build_seed(
+        raw, args.out, args.algorithm, args.provenance,
+        raw_source_urls=source_urls,
+        raw_dependency_names=dependencies,
+    )
     print(f"Wrote {result['count']} hashed maintainers to {result['seed_dir']}")
     print(f"  salt: {result['salt']}")
     print(f"  seed_hash: {result['seed_hash']}")

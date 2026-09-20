@@ -460,6 +460,9 @@ def run_baseline_build(
                 archive_trailer_finding=trailer_finding,
                 snapshot_refused=snapshot_refused,
                 depth=depth,
+                # The corpus builder is a writer by definition: it exists to
+                # accumulate the observations the read-only default consumes.
+                record=True,
             )
         except TokenizerUnavailable as exc:
             # The sandboxed tokenizer could not answer (A6).  The package is

@@ -1187,13 +1187,15 @@ class TrustSight:
     # --- analysis ----------------------------------------------------
 
     def inspect(self, package: str, *, check_aur: bool = True,
-                depth: Optional[int] = None) -> Report:
+                depth: Optional[int] = None, record: bool = False) -> Report:
         """Analyse one package: what ``trustsight inspect`` shows.
 
         Fetches the package's AUR git repository, diffs it against the last
-        state this database saw, runs every rule, and records the run as an
-        observation, which is what makes the *next* call's novelty signals
-        mean anything.
+        state this database saw, and runs every rule.  Read-only by default:
+        nothing is written, so the same call against the same state returns
+        the same report.  Pass ``record=True`` to persist the run as an
+        observation and analysis history, which is what makes the *next*
+        call's novelty signals mean anything.
 
         :param check_aur: verify the package exists before analysing.  Set
             ``False`` to skip the RPC round trip when you already know it
@@ -1233,7 +1235,9 @@ class TrustSight:
             if package not in get_aur_package_info([package]) and get_package(package) is None:
                 raise PackageNotFound(package)
 
-        return _report_from_fact(analyze_package(package, depth=depth))
+        return _report_from_fact(
+            analyze_package(package, depth=depth, record=record)
+        )
 
     def analyze_text(
         self,
@@ -1246,6 +1250,7 @@ class TrustSight:
         last_modified: Optional[int] = None,
         first_submitted: Optional[int] = None,
         previous_modified: Optional[int] = None,
+        record: bool = False,
     ) -> Report:
         """Analyse PKGBUILD text directly, with no git and no network.
 
@@ -1307,6 +1312,7 @@ class TrustSight:
                 source="caller" if last_modified is not None else "unknown",
             ),
             srcinfo=srcinfo,
+            record=record,
         )
         return _report_from_fact(fact)
 
@@ -1323,6 +1329,7 @@ class TrustSight:
         on_warning: Optional[Callable[[str], None]] = None,
         depth: Optional[int] = None,
         deps: bool = False,
+        record: bool = False,
     ) -> ReviewResult:
         """Review installed AUR packages: what ``trustsight review`` does.
 
@@ -1331,10 +1338,12 @@ class TrustSight:
         Pass *packages* to review an explicit list instead and skip
         discovery entirely.
 
-        The very first call with no local AUR metadata snapshot downloads
-        one and returns ``metadata_bootstrapped=True`` with no reports:
-        there was no prior snapshot to diff against, so there is no delta
-        to report yet.  Call again.
+        Read-only by default: nothing is written, so repeated calls against
+        the same database return the same reports.  ``record=True`` persists
+        observations and analysis history.
+
+        The first call with no local AUR metadata snapshot downloads one and
+        reviews against it in the same invocation.
 
         :param limit: analyse at most this many packages (0 = no limit).
         :param repos: local repositories to scan, by name.
@@ -1412,7 +1421,7 @@ class TrustSight:
         # verbose=True keeps the underlying fact on each row, which is what
         # lets a review report carry everything an inspect report does.
         rows = analyze_outdated_batch(entries, _hook(on_progress), verbose=True,
-                                      depth=depth)
+                                      depth=depth, record=record)
 
         # Same field on every surface: the CLI attaches this to the row it
         # renders and serialises, so the API attaches it to the row it turns

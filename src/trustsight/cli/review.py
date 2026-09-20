@@ -196,7 +196,7 @@ def _sort_key(sort_by: str | None, result: dict):
     return (0, 0)
 
 
-def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None, required_by=None, deps_only=False, sort_by=None):
+def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_installed=0, all_packages=False, show_score=False, show_risk=False, depth=None, required_by=None, deps_only=False, sort_by=None, record=False):
     limited = outdated_pkgs[:limit] if limit else outdated_pkgs
     # How many needed reviewing, as opposed to how many were reviewed. The
     # caption used to report the second number under the first one's name:
@@ -231,15 +231,15 @@ def _run_analysis_loop(outdated_pkgs, limit, verbose, quiet, json_output, total_
                 else:
                     progress.update(task, description=description, refresh=True)
 
-            results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth)
+            results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth, record=record)
             progress.update(task, visible=False)
     elif json_output:
         def on_progress(_current, total, description):
             import json as _json
             print(_json.dumps({"event": "progress", "current": _current, "total": total, "phase": description}), file=sys.stderr)
-        results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth)
+        results = _analyze_outdated_batch(limited, on_progress, verbose, depth=depth, record=record)
     else:
-        results = _analyze_outdated_batch(limited, None, verbose, depth=depth)
+        results = _analyze_outdated_batch(limited, None, verbose, depth=depth, record=record)
 
     # `--deps` reverses the question the report answers: not "what does
     # this package pull in" but "who pulls this one in". The edge list is
@@ -641,6 +641,10 @@ def register_commands(app: typer.Typer):
             False, "--refresh",
             help="Force refresh the AUR metadata snapshot regardless of TTL.",
         ),
+        record: bool = typer.Option(
+            False, "--record",
+            help="Persist observations and analysis history (default: read-only).",
+        ),
     ):
         """Review AUR packages for suspicious updates."""
         has_progress = use_rich_progress() and not json_output and not quiet
@@ -850,7 +854,7 @@ def register_commands(app: typer.Typer):
                         else:
                             _print_colored("Rules are already up to date.", "green")
 
-            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by)
+            _run_analysis_loop(changed_installed, effective_limit, verbose, quiet, json_output, total_installed, all_packages, score, show_risk=risk, depth=depth, required_by=required_by, deps_only=deps_only, sort_by=sort_by, record=record)
         finally:
             if init_progress is not None:
                 init_progress.stop()

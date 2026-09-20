@@ -16,12 +16,14 @@ from ..analysis.buildfetch import has_unpinned_build_deps
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
 from ..analysis.structural import _structural_findings
+from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
 from ..buckets import classify_urls
 from ..config import load_config, load_thresholds
 from ..db import (
     effective_observation_count,
     get_connection,
     get_package,
+    get_package_id,
     insert_analysis,
     record_dependency_names,
     update_package_maintainer,
@@ -70,8 +72,17 @@ def _extract_pkgver(pkgbuild: str) -> str:
 
 
 def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str:
-    old_lines = old_text.splitlines(keepends=True)
-    new_lines = new_text.splitlines(keepends=True)
+    """Build the unified diff for the corpus path.
+
+    Uses the same shell-aware ``split_lines`` (and newline join) as
+    ``analysis.pipeline.analyze_package_text``.  Python's ``splitlines``
+    breaks on U+2028 and friends, which a PKGBUILD treats as an ordinary
+    character in a word, so identical recipe texts produced different hunk
+    boundaries depending on which adapter built the diff - and rules that
+    scan the diff could fire on one path and not the other.
+    """
+    old_lines = split_lines(old_text) if old_text else []
+    new_lines = split_lines(new_text) if new_text else []
     diff_lines = list(
         difflib.unified_diff(
             old_lines,
@@ -81,17 +92,13 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
             n=context_lines,
         )
     )
-    return "".join(diff_lines)
+    return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 
 
 def _diff_summary(diff_text: str) -> DiffSummary:
-    if not diff_text:
-        return DiffSummary()
-    lines = split_lines(diff_text)
-    return DiffSummary(
-        lines_added=sum(1 for line in lines if line.startswith("+")),
-        lines_removed=sum(1 for line in lines if line.startswith("-")),
-    )
+    from ..differ import diff_summary_from_text
+
+    return diff_summary_from_text(diff_text)
 
 
 def _temporal_findings(
@@ -145,7 +152,7 @@ def _temporal_findings(
     return findings
 
 
-def _corpus_dependency_fact(name: str):
+def _corpus_dependency_fact(name: str, record: bool = False):
     """A dependency's result, preferring what the corpus already computed.
 
     On the corpus path every package is analysed in its own right during the
@@ -176,6 +183,7 @@ def _corpus_dependency_fact(name: str):
         maintainer="",
         temporal=TemporalContext(source="corpus_depth"),
         depth=0,
+        record=record,
     )
 
 
@@ -197,7 +205,7 @@ class _StoredFact:
         self.coverage_gaps = ()
 
 
-def _walk_corpus_dependencies(pkg_name, depth, config, seen):
+def _walk_corpus_dependencies(pkg_name, depth, config, seen, record: bool = False):
     """The dependency closure, from results the corpus already has.
 
     ``seen`` is deliberately **not** shared across the packages of a corpus
@@ -219,7 +227,7 @@ def _walk_corpus_dependencies(pkg_name, depth, config, seen):
         pkg_name,
         depth=resolved,
         metadata=default_metadata(),
-        analyse=_corpus_dependency_fact,
+        analyse=lambda name: _corpus_dependency_fact(name, record=record),
         already_seen=set(seen) if seen else None,
     )
 
@@ -236,6 +244,7 @@ def analyze_package_text(
     snapshot_refused: bool = False,
     depth: int | None = None,
     _depth_seen: set | None = None,
+    record: bool = False,
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -277,13 +286,18 @@ def analyze_package_text(
     # Before either producer builds a fact: a truncated walk has to reach
     # `gaps_from`, because the band downgrade is decided inside
     # calculate_score and carried on the fact rather than re-derived.
-    depth_result = _walk_corpus_dependencies(pkg_name, depth, config, _depth_seen)
+    depth_result = _walk_corpus_dependencies(
+        pkg_name, depth, config, _depth_seen, record=record
+    )
     old_maintainer: Optional[str] = None
 
     new_version = _extract_pkgver(new_pkgbuild)
     old_version = _extract_pkgver(old_pkgbuild) if old_pkgbuild else ""
 
-    package_id = upsert_package(pkg_name, new_version)
+    if record:
+        package_id = upsert_package(pkg_name, new_version)
+    else:
+        package_id = get_package_id(pkg_name) or 0
 
     # Property stability tracking: record now, consumed in the same analysis
     # by the longitudinal rules (H047-H051/H054/H037).
@@ -295,15 +309,16 @@ def analyze_package_text(
         from datetime import datetime, timezone
         observed_at = datetime.now(timezone.utc).isoformat()
     breaks: list = []
-    try:
-        props = extract_properties(new_pkgbuild, srcinfo)
-        floor = int(
-            load_thresholds().get("longitudinal", {}).get("stability_floor", 10)
-        )
-        with get_connection() as conn:
-            breaks = update_properties(conn, pkg_name, props, observed_at, floor=floor)
-    except Exception:
-        log.warning("property tracking failed for %s", pkg_name, exc_info=True)
+    if record:
+        try:
+            props = extract_properties(new_pkgbuild, srcinfo)
+            floor = int(
+                load_thresholds().get("longitudinal", {}).get("stability_floor", 10)
+            )
+            with get_connection() as conn:
+                breaks = update_properties(conn, pkg_name, props, observed_at, floor=floor)
+        except Exception:
+            log.warning("property tracking failed for %s", pkg_name, exc_info=True)
 
     # H092 - the metadata and the recipe describe different packages.
     metadata_findings: list[dict] = []
@@ -317,7 +332,7 @@ def analyze_package_text(
         }))
 
     if old_pkgbuild is None:
-        novelty = build_novelty_context([], package_id)
+        novelty = build_novelty_context([], package_id, record=record)
         triggered_rules: list[dict] = []
         triggered_rules.extend(metadata_findings)
         triggered_rules.extend(
@@ -377,20 +392,21 @@ def analyze_package_text(
         # No diff on the first-seen path: there is nothing to compare
         # against, and the summary says so from the fact alone.
         with_changes(fact)
-        insert_analysis(
-            package_id=package_id,
-            old_version=old_version,
-            new_version=new_version,
-            old_commit="",
-            new_commit="",
-            final_score=score,
-            raw_diff="",
-            fact_json=json.dumps(fact_to_dict(fact)),
-            triggered_rules=triggered_rules,
-        )
-        update_package_version(pkg_name, new_version)
-        if maintainer:
-            update_package_maintainer(pkg_name, maintainer)
+        if record:
+            insert_analysis(
+                package_id=package_id,
+                old_version=old_version,
+                new_version=new_version,
+                old_commit="",
+                new_commit="",
+                final_score=score,
+                raw_diff="",
+                fact_json=json.dumps(fact_to_dict(fact)),
+                triggered_rules=triggered_rules,
+            )
+            update_package_version(pkg_name, new_version)
+            if maintainer:
+                update_package_maintainer(pkg_name, maintainer)
         return fact
 
     diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
@@ -402,6 +418,10 @@ def analyze_package_text(
 
     source_changes = extract_urls_from_diff(diff_text)
     source_buckets = classify_urls(source_changes.added_urls)
+    pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
+        diff_text, new_pkgbuild
+    )
+    version_moved = any_version_scalar_moved(diff_text)
 
     pkg_row = get_package(pkg_name)
     if pkg_row and pkg_row.get("current_maintainer"):
@@ -414,6 +434,7 @@ def analyze_package_text(
         source_changes.added_urls,
         package_id,
         maintainer=maintainer,
+        record=record,
     )
 
     resolved_strings, unresolved_strings, resolved_indices = (
@@ -515,7 +536,7 @@ def analyze_package_text(
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
         snapshot_refused=snapshot_refused,
-        unpinned_build_deps=has_unpinned_build_deps(diff_text),
+        unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
         deps_not_scanned=depth_result.truncated,
     )
 
@@ -533,6 +554,10 @@ def analyze_package_text(
         maintainer_changed=maintainer_changed,
         previous_maintainer=old_maintainer,
         current_maintainer=maintainer,
+        pkgver_changed=pkgver_changed,
+        version_moved=version_moved,
+        pkgver_old=_pkgver_old or "",
+        pkgver_new=_pkgver_new or "",
         diff_summary=_diff_summary(diff_text),
         source_changes=source_changes,
         source_buckets=source_buckets,
@@ -557,27 +582,29 @@ def analyze_package_text(
     )
 
     with_changes(fact, diff_text)
-    insert_analysis(
-        package_id=package_id,
-        old_version=old_version,
-        new_version=new_version,
-        old_commit="",
-        new_commit="",
-        final_score=score,
-        raw_diff=diff_text,
-        fact_json=json.dumps(fact_to_dict(fact)),
-        triggered_rules=triggered_rules,
-    )
+    if record:
+        insert_analysis(
+            package_id=package_id,
+            old_version=old_version,
+            new_version=new_version,
+            old_commit="",
+            new_commit="",
+            final_score=score,
+            raw_diff=diff_text,
+            fact_json=json.dumps(fact_to_dict(fact)),
+            triggered_rules=triggered_rules,
+        )
 
-    update_package_version(pkg_name, new_version)
-    if maintainer:
-        update_package_maintainer(pkg_name, maintainer)
+        update_package_version(pkg_name, new_version)
+        if maintainer:
+            update_package_maintainer(pkg_name, maintainer)
 
     dependency_changes = extract_dependency_changes(diff_text, pkg_name)
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
     with_changes(fact, diff_text)
-    record_dependency_names(sorted(
-        name for names in dependency_changes.values() for name in names
-    ))
+    if record:
+        record_dependency_names(sorted(
+            name for names in dependency_changes.values() for name in names
+        ))
 
     return fact

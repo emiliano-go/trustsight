@@ -657,6 +657,45 @@ def test_the_top_navigation_exposes_every_page():
         )
 
 
+# The security model was split by part into `docs/security/`, and other
+# pages, the changelog and links from outside the repo still point at the
+# old `security.md#anchor` URLs.  `security.md` keeps a stub heading per
+# moved anchor so those keep resolving; this pins the stubs, so renaming a
+# destination heading cannot quietly break an external deep link.
+_MOVED_SECURITY_ANCHORS = {
+    "part-a-trustsight-as-a-program-under-attack",
+    "the-adversary",
+    "the-trust-boundary",
+    "the-invariants",
+    "what-this-part-does-not-protect",
+    "part-b-what-the-result-claims",
+    "b1-a-score-is-a-sum-of-matched-evidence-nothing-more",
+    "b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete",
+    "b3-inconclusive-is-not-presented-as-unflagged",
+    "b4-fatal-cannot-be-switched-off",
+    "b5-suppression-is-always-visible",
+    "b6-what-a-result-does-not-claim",
+    "b7-a-result-reports-what-changed-not-only-what-fired",
+    "b8-a-finding-is-checkable",
+    "b9-no-output-grants-permission-to-skip-review",
+    "b10-positive-evidence-is-reported-never-credited",
+    "b11-every-surface-reports-the-same-thing",
+    "part-c-the-enforcement-map",
+    "part-d-vulnerability-reporting",
+    "how-to-report",
+    "supported-versions",
+    "what-counts-as-a-vulnerability-in-this-kind-of-tool",
+    "timeline",
+}
+
+
+def test_security_md_still_anchors_every_moved_part():
+    """The split kept the old URLs working by stubbing every moved anchor."""
+    text = (ROOT / "docs" / "security.md").read_text()
+    missing = sorted(a for a in _MOVED_SECURITY_ANCHORS if f"{{#{a}}}" not in text)
+    assert missing == [], f"stub anchors lost from docs/security.md: {missing}"
+
+
 def test_the_readme_rule_count_matches_the_catalog():
     """The README advertises a total; it drifted to 145 against 171."""
     scoring = sum(

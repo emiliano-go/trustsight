@@ -1051,7 +1051,7 @@ def gate_maturity_numbers_are_not_duplicated() -> Gate:
     problems = []
     half = _MATURITY_THRESHOLD // 2
 
-    doc = (ROOT / "docs" / "security.md").read_text()
+    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text()
     section = doc.split("### B3.")[-1].split("\n### ")[0]
     if f"**{_MATURITY_THRESHOLD}**" not in section:
         problems.append(f"B3 does not state the threshold ({_MATURITY_THRESHOLD})")
@@ -1921,7 +1921,7 @@ def gate_flag_threshold_is_derived() -> Gate:
     """
     from trustsight.scoring import FLAG_THRESHOLD
 
-    doc = (ROOT / "docs" / "security.md").read_text()
+    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text()
     problems = []
     if f"at or below {FLAG_THRESHOLD} points" not in doc:
         problems.append(f"security.md does not state the threshold ({FLAG_THRESHOLD})")
@@ -2346,21 +2346,19 @@ def gate_doc_cross_references_resolve() -> Gate:
 
 
 def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
-    """``docs/security.md`` names exactly the invariants enforced here.
+    """``docs/security/enforcement-map.md`` names exactly the invariants enforced here.
 
     The document is the claim and this script is the proof, so a gate with
     no entry is an unstated guarantee and an entry with no gate is an
-    unbacked promise.  Both are failures.
+    unbacked promise.  Both are failures.  The map is its own page since
+    the model was split by part, and its only table is the gate list.
     """
     name = "docs/security.md matches the gates"
-    doc = ROOT / "docs" / "security.md"
+    doc = ROOT / "docs" / "security" / "enforcement-map.md"
     if not doc.exists():
         return Gate(name, False, "missing")
     text = doc.read_text()
-    # Only the enforcement map, not every backticked first column on the
-    # page: the coverage-gap table upstream has the same row shape.
-    section = text.split("## Part C")[-1].split("\n## ")[0]
-    documented = set(re.findall(r"^\|\s*`([^`]+)`\s*\|", section, re.MULTILINE))
+    documented = set(re.findall(r"^\|\s*`([^`]+)`\s*\|", text, re.MULTILINE))
     enforced = {g.name for g in gates} | {name}
     missing = sorted(enforced - documented)
     extra = sorted(documented - enforced)

@@ -5,6 +5,10 @@
 /src/trustsight/config.py @emiliano-go
 /src/trustsight/db.py @emiliano-go
 /docs/security.md @emiliano-go
+/docs/security/program-under-attack.md @emiliano-go
+/docs/security/what-a-result-claims.md @emiliano-go
+/docs/security/enforcement-map.md @emiliano-go
+/docs/security/vulnerability-reporting.md @emiliano-go
 /.github/workflows/security.yml @emiliano-go
 /.github/workflows/calibration.yml @emiliano-go
 /packaging/aur/PKGBUILD @emiliano-go

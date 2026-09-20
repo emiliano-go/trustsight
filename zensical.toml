@@ -77,6 +77,10 @@ Overview = [
 [[project.nav]]
 Security = [
   {"Security Model" = "security.md"},
+  {"Program Under Attack" = "security/program-under-attack.md"},
+  {"What a Result Claims" = "security/what-a-result-claims.md"},
+  {"Enforcement Map" = "security/enforcement-map.md"},
+  {"Vulnerability Reporting" = "security/vulnerability-reporting.md"},
 ]
 
 [[project.nav]]

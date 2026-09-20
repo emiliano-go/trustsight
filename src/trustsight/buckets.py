@@ -327,8 +327,21 @@ _TAG_PATH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A fragment that names one immutable object.  This is the same predicate
+# `coverage.unpinned_source_refs` uses, kept in step with it: a
+# `#commit=`/`#revision=` ref is a commit pin, whether it carries a literal
+# digest or a variable that resolves to one.  A commit pin is not the same
+# declared fact as a checksummed tarball, and treating them as one is what
+# made a checksummed source report P005 "pinned to a full commit hash".
+_COMMIT_REF_RE = re.compile(
+    r"#(?:commit|revision)=(?:[0-9a-f]{7,40}|\$\{?[A-Za-z_]\w*\}?)",
+    re.IGNORECASE,
+)
 
-PINNING_ORDER = ["checksum_pinned", "tag_pinned", "branch_pinned", "unpinned"]
+
+PINNING_ORDER = [
+    "checksum_pinned", "commit_pinned", "tag_pinned", "branch_pinned", "unpinned",
+]
 
 
 def classify_pinning_level(url: str, checksum_present: bool = False) -> str:
@@ -336,10 +349,13 @@ def classify_pinning_level(url: str, checksum_present: bool = False) -> str:
 
     Levels from most to least pinned:
     - ``checksum_pinned``: URL covered by a valid sha256 checksum
-    - ``tag_pinned``: URL references a tag or version (immutable ref)
+    - ``commit_pinned``: URL names one immutable commit (``#commit=<sha>``)
+    - ``tag_pinned``: URL references a tag or version (a ref upstream can move)
     - ``branch_pinned``: URL references a mutable branch
     - ``unpinned``: none of the above
     """
+    if _COMMIT_REF_RE.search(url):
+        return "commit_pinned"
     if checksum_present:
         return "checksum_pinned"
     if _BRANCH_REF_RE.search(url):

@@ -760,6 +760,12 @@ network_makedepends = [
 ]
 """
 
+#: The novelty weights that ship, parsed from the config above.  Scoring reads
+#: a caller-supplied ``novelty_weights`` when present, but the fallback has to
+#: be the shipped value rather than a second copy that can drift: the inline
+#: defaults were 15/10/20 while the shipped config said 10/5/15.
+DEFAULT_NOVELTY_WEIGHTS = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
+
 DEFAULT_RULES = """\
 [[rules]]
 id = "R001"

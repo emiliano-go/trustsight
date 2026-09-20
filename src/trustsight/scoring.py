@@ -1,4 +1,4 @@
-from .config import load_config
+from .config import DEFAULT_NOVELTY_WEIGHTS, load_config
 from .coverage import GAP_REASONS, fail_closed, inconclusive_label, qualified_band
 from .schema import NoveltyContext, ScoreEntry
 
@@ -46,7 +46,11 @@ P_NO_COMMIT_PIN = "P008"
 # weights so that changing a weight cannot change which findings exist.
 DECLARED_BUCKETS = frozenset({"trusted_forge"})
 
-_PINNED_LEVELS = {"checksum_pinned": P_COMMIT_PINNED, "tag_pinned": P_TAG_PINNED}
+#: A commit pin is P005 and a tag pin is P006.  A checksum-pinned tarball is
+#: not a commit pin and gets no P-id here: P001 already reports that the
+#: recipe declares checksums, and conflating the two made P005 claim a commit
+#: hash for every checksummed tarball.
+_PINNED_LEVELS = {"commit_pinned": P_COMMIT_PINNED, "tag_pinned": P_TAG_PINNED}
 
 _EVIDENCE_IDS = {
     "checksum_present": P_CHECKSUMS,
@@ -353,7 +357,9 @@ def calculate_score(
     novelty_weights = config.get("novelty_weights", {})
     m = maturity(novelty.observation_count)
     if novelty.url_first_seen_globally:
-        raw_w = novelty_weights.get("url_first_globally", 15)
+        raw_w = novelty_weights.get(
+            "url_first_globally", DEFAULT_NOVELTY_WEIGHTS["url_first_globally"]
+        )
         w = int(raw_w * m)
         if w > 0:
             base += w
@@ -366,7 +372,9 @@ def calculate_score(
                 )
             )
     if novelty.url_first_seen_in_this_package:
-        raw_w = novelty_weights.get("url_first_in_package", 10)
+        raw_w = novelty_weights.get(
+            "url_first_in_package", DEFAULT_NOVELTY_WEIGHTS["url_first_in_package"]
+        )
         w = int(raw_w * m)
         if w > 0:
             base += w
@@ -379,7 +387,10 @@ def calculate_score(
                 )
             )
     if novelty.maintainer_first_seen_for_this_package:
-        raw_w = novelty_weights.get("maintainer_first_in_package", 20)
+        raw_w = novelty_weights.get(
+            "maintainer_first_in_package",
+            DEFAULT_NOVELTY_WEIGHTS["maintainer_first_in_package"],
+        )
         w = int(raw_w * m)
         if w > 0:
             base += w

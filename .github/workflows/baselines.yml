@@ -112,17 +112,29 @@ jobs:
           uv run python - <<'EOF'
           import json
           import sqlite3
+
           conn = sqlite3.connect("/tmp/seed.db")
-          rows = conn.execute("SELECT name, count FROM maintainer_counts").fetchall()
+
+          def dump(path, query, keys):
+              with open(path, "w", encoding="utf-8") as fh:
+                  for row in conn.execute(query):
+                      fh.write(json.dumps(dict(zip(keys, row))) + "\n")
+
+          dump("/tmp/maintainers.jsonl",
+               "SELECT name, count FROM maintainer_counts WHERE name IS NOT NULL",
+               ["name", "package_count"])
+          dump("/tmp/source_urls.jsonl",
+               "SELECT url, total_uses FROM source_urls",
+               ["url", "total_uses"])
+          dump("/tmp/dependency_names.jsonl",
+               "SELECT name, observation_count FROM dependency_names",
+               ["name", "observation_count"])
           conn.close()
-          with open("/tmp/maintainers.jsonl", "w", encoding="utf-8") as fh:
-              for name, count in rows:
-                  if not name:
-                      continue
-                  fh.write(json.dumps({"name": name, "package_count": count or 0}) + "\n")
           EOF
           uv run python scripts/build_hashed_seed.py /tmp/maintainers.jsonl \
-            --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json
+            --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json \
+            --source-urls /tmp/source_urls.jsonl \
+            --dependencies /tmp/dependency_names.jsonl
 
       - name: Write the distribution signing key
         env:

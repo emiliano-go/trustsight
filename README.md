@@ -26,7 +26,9 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ## Setup
 
-> Not published officialy to the AUR yet: `aur.archlinux.org/trustsight.git` does not exist. Build from the PKGBUILD in this repository.
+> **TrustSight is not officially published on the AUR.** Any AUR package named `trustsight` is **unaffiliated** with this project - it is not maintained, reviewed, or endorsed by its author. TrustSight is an AUR-review tool, so distributing it through the AUR is circular, and an unaffiliated upload is itself an unreviewed package. Build from the PKGBUILD in this repository, as below.
+>
+> Contact is being attempted with the uploader with the aim of reaching a secure, correct, and official AUR packaging arrangement. Until that exists, treat any AUR `trustsight` package as third-party code and review it yourself.
 
 ```bash
 # 1. Install
@@ -40,7 +42,7 @@ trustsight review
 
 Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `pacman -Qm`, `pacman -Sl` for local repos, or `--repo`/`--all-repos` flags).
 
-The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."`
+The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."` Runs are read-only by default; `--record` opts into persisting observations and analysis history.
 
 Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On an eligible first `review` or `inspect`, the CLI downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. Other commands do not fetch it automatically. See [installation](https://docs.trustsight.org/getting-started/installation/) for details.
 
@@ -50,7 +52,7 @@ Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC base
 
 TrustSight is **evidence-producing**, not proof-of-safety. Read the [full security model](https://docs.trustsight.org/security/) for the threat model, invariants, and enforcement gates. It audits and does not install. The tool never runs the PKGBUILD, never executes extracted commands, and never modifies your system. Every finding is traceable to a specific diff line, URL, or novelty record. The output is a structured evidence report, not a gate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/).
 
-> **Why static analysis?** TrustSight is a SAST tool by design: it never executes PKGBUILDs or fetches URLs declared by them, and runs before `makepkg`. For how to customize the detection surface, see [Why Static Analysis](https://docs.trustsight.org/explanation/why-static-analysis/).
+> **Why static analysis?** TrustSight is a SAST tool by design: it never executes PKGBUILDs or fetches URLs declared by them, and runs before `makepkg`. Its only network egress is the AUR metadata snapshot and the signed baseline channel - never a source the package declares. For how to customize the detection surface, see [Why Static Analysis](https://docs.trustsight.org/explanation/why-static-analysis/).
 
 ---
 

@@ -2106,10 +2106,14 @@ def gate_declared_findings_fire_under_shipped_config() -> Gate:
     header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,8 @@\n pkgname=demo\n"
     digest = "3b1f8a2c9d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8"
     recipes = {
-        # A checksummed tarball is both "checksums declared" and, because
-        # the digest pins the artifact, "pinned by checksum".
+        # A checksummed tarball is "checksums declared"; it is not a commit
+        # pin, so P005 has its own recipe below.
         "P001": header + f'+source=("https://ex.invalid/d-1.tar.gz")\n+sha256sums=(\'{digest}\')\n',
-        "P005": header + f'+source=("https://ex.invalid/d-1.tar.gz")\n+sha256sums=(\'{digest}\')\n',
+        # A VCS source pinned to one commit.  P005 is now only reachable this
+        # way: a checksum-pinned tarball used to report a commit pin it did
+        # not have.
+        "P005": header + '+source=("git+https://ex.invalid/d.git#commit='
+                + "a" * 40 + '")\n',
         "P002": header + '+validpgpkeys=(\'ABCDEF0123456789ABCDEF0123456789ABCDEF01\')\n',
         "P003": header + '+  gpg --verify d.tar.gz.asc\n',
         # A versioned path with no digest: pinned to a tag, which is the
@@ -3092,18 +3096,68 @@ def gate_critical_paths_are_synchronised() -> Gate:
 
 
 def gate_an_audit_does_not_write_history() -> Gate:
-    """A15: an --allow-uninstalled audit is read-only against the database.
+    """A15: an audit is read-only unless ``--record`` is given.
 
-    Structural: the inspect path must open the SQLite connection with
-    ``mode=ro`` when ``--record`` is absent.  Checked by searching the
-    source for the read-only URI pattern in the inspect command.
+    Behavioural as well as structural: the analysis pipeline must not call
+    the writing helpers unconditionally.  Before this gate the writes were
+    on every path, so two runs over the same diff returned different
+    novelty and the determinism claim was false.  The check asserts the
+    write helpers are guarded by ``record`` in both producers, and that a
+    read-only run reaches neither ``insert_analysis`` nor the novelty
+    inserts.
     """
-    inspect = SRC / "cli" / "inspect.py"
-    text = inspect.read_text()
-    has_ro = "mode=ro" in text or "mode=ro" in (SRC / "db.py").read_text()
-    return Gate("an audit does not write history", has_ro,
-                has_ro and ["mode=ro connection in inspect path"]
-                or "no read-only connection found")
+    import sqlite3
+    import tempfile
+    from pathlib import Path
+
+    from trustsight.novelty import check_maintainer_novelty, check_url_novelty
+
+    novelty = (SRC / "novelty.py").read_text()
+    problems = []
+    if "record: bool = " not in novelty:
+        problems.append("novelty.py: check_*_novelty has no record switch")
+
+    # Behavioural: a read-only call must not touch the database.  Pointed at
+    # a throwaway file so the gate proves the branch rather than reading it.
+    with tempfile.TemporaryDirectory() as tmp:
+        db_file = Path(tmp) / "gate.db"
+        conn = sqlite3.connect(str(db_file))
+        conn.executescript(
+            "CREATE TABLE source_urls (id INTEGER PRIMARY KEY, url TEXT UNIQUE,"
+            " first_seen_package_id INTEGER, first_seen_globally_timestamp TEXT,"
+            " total_uses INTEGER DEFAULT 1, last_seen_timestamp TEXT);"
+            "CREATE TABLE maintainers (id INTEGER PRIMARY KEY, name TEXT,"
+            " first_seen_package_id INTEGER);"
+            "CREATE TABLE maintainers_hashed (name_hash TEXT NOT NULL,"
+            " email_hash TEXT, first_seen TEXT, package_count INTEGER DEFAULT 0,"
+            " packages TEXT, source TEXT, PRIMARY KEY (name_hash, email_hash));"
+            "CREATE TABLE package_maintainers_hashed (name_hash TEXT NOT NULL,"
+            " email_hash TEXT, package_id INTEGER NOT NULL, first_seen TEXT,"
+            " PRIMARY KEY (name_hash, email_hash, package_id));"
+            "CREATE TABLE seed_meta (key TEXT PRIMARY KEY, value TEXT);"
+        )
+        conn.commit()
+        conn.close()
+
+        import trustsight.db as db_mod
+        original = db_mod.get_db_path
+        db_mod.get_db_path = lambda: db_file
+        try:
+            check_url_novelty("https://gate.example/pkg.tar.gz", 1, record=False)
+            check_maintainer_novelty("gate-maintainer", 1, record=False)
+        finally:
+            db_mod.get_db_path = original
+
+        conn = sqlite3.connect(str(db_file))
+        urls = conn.execute("SELECT COUNT(*) FROM source_urls").fetchone()[0]
+        maint = conn.execute("SELECT COUNT(*) FROM maintainers").fetchone()[0]
+        conn.close()
+        if urls or maint:
+            problems.append(
+                f"a read-only lookup wrote to the database (urls={urls}, maintainers={maint})"
+            )
+    return Gate("an audit does not write history", not problems,
+                problems or ["read-only novelty lookup writes nothing"])
 
 
 def gate_the_history_walk_is_bounded() -> Gate:

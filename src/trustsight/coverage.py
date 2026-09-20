@@ -51,6 +51,7 @@ RULESET_DRIFTED = "ruleset_drifted"
 STAGE_DEGRADED = "stage_degraded"
 HISTORY_TRUNCATED = "history_truncated"
 NOEXTRACT_SUPPRESSED = "noextract_suppressed"
+TOKENIZER_UNAVAILABLE = "tokenizer_unavailable"
 
 GAPS = (
     DIFF_TRUNCATED,
@@ -67,6 +68,7 @@ GAPS = (
     STAGE_DEGRADED,
     HISTORY_TRUNCATED,
     NOEXTRACT_SUPPRESSED,
+    TOKENIZER_UNAVAILABLE,
 )
 
 GAP_REASONS = {
@@ -128,6 +130,10 @@ GAP_REASONS = {
     NOEXTRACT_SUPPRESSED: (
         "noextract=() suppresses extraction of source archives whose "
         "contents could not be examined"
+    ),
+    TOKENIZER_UNAVAILABLE: (
+        "the sandboxed tokenizer could not answer for this input, so no "
+        "expanded text was produced; the package is reported as not vetted"
     ),
 }
 
@@ -509,6 +515,9 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     NOEXTRACT_SUPPRESSED: (
         "noextract=() suppresses extraction: source archive contents not examined"
+    ),
+    TOKENIZER_UNAVAILABLE: (
+        "the sandboxed tokenizer did not run: the recipe was not expanded"
     ),
 }
 

@@ -1,6 +1,10 @@
 # Security-critical paths require maintainer review.
 /scripts/security_gates.py @emiliano-go
 /src/trustsight/tokenizer.py @emiliano-go
+/src/trustsight/_tokenizer_engine.py @emiliano-go
+/src/trustsight/sandbox/client.py @emiliano-go
+/src/trustsight/sandbox/expand_worker.py @emiliano-go
+/src/trustsight/sandbox/protocol.py @emiliano-go
 /src/trustsight/scoring.py @emiliano-go
 /src/trustsight/config.py @emiliano-go
 /src/trustsight/db.py @emiliano-go

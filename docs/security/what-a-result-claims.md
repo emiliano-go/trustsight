@@ -26,7 +26,7 @@ The score is not a probability, not a confidence, and not a prediction. A score 
 
 ### B2. An unflagged verdict is never issued for an analysis that was incomplete
 
-Fourteen things make a run partial, and all fourteen are recorded as **coverage gaps** on the result:
+Fifteen things make a run partial. Fourteen are recorded as **coverage gaps** on the result; the fifteenth, `tokenizer_unavailable`, is a refusal and is reported through the not-vetted path described below.
 
 | Gap | Meaning |
 |-----|---------|
@@ -44,6 +44,7 @@ Fourteen things make a run partial, and all fourteen are recorded as **coverage 
 | `history_truncated` | The history walk (`--last N`) stopped before yielding the requested N results: a ceiling was reached, the run diff budget was exhausted, or the repository had fewer content-bearing commits than requested. Attached to the newest result, with the run-level count also reported (A14). |
 | `ruleset_drifted` | The installed `rules.toml` differs from the shipped rule set in a field that changes what a rule detects, so this analysis did not run the checks this version documents. |
 | `noextract_suppressed` | `noextract=()` suppresses extraction of specific source archives, so their contents were not available for rule matching. |
+| `tokenizer_unavailable` | The sandboxed tokenizer could not answer, so no expanded text was produced. Not a per-result gap: the package is reported as not vetted (A6), so a failed sandbox cannot read as a clean analysis. |
 
 `companion_truncated` is separate from `diff_truncated` for the reason `scan_truncated` is: they point at different dials. A companion is read on its own budget, and a reader told only "the diff was truncated" would raise `max_diff_bytes` and find it changed nothing. The bound itself is not the interesting part - every bound drops content. What made this one a vulnerability rather than a limit was that it dropped content *and said nothing*, so a payload past 64 KiB in a committed `Makefile` scored identically to a package with no companions at all.
 

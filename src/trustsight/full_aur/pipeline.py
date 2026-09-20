@@ -41,6 +41,7 @@ from ..db import (
 )
 from ..schema import TemporalContext
 from ..scoring import risk_level
+from ..tokenizer import TokenizerUnavailable
 from .analyze import analyze_package_text
 from .corpus import run_corpus_sweep, source_repos_from_pkgbuild
 from .fetch import (
@@ -443,22 +444,29 @@ def run_baseline_build(
         prev_last_modified: Optional[int] = (
             old_snapshot["last_modified"] if old_snapshot else None
         )
-        fact = analyze_package_text(
-            pkg_name=name,
-            old_pkgbuild=old_pkgbuild,
-            new_pkgbuild=new_pkgbuild,
-            maintainer=meta.get("Maintainer") or "",
-            temporal=TemporalContext(
-                last_modified=meta.get("LastModified"),
-                first_seen=meta.get("FirstSubmitted"),
-                previous_modified=prev_last_modified,
-                source="aur_metadata",
-            ),
-            tree_manifest=tree_manifest,
-            archive_trailer_finding=trailer_finding,
-            snapshot_refused=snapshot_refused,
-            depth=depth,
-        )
+        try:
+            fact = analyze_package_text(
+                pkg_name=name,
+                old_pkgbuild=old_pkgbuild,
+                new_pkgbuild=new_pkgbuild,
+                maintainer=meta.get("Maintainer") or "",
+                temporal=TemporalContext(
+                    last_modified=meta.get("LastModified"),
+                    first_seen=meta.get("FirstSubmitted"),
+                    previous_modified=prev_last_modified,
+                    source="aur_metadata",
+                ),
+                tree_manifest=tree_manifest,
+                archive_trailer_finding=trailer_finding,
+                snapshot_refused=snapshot_refused,
+                depth=depth,
+            )
+        except TokenizerUnavailable as exc:
+            # The sandboxed tokenizer could not answer (A6).  The package is
+            # not analysed and nothing is persisted, so it cannot enter the
+            # corpus as if it had been vetted; the cycle continues.
+            log.warning("tokenizer unavailable for %s: %s; not vetted", name, exc)
+            return "not_vetted"
         save_pkgbuild_snapshot(
             package_name=name,
             pkgbuild_text=new_pkgbuild,
@@ -477,6 +485,7 @@ def run_baseline_build(
         return "ok"
 
     fetch_failures = 0
+    not_vetted = 0
     progress = _corpus_progress(len(pending), json_output)
     try:
         done = 0
@@ -484,9 +493,15 @@ def run_baseline_build(
             status = _store(name, fetched)
             if status == "fetch_failed":
                 fetch_failures += 1
+            elif status == "not_vetted":
+                not_vetted += 1
             # A fetch failure is marked done too, so a resume does not retry a
-            # package the mirror has no snapshot for on every pass.
-            processed.add(name)
+            # package the mirror has no snapshot for on every pass.  A
+            # not-vetted package is the opposite case: nothing was stored and
+            # the tokenizer may answer on a later pass, so it is left out of
+            # the resume set and retried.
+            if status != "not_vetted":
+                processed.add(name)
             done += 1
 
             if progress is not None:
@@ -506,6 +521,13 @@ def run_baseline_build(
 
     if fetch_failures:
         _log(f"{fetch_failures} package(s) had no fetchable PKGBUILD this cycle")
+
+    if not_vetted:
+        _log(
+            f"{not_vetted} package(s) were NOT vetted this cycle: the "
+            "sandboxed tokenizer could not answer and nothing was recorded "
+            "for them"
+        )
 
     save_resume_state({"processed": sorted(processed)})
 

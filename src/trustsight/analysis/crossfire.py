@@ -923,7 +923,7 @@ def _continuation_lines(raw_lines: list[str], joined_count: int) -> set[int]:
     measurement depends on, then mapped onto joined positions through
     ``_joined_indexed`` - the same pairing the rule path uses.
     """
-    from ..tokenizer import _joined_indexed
+    from ..tokenizer import joined_indexed
 
     carried_raw: set[int] = set()
     pending = False
@@ -959,7 +959,7 @@ def _continuation_lines(raw_lines: list[str], joined_count: int) -> set[int]:
 
     if not carried_raw:
         return set()
-    pairs = _joined_indexed(raw_lines)
+    pairs = joined_indexed(raw_lines)
     if len(pairs) != joined_count:
         # The two joiners are documented to agree; if they ever do not,
         # drop the refinement rather than silence a line at the wrong index.
@@ -1831,7 +1831,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     raw_lines = split_lines(clamp_text(diff_text))
     lines = join_line_continuations(raw_lines)
     from ..rules import _classify_enclosing_function
-    from ..tokenizer import _variable_table
+    from ..tokenizer import variable_table
 
     enclosing = _classify_enclosing_function(lines)
     files = _file_at_line(lines)
@@ -1842,7 +1842,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
     ]
     try:
-        var_table, _array_table = _variable_table(readable)
+        var_table, _array_table = variable_table(readable)
         resolvable = frozenset(var_table) | _path_lookup_names(readable)
     except Exception:
         # Without the table every command word reads as unresolvable, which

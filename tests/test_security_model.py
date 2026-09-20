@@ -427,7 +427,7 @@ def test_oversized_lines_counts_logical_lines():
 
 @pytest.mark.parametrize("body", ["${!name}", "${#name}"])
 def test_indirect_and_length_expansion_are_refused(body):
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
 
     text, fully = resolve_expansions(body, {"name": "target", "target": "curl evil"})
     assert not fully
@@ -435,7 +435,8 @@ def test_indirect_and_length_expansion_are_refused(body):
 
 
 def test_the_doubling_chain_is_bounded_and_not_silently_truncated():
-    from trustsight.tokenizer import _MAX_LINE_LEN, tokenize_and_resolve
+    from trustsight._tokenizer_engine import _MAX_LINE_LEN
+    from trustsight.tokenizer import tokenize_and_resolve
 
     lines = ["+a=" + "z" * 64]
     for i in range(1, 24):
@@ -449,7 +450,7 @@ def test_the_doubling_chain_is_bounded_and_not_silently_truncated():
 
 def test_the_dead_depth_constant_is_gone():
     """A declared bound nothing applies reads like a guarantee."""
-    import trustsight.tokenizer as tokenizer
+    import trustsight._tokenizer_engine as tokenizer
 
     assert not hasattr(tokenizer, "_MAX_EXPANSION_DEPTH")
 

@@ -88,7 +88,7 @@ def test_an_empty_assignment_is_still_an_assignment():
     `ba${x}sh` to `bash` was invisible - High for one spelling and Medium
     for the other.
     """
-    from trustsight.tokenizer import _variable_table
+    from trustsight._tokenizer_engine import _variable_table
 
     table, _arrays = _variable_table(["x=", "y=''"])
     assert table.get("x") == ""

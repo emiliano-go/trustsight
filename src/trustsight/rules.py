@@ -5,11 +5,11 @@ import logging
 
 from .config import load_rules
 from .findings import stamp
-from .tokenizer import (  # noqa: F401
-    collapse_traversal,
-    strip_leading_bom,
+from .tokenizer import (
+    clean_lines,
     join_line_continuations,
     split_lines,
+    strip_boms,
 )
 from .regex_safety import (
     BACKTRACK_BUDGET_S,
@@ -758,9 +758,10 @@ def apply_rules(
     # path into `/lib`.  Collapsed here as well as in the resolved text,
     # because the rules that own package-root staging read raw lines
     # deliberately - they need the quoting the tokenizer removes.
+    filtered_raw = filter_raw_lines(raw_diff_lines)
+    cleaned_raw = clean_lines([ln for _i, ln in filtered_raw])
     raw_candidates = [
-        (i, collapse_traversal(strip_leading_bom(ln)))
-        for i, ln in filter_raw_lines(raw_diff_lines)
+        (i, cleaned) for (i, _ln), cleaned in zip(filtered_raw, cleaned_raw)
     ]
     added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
     if resolved_indices is not None:
@@ -794,8 +795,11 @@ def apply_rules(
     # the reader will not see.
     # The BOM strip applies here too: R013 is the rule that reads this list
     # and the rule a byte-order mark used to fire, at FATAL.
+    reader_pairs = _to_pairs(raw_diff_lines)
+    stripped_reader = strip_boms([ln for _i, ln in reader_pairs])
     reader_candidates = [
-        (i, strip_leading_bom(ln)) for i, ln in _to_pairs(raw_diff_lines)
+        (i, stripped)
+        for (i, ln), stripped in zip(reader_pairs, stripped_reader)
         if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
     ]
     rules_by_id = {rule["id"]: rule for rule in rules}

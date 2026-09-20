@@ -4,7 +4,33 @@
 
 ## [Unreleased]
 
-_No changes yet._
+### Security
+
+- **The whole tokenizer runs in a sandboxed child process.** The tokenizer
+  is the second parser eating package-controlled input, and the one with an
+  amplification property (`b=$a$a` doubles per level), so A6 bounded it with
+  four constants. A bound applied to a known amplification is a weaker
+  assurance than "a defect here cannot reach anything", so
+  `trustsight.tokenizer` is now an RPC facade over a persistent pool of
+  child processes: no inherited descriptors, `RLIMIT_AS` / `RLIMIT_CPU` /
+  `RLIMIT_FSIZE` / `RLIMIT_NOFILE`, `PR_SET_NO_NEW_PRIVS`, a best-effort
+  network namespace, and a wall-clock request timeout. The parent imports
+  no engine code - `_tokenizer_engine.py` is imported by the worker alone,
+  enforced by the new `tokenizer module is isolated` gate.
+
+  A child that cannot answer is a refusal, not a quiet run: the facade
+  raises `TokenizerUnavailable`, the package is reported as NOT vetted
+  through the existing failure path, and a new
+  `a dead tokenizer child fails the package` gate proves the real
+  `scan_diff` reaches that raise. The `tokenizer_unavailable` reason code
+  is added to the coverage taxonomy. The protocol is a four-byte length and
+  JSON, never `pickle`, with every frame and read capped; an identity cache
+  collapses the ~97 tokenizer entry-point calls a diff makes into about a
+  dozen child round-trips, and callers treat tokenizer output as read-only.
+
+  The security model's A1, A6, the "known architectural limits" and the
+  [sandboxing the tokenizer](explanation/sandboxing-the-tokenizer.md) page
+  are updated from a design note to a description of what exists.
 
 ## [0.16.0] - 2026-09-19
 

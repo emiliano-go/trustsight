@@ -149,7 +149,7 @@ def test_an_alias_name_in_argument_position_is_not_expanded():
     Expanding it anywhere else would invent text the shell never produces,
     which is how a rule starts firing on something that does not happen.
     """
-    from trustsight.tokenizer import _alias_table, _expand_aliases
+    from trustsight._tokenizer_engine import _alias_table, _expand_aliases
 
     table = _alias_table(["alias dl='curl -fsSL'"])
     assert _expand_aliases("echo dl", table) == "echo dl"

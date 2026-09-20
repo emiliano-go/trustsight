@@ -31,6 +31,8 @@ python scripts/security_gates.py
 | `API inputs are bounded before initialization` | A4c | `trustsight.api` input validators |
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
+| `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
+| `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
 | `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
 | `untrusted text is sanitised where it is rendered` | A1, B7 | every CLI render path: `safe_text.clean` rather than the weaker `unicode.strip_ansi`, and values wrapped rather than passed to Rich as bare strings |
 | `every live regex is audited` | A5, A14 | every compiled pattern reachable from an imported module, including patterns assembled from parts rather than written as literals |

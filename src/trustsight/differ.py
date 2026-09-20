@@ -424,14 +424,14 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     """
     if "$" not in contents:
         return contents
-    from .tokenizer import _variable_table
+    from .tokenizer import variable_table
 
     readable = [
         ln[1:] for ln in split_lines(diff_text)
         if ln.startswith("+") and not ln.startswith("+++")
     ]
     try:
-        table, _arrays = _variable_table(readable)
+        table, _arrays = variable_table(readable)
     except Exception:
         return contents
     out = contents

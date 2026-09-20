@@ -19,7 +19,7 @@ from ..rules import (
 )
 from ..tokenizer import (
     join_line_continuations,
-    reconstruct_literals,
+    reconstruct_lines,
     resolve_added_lines,
 )
 from .base import _experimental_enabled, mask_to_recipe
@@ -669,11 +669,16 @@ def _reconstruction_findings(diff_text, config, add) -> None:
     read as clean (plan §3.1).
     """
     raw_lines = join_line_continuations(split_lines(diff_text))
-    for line in raw_lines:
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        body = _strip_comment(line[1:])
-        rebuilt, fully = reconstruct_literals(body)
+    bodies = [
+        _strip_comment(line[1:])
+        for line in raw_lines
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+    # One round-trip for every line's reconstruction rather than one per
+    # line: the body walk is O(lines) and would otherwise be the sandbox's
+    # dominant cost on ordinary text.
+    rebuilt_pairs = reconstruct_lines(bodies)
+    for body, (rebuilt, fully) in zip(bodies, rebuilt_pairs):
         if not fully:
             # An ANSI-C quote that survived reconstruction is the
             # inconclusive case, whether or not anything else on the line

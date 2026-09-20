@@ -249,3 +249,46 @@ def test_http_get_gives_up_after_max_retries(monkeypatch):
     monkeypatch.setattr(fetch.urllib.request, "urlopen", fake_urlopen)
     assert fetch._http_get("https://x/y") is None
     assert calls["n"] == fetch._MAX_RETRIES + 1
+
+
+def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
+    """A6: the tokenizer sandbox failing one package must not abort the cycle.
+
+    ``run_baseline_build`` analyses every changed package in one loop, so an
+    uncaught ``TokenizerUnavailable`` would end a whole bootstrap.  The
+    package must instead be skipped, left out of the resume set so a later
+    pass retries it once the sandbox can answer, and never persisted.
+    """
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.tokenizer import TokenizerUnavailable
+
+    saved: dict = {}
+    monkeypatch.setattr(pipeline, "fetch_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "load_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "diff_metadata",
+                        lambda old, new: {"demo": "modified"})
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
+                        lambda *a, **k: ("pkgver=1\n", None, None, False))
+    monkeypatch.setattr(pipeline, "get_pkgbuild_snapshot", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
+    monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
+    monkeypatch.setattr(pipeline, "source_repos_from_pkgbuild", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "save_pkgbuild_snapshot", lambda **k: None)
+    monkeypatch.setattr(pipeline, "save_package_profile", lambda **k: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "record_alerts", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "save_resume_state",
+                        lambda state: saved.update(state))
+    monkeypatch.setattr(pipeline, "analyze_package_text",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            TokenizerUnavailable("boom")))
+
+    result = pipeline.run_baseline_build()
+
+    assert result.processed == 0
+    assert saved.get("processed") == []

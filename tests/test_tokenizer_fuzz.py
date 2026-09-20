@@ -12,12 +12,14 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from trustsight.analysis.pipeline import scan_diff
-from trustsight.tokenizer import (
+from trustsight._tokenizer_engine import (
     _MAX_LINE_LEN,
-    join_line_continuations,
     reconstruct_literals,
-    resolve_added_lines,
     resolve_expansions,
+)
+from trustsight.tokenizer import (
+    join_line_continuations,
+    resolve_added_lines,
     tokenize_and_resolve,
     tokenize_and_resolve_indexed,
 )

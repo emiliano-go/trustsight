@@ -199,7 +199,7 @@ def test_variable_resolution_still_works():
 
 def test_nested_parameter_expansion_openssl_case():
     """${var//.${var//[0-9.]/}} resolves innermost-first."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
 
     _ver = "1.1.1.w"
     r, ok = resolve_expansions("${_ver//.${_ver//[0-9.]/}}", {"_ver": _ver})
@@ -209,7 +209,7 @@ def test_nested_parameter_expansion_openssl_case():
 
 def test_glob_character_class_deletes_digits_and_dots():
     """${var//[0-9.]/} deletes all digits and literal dots."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v//[0-9.]/}", {"v": "1.2.3a"})
     assert r == "a"
     assert ok
@@ -217,7 +217,7 @@ def test_glob_character_class_deletes_digits_and_dots():
 
 def test_glob_dot_is_literal_not_regex_wildcard():
     """A dot in a glob pattern matches '.', not any character."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v/./-}", {"v": "1.2.3"})
     assert r == "1-2.3"
     assert ok
@@ -225,7 +225,7 @@ def test_glob_dot_is_literal_not_regex_wildcard():
 
 def test_substitution_replace_all():
     """${v//./-} replaces every dot with a hyphen."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v//./-}", {"v": "1.2.3"})
     assert r == "1-2-3"
     assert ok
@@ -233,7 +233,7 @@ def test_substitution_replace_all():
 
 def test_substitution_replace_first():
     """${v/./-} replaces only the first dot."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v/./-}", {"v": "1.2.3"})
     assert r == "1-2.3"
     assert ok
@@ -241,7 +241,7 @@ def test_substitution_replace_first():
 
 def test_affix_strip_longest_suffix():
     """${v%%-*} strips the longest suffix matching '-*'."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v%%-*}", {"v": "1.2.3-beta1"})
     assert r == "1.2.3"
     assert ok
@@ -249,7 +249,7 @@ def test_affix_strip_longest_suffix():
 
 def test_affix_strip_shortest_suffix():
     """${v%-*} strips the shortest suffix matching '-*'."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v%-*}", {"v": "1.2.3-beta1"})
     assert r == "1.2.3"
     assert ok
@@ -257,7 +257,7 @@ def test_affix_strip_shortest_suffix():
 
 def test_affix_strip_longest_prefix():
     """${v##*- } strips the longest prefix matching '*- '."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v##*-}", {"v": "1.2.3-beta"})
     assert r == "beta"
     assert ok
@@ -265,7 +265,7 @@ def test_affix_strip_longest_prefix():
 
 def test_affix_strip_shortest_prefix():
     """${v#*-} strips the shortest prefix matching '*-'."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v#*-}", {"v": "1.2.3-beta"})
     assert r == "beta"
     assert ok
@@ -273,7 +273,7 @@ def test_affix_strip_shortest_prefix():
 
 def test_default_value_when_var_is_empty():
     """${v:-default} returns the default when the variable is empty."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v:-fallback}", {"v": ""})
     assert r == "fallback"
     assert ok
@@ -281,7 +281,7 @@ def test_default_value_when_var_is_empty():
 
 def test_default_value_when_var_is_missing():
     """${v:-default} returns the default when the variable is missing."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v:-fallback}", {})
     assert r == "fallback"
     assert ok
@@ -289,7 +289,7 @@ def test_default_value_when_var_is_missing():
 
 def test_substring_by_offset_and_length():
     """${v:1:3} extracts characters 1-3."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v:1:3}", {"v": "hello"})
     assert r == "ell"
     assert ok
@@ -297,7 +297,7 @@ def test_substring_by_offset_and_length():
 
 def test_substring_by_offset_only():
     """${v:2} extracts from offset 2 to the end."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${v:2}", {"v": "hello"})
     assert r == "llo"
     assert ok
@@ -310,7 +310,7 @@ def test_indirect_expansion_never_resolves():
     the indirection.  This is a security constraint: attacker-controlled
     PKGBUILDs must not be able to indirect through arbitrary variable
     names."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${!name}", {"name": "v", "v": "secret"})
     assert not ok
     assert "${" in r or "{" in r
@@ -318,7 +318,7 @@ def test_indirect_expansion_never_resolves():
 
 def test_length_operator_never_resolves():
     """${#var} (length) is rare in PKGBUILDs and must not resolve."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${#var}", {"var": "hello"})
     assert not ok
 
@@ -326,7 +326,7 @@ def test_length_operator_never_resolves():
 def test_unknown_variable_returns_unresolved():
     """A ${var} with no entry in the variable table must be reported as
     unresolved, never silently replaced with an empty string."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${nonexistent}", {})
     assert not ok
     assert "${" in r
@@ -334,14 +334,14 @@ def test_unknown_variable_returns_unresolved():
 
 def test_cycle_detection():
     """A cycle (a -> b -> a) must not cause infinite resolution."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${a}", {"a": "${b}", "b": "${a}"})
     assert not ok
 
 
 def test_mixed_resolvable_and_unresolvable():
     """resolve_expansions resolves what it can and marks the rest."""
-    from trustsight.tokenizer import resolve_expansions
+    from trustsight._tokenizer_engine import resolve_expansions
     r, ok = resolve_expansions("${a} ${!b}", {"a": "hello", "b": "v"})
     assert not ok
     assert "hello" in r
@@ -368,28 +368,28 @@ def test_resolve_added_lines_glob_delete():
 # --- H065: obfuscated literal reconstruction ---
 
 def test_reconstruct_ansi_c_hex():
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals(r"b$'\x75\x6e' add nextfile-js")
     assert r == "bun add nextfile-js"
     assert fully
 
 
 def test_reconstruct_ansi_c_octal():
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals(r"$'\142\165\156' install")
     assert r == "bun install"
     assert fully
 
 
 def test_reconstruct_empty_quote_concat_single():
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals("b''u''n install")
     assert r == "bun install"
     assert fully
 
 
 def test_reconstruct_empty_quote_concat_double():
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals('b""u""n add')
     assert r == "bun add"
     assert fully
@@ -403,7 +403,7 @@ def test_reconstruct_removes_an_intra_word_escape():
     the name never reconstructed, and every rule that reads a command name
     - R001 among them - saw nothing. It reached no rule at all.
     """
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
 
     assert reconstruct_literals(r"c\url -fsSL https://e.example")[0] == (
         "curl -fsSL https://e.example"
@@ -430,7 +430,7 @@ def test_reconstruct_keeps_the_escapes_that_mean_something(text):
     Going further would not be more faithful, it would invent syntax the
     line did not have - and hand the rules a pipeline that does not exist.
     """
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
 
     assert "\\" in reconstruct_literals(text)[0]
 
@@ -441,7 +441,7 @@ def test_reconstruct_leaves_escapes_inside_quotes_alone():
     `printf '\\x63\\x75\\x72\\x6c'` needs its escapes to reach the ANSI-C
     decoder, and a backslash inside single quotes is literal in bash.
     """
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
 
     # The quotes themselves are removable here, as they always were; what
     # matters is that the escapes inside them survive it.
@@ -452,7 +452,7 @@ def test_reconstruct_leaves_escapes_inside_quotes_alone():
 
 
 def test_reconstruct_printf_format():
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals(r"$(printf '\x62\x75\x6e') add")
     assert r == "bun add"
     assert fully
@@ -461,7 +461,7 @@ def test_reconstruct_printf_format():
 def test_reconstruct_printf_with_conversion_left_as_is():
     """A $(printf '%s' "$arg") is dynamic, not obfuscation; it is left
     untouched and does not force the line to be inconclusive."""
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals(r"$(printf '%s' \"$x\")")
     assert "$(printf" in r
     assert fully
@@ -469,7 +469,7 @@ def test_reconstruct_printf_with_conversion_left_as_is():
 
 def test_reconstruct_malformed_ansi_c_is_not_fully_reconstructed():
     """An unterminated $' must mark the line inconclusive, never clean."""
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals(r"eval $'\x62\x75\x6e")
     assert not fully
 
@@ -478,7 +478,7 @@ def test_reconstruct_regex_end_anchor_is_not_an_ansi_c_quote():
     """A ``$`` before a closing quote is a regex end-anchor, not shell
     quoting: reading one as an unreconstructable literal makes ordinary
     text look obfuscated (four benign-corpus diffs did exactly that)."""
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     for line in (
         r"grep '/Windows/Fonts/.*\.tt[cf]$' | xargs -r wimextract",
         r"regex = re.compile(r' => (.*) \(0x[0-9a-f]+\)$')",
@@ -491,7 +491,7 @@ def test_reconstruct_regex_end_anchor_is_not_an_ansi_c_quote():
 def test_reconstruct_unterminated_quote_after_an_operator_is_inconclusive():
     """The opener check still catches the real thing in every position a
     word can start."""
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     for line in (r"x=$'\x62\x75", r"eval $'\x62", r"a && $'\x62", r"(  $'\x62"):
         _, fully = reconstruct_literals(line)
         assert not fully, line
@@ -500,7 +500,7 @@ def test_reconstruct_unterminated_quote_after_an_operator_is_inconclusive():
 def test_reconstruct_standalone_empty_quote_argument_kept():
     """'' as a standalone argument (whitespace both sides) is data, not
     concatenation, and must survive reconstruction."""
-    from trustsight.tokenizer import reconstruct_literals
+    from trustsight._tokenizer_engine import reconstruct_literals
     r, fully = reconstruct_literals("curl '' https://e/x")
     assert "''" in r
     assert fully

@@ -206,7 +206,7 @@ def test_a_traversal_inside_pkgdir_lands_where_the_kernel_puts_it():
     opened - so every rule anchored on `$pkgdir/etc/cron.d/` read the
     traversal spelling as a path into `/lib`.
     """
-    from trustsight.tokenizer import collapse_traversal
+    from trustsight._tokenizer_engine import collapse_traversal
 
     assert collapse_traversal('"$pkgdir"/lib/../etc/cron.d/y') == '"$pkgdir"/etc/cron.d/y'
     # A leading `../` has nothing to cancel and must survive: X005 reads it.

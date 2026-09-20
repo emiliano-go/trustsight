@@ -133,9 +133,20 @@ _UNBOUNDED_SPAWN_RE = re.compile(
 # S002: recursive deletion outside the build tree.
 # ---------------------------------------------------------------------------
 
+# Recursive and forced, in any order and in either spelling.  The old form
+# matched only a single combined token (`-rf`/`-fr`), so `rm -r -f`, `rm -f -r`
+# and `rm --recursive --force` all read as clean while `rm -rf` fired.  The
+# flag is a *set*, not a token: two lookaheads over the option span require an
+# r/R flag and an f flag independently.  Long options are matched whole, so
+# `--no-preserve-root` (which contains an `r`) is not mistaken for
+# `--recursive`.
+_OPT_RECURSIVE = r"(?:-[A-Za-z]*[rR][A-Za-z]*|--recursive)"
+_OPT_FORCE = r"(?:-[A-Za-z]*f[A-Za-z]*|--force)"
+_OPT_BOUND = r"(?=[ \t]|$|;|&|\|)"
 _RM_RF_RE = re.compile(
-    _CMD + r"rm\s+(?:-[a-zA-Z]*\s+)*-[a-zA-Z]*[rR][a-zA-Z]*f|"
-    + _CMD + r"rm\s+(?:-[a-zA-Z]*\s+)*-[a-zA-Z]*f[a-zA-Z]*[rR]",
+    _CMD + r"rm\b"
+    + r"(?=[^\n;&|]*?(?:^|[ \t])" + _OPT_RECURSIVE + _OPT_BOUND + r")"
+    + r"(?=[^\n;&|]*?(?:^|[ \t])" + _OPT_FORCE + _OPT_BOUND + r")",
     re.MULTILINE,
 )
 _RM_TARGET_SYSTEM_RE = re.compile(

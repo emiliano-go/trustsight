@@ -1726,6 +1726,22 @@ _MANIFEST_ARG_RE = re.compile(
 )
 
 
+def _consumer_after_override(body: str, override: re.Match) -> bool:
+    """True when a compile/configure step follows the override on its line.
+
+    ``CC="$srcdir/mcc" make`` is the shell's ``VAR=value command`` form: the
+    override and the step it redirects share a line, so looking for the
+    consumer from the *next* line never saw it.  The scan resumes at the
+    first token boundary after the matched value, which skips the rest of
+    the path and its closing quote.
+    """
+    tail = body[override.end():]
+    boundary = re.search(r"[;&|]|\s", tail)
+    if boundary is None:
+        return False
+    return bool(X012_CONSUMER_RE.search(tail[boundary.start():]))
+
+
 def _consumer_at(lines: list[str], index: int) -> bool:
     """True when a compile or configure step runs at or after *index*.
 
@@ -2080,7 +2096,10 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
                    body.strip())
 
         override = X012_RE.search(body)
-        if override and not toolchain and _consumer_at(lines, index + 1):
+        if override and not toolchain and (
+            _consumer_after_override(body, override)
+            or _consumer_at(lines, index + 1)
+        ):
             # The override only matters because something later uses it.
             # The consumer is looked for from here rather than waited for,
             # because it need not be an added line: an override placed

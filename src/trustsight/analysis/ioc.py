@@ -42,7 +42,7 @@ _BARE_HOST_RE = re.compile(r"(?<![\w.-])((?:[^\W_](?:[\w\-]*[^\W_])?\.)+[^\W\d_]
 _HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{32,128})(?![0-9a-fA-F])")
 
 _DEP_FIELDS = ("depends", "makedepends", "optdepends", "checkdepends",
-               "provides", "replaces")
+               "provides", "replaces", "conflicts")
 
 
 def _added_bodies(diff_text: str) -> list[str]:
@@ -79,7 +79,9 @@ def _hosts_in(body: str):
     """
     for _scheme, url in iter_scheme_urls(body):
         authority = url.split("://", 1)[1].split("/", 1)[0]
-        yield authority.split("@")[-1].split(":", 1)[0], "url"
+        from ..buckets import canonical_host
+
+        yield canonical_host(authority), "url"
     for match in _BARE_HOST_RE.finditer(body):
         yield match.group(1), "bare"
 

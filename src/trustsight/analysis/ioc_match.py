@@ -30,7 +30,7 @@ _CHECKSUM_ARRAY_RE = re.compile(
 _HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{32,128})(?![0-9a-fA-F])")
 
 _DEP_FIELDS = ("depends", "makedepends", "optdepends", "checkdepends",
-               "provides", "replaces")
+               "provides", "replaces", "conflicts")
 
 
 def _as_added(text: str) -> str:

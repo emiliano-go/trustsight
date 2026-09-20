@@ -401,7 +401,15 @@ def import_baseline(
             )
         else:
             conn.execute("DELETE FROM ioc_entries WHERE source = ?", (source,))
+        seen_this_import: set[tuple[str, str]] = set()
         for entry in entries:
+            key = (entry.type, entry.value)
+            if key in seen_this_import:
+                # A second identical row in one file is a duplicate, not a
+                # renewal: it must import once.
+                skipped += 1
+                continue
+            seen_this_import.add(key)
             try:
                 conn.execute(
                     """INSERT INTO ioc_entries
@@ -421,8 +429,28 @@ def import_baseline(
                     ),
                 )
             except sqlite3.IntegrityError:
-                # A kept expired row already covers this indicator.
-                skipped += 1
+                # A kept *expired* row already covers this indicator.  The
+                # row is kept for attribution, but the source has now
+                # re-issued the indicator, so renew it in place: leaving the
+                # stale expires_at behind would keep a renewed entry
+                # invisible to `active_iocs` forever.
+                conn.execute(
+                    """UPDATE ioc_entries
+                       SET confidence = ?, provenance = ?, campaign = ?,
+                           added = ?, expires_at = ?, imported_at = ?
+                       WHERE type = ? AND value = ? AND source = ?""",
+                    (
+                        entry.confidence,
+                        entry.provenance,
+                        entry.campaign,
+                        entry.added,
+                        entry.expires_at,
+                        now,
+                        entry.type,
+                        entry.value,
+                        source,
+                    ),
+                )
         conn.commit()
 
     return {

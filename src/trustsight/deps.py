@@ -262,6 +262,32 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     return found
 
 
+#: A scalar assignment whose value is not an array.  Used only to widen the
+#: variable table; a `depends=(` opener is deliberately excluded so promoting
+#: a context line cannot turn an unchanged dependency array into an added one.
+_SCALAR_ASSIGN_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*\+?=\s*[^(\s]")
+
+
+def _with_context_assignments(diff_text: str) -> str:
+    """*diff_text* with context-line scalar assignments marked as added.
+
+    ``resolve_added_lines`` builds its variable table from ``+`` lines only,
+    so ``depends=("$_evil")`` added beside a *context* ``_evil=malware``
+    resolved to nothing and the dependency disappeared.  A context scalar
+    assignment is a fact about the file the diff is applied to, so it is
+    promoted for the resolution pass.  Only scalar assignments are promoted:
+    a promoted array opener would be read as an added dependency.
+    """
+    out: list[str] = []
+    for line in split_lines(diff_text):
+        if (line.startswith(" ") and not line.rstrip().endswith("\\")
+                and _SCALAR_ASSIGN_RE.match(line[1:])):
+            out.append("+" + line[1:])
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
 def extract_dependency_changes(
     diff_text: str, pkgbase: str = ""
 ) -> dict[str, set[str]]:
@@ -271,8 +297,12 @@ def extract_dependency_changes(
     compared as its expanded value where that value is known.
     """
     # Resolved so that depends=("$_pkgname-x11") is compared by its real
-    # name where the value is known; positions are preserved.
-    after = _side_names(resolve_added_lines(diff_text), "+")
+    # name where the value is known; positions are preserved.  Context
+    # assignments are promoted so a variable declared outside the hunk still
+    # resolves the added line that uses it.
+    after = _side_names(
+        resolve_added_lines(_with_context_assignments(diff_text)), "+"
+    )
     before = _side_names(split_lines(diff_text), "-")
 
     added: dict[str, set[str]] = {}

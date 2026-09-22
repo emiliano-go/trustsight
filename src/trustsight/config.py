@@ -707,14 +707,17 @@ metadata_ttl_minutes = 60
 [rules]
 # Run rules marked experimental in rules.toml.  The R039+ set is now
 # calibrated and runs unconditionally; this gates future additions whose
-# false-positive rate has not been measured yet.
+# false-positive rate has not been measured yet.  It does NOT reach the
+# code-emitted rules in [code_rules] below.
 experimental = false
 
-[experimental_rules]
+[code_rules]
 # Rules emitted from code rather than rules.toml, so the [rules]
-# experimental flag above cannot reach them.  All default to true since
-# v0.7.0 after each was measured against the 3739-diff benign corpus
-# (see docs/explanation/fire-rates.md).
+# experimental flag above cannot reach them.  They are not experimental:
+# all default to true since v0.7.0 after each was measured against the
+# 3739-diff benign corpus (see docs/explanation/fire-rates.md).  The
+# pre-rename name of this table was [experimental_rules], still read as a
+# fallback.
 #
 # D001  novel dependency: a name never seen anywhere in the AUR
 # D002  typosquatted dependency: a novel name one or two edits from a

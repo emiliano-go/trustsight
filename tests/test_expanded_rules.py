@@ -608,7 +608,7 @@ def _h026_finding(
 
 
 def test_h026_always_on_by_default(monkeypatch):
-    """H026 is always on; no experimental_rules section needed."""
+    """H026 is always on; no code_rules section needed."""
     result = _h026_finding(True, "newbie", monkeypatch)
     assert result is not None
 

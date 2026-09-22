@@ -36,7 +36,7 @@ def rules():
 def enabled():
     ensure_default_configs()
     config = copy.deepcopy(load_config())
-    config["experimental_rules"] = {
+    config["code_rules"] = {
         r: True for r in ("D001", "D002", "D003", "H015", "H016")
     }
     return config
@@ -46,7 +46,7 @@ def enabled():
 def disabled():
     ensure_default_configs()
     config = load_config()
-    config["experimental_rules"] = {
+    config["code_rules"] = {
         r: False for r in ("D001", "D002", "D003", "D004",
                            "H016", "H017", "H018", "H019")
     }
@@ -293,7 +293,7 @@ def test_scoring_rules_fire_for_a_config_without_the_section(seeded_db, rules):
 
 @pytest.fixture
 def all_enabled(enabled):
-    enabled["experimental_rules"].update(
+    enabled["code_rules"].update(
         {"D004": True, "H017": True, "H018": True, "H019": True,
          "H035": True, "H036": True}
     )
@@ -484,7 +484,7 @@ def test_h036_fires_with_url_shortener_and_obfuscation(all_enabled, rules):
     assert "H036" in fired(diff, all_enabled, rules)
 
 
-def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
+def test_code_rules_on_by_default_with_load_config(seeded_db, rules):
     """D004, H017, H018, H019, H035, H036 fire when triggered with default config."""
     ensure_default_configs()
     config = load_config()
@@ -497,6 +497,26 @@ def test_experimental_rules_on_by_default_with_load_config(seeded_db, rules):
         HEADER + '+build() {\n+  eval $(base64 -d <<< "$x" | bash)\n+}\n',
     ):
         assert {"D004", "H017", "H018", "H019", "H035", "H036"} & fired(diff, config, rules), diff
+
+
+def test_legacy_experimental_rules_section_is_still_honored(seeded_db, rules):
+    """A config.toml written before the rename must not silently re-enable a
+    rule the user disabled, since these rules default to true."""
+    ensure_default_configs()
+    config = load_config()
+    config.pop("code_rules", None)
+    config["experimental_rules"] = {"D003": False}
+    diff = HEADER + "-makedepends=('cmake')\n+makedepends=('cmake' 'curl')\n"
+    assert "D003" not in fired(diff, config, rules)
+
+
+def test_code_rules_section_wins_over_legacy(seeded_db, rules):
+    ensure_default_configs()
+    config = load_config()
+    config["experimental_rules"] = {"D003": False}
+    config["code_rules"] = {"D003": True}
+    diff = HEADER + "-makedepends=('cmake')\n+makedepends=('cmake' 'curl')\n"
+    assert "D003" in fired(diff, config, rules)
 
 
 @pytest.mark.parametrize("rule_id,diff", [
@@ -515,7 +535,7 @@ def test_each_rule_works_when_enabled_alone(seeded_db, rules, rule_id, diff):
     on its own silently did nothing."""
     ensure_default_configs()
     config = copy.deepcopy(load_config())
-    config["experimental_rules"] = {rule_id: True}
+    config["code_rules"] = {rule_id: True}
     assert rule_id in fired(diff, config, rules)
 
 

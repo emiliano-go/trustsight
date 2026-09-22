@@ -196,7 +196,7 @@ levels = 1
 
 **`[diff]`** sets byte caps for diffs. The default `max_diff_bytes` is 5 MiB; a larger diff sets the `diff_truncated` coverage gap.
 
-**`[experimental_rules]`** enables or disables code-emitted rules that default to `true` after corpus calibration: D001 (novel dependency name), D002 (dependency typo), D003 (network-capable makedepends), D004 (unrelated provides/replaces), H015-H019, and others.
+**`[code_rules]`** enables or disables code-emitted rules that default to `true` after corpus calibration: D001 (novel dependency name), D002 (dependency typo), D003 (network-capable makedepends), D004 (unrelated provides/replaces), H015-H019, and others.
 
 ### overrides.json
 

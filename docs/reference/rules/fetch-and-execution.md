@@ -234,7 +234,7 @@ At weight 0 it is context for a reviewer rather than a signal, which is why it i
 
 Function membership comes from `_classify_enclosing_function()` in `rules.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
 
-On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
+On by default. See [`[code_rules]`](../configuration.md#code_rules).
 
 ### H016: Hidden Network Fetch In Build {#h016}
 
@@ -245,7 +245,7 @@ On by default. See [`[experimental_rules]`](../configuration.md#experimental_rul
 
 The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
 
-On by default. See [`[experimental_rules]`](../configuration.md#experimental_rules).
+On by default. See [`[code_rules]`](../configuration.md#code_rules).
 
 ### H031: Version-In-URL Injection {#h031}
 

@@ -142,7 +142,7 @@ An `H` rule is a heuristic emitted from an analysis module and has no TOML
 definition, so a `[rules.H###]` block does nothing. That is what the prefix is
 for - if you can name it with an `R`, you can configure it here. Use the
 documented dedicated settings for heuristics where available, such as
-`[experimental_rules]` below.
+`[code_rules]` below.
 
 A `[rules.R###]` block naming an id this release retired (see
 [the mapping](../changelog.md#rule-id-mapping)) also does nothing, and did
@@ -150,11 +150,13 @@ nothing before the rename either: those rules were always code-emitted. Retired
 ids are never reassigned, so such a block cannot later attach itself to an
 unrelated rule.
 
-### `[experimental_rules]`
+### `[code_rules]`
 
-Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. All default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
+Rules emitted from code rather than `rules.toml`, so the `experimental` flag above cannot reach them. They are **not** experimental: all default to `true`, a value set by corpus calibration; see [Fire Rates](../explanation/fire-rates.md).
 
-A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_EXPERIMENTAL_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
+A config written before this section existed still gets these defaults: `load_config()` reads the file verbatim without merging defaults, so the fallbacks live in code (`_CODE_RULE_DEFAULTS` in `src/trustsight/analysis/base.py`). Setting a key here always overrides them.
+
+This table was named `[experimental_rules]` before the rename. The old name is still read as a fallback, with a deprecation warning, so an existing `config.toml` keeps the rules it turned on or off; rename it to `[code_rules]`.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|

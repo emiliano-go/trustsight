@@ -335,7 +335,7 @@ trustsight config sync-rules [--update]
 
 | Subcommand | Description |
 |------------|-------------|
-| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays seed auto-import status, experimental rules toggle, and scoring weights. |
+| `show` | Print the current configuration from `~/.config/trustsight/config.toml`. Displays seed auto-import status, the `rules.toml` experimental toggle, and scoring weights. |
 | `set <key> <value>` | Set a configuration value. Example: `trustsight config set seed.auto_import false`. |
 | `sync-rules` | Add rules that ship with this version but are absent from your `rules.toml`. |
 

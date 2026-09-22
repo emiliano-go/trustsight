@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **`[experimental_rules]` renamed to `[code_rules]`.** The section toggles
+  code-emitted rules (D001-D004, H015-H019), which are enabled by default and
+  are not experimental; the old name made reviewers read them as off by
+  default. The pre-rename name is still read as a fallback, with a
+  deprecation warning, so an existing `config.toml` keeps the rules it turned
+  on or off. Internal `_EXPERIMENTAL_DEFAULTS` / `_experimental_enabled` were
+  renamed to `_CODE_RULE_DEFAULTS` / `_code_rule_enabled`. The separate
+  `[rules] experimental` flag, which gates `rules.toml` rules, is unchanged.
+
 ### Fixed
 
 - **The verdict no longer contradicts the version rules.** `verdict.py`

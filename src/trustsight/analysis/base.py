@@ -1,3 +1,4 @@
+import logging
 import re
 import subprocess
 from urllib.parse import urlparse
@@ -6,6 +7,8 @@ from ..buckets import PINNING_ORDER, classify_pinning_level
 from ..config import ensure_default_configs
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
+
+log = logging.getLogger(__name__)
 
 _initialized = False
 
@@ -77,11 +80,19 @@ _NO_CHECKSUM_BEHAVIORS = (
     "checksum_array_removed",
 )
 
-_EXPERIMENTAL_DEFAULTS = {
+_CODE_RULE_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
     "H015": True,
     "H016": True, "H017": True, "H018": True, "H019": True,
 }
+
+#: Pre-rename name of the ``[code_rules]`` config table.  Kept readable so an
+#: existing config.toml is not silently ignored: these rules default to *true*,
+#: so dropping an old ``D001 = false`` would re-enable a rule the user turned
+#: off.  Remove the fallback once the rename has shipped for a couple of
+#: releases.
+_LEGACY_RULE_SECTION = "experimental_rules"
+_warned_legacy_section = False
 
 
 _INSTALL_FILE_IN_DIFF_RE = re.compile(
@@ -128,11 +139,25 @@ def _aggregate_pinning(
     return PINNING_ORDER[max(PINNING_ORDER.index(p) for p in levels)]
 
 
-def _experimental_enabled(config: dict, rule_id: str) -> bool:
-    section = config.get("experimental_rules") if config else None
+def _code_rule_enabled(config: dict, rule_id: str) -> bool:
+    """Whether the code-emitted *rule_id* is enabled.
+
+    Reads ``[code_rules]`` first, then the pre-rename ``[experimental_rules]``
+    table for configs written before the rename.
+    """
+    global _warned_legacy_section
+    section = config.get("code_rules") if config else None
+    if section is None and config:
+        section = config.get(_LEGACY_RULE_SECTION)
+        if section is not None and not _warned_legacy_section:
+            log.warning(
+                "[%s] in config.toml is deprecated; rename it to [code_rules]",
+                _LEGACY_RULE_SECTION,
+            )
+            _warned_legacy_section = True
     if section is None:
-        return _EXPERIMENTAL_DEFAULTS.get(rule_id, False)
-    return bool(section.get(rule_id, _EXPERIMENTAL_DEFAULTS.get(rule_id, False)))
+        return _CODE_RULE_DEFAULTS.get(rule_id, False)
+    return bool(section.get(rule_id, _CODE_RULE_DEFAULTS.get(rule_id, False)))
 
 
 def _get_installed_version(pkg_name: str) -> str:

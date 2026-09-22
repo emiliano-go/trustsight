@@ -130,8 +130,8 @@ Claiming another project's name redirects installs of that name to this
 package. Relatedness suppresses the obvious false positive: variant, companion
 and sibling stems of the package's own name never fire. Cold start cannot fire
 either branch, since neither corpus nor pacman data exists to establish what is
-established. H064 always runs; the experimental D004 covers the same ground and
-may double-report when experimental rules are enabled.
+established. H064 always runs; D004 covers the same ground and may
+double-report when it is enabled (it is, by default).
 
 Fire rate: 0 of 3739.
 

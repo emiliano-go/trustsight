@@ -6,7 +6,7 @@ from ..config import (
 from ..db import dependency_observation_count, is_established_package, top_dependency_names
 from ..deps import extract_dependency_changes, is_related_package
 from ..novelty import is_dependency_novel, typosquat_target
-from .base import _experimental_enabled, _rarities_of
+from .base import _code_rule_enabled, _rarities_of
 
 _DEP_EXPANSION_GATE = 1.5
 
@@ -103,7 +103,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
     _scope_expansion_findings(diff_text, package_name, config, add)
 
     wanted = {r for r in ("D001", "D002", "D003", "D004")
-              if _experimental_enabled(config, r)}
+              if _code_rule_enabled(config, r)}
     if not wanted:
         return
 

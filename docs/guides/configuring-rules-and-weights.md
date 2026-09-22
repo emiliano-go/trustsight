@@ -36,7 +36,7 @@ weight_override = 15     # default severity weight
 enabled = false
 ```
 
-`enabled` and `weight_override` are read from `config.toml`; they do not change a rule's TOML definition. FATAL rules cannot be disabled, and their score hard-stops at 100, so a weight override has no effect. Code-emitted rules have their own configuration paths where provided, such as `[experimental_rules]`; `[rules.R###]` does not control them. Always re-run benchmarks after changing an effective weight.
+`enabled` and `weight_override` are read from `config.toml`; they do not change a rule's TOML definition. FATAL rules cannot be disabled, and their score hard-stops at 100, so a weight override has no effect. Code-emitted rules have their own configuration paths where provided, such as `[code_rules]`; `[rules.R###]` does not control them. Always re-run benchmarks after changing an effective weight.
 
 ## Adjusting scoring parameters in config.toml
 

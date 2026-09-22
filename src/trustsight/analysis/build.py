@@ -22,7 +22,7 @@ from ..tokenizer import (
     reconstruct_lines,
     resolve_added_lines,
 )
-from .base import _experimental_enabled, mask_to_recipe
+from .base import _code_rule_enabled, mask_to_recipe
 from ..tokenizer import split_lines
 
 
@@ -504,7 +504,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             detail="CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
 
     wanted = ({r for r in ("H015", "H016", "H017", "H018", "H019")
-               if _experimental_enabled(config, r)}
+               if _code_rule_enabled(config, r)}
               | {"H035", "H036"})
     if not wanted:
         return

@@ -691,7 +691,7 @@ They also have to bypass the engine's own filtering: `rules.py` strips
 pattern runs, which is why extraction lives in `src/trustsight/deps.py`.
 
 All D-series rules are **enabled by default**. Disable them
-individually under [`[experimental_rules]`](../configuration.md#experimental_rules).
+individually under [`[code_rules]`](../configuration.md#code_rules).
 
 ### D001 {#d001}
 

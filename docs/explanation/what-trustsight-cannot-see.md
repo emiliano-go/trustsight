@@ -101,9 +101,9 @@ This narrows the gap; it does not close it:
 
 - A backdoor introduced into an *established* dependency is still invisible. D001 asks whether the **name** is novel, not whether the package behind it is trustworthy. Depending on a popular library that was itself compromised upstream produces no signal at all, and that is the same upstream-payload gap described above.
 - Removing a dependency is not scored. Dropping a hardening library is a real weakening, but it is indistinguishable from ordinary cleanup.
-- The rules are only as good as the seeded corpus. Against an unseeded database, D001 stays silent by design rather than flagging every dependency it sees.
+- The rules are only as good as the seeded corpus. Against an unseeded database, D001 and D002 stay silent by design rather than flagging every dependency they see. The guard is in the rule, not a config flag: `is_dependency_novel` returns `False` whenever the `dependency_names` table is empty, because an empty table cannot tell "never seen anywhere" from "no data yet".
 
-The D-series is enabled by default; see [`[experimental_rules]`](../reference/configuration.md#experimental_rules).
+The D-series is enabled by default; see [`[code_rules]`](../reference/configuration.md#code_rules).
 
 ## Registry-payload gap
 

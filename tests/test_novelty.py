@@ -319,3 +319,48 @@ def test_record_true_persists_the_observation(db):
             (normalize_url(url),),
         ).fetchone()["n"]
     assert persisted == 1
+
+
+# --- the text path names a source file the recipe added ----------------
+#
+# The change summary reported added source *hosts* only, so a non-URL
+# `source=()` entry - a committed patch, a companion file - was invisible
+# even after the diff summary started carrying file changes.
+
+@pytest.fixture
+def full_db(tmp_path, monkeypatch):
+    """An isolated database and config for the full analysis path."""
+    import trustsight.config as config
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path / "config")
+    config.ensure_default_configs()
+    init_db()
+    yield
+
+
+_OLD_PKGBUILD = (
+    "pkgname=p\npkgver=1\npkgrel=1\narch=('x86_64')\n"
+    "source=(\n    'first.patch'\n)\n"
+    "sha256sums=(\n    'aaa'\n)\n"
+    "prepare() {\n    patch -p1 < \"$srcdir/first.patch\"\n}\n"
+)
+_NEW_PKGBUILD = (
+    "pkgname=p\npkgver=1\npkgrel=1\narch=('x86_64')\n"
+    "source=(\n    'first.patch'\n    'second.patch'\n)\n"
+    "sha256sums=(\n    'aaa'\n    'bbb'\n)\n"
+    "prepare() {\n    for p in \"$srcdir\"/*.patch; do\n"
+    "        patch -p1 < \"$p\"\n    done\n}\n"
+)
+
+
+def test_analyze_text_reports_the_source_file_it_added(full_db):
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    fact = analyze_package_text(
+        "p", _OLD_PKGBUILD, _NEW_PKGBUILD, maintainer="dev",
+        temporal=TemporalContext(last_modified=1, source="git_commit"),
+        record=False,
+    )
+    assert fact.diff_summary.files_changed == ["PKGBUILD"]
+    assert any("source file(s) added" in c for c in fact.changes), fact.changes

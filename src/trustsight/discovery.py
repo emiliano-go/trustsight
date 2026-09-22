@@ -231,7 +231,13 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
             log.warning("AUR RPC query failed for %d package(s): HTTP %s",
                         len(missed), exc.code)
             break
-        except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge) as exc:
+        # ``OSError`` covers ``URLError`` and the connection errors it does
+        # not: a dropped RPC connection raises ``TimeoutError``,
+        # ``ConnectionResetError`` or ``http.client.RemoteDisconnected``, all
+        # ``OSError``, and a malformed body raises ``UnicodeDecodeError``, a
+        # ``ValueError``.  Missing them let an AUR hiccup escape as a
+        # traceback instead of a failed lookup.
+        except (OSError, ValueError, _RpcResponseTooLarge) as exc:
             if attempt < _RPC_MAX_RETRIES:
                 delay = _rpc_backoff_delay(attempt)
                 log.debug("AUR RPC error %s; retrying in %.1fs (attempt %d/%d)",
@@ -290,7 +296,7 @@ def fetch_package_info(name: str) -> Optional[dict]:
             data = _load_rpc_json(resp)
             if data["resultcount"] > 0:
                 return data["results"][0]
-    except (urllib.error.URLError, json.JSONDecodeError, _RpcResponseTooLarge):
+    except (OSError, ValueError, _RpcResponseTooLarge):
         pass
     return None
 

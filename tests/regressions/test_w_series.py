@@ -167,6 +167,34 @@ def test_w003_stands_down_on_a_patch_h090_has_read():
 
 
 @pytest.mark.parametrize("line", [
+    '  patch -p1 < "$p"',
+    '  patch -p1 < "${p}"',
+])
+def test_w003_sees_a_patch_named_at_runtime(line):
+    """The literal-path regex required a `.patch`/`.diff` argument, so a
+    loop variable or glob redirection was invisible: rewriting a named
+    patch application as `for p in "$srcdir"/*.patch; do patch -p1 < "$p";
+    done` silenced W003 entirely."""
+    assert "W003" in _shipped_ids([line], declared=False, fn="prepare"), line
+
+
+def test_w003_stands_down_on_a_loop_over_committed_patches():
+    """A glob over `"$srcdir"/*.patch` is most likely reading patches the
+    tree commits, which H090 has already read."""
+    from trustsight.analysis import scan_diff
+
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,12 @@\n"
+            "+pkgname=p\n+pkgver=1\n+source=(fix.patch)\n+sha256sums=('SKIP')\n"
+            '+prepare() {\n+  for p in "$srcdir"/*.patch; do\n'
+            '+    patch -p1 < "$p"\n+  done\n+}\n')
+    ids = {e.rule_id for e in scan_diff(
+        diff, package_name="p",
+        tree_manifest=[("0001-fix.patch", b"--- a\n+++ b\n")],
+    ).score_breakdown}
+    assert "W003" not in ids
+
+
+@pytest.mark.parametrize("line", [
     "  npm install --production",
     '  patch -Np1 -i "$srcdir/fix.patch"',
     '  bash "$srcdir/p-1/postunpack.sh"',

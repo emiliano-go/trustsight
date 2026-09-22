@@ -2179,6 +2179,18 @@ _PATCH_APPLY_RE = re.compile(
     re.IGNORECASE,
 )
 
+#: The same command where the patch is named at runtime rather than by a
+#: literal `.patch` path: `patch -p1 < "$p"`, `patch -i "$p"`, or the loop
+#: `for p in "$srcdir"/*.patch; do patch -p1 < "$p"; done`.  The bytes are
+#: not named in the recipe, so the target is captured unresolved and W003
+#: decides from what the tree does and does not commit.  Only consulted
+#: when `_PATCH_APPLY_RE` finds no literal path.
+_PATCH_APPLY_RUNTIME_RE = re.compile(
+    _CMD_START + r"(?:patch|git\s+apply)\b[^\n;&|]*?"
+    r"(?:<\s*|--input[=\s]+|-i\s+)[\"']?([^\"'\s;&|<>]+)[\"']?",
+    re.IGNORECASE,
+)
+
 
 #: A build engine pointed at a manifest the recipe names explicitly.
 #:
@@ -2461,15 +2473,29 @@ def _unread_patch_findings(diff_text, add, tree_manifest=None,
             continue
         body = _strip_comment(line[1:])
         m = _PATCH_APPLY_RE.search(body)
-        if not m:
-            continue
-        raw = m.group(1)
-        if _not_a_path(raw):
-            continue
-        base = os.path.basename(_norm_path(raw))
-        # A committed patch is one H090 has already read.
-        if not base or base in committed:
-            continue
+        if m:
+            raw = m.group(1)
+            if _not_a_path(raw):
+                continue
+            base = os.path.basename(_norm_path(raw))
+            # A committed patch is one H090 has already read.
+            if not base or base in committed:
+                continue
+        else:
+            # The target is named at runtime (a variable or a glob): the
+            # basename cannot be compared against the tree.  When the tree
+            # commits any patch, a glob or loop over "$srcdir"/*.patch is
+            # most likely reading those, which H090 has already read;
+            # otherwise the applied bytes are genuinely unread.
+            m = _PATCH_APPLY_RUNTIME_RE.search(body)
+            if not m:
+                continue
+            raw = m.group(1)
+            if not raw:
+                continue
+            if any(b.endswith((".patch", ".diff")) for b in committed):
+                continue
+            base = raw
         add("W003", "Applies A Patch This Analysis Did Not Read", "INFO",
             "unverifiable",
             f"{fn}() applies {base}, whose content is not in this repository "

@@ -129,6 +129,19 @@ def summarise(fact, diff_text: str = "") -> list[str]:
     elif new_hosts:
         entries.append(f"source host added: {', '.join(new_hosts)}")
 
+    # A source entry that is not a URL (a committed patch, a companion file)
+    # is invisible to the host summary above.  On the history path the file
+    # itself is not in the diff at all, so naming it is the only signal that
+    # the source set grew.
+    if diff_text:
+        from .differ import _post_diff_lines, _pre_diff_lines, local_source_names
+
+        post_sources = local_source_names("\n".join(_post_diff_lines(diff_text)))
+        pre_sources = local_source_names("\n".join(_pre_diff_lines(diff_text)))
+        new_sources = sorted(post_sources - pre_sources)
+        if new_sources:
+            entries.append("source file(s) added: " + ", ".join(new_sources))
+
     for change in fact.diff_summary.file_changes:
         path = change.get("path", "")
         if not path or path in ALWAYS_NOISY:

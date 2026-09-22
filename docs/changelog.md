@@ -17,6 +17,23 @@
 
 ### Fixed
 
+- **W003 sees a patch applied through a redirection or a loop variable.**
+  `_PATCH_APPLY_RE` required a literal `.patch`/`.diff` argument, so
+  `patch -p1 < "$p"` and `for p in "$srcdir"/*.patch; do patch -p1 < "$p";
+  done` were invisible. The runtime form is now matched; when the tree
+  commits a patch it stands down, since H090 has read that patch. Reported
+  by Alexander Berg (Wehrwolfmann).
+- **A dropped AUR RPC connection degrades instead of escaping.** The lookup
+  caught `URLError` but not the `OSError` subclasses a dropped connection
+  raises (`TimeoutError`, `ConnectionResetError`, `RemoteDisconnected`) nor
+  the `ValueError` an undecodable body raises, so an AUR hiccup during
+  `inspect` surfaced as an unhandled failure. Reported by Alexander Berg
+  (Wehrwolfmann).
+- **The change summary names a source file the recipe added.** A non-URL
+  `source=()` entry (a committed patch, a companion file) never reached the
+  summary, which only reported added source *hosts*; the source-file entry
+  is now reported alongside them. Reported by Alexander Berg
+  (Wehrwolfmann).
 - **The verdict no longer contradicts the version rules.** `verdict.py`
   prefixed every non-fatal result with the literal `"Version bump. "`, so a
   diff that changed the source but left `pkgver` at `1.2.3` read as a bump

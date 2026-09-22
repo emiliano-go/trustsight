@@ -444,3 +444,45 @@ def test_get_aur_package_info_degrades_on_oversized_rpc(monkeypatch):
     monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
     # Nothing raises out; the oversized reply degrades to an empty result.
     assert disc.get_aur_package_info(["somepkg"]) == {}
+
+
+@pytest.mark.parametrize("exc", [
+    TimeoutError("timed out"),
+    ConnectionResetError(104, "reset"),
+])
+def test_get_aur_package_info_degrades_on_a_dropped_connection(monkeypatch, exc):
+    """A dropped RPC connection raises ``OSError`` (``TimeoutError``,
+    ``ConnectionResetError``, ``RemoteDisconnected``), not ``URLError``, so
+    it must be treated as a failed lookup rather than escaping as a
+    traceback from ``inspect``."""
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+
+    def fake_urlopen(url, timeout=0):
+        raise exc
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_aur_package_info(["somepkg"]) == {}
+
+
+def test_get_aur_package_info_degrades_on_an_undecodable_body(monkeypatch):
+    """A malformed body raises ``UnicodeDecodeError`` (a ``ValueError``,
+    not a ``JSONDecodeError``) and must degrade the same way."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(b"\xff\xfe not utf-8")
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_aur_package_info(["somepkg"]) == {}

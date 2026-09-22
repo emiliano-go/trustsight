@@ -235,7 +235,9 @@ def test_a_config_without_novelty_weights_uses_the_shipped_values():
     from trustsight.scoring import calculate_score
 
     ctx = NoveltyContext(observation_count=50, url_first_seen_globally=True)
-    _score, breakdown, _level = calculate_score([], {}, ctx)
+    # `config={}` explicitly: the default is `load_config()`, which reads the
+    # developer's own config.toml and made this test depend on it.
+    _score, breakdown, _level = calculate_score([], {}, ctx, config={})
     novelty = [e for e in breakdown if e.rule_id == "NOVELTY"]
     assert novelty and novelty[0].weight == DEFAULT_NOVELTY_WEIGHTS["url_first_globally"]
     assert DEFAULT_NOVELTY_WEIGHTS["url_first_globally"] == 10

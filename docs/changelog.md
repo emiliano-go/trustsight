@@ -34,15 +34,20 @@ the version its checksum describes.
   `.github/workflows/update-arch-container.yml` opens a weekly PR when the
   digest moves (the maintainer signs it, since it edits critical paths), and
   a Dependabot config keeps the pinned action SHAs current.
+- **The AUR package is now maintained by the project.** Ownership of the
+  `trustsight` AUR package transferred from its original submitter to the
+  TrustSight author, so the README and the installation page no longer warn
+  against it. Source stays the recommended install, and the AUR package is
+  documented as an AUR package like any other: it gets no special trust, and
+  its PKGBUILD is the one in `packaging/aur/`, to be inspected before
+  installing.
 
 ### Fixed
 
 - **Installation no longer clones a moving branch.** The instructions pinned
   nothing, so `git clone .../master` met a PKGBUILD that names one released
-  version. They now check out the latest release tag, offer
-  `packaging/local/PKGBUILD` to build the checkout in place, and tell
-  self-builders to set `IgnorePkg = trustsight` so an AUR helper cannot
-  replace their build with the unaffiliated package of the same name.
+  version. They now check out the latest release tag, and offer
+  `packaging/local/PKGBUILD` to build the checkout in place.
 - **`build()` no longer downloads an unpinned build backend.** `python -m
   build --wheel` built in an isolated venv and fetched hatchling from PyPI
   with no version and no hash; it now uses `--no-isolation`, so the declared

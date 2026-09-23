@@ -1,23 +1,15 @@
-<!-- description: Build and install TrustSight from the PKGBUILD in this repository. TrustSight is not officially published on the AUR; requirements are Arch Linux, Python 3.11 or later, and git. -->
+<!-- description: Build and install TrustSight from the PKGBUILD in this repository, the recommended path. The AUR package is maintained by the project. Requirements are Arch Linux, Python 3.11 or later, and git. -->
 
 # Installation
 
 TrustSight requires **Arch Linux**, **Python 3.11 or later**, and **git** (for cloning AUR repositories during analysis).
 
-!!! warning "TrustSight is not officially published on the AUR"
+!!! note "The AUR package is maintained by this project"
 
-    Any AUR package named `trustsight` is **unaffiliated** with this project
-    and is not maintained, reviewed, or endorsed by its author. TrustSight is
-    an AUR-review tool; distributing it through the AUR is circular, and an
-    unaffiliated upload is itself an unreviewed package. Install from this
-    repository's PKGBUILD or the signed release tarball instead, as below.
-
-    Contact is being attempted with the uploader with the aim of reaching a
-    secure, correct, and official AUR packaging arrangement. Until that exists,
-    treat any AUR `trustsight` package as third-party code and review it
-    yourself. If you build from source, add `IgnorePkg = trustsight` to
-    `/etc/pacman.conf`; otherwise an AUR helper will "upgrade" the package you
-    built with the unaffiliated one of the same name.
+    The `trustsight` AUR package is built from `packaging/aur/PKGBUILD` in
+    this repository. It gets no special trust for being the author's: it is
+    an AUR package like any other, so inspect its PKGBUILD before installing.
+    Source remains the recommended install, below.
 
 ---
 
@@ -70,6 +62,22 @@ For an isolated environment, install the PyPI distribution with
 `python -m venv .venv && .venv/bin/pip install trustsight`.
 
 For a development checkout with the test dependencies, use a virtualenv instead (see [development setup](../contributing/development-setup.md)).
+
+---
+
+## Install From the AUR
+
+The `trustsight` package on the AUR is maintained by this project, but it is
+an AUR package like any other: it gets no special trust, so review its
+PKGBUILD before installing, exactly as you would with any other.
+
+```bash
+git clone https://aur.archlinux.org/trustsight.git
+cd trustsight
+makepkg -si
+```
+
+Or with an AUR helper: `yay -S trustsight`.
 
 ---
 

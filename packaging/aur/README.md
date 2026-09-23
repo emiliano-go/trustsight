@@ -1,7 +1,8 @@
 # AUR packaging
 
-Files for the `trustsight` AUR package. TrustSight audits its own updates, so
-this PKGBUILD is held to the standard the tool enforces.
+Files for the `trustsight` AUR package, which is maintained by this project.
+TrustSight audits its own updates, so this PKGBUILD is held to the standard
+the tool enforces.
 
 ## Where the tarball comes from
 

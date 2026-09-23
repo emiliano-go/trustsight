@@ -26,9 +26,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
 
 ## Setup
 
-> **TrustSight is not officially published on the AUR.** Any AUR package named `trustsight` is **unaffiliated** with this project - it is not maintained, reviewed, or endorsed by its author. TrustSight is an AUR-review tool, so distributing it through the AUR is circular, and an unaffiliated upload is itself an unreviewed package. Build from the PKGBUILD in this repository, as below. Add `IgnorePkg = trustsight` to `/etc/pacman.conf` so an AUR helper cannot replace it with the unaffiliated package.
->
-> Contact is being attempted with the uploader with the aim of reaching a secure, correct, and official AUR packaging arrangement. Until that exists, treat any AUR `trustsight` package as third-party code and review it yourself.
+> **TrustSight is available on the AUR, maintained by this project.** The `trustsight` AUR package is built from `packaging/aur/PKGBUILD` in this repository. It gets no special trust for being the author's: it is an AUR package like any other, so inspect its PKGBUILD before installing. Source remains the recommended install, below.
 
 ```bash
 # 1. Install the latest release tag (the PKGBUILD pins one version)

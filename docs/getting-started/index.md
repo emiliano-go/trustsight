@@ -10,7 +10,7 @@ The fastest path from zero to your first `trustsight review`. Follow these pages
 
 -   [**Installation**](installation.md)
 
-    Build the PKGBUILD included in this repository. TrustSight is not published in the AUR.
+    Build the PKGBUILD included in this repository, the recommended path. The AUR package is maintained by the project, and is an AUR package like any other.
 
 -   [**Quickstart**](quickstart.md)
 

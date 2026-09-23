@@ -42,8 +42,17 @@ sha256sums=()
 
 pkgver() {
   cd "$startdir/../.."
-  git describe --long --tags --match 'v[0-9]*' 2>/dev/null \
-    | sed 's/^v//; s/\([^-]*-g\)/r\1/; s/-/./g'
+  # A shallow clone of master has no tags, where `git describe` fails and a
+  # bare pipe would yield an empty pkgver and abort makepkg.  Capture it
+  # first so the failure is visible, and fall back to a commit-derived
+  # version.
+  local describe
+  if describe=$(git describe --long --tags --match 'v[0-9]*' 2>/dev/null); then
+    printf '%s\n' "$describe" | sed 's/^v//; s/\([^-]*-g\)/r\1/; s/-/./g'
+  else
+    printf '0.0.0.r%s.g%s\n' \
+      "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  fi
 }
 
 build() {
@@ -53,9 +62,20 @@ build() {
 
 check() {
   cd "$startdir/../.."
-  # The two modules need network and corpus fixtures that a clean build
-  # does not have; the release PKGBUILD excludes the same pair.
-  python -m pytest tests/ -q --ignore=tests/test_fetcher.py --ignore=tests/test_rebaseline.py
+  # Test the wheel this recipe just built, in a venv of its own.  Running
+  # pytest with the system Python instead let the suite import whatever
+  # `trustsight` was already installed (an older package on an upgrade, or
+  # src/ on a first install) rather than the checkout, so the check could
+  # pass while testing the wrong code.  The venv is fully isolated (no
+  # --system-site-packages), so its dependencies are resolved from the
+  # index; that is the cost of not inheriting an installed copy.
+  local venv="$srcdir/_test-env"
+  mkdir -p "$srcdir"
+  rm -rf "$venv"
+  python -m venv "$venv"
+  "$venv/bin/python" -m pip install --disable-pip-version-check --quiet dist/*.whl
+  "$venv/bin/python" -m pytest tests/ -q \
+    --ignore=tests/test_fetcher.py --ignore=tests/test_rebaseline.py
 }
 
 package() {

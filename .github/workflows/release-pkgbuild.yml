@@ -1,6 +1,12 @@
 name: Verify the release artifact
 
 on:
+  # Run automatically when a software release is published, so the artifact
+  # users install is verified without a manual dispatch.  A manual run is
+  # still available for re-verification or an older tag.  Pre-releases are
+  # skipped; the tag classifier also ignores anything that is not vX.Y.Z.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -51,9 +57,15 @@ jobs:
       - name: Resolve tag
         id: tag
         env:
-          TAG: ${{ github.event.inputs.tag }}
+          # A manual dispatch passes the tag as an input; a published release
+          # carries it on the event.  A pre-release is not a software release
+          # this workflow verifies.
+          TAG: ${{ github.event.inputs.tag || github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ "$PRERELEASE" == "true" ]]; then
+            echo "is_software_release=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "is_software_release=true" >> "$GITHUB_OUTPUT"
             echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           else

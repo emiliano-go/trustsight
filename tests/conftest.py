@@ -26,6 +26,47 @@ os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
 os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
+# --- the network guard reaches subprocesses too -------------------------
+#
+# The fixture below patches `socket.connect` in *this* process only.  Git and
+# the tokenizer worker are separate processes, where that patch does not
+# apply, so two portable guards close the gap:
+#
+# * a `sitecustomize.py` on PYTHONPATH, which every Python subprocess imports
+#   at startup and which installs the same guard there;
+# * `GIT_ALLOW_PROTOCOL=file`, which makes git refuse every transport except
+#   local files.
+#
+# A subprocess that is neither Python nor git and opens a raw socket to a
+# non-loopback host is still not covered; OS-level network namespaces are not
+# portable to every runner, so that residual is documented rather than
+# emulated with a proxy environment that well-behaved clients only honour.
+_GUARD_DIR = tempfile.mkdtemp(prefix="trustsight-net-guard-")
+Path(_GUARD_DIR, "sitecustomize.py").write_text(
+    "import socket as _s\n"
+    "_LOOPBACK = {'127.0.0.1', '::1', 'localhost', ''}\n"
+    "_real = _s.socket.connect\n"
+    "def _guarded(self, address, *a, **k):\n"
+    "    if getattr(self, 'family', None) == getattr(_s, 'AF_UNIX', object()):\n"
+    "        return _real(self, address, *a, **k)\n"
+    "    host = address[0] if isinstance(address, tuple) else address\n"
+    "    if isinstance(host, (bytes, bytearray)):\n"
+    "        host = host.decode('utf-8', 'replace')\n"
+    "    if isinstance(host, str) and host not in _LOOPBACK:\n"
+    "        raise RuntimeError(\n"
+    "            'a test subprocess tried to connect to %r; the suite is offline'\n"
+    "            % (host,)\n"
+    "        )\n"
+    "    return _real(self, address, *a, **k)\n"
+    "_s.socket.connect = _guarded\n",
+    encoding="utf-8",
+)
+os.environ["PYTHONPATH"] = os.pathsep.join(
+    part for part in (_GUARD_DIR, os.environ.get("PYTHONPATH", "")) if part
+)
+os.environ["GIT_ALLOW_PROTOCOL"] = "file"
+atexit.register(shutil.rmtree, _GUARD_DIR, ignore_errors=True)
+
 # Prefer an installed package over the source tree.  A dev checkout installs
 # the package (editable), and the PKGBUILD's ``check()`` installs the built
 # wheel into its venv, so ``trustsight`` is importable either way; falling

@@ -25,27 +25,27 @@ and a database written by 0.16.0 is read unchanged.
   `pkgver` when it exists, and from the working tree only while a version is
   being prepared. Previously every content commit forced the checksum to the
   unreleased tree, which is how three commits replaced the published v0.16.0
-  checksum and made the documented install fail.
+  checksum and made the documented install fail. Reported in #8 and #9.
 - **The release asset is built from the released commit.** `publishing.yml`
   used `$GITHUB_SHA` (the commit the workflow file sits on) rather than the
   requested target, so the tag, the PKGBUILD checksum and the asset could
   describe three trees. It now builds from the checked-out target and refuses
   a pre-existing tag that does not point at it. The release workflows and the
-  signature policy are now in the critical-path set.
+  signature policy are now in the critical-path set. Reported in #9.
 - **The Arch CI container is pinned to a digest.** `archlinux:latest` is a
   rolling tag, so a rebuilt image could change what runs the release build
   without any commit changing. The three workflows that use it now pin the
   multi-arch index digest. Dependabot cannot update a `container:` image, so
   `.github/workflows/update-arch-container.yml` opens a weekly PR when the
   digest moves (the maintainer signs it, since it edits critical paths), and
-  a Dependabot config keeps the pinned action SHAs current.
+  a Dependabot config keeps the pinned action SHAs current. Reported in #9.
 - **The AUR package is now maintained by the project.** Ownership of the
   `trustsight` AUR package transferred from its original submitter to the
   TrustSight author, so the README and the installation page no longer warn
   against it. Source stays the recommended install, and the AUR package is
   documented as an AUR package like any other: it gets no special trust, and
   its PKGBUILD is the one in `packaging/aur/`, to be inspected before
-  installing.
+  installing. Reported in #9.
 
 - **`[experimental_rules]` renamed to `[code_rules]`.** The section toggles
   code-emitted rules (D001-D004, H015-H019), which are enabled by default and
@@ -61,11 +61,11 @@ and a database written by 0.16.0 is read unchanged.
 - **Installation no longer clones a moving branch.** The instructions pinned
   nothing, so `git clone .../master` met a PKGBUILD that names one released
   version. They now check out the latest release tag, and offer
-  `packaging/local/PKGBUILD` to build the checkout in place.
+  `packaging/local/PKGBUILD` to build the checkout in place. Reported in #9.
 - **`build()` no longer downloads an unpinned build backend.** `python -m
   build --wheel` built in an isolated venv and fetched hatchling from PyPI
   with no version and no hash; it now uses `--no-isolation`, so the declared
-  makedepend is the one used and the build is reproducible.
+  makedepend is the one used and the build is reproducible. Reported in #9.
 - **The test suite no longer writes to the builder's home.** `check()` runs
   pytest, and `config.py` derives its paths from `$HOME` at import, so a
   `makepkg` run created and edited the builder's live configuration and
@@ -74,12 +74,13 @@ and a database written by 0.16.0 is read unchanged.
   the `XDG_*_HOME` variables and `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`
   before the package is imported. The suite also prefers an installed package
   over the source tree, so `check()` exercises the wheel users receive rather
-  than the checkout it was built from.
+  than the checkout it was built from. Reported in #9.
 - **The signature check runs on pushes, and reads the canonical path list.**
   It only ran on pull requests, so direct pushes to `master` bypassed it, and
   it read `CRITICAL_PATHS` from the change's own tree, so a pull request could
   remove a path from the list and then modify that path unsigned. It now also
   runs on pushes to `master` and unions the list from the base and the change.
+  Reported in #9.
 - **The documentation extension moved under the package.** The top-level
   `zensical_extensions` module had a generic name and the PKGBUILD's `check()`
   had to delete an inherited copy because it collided. It is now
@@ -87,7 +88,7 @@ and a database written by 0.16.0 is read unchanged.
   install (`pip install -e '.[docs]'`) rather than from the working directory,
   and no generic top-level module is installed. The `docs` extra is also
   pinned to the versions in `uv.lock`, because the site is built by an
-  external service that does not read the lock.
+  external service that does not read the lock. Reported in #9.
 
 - **W003 sees a patch applied through a redirection or a loop variable.**
   `_PATCH_APPLY_RE` required a literal `.patch`/`.diff` argument, so
@@ -193,13 +194,14 @@ and a database written by 0.16.0 is read unchanged.
   interpolated `${{ inputs.tag }}` and `${{ inputs.ioc_source }}` directly
   into `run:` scripts in the job that writes the signing key to disk; they are
   now environment variables, so a dispatch input cannot become shell.
+  Reported in #9.
 - **The commit-signature check is pinned to one key.** It accepted any
   signature GitHub reported as verified, so any GPG key associated with any
   account passed. It now imports `scripts/commit_signing_key.asc` into a
   throwaway keyring and verifies every critical-path commit against that key's
   fingerprint (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`), locally, without
   the API's `verified` flag. The key file is itself a critical path, so
-  swapping the trust anchor is a signed change.
+  swapping the trust anchor is a signed change. Reported in #9.
 - **A fetch now advances the analysed commit.** `Remote.fetch` updates only
   `refs/remotes/origin/*`, so the local branch and HEAD stayed at the first
   clone while every consumer reads HEAD: a maintainer could publish a benign

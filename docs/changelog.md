@@ -8,9 +8,12 @@ _No changes yet._
 
 ## [0.16.1] - 2026-09-23
 
-Packaging and release-process fixes, from reports #8 and #9 by Marcool04 and
-nursoda. Nothing in the analysis changes; the release you install now matches
-the version its checksum describes.
+Twenty-four commits since v0.16.0. It carries the work that had accumulated on
+`master` (the sandboxed tokenizer, runs read-only by default, the commit-pin
+level, and a batch of rule and summary fixes) together with the packaging,
+release-process and security fixes from reports #8 and #9 and a private source
+review. No rule changes meaning, no stored state or baseline needs migration,
+and a database written by 0.16.0 is read unchanged.
 
 ### Changed
 
@@ -41,6 +44,15 @@ the version its checksum describes.
   documented as an AUR package like any other: it gets no special trust, and
   its PKGBUILD is the one in `packaging/aur/`, to be inspected before
   installing.
+
+- **`[experimental_rules]` renamed to `[code_rules]`.** The section toggles
+  code-emitted rules (D001-D004, H015-H019), which are enabled by default and
+  are not experimental; the old name made reviewers read them as off by
+  default. The pre-rename name is still read as a fallback, with a
+  deprecation warning, so an existing `config.toml` keeps the rules it turned
+  on or off. Internal `_EXPERIMENTAL_DEFAULTS` / `_experimental_enabled` were
+  renamed to `_CODE_RULE_DEFAULTS` / `_code_rule_enabled`. The separate
+  `[rules] experimental` flag, which gates `rules.toml` rules, is unchanged.
 
 ### Fixed
 
@@ -74,79 +86,6 @@ the version its checksum describes.
   and no generic top-level module is installed. The `docs` extra is also
   pinned to the versions in `uv.lock`, because the site is built by an
   external service that does not read the lock.
-
-### Security
-
-- **Dispatch inputs are passed through the environment.** `baselines.yml`
-  interpolated `${{ inputs.tag }}` and `${{ inputs.ioc_source }}` directly
-  into `run:` scripts in the job that writes the signing key to disk; they are
-  now environment variables, so a dispatch input cannot become shell.
-- **The commit-signature check is pinned to one key.** It accepted any
-  signature GitHub reported as verified, so any GPG key associated with any
-  account passed. It now imports `scripts/commit_signing_key.asc` into a
-  throwaway keyring and verifies every critical-path commit against that key's
-  fingerprint (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`), locally, without
-  the API's `verified` flag. The key file is itself a critical path, so
-  swapping the trust anchor is a signed change.
-- **A fetch now advances the analysed commit.** `Remote.fetch` updates only
-  `refs/remotes/origin/*`, so the local branch and HEAD stayed at the first
-  clone while every consumer reads HEAD: a maintainer could publish a benign
-  version, wait for it to be cached, then push something malicious that was
-  never looked at. The local branch is fast-forwarded to the fetched commit.
-  Fixing it surfaced a second hole in the same area: a stale fetch marker fell
-  through to the commit time of HEAD, which a future-dated commit could
-  satisfy, so the marker is now authoritative.
-- **A binary metadata file is a HIGH finding and a coverage gap.** git emits
-  no diff body for a binary file, so a single NUL byte in `PKGBUILD` or an
-  install script read as a clean empty change while the shell still sourced
-  the file normally. New rule C010 reports it, and the `binary_metadata` gap
-  forbids the run from reading clean.
-- **A stage failure is recorded, not returned as "nothing found".** The
-  dependency-change scan and the checksum resolver returned a neutral value
-  when an internal stage raised, which cleared the `deps_not_scanned` and
-  checksum gaps. A missing tokenizer now propagates as a refusal; any other
-  failure records a degraded stage.
-- **Rule-pattern verdicts are decided once.** The backtracking probe is
-  wall-clock, and it was re-measured on every call, so the same input could
-  score differently under load. Verdicts are memoised and the shipped
-  patterns are vetted single-threaded before the review pool starts. A
-  refused rule now records a stage gap instead of disappearing silently.
-- **The history renderers clean every field, and a failed commit is reported.**
-  The AUR commit subject and the plain renderer printed package-controlled
-  text raw, and ESC survives Rich's control-byte stripping; a commit whose
-  analysis crashed was dropped and mislabelled as a truncated walk. Both
-  renderers clean every value, and a failed commit is emitted as its own
-  `failed: true` result in JSON and in both renderers.
-- **The seed no longer ships email hashes or per-maintainer package lists.**
-  The salt is public, so a salted hash of a guessed address is trivially
-  confirmed, and a package list re-identifies the person even when the hash
-  does not. The format is v3; a v2 seed still imports and its email and
-  package fields are ignored.
-- **Sandbox and download hardening.** The tokenizer worker is retired by CPU
-  used rather than only by request count; the frame cap is sized to the
-  JSON-escaping worst case; the result of `unshare`/`prctl` is reported rather
-  than discarded; IOC imports verify against the pinned key instead of a key
-  the artifact carries; `safe_text.clean` strips bidi and zero-width
-  characters; the config, data and cache directories and the database are
-  owner-only; downloads carry a total wall-clock deadline; the snapshot tar
-  walk is bounded by members visited; and the worker runs with `-s`.
-
-These were found in a private source review by Olav Seyfarth (nursoda), with
-analysis assistance from Claude Code (Opus 5.5); the report is credited here
-at the reporter's request.
-
-### Changed
-
-- **`[experimental_rules]` renamed to `[code_rules]`.** The section toggles
-  code-emitted rules (D001-D004, H015-H019), which are enabled by default and
-  are not experimental; the old name made reviewers read them as off by
-  default. The pre-rename name is still read as a fallback, with a
-  deprecation warning, so an existing `config.toml` keeps the rules it turned
-  on or off. Internal `_EXPERIMENTAL_DEFAULTS` / `_experimental_enabled` were
-  renamed to `_CODE_RULE_DEFAULTS` / `_code_rule_enabled`. The separate
-  `[rules] experimental` flag, which gates `rules.toml` rules, is unchanged.
-
-### Fixed
 
 - **W003 sees a patch applied through a redirection or a loop variable.**
   `_PATCH_APPLY_RE` required a literal `.patch`/`.diff` argument, so
@@ -245,12 +184,62 @@ at the reporter's request.
   corpora alongside the hashed maintainers. The v2 builder and the release
   workflow packed maintainers only, so a fresh install imported zero known
   URLs and URL novelty had nothing to compare against.
-- The README and installation page state that TrustSight is not officially
-  published on the AUR, that any AUR `trustsight` package is unaffiliated
-  and unreviewed, and that contact is being attempted with the uploader
-  toward a secure and correct official AUR packaging arrangement.
 
 ### Security
+
+- **Dispatch inputs are passed through the environment.** `baselines.yml`
+  interpolated `${{ inputs.tag }}` and `${{ inputs.ioc_source }}` directly
+  into `run:` scripts in the job that writes the signing key to disk; they are
+  now environment variables, so a dispatch input cannot become shell.
+- **The commit-signature check is pinned to one key.** It accepted any
+  signature GitHub reported as verified, so any GPG key associated with any
+  account passed. It now imports `scripts/commit_signing_key.asc` into a
+  throwaway keyring and verifies every critical-path commit against that key's
+  fingerprint (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`), locally, without
+  the API's `verified` flag. The key file is itself a critical path, so
+  swapping the trust anchor is a signed change.
+- **A fetch now advances the analysed commit.** `Remote.fetch` updates only
+  `refs/remotes/origin/*`, so the local branch and HEAD stayed at the first
+  clone while every consumer reads HEAD: a maintainer could publish a benign
+  version, wait for it to be cached, then push something malicious that was
+  never looked at. The local branch is fast-forwarded to the fetched commit.
+  Fixing it surfaced a second hole in the same area: a stale fetch marker fell
+  through to the commit time of HEAD, which a future-dated commit could
+  satisfy, so the marker is now authoritative.
+- **A binary metadata file is a HIGH finding and a coverage gap.** git emits
+  no diff body for a binary file, so a single NUL byte in `PKGBUILD` or an
+  install script read as a clean empty change while the shell still sourced
+  the file normally. New rule C010 reports it, and the `binary_metadata` gap
+  forbids the run from reading clean.
+- **A stage failure is recorded, not returned as "nothing found".** The
+  dependency-change scan and the checksum resolver returned a neutral value
+  when an internal stage raised, which cleared the `deps_not_scanned` and
+  checksum gaps. A missing tokenizer now propagates as a refusal; any other
+  failure records a degraded stage.
+- **Rule-pattern verdicts are decided once.** The backtracking probe is
+  wall-clock, and it was re-measured on every call, so the same input could
+  score differently under load. Verdicts are memoised and the shipped
+  patterns are vetted single-threaded before the review pool starts. A
+  refused rule now records a stage gap instead of disappearing silently.
+- **The history renderers clean every field, and a failed commit is reported.**
+  The AUR commit subject and the plain renderer printed package-controlled
+  text raw, and ESC survives Rich's control-byte stripping; a commit whose
+  analysis crashed was dropped and mislabelled as a truncated walk. Both
+  renderers clean every value, and a failed commit is emitted as its own
+  `failed: true` result in JSON and in both renderers.
+- **The seed no longer ships email hashes or per-maintainer package lists.**
+  The salt is public, so a salted hash of a guessed address is trivially
+  confirmed, and a package list re-identifies the person even when the hash
+  does not. The format is v3; a v2 seed still imports and its email and
+  package fields are ignored.
+- **Sandbox and download hardening.** The tokenizer worker is retired by CPU
+  used rather than only by request count; the frame cap is sized to the
+  JSON-escaping worst case; the result of `unshare`/`prctl` is reported rather
+  than discarded; IOC imports verify against the pinned key instead of a key
+  the artifact carries; `safe_text.clean` strips bidi and zero-width
+  characters; the config, data and cache directories and the database are
+  owner-only; downloads carry a total wall-clock deadline; the snapshot tar
+  walk is bounded by members visited; and the worker runs with `-s`.
 
 - **The whole tokenizer runs in a sandboxed child process.** The tokenizer
   is the second parser eating package-controlled input, and the one with an
@@ -277,6 +266,10 @@ at the reporter's request.
   The security model's A1, A6, the "known architectural limits" and the
   [sandboxing the tokenizer](explanation/sandboxing-the-tokenizer.md) page
   are updated from a design note to a description of what exists.
+
+These were found in a private source review by Olav Seyfarth (nursoda), with
+analysis assistance from Claude Code (Opus 5.5); the report is credited here
+at the reporter's request.
 
 ## [0.16.0] - 2026-09-19
 

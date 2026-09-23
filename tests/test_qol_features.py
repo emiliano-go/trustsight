@@ -312,8 +312,12 @@ class TestReviewSort:
     def test_sort_option_accepted(self, tmp_path, monkeypatch):
         """--sort with a valid value should not be rejected at parse time."""
         _env(tmp_path, monkeypatch)
-        # The command may download AUR metadata, which writes to stdout.
-        # What matters is the exit code: valid --sort is not rejected.
+        # Discovery shells out to pacman (`-Qm`); this test is about flag
+        # validation, so supply an empty installed set rather than depend on
+        # the host being Arch. What matters is the exit code.
+        monkeypatch.setattr(
+            "trustsight.review.get_installed_packages", lambda *a, **k: []
+        )
         result = runner.invoke(app, ["review", "--sort", "score", "--quiet"])
         # Exit 0 means the sort flag was accepted.
         # (Exit 2 would mean validation rejected it.)

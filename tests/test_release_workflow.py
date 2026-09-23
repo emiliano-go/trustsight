@@ -81,6 +81,31 @@ def test_pkgbuild_verifies_the_pre_tag_deterministic_tarball_on_every_run():
     assert "releases/download/" not in text
 
 
+def test_workflows_that_run_the_suite_fetch_tags():
+    """A suite runner must check out with tags.
+
+    `tests/test_pkgbuild.py` ties the PKGBUILD checksum to the tag named by
+    `pkgver`.  `actions/checkout` is shallow by default and fetches no tags
+    unless `fetch-depth: 0` is set, so a runner without it sees no tag, falls
+    back to the working tree, and fails for every commit after a release
+    until the next version bump.  That is exactly the `fetch-depth: 0` gap
+    that reddened the Tests job while the release workflow (which already
+    fetched tags) stayed green.
+    """
+    offenders = []
+    for workflow in sorted(WORKFLOWS.glob("*.yml")):
+        text = workflow.read_text()
+        runs_pytest = any(
+            "pytest" in line and not line.lstrip().startswith("#")
+            for line in text.splitlines()
+        )
+        if runs_pytest and "fetch-depth: 0" not in text:
+            offenders.append(workflow.name)
+    assert offenders == [], (
+        f"workflows run pytest without fetching tags: {offenders}"
+    )
+
+
 @pytest.mark.parametrize("flag", ["--nocheck", "--skipchecksums"])
 def test_no_workflow_weakens_the_release_build(flag):
     offenders = []

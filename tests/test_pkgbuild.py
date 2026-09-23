@@ -222,6 +222,15 @@ def _latest_version_tag() -> str | None:
     return None
 
 
+def _is_shallow_checkout() -> bool:
+    """True when git has only a shallow history, as a default checkout is."""
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )
+    return result.stdout.strip() == "true"
+
+
 @pytest.mark.skipif(
     not (ROOT / ".git").exists(),
     reason="not a git checkout (running from a release archive)",
@@ -256,7 +265,22 @@ def test_recorded_checksum_matches_the_recorded_version():
     assert recorded, "PKGBUILD records no sha256sums"
 
     latest = _latest_version_tag()
-    rev = latest if latest == f"v{pkgver}" else "WORKTREE"
+    if latest == f"v{pkgver}":
+        rev = latest
+    elif _is_shallow_checkout():
+        # A shallow checkout has no tags, so the tag named by `pkgver` looks
+        # absent and the test would fall back to the working tree and pass
+        # or fail for the wrong reason.  Say so instead of guessing: after a
+        # release, any content commit trips this, and the fix is to fetch the
+        # tags (actions/checkout with `fetch-depth: 0`).
+        pytest.fail(
+            f"this is a shallow git checkout, so the tag for pkgver {pkgver} "
+            "may exist but is not present.  Fetch tags, e.g. check out with "
+            "`fetch-depth: 0`, or run this from a full clone."
+        )
+    else:
+        rev = "WORKTREE"
+
     _, digest = build(rev, pkgver)
     assert digest == recorded.group(1), (
         f"PKGBUILD records {recorded.group(1)} for {pkgver}, but {rev} "

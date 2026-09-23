@@ -257,10 +257,10 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     is read: H066 needs the magic bytes, not the whole file.
     """
     manifest: list[tuple[str, bytes]] = []
-    # Count *iterations*, not appended files: a tar of millions of
-    # directories, symlinks or unreadable members kept `len(manifest)` at
-    # zero while the loop walked the whole archive, so the member cap did
-    # not bound the work.
+    # Count *iterations*, not appended files: a tar of directories,
+    # symlinks or unreadable members leaves `len(manifest)` at zero while
+    # the loop walks the whole archive, so a bound on the list does not
+    # bound the work.
     for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
         if seen >= max_members:
             break

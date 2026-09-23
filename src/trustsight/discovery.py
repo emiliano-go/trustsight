@@ -365,6 +365,51 @@ def get_installed_from_repo(repo: str) -> list[tuple[str, str]]:
     ]
 
 
+def get_repo_newest_versions(repo: str) -> dict[str, str]:
+    """Return ``{package: version}`` for every package *repo* advertises.
+
+    ``pacman -Sl <repo>`` prints ``repo name version`` from the repo's own
+    sync database, so a package installed from a local repo has a "latest"
+    version this machine already knows.  Comparing against it keeps those
+    names off the AUR RPC: a private repository's package names have no
+    business leaving the machine.
+    """
+    sl = _run_pacman(["pacman", "-Sl", "--", repo])
+    if sl.returncode != 0:
+        return {}
+    newest: dict[str, str] = {}
+    for line in sl.stdout.strip().splitlines():
+        parts = line.split()
+        if len(parts) >= 3:
+            newest[parts[1]] = parts[2]
+    return newest
+
+
+def _outdated_from_repo(
+    installed: list[tuple[str, str]],
+    newest: dict[str, str],
+    all_packages: bool = False,
+) -> list[dict]:
+    """Outdated packages among *installed*, compared against *newest*.
+
+    The same entry shape ``find_outdated_from_list`` produces, so callers
+    cannot tell which source answered.  No ``last_modified``: the repo
+    database carries no AUR ``LastModified``.
+    """
+    outdated: list[dict] = []
+    for name, current_version in installed:
+        latest_version = newest.get(name)
+        if not latest_version:
+            continue
+        if all_packages or _vercmp(current_version, latest_version) < 0:
+            outdated.append({
+                "name": name,
+                "current_version": current_version,
+                "latest_version": latest_version,
+            })
+    return outdated
+
+
 def get_installed_foreign() -> list[tuple[str, str]]:
     """Return (name, version) pairs installed from foreign sources (AUR)."""
     result = _run_pacman(["pacman", "-Qm"])
@@ -442,29 +487,43 @@ def discover_packages(
     """Discover packages across repos and optionally foreign sources.
 
     Returns only outdated packages by default.  When *all_packages* is true,
-    every AUR-resolvable package is included regardless of update status.
+    every resolved package is included regardless of update status.
+
+    Packages installed from a local repo are compared against that repo's own
+    version (``pacman -Sl``), and only foreign packages are looked up on the
+    AUR.  An auto-detected ``--all-repos`` set can name a private repository,
+    so its package names must not be sent to ``aur.archlinux.org``.
     """
-    sources: set[tuple[str, str]] = set()
+    results: list[dict] = []
+    seen: set[str] = set()
 
+    repo_list: list[str] = []
     if all_repos:
-        local_repos = get_local_repos_from_pacman_conf()
-        for repo in local_repos:
-            sources.update(get_installed_from_repo(repo))
-
+        repo_list.extend(get_local_repos_from_pacman_conf())
     if repos:
-        for repo in repos:
-            pkg_list = get_installed_from_repo(repo)
-            if not pkg_list and _warn_func:
-                if _repo_exists(repo):
-                    _warn_func(
-                        f"repo '{repo}' exists but no packages from it are installed."
-                    )
-                else:
-                    _warn_func(f"repo '{repo}' does not exist.")
-            sources.update(pkg_list)
+        repo_list.extend(repos)
+
+    for repo in repo_list:
+        installed = get_installed_from_repo(repo)
+        if not installed and repos and repo in repos and _warn_func:
+            if _repo_exists(repo):
+                _warn_func(
+                    f"repo '{repo}' exists but no packages from it are installed."
+                )
+            else:
+                _warn_func(f"repo '{repo}' does not exist.")
+        newest = get_repo_newest_versions(repo)
+        for entry in _outdated_from_repo(installed, newest, all_packages):
+            if entry["name"] not in seen:
+                seen.add(entry["name"])
+                results.append(entry)
 
     if include_foreign or (not all_repos and repos is None):
-        sources.update(get_installed_foreign())
+        for entry in find_outdated_from_list(
+            get_installed_foreign(), all_packages=all_packages
+        ):
+            if entry["name"] not in seen:
+                seen.add(entry["name"])
+                results.append(entry)
 
-    unique_pkgs = list(sources)
-    return find_outdated_from_list(unique_pkgs, all_packages=all_packages)
+    return results

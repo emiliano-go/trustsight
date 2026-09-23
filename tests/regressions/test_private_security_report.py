@@ -1,7 +1,9 @@
-"""Regressions for the private security report of 2026-09-23.
+"""Regression tests for the fetcher, differ, renderer, seed and sandbox.
 
-Each test pins one finding, named by its report number.  Where the report's
-own reading was wrong, the test pins the corrected behaviour and says so.
+Each test pins a behaviour a silent failure would otherwise hide: content
+skipped without a coverage gap, a stage failure read as "nothing found", a
+verdict that depends on machine load, or a package-controlled value reaching
+the terminal or leaving the machine.
 """
 
 import json
@@ -49,15 +51,14 @@ def repo(tmp_path):
     return pygit2.init_repository(str(tmp_path / "repo"))
 
 
-# --- 2.1: a fetch must advance the analysed commit --------------------------
+# --- a fetch must advance the analysed commit -------------------------------
 
 def test_stale_marker_and_future_dated_commit_still_fetches(tmp_path, monkeypatch):
-    """2.1: a marker older than upstream must not be rescued by commit time.
+    """A fetch marker older than upstream must not be rescued by commit time.
 
-    The report's finding is that HEAD never moves after a fetch.  While
-    removing the dead `head.is_remote` branch this exposed a second hole:
-    `_is_current` fell through to HEAD's commit time even when it had a
-    marker, so a future-dated commit suppressed the fetch.
+    A maintainer can date a commit in the future.  The commit-time fallback
+    is only for a clone that has no marker at all, so a marker that says the
+    clone is behind must win over HEAD's self-declared date.
     """
     from trustsight.fetcher import _is_current, _record_fetch
 
@@ -78,10 +79,10 @@ def test_stale_marker_and_future_dated_commit_still_fetches(tmp_path, monkeypatc
     assert _is_current(repo, int(time.time()) + 5) is False
 
 
-# --- 2.2: binary metadata is not a silent skip ------------------------------
+# --- binary metadata is not a silent skip ----------------------------------
 
 def test_binary_pkgbuild_is_detected_at_the_git_level(repo):
-    """2.2: a NUL turns the diff into one line with no body."""
+    """A NUL byte turns a PKGBUILD delta into a one-line binary marker."""
     c1 = _commit(repo, {"PKGBUILD": b'pkgver=1\nsource=("https://a/x.tar.gz")\n'}, [])
     c2 = _commit(
         repo,
@@ -92,7 +93,7 @@ def test_binary_pkgbuild_is_detected_at_the_git_level(repo):
 
 
 def test_binary_metadata_marker_is_detected_in_text():
-    """2.2: the text path reads the marker git wrote."""
+    """The text path reads the binary marker git wrote."""
     diff = (
         "diff --git a/PKGBUILD b/PKGBUILD\n"
         "Binary files a/PKGBUILD and b/PKGBUILD differ\n"
@@ -101,7 +102,7 @@ def test_binary_metadata_marker_is_detected_in_text():
 
 
 def test_scan_diff_records_the_binary_metadata_gap_and_finding():
-    """2.2: the gap and the HIGH finding travel with the text path."""
+    """The binary-metadata gap and the HIGH finding travel with the text path."""
     from trustsight.analysis.pipeline import scan_diff
 
     diff = (
@@ -119,10 +120,10 @@ def test_scan_diff_records_the_binary_metadata_gap_and_finding():
                for e in fact.score_breakdown)
 
 
-# --- 2.3: a stage failure is not "nothing found" ----------------------------
+# --- a stage failure is not "nothing found" --------------------------------
 
 def test_dependency_scan_failure_is_recorded(monkeypatch):
-    """2.3a: the bare except used to return a neutral False."""
+    """A raising dependency scan is recorded as a degraded stage."""
     from trustsight.analysis import pipeline
 
     def boom(*a, **k):
@@ -135,7 +136,7 @@ def test_dependency_scan_failure_is_recorded(monkeypatch):
 
 
 def test_dependency_scan_reraise_tokenizer_unavailable(monkeypatch):
-    """2.3a: a missing tokenizer is a refusal, not a neutral result."""
+    """A missing tokenizer is a refusal, not a neutral result."""
     from trustsight.analysis import pipeline
 
     def dead(*a, **k):
@@ -148,7 +149,7 @@ def test_dependency_scan_reraise_tokenizer_unavailable(monkeypatch):
 
 
 def test_checksum_resolution_failure_is_recorded(monkeypatch):
-    """2.3b: unresolved checksum text must not clear the gap."""
+    """An unresolved checksum array records a stage failure."""
     def boom(lines):
         raise RuntimeError("tokenizer blew up")
 
@@ -159,11 +160,10 @@ def test_checksum_resolution_failure_is_recorded(monkeypatch):
     assert "checksum-resolution" in stage_failures()
 
 
-# --- 2.4: pattern verdicts are decided once ---------------------------------
+# --- pattern verdicts are decided once -------------------------------------
 
 def test_refused_pattern_is_cached():
-    """2.4: the timing refusal used to be re-decided per call, so the same
-    input could score differently under load."""
+    """A refused pattern is memoised, so its verdict cannot change per call."""
     from trustsight import rules
 
     pattern = r"(a+)+$"
@@ -181,7 +181,7 @@ def test_precompile_shipped_patterns_runs():
 
 
 def test_refused_rule_is_reported_as_a_stage_gap():
-    """2.4: a refused rule used to be a silent `continue`."""
+    """A rule whose pattern is refused is reported as a stage gap."""
     from trustsight.rules import apply_rules
 
     rule = {"id": "Z9", "name": "z", "pattern": r"(a+)+$",
@@ -192,10 +192,10 @@ def test_refused_rule_is_reported_as_a_stage_gap():
     assert any(stage.startswith("rule:") for stage in stage_failures())
 
 
-# --- 2.5: the sandbox cannot be spent on purpose -----------------------------
+# --- the sandbox cannot be spent on purpose --------------------------------
 
 def test_frame_cap_covers_the_escaping_worst_case():
-    """2.5: control bytes become six-byte ``\\u00XX`` escapes."""
+    """The frame cap covers the escaping worst case for a maximum diff."""
     from trustsight.sandbox import protocol
 
     assert protocol.MAX_FRAME_BYTES >= 6 * (5 * 1024 * 1024)
@@ -208,7 +208,7 @@ def test_worker_cpu_reading_is_safe_without_a_process():
 
 
 def test_worker_cpu_reading_matches_the_process():
-    """2.5: the reading must be the child's cumulative CPU, not a constant."""
+    """The reading is the process's cumulative user and system CPU."""
     import resource
 
     from trustsight.sandbox.client import _worker_cpu_seconds, _Worker
@@ -231,7 +231,7 @@ def test_isolation_helpers_report_a_bool():
 
 
 def test_worker_spawn_disables_user_site(monkeypatch):
-    """2.8: the child must not run a user .pth or sitecustomize."""
+    """The worker must not run a user .pth or sitecustomize."""
     from trustsight.sandbox import client as client_mod
 
     captured = {}
@@ -257,7 +257,7 @@ def test_worker_spawn_disables_user_site(monkeypatch):
         worker.proc = None
 
 
-# --- 2.6: history rendering and failed commits -------------------------------
+# --- history rendering and failed commits ----------------------------------
 
 def test_finding_line_has_no_escape():
     line = _finding_line({
@@ -302,10 +302,10 @@ def test_history_rich_renderer_cleans_commit_text(capsys):
     assert "\x1b" not in out
 
 
-# --- 2.7: privacy and the seed ----------------------------------------------
+# --- privacy and the seed --------------------------------------------------
 
 def test_aur_rpc_is_off_by_default(monkeypatch):
-    """2.7: TRUSTSIGHT_OFFLINE must cover the RPC."""
+    """TRUSTSIGHT_OFFLINE forbids the RPC; a cached answer is still served."""
     monkeypatch.setattr(discovery, "get_aur_package_info", _REAL_GET_AUR_PACKAGE_INFO)
     monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
     import trustsight.db as db
@@ -314,8 +314,37 @@ def test_aur_rpc_is_off_by_default(monkeypatch):
     assert discovery.get_aur_package_info(["secret-private-pkg"]) == {}
 
 
+def test_local_repo_names_never_reach_the_aur(monkeypatch):
+    """A package from a local repo is compared against its repo's version.
+
+    An auto-detected repository can be private, so its package names must
+    never leave the machine.  Only foreign packages are looked up on the AUR.
+    """
+    monkeypatch.setattr(
+        discovery, "get_local_repos_from_pacman_conf", lambda: ["private-repo"]
+    )
+    monkeypatch.setattr(
+        discovery, "get_installed_from_repo", lambda repo: [("secret-pkg", "1.0")]
+    )
+    monkeypatch.setattr(
+        discovery, "get_repo_newest_versions", lambda repo: {"secret-pkg": "2.0"}
+    )
+    monkeypatch.setattr(discovery, "get_installed_foreign", lambda: [])
+
+    queried = []
+    monkeypatch.setattr(
+        discovery,
+        "find_outdated_from_list",
+        lambda pkgs, all_packages=False: queried.append(list(pkgs)) or [],
+    )
+
+    result = discovery.discover_packages(all_repos=True)
+    assert queried == [], "local-repo names were sent to the AUR"
+    assert [entry["name"] for entry in result] == ["secret-pkg"]
+
+
 def test_seed_v3_ships_no_email_hash_or_package_list(tmp_path):
-    """2.7: the salt is public, so both are personal data."""
+    """The salt is public, so the seed ships neither value."""
     raw = [{"name": "Alice", "email": "alice@example.com", "packages": ["p"]}]
     build_seed(raw, tmp_path)
     meta = json.loads((tmp_path / "trustsight-seed-v2" / "seed_meta.json").read_text())
@@ -328,7 +357,7 @@ def test_seed_v3_ships_no_email_hash_or_package_list(tmp_path):
     assert row["package_count"] == 1
 
 
-# --- 2.8: hardening ---------------------------------------------------------
+# --- hardening -------------------------------------------------------------
 
 def test_clean_strips_bidi_and_zero_width():
     assert clean("\u202eabc\u200b\u2066def\ufeff") == "abcdef"
@@ -364,11 +393,10 @@ def test_read_deadline_refuses_a_slow_stream():
 
 
 def test_snapshot_manifest_bounds_total_members():
-    """2.8: skipped members must count, or a tar of directories walks free.
+    """The member bound counts every visited member, not only appended files.
 
-    The old loop bounded ``len(manifest)``, which stays zero when every
-    member is a directory, so the walk consumed the whole archive.  Count
-    what the iterator actually yielded.
+    A bound on ``len(manifest)`` stays at zero when every member is a
+    directory, which lets a tar of directories consume the whole archive.
     """
     from trustsight.full_aur.fetch import _snapshot_manifest
 
@@ -392,7 +420,7 @@ def test_snapshot_manifest_bounds_total_members():
 
 
 def test_ioc_import_requires_the_pinned_key(tmp_path):
-    """2.8: a manifest must not be trusted because it carries its own key."""
+    """A manifest is verified against the pinned key, not one it carries."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     from trustsight.ioc_baseline import InvalidSignatureError, import_baseline
@@ -416,7 +444,7 @@ def test_ioc_import_requires_the_pinned_key(tmp_path):
 
 
 def test_tampered_manifest_payload_is_rejected(tmp_path):
-    """2.8: the exact bytes are signed, not the name or version."""
+    """The exact signed bytes are checked, so a changed field is rejected."""
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
     from trustsight.ioc_baseline import InvalidSignatureError, import_baseline

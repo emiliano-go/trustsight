@@ -198,9 +198,10 @@ def test_discover_packages_foreign_default(
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 def test_discover_packages_with_repos(
-    mock_outdated, mock_repo, mock_foreign
+    mock_outdated, mock_newest, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
@@ -208,9 +209,9 @@ def test_discover_packages_with_repos(
         [("repo-a-pkg", "1.0")],
         [("repo-b-pkg", "2.0")],
     ]
-    mock_outdated.return_value = [
-        {"name": "repo-a-pkg", "current_version": "1.0", "latest_version": "2.0"},
-        {"name": "repo-b-pkg", "current_version": "2.0", "latest_version": "3.0"},
+    mock_newest.side_effect = [
+        {"repo-a-pkg": "2.0"},
+        {"repo-b-pkg": "3.0"},
     ]
 
     result = discover_packages(
@@ -221,21 +222,24 @@ def test_discover_packages_with_repos(
     mock_repo.assert_any_call("myrepo-a")
     mock_repo.assert_any_call("myrepo-b")
     mock_foreign.assert_not_called()
+    # Repo packages are compared locally; the AUR is never asked.
+    mock_outdated.assert_not_called()
     assert len(result) == 2
 
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 def test_discover_packages_repo_plus_foreign(
-    mock_outdated, mock_repo, mock_foreign
+    mock_outdated, mock_newest, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
     mock_repo.return_value = [("repo-pkg", "1.0")]
+    mock_newest.return_value = {"repo-pkg": "2.0"}
     mock_foreign.return_value = [("foreign-pkg", "2.0")]
     mock_outdated.return_value = [
-        {"name": "repo-pkg", "current_version": "1.0", "latest_version": "2.0"},
         {"name": "foreign-pkg", "current_version": "2.0", "latest_version": "3.0"},
     ]
 
@@ -246,15 +250,19 @@ def test_discover_packages_repo_plus_foreign(
 
     mock_repo.assert_called_once_with("myrepo")
     mock_foreign.assert_called_once()
+    # Only the foreign package reaches the AUR.
+    args, _kwargs = mock_outdated.call_args
+    assert args[0] == [("foreign-pkg", "2.0")]
     assert len(result) == 2
 
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
 @patch("trustsight.discovery.get_local_repos_from_pacman_conf")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 def test_discover_packages_all_repos(
-    mock_outdated, mock_pacman_conf, mock_repo, mock_foreign
+    mock_outdated, mock_newest, mock_pacman_conf, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
@@ -263,8 +271,9 @@ def test_discover_packages_all_repos(
         [("custom-pkg", "1.0")],
         [("local-pkg", "2.0")],
     ]
-    mock_outdated.return_value = [
-        {"name": "custom-pkg", "current_version": "1.0", "latest_version": "2.0"},
+    mock_newest.side_effect = [
+        {"custom-pkg": "2.0"},
+        {"local-pkg": "2.0"},
     ]
     mock_foreign.return_value = []  # not included without --foreign
 
@@ -277,23 +286,26 @@ def test_discover_packages_all_repos(
     mock_repo.assert_any_call("custom")
     mock_repo.assert_any_call("local-repo")
     mock_foreign.assert_not_called()
-    assert len(result) == 1
+    # Auto-detected repo names never reach the AUR.
+    mock_outdated.assert_not_called()
+    assert [e["name"] for e in result] == ["custom-pkg"]
 
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
 @patch("trustsight.discovery.get_local_repos_from_pacman_conf")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 def test_discover_packages_all_repos_plus_foreign(
-    mock_outdated, mock_pacman_conf, mock_repo, mock_foreign
+    mock_outdated, mock_newest, mock_pacman_conf, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
     mock_pacman_conf.return_value = ["custom"]
     mock_repo.return_value = [("custom-pkg", "1.0")]
+    mock_newest.return_value = {"custom-pkg": "2.0"}
     mock_foreign.return_value = [("foreign-pkg", "2.0")]
     mock_outdated.return_value = [
-        {"name": "custom-pkg", "current_version": "1.0", "latest_version": "2.0"},
         {"name": "foreign-pkg", "current_version": "2.0", "latest_version": "3.0"},
     ]
 
@@ -302,19 +314,21 @@ def test_discover_packages_all_repos_plus_foreign(
         include_foreign=True,
     )
 
-    assert len(result) == 2
+    assert {e["name"] for e in result} == {"custom-pkg", "foreign-pkg"}
 
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 @patch("trustsight.discovery._repo_exists")
 def test_discover_packages_empty_repo_warns(
-    mock_exists, mock_outdated, mock_repo, mock_foreign
+    mock_exists, mock_outdated, mock_newest, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
     mock_repo.return_value = []
+    mock_newest.return_value = {}
     mock_foreign.return_value = [("foreign-pkg", "1.0")]
     mock_outdated.return_value = [
         {"name": "foreign-pkg", "current_version": "1.0", "latest_version": "2.0"},
@@ -382,13 +396,15 @@ def test_discover_packages_empty_repos_list():
 
 @patch("trustsight.discovery.get_installed_foreign")
 @patch("trustsight.discovery.get_installed_from_repo")
+@patch("trustsight.discovery.get_repo_newest_versions")
 @patch("trustsight.discovery.find_outdated_from_list")
 def test_discover_packages_deduplicates(
-    mock_outdated, mock_repo, mock_foreign
+    mock_outdated, mock_newest, mock_repo, mock_foreign
 ):
     from trustsight.discovery import discover_packages
 
     mock_repo.return_value = [("shared-pkg", "1.0")]
+    mock_newest.return_value = {"shared-pkg": "2.0"}
     mock_foreign.return_value = [("shared-pkg", "1.0")]
     mock_outdated.return_value = [
         {"name": "shared-pkg", "current_version": "1.0", "latest_version": "2.0"},

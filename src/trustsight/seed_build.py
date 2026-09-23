@@ -2,12 +2,11 @@
 
 The seed stores only salted SHA-256 hashes of maintainer *names*, together
 with non-identifying metadata such as package counts and first-seen
-timestamps.  It deliberately does not ship email hashes or per-maintainer
-package lists: the salt travels with the seed, so a salted hash of a known
-address is trivially confirmed, and a package list re-identifies the person
-even when the hash does not.  That is pseudonymous personal data, not
-anonymous data.  The v3 format drops both fields; the importer still reads
-a v2 seed and ignores them.
+timestamps.  It ships no email hash and no per-maintainer package list: the
+salt travels with the seed, so a salted hash of a known address is trivially
+confirmed, and a package list re-identifies the person even when the hash
+does not.  That is pseudonymous personal data, not anonymous data.  An older
+seed that carries those fields still imports, and they are ignored.
 """
 
 import hashlib
@@ -137,7 +136,7 @@ def _normalise_maintainer(raw: dict) -> dict:
     if packages is not None and not isinstance(packages, list):
         raise ValueError("packages must be a list")
     package_count = int(raw.get("package_count", 0) or 0)
-    # The list itself is not shipped in v3, but its length is a useful,
+    # The list itself is not shipped, but its length is a useful,
     # non-identifying count when the caller supplied no explicit count.
     if not package_count and packages:
         package_count = len(packages)

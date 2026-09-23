@@ -25,6 +25,10 @@ _RESUME_FILE = "full-aur-resume.json"
 
 _HTTP_TIMEOUT = 60
 
+#: Total wall-clock budget for one response; ``_HTTP_TIMEOUT`` only bounds a
+#: single socket operation and resets on every chunk.
+_DOWNLOAD_DEADLINE_SECONDS = 120
+
 # The AUR's cgit sits behind rate limiting and Anubis anti-scraping, and it
 # will 429, 5xx, or reset the connection when hit too fast; a bootstrap makes
 # ~120k requests, so being a good citizen is not optional.  Two mechanisms
@@ -109,7 +113,14 @@ def _http_get(url: str) -> Optional[bytes]:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
             resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
             buf = bytearray()
+            deadline = time.monotonic() + _DOWNLOAD_DEADLINE_SECONDS
             while True:
+                if time.monotonic() > deadline:
+                    log.warning(
+                        "response from %s exceeded its %gs deadline; abandoning",
+                        url, _DOWNLOAD_DEADLINE_SECONDS,
+                    )
+                    return None
                 chunk = resp.read(65536)
                 if not chunk:
                     break
@@ -246,8 +257,12 @@ def _snapshot_manifest(tf: tarfile.TarFile, max_members: int = 10_000) -> list[t
     is read: H066 needs the magic bytes, not the whole file.
     """
     manifest: list[tuple[str, bytes]] = []
-    for member in tf:  # lazy: getmembers() would parse the whole archive
-        if len(manifest) >= max_members:
+    # Count *iterations*, not appended files: a tar of millions of
+    # directories, symlinks or unreadable members kept `len(manifest)` at
+    # zero while the loop walked the whole archive, so the member cap did
+    # not bound the work.
+    for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
+        if seen >= max_members:
             break
         if not member.isfile():
             continue

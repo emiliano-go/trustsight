@@ -50,7 +50,20 @@ _local = threading.local()
 
 
 def _new_connection(db_path: Path) -> sqlite3.Connection:
+    # The parent may not exist yet on a path that never went through
+    # `config.ensure_dirs` (a first import, or a test that points DATA_DIR at
+    # a fresh tmpdir).  Create it owner-only rather than let SQLite fail with
+    # a path-dependent "unable to open database file".
+    db_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    existed = db_path.exists()
     conn = sqlite3.connect(str(db_path))
+    if not existed:
+        # SQLite creates the file 0666 & ~umask; the database holds package
+        # names, maintainers and analysis history, so pin it to the owner.
+        try:
+            os.chmod(db_path, 0o600)
+        except OSError:
+            pass
     conn.row_factory = sqlite3.Row
     # journal_mode is a persistent property of the file, so this only does
     # real work the first time a database is created; foreign_keys is

@@ -20,6 +20,7 @@ module that does.
 
 import atexit
 import json
+import logging
 import os
 import queue
 import select
@@ -32,6 +33,8 @@ from pathlib import Path
 
 from . import protocol
 
+_log = logging.getLogger(__name__)
+
 #: Wall-clock ceiling for one request, enforced by the parent's ``select``.
 #: The engine's own worst case is milliseconds; this is the backstop for a
 #: worker wedged by a defect.
@@ -40,6 +43,13 @@ REQUEST_TIMEOUT_SECONDS = 5.0
 #: A worker is retired after this many requests so residual state and
 #: fragmentation cannot accumulate across a whole ``full-aur`` run.
 MAX_REQUESTS_PER_WORKER = 512
+
+#: Retire a worker once it has burned this much CPU, below the child's own
+#: ``RLIMIT_CPU`` of 5 s.  CPU accumulates across every request a worker
+#: serves, so without this a slow drip from one package spends the budget
+#: meant for the whole worker and the *next* package's request is the one
+#: killed by SIGXCPU - a failure attributed to the wrong input.
+CPU_RETIRE_SECONDS = 3.5
 
 #: Concurrent children.  The analysis itself runs a thread pool; these are
 #: serialised per worker, and the queue bounds the fan-out.  A source
@@ -68,19 +78,45 @@ class _Worker:
     def __init__(self):
         self.proc = None
         self.requests = 0
+        self._stderr_thread = None
 
     def start(self) -> None:
         self.proc = subprocess.Popen(
-            [sys.executable, str(_WORKER_PATH)],
+            # ``-s`` drops the user site directory, so a user ``.pth`` or
+            # ``sitecustomize`` cannot run inside the sandbox.  ``-I`` is
+            # deliberately not used: it would also ignore the PYTHONPATH
+            # that lets a dev checkout's child import the same tree.
+            [sys.executable, "-s", str(_WORKER_PATH)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
+            # Piped, not discarded: the child reports whether the best-effort
+            # hardening (no_new_privs, network namespace) took effect.  A
+            # daemon thread drains it so a chatty child cannot block on a
+            # full pipe.
+            stderr=subprocess.PIPE,
             close_fds=True,
             start_new_session=True,
             cwd="/",
             env=_child_env(),
         )
         self.requests = 0
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr, daemon=True
+        )
+        self._stderr_thread.start()
+
+    def _drain_stderr(self) -> None:
+        proc = self.proc
+        if proc is None or proc.stderr is None:
+            return
+        try:
+            for line in proc.stderr:
+                _log.debug(
+                    "tokenizer worker: %s",
+                    line.decode("utf-8", "replace").rstrip(),
+                )
+        except (OSError, ValueError):
+            pass
 
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
@@ -199,12 +235,38 @@ def _acquire() -> _Worker:
     return _acquire()
 
 
+def _worker_cpu_seconds(worker: _Worker) -> float:
+    """Cumulative user+system CPU of *worker*, in seconds.
+
+    Read from ``/proc`` rather than ``getrusage``: ``RUSAGE_CHILDREN`` is
+    process-wide across every child, so it cannot say which worker is close
+    to the limit.  Returns 0.0 when the reading is unavailable, which errs
+    toward keeping the worker (the request-count and RLIMIT_CPU bounds
+    still apply).
+    """
+    if worker.proc is None:
+        return 0.0
+    try:
+        with open(f"/proc/{worker.proc.pid}/stat", "rb") as handle:
+            # Bounded: /proc stat is small, and the read-bound gate is a
+            # structural check on every read() in the source.
+            fields = handle.read(4096).rsplit(b")", 1)[-1].split()
+        ticks = int(fields[11]) + int(fields[12])  # utime, stime (1-based 14,15)
+    except (OSError, IndexError, ValueError):
+        return 0.0
+    return ticks / os.sysconf("SC_CLK_TCK")
+
+
 def _release(worker: _Worker) -> None:
     if _shutdown.is_set():
         worker.stop()
         _forget(worker)
         return
-    if worker.alive() and worker.requests < MAX_REQUESTS_PER_WORKER:
+    if (
+        worker.alive()
+        and worker.requests < MAX_REQUESTS_PER_WORKER
+        and _worker_cpu_seconds(worker) < CPU_RETIRE_SECONDS
+    ):
         _pool.put(worker)
         return
     worker.stop()

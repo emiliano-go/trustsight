@@ -1,8 +1,13 @@
-"""Build a v2 hashed maintainer seed.
+"""Build a v3 hashed maintainer seed.
 
-The seed format stores only salted SHA-256 hashes of maintainer names and
-emails, together with non-identifying metadata such as package counts and
-first-seen timestamps.  No plaintext identity is written to the seed.
+The seed stores only salted SHA-256 hashes of maintainer *names*, together
+with non-identifying metadata such as package counts and first-seen
+timestamps.  It deliberately does not ship email hashes or per-maintainer
+package lists: the salt travels with the seed, so a salted hash of a known
+address is trivially confirmed, and a package list re-identifies the person
+even when the hash does not.  That is pseudonymous personal data, not
+anonymous data.  The v3 format drops both fields; the importer still reads
+a v2 seed and ignores them.
 """
 
 import hashlib
@@ -15,7 +20,7 @@ from pathlib import Path
 from .bounded_io import read_file_capped
 
 DEFAULT_HASH_ALGORITHM = "sha256"
-SEED_FORMAT_VERSION = "2.0.0"
+SEED_FORMAT_VERSION = "3.0.0"
 
 #: Fixed timestamp for bulk corpora, matching scripts/generate_seed.py.
 #: The seed records *that* a URL or dependency was observed, not when; a
@@ -131,11 +136,16 @@ def _normalise_maintainer(raw: dict) -> dict:
     packages = raw.get("packages")
     if packages is not None and not isinstance(packages, list):
         raise ValueError("packages must be a list")
+    package_count = int(raw.get("package_count", 0) or 0)
+    # The list itself is not shipped in v3, but its length is a useful,
+    # non-identifying count when the caller supplied no explicit count.
+    if not package_count and packages:
+        package_count = len(packages)
     return {
         "name": name,
         "email": email,
         "first_seen": raw.get("first_seen") or datetime.now(timezone.utc).isoformat(),
-        "package_count": int(raw.get("package_count", 0) or 0),
+        "package_count": package_count,
         "packages": packages,
         "source": raw.get("source") or "aur",
     }
@@ -183,25 +193,19 @@ def build_seed(
     # Fold duplicate names so package counts accumulate deterministically.
     by_name: dict[str, dict] = defaultdict(
         lambda: {
-            "email": None,
             "first_seen": None,
             "package_count": 0,
-            "packages": set(),
             "source": "aur",
         }
     )
     for raw in raw_maintainers:
         rec = _normalise_maintainer(raw)
         bucket = by_name[rec["name"]]
-        if rec["email"]:
-            bucket["email"] = rec["email"]
         if bucket["first_seen"] is None or (
             rec["first_seen"] and rec["first_seen"] < bucket["first_seen"]
         ):
             bucket["first_seen"] = rec["first_seen"]
         bucket["package_count"] += rec["package_count"]
-        if rec["packages"]:
-            bucket["packages"].update(rec["packages"])
         if rec["source"]:
             bucket["source"] = rec["source"]
 
@@ -218,17 +222,11 @@ def build_seed(
     maintainer_lines = []
     for name, rec in by_name.items():
         name_hash = _hash_value(name, salt, hash_algorithm)
-        email_hash = _hash_value(rec["email"], salt, hash_algorithm) if rec["email"] else None
-        packages = sorted(rec["packages"]) if rec["packages"] else None
         package_count = rec["package_count"]
-        if not package_count and packages:
-            package_count = len(packages)
         line = {
             "name_hash": name_hash,
-            "email_hash": email_hash,
             "first_seen": rec["first_seen"] or now,
             "package_count": max(1, package_count) if package_count else 1,
-            "packages": packages,
             "source": rec["source"],
         }
         maintainer_lines.append(line)

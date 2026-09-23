@@ -28,6 +28,10 @@ class ReadTooLarge(Exception):
     """Raised when a bounded read would materialise more than its limit."""
 
 
+class ReadTimedOut(Exception):
+    """Raised when a bounded read runs past its total wall-clock deadline."""
+
+
 def read_capped(fh: BinaryIO, limit: int, what: str) -> bytes:
     """Read *fh* to EOF, refusing past *limit* bytes.
 
@@ -36,6 +40,37 @@ def read_capped(fh: BinaryIO, limit: int, what: str) -> bytes:
     """
     out = bytearray()
     while True:
+        chunk = fh.read(_CHUNK_BYTES)
+        if not chunk:
+            break
+        out.extend(chunk)
+        if len(out) > limit:
+            raise ReadTooLarge(
+                f"{what} exceeds {limit} bytes; refusing to read it"
+            )
+    return bytes(out)
+
+
+def read_capped_with_deadline(
+    fh: BinaryIO, limit: int, what: str, deadline_seconds: float
+) -> bytes:
+    """Read *fh* to EOF under a byte cap *and* a total wall-clock deadline.
+
+    ``urlopen(timeout=...)`` bounds a single socket operation, not the
+    download: a slow-drip server resets it on every chunk, so a response
+    can be held open indefinitely while staying under the byte cap.  This
+    charges the whole transfer one deadline.
+    """
+    import time
+
+    deadline = time.monotonic() + deadline_seconds
+    out = bytearray()
+    while True:
+        if time.monotonic() > deadline:
+            raise ReadTimedOut(
+                f"{what} exceeded its {deadline_seconds:g}s deadline; refusing "
+                "to keep reading"
+            )
         chunk = fh.read(_CHUNK_BYTES)
         if not chunk:
             break

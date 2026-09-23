@@ -24,6 +24,8 @@ from ..db import (
 from ..differ import (
     diff_summary_from_text,
     generate_diff_bounded,
+    binary_metadata_in_text,
+    binary_metadata_paths,
     changed_opaque_members,
     companion_source_hunks,
     detect_gpg_verification_removed,
@@ -279,13 +281,45 @@ def _has_noextract(diff_text: str) -> bool:
     return bool(_NOEXTRACT_RE.search(diff_text))
 
 
+def _binary_metadata_finding(paths: list[str]) -> dict:
+    """A HIGH finding for metadata git refused to diff as text.
+
+    A binary ``PKGBUILD``/``.install`` is never legitimate: the shell still
+    sources it normally, and no rule saw a line of it.
+    """
+    return stamp({
+        "rule_id": "C010",
+        "name": "Binary Metadata File",
+        "severity": "HIGH",
+        "category": "integrity",
+        "match": (
+            "metadata file(s) are binary, so no diff body was emitted and "
+            f"their content was not read: {', '.join(paths[:3])}"
+        ),
+        "file": paths[0], "line": None,
+        "params": {"members": ", ".join(paths[:5])},
+    })
+
+
 def _adds_a_dependency(diff_text: str) -> bool:
-    """True when the diff adds a runtime or build dependency."""
+    """True when the diff adds a runtime or build dependency.
+
+    A tokenizer failure must not read as "no dependency added": that is the
+    same neutral value a complete scan returns, and it silently clears
+    ``deps_not_scanned``.  A missing tokenizer is a refusal (the package is
+    not vetted), so it propagates; any other failure is recorded as a
+    degraded stage and the caller fails closed on the stage gap.
+    """
     from ..deps import extract_dependency_changes
+    from ..tokenizer import TokenizerUnavailable
 
     try:
         added = extract_dependency_changes(diff_text, "")
+    except TokenizerUnavailable:
+        raise
     except Exception:
+        log.debug("dependency-change scan failed", exc_info=True)
+        note_stage_failure("dependency-change-scan")
         return False
     return any(added.get(field) for field in
                ("depends", "makedepends", "checkdepends", "optdepends"))
@@ -494,6 +528,14 @@ def analyze_package(
             "params": {"carrier": "committed-binary",
                        "members": ", ".join(swapped[:5])},
         }))
+    # A binary metadata file is a separate blind spot from a committed
+    # binary: git emits no body for it either, but unlike an opaque member
+    # the analysis claims to read it, and a binary PKGBUILD is never
+    # legitimate.  The HIGH finding plus the gap is what stops it reading
+    # clean.
+    binary_meta = binary_metadata_paths(repo, old_commit, head_commit)
+    if binary_meta:
+        triggered_rules.append(_binary_metadata_finding(binary_meta))
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -615,6 +657,7 @@ def analyze_package(
                        and not _scriptlet_files_unread(
                            diff_text, tree_manifest)),
         companion_truncated=companion_truncated,
+        binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),
@@ -783,6 +826,11 @@ def scan_diff(
             tree_manifest=tree_manifest,
         )
     )
+    # Same blind spot as the git path, read from the marker git wrote: a
+    # binary metadata delta has no body, so no rule sees a line of it.
+    binary_meta = binary_metadata_in_text(diff_text)
+    if binary_meta:
+        triggered_rules.append(_binary_metadata_finding(binary_meta))
     if tree_manifest:
         from .delivery import scan_tree_manifest
         triggered_rules.extend(
@@ -855,6 +903,7 @@ def scan_diff(
         tree_analyzed=(bool(tree_manifest) and tree_complete
                        and not _scriptlet_files_unread(
                            diff_text, tree_manifest)),
+        binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
         parse_time_substitutions=parse_time_substitution_lines(diff_text),

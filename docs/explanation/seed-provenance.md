@@ -11,15 +11,18 @@ it.
 The seed is a bundle of prior knowledge drawn from the whole AUR, published
 on the [release channel](../reference/baseline-keys.md#the-release-channel) as `baseline-seed.tar.gz` and
 imported into the user's database on first run (or manually with
-`trustsight seed fetch`). The shipped seed is the **v2 hashed format**: a
+`trustsight seed fetch`). The shipped seed is the **v3 hashed format**: a
 `trustsight-seed-v2/` directory of salted SHA-256 hashes rather than a SQLite
 file of plaintext values. Its three kinds of prior knowledge are:
 
 - **source URLs** (179,956, normalised), with first-seen timestamps
   and use counts;
-- **hashed maintainers**: salted hashes of maintainer names and emails, with
+- **hashed maintainers**: salted hashes of maintainer *names* only, with
   package counts and first-seen timestamps, so no plaintext identity leaves
-  the machine that builds the seed (invariant [P1](../security.md#the-invariants));
+  the machine that builds the seed (invariant [P1](../security.md#the-invariants)).
+  v3 dropped the email hash and the per-maintainer package list: the salt is
+  public, so a salted hash of a guessed address is trivially confirmed and a
+  package list re-identifies the person even when the hash does not;
 - **dependency names**: 209,909 dependency names, package names and `provides`
   aliases, with observation counts.
 

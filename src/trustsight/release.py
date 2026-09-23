@@ -44,6 +44,11 @@ GITHUB_API_URL = "https://api.github.com"
 #: Every outbound request carries an explicit timeout (security gate A4).
 _REQUEST_TIMEOUT_SECONDS = 60
 
+#: Total wall-clock budget for one asset download.  The per-op timeout above
+#: resets on every chunk, so it does not bound a slow-drip transfer; this is
+#: the bound on the transfer as a whole.
+_DOWNLOAD_DEADLINE_SECONDS = 300
+
 #: The releases listing is small JSON, but the read is still capped so a
 #: hostile or malfunctioning response cannot be materialised whole (A4).
 _MAX_RELEASES_JSON_BYTES = 1 * 1024 * 1024
@@ -165,17 +170,22 @@ def download_asset(
     url = asset_url(asset_name, tag)
     try:
         with urllib.request.urlopen(url, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
-            body = bytearray()
-            while True:
-                chunk = resp.read(max_bytes + 1 - len(body))
-                if not chunk:
-                    break
-                body.extend(chunk)
-                if len(body) > max_bytes:
-                    raise ReleaseTooLargeError(
-                        f"{asset_name} exceeded the {max_bytes} byte download bound"
-                    )
-            return bytes(body)
+            # The per-op timeout does not bound the transfer; a slow-drip
+            # server resets it every chunk.  Charge the whole download one
+            # wall-clock deadline as well.
+            from .bounded_io import (
+                ReadTimedOut,
+                ReadTooLarge,
+                read_capped_with_deadline,
+            )
+            try:
+                return read_capped_with_deadline(
+                    resp, max_bytes, asset_name, _DOWNLOAD_DEADLINE_SECONDS
+                )
+            except ReadTooLarge as exc:
+                raise ReleaseTooLargeError(str(exc)) from exc
+            except ReadTimedOut as exc:
+                raise ReleaseFetchError(str(exc)) from exc
     except ReleaseTooLargeError:
         raise
     except Exception as exc:

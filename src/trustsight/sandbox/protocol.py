@@ -15,10 +15,14 @@ make the other allocate an amount it chose (A4, A14).  See
 import json
 import struct
 
-#: One request.  Larger than ``[diff] max_diff_bytes`` (5 MiB) because the
-#: request is the diff plus a little framing, and the sandbox must be able
-#: to carry the largest diff the analysis is configured to examine.
-MAX_FRAME_BYTES = 8 * 1024 * 1024
+#: One request.  Sized to the *escaping* worst case, not the raw diff:
+#: ``json.dumps`` still spells every C0 control byte as a six-byte
+#: ``\u00XX`` even with ``ensure_ascii=False``, so a 5 MiB diff of control
+#: bytes serialises to about 30 MiB.  At 8 MiB the cap was reachable with
+#: ~1.4 MiB of control bytes, which turned a hostile PKGBUILD into a
+#: repeatable ``TokenizerUnavailable`` (alarm fatigue).  This carries the
+#: largest configured diff however it is encoded.
+MAX_FRAME_BYTES = 6 * (5 * 1024 * 1024) + 1024 * 1024
 
 #: One response.  A resolved line is capped at 64 KiB and the line count at
 #: 20,000, so the worst case is well under this; the cap refuses rather

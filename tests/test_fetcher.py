@@ -19,8 +19,20 @@ from trustsight.fetcher import (
     _record_fetch,
     clone_or_fetch,
     get_head_commit,
+    get_pkgver_from_head,
     last_fetch_time,
 )
+
+
+@pytest.fixture(autouse=True)
+def _online(monkeypatch):
+    """These tests exercise the fetch path, which TRUSTSIGHT_OFFLINE forbids.
+
+    The suite is offline by default (tests/conftest.py); a test that reaches
+    the network opts back in.  The offline behaviour itself is covered by
+    the two ``_offline_`` tests below.
+    """
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
 
 
 @pytest.fixture
@@ -60,9 +72,12 @@ def test_is_not_current_when_upstream_is_newer_than_our_fetch(repo):
 
 
 def test_is_not_current_without_a_marker(repo):
-    """A clone from an older version has no marker and must be fetched."""
+    """A clone from an older version has no marker, so freshness falls back
+    to HEAD's commit time: an upstream newer than it must be fetched."""
     assert last_fetch_time(repo) is None
-    assert _is_current(repo, int(time.time())) is False
+    assert _is_current(repo, int(time.time()) + 3600) is False
+    # HEAD is current relative to an older upstream, which avoids a fetch.
+    assert _is_current(repo, int(time.time()) - 3600) is True
 
 
 def test_a_future_dated_commit_cannot_suppress_fetches(repo, monkeypatch):
@@ -219,3 +234,61 @@ def test_clone_or_fetch_applies_the_timeouts_before_the_network(
     monkeypatch.setattr(pygit2.Remote, "fetch", lambda self, *a, **k: None)
     clone_or_fetch("demo")
     assert fetcher._NETWORK_TIMEOUTS_APPLIED is True
+
+
+def test_offline_uses_the_cache_without_fetching(repo, monkeypatch):
+    """TRUSTSIGHT_OFFLINE must not touch the network, but a cached clone is
+    local state and stays usable."""
+    monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
+    fetched = _record_fetch(repo)
+
+    def explode(*args, **kwargs):
+        raise AssertionError("fetched while offline")
+
+    monkeypatch.setattr(pygit2.Remote, "fetch", explode)
+    result = clone_or_fetch("demo", fetched + 3600)
+    assert get_head_commit(result) == get_head_commit(repo)
+
+
+def test_offline_refuses_a_new_clone(tmp_path, monkeypatch):
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
+    with pytest.raises(RuntimeError, match="TRUSTSIGHT_OFFLINE"):
+        clone_or_fetch("demo")
+
+
+def test_a_fetch_advances_head_to_the_fetched_commit(tmp_path, monkeypatch):
+    """The real fetch path, not a stub: HEAD must move to the new commit.
+
+    ``Remote.fetch`` updates only ``refs/remotes/origin/*``; every consumer
+    reads HEAD, so without moving the local branch the analysis keeps
+    reporting the first-cloned commit while the AUR helper installs the
+    fetched one.  The old tests stubbed ``fetch``, which is why this was
+    never caught.
+    """
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+
+    upstream = pygit2.init_repository(str(tmp_path / "upstream"))
+    author = pygit2.Signature("Tester", "tester@example.com")
+
+    def commit(repo, text, parents):
+        blob = repo.create_blob(text)
+        builder = repo.TreeBuilder()
+        builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+        return repo.create_commit("HEAD", author, author, "c", builder.write(), parents)
+
+    first = commit(upstream, b"pkgver=1.0\n", [])
+    cached = pygit2.clone_repository(str(tmp_path / "upstream"), str(cache / "demo"))
+
+    second = commit(upstream, b"pkgver=2.0\n", [first])
+    _record_fetch(cached)
+    # A future upstream timestamp forces the fetch path.
+    result = clone_or_fetch("demo", int(time.time()) + 3600)
+
+    assert get_pkgver_from_head(result) == "2.0"
+    assert str(result.head.peel().id) == str(second)
+    assert str(result.references["refs/remotes/origin/master"].target) == str(second)

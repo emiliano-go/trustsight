@@ -461,6 +461,13 @@ def analyze_outdated_batch(
     analysed_by_idx: dict[int, tuple] = {}
     failures: list[dict] = []
 
+    # Vet every pattern once, single-threaded, before the pool starts: the
+    # wall-clock safety probe is inflated by GIL contention, and the verdict
+    # is cached, so deciding it here keeps one package's score from depending
+    # on what the other workers were doing.
+    from .rules import precompile_shipped_patterns
+    precompile_shipped_patterns()
+
     with ThreadPoolExecutor(max_workers=default_workers()) as pool:
         futures = {pool.submit(_pipeline_one, entry): i for i, entry in enumerate(pkgs)}
         done_count = 0

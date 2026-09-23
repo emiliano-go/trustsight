@@ -52,6 +52,7 @@ STAGE_DEGRADED = "stage_degraded"
 HISTORY_TRUNCATED = "history_truncated"
 NOEXTRACT_SUPPRESSED = "noextract_suppressed"
 TOKENIZER_UNAVAILABLE = "tokenizer_unavailable"
+BINARY_METADATA = "binary_metadata"
 
 GAPS = (
     DIFF_TRUNCATED,
@@ -59,6 +60,7 @@ GAPS = (
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
     COMPANION_TRUNCATED,
+    BINARY_METADATA,
     UNRESOLVED_SOURCE,
     UNRESOLVED_PARSE_TIME,
     SNAPSHOT_REFUSED,
@@ -91,6 +93,11 @@ GAP_REASONS = {
         "a committed file the recipe names was larger than the companion "
         "read budget, or there were more of them than the file limit, so "
         "its content was not matched against any rule"
+    ),
+    BINARY_METADATA: (
+        "a metadata file (PKGBUILD, .SRCINFO or an install script) is binary, "
+        "so git emitted no diff body and its content was not matched against "
+        "any rule"
     ),
     UNRESOLVED_SOURCE: (
         "a source entry is computed at build time, so the URL that will be "
@@ -384,6 +391,7 @@ def gaps_from(
     scan_truncated: bool = False,
     tree_analyzed: bool = True,
     companion_truncated: bool = False,
+    binary_metadata: bool = False,
     unresolved_sources: list[str] | None = None,
     long_lines: int = 0,
     parse_time_substitutions: list[str] | None = None,
@@ -413,6 +421,11 @@ def gaps_from(
     # only in part, which points at a different dial (MAX_COMPANION_BYTES).
     if companion_truncated:
         gaps.append(COMPANION_TRUNCATED)
+    # A binary metadata file is a *different* skip from a truncated
+    # companion: the companion was read in part, this was not read at all,
+    # and the file is the one that decides what the build runs.
+    if binary_metadata:
+        gaps.append(BINARY_METADATA)
     if unresolved_sources:
         gaps.append(UNRESOLVED_SOURCE)
     if parse_time_substitutions:
@@ -488,6 +501,9 @@ GAP_INCONCLUSIVE_REASONS = {
     COMPANION_TRUNCATED: (
         "a committed file the recipe runs was not read in full: payload may "
         "be hidden"
+    ),
+    BINARY_METADATA: (
+        "a metadata file is binary: its content was never read"
     ),
     UNRESOLVED_SOURCE: (
         "source computed at build time: fetch destination unknown"

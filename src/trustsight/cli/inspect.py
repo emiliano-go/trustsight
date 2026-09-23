@@ -56,8 +56,11 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     label = verdict_label(fact)
     border = RISK_COLORS.get(risk, "white") if (show_score or show_risk) else "blue"
 
-    rows: list[tuple[str, str]] = []
-    rows.append(("Version", version_transition(fact)))
+    rows: list[tuple[str, object]] = []
+    # The transition carries pkgver values from the recipe, so it is cleaned
+    # like every other package-derived cell: a plain str cell is markup-
+    # parsed by Rich and can carry ESC.
+    rows.append(("Version", Text(clean(version_transition(fact)))))
 
     # B2: the gap is shown whether or not a band is.  It used to ride the
     # band label alone, and the default output withholds the band, so
@@ -320,10 +323,15 @@ def _render_history_panel_rich(row: dict, show_score: bool, show_risk: bool, ver
 
     commit_id = row.get("commit", "")[:8]
     commit_msg = row.get("commit_message", "")
-    table.add_row("Commit", Text(f"{commit_id}  {commit_msg}", style="dim"))
+    # The AUR commit subject is package-controlled; Rich's Text strips BEL,
+    # BS, VT, FF and CR but not ESC, so it is cleaned like every other field.
+    table.add_row("Commit", Text(clean(f"{commit_id}  {commit_msg}"), style="dim"))
 
     findings = row.get("findings", [])
-    if findings:
+    if row.get("failed"):
+        table.add_row("Status", Text(
+            clean(f"not analysed: {row.get('error', '')}"), style="red"))
+    elif findings:
         for f in findings:
             table.add_row("", Text(clean(_finding_line(f))))
     else:
@@ -352,23 +360,25 @@ def _render_history_panel_plain(row: dict, show_score: bool, show_risk: bool):
     """Render one history result as plain text."""
     commit_id = row.get("commit", "")[:8]
     commit_msg = row.get("commit_message", "")
-    print(f"\n--- {commit_id}  {commit_msg} ---")
+    print(f"\n--- {clean(commit_id)}  {clean(commit_msg)} ---")
 
     findings = row.get("findings", [])
-    if findings:
+    if row.get("failed"):
+        print(f"  Not analysed: {clean(row.get('error', ''))}")
+    elif findings:
         for f in findings:
-            print(f"  {_finding_line(f)}")
+            print(f"  {clean(_finding_line(f))}")
     else:
         print("  No findings")
 
     for gap in row.get("coverage_gaps", []):
-        print(f"  Not vetted: {GAP_REASONS.get(gap, gap)}")
+        print(f"  Not vetted: {clean(GAP_REASONS.get(gap, gap))}")
 
     changes = row.get("changes", [])
     if changes:
-        print(f"  Changed: {changes[0]}")
+        print(f"  Changed: {clean(changes[0])}")
         for entry in changes[1:]:
-            print(f"    {entry}")
+            print(f"    {clean(entry)}")
 
     if show_score and not row.get("failed"):
         label = row.get("risk_label") or row.get("risk", "")
@@ -376,6 +386,25 @@ def _render_history_panel_plain(row: dict, show_score: bool, show_risk: bool):
     elif show_risk and not row.get("failed"):
         label = row.get("risk_label") or row.get("risk", "")
         print(f"  Risk: {label}")
+
+
+def _failed_history_result(commit, reason: str) -> dict:
+    """A history row for a commit that could not be analysed.
+
+    The row carries ``failed: True`` so both renderers show it and the JSON
+    output records it, rather than the commit vanishing and the older
+    commits reading as a complete history.
+    """
+    return {
+        "failed": True,
+        "error": reason,
+        "commit": str(commit.id),
+        "commit_time": commit.commit_time,
+        "commit_message": commit.message.strip().split("\n")[0],
+        "findings": [],
+        "changes": [],
+        "coverage_gaps": [],
+    }
 
 
 def _finding_line(finding: dict) -> str:
@@ -386,7 +415,8 @@ def _finding_line(finding: dict) -> str:
     rule_id = finding.get("rule_id", "?")
     reason = finding.get("reason", "")
     parts.append(f"{rule_id}  {reason}")
-    return " ".join(parts)
+    # Cleaned here so every caller is covered, including the plain renderer.
+    return clean(" ".join(parts))
 
 
 def _inspect_one(fact, *, show_score, show_risk, verbose, json_output):
@@ -602,7 +632,10 @@ def _inspect_history(
                 old_pkgbuild = old_tree["PKGBUILD"].data.decode("utf-8", errors="replace")
             else:
                 old_pkgbuild = None
-        except Exception:
+        except Exception as exc:
+            # A commit whose tree could not be read is not "nothing to see":
+            # dropping it shortens the history silently and reads as clean.
+            results.append(_failed_history_result(commit, f"tree unreadable: {exc}"))
             continue
 
         # Skip if PKGBUILD didn't change.
@@ -634,8 +667,11 @@ def _inspect_history(
             )
         except Exception as _exc:
             import traceback as _tb
-            print(f"ANALYSIS FAILED: {_exc}", file=sys.stderr, flush=True)
             _tb.print_exc(file=sys.stderr)
+            # Emitted as its own result, not dropped: a crash must not read
+            # as a clean older commit, and it must not be mislabelled as a
+            # truncated walk (the result count stays whole).
+            results.append(_failed_history_result(commit, f"analysis failed: {_exc}"))
             continue
 
         # Attach commit metadata.

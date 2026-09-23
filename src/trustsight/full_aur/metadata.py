@@ -43,6 +43,11 @@ JSON_OBJECT_AMPLIFICATION = 6
 # dead socket, not a slow one.
 HTTP_TIMEOUT = 300
 
+#: Total wall-clock budget for the metadata download.  ``HTTP_TIMEOUT`` is a
+#: per-socket-operation timeout and resets on every chunk, so a slow server
+#: can hold the response open indefinitely under the byte cap.
+DOWNLOAD_DEADLINE_SECONDS = 900
+
 # The compressed dump is ~60 MB.  Reading a response with no ceiling lets
 # the remote end decide how much of this machine's memory to use, which is
 # the same reason full_aur/fetch.py caps its own reads.
@@ -114,9 +119,16 @@ def fetch_metadata(on_progress=None) -> dict:
             f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
         ) from exc
     try:
+        import time
         total = int(resp.headers.get("Content-Length", 0))
         buf = bytearray()
+        deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
         while True:
+            if time.monotonic() > deadline:
+                raise RuntimeError(
+                    "AUR metadata download exceeded its "
+                    f"{DOWNLOAD_DEADLINE_SECONDS:g}s deadline"
+                )
             chunk = resp.read(65536)
             if not chunk:
                 break

@@ -550,7 +550,7 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     """
     if "$" not in contents:
         return contents
-    from .tokenizer import variable_table
+    from .tokenizer import TokenizerUnavailable, variable_table
 
     readable = [
         ln[1:] for ln in split_lines(diff_text)
@@ -558,7 +558,16 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     ]
     try:
         table, _arrays = variable_table(readable)
+    except TokenizerUnavailable:
+        # A missing tokenizer is a refusal, not "the checksum did not
+        # change": the package is not vetted and the caller fails closed.
+        raise
     except Exception:
+        # Returning the unresolved text is the neutral value a complete
+        # resolution also produces, so without this note a `${_cs}=SKIP`
+        # indirection would read as a set checksum and clear the gap.
+        from .coverage import note_stage_failure
+        note_stage_failure("checksum-resolution")
         return contents
     out = contents
     for name, value in table.items():
@@ -1133,6 +1142,65 @@ def changed_opaque_members(repo, old_oid: str, new_oid: str) -> list[str]:
         name for name, oid in after.items()
         if name in before and before[name] != oid
     )
+
+
+#: The one-line body git emits in place of a binary delta.  A `.gitattributes`
+#: `-diff`/`binary` marker produces the same shape without a NUL byte.
+_BINARY_DIFF_MARKER_RE = re.compile(
+    r"^Binary files .*?(\S+?) and (\S+?) differ$", re.MULTILINE
+)
+
+
+def binary_metadata_paths(repo, old_oid: str, new_oid: str) -> list[str]:
+    """Metadata files git refused to diff because they are binary.
+
+    ``generate_diff_bounded`` reads ``patch.text``, and for a binary delta
+    that is the single line ``Binary files a/PKGBUILD and b/PKGBUILD
+    differ``: no added line, no source URL, no rule.  A PKGBUILD with one
+    NUL byte therefore analyses as a clean, empty change while ``bash``
+    sources it normally, which is exactly the silent skip B2 forbids.
+
+    Detected from the delta flag rather than the text so an added file and a
+    replaced one are both caught, and so a ``.gitattributes`` marking a
+    metadata file binary is caught without a NUL.
+    """
+    old_commit = repo.get(old_oid) if old_oid else None
+    new_commit = repo.get(new_oid) if new_oid else None
+    if old_commit is None or new_commit is None:
+        return []
+    try:
+        diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=0)
+    except (KeyError, AttributeError, TypeError, ValueError):
+        return []
+    found: list[str] = []
+    for patch in diff:
+        delta = patch.delta
+        new_path = delta.new_file.path
+        old_path = delta.old_file.path
+        if not (_is_metadata_path(new_path) or _is_metadata_path(old_path)):
+            continue
+        if not delta.is_binary:
+            continue
+        path = old_path if delta.status == GIT_DELTA_DELETED else new_path
+        if path and path not in found:
+            found.append(path)
+    return found
+
+
+def binary_metadata_in_text(diff_text: str) -> list[str]:
+    """Metadata paths a git-generated text diff marked binary.
+
+    The text path (``scan_diff``, the corpus adapter) has no repository to
+    ask, so it reads the marker git wrote instead.  Same skip, different
+    source of the fact.
+    """
+    found: list[str] = []
+    for match in _BINARY_DIFF_MARKER_RE.finditer(diff_text):
+        for raw in (match.group(1), match.group(2)):
+            path = raw[2:] if raw.startswith(("a/", "b/")) else raw
+            if _is_metadata_path(path) and path not in found:
+                found.append(path)
+    return found
 
 
 def companion_source_hunks(

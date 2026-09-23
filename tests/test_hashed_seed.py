@@ -70,7 +70,7 @@ def test_build_seed_writes_expected_files(tmp_path):
     assert (seed_dir / "maintainers.jsonl").exists()
 
     meta = json.loads((seed_dir / "seed_meta.json").read_text())
-    assert meta["format_version"] == "2.0.0"
+    assert meta["format_version"] == "3.0.0"
     assert meta["hash_algorithm"] == "sha256"
     assert meta["count"] == 1
     assert "salt" in meta
@@ -80,7 +80,10 @@ def test_build_seed_writes_expected_files(tmp_path):
     assert len(lines) == 1
     row = json.loads(lines[0])
     assert row["name_hash"] == _hash_maintainer_value("Carol Coder", meta["salt"])
-    assert row["email_hash"] == _hash_maintainer_value("carol@example.com", meta["salt"])
+    # v3 drops the email hash and the per-maintainer package list: the salt
+    # is public, so both are pseudonymous personal data, not anonymous.
+    assert "email_hash" not in row
+    assert "packages" not in row
 
 
 def test_build_seed_folds_duplicate_names(tmp_path):
@@ -92,7 +95,8 @@ def test_build_seed_folds_duplicate_names(tmp_path):
     assert result["count"] == 1
     lines = (Path(result["seed_dir"]) / "maintainers.jsonl").read_text().strip().splitlines()
     row = json.loads(lines[0])
-    assert set(row["packages"]) == {"pkg-x", "pkg-y"}
+    assert row["package_count"] == 2
+    assert "packages" not in row
 
 
 def test_import_v2_seed_populates_hashed_maintainers(db, tmp_path):

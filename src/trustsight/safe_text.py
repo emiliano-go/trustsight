@@ -39,6 +39,15 @@ _ESCAPE_SEQUENCE_RE = re.compile(
 # forgery, they are layout, and a table cell wants neither.
 _CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x1f\x7f-\x9f]")
 
+# Invisible formatting characters: bidi overrides and isolates, zero-width
+# joiners/spaces, and the BOM.  They are not C0/C1 control bytes, so the
+# sweep above leaves them, and a bidi override reorders the text a reader
+# sees without changing the bytes.  R013 reports them in the recipe; a
+# rendered cell must not carry them.
+_INVISIBLE_RE = re.compile(
+    r"[\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]"
+)
+
 _WHITESPACE_RE = re.compile(r"[\t\n\r\f\v]+")
 
 # Rich reads these as markup.  Escaping the opening bracket is enough:
@@ -56,6 +65,7 @@ def clean(value, limit: int | None = None) -> str:
     text = value if isinstance(value, str) else str(value)
     text = _ESCAPE_SEQUENCE_RE.sub("", text)
     text = _CONTROL_RE.sub("", text)
+    text = _INVISIBLE_RE.sub("", text)
     text = _WHITESPACE_RE.sub(" ", text)
     if limit is not None and len(text) > limit:
         text = text[: max(0, limit - 1)] + "…"

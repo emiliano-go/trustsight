@@ -29,7 +29,7 @@ CLI_SRC = ROOT / "src" / "trustsight" / "cli"
 
 SHIPPED_RULES = tomllib.loads(DEFAULT_RULES)["rules"]
 PROGRAMMATIC_RULES = ["H001", "H002", "C001", "C002", "C003",
-                      "C004", "C005", "C006", "C007", "C008", "C009"]
+                      "C004", "C005", "C006", "C007", "C008", "C009", "C010"]
 
 # Pages under RULES_DIR that hold no rule definitions.  `index.md` is the
 # map and `system.md` is everything that is not an individual rule, so a

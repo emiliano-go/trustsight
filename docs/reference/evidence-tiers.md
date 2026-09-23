@@ -21,7 +21,7 @@ Pattern-matched from the PKGBUILD diff. Direct, observable facts about what the 
 
 - R-series regex rules and H-series heuristics, plus C/D/S/X rules where the signal requires structural, dependency, sabotage, or anti-evasion context.
 - H001/H002 checksum integrity rules (hard-coded, not TOML).
-- C001-C009 structural anomaly rules (checksum/source integrity heuristics).
+- C001-C010 structural anomaly rules (checksum/source integrity heuristics).
 - D001-D004 dependency-graph rules.
 
 ### Availability

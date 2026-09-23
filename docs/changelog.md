@@ -86,6 +86,52 @@ the version its checksum describes.
   fingerprint (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`), locally, without
   the API's `verified` flag. The key file is itself a critical path, so
   swapping the trust anchor is a signed change.
+- **A fetch now advances the analysed commit.** `Remote.fetch` updates only
+  `refs/remotes/origin/*`, so the local branch and HEAD stayed at the first
+  clone while every consumer reads HEAD: a maintainer could publish a benign
+  version, wait for it to be cached, then push something malicious that was
+  never looked at. The local branch is fast-forwarded to the fetched commit.
+  Fixing it surfaced a second hole in the same area: a stale fetch marker fell
+  through to the commit time of HEAD, which a future-dated commit could
+  satisfy, so the marker is now authoritative.
+- **A binary metadata file is a HIGH finding and a coverage gap.** git emits
+  no diff body for a binary file, so a single NUL byte in `PKGBUILD` or an
+  install script read as a clean empty change while the shell still sourced
+  the file normally. New rule C010 reports it, and the `binary_metadata` gap
+  forbids the run from reading clean.
+- **A stage failure is recorded, not returned as "nothing found".** The
+  dependency-change scan and the checksum resolver returned a neutral value
+  when an internal stage raised, which cleared the `deps_not_scanned` and
+  checksum gaps. A missing tokenizer now propagates as a refusal; any other
+  failure records a degraded stage.
+- **Rule-pattern verdicts are decided once.** The backtracking probe is
+  wall-clock, and it was re-measured on every call, so the same input could
+  score differently under load. Verdicts are memoised and the shipped
+  patterns are vetted single-threaded before the review pool starts. A
+  refused rule now records a stage gap instead of disappearing silently.
+- **The history renderers clean every field, and a failed commit is reported.**
+  The AUR commit subject and the plain renderer printed package-controlled
+  text raw, and ESC survives Rich's control-byte stripping; a commit whose
+  analysis crashed was dropped and mislabelled as a truncated walk. Both
+  renderers clean every value, and a failed commit is emitted as its own
+  `failed: true` result in JSON and in both renderers.
+- **The seed no longer ships email hashes or per-maintainer package lists.**
+  The salt is public, so a salted hash of a guessed address is trivially
+  confirmed, and a package list re-identifies the person even when the hash
+  does not. The format is v3; a v2 seed still imports and its email and
+  package fields are ignored.
+- **Sandbox and download hardening.** The tokenizer worker is retired by CPU
+  used rather than only by request count; the frame cap is sized to the
+  JSON-escaping worst case; the result of `unshare`/`prctl` is reported rather
+  than discarded; IOC imports verify against the pinned key instead of a key
+  the artifact carries; `safe_text.clean` strips bidi and zero-width
+  characters; the config, data and cache directories and the database are
+  owner-only; downloads carry a total wall-clock deadline; the snapshot tar
+  walk is bounded by members visited; and the worker runs with `-s`.
+
+These were found in a private source review by Olav Seyfarth (nursoda), with
+analysis assistance from Claude Code (Opus 5.5); the report is credited here
+at the reporter's request.
 
 ### Changed
 

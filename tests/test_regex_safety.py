@@ -779,16 +779,15 @@ def test_a_class_of_single_letter_escapes_is_probed_with_the_control_it_names():
     assert all(re.match(r"[\t\n\r\f\v]", c) for c in alphabet), alphabet
 
 
-def test_a_timing_only_refusal_is_not_memoised(monkeypatch):
-    """A load spike must not disable a rule for the rest of the process.
+def test_a_timing_refusal_is_decided_once(monkeypatch):
+    """Determinism (B1): a timing refusal is cached, not re-decided.
 
-    ``rules._compiled`` caches compiled patterns process-wide. The
-    backtracking probe is wall-clock, so a busy machine can overshoot the
-    budget for a single measurement; memoising that ``None`` made one slow
-    probe disable the rule until exit. R013's large generated pattern is
-    the case that surfaced it: a full-suite run under load crossed the
-    budget once, cached the refusal, and every later R013 test failed
-    while the same tests passed in isolation.
+    The probe is wall-clock, so re-deciding it per call made one input's
+    score depend on what else the machine was doing.  The verdict is now
+    decided once and cached; reliability comes from
+    ``precompile_shipped_patterns``, which vets every shipped pattern
+    single-threaded before the analysis pool starts, when contention is
+    lowest.
     """
     from trustsight import rules
 
@@ -796,23 +795,19 @@ def test_a_timing_only_refusal_is_not_memoised(monkeypatch):
     rules._pattern_cache.pop(pattern, None)
 
     calls = {"n": 0}
-    real = rules.backtracking_risk
 
-    def flaky(compiled):
+    def over_budget(compiled):
         calls["n"] += 1
-        # The first measurement and its re-probe are over budget; every
-        # later call sees the normal, small cost.
-        if calls["n"] <= 2:
-            return BACKTRACK_BUDGET_S * 10
-        return real(compiled)
+        return BACKTRACK_BUDGET_S * 10
 
-    monkeypatch.setattr(rules, "backtracking_risk", flaky)
+    monkeypatch.setattr(rules, "backtracking_risk", over_budget)
 
     assert rules._compiled(pattern) is None, "over-budget probe must refuse"
-    assert pattern not in rules._pattern_cache, "a timing refusal was memoised"
+    assert pattern in rules._pattern_cache, "a timing refusal was not memoised"
+    assert rules._pattern_cache[pattern] is None
 
-    compiled = rules._compiled(pattern)
-    assert compiled is not None, "the rule stayed disabled after the spike"
-    assert rules._pattern_cache[pattern] is compiled
+    probed = calls["n"]
+    assert rules._compiled(pattern) is None
+    assert calls["n"] == probed, "the cached refusal was re-probed"
 
     rules._pattern_cache.pop(pattern, None)

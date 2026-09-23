@@ -1,5 +1,6 @@
 import copy
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -1364,15 +1365,27 @@ domains = [
 
 
 def ensure_dirs():
-    """Create config, data, and cache directories if missing"""
+    """Create config, data, and cache directories if missing.
+
+    Created 0700: the database and the config can carry package names,
+    maintainers and analysis history, none of which belong to other local
+    users.  An explicit chmod follows the mkdir because the mode argument is
+    masked by the umask.
+    """
     for d in (CONFIG_DIR, DATA_DIR, CACHE_DIR):
-        d.mkdir(parents=True, exist_ok=True)
+        d.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(d, 0o700)
+        except OSError:
+            pass
 
 
 def write_default_file(path: Path, content: str):
-    """Write a default file to disk if it does not exist"""
+    """Write a default file to disk if it does not exist, mode 0600."""
     if not path.exists():
-        path.write_text(content)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(content)
 
 
 # The iocs.toml this project shipped before H056 existed: a placeholder with

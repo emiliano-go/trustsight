@@ -196,15 +196,15 @@ def clamp_diff_lines(diff_text: str, package_name: str = "") -> tuple[str, bool]
 def _compiled(pattern: str, rule_id: str = ""):
     """Return the compiled form of *pattern*, or None if it is invalid.
 
-    A refusal from :func:`has_nested_quantifier` is structural, so it is
-    deterministic and cached.  The other two checks measure wall-clock time
+    Every verdict is memoised, including a refusal.  The wall-clock checks
     (:data:`BACKTRACK_BUDGET_S`, :func:`~trustsight.regex_safety.is_superlinear`)
-    and are load-sensitive: a busy machine can make a safe pattern look
-    dangerous for a single probe.  A timing-only refusal is therefore
-    honoured for this call but deliberately **not** memoised, because
-    ``_pattern_cache`` is process-global and one slow probe would otherwise
-    disable the rule until the process exits.  That is how R013's large
-    generated pattern would go silently blind part-way through a test run.
+    are load-sensitive: the same pattern could be accepted on an idle machine
+    and refused on a busy one, so the score of one input depended on what else
+    the box was doing (B1).  Deciding once and caching the answer removes that.
+    The reliability cost - one slow probe disabling a rule for the process - is
+    paid down by :func:`precompile_patterns`, which vets every shipped pattern
+    single-threaded before the analysis pool starts, when the machine is least
+    contended.
     """
     try:
         return _pattern_cache[pattern]
@@ -241,10 +241,36 @@ def _compiled(pattern: str, rule_id: str = ""):
         risk = min(risk, backtracking_risk(compiled))
     if risk > BACKTRACK_BUDGET_S or is_superlinear(compiled):
         _refuse()
+        _pattern_cache[pattern] = None
         return None
 
     _pattern_cache[pattern] = compiled
     return compiled
+
+
+def precompile_patterns(patterns) -> None:
+    """Vet every pattern once, single-threaded, before matching starts.
+
+    ``review`` analyses packages in a pool, and the wall-clock probe that
+    decides whether a pattern is safe is inflated by GIL contention.  Vetting
+    here, before the pool, means the decision is made once from the least
+    loaded measurement available and is then cached for every thread - so a
+    rule cannot vanish for one package in a batch and not another.
+    """
+    for pattern in patterns:
+        if pattern:
+            _compiled(pattern)
+
+
+def precompile_shipped_patterns() -> None:
+    """Vet the shipped and generated rule patterns, single-threaded."""
+    import tomllib
+
+    from .config import DEFAULT_RULES
+
+    generated = tomllib.loads(DEFAULT_RULES).get("rules", [])
+    resolve_generated_patterns(generated)
+    precompile_patterns(r.get("pattern", "") for r in generated)
 
 
 #: Verdicts for dynamic patterns, kept so the answer is decided once.
@@ -837,6 +863,11 @@ def apply_rules(
 
         compiled = _compiled(rule["pattern"], rule_id=rule.get("id", ""))
         if compiled is None:
+            # A refused rule must not read as "this rule found nothing".
+            # The verdict fails closed on the stage gap, so a pattern the
+            # budget refused cannot yield a clean result.
+            from .coverage import note_stage_failure
+            note_stage_failure(f"rule:{rule.get('id', '?')}")
             continue
 
         rule_scope = rule.get("scope") if match_target == "raw_line" else None

@@ -334,6 +334,7 @@ def import_baseline(
     path: str | Path,
     source_name: str | None = None,
     allow_unsigned: bool = False,
+    trust_manifest_key: bool = False,
 ) -> dict:
     """Import an IOC federation baseline directory.
 
@@ -356,19 +357,48 @@ def import_baseline(
     entries = _load_iocs(iocs_path)
 
     signature_hex = manifest.signature
-    public_key_hex = manifest.public_key
+    manifest_key_hex = manifest.public_key
     verified = False
 
-    if signature_hex and public_key_hex:
-        verified = _verify_signature(
-            manifest_path, iocs_path, signature_hex, public_key_hex
+    # Verify against the pinned distribution key, not the key the artifact
+    # carries.  A signature checked with its own embedded key proves only
+    # internal consistency: whoever wrote the manifest chose both.  The
+    # pinned key is what the seed and corpus baselines already trust
+    # (A13/A13b), so the same anchor applies here.
+    from .full_aur.export import _load_trusted_pubkey
+    from .release import PINNED_PUBKEY_PATH
+
+    try:
+        pinned_hex = _load_trusted_pubkey(PINNED_PUBKEY_PATH).hex()
+    except Exception:
+        pinned_hex = ""
+
+    accepted = False
+    if signature_hex and pinned_hex:
+        accepted = _verify_signature(
+            manifest_path, iocs_path, signature_hex, pinned_hex
         )
-        if not verified and not allow_unsigned:
+        verified = accepted
+    if not accepted and signature_hex and manifest_key_hex and trust_manifest_key:
+        # Explicit opt-in: the key travels with the artifact, so this proves
+        # consistency, never origin.  It is accepted for the import, but the
+        # result stays `verified: False`.
+        accepted = _verify_signature(
+            manifest_path, iocs_path, signature_hex, manifest_key_hex
+        )
+        if accepted:
+            log.warning(
+                "baseline verified against its own embedded key; origin is "
+                "not authenticated and the import is reported unverified"
+            )
+
+    if signature_hex and (pinned_hex or manifest_key_hex):
+        if not accepted and not allow_unsigned:
             raise InvalidSignatureError(
-                "Baseline signature verification failed. "
+                "Baseline signature does not verify against the pinned key. "
                 "Use --allow-unsigned only for a baseline you trust locally."
             )
-        if not verified and allow_unsigned:
+        if not accepted and allow_unsigned:
             log.warning("signature verification failed; importing unsigned as requested")
     elif not allow_unsigned:
         raise UnsignedBaselineError(

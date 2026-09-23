@@ -209,7 +209,10 @@ def _update_feed(feed: dict) -> dict:
     try:
         (tmp_dir / "manifest.json").write_bytes(release.fetch_verified_asset(manifest_asset))
         (tmp_dir / "iocs.jsonl").write_bytes(release.fetch_verified_asset(iocs_asset))
-        result = import_baseline(tmp_dir, source_name=name)
+        # The bytes were already verified against the pinned key by
+        # `fetch_verified_asset`; the manifest's own key is accepted here
+        # only because that check already happened on the way in.
+        result = import_baseline(tmp_dir, source_name=name, trust_manifest_key=True)
         return {"feed": name, "status": "ok", "url": release.asset_url(manifest_asset), **result}
     except (release.ReleaseError, UnsignedBaselineError, InvalidSignatureError,
             MalformedBaselineError, FileNotFoundError) as exc:

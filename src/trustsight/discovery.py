@@ -24,6 +24,10 @@ _RPC_BACKOFF_MAX = 15.0
 # below, and degrades to "query failed" rather than exhausting memory.
 _MAX_RPC_BYTES = 64 * 1024 * 1024
 
+#: Total wall-clock budget for one RPC response.  ``urlopen(timeout=)`` only
+#: bounds a single socket operation.
+_RPC_DEADLINE_SECONDS = 60
+
 
 class _RpcResponseTooLarge(Exception):
     """The RPC response exceeded _MAX_RPC_BYTES."""
@@ -38,9 +42,13 @@ def _load_rpc_json(resp, limit: int | None = None):
     """
     if limit is None:
         limit = _MAX_RPC_BYTES
-    raw = resp.read(limit + 1)
-    if len(raw) > limit:
-        raise _RpcResponseTooLarge(f"AUR RPC response exceeds {limit} bytes")
+    from .bounded_io import ReadTooLarge, read_capped_with_deadline
+    try:
+        raw = read_capped_with_deadline(
+            resp, limit, "AUR RPC response", _RPC_DEADLINE_SECONDS
+        )
+    except ReadTooLarge as exc:
+        raise _RpcResponseTooLarge(str(exc)) from exc
     return json.loads(raw)
 
 _OFFICIAL_REPOS = frozenset({
@@ -206,6 +214,16 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
 
     missed = [n for n in pkg_names if n not in cached]
     if not missed:
+        return {
+            n: {"Version": v["version"], "LastModified": v.get("last_modified")}
+            for n, v in cached.items()
+        }
+
+    # ``TRUSTSIGHT_OFFLINE`` forbids outbound requests, and the AUR RPC is
+    # one.  Serve what the cache holds and do not touch the network; this is
+    # also the documented control over which package names leave the machine.
+    from .release import offline
+    if offline():
         return {
             n: {"Version": v["version"], "LastModified": v.get("last_modified")}
             for n, v in cached.items()

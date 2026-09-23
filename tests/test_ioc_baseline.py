@@ -123,9 +123,18 @@ def test_import_baseline_allow_unsigned(baseline_dir, isolated_db):
 
 
 def test_import_baseline_signed(signed_baseline_dir, isolated_db):
+    """A manifest that carries its own key is not "verified".
+
+    Verification is against the pinned distribution key.  A baseline signed
+    by a key it also embeds is internally consistent, not authentic, so it
+    imports only under the explicit opt-in and reports ``verified: False``.
+    """
     base, _pub = signed_baseline_dir
-    result = import_baseline(base, allow_unsigned=False)
-    assert result["verified"] is True
+    with pytest.raises(InvalidSignatureError):
+        import_baseline(base, allow_unsigned=False)
+
+    result = import_baseline(base, allow_unsigned=False, trust_manifest_key=True)
+    assert result["verified"] is False
     assert result["entries_imported"] == 1
     assert all_ioc_sources() == ["signed-feed"]
 
@@ -613,9 +622,10 @@ def test_build_ioc_baseline_signed_round_trips(tmp_path, isolated_db):
     res = bib.build(entries, "curator-x", out, "inc-1", 30, key_path)
     assert res["signed"] is True
 
-    # The real importer verifies the signature (no allow_unsigned).
-    result = import_baseline(out, allow_unsigned=False)
-    assert result["verified"] is True
+    # The real importer checks the signature, but the key travels with the
+    # artifact, so this is an explicit opt-in and is not reported verified.
+    result = import_baseline(out, allow_unsigned=False, trust_manifest_key=True)
+    assert result["verified"] is False
     assert result["entries_imported"] == 2
     assert match_domain("evil.example")
 

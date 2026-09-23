@@ -31,6 +31,7 @@ severity weights and the reserved identifier ranges.
 | [C005](#c005) | Binary Artifact From Untrusted Source | MEDIUM |
 | [C008](#c008) | Unread Content Moved Under A Stable Version | HIGH |
 | [C009](#c009) | Unread Content Moved With The Version | INFO |
+| [C010](#c010) | Binary Metadata File | HIGH |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -149,6 +150,24 @@ anyone who builds it now.
 The ordinary reading, reported so that the pair is visible rather than only
 the alarming half. A reader comparing two revisions can see that the bytes
 behind the pointer changed even though no content appears in the diff.
+
+### C010: Binary Metadata File {#c010}
+
+- **Severity:** HIGH (weight 25)
+- **Condition:** A `PKGBUILD`, `.SRCINFO`, or `*.install` file is binary, so git emitted no diff body for it.
+
+A binary metadata file is never legitimate, and it is the most direct way to
+skip the analysis: git emits only `Binary files ... differ`, so every rule
+sees an empty change, while the shell still sources the file normally and
+`bash -c 'source PKGBUILD'` reads it byte for byte. A single NUL byte is
+enough, and a `.gitattributes` `-diff` or `binary` marker does the same
+without one.
+
+The finding is paired with the `binary_metadata` coverage gap, so the run
+cannot present as clean even if the file is left in place rather than
+changed. The companion reader records the same gap for a binary file the
+recipe names and runs, which [H066](#h066) does not cover: H066 claims a
+committed binary's presence, not the content of a file the build executes.
 
 ### R049: Compiler Plugin Or Loader Override {#r049}
 

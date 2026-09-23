@@ -313,20 +313,74 @@ def _is_current(repo: pygit2.Repository, upstream_mtime: int) -> bool:
     """
     fetched = last_fetch_time(repo)
     if fetched is not None:
+        # A marker we wrote is authoritative.  It must *not* fall through to
+        # the commit-time check below: a maintainer can date a commit in the
+        # future, so an older marker plus a future-dated HEAD would satisfy
+        # that check and suppress the fetch - the exact blindness the marker
+        # exists to prevent.  The old code fell through, and only the dead
+        # `head.is_remote` branch (an AttributeError into the except)
+        # returned the right answer.
         try:
-            if fetched >= int(upstream_mtime):
-                return True
+            return fetched >= int(upstream_mtime)
         except (TypeError, ValueError):
-            pass
+            return False
 
     try:
-        head = repo.head
-        if head.is_remote:
-            return False
-        commit = head.peel()
+        # No marker (a clone from an older version): fall back to HEAD's
+        # commit time so an unchanged clone avoids a needless fetch.
+        commit = repo.head.peel()
         return int(commit.commit_time) >= int(upstream_mtime)
     except (AttributeError, pygit2.GitError, KeyError, TypeError, ValueError):
         return False
+
+
+def _advance_to_fetched_head(repo: pygit2.Repository) -> None:
+    """Move the local branch (and HEAD) onto what ``origin`` just fetched.
+
+    libgit2's ``Remote.fetch`` updates only ``refs/remotes/origin/*``.  The
+    local branch and HEAD stay where the first clone left them, and every
+    consumer reads HEAD, so without this the analysis keeps reporting the
+    first-cloned commit while the AUR helper installs the fetched one: a
+    maintainer can publish a benign version, wait for it to be cached, then
+    push a malicious one that is never analysed, and no coverage gap is
+    recorded because the analysis believes it read the current tree.
+    """
+    try:
+        if repo.head_is_unborn or repo.head_is_detached:
+            local_name = None
+        else:
+            local_name = repo.head.shorthand
+    except pygit2.GitError:
+        local_name = None
+
+    remote_ref_name = None
+    if local_name:
+        candidate = f"refs/remotes/origin/{local_name}"
+        if candidate in repo.references:
+            remote_ref_name = candidate
+    if remote_ref_name is None:
+        origin_head = repo.references.get("refs/remotes/origin/HEAD")
+        symbolic = getattr(origin_head, "symbolic_target", None) if origin_head else None
+        if symbolic:
+            remote_ref_name = symbolic
+    if remote_ref_name is None:
+        return
+    remote_ref = repo.references.get(remote_ref_name)
+    target = getattr(remote_ref, "target", None)
+    if target is None:
+        return
+
+    branch_ref = (
+        repo.references.get(f"refs/heads/{local_name}") if local_name else None
+    )
+    if branch_ref is not None:
+        # Fast-forward the local branch.  Nothing is checked out: consumers
+        # read the tree out of the commit object, so the working tree being
+        # stale is irrelevant.
+        branch_ref.set_target(target)
+    else:
+        # Detached or unborn: point HEAD straight at the fetched commit.
+        repo.set_head(remote_ref_name)
 
 
 def clone_or_fetch(
@@ -356,10 +410,23 @@ def clone_or_fetch(
         if cached is not None:
             if upstream_mtime is not None and _is_current(cached, upstream_mtime):
                 return cached
+            # Offline: use the clone on disk, never the network.  A cached
+            # clone is local state, so an air-gapped run can still analyse
+            # what it already has; only a *new* clone is refused below.
+            from .release import offline
+            if offline():
+                return cached
             with _timeout(120):
                 cached.remotes["origin"].fetch(callbacks=_DeadlineCallbacks(120))
+            _advance_to_fetched_head(cached)
             _record_fetch(cached)
             return cached
+    from .release import offline
+    if offline():
+        raise RuntimeError(
+            "TRUSTSIGHT_OFFLINE is set and no cached clone exists for "
+            f"{pkg_name!r}: refusing to clone from the AUR"
+        )
     os.makedirs(path.parent, exist_ok=True)
     url = f"https://aur.archlinux.org/{pkg_name}.git"
     with _timeout(120):

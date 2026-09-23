@@ -63,25 +63,40 @@ def _apply_limits() -> None:
             resource.setrlimit(which, (value, value))
         except (ValueError, OSError):
             pass
-    _no_new_privs()
-    _drop_network()
+    _report_isolation(_no_new_privs(), _drop_network())
 
 
-def _no_new_privs() -> None:
+def _no_new_privs() -> bool:
+    """Set PR_SET_NO_NEW_PRIVS; return whether it took effect."""
     try:
         libc = ctypes.CDLL(None, use_errno=True)
-        libc.prctl(_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
+        return libc.prctl(_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == 0
     except (OSError, AttributeError):
-        pass
+        return False
 
 
-def _drop_network() -> None:
-    """Best-effort network-namespace removal; ignore when unprivileged."""
+def _drop_network() -> bool:
+    """Best-effort network-namespace removal; return whether it took effect."""
     try:
         libc = ctypes.CDLL(None, use_errno=True)
-        libc.unshare(_CLONE_NEWNET)
+        return libc.unshare(_CLONE_NEWNET) == 0
     except (OSError, AttributeError):
-        pass
+        return False
+
+
+def _report_isolation(no_new_privs: bool, network_dropped: bool) -> None:
+    """State whether the hardening took effect, on stderr.
+
+    The parent drains this and logs it.  Both are best-effort by design, so
+    a failure is not fatal, but a run that silently lost its network
+    namespace should not look identical to one that kept it.
+    """
+    print(
+        "trustsight-tokenizer-isolation "
+        f"no_new_privs={no_new_privs} network_dropped={network_dropped}",
+        file=sys.stderr,
+        flush=True,
+    )
 
 
 def _dispatch(op: str, payload: object) -> object:

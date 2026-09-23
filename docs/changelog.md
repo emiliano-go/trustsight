@@ -4,6 +4,64 @@
 
 ## [Unreleased]
 
+_No changes yet._
+
+## [0.16.1] - 2026-09-23
+
+Packaging and release-process fixes, from reports #8 and #9 by Marcool04 and
+nursoda. Nothing in the analysis changes; the release you install now matches
+the version its checksum describes.
+
+### Changed
+
+- **The PKGBUILD checksum describes a version, not the branch tip.** Between
+  releases, `master`'s PKGBUILD must carry the published asset's checksum.
+  The checksum test and `pkgbuild.yml` now rebuild from the tag named by
+  `pkgver` when it exists, and from the working tree only while a version is
+  being prepared. Previously every content commit forced the checksum to the
+  unreleased tree, which is how three commits replaced the published v0.16.0
+  checksum and made the documented install fail.
+- **The release asset is built from the released commit.** `publishing.yml`
+  used `$GITHUB_SHA` (the commit the workflow file sits on) rather than the
+  requested target, so the tag, the PKGBUILD checksum and the asset could
+  describe three trees. It now builds from the checked-out target and refuses
+  a pre-existing tag that does not point at it. The release workflows and the
+  signature policy are now in the critical-path set.
+
+### Fixed
+
+- **Installation no longer clones a moving branch.** The instructions pinned
+  nothing, so `git clone .../master` met a PKGBUILD that names one released
+  version. They now check out the latest release tag, offer
+  `packaging/local/PKGBUILD` to build the checkout in place, and tell
+  self-builders to set `IgnorePkg = trustsight` so an AUR helper cannot
+  replace their build with the unaffiliated package of the same name.
+- **`build()` no longer downloads an unpinned build backend.** `python -m
+  build --wheel` built in an isolated venv and fetched hatchling from PyPI
+  with no version and no hash; it now uses `--no-isolation`, so the declared
+  makedepend is the one used and the build is reproducible.
+- **The test suite no longer writes to the builder's home.** `check()` runs
+  pytest, and `config.py` derives its paths from `$HOME` at import, so a
+  `makepkg` run created and edited the builder's live configuration and
+  database, and a test that shells out to git read their global git config
+  (`commit.gpgsign`, `core.hooksPath`). `conftest.py` now redirects `HOME`,
+  the `XDG_*_HOME` variables and `GIT_CONFIG_GLOBAL`/`GIT_CONFIG_SYSTEM`
+  before the package is imported. The suite also prefers an installed package
+  over the source tree, so `check()` exercises the wheel users receive rather
+  than the checkout it was built from.
+- **The signature check runs on pushes, and reads the canonical path list.**
+  It only ran on pull requests, so direct pushes to `master` bypassed it, and
+  it read `CRITICAL_PATHS` from the change's own tree, so a pull request could
+  remove a path from the list and then modify that path unsigned. It now also
+  runs on pushes to `master` and unions the list from the base and the change.
+
+### Security
+
+- **Dispatch inputs are passed through the environment.** `baselines.yml`
+  interpolated `${{ inputs.tag }}` and `${{ inputs.ioc_source }}` directly
+  into `run:` scripts in the job that writes the signing key to disk; they are
+  now environment variables, so a dispatch input cannot become shell.
+
 ### Changed
 
 - **`[experimental_rules]` renamed to `[code_rules]`.** The section toggles

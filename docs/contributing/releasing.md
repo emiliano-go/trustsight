@@ -97,9 +97,16 @@ In outline, and note that every step happens **before** the tag:
    touches only `packaging/`, so it cannot move the checksum from step 2.
 4. Build locally with `makepkg -si`.
 5. Push the final commit, then dispatch `Release software` with the intended
-   `vX.Y.Z` tag and commit. It builds the artifacts, verifies their metadata,
-   test-installs the wheel and sdist, builds the Arch package, creates a draft
-   release, verifies its checksum manifest, then publishes GitHub and PyPI.
+   `vX.Y.Z` tag and commit. It builds the artifacts from that commit, verifies
+   their metadata, test-installs the wheel and sdist, builds the Arch package,
+   creates a draft release, verifies its checksum manifest, then publishes
+   GitHub and PyPI.
+
+   Sign the release tag. Either create it yourself first with `git tag -s`
+   and push it (the workflow then requires it to point at the released
+   commit, and refuses a tag that does not), or let the workflow create it
+   from the target and sign it afterwards. An unsigned tag is an unsigned
+   claim about which tree the asset describes.
 
 Nothing is repaired afterwards. There is no post-tag step that can fail and
 leave the branch inconsistent, which was the whole defect.

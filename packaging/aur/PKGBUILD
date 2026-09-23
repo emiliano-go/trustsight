@@ -1,7 +1,7 @@
 # Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
 
 pkgname=trustsight
-pkgver=0.16.0
+pkgver=0.16.1
 pkgrel=1
 pkgdesc='Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals'
 arch=('any')
@@ -27,11 +27,16 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
 
-sha256sums=('a59ffb2d74c5e8a5c44f145a63a9bf82c5afd76c40e41eee61bc9d05f192ae95')
+sha256sums=('f71ee252e80db379c1f765b2b042f1b09d17f25588b85216bfae1109e6fa3fd1')
 
 build() {
   cd "$pkgname-$pkgver"
-  python -m build --wheel
+  # --no-isolation: the build backend (hatchling) is a declared makedepend.
+  # The default builds in an isolated venv and downloads hatchling from PyPI
+  # with no version and no hash, which is both unreproducible and an
+  # unpinned code path running as the builder. Arch packaging policy is
+  # --no-isolation for exactly this reason.
+  python -m build --wheel --no-isolation
 }
 
 check() {

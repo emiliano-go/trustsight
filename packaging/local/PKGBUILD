@@ -1,0 +1,68 @@
+# Maintainer: Emiliano Gandini Outeda <emiliano.gandini@protonmail.com>
+#
+# Build the checkout this file sits in, with no download.
+#
+# The release PKGBUILD in packaging/aur/ pins one published tarball so AUR
+# and release builds are reproducible.  That means it fetches the sources a
+# second time, from GitHub, and fails whenever the checkout and the asset
+# disagree.  This recipe is the other half: `cd packaging/local && makepkg
+# -si` builds exactly the tree you cloned and reviewed, offline.
+#
+# source=() is intentional.  There is nothing to fetch; the "source" is the
+# parent checkout, and pkgver() derives the version from its tags.
+
+pkgname=trustsight
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals'
+arch=('any')
+url='https://github.com/emiliano-go/trustsight'
+license=('MIT')
+depends=(
+  'python'
+  'python-pygit2'
+  'python-tldextract'
+  'python-rich'
+  'python-typer'
+  'python-cryptography'
+)
+makedepends=(
+  'git'
+  'python-build'
+  'python-installer'
+  'python-wheel'
+  'python-hatchling'
+  'python-pytest'
+)
+optdepends=(
+  'pyalpm: native version comparison (faster discovery)'
+)
+source=()
+sha256sums=()
+
+pkgver() {
+  cd "$startdir/../.."
+  git describe --long --tags --match 'v[0-9]*' 2>/dev/null \
+    | sed 's/^v//; s/\([^-]*-g\)/r\1/; s/-/./g'
+}
+
+build() {
+  cd "$startdir/../.."
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$startdir/../.."
+  # The two modules need network and corpus fixtures that a clean build
+  # does not have; the release PKGBUILD excludes the same pair.
+  python -m pytest tests/ -q --ignore=tests/test_fetcher.py --ignore=tests/test_rebaseline.py
+}
+
+package() {
+  cd "$startdir/../.."
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
+
+# vim:set ts=2 sw=2 et:

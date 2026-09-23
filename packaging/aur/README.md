@@ -63,10 +63,12 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
    `check()` runs the shipped suite but excludes `tests/test_fetcher.py` and
    `tests/test_rebaseline.py`.
 
-5. Tag, push, and publish the release **with the tarball attached**:
+5. Tag, push, and publish the release **with the tarball attached**. The tag
+   must point at the commit that carries the checksum recorded in step 3, and
+   must be signed:
 
    ```bash
-   git tag -a v<ver> -m "v<ver>"
+   git tag -s v<ver> -m "v<ver>"
    git push origin master && git push origin v<ver>
    gh release create v<ver> --title v<ver> \
      --notes-file <notes> dist/trustsight-<ver>.tar.gz
@@ -77,6 +79,20 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
    the recorded checksum and the published asset.
 
 6. Push to the AUR repository.
+
+## Building a checkout instead
+
+This recipe pins a published tarball, so it downloads the sources even when
+you already cloned them. To build the tree you cloned, offline, use the local
+recipe instead:
+
+```bash
+cd packaging/local
+makepkg -si
+```
+
+It takes no `source`, derives `pkgver` from `git describe`, and builds the
+parent checkout in place.
 
 ## Dogfooding check
 

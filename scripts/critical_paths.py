@@ -27,6 +27,17 @@ CRITICAL_PATHS = frozenset({
     "docs/security/vulnerability-reporting.md",
     ".github/workflows/security.yml",
     ".github/workflows/calibration.yml",
+    # The signature policy and the release pipeline are critical too.  The
+    # signature workflow was outside its own list, so it could be weakened
+    # without a signature; the release workflows decide what users receive.
+    ".github/workflows/verify-commit-sigs.yml",
+    ".github/workflows/publishing.yml",
+    ".github/workflows/release-pkgbuild.yml",
+    ".github/workflows/pkgbuild.yml",
+    ".github/workflows/baselines.yml",
+    "scripts/critical_paths.py",
+    "scripts/build_release_tarball.py",
+    "scripts/verify_release.py",
     "packaging/aur/PKGBUILD",
     "docs/reference/baseline-keys.md",
     "src/trustsight/full_aur/baseline_pubkey.pem",

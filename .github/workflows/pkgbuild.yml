@@ -23,7 +23,17 @@ jobs:
           set -eu
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           pkgver=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
+          # The recorded checksum describes a version, not the branch tip.
+          # Once v$pkgver is tagged the tag is immutable and is what the
+          # checksum must describe; before that, the version is being
+          # prepared and the checksum must describe this tree.
+          if git rev-parse -q --verify "v${pkgver}" >/dev/null; then
+            rev="v${pkgver}"
+          else
+            rev="WORKTREE"
+          fi
           python scripts/build_release_tarball.py \
+            --rev "$rev" \
             --pkgver "$pkgver" \
             --output "packaging/aur/trustsight-${pkgver}.tar.gz"
 

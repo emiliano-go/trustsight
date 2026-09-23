@@ -4,6 +4,13 @@ on:
   pull_request:
     branches:
       - master
+  # Direct pushes to master bypassed this check entirely: it only ran on pull
+  # requests, so 21 unsigned commits reached critical paths (db.py, the
+  # PKGBUILD) without a signature. A push to master is the other way a commit
+  # arrives, so it is checked too.
+  push:
+    branches:
+      - master
 
 jobs:
   verify:
@@ -20,23 +27,68 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
         run: |
           python - <<'PY'
+          import ast
           import json
           import os
           import subprocess
           import sys
           import urllib.request
 
-          base_sha = os.environ["BASE_SHA"]
-          head_sha = os.environ["HEAD_SHA"]
+          from scripts.critical_paths import CRITICAL_PATHS
+
+          base_sha = os.environ.get("PR_BASE_SHA") or os.environ.get("PUSH_BEFORE") or ""
+          head_sha = os.environ.get("PR_HEAD_SHA") or os.environ.get("PUSH_AFTER") or ""
           repo = os.environ["GITHUB_REPOSITORY"]
           token = os.environ["GITHUB_TOKEN"]
 
-          from scripts.critical_paths import CRITICAL_PATHS
-          critical_paths = set(CRITICAL_PATHS)
+          if not head_sha or set(head_sha) == {"0"}:
+              print("No commit range to check.")
+              raise SystemExit(0)
+          if not base_sha or set(base_sha) == {"0"}:
+              # A first push or a force push with no usable base: check the
+              # tip commit rather than every commit in history.
+              base_sha = f"{head_sha}^"
+
+          def critical_paths_at(rev):
+              """The canonical list as of *rev*, not as of the change.
+
+              Reading it from the checked-out tree let a pull request delete a
+              path from the list and then modify that path without a
+              signature, since the workflow would no longer consider it
+              critical. The union of the base and the change closes that.
+              """
+              try:
+                  source = subprocess.check_output(
+                      ["git", "show", f"{rev}:scripts/critical_paths.py"], text=True
+                  )
+              except subprocess.CalledProcessError:
+                  return set()
+              for node in ast.parse(source).body:
+                  if isinstance(node, ast.Assign) and any(
+                      isinstance(target, ast.Name)
+                      and target.id == "CRITICAL_PATHS"
+                      for target in node.targets
+                  ):
+                      value = node.value
+                      if (
+                          isinstance(value, ast.Call)
+                          and getattr(value.func, "id", "") == "frozenset"
+                      ):
+                          value = value.args[0]
+                      return set(ast.literal_eval(value))
+              return set()
+
+          critical_paths = (
+              critical_paths_at(base_sha)
+              | critical_paths_at(head_sha)
+              | set(CRITICAL_PATHS)
+          )
 
           diff = subprocess.check_output(
               ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],

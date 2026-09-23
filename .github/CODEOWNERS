@@ -15,6 +15,14 @@
 /docs/security/vulnerability-reporting.md @emiliano-go
 /.github/workflows/security.yml @emiliano-go
 /.github/workflows/calibration.yml @emiliano-go
+/.github/workflows/verify-commit-sigs.yml @emiliano-go
+/.github/workflows/publishing.yml @emiliano-go
+/.github/workflows/release-pkgbuild.yml @emiliano-go
+/.github/workflows/pkgbuild.yml @emiliano-go
+/.github/workflows/baselines.yml @emiliano-go
+/scripts/critical_paths.py @emiliano-go
+/scripts/build_release_tarball.py @emiliano-go
+/scripts/verify_release.py @emiliano-go
 /packaging/aur/PKGBUILD @emiliano-go
 /docs/reference/baseline-keys.md @emiliano-go
 /src/trustsight/full_aur/baseline_pubkey.pem @emiliano-go

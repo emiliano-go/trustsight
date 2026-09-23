@@ -1,12 +1,43 @@
+import atexit
+import os
+import shutil
 import socket as _socket
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
-_SRC = str(Path(__file__).resolve().parent.parent / "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+# --- per-user state is redirected before the package is imported ---------
+#
+# ``trustsight.config`` derives CONFIG_DIR/DATA_DIR/CACHE_DIR from
+# ``Path.home()`` at import time, and ``ensure_default_configs``/``init_db``
+# write there.  Without this, the ``makepkg`` run's ``check()`` creates and
+# edits the builder's live configuration and database, and a test that shells
+# out to git reads the builder's global git config (``commit.gpgsign``,
+# ``core.hooksPath``).  This must run before test collection imports the
+# package, so it is module-level rather than a fixture.
+_TEST_HOME = tempfile.mkdtemp(prefix="trustsight-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["XDG_CONFIG_HOME"] = os.path.join(_TEST_HOME, ".config")
+os.environ["XDG_DATA_HOME"] = os.path.join(_TEST_HOME, ".local", "share")
+os.environ["XDG_CACHE_HOME"] = os.path.join(_TEST_HOME, ".cache")
+os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
+os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
+atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
+
+# Prefer an installed package over the source tree.  A dev checkout installs
+# the package (editable), and the PKGBUILD's ``check()`` installs the built
+# wheel into its venv, so ``trustsight`` is importable either way; falling
+# back to ``src`` keeps a bare ``pytest`` from an uninstalled checkout
+# working.  Inserting ``src`` unconditionally made the wheel-install check
+# exercise the source tree instead of what users receive.
+try:
+    import trustsight  # noqa: F401
+except ImportError:
+    _SRC = str(Path(__file__).resolve().parent.parent / "src")
+    if _SRC not in sys.path:
+        sys.path.insert(0, _SRC)
 
 SHARED_RULES = [
     {"id": "R001", "name": "Remote Script Execution", "pattern": r"curl.*(?<!\\)\|\s*(bash|sh|python|zsh)", "severity": "CRITICAL", "category": "network_execution", "match_target": "resolved"},

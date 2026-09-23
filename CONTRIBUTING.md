@@ -92,6 +92,14 @@ signature workflow:
 | `docs/security.md` | Security claims and invariants |
 | `.github/workflows/security.yml` | CI checks for security invariants |
 | `.github/workflows/calibration.yml` | CI checks for calibration regressions |
+| `.github/workflows/verify-commit-sigs.yml` | The signature policy itself |
+| `.github/workflows/publishing.yml` | Builds and publishes the release artifacts |
+| `.github/workflows/release-pkgbuild.yml` | Verifies a published release |
+| `.github/workflows/pkgbuild.yml` | Builds the AUR package from the tarball |
+| `.github/workflows/baselines.yml` | Builds and signs the baseline assets |
+| `scripts/critical_paths.py` | The canonical critical-path list |
+| `scripts/build_release_tarball.py` | The deterministic release tarball |
+| `scripts/verify_release.py` | Release metadata and checksum verification |
 | `packaging/aur/PKGBUILD` | Supported packaging path |
 | `docs/reference/baseline-keys.md` | Baseline trust anchor |
 | `src/trustsight/full_aur/baseline_pubkey.pem` | Distribution key for signed baselines |

@@ -15,17 +15,42 @@ TrustSight requires **Arch Linux**, **Python 3.11 or later**, and **git** (for c
     Contact is being attempted with the uploader with the aim of reaching a
     secure, correct, and official AUR packaging arrangement. Until that exists,
     treat any AUR `trustsight` package as third-party code and review it
-    yourself.
+    yourself. If you build from source, add `IgnorePkg = trustsight` to
+    `/etc/pacman.conf`; otherwise an AUR helper will "upgrade" the package you
+    built with the unaffiliated one of the same name.
 
 ---
 
 ## Install From This Repository
 
+The PKGBUILD pins one released version, so check out the release tag it names
+rather than the moving `master` branch:
+
 ```bash
-git clone https://github.com/emiliano-go/trustsight.git
+git clone --depth 1 --branch "$(git ls-remote --tags --refs --sort=-v:refname \
+  https://github.com/emiliano-go/trustsight.git 'v*' | head -1 | cut -d/ -f3)" \
+  https://github.com/emiliano-go/trustsight.git
 cd trustsight/packaging/aur
 makepkg -si
 ```
+
+To build the checkout you just cloned, with no second download of the same
+sources from GitHub, use the local recipe instead. It derives `pkgver` from
+`git describe` and builds the tree in place:
+
+```bash
+cd trustsight/packaging/local
+makepkg -si
+```
+
+Before installing a release, you can confirm the asset matches the tag it
+claims to describe:
+
+```bash
+python scripts/build_release_tarball.py --rev v<version> --check <sha256>
+```
+
+The recorded `<sha256>` is in `packaging/aur/PKGBUILD`.
 
 !!! note "Repository PKGBUILD only"
 

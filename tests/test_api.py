@@ -11,15 +11,10 @@ verdict nobody else would have given.
 """
 
 import json
-import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
-
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-_SRC_DIR = str(_REPO_ROOT / "src")
 
 import trustsight
 import trustsight.db as db_module
@@ -91,9 +86,7 @@ def test_importing_the_package_does_not_import_the_cli():
         "assert 'typer' not in sys.modules, sorted(sys.modules)[:0];"
         "assert 'trustsight.analysis' not in sys.modules"
     )
-    env = os.environ.copy()
-    env["PYTHONPATH"] = _SRC_DIR + os.pathsep + env.get("PYTHONPATH", "")
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
 
 
@@ -103,9 +96,7 @@ def test_importing_the_package_does_not_import_the_cli_renderer():
         "assert 'trustsight.cli.review' not in sys.modules;"
         "assert 'trustsight.review' not in sys.modules"
     )
-    env = os.environ.copy()
-    env["PYTHONPATH"] = _SRC_DIR + os.pathsep + env.get("PYTHONPATH", "")
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert out.returncode == 0, out.stderr
 
 

@@ -78,9 +78,14 @@ jobs:
       - name: Check for existing seed
         id: check_seed
         shell: bash
+        env:
+          # Passed through the environment, never interpolated into the
+          # script: a dispatch input is text, and text placed in a `run:`
+          # body is shell.
+          TAG: ${{ inputs.tag }}
         run: |
           seed_exists=false
-          if gh release view "${{ inputs.tag }}" --json assets \
+          if gh release view "$TAG" --json assets \
               -q '.assets[].name' 2>/dev/null | grep -qx 'baseline-seed.tar.gz'; then
             seed_exists=true
           fi
@@ -88,8 +93,9 @@ jobs:
 
       - name: Download the required corpus baseline
         shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          TAG="${{ inputs.tag }}"
           mkdir -p /tmp/release-assets
           gh release download "$TAG" --pattern baseline-corpus.tar.zst --dir /tmp/release-assets
           test -s /tmp/release-assets/baseline-corpus.tar.zst
@@ -97,9 +103,11 @@ jobs:
       - name: Download the canonical seed when present
         if: steps.check_seed.outputs.seed_exists == 'true'
         shell: bash
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           mkdir -p /tmp/release-assets
-          gh release download "${{ inputs.tag }}" \
+          gh release download "$TAG" \
             --pattern baseline-seed.tar.gz --dir /tmp/release-assets
           test -s /tmp/release-assets/baseline-seed.tar.gz
 
@@ -148,6 +156,8 @@ jobs:
 
       - name: Build and sign the baseline-* assets
         shell: bash
+        env:
+          IOC_SOURCE: ${{ inputs.ioc_source }}
         run: |
           SEED_ARGS=()
           if [ -d /tmp/seed-v2 ]; then
@@ -155,12 +165,13 @@ jobs:
           else
             SEED_ARGS=(--seed-archive /tmp/release-assets/baseline-seed.tar.gz)
           fi
+          curator="${IOC_SOURCE:-emiliano-go}"
           IOC_ARGS=()
           for f in data/iocs/*.json; do
             base="$(basename "$f")"
             [ "$base" = "example.json" ] && continue
             incident="${base%.json}"
-            IOC_ARGS+=(--ioc "$f" --ioc-source "${{ inputs.ioc_source || 'emiliano-go' }}" --ioc-incident "$incident")
+            IOC_ARGS+=(--ioc "$f" --ioc-source "$curator" --ioc-incident "$incident")
           done
           uv run python scripts/build_release_baselines.py \
             --out /tmp/baselines \
@@ -170,5 +181,7 @@ jobs:
             "${IOC_ARGS[@]}"
 
       - name: Upload baseline-* assets to the release
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          gh release upload "${{ inputs.tag }}" /tmp/baselines/baseline-*
+          gh release upload "$TAG" /tmp/baselines/baseline-*

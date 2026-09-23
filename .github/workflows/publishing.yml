@@ -13,8 +13,11 @@ on:
         required: true
         type: string
 
+# Least privilege at the top level. Only the publish job writes (it creates
+# the release), and it grants itself `contents: write`; preflight and aur run
+# the build, the tests and the dependency install and need no write access.
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: software-release-${{ inputs.tag }}
@@ -66,8 +69,13 @@ jobs:
         run: |
           version="${TAG#v}"
           path="release/trustsight-${version}.tar.gz"
+          # Build the asset from the commit that was checked out, which is
+          # the commit the tag will point at. $GITHUB_SHA is the commit the
+          # workflow file sits on (the default branch), not the requested
+          # target, so using it let the tag, the PKGBUILD and the asset
+          # describe three different trees.
           uv run python scripts/build_release_tarball.py \
-            --rev "$GITHUB_SHA" \
+            --rev "${{ steps.head.outputs.sha }}" \
             --output "$path"
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
@@ -154,6 +162,16 @@ jobs:
           set -eu
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "::error::release $TAG already exists"
+            exit 1
+          fi
+          # `gh release create --target` is a no-op when the tag already
+          # exists, so a pre-created tag whose tree differs from the one the
+          # preflight verified would silently publish a mismatched release.
+          # Resolve the tag to its commit (annotated or lightweight) and
+          # require it to be the target, or create it at the target.
+          tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha' 2>/dev/null || true)
+          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$TARGET" ]; then
+            echo "::error::tag $TAG points at $tag_sha, but this release targets $TARGET"
             exit 1
           fi
           gh release create "$TAG" --target "$TARGET" --draft --generate-notes --title "$TAG"

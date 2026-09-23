@@ -7,8 +7,9 @@ import pytest
 import tomllib
 
 
-PKGBUILD_DIR = Path(__file__).resolve().parent.parent / "packaging" / "aur"
-PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+ROOT = Path(__file__).resolve().parent.parent
+PKGBUILD_DIR = ROOT / "packaging" / "aur"
+PYPROJECT = ROOT / "pyproject.toml"
 SRCINFO = PKGBUILD_DIR / ".SRCINFO"
 
 _PKGBUILD_NEEDS_MAKEPKG = pytest.mark.skipif(
@@ -209,33 +210,58 @@ def test_source_is_a_release_asset_not_a_generated_archive():
     )
 
 
+def _latest_version_tag() -> str | None:
+    """The highest `vX.Y.Z` tag in the checkout, or None if there is none."""
+    result = subprocess.run(
+        ["git", "tag", "--list", "v[0-9]*", "--sort=-v:refname"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    )
+    for tag in result.stdout.split():
+        if re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+            return tag
+    return None
+
+
 @pytest.mark.skipif(
-    not (Path(__file__).resolve().parent.parent / ".git").exists(),
+    not (ROOT / ".git").exists(),
     reason="not a git checkout (running from a release archive)",
 )
-def test_recorded_checksum_matches_a_freshly_built_tarball():
-    """The checksum in the PKGBUILD must describe the tarball this tree
-    produces.
+def test_recorded_checksum_matches_the_recorded_version():
+    """The PKGBUILD checksum must describe the tree its `pkgver` names.
 
-    This is the test that makes the v0.13.1 report impossible to repeat. The
-    tarball is deterministic and `packaging/` is export-ignored from it, so
-    the value can be checked here rather than after a tag, which is what
-    made the old ordering fragile: it recorded the checksum in a second
-    commit, and when that commit failed the branch stayed broken.
+    It is tempting to require the checksum to match a freshly built
+    *working tree* on every commit. That is the trap: it forces `master`
+    away from the published asset between releases, because every content
+    commit changes the tree while `pkgver` (and the asset) stays put. The
+    v0.16.0 report came from exactly that: three commits replaced the
+    published v0.16.0 checksum with the checksum of an unreleased tree.
+
+    So the checksum is tied to the version, not to the branch tip:
+
+    * `pkgver` already has a tag: the checksum must describe that tag, which
+      is immutable, so content commits between releases cannot move it.
+    * `pkgver` has no tag yet: a release is being prepared, and the checksum
+      must describe the tree about to be tagged.
+
+    Either way the value can be checked before the tag exists, which is what
+    makes the pre-tag ordering of `releasing.md` possible.
     """
     import sys
 
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    sys.path.insert(0, str(ROOT / "scripts"))
     from build_release_tarball import build
 
+    pkgver = _pkgver_from_pkgbuild()
     recorded = re.search(r"^sha256sums=\('(.*)'\)$", _pkgbuild_text(), re.M)
     assert recorded, "PKGBUILD records no sha256sums"
 
-    _, digest = build("WORKTREE", _pkgver_from_pkgbuild())
+    latest = _latest_version_tag()
+    rev = latest if latest == f"v{pkgver}" else "WORKTREE"
+    _, digest = build(rev, pkgver)
     assert digest == recorded.group(1), (
-        f"PKGBUILD records {recorded.group(1)} but this tree builds "
-        f"{digest}; rerun scripts/build_release_tarball.py and update the "
-        f"PKGBUILD before tagging"
+        f"PKGBUILD records {recorded.group(1)} for {pkgver}, but {rev} "
+        f"builds {digest}; run scripts/build_release_tarball.py --rev {rev} "
+        f"and update the PKGBUILD in the same commit as the version"
     )
 
 

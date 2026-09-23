@@ -38,8 +38,12 @@ license-files = ["LICENSE"]
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 docs = [
-    "seoslug>=2.0.1",
-    "zensical>=0.0.44",
+    # Pinned to the versions in uv.lock.  The docs site is also built by an
+    # external service that runs `pip install -e '.[docs]'` and does not read
+    # the lock, so an unpinned range let it resolve a different zensical than
+    # CI and shipped builds.
+    "seoslug==2.3.0",
+    "zensical==0.0.51",
 ]
 
 [project.urls]

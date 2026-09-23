@@ -49,10 +49,6 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - run: uv sync --locked --extra docs --python 3.13
       - run: uv run --extra docs zensical build
-        env:
-          # zensical_extensions is documentation tooling, not part of the
-          # wheel: it lives in the checkout and is imported from there.
-          PYTHONPATH: ${{ github.workspace }}
       - run: uv run --extra docs python scripts/build_llms_txt.py
 
   # The malicious .diff bodies are committed source (fixture-reproducibility

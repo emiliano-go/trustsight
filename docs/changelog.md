@@ -66,12 +66,14 @@ the version its checksum describes.
   it read `CRITICAL_PATHS` from the change's own tree, so a pull request could
   remove a path from the list and then modify that path unsigned. It now also
   runs on pushes to `master` and unions the list from the base and the change.
-- **The wheel no longer ships `zensical_extensions`.** The documentation
-  extension is a top-level module with a generic name, and the PKGBUILD's
-  `check()` already had to delete the inherited copy because it collided. It
-  is documentation tooling, not runtime code, so it stays in the checkout and
-  the docs build imports it from there; the wheel now contains only
-  `trustsight`.
+- **The documentation extension moved under the package.** The top-level
+  `zensical_extensions` module had a generic name and the PKGBUILD's `check()`
+  had to delete an inherited copy because it collided. It is now
+  `trustsight.zensical_extensions`, so the docs build imports it from the
+  install (`pip install -e '.[docs]'`) rather than from the working directory,
+  and no generic top-level module is installed. The `docs` extra is also
+  pinned to the versions in `uv.lock`, because the site is built by an
+  external service that does not read the lock.
 
 ### Security
 

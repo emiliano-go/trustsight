@@ -788,10 +788,10 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "rich", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'" },
-    { name = "seoslug", marker = "extra == 'docs'", specifier = ">=2.0.1" },
+    { name = "seoslug", marker = "extra == 'docs'", specifier = "==2.3.0" },
     { name = "tldextract", specifier = ">=5.0" },
     { name = "typer", specifier = ">=0.12" },
-    { name = "zensical", marker = "extra == 'docs'", specifier = ">=0.0.44" },
+    { name = "zensical", marker = "extra == 'docs'", specifier = "==0.0.51" },
 ]
 provides-extras = ["dev", "docs"]
 

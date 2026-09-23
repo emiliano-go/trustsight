@@ -543,6 +543,26 @@ def test_every_environment_variable_is_documented():
     )
 
 
+def test_the_docs_extension_is_importable_from_the_package():
+    """The docs build imports extensions by module path from the *install*.
+
+    The site is also built by an external service that runs
+    `pip install -e '.[docs]' && zensical build` with no ``PYTHONPATH``, so an
+    extension left at the repository root is importable in a checkout and
+    missing there.  It lives under the package for exactly that reason; pin
+    the registration and the module so a move cannot silently break the build.
+    """
+    config = (ROOT / "zensical.toml").read_text()
+    assert '"trustsight.zensical_extensions.description_meta"' in config
+    assert '"zensical_extensions.description_meta"' not in config
+
+    module = (
+        ROOT / "src" / "trustsight" / "zensical_extensions" / "description_meta.py"
+    )
+    assert module.exists(), "the docs extension is not under src/trustsight"
+    assert 'name = "trustsight.zensical_extensions.description_meta"' in module.read_text()
+
+
 def test_the_llms_txt_generator_covers_every_page():
     """The templates promise `/llms.txt` and `/llms-full.txt` on every page.
 

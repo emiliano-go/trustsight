@@ -64,7 +64,7 @@ class DescriptionMetaPreprocessor(Preprocessor):
 class DescriptionMetaExtension(Extension):
     """Register the description-meta preprocessor."""
 
-    name = "zensical_extensions.description_meta"
+    name = "trustsight.zensical_extensions.description_meta"
 
     def extendMarkdown(self, md: Markdown) -> None:
         md.registerExtension(self)

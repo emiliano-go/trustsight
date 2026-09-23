@@ -140,6 +140,10 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      # Needed to dispatch the post-release verification below.  A `release`
+      # event created with the default GITHUB_TOKEN does not trigger other
+      # workflows, so the audit is dispatched explicitly instead.
+      actions: write
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -189,3 +193,14 @@ jobs:
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: artifacts/dist/
+
+      # Verify the release users will actually download: rebuild from the
+      # tag, compare to the PKGBUILD checksum and the published asset, then
+      # `makepkg -si` from it.  Dispatched here because a release published
+      # with the default GITHUB_TOKEN does not fire the `release` trigger on
+      # its own; `release-pkgbuild.yml` keeps that trigger for releases
+      # published by hand.
+      - name: Verify the published release automatically
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release-pkgbuild.yml -f tag="${{ inputs.tag }}"

@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -25,8 +24,6 @@ jobs:
 
       - name: Check critical-path commit signatures
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PUSH_BEFORE: ${{ github.event.before }}
@@ -34,18 +31,24 @@ jobs:
         run: |
           python - <<'PY'
           import ast
-          import json
           import os
           import subprocess
           import sys
-          import urllib.request
+          import tempfile
 
           from scripts.critical_paths import CRITICAL_PATHS
 
+          # The commit-signing trust anchor.  Both halves are in the
+          # critical-path set, so changing the key or this fingerprint is
+          # itself a signed change.  The key is imported into a throwaway
+          # keyring and every commit is verified locally against it.  The
+          # GitHub API's "verified" flag is deliberately not used: it accepts
+          # a signature from any key GitHub has seen, not the pinned one.
+          PINNED_FINGERPRINT = "F759D6D49B0A395AB922414A5CC3B4C50D37E793"
+          KEY_FILE = "scripts/commit_signing_key.asc"
+
           base_sha = os.environ.get("PR_BASE_SHA") or os.environ.get("PUSH_BEFORE") or ""
           head_sha = os.environ.get("PR_HEAD_SHA") or os.environ.get("PUSH_AFTER") or ""
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GITHUB_TOKEN"]
 
           if not head_sha or set(head_sha) == {"0"}:
               print("No commit range to check.")
@@ -54,6 +57,34 @@ jobs:
               # A first push or a force push with no usable base: check the
               # tip commit rather than every commit in history.
               base_sha = f"{head_sha}^"
+
+          gnupg_home = tempfile.mkdtemp(prefix="trustsight-gnupg-")
+          os.chmod(gnupg_home, 0o700)
+          gpg_env = {**os.environ, "GNUPGHOME": gnupg_home}
+          imported = subprocess.run(
+              ["gpg", "--batch", "--import", KEY_FILE],
+              env=gpg_env, capture_output=True, text=True,
+          )
+          if imported.returncode != 0:
+              print(f"could not import {KEY_FILE}:\n{imported.stderr}")
+              raise SystemExit(1)
+
+          def signed_by_pinned_key(sha):
+              """True only when *sha* carries a valid signature from the
+              pinned key.  ``git verify-commit --raw`` writes the gpg status
+              to stderr; VALIDSIG's second field is the signing key and its
+              eleventh (when present) is the primary key."""
+              result = subprocess.run(
+                  ["git", "verify-commit", "--raw", sha],
+                  env=gpg_env, capture_output=True, text=True,
+              )
+              for line in result.stderr.splitlines():
+                  if line.startswith("[GNUPG:] VALIDSIG "):
+                      parts = line.split()
+                      signing = parts[2].upper()
+                      primary = parts[10].upper() if len(parts) > 10 else signing
+                      return PINNED_FINGERPRINT in (signing, primary)
+              return False
 
           def critical_paths_at(rev):
               """The canonical list as of *rev*, not as of the change.
@@ -104,43 +135,25 @@ jobs:
               text=True,
           ).splitlines()
 
-          opener = urllib.request.build_opener()
-          opener.addheaders = [
-              ("Accept", "application/vnd.github+json"),
-              ("Authorization", f"Bearer {token}"),
-              ("X-GitHub-Api-Version", "2022-11-28"),
-              ("User-Agent", "trustsight-signature-check"),
-          ]
-
           bad = []
           for sha in commits:
-              url = f"https://api.github.com/repos/{repo}/commits/{sha}"
-              with opener.open(url) as response:
-                  payload = json.load(response)
-              verification = payload["commit"].get("verification") or {}
-              signature = verification.get("signature") or ""
-              verified = bool(verification.get("verified"))
-              is_gpg = signature.startswith("-----BEGIN PGP SIGNATURE-----")
-              if not verified or not is_gpg:
-                  bad.append(
-                      (
-                          sha,
-                          payload["commit"]["message"].splitlines()[0],
-                          verification.get("reason", "unsigned"),
-                          "GPG" if is_gpg else "non-GPG or missing signature",
-                      )
-                  )
+              if not signed_by_pinned_key(sha):
+                  subject = subprocess.check_output(
+                      ["git", "log", "-1", "--format=%s", sha], text=True
+                  ).strip()
+                  bad.append((sha, subject))
 
           if bad:
-              print("ERROR: Critical-path changes require GPG-signed commits.")
+              print("ERROR: Critical-path changes require a signature from the "
+                    f"pinned key {PINNED_FINGERPRINT}.")
               print("Touched critical paths:")
               for path in touched:
                   print(f"  {path}")
-              print("Unsigned or non-GPG commits:")
-              for sha, subject, reason, detail in bad:
-                  print(f"  {sha[:7]} {subject} ({reason}; {detail})")
+              print("Commits without a valid pinned signature:")
+              for sha, subject in bad:
+                  print(f"  {sha[:7]} {subject}")
               print("See CONTRIBUTING.md for setup steps.")
               raise SystemExit(1)
 
-          print("All commits touching critical paths are GPG-signed.")
+          print(f"All commits touching critical paths are signed by {PINNED_FINGERPRINT}.")
           PY

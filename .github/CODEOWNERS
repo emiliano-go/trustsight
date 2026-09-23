@@ -23,6 +23,7 @@
 /scripts/critical_paths.py @emiliano-go
 /scripts/build_release_tarball.py @emiliano-go
 /scripts/verify_release.py @emiliano-go
+/scripts/commit_signing_key.asc @emiliano-go
 /packaging/aur/PKGBUILD @emiliano-go
 /docs/reference/baseline-keys.md @emiliano-go
 /src/trustsight/full_aur/baseline_pubkey.pem @emiliano-go

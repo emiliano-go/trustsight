@@ -1,0 +1,81 @@
+name: Update the Arch CI container digest
+
+# `archlinux:latest` is a rolling image: it is rebuilt regularly, and each
+# rebuild moves the digest the release workflows pin. Dependabot cannot
+# update a `container:` image (dependabot-core #5819), so this opens the PR
+# instead.
+#
+# The commit is created by CI and is therefore unsigned. The three workflows
+# it edits are in the critical-path set, so `verify-commit-sigs` will reject
+# the PR until the maintainer signs it. That is intentional: a change to
+# what runs the release build should carry the pinned signature.
+
+on:
+  schedule:
+    # Weekly. Arch rebuilds the image far more often, but the digest only
+    # needs to move when the maintainer is ready to sign the change.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Open a PR if the pinned digest moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          current=$(grep -rhoE 'archlinux:latest@sha256:[0-9a-f]{64}' .github/workflows | sort -u)
+          if [ "$(printf '%s\n' "$current" | wc -l)" -ne 1 ]; then
+            echo "::error::expected exactly one pinned Arch digest, found:"
+            printf '  %s\n' "$current"
+            exit 1
+          fi
+          latest="archlinux:latest@$(docker buildx imagetools inspect archlinux:latest --format '{{.Manifest.Digest}}')"
+          if [ "$current" = "$latest" ]; then
+            echo "digest is current: $current"
+            exit 0
+          fi
+          echo "bumping ${current#archlinux:latest@} -> ${latest#archlinux:latest@}"
+
+          branch="update-arch-container-digest"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          for file in $(grep -rlE 'archlinux:latest@sha256:[0-9a-f]{64}' .github/workflows); do
+            sed -i "s|archlinux:latest@sha256:[0-9a-f]\{64\}|${latest}|g" "$file"
+          done
+          git commit -am "ci: bump the pinned Arch container digest"
+
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch origin "$branch"
+            git push --force-with-lease origin "$branch"
+          else
+            git push origin "$branch"
+          fi
+
+          existing=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "PR #$existing is already open"
+          else
+            cat > /tmp/arch-digest-pr.md <<EOF
+          archlinux:latest was rebuilt.
+
+          Pinned digest: ${current#archlinux:latest@} -> ${latest#archlinux:latest@}
+
+          The commit is created by CI and is unsigned. The workflows it edits
+          are in the critical-path set, so verify-commit-sigs will reject it
+          until it is signed: git commit --amend -S (or re-sign the branch)
+          before merging.
+          EOF
+            gh pr create --base master --head "$branch" \
+              --title "ci: bump the pinned Arch container digest" \
+              --body-file /tmp/arch-digest-pr.md
+          fi

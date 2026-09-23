@@ -38,6 +38,10 @@ CRITICAL_PATHS = frozenset({
     "scripts/critical_paths.py",
     "scripts/build_release_tarball.py",
     "scripts/verify_release.py",
+    # The commit-signing trust anchor.  The signature workflow verifies
+    # against this key and this fingerprint; swapping either is a policy
+    # change and must be signed like one.
+    "scripts/commit_signing_key.asc",
     "packaging/aur/PKGBUILD",
     "docs/reference/baseline-keys.md",
     "src/trustsight/full_aur/baseline_pubkey.pem",

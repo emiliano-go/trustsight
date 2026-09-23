@@ -5,7 +5,7 @@ on: [push, pull_request]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: archlinux:latest
+    container: archlinux:latest@sha256:f3691b4dde62ba4c4b6f0ae2c1fbf28e8c0c8c4b9a35c7e06dc1f70e21aa29f6
     steps:
       # The container ships no git, so actions/checkout falls back to
       # downloading the source archive, which honours .gitattributes

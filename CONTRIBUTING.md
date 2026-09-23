@@ -38,25 +38,29 @@ All required checks should pass before a pull request is reviewed.
 ## Signed Commits
 
 For pull requests to `master` that change one of the exact paths in
-`scripts/critical_paths.py`, every commit in the pull request range must have a
-verified GPG signature. The `verify-commit-sigs` workflow enforces this policy.
+`scripts/critical_paths.py`, every commit in the pull request range must carry
+a valid GPG signature from the **pinned commit-signing key**
+(`scripts/commit_signing_key.asc`, fingerprint
+`F759D6D49B0A395AB922414A5CC3B4C50D37E793`). A signature from any other key,
+and an unsigned commit, are rejected: the `verify-commit-sigs` workflow
+imports that key into a throwaway keyring and verifies each commit against it,
+rather than trusting GitHub's "verified" flag, which accepts any key.
 
-For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required.
+For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required. If you do not hold the pinned key, leave critical-path changes to the maintainer.
 
 ### Setting Up GPG Signing
 
-If you do not already have a GPG key:
+The pinned key is the only accepted signer for critical paths. To sign with it:
 
 ```bash
-gpg --full-generate-key
+gpg --import scripts/commit_signing_key.asc   # public half, for verification
 gpg --list-secret-keys --keyid-format=long
-git config --global user.signingkey YOUR_KEY_ID
+git config --global user.signingkey 5CC3B4C50D37E793!
 git config --global commit.gpgsign true
 ```
 
-Add the public key to your GitHub profile:
-
-https://github.com/settings/gpg/new
+The trailing `!` makes git sign with the primary key rather than a subkey,
+which is the fingerprint the workflow pins.
 
 Verify a commit before pushing:
 
@@ -100,6 +104,7 @@ signature workflow:
 | `scripts/critical_paths.py` | The canonical critical-path list |
 | `scripts/build_release_tarball.py` | The deterministic release tarball |
 | `scripts/verify_release.py` | Release metadata and checksum verification |
+| `scripts/commit_signing_key.asc` | The commit-signing trust anchor |
 | `packaging/aur/PKGBUILD` | Supported packaging path |
 | `docs/reference/baseline-keys.md` | Baseline trust anchor |
 | `src/trustsight/full_aur/baseline_pubkey.pem` | Distribution key for signed baselines |

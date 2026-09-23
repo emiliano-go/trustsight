@@ -27,6 +27,13 @@ the version its checksum describes.
   describe three trees. It now builds from the checked-out target and refuses
   a pre-existing tag that does not point at it. The release workflows and the
   signature policy are now in the critical-path set.
+- **The Arch CI container is pinned to a digest.** `archlinux:latest` is a
+  rolling tag, so a rebuilt image could change what runs the release build
+  without any commit changing. The three workflows that use it now pin the
+  multi-arch index digest. Dependabot cannot update a `container:` image, so
+  `.github/workflows/update-arch-container.yml` opens a weekly PR when the
+  digest moves (the maintainer signs it, since it edits critical paths), and
+  a Dependabot config keeps the pinned action SHAs current.
 
 ### Fixed
 
@@ -54,6 +61,12 @@ the version its checksum describes.
   it read `CRITICAL_PATHS` from the change's own tree, so a pull request could
   remove a path from the list and then modify that path unsigned. It now also
   runs on pushes to `master` and unions the list from the base and the change.
+- **The wheel no longer ships `zensical_extensions`.** The documentation
+  extension is a top-level module with a generic name, and the PKGBUILD's
+  `check()` already had to delete the inherited copy because it collided. It
+  is documentation tooling, not runtime code, so it stays in the checkout and
+  the docs build imports it from there; the wheel now contains only
+  `trustsight`.
 
 ### Security
 
@@ -61,6 +74,13 @@ the version its checksum describes.
   interpolated `${{ inputs.tag }}` and `${{ inputs.ioc_source }}` directly
   into `run:` scripts in the job that writes the signing key to disk; they are
   now environment variables, so a dispatch input cannot become shell.
+- **The commit-signature check is pinned to one key.** It accepted any
+  signature GitHub reported as verified, so any GPG key associated with any
+  account passed. It now imports `scripts/commit_signing_key.asc` into a
+  throwaway keyring and verifies every critical-path commit against that key's
+  fingerprint (`F759D6D49B0A395AB922414A5CC3B4C50D37E793`), locally, without
+  the API's `verified` flag. The key file is itself a critical path, so
+  swapping the trust anchor is a signed change.
 
 ### Changed
 

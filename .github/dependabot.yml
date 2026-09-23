@@ -1,0 +1,15 @@
+version: 2
+
+updates:
+  # Keep the pinned GitHub Actions SHAs current. Dependabot reads the
+  # `uses:` references and rewrites the commit plus its `# vX` comment.
+  #
+  # The `archlinux:latest` digest in the release workflows is deliberately
+  # not here: Dependabot cannot update a `container:` image (dependabot-core
+  # #5819), so .github/workflows/update-arch-container.yml opens that PR.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

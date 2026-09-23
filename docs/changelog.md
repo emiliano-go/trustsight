@@ -4,7 +4,9 @@
 
 ## [Unreleased]
 
-_No changes yet._
+### Fixed
+
+- The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.
 
 ## [0.16.1] - 2026-09-23
 

@@ -103,6 +103,9 @@ def test_pkgbuild_parses():
     assert parsed.get("pkgver"), "pkgver is required"
     assert parsed.get("pkgrel"), "pkgrel is required"
     assert parsed.get("pkgdesc"), "pkgdesc is required"
+    assert len(parsed["pkgdesc"]) <= 80, (
+        "pkgdesc must stay within the 80-character packaging guideline"
+    )
     assert "any" in parsed.get("arch", "")
     assert parsed.get("url") == "https://github.com/emiliano-go/trustsight"
     assert "MIT" in parsed.get("license", "")

@@ -1,5 +1,5 @@
 pkgbase = trustsight
-	pkgdesc = Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals
+	pkgdesc = Audits AUR PKGBUILD updates before install: structure, commands, novelty
 	pkgver = 0.16.1
 	pkgrel = 1
 	url = https://github.com/emiliano-go/trustsight

@@ -462,6 +462,10 @@ def register_commands(app: typer.Typer):
             False, "--record",
             help="Persist observations and analysis history (default: read-only)",
         ),
+        full_recipe: bool = typer.Option(
+            False, "--full-recipe",
+            help="Analyse the whole recipe as if newly added, not only the last change",
+        ),
     ):
         """Show a detailed analysis of a single package."""
         _show_score = score
@@ -491,6 +495,14 @@ def register_commands(app: typer.Typer):
         # the A14 product-composition shape.
         if last is not None and depth is not None and depth != 0:
             msg = "--last and --depth > 0 are not combined in this version"
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+
+        if last is not None and full_recipe:
+            msg = "--last and --full-recipe are not combined"
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
             else:
@@ -543,7 +555,7 @@ def register_commands(app: typer.Typer):
 
         # Single-result path (current behaviour).
         try:
-            fact = analyze_package(package, depth=depth, record=record)
+            fact = analyze_package(package, depth=depth, record=record, full_recipe=full_recipe)
         except Exception as exc:
             msg = f"Analysis of '{package}' failed: {exc}"
             if json_output:

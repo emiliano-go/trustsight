@@ -7,6 +7,7 @@
 ### Added
 
 - Shell completion of package names for `inspect`, `history`, `forget` and `override`.
+- `inspect --full-recipe` analyses the whole recipe, not only the changes since the last review.
 
 ### Security
 

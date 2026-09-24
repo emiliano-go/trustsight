@@ -383,6 +383,7 @@ def analyze_package(
     depth: int | None = None,
     _depth_seen: set | None = None,
     record: bool = False,
+    full_recipe: bool = False,
 ) -> PackageFact:
     _ensure_init()
     begin_stage_tracking()
@@ -426,7 +427,9 @@ def analyze_package(
     if not head_commit:
         return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record)
 
-    if not old_commit:
+    if full_recipe:
+        old_commit = ""
+    elif not old_commit:
         last = get_last_analysis(package_id)
         if last is not None:
             stored_commit = last.get("new_commit")

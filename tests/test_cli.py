@@ -335,7 +335,7 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
         )
         result = CliRunner().invoke(app, ["inspect", "testpkg"])
         assert result.exit_code == 0, result.stdout
-        mock_analyze.assert_called_once_with("testpkg", depth=None, record=False)
+        mock_analyze.assert_called_once_with("testpkg", depth=None, record=False, full_recipe=False)
 
 
 def test_cli_inspect_json_emits_the_body(tmp_path, monkeypatch):
@@ -1269,3 +1269,41 @@ def test_the_deps_hint_appears_only_where_it_helps():
     assert _deps_hint(with_deps, deps_only=True) == ""
     # Nothing to point at.
     assert _deps_hint([{"package": "p", "dependencies": []}], deps_only=False) == ""
+
+
+
+def test_cli_inspect_full_recipe_passes_through(tmp_path, monkeypatch):
+    """`inspect --full-recipe` asks the analysis for the whole recipe."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+
+    with (
+        patch("trustsight.cli.inspect.analyze_package") as mock_analyze,
+        patch("trustsight.discovery.get_aur_package_info") as mock_aur,
+    ):
+        from trustsight.schema import DiffSummary, PackageFact
+        mock_aur.return_value = {"example-pkg": {"Version": "1.0"}}
+        mock_analyze.return_value = PackageFact(
+            package_name="example-pkg", new_version="1.0",
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+        )
+        result = CliRunner().invoke(
+            app, ["inspect", "example-pkg", "--full-recipe", "--allow-uninstalled"],
+        )
+        assert result.exit_code == 0, result.stdout
+        mock_analyze.assert_called_once_with("example-pkg", depth=None, record=False, full_recipe=True)
+
+
+def test_cli_inspect_full_recipe_refuses_last(tmp_path, monkeypatch):
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    result = CliRunner().invoke(app, ["inspect", "example-pkg", "--full-recipe", "--last", "2"])
+    assert result.exit_code == 2
+    assert "--last and --full-recipe" in result.output

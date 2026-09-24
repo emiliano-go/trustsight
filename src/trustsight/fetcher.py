@@ -518,6 +518,8 @@ def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
 
 def get_maintainer_from_commit(repo: pygit2.Repository, commit_oid: str) -> Optional[str]:
     """Return the maintainer from *repo* at a specific *commit_oid*."""
+    if not commit_oid:
+        return None
     try:
         commit = repo.get(commit_oid)
         tree = commit.tree

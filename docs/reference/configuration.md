@@ -117,6 +117,14 @@ emitted, not a score.
 |-----|------|---------|-------------|
 | `network_makedepends` | array of strings | `["curl", "wget", "aria2", "git", ...]` | Package names that D003 treats as network-accessible makedepends. |
 
+### `[source_host_divergence]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `allow` | array of strings | `["waterfox.com", "torproject.org", "arduino.cc", "cachyos.org", "freedesktop.org", "archlinux.org", "winehq.org"]` | Registered domains (eTLD+1) exempted from C011. Add a legitimate non-forge distribution CDN or mirror here when C011 fires on a prebuilt `-bin` package that sources from it. |
+
+`config.toml` is written once and read verbatim, so an install that predates this table keeps the shipped default (`DEFAULT_SOURCE_DIVERGENCE_ALLOW` in `src/trustsight/config.py`). The table is part of the [configuration fingerprint](../explanation/scoring-philosophy.md): changing it changes which packages C011 reports, so two operators with different lists are different instruments.
+
 ### `[rules]`
 
 | Key | Type | Default | Description |

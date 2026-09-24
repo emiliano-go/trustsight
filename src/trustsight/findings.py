@@ -40,6 +40,7 @@ TEMPLATES: dict[str, str] = {
     "C005": "binary artifact from {bucket} source: {url}",
     "C006": "maintainer changed; new domains appeared: {new_domains}",
     "C007": "source array contains command substitution $( ) or backticks",
+    "C011": "prebuilt binary sources from {source_host}, not declared upstream {upstream_host}",
 
     # --- Checksum rules ---
     "H001": "checksum set to SKIP{skip_suffix}",

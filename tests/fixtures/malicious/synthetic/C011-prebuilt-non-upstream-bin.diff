@@ -1,0 +1,12 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,6 +1,6 @@
+ # Maintainer: Alice <alice@example.com>
+ pkgname=pkhex-bin
+-pkgver=26.07.07
++pkgver=26.08.26
+ url="https://github.com/kwsch/PKHeX"
+-source=('https://downloads.dfagaming.nl/PKHeX-26.07.07.tar.gz')
+-sha256sums=('1111111111111111111111111111111111111111111111111111111111111111')
++source=('https://downloads.iusearchbtw.nl/PKHeX-26.08.26.tar.gz')
++sha256sums=('d6a2c410bfa9a0523ee42cec29e2f5aa10556f959d8df63a8f0ff680ebce61c4')

@@ -6,5 +6,9 @@
   "H087-offline-build-no-gap.diff": {
     "must_fire": [],
     "max_score": 0
+  },
+  "C011-same-forge-bin.diff": {
+    "must_fire": [],
+    "max_score": 0
   }
 }

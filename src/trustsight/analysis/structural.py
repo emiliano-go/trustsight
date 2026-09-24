@@ -1,6 +1,7 @@
 import re
 
 from ..differ import (
+    _post_diff_lines,
     checksum_array_parity,
     is_skip_justified,
     source_array_has_command_substitution,
@@ -197,6 +198,90 @@ def _unread_carrier_findings(diff_text, pkgver_changed, add) -> None:
         return
 
 
+#: A literal ``url=`` scalar in a PKGBUILD.  A value carrying a shell
+#: variable is skipped: resolving it needs the whole recipe, and a wrong
+#: upstream is worse than no upstream for C011.
+_URL_SCALAR_RE = re.compile(r"^\s*url\s*=\s*['\"]?([^'\"\s]+)", re.MULTILINE)
+
+#: The AUR convention for a package that ships a prebuilt binary.  A
+#: convention, not a guarantee: a prebuilt package without the suffix is
+#: outside C011's scope.
+_PREBUILT_SUFFIX = "-bin"
+
+#: Buckets whose source is already trusted or a declared distribution
+#: channel; a host in one of these is never a C011 divergence.
+_TRUSTED_SOURCE_BUCKETS = frozenset(
+    {"trusted_forge", "official", "raw_hosting", "homograph_attack"}
+)
+
+
+def _declared_upstream_host(pkgbuild_text: str | None) -> str:
+    """The host of the PKGBUILD's ``url=`` scalar, or "" when unusable."""
+    if not pkgbuild_text:
+        return ""
+    match = _URL_SCALAR_RE.search(pkgbuild_text)
+    if not match:
+        return ""
+    value = match.group(1)
+    if "$" in value or "{" in value:
+        return ""
+    return _url_domain(value)
+
+
+def _registered_domain(host: str) -> str:
+    """The registrable domain (eTLD+1) of *host*, or *host* when unknown.
+
+    Registered domain rather than host so a subdomain or CDN under the
+    upstream's own domain (``dl.google.com`` for ``google.com``) is not a
+    divergence.
+    """
+    if not host:
+        return ""
+    from ..buckets import _extract
+
+    extracted = _extract(host.split(":", 1)[0])
+    if extracted.suffix:
+        return f"{extracted.domain}.{extracted.suffix}"
+    return host
+
+
+def _source_divergence_allow(config: dict | None) -> frozenset[str]:
+    """Registered domains exempted from C011 by the operator."""
+    from ..config import DEFAULT_SOURCE_DIVERGENCE_ALLOW
+
+    section = (config or {}).get("source_host_divergence") or {}
+    values = section.get("allow") or DEFAULT_SOURCE_DIVERGENCE_ALLOW
+    return frozenset(str(v).lower() for v in values)
+
+
+def _prebuilt_host_divergence(
+    added: list[str],
+    source_buckets: dict[str, str],
+    package_name: str,
+    upstream_host: str,
+    allow: frozenset[str],
+) -> tuple[str, str, str] | None:
+    """Return ``(url, source_registered, upstream_registered)`` for C011, or None.
+
+    Only the highest-trust host shape is exempt: a source already in a
+    trusted, official or raw-hosting bucket, or one sharing the upstream's
+    registered domain.  The first divergent source is the one reported, the
+    way SOURCE_BUCKET reports the least-trusted single URL rather than one
+    finding per URL.
+    """
+    upstream_reg = _registered_domain(upstream_host)
+    if not upstream_reg:
+        return None
+    for url in added:
+        if source_buckets.get(url, "unknown") in _TRUSTED_SOURCE_BUCKETS:
+            continue
+        source_reg = _registered_domain(_url_domain(url))
+        if not source_reg or source_reg == upstream_reg or source_reg in allow:
+            continue
+        return url, source_reg, upstream_reg
+    return None
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -323,6 +408,35 @@ def _structural_findings(
                 f"maintainer changed and new domain(s) appeared: {sorted(new_domains)}",
                 line=find_line_in_diff(diff_text, r"#\s*Maintainer"),
                 new_domains=", ".join(sorted(new_domains)))
+
+    # C011 - a prebuilt (-bin) package that fetches its artifact from a host
+    # that is neither the declared upstream's registered domain nor a known
+    # distribution channel.  The upstream `url=` is declared by the same
+    # party under review, so this is a heuristic, not proof; it names the
+    # divergence a reviewer has to judge.  The upstream-payload gap itself
+    # (the bytes behind the URL) stays outside static analysis.
+    if package_name.endswith(_PREBUILT_SUFFIX) and added:
+        # The full head PKGBUILD when the caller has it (the git and corpus
+        # paths do); otherwise the post-diff lines, so a caller that supplies
+        # only a diff - the fixture gates - still sees the `url=` scalar when
+        # it sits in the hunk's context.
+        upstream_text = current_text
+        if upstream_text is None:
+            upstream_text = "\n".join(_post_diff_lines(diff_text))
+        upstream_host = _declared_upstream_host(upstream_text)
+        if upstream_host:
+            divergence = _prebuilt_host_divergence(
+                added, source_buckets, package_name, upstream_host,
+                _source_divergence_allow(config),
+            )
+            if divergence is not None:
+                url, source_reg, upstream_reg = divergence
+                add("C011", "Prebuilt Binary From Non-Upstream Host", "MEDIUM",
+                    "source",
+                    f"prebuilt package sources from {source_reg}, "
+                    f"not declared upstream {upstream_reg}",
+                    line=find_line_in_diff(diff_text, re.escape(url[:80])),
+                    url=url, source_host=source_reg, upstream_host=upstream_reg)
 
     if source_array_has_command_substitution(diff_text):
         add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",

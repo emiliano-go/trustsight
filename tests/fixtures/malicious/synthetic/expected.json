@@ -1138,6 +1138,12 @@
       "X007"
     ]
   },
+  "C011-prebuilt-non-upstream-bin.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "C011"
+    ]
+  },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
       "R001",

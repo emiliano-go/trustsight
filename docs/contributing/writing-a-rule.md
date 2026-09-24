@@ -9,7 +9,7 @@ TrustSight has two rule namespaces to avoid identifier collision:
 | R-series  | R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144 | `rules.toml` | Yes | Regex-detectable patterns   |
 | H-series  | H001-H097   | `analysis/*.py`  | No                | Heuristics: code-emitted detection |
 | D-series  | D001-D004   | `analysis/*.py`  | No                | Dependency-graph rules      |
-| C-series  | C001-C010   | `analysis/*.py`  | No                | Structural / multi-condition |
+| C-series  | C001-C011   | `analysis/*.py`  | No                | Structural / multi-condition |
 | S-series  | S001-S008   | `analysis/sabotage.py` | No          | Sabotage: payloads aimed at the machine |
 | X-series  | X001-X025   | `analysis/crossfire.py` | No         | Crossfire: the evasion technique itself |
 | P-series  | P001-P008 (P004 skipped) | `scoring.py`, `differ.py` | No          | Declared practice, reported at weight 0 |

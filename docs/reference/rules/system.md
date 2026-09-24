@@ -86,7 +86,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, H001-H097, S001-S008, X001-X025, C001-C010, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, H001-H097, S001-S008, X001-X025, C001-C011, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -346,6 +346,10 @@ See [C009: Unread Content Moved With The Version](integrity.md#c009).
 ### C010 {#c010}
 
 See [C010: Binary Metadata File](integrity.md#c010).
+
+### C011 {#c011}
+
+See [C011: Prebuilt Binary From Non-Upstream Host](integrity.md#c011).
 
 ### C005 {#c005}
 

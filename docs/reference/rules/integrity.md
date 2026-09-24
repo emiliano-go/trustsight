@@ -32,6 +32,7 @@ severity weights and the reserved identifier ranges.
 | [C008](#c008) | Unread Content Moved Under A Stable Version | HIGH |
 | [C009](#c009) | Unread Content Moved With The Version | INFO |
 | [C010](#c010) | Binary Metadata File | HIGH |
+| [C011](#c011) | Prebuilt Binary From Non-Upstream Host | MEDIUM |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -168,6 +169,35 @@ cannot present as clean even if the file is left in place rather than
 changed. The companion reader records the same gap for a binary file the
 recipe names and runs, which [H066](#h066) does not cover: H066 claims a
 committed binary's presence, not the content of a file the build executes.
+
+### C011: Prebuilt Binary From Non-Upstream Host {#c011}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `source`
+- **Condition:** A package whose name ends in `-bin` declares an added
+  `source=` URL whose registered domain is neither the registered domain of
+  the recipe's `url=` scalar nor a host already in a trusted, official or
+  raw-hosting bucket. Registered domains are compared (eTLD+1), so a CDN or
+  subdomain under the upstream's own domain is not a divergence.
+
+A `-bin` package ships a prebuilt binary, so the PKGBUILD is not the thing
+that runs: whatever the source URL serves is. When that URL is on a host
+unrelated to the project's declared upstream, the only evidence available is
+the host itself, and the reviewer has to decide whether the mirror is
+trustworthy.
+
+This is a heuristic, not proof. The `url=` field is declared by the same
+party under review, so it can be set to match a malicious mirror, and the
+suffix is the AUR convention rather than a guarantee - a prebuilt package
+without `-bin` is outside the rule's scope. The bytes behind the URL are
+never fetched (see [the security model](../../security.md#the-invariants)),
+so this rule names the divergence; it does not compare the artifact to
+upstream. Operators can exempt a legitimate non-forge distribution CDN or
+mirror by adding its registered domain to `[source_host_divergence] allow`
+in `config.toml`; the shipped list covers projects that publish prebuilt
+binaries from their own official site while `url=` names a source
+repository. Measured against the 3,739-diff benign corpus, C011's benign
+rate is 0.05 %.
 
 ### R049: Compiler Plugin Or Loader Override {#r049}
 

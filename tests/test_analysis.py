@@ -331,3 +331,45 @@ def test_source_host_identity_is_the_canonical_one():
     assert _host(url) == "github.com"
     assert _url_domain(url) == "github.com"
     assert canonical_host("user@GITHUB.com:443") == "github.com"
+
+
+# --- C011: prebuilt binary from a non-upstream host ---
+
+_C011_DIFF = (
+    "-pkgver=26.07.07\n"
+    "+pkgver=26.08.26\n"
+    ' url="https://github.com/kwsch/PKHeX"\n'
+    "-source=('https://downloads.dfagaming.nl/PKHeX-26.07.07.tar.gz')\n"
+    "+source=('https://downloads.iusearchbtw.nl/PKHeX-26.08.26.tar.gz')\n"
+)
+
+
+def _fired(diff: str, package_name: str, **kwargs) -> set[str]:
+    from trustsight.analysis import scan_diff
+
+    fact = scan_diff(diff, package_name=package_name, **kwargs)
+    return {e.rule_id for e in fact.score_breakdown}
+
+
+def test_c011_prebuilt_binary_from_non_upstream_host_fires():
+    assert "C011" in _fired(_C011_DIFF, "pkhex-bin")
+
+
+def test_c011_same_registered_domain_does_not_fire():
+    """A CDN or subdomain under the upstream's own domain is not a divergence."""
+    diff = (
+        "+source=('https://cdn.example-project.org/tool-1.1.0.tar.gz')\n"
+    )
+    assert "C011" not in _fired(
+        diff, "tool-bin", current_text='url="https://example-project.org"\n'
+    )
+
+
+def test_c011_allowlist_exempts_a_known_mirror():
+    cfg = {"source_host_divergence": {"allow": ["iusearchbtw.nl"]}}
+    assert "C011" not in _fired(_C011_DIFF, "pkhex-bin", config=cfg)
+
+
+def test_c011_ignores_non_bin_packages():
+    """The suffix is the AUR convention that scopes the rule."""
+    assert "C011" not in _fired(_C011_DIFF, "pkhex")

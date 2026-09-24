@@ -762,6 +762,26 @@ network_makedepends = [
     "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
     "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
 ]
+
+[source_host_divergence]
+# C011 reports a prebuilt (-bin) package whose source host is not the
+# registered domain of its declared upstream `url=` and is not already in a
+# trusted, official or raw-hosting bucket.  Add registrable domains here to
+# exempt a legitimate non-forge distribution CDN or mirror.
+#
+# The shipped entries are projects that publish their own prebuilt binaries
+# from their official site while the AUR `url=` names a source repository, so
+# the host is a project's own, not a third party's.  Measured against the
+# 3,739-diff benign corpus: with these listed, C011's benign rate is 0.05%.
+allow = [
+    "waterfox.com",
+    "torproject.org",
+    "arduino.cc",
+    "cachyos.org",
+    "freedesktop.org",
+    "archlinux.org",
+    "winehq.org",
+]
 """
 
 #: The novelty weights that ship, parsed from the config above.  Scoring reads
@@ -769,6 +789,13 @@ network_makedepends = [
 #: be the shipped value rather than a second copy that can drift: the inline
 #: defaults were 15/10/20 while the shipped config said 10/5/15.
 DEFAULT_NOVELTY_WEIGHTS = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
+
+#: The C011 allowlist that ships, parsed from the config above.  Read as a
+#: fallback so an install whose config.toml predates the table still gets
+#: the shipped value rather than an empty one.
+DEFAULT_SOURCE_DIVERGENCE_ALLOW = (
+    tomllib.loads(DEFAULT_CONFIG).get("source_host_divergence", {}).get("allow", [])
+)
 
 DEFAULT_RULES = """\
 [[rules]]
@@ -2223,6 +2250,9 @@ def config_fingerprint() -> str:
         "severity_weights": config.get("severity_weights", {}),
         "source_bucket_weights": config.get("source_bucket_weights", {}),
         "novelty_weights": config.get("novelty_weights", {}),
+        # C011's allowlist changes which prebuilt packages are reported, so
+        # two operators with different lists are different instruments.
+        "source_host_divergence": config.get("source_host_divergence", {}),
         # The selected review policy changes which reports are flagged, even
         # though it deliberately leaves score arithmetic unchanged.
         "review_policy": _review_policy_material(config),

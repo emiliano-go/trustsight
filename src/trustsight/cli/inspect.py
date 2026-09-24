@@ -18,6 +18,7 @@ from ..scoring import (
 )
 from ..safe_text import clean, safe_markup
 from ..unicode import describe_fatal_codepoints
+from .completion import installed_packages
 from .display import (
     DEPTH_TRUNCATED_NOTE,
     dependency_cards_rich,
@@ -439,7 +440,7 @@ def register_commands(app: typer.Typer):
     """Register the ``inspect`` and ``history`` subcommands on *app*."""
     @app.command()
     def inspect(
-        package: str = typer.Argument(..., help="Package name"),
+        package: str = typer.Argument(..., help="Package name", autocompletion=installed_packages),
         verbose: bool = typer.Option(False, "--verbose", help="Show triggered rules and score breakdown"),
         score: bool = typer.Option(False, "--score", help="Show aggregate trust score"),
         risk: bool = typer.Option(False, "--risk", help="Show risk level"),

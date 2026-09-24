@@ -6,6 +6,7 @@ from ..config import ensure_default_configs
 from ..db import get_history, get_package_id, get_triggered_rules, init_db
 from ..safe_text import clean
 from ..scoring import stored_band
+from .completion import tracked_packages
 from .display import (
     band_colour,
     _print_colored,
@@ -38,7 +39,7 @@ def register_commands(app: typer.Typer):
     """Register the ``history`` subcommand on *app*."""
     @app.command()
     def history(
-        package: str = typer.Argument(..., help="Package name"),
+        package: str = typer.Argument(..., help="Package name", autocompletion=tracked_packages),
         limit: int = typer.Option(20, "--limit", help="Max history entries"),
         score_breakdown: bool = typer.Option(False, "--score-breakdown", help="Show score breakdown"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),

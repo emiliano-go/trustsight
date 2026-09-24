@@ -9,6 +9,7 @@ import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
 PKGBUILD_DIR = ROOT / "packaging" / "aur"
+LOCAL_PKGBUILD = ROOT / "packaging" / "local" / "PKGBUILD"
 PYPROJECT = ROOT / "pyproject.toml"
 SRCINFO = PKGBUILD_DIR / ".SRCINFO"
 
@@ -319,6 +320,30 @@ def test_cryptography_is_not_in_optdepends():
     assert not any(d.startswith("python-cryptography") for d in opts), (
         "python-cryptography must not appear in optdepends"
     )
+
+
+def test_local_check_installs_the_wheel_without_reaching_the_index():
+    """packaging/local check() must not resolve dependencies from PyPI.
+
+    It ran ``python -m venv`` then ``pip install dist/*.whl``, which fetched
+    the runtime deps from the index as the builder and left no pytest in the
+    fresh venv, so the check failed.  It mirrors packaging/aur now: the wheel
+    is installed with ``python -m installer``, and the declared
+    depends/makedepends (python-pytest among them) come from the system via
+    ``--system-site-packages``.
+    """
+    text = LOCAL_PKGBUILD.read_text()
+    match = re.search(r"^check\(\) \{(.*?)^\}", text, re.M | re.S)
+    assert match, "packaging/local defines no check()"
+    body = match.group(1)
+    assert "--system-site-packages" in body, (
+        "check() must inherit the system site-packages for its dependencies"
+    )
+    assert "pip install" not in body, (
+        "check() must not install from the index; use python -m installer"
+    )
+    assert "-m installer" in body, "check() must install the built wheel"
+    assert "-m pytest" in body, "check() must run the suite"
 
 
 

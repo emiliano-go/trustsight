@@ -24,6 +24,11 @@ os.environ["XDG_DATA_HOME"] = os.path.join(_TEST_HOME, ".local", "share")
 os.environ["XDG_CACHE_HOME"] = os.path.join(_TEST_HOME, ".cache")
 os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
 os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
+# A deterministic locale: git (and everything else) localises its messages,
+# so a test that matches a message must not depend on the builder's locale.
+# `packaging/*/check()` failed under LANG=de_DE.UTF-8 for exactly this.
+os.environ["LC_ALL"] = "C"
+os.environ["LANG"] = "C"
 atexit.register(shutil.rmtree, _TEST_HOME, ignore_errors=True)
 
 # --- the network guard reaches subprocesses too -------------------------

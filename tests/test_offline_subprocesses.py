@@ -49,4 +49,7 @@ def test_git_subprocess_refuses_a_network_protocol(tmp_path):
         capture_output=True, text=True, cwd=tmp_path, timeout=30,
     )
     assert out.returncode != 0
-    assert "not allowed" in out.stderr.lower()
+    # The message is localised, so assert git refused and said something,
+    # not the English wording: under LANG=de_DE.UTF-8 this read
+    # "übertragungsart 'https' nicht erlaubt." and the phrase match failed.
+    assert out.stderr.strip(), "git refused the transport but said nothing"

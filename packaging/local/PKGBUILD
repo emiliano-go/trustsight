@@ -62,18 +62,20 @@ build() {
 
 check() {
   cd "$startdir/../.."
-  # Test the wheel this recipe just built, in a venv of its own.  Running
-  # pytest with the system Python instead let the suite import whatever
-  # `trustsight` was already installed (an older package on an upgrade, or
-  # src/ on a first install) rather than the checkout, so the check could
-  # pass while testing the wrong code.  The venv is fully isolated (no
-  # --system-site-packages), so its dependencies are resolved from the
-  # index; that is the cost of not inheriting an installed copy.
+  # Test the wheel this recipe just built, with the interpreter that will
+  # import it.  The venv inherits the system site-packages, so the declared
+  # depends and makedepends (including python-pytest) come from the system
+  # and nothing is fetched from PyPI.  Installing the wheel into the venv's
+  # own site-packages puts it ahead of any installed `trustsight` on
+  # sys.path, so the check exercises the build, not a stale package or src/.
   local venv="$srcdir/_test-env"
   mkdir -p "$srcdir"
   rm -rf "$venv"
-  python -m venv "$venv"
-  "$venv/bin/python" -m pip install --disable-pip-version-check --quiet dist/*.whl
+  python -m venv --system-site-packages "$venv"
+  # Drop inherited trustsight files so the fresh wheel installs cleanly.
+  find "$venv/lib" -path '*/trustsight*' -exec rm -rf {} + 2>/dev/null || true
+  rm -f "$venv/bin/trustsight"
+  "$venv/bin/python" -m installer dist/*.whl
   "$venv/bin/python" -m pytest tests/ -q \
     --ignore=tests/test_fetcher.py --ignore=tests/test_rebaseline.py
 }

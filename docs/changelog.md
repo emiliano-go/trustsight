@@ -7,6 +7,8 @@
 ### Fixed
 
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.
+- `packaging/local`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
+- The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.
 
 ## [0.16.1] - 2026-09-23
 

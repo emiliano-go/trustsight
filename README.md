@@ -5,6 +5,9 @@
 Audits AUR PKGBUILD updates before you install: detects structural changes, suspicious commands, typosquatting, and novelty signals, then produces a deterministic evidence report.
 
 <p align="center">
+  <a href="https://docs.trustsight.org/">
+    <img src="https://img.shields.io/badge/Docs-docs.trustsight.org-2C7BE5?style=for-the-badge&logo=readthedocs&logoColor=white" alt="Documentation">
+  </a>
   <a href="https://www.python.org/downloads/">
     <img src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white&style=for-the-badge" alt="Python">
   </a>

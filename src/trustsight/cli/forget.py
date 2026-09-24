@@ -10,6 +10,7 @@ from ..db import (
     get_all_packages,
     init_db,
 )
+from .completion import tracked_packages
 from .display import _print_colored
 
 
@@ -27,7 +28,9 @@ def register_commands(app: typer.Typer):
     """Register the ``forget`` subcommand on *app*."""
     @app.command()
     def forget(
-        packages: list[str] = typer.Argument(None, help="Package name(s) to forget"),
+        packages: list[str] = typer.Argument(
+            None, help="Package name(s) to forget", autocompletion=tracked_packages,
+        ),
         prune: bool = typer.Option(False, "--prune", help="Remove packages not in the AUR"),
         dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be removed without deleting"),
         yes: bool = typer.Option(False, "--yes", help="Skip confirmation prompt"),

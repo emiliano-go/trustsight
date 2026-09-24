@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Shell completion of package names for `inspect`, `history`, `forget` and `override`.
+
 ### Fixed
 
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.

@@ -13,6 +13,7 @@ from ..override import (
     remove_override,
 )
 from ..safe_text import clean
+from .completion import installed_packages
 from .display import (
     _print_colored,
     console,
@@ -88,7 +89,9 @@ def override_list(
 def override_add(
     rule_id: str = typer.Argument(..., help="Rule to suppress, e.g. R010"),
     reason: str = typer.Option(..., "--reason", help="Why this rule is being suppressed (required)"),
-    package: str | None = typer.Option(None, "--package", help="Limit to one package"),
+    package: str | None = typer.Option(
+        None, "--package", help="Limit to one package", autocompletion=installed_packages,
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Add a rule override to suppress a finding."""
@@ -117,7 +120,9 @@ def override_add(
 
 @override_app.command("wizard")
 def override_wizard(
-    package: str = typer.Argument(..., help="Package to configure overrides for"),
+    package: str = typer.Argument(
+        ..., help="Package to configure overrides for", autocompletion=installed_packages,
+    ),
 ):
     """Interactive wizard to suppress rules that misfire on a package."""
     ensure_default_configs()
@@ -237,7 +242,10 @@ def override_wizard(
 @override_app.command("rm")
 def override_rm(
     rule_id: str = typer.Argument(..., help="Rule to stop suppressing"),
-    package: str | None = typer.Option(None, "--package", help="Scope the removal to one package"),
+    package: str | None = typer.Option(
+        None, "--package", help="Scope the removal to one package",
+        autocompletion=installed_packages,
+    ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
     """Remove a rule override."""

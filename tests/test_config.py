@@ -170,6 +170,8 @@ def test_load_domains_creates_default(tmp_path, monkeypatch):
     assert "trusted_forges" in domains
     assert "github.com" in domains["trusted_forges"]["domains"]
     assert "gitlab.com" in domains["trusted_forges"]["domains"]
+    assert "sourceforge.net" in domains["trusted_forges"]["domains"]
+    assert "freedesktop.org" in domains["trusted_forges"]["domains"]
     assert "official_projects" in domains
     assert "python.org" in domains["official_projects"]["domains"]
     assert "kernel.org" in domains["official_projects"]["domains"]

@@ -530,6 +530,25 @@ def test_a_dependency_this_run_did_not_read(field):
     assert gap_weight == 0, f"coverage gap added {gap_weight} points"
 
 
+def test_a_repo_dependency_does_not_report_deps_not_scanned(monkeypatch):
+    """A dependency from an official repo is not unread AUR code.
+
+    ``lib32-glibc`` is in ``[core]``; the dependency walk already drops
+    non-AUR names, so the added-dependency test must distinguish them too.
+    """
+    from trustsight.analysis import scan_diff
+    import trustsight.db as db
+
+    monkeypatch.setattr(
+        db, "official_package_names", lambda: frozenset({"lib32-glibc"})
+    )
+    base = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
+            "+pkgname=p\n+pkgver=1\n")
+    tail = "+source=(https://e.example/x.tar.gz)\n+sha256sums=('SKIP')\n"
+    fact = scan_diff(base + "+depends=('lib32-glibc')\n" + tail, package_name="p")
+    assert "deps_not_scanned" not in fact.coverage_gaps
+
+
 def test_a_stale_ruleset_degrades_the_verdict_instead_of_passing():
     """`rules.toml` is written once, at install time, and never rewritten.
 

@@ -138,9 +138,16 @@ def _known_suffixes() -> tuple[str, ...]:
     return tuple(suffixes) if suffixes else DEFAULT_KNOWN_SUFFIXES
 
 
-def _strip_variant_suffix(name: str) -> str:
-    """strip known variant suffixes like -git or -bin from a package name"""
-    for s in _known_suffixes():
+def _strip_variant_suffix(
+    name: str, suffixes: tuple[str, ...] | None = None
+) -> str:
+    """strip known variant suffixes like -git or -bin from a package name
+
+    *suffixes* is resolved once per caller: ``_known_suffixes`` loads
+    ``naming.toml``, whose cached lookup still ``stat``s the file, and the
+    typosquat loop ran it once per candidate name.
+    """
+    for s in suffixes if suffixes is not None else _known_suffixes():
         if name.endswith(s):
             return name[: -len(s)]
     return name
@@ -155,7 +162,8 @@ def package_typosquat_target(pkg_name: str) -> str | None:
     """
     if len(pkg_name) < 4:
         return None
-    base = _strip_variant_suffix(pkg_name)
+    suffixes = _known_suffixes()
+    base = _strip_variant_suffix(pkg_name, suffixes)
     pkg_pop = dependency_observation_count(pkg_name)
 
     # The popularity of every candidate arrives with the candidate list.
@@ -171,7 +179,7 @@ def package_typosquat_target(pkg_name: str) -> str | None:
             continue
         if cand_pop < threshold:
             continue
-        if cand == pkg_name or _strip_variant_suffix(cand) == base:
+        if cand == pkg_name or _strip_variant_suffix(cand, suffixes) == base:
             continue
         filtered.append(cand)
 
@@ -202,7 +210,16 @@ def check_url_novelty(
                WHERE url = ? AND first_seen_package_id = ?""",
             (nurl, package_id),
         ).fetchone()
-        url_first_package = pkg_row is None
+        # Seed rows carry ``first_seen_package_id = 0`` and so can never
+        # match a real package id.  Without this check every URL on the first
+        # review of every package read as "first seen in this package"; a URL
+        # the seed already knows is not that.
+        seed_row = cur.execute(
+            """SELECT 1 FROM source_urls
+               WHERE url = ? AND first_seen_package_id = 0""",
+            (nurl,),
+        ).fetchone()
+        url_first_package = pkg_row is None and seed_row is None
 
         global_row = cur.execute(
             "SELECT id, total_uses FROM source_urls WHERE url = ?", (nurl,)
@@ -248,16 +265,26 @@ def check_maintainer_novelty(
                 (name_hash, package_id),
             ).fetchone()
 
-            if existing is None and record:
-                now = datetime.now(timezone.utc).isoformat()
-                cur.execute(
-                    """INSERT INTO package_maintainers_hashed
-                       (name_hash, email_hash, package_id, first_seen)
-                       VALUES (?, NULL, ?, ?)""",
-                    (name_hash, package_id, now),
-                )
-                conn.commit()
-            return existing is None
+            if existing is None:
+                # The seed's global corpus knows this maintainer even though
+                # this package has no per-package record yet.  Calling that
+                # "first seen for this package" charged a long-established
+                # maintainer a +15 on every first review.
+                seeded = cur.execute(
+                    "SELECT 1 FROM maintainers_hashed WHERE name_hash = ?",
+                    (name_hash,),
+                ).fetchone()
+                if record:
+                    now = datetime.now(timezone.utc).isoformat()
+                    cur.execute(
+                        """INSERT INTO package_maintainers_hashed
+                           (name_hash, email_hash, package_id, first_seen)
+                           VALUES (?, NULL, ?, ?)""",
+                        (name_hash, package_id, now),
+                    )
+                    conn.commit()
+                return seeded is None
+            return False
         else:
             # No salt yet: fall back to the legacy plaintext table so the
             # first-seen-for-this-package semantics stay intact.

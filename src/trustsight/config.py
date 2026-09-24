@@ -1382,7 +1382,14 @@ DEFAULT_RULES = (
 
 DEFAULT_DOMAINS = """\
 [trusted_forges]
-domains = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"]
+domains = [
+    "github.com",
+    "gitlab.com",
+    "codeberg.org",
+    "bitbucket.org",
+    "sourceforge.net",
+    "freedesktop.org",
+]
 
 [official_projects]
 domains = [

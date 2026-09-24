@@ -4,8 +4,30 @@
 
 ## [Unreleased]
 
+### Security
+
+- The sandboxed tokenizer's worker pool refuses a saturated pool at a finite deadline instead of blocking forever on a wedged holder, retires a worker that died while idle instead of handing it to a request that would fail, and closes the child's pipe handles on retirement. The pool still retires workers by request count and CPU budget. Two security gates enforce the bounded wait and the release-artifact/release-tag consistency.
+- The security and regex audits read repository text as UTF-8 rather than the process locale, so a non-UTF-8 locale no longer changes or fails a gate. Security-gate path allowlists use forward slashes on every platform.
+- `scripts/verify_release.py` rebuilds `HEAD` with the running interpreter (`sys.executable`) so the checksum it compares is the committed tree's, not a `python` found on `PATH`.
+
+### Performance
+
+- The `full-aur` metadata snapshot is parsed once per process instead of once per package, saved with compact separators through an atomic rename, and refreshed with a conditional GET (`If-None-Match`/`If-Modified-Since`) so an unchanged dump is not downloaded again.
+- The typosquat scan resolves the variant-suffix list once per package instead of once per candidate name, removing tens of thousands of file `stat` calls from a `review --all` run.
+- The Unicode format-control (Cf) set is cached on disk, keyed by the interpreter's Unicode version, so a later process reads a small file instead of walking all 1,114,112 code points at first use.
+
+### Documentation
+
+- `status` explains what a missing dependency corpus costs and points to the seed-provenance page; `seed fetch` reports the maintainer, source-URL and dependency-name counts and warns when the seed carries only maintainers. The seed build steps show the `--source-urls`/`--dependencies` hand-off, and Quickstart answers whether to build the dependency corpus, and how often.
+
 ### Fixed
 
+- C004 no longer fires without a checksum being removed. The checksum parser now compares the hashes an array held on each side of the diff, scopes an array to its own file, and ignores `.SRCINFO`'s scalar `*sums = <hash>` lines, so a dropped `.SRCINFO` blank line, a tab-to-space re-indentation, or a replaced hash that spans two hunks is no longer reported as a CRITICAL entry removal.
+- `cmake` cache types (`-D<VAR>:PATH=`, `:FILEPATH=`) are no longer read as PATH assignments, so a routine `cmake` invocation no longer trips H025 or H085.
+- `inspect --last` analyses the commit's tree, which it already had in hand, so a history result no longer reports `tree_not_analyzed` and reads as Inconclusive for a trivial bump.
+- A dependency added from an official repository (for example `lib32-glibc` from `[core]`) no longer sets `deps_not_scanned`; the gap is for a name the run did not walk, which is an AUR dependency.
+- `inspect`'s installed gate checks the local pacman set instead of trustsight's own database, so a package that is installed but not yet recorded is no longer reported as "not installed".
+- The novelty signals consult the seed before reporting a maintainer or a source URL as "first seen". An established maintainer the seed already knows no longer charges the per-package weight on a package's first review, and a URL the seed knows no longer charges the per-package weight. `sourceforge.net` and `freedesktop.org` join the trusted forge list, so their artifacts no longer fall into the `unknown` bucket.
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.
 - `packaging/local`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
 - The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.

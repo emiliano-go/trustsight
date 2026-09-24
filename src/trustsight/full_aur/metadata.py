@@ -10,9 +10,12 @@ import gzip
 import io
 import json
 import logging
+import os
+import threading
 import time
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +86,62 @@ def default_metadata_path() -> Path:
     return CONFIG_DIR / "full-aur-meta.json"
 
 
+#: One parsed snapshot, keyed by ``(path, mtime_ns, size)``.  ``review``
+#: loads the snapshot once per package through ``depth.default_metadata``;
+#: without this the 81 MB JSON was re-parsed for every package in the batch.
+#: The cache holds a single entry, so it never pins an old snapshot's memory.
+_snapshot_cache: dict[tuple[str, int, int], tuple[dict, int | None] | None] = {}
+_snapshot_cache_lock = threading.Lock()
+
+
+def _stat_key(path: Path) -> tuple[str, int, int] | None:
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    return (str(path), st.st_mtime_ns, st.st_size)
+
+
+def _validators_path() -> Path:
+    """A small sidecar beside the snapshot, so reading it is cheap.
+
+    Reading the snapshot itself for its HTTP validators would parse the
+    whole 81 MB file for two strings.
+    """
+    base = default_metadata_path()
+    return base.with_name(base.name + ".http.json")
+
+
+def _read_validators() -> tuple[str | None, str | None]:
+    """The ``(ETag, Last-Modified)`` of the last download, best-effort."""
+    try:
+        data = json.loads(_validators_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, None
+    etag = data.get("etag")
+    last_modified = data.get("last_modified")
+    return (
+        etag if isinstance(etag, str) else None,
+        last_modified if isinstance(last_modified, str) else None,
+    )
+
+
+def _write_validators(etag: str | None, last_modified: str | None) -> None:
+    if not (etag or last_modified):
+        return
+    path = _validators_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(
+            json.dumps({"etag": etag, "last_modified": last_modified}),
+            encoding="utf-8",
+        )
+        os.replace(tmp, path)
+    except OSError:
+        log.debug("could not persist metadata validators", exc_info=True)
+
+
 def gunzip_capped(raw: bytes, limit: int = MAX_DECOMPRESSED_BYTES) -> bytes:
     """Decompress *raw*, refusing to materialise more than *limit* bytes."""
     out = bytearray()
@@ -112,8 +171,24 @@ def fetch_metadata(on_progress=None) -> dict:
     and the expected content length.
     """
     log.info("fetching AUR metadata from %s", _METADATA_URL)
+    # Conditional GET: the dump is ~60 MB gzipped and is refreshed every few
+    # minutes, so a refresh that changed nothing should not move it again.
+    etag, last_modified = _read_validators()
+    headers: dict[str, str] = {}
+    if etag:
+        headers["If-None-Match"] = etag
+    if last_modified:
+        headers["If-Modified-Since"] = last_modified
     try:
-        resp = urlopen(_METADATA_URL, timeout=HTTP_TIMEOUT)
+        resp = urlopen(Request(_METADATA_URL, headers=headers), timeout=HTTP_TIMEOUT)
+    except HTTPError as exc:
+        if exc.code == 304:
+            log.info("AUR metadata unchanged (304); reusing the stored snapshot")
+            existing = load_metadata()
+            return existing if existing is not None else {}
+        raise RuntimeError(
+            f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
+        ) from exc
     except Exception as exc:
         raise RuntimeError(
             f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
@@ -121,6 +196,8 @@ def fetch_metadata(on_progress=None) -> dict:
     try:
         import time
         total = int(resp.headers.get("Content-Length", 0))
+        response_etag = resp.headers.get("ETag")
+        response_last_modified = resp.headers.get("Last-Modified")
         buf = bytearray()
         deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
         while True:
@@ -146,6 +223,7 @@ def fetch_metadata(on_progress=None) -> dict:
     metadata: dict[str, dict] = {}
     for entry in data:
         metadata[entry["Name"]] = entry
+    _write_validators(response_etag, response_last_modified)
     log.info("loaded metadata for %d packages", len(metadata))
     return metadata
 
@@ -171,11 +249,23 @@ def diff_metadata(old: dict, new: dict) -> dict[str, str]:
 
 
 def save_metadata(metadata: dict, path: Path | None = None) -> Path:
-    """Persist a metadata snapshot to disk."""
+    """Persist a metadata snapshot to disk.
+
+    Written with compact separators and through a temp file: the snapshot is
+    tens of megabytes, and the default separators spend a byte on every
+    colon and comma.  ``os.replace`` keeps a crash from leaving a
+    half-written snapshot that the next run would read as a smaller,
+    complete-looking corpus.
+    """
     path = path or default_metadata_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump({"snapshot_time": int(time.time()), "packages": metadata}, f)
+    payload = {"snapshot_time": int(time.time()), "packages": metadata}
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    os.replace(tmp, path)
+    with _snapshot_cache_lock:
+        _snapshot_cache.clear()
     log.info("saved metadata snapshot (%d packages) to %s", len(metadata), path)
     return path
 
@@ -198,12 +288,24 @@ def load_snapshot(path: Path | None = None) -> tuple[dict, int | None] | None:
     which for a TTL check means stale.
     """
     path = path or default_metadata_path()
-    if not path.exists():
+    key = _stat_key(path)
+    if key is None:
         return None
-    with open(path) as f:
-        data = json.load(f)
-    stamp = data.get("snapshot_time")
-    return data.get("packages", {}), stamp if isinstance(stamp, int) else None
+    with _snapshot_cache_lock:
+        if key in _snapshot_cache:
+            return _snapshot_cache[key]
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        result = None
+    else:
+        stamp = data.get("snapshot_time")
+        result = (data.get("packages", {}), stamp if isinstance(stamp, int) else None)
+    with _snapshot_cache_lock:
+        _snapshot_cache.clear()
+        _snapshot_cache[key] = result
+    return result
 
 
 def snapshot_age_seconds(snapshot_time: int | None, now: float | None = None) -> float | None:

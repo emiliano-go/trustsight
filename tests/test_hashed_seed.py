@@ -215,8 +215,31 @@ def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path):
     with pytest.warns(UserWarning, match="Plaintext maintainers table detected"):
         import_seed(seed_dir)
     pkg2 = upsert_package("other", "1.0")
-    assert check_maintainer_novelty("Alice Example", pkg2) is True
+    # A maintainer the seed already knows globally is not "first seen for
+    # this package"; a name the seed does not know still is.
     assert check_maintainer_novelty("Alice Example", pkg2) is False
+    assert check_maintainer_novelty("Carol Fresh", pkg2) is True
+    assert check_maintainer_novelty("Carol Fresh", pkg2) is False
+
+
+def test_seeded_source_url_is_not_novel_in_a_package(db, tmp_path):
+    """A URL the seed already knows is not "first seen in this package".
+
+    Seed rows carry ``first_seen_package_id = 0`` and so never match a real
+    package id; without the seed check every URL on a first review charged
+    the per-package +5.
+    """
+    from trustsight.db import upsert_package
+    from trustsight.novelty import check_url_novelty
+
+    url = "https://downloads.sourceforge.net/project/x/x.tar.gz"
+    seed_dir = _build_v2_seed(tmp_path, urls=[{"url": url, "total_uses": 3}])
+    import_seed(seed_dir)
+
+    pkg_id = upsert_package("demo", "1.0")
+    first_pkg, first_global = check_url_novelty(url, pkg_id, record=False)
+    assert first_global is False
+    assert first_pkg is False
 
 
 def test_migration_from_plaintext_maintainers(tmp_path):

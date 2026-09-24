@@ -267,8 +267,11 @@ def reconstructs_to_eval_of_decoded(text: str) -> bool:
 _ENV_SUBVERSION_HIGH_RE = re.compile(
     r"\b(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*(?:\+?=)",
 )
+#: The variable must be the one being assigned, not a suffix of a cmake cache
+#: type.  ``-DCMAKE_INSTALL_PREFIX:PATH=/usr`` and ``:FILEPATH=`` are type
+#: annotations, not PATH assignments, so a ``:`` before the name excludes it.
 _ENV_SUBVERSION_MED_RE = re.compile(
-    r"\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
+    r"(?<!:)\b(?:CFLAGS|LDFLAGS|MAKEFLAGS|PATH)\s*(?:\+?=)",
 )
 
 # H004 - sudo at a command position.  `sudo` is executed, not mentioned,

@@ -62,6 +62,24 @@ def _stale_rules_note(stale_patterns, missing, plain: bool = False) -> str:
     return body if plain else f"\n[yellow]{body}[/]"
 
 
+def _dependency_corpus_note(plain: bool = False) -> str:
+    """What a missing dependency corpus costs, said plainly.
+
+    The D-series rules compare a name against every dependency name observed
+    across the AUR.  Without the corpus they stay silent, so a quiet report
+    is quiet for a reason the report does not show.
+    """
+    body = (
+        "The dependency corpus is not loaded, so the D-series rules (novel "
+        "dependency, typosquat, dependency count) stay silent and a quiet "
+        "report is quiet for a reason the report does not show. Run "
+        "`trustsight seed fetch` for the published corpus, or build it from "
+        "the AUR mirror yourself (about 2.5 GB, rebuild monthly); see "
+        "https://docs.trustsight.org/explanation/seed-provenance/."
+    )
+    return body if plain else f"\n[yellow]{body}[/]"
+
+
 def register_commands(app: typer.Typer):
     """Register the subcommand groups and maintenance commands on *app*."""
     from .baseline import register_commands as _register_baseline
@@ -318,6 +336,8 @@ def register_commands(app: typer.Typer):
                 else Text(f"{len(stale_patterns)} stale", style="yellow"),
             )
             con.print(table)
+            if not deps_loaded:
+                con.print(_dependency_corpus_note())
             if stale_patterns or missing:
                 con.print(_stale_rules_note(stale_patterns, missing))
         else:
@@ -329,6 +349,8 @@ def register_commands(app: typer.Typer):
             print("Rule patterns         : "
                   + ("Up to date" if not stale_patterns
                      else f"{len(stale_patterns)} stale"))
+            if not deps_loaded:
+                print(_dependency_corpus_note(plain=True))
             if stale_patterns or missing:
                 print(_stale_rules_note(stale_patterns, missing, plain=True))
 

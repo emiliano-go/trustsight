@@ -153,10 +153,20 @@ def seed_fetch(
         typer.echo(json.dumps(result, indent=2))
     else:
         _print_colored(
-            f"Verified and imported {stats['urls_total']:,} known source URLs and "
-            f"{stats['maintainers']} maintainers from the release channel.",
+            f"Verified and imported {stats['maintainers']} maintainers, "
+            f"{stats['urls_total']:,} known source URLs and "
+            f"{stats['dependency_names']:,} dependency names from the release channel.",
             "green",
         )
+        if not (stats["urls_total"] or stats["dependency_names"]):
+            _print_colored(
+                "This seed carries only maintainers: the source-URL and "
+                "dependency-name corpora are absent, so URL novelty and the "
+                "D-series rules stay silent. Build them from the AUR mirror "
+                "and import with `trustsight seed-db`; see "
+                "https://docs.trustsight.org/explanation/seed-provenance/.",
+                "yellow",
+            )
 
 
 @seed_app.command("stats")

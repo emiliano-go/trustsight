@@ -1,3 +1,5 @@
+import json
+import os
 import re
 import unicodedata
 
@@ -20,8 +22,41 @@ _CONTEXTUAL_CF = frozenset({0x200B, 0x200C, 0x200D, 0x200E, 0x200F, 0xFEFF})
 # covered automatically; only *when* it runs has changed.
 
 
+#: Bump when the *shape* of the derived list changes, so an old on-disk
+#: cache is not reused.
+_CF_CACHE_SCHEMA = 1
+
+
+def _unconditional_cf_cache_path():
+    from .config import CACHE_DIR
+
+    version = unicodedata.unidata_version.replace(".", "_")
+    return CACHE_DIR / f"unicode_cf-{version}.json"
+
+
 def _build_unconditional_cf() -> list[int]:
-    """All Cf code points except the ones that need ASCII context."""
+    """All Cf code points except the ones that need ASCII context.
+
+    The scan walks all 1,114,112 code points.  The result is cached on disk,
+    keyed by the interpreter's Unicode version and the contextual set: a
+    later run reads a small file instead of paying the scan again, while a
+    new Unicode version (or a changed set) derives and replaces it.  The
+    derivation stays the source of truth, so a Cf codepoint added by a
+    future Unicode version is still covered.
+    """
+    cache_path = _unconditional_cf_cache_path()
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+        if (
+            isinstance(cached, dict)
+            and cached.get("schema") == _CF_CACHE_SCHEMA
+            and cached.get("contextual") == sorted(_CONTEXTUAL_CF)
+            and isinstance(cached.get("codepoints"), list)
+        ):
+            return [int(cp) for cp in cached["codepoints"]]
+    except (OSError, ValueError, TypeError):
+        pass
+
     found: list[int] = []
     for cp in range(0x110000):
         try:
@@ -29,6 +64,21 @@ def _build_unconditional_cf() -> list[int]:
                 found.append(cp)
         except ValueError:
             pass
+
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = cache_path.with_name(cache_path.name + ".tmp")
+        tmp.write_text(
+            json.dumps({
+                "schema": _CF_CACHE_SCHEMA,
+                "contextual": sorted(_CONTEXTUAL_CF),
+                "codepoints": found,
+            }),
+            encoding="utf-8",
+        )
+        os.replace(tmp, cache_path)
+    except OSError:
+        pass
     return found
 
 

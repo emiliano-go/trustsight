@@ -1408,7 +1408,9 @@ def _service_binary_findings(diff_text, tree_manifest, add, current_text=None) -
 # standard command's search path.  When the added directory is not declared in
 # ``source=()`` and not present in the repository manifest, its contents are
 # invisible to review.
-_PATH_ASSIGN_RE = re.compile(r"\bPATH\s*=\s*([^;\n]+)", re.IGNORECASE)
+#: A real PATH assignment, not a cmake cache type: ``-D...:PATH=/usr`` and
+#: ``:FILEPATH=`` put a ``:`` before the name, which excludes them.
+_PATH_ASSIGN_RE = re.compile(r"(?<!:)\bPATH\s*=\s*([^;\n]+)", re.IGNORECASE)
 _PATH_BUILD_DIR_RE = re.compile(
     r"\$\{?(?:srcdir|pkgdir|startdir|BUILDDIR)\}?/([^:\s]+)",
     re.IGNORECASE,

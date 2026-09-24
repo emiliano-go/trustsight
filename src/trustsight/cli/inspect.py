@@ -496,13 +496,19 @@ def register_commands(app: typer.Typer):
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
 
-        # Check local installation status for the --allow-uninstalled gate.
-        from ..db import get_package as _get_pkg
-        local = _get_pkg(package)
+        # The gate is the local pacman set, not trustsight's database: a
+        # package trustsight has not recorded yet (no `--record`) is still
+        # installed, and `get_package` returned "not tracked" while the
+        # message claimed "not installed".  The database is for history only.
+        from ..discovery import get_all_installed, get_aur_package_info
+        try:
+            local = get_all_installed().get(package)
+        except Exception:
+            local = None
         if local is None and not allow_uninstalled:
             msg = (
-                f"Package '{package}' is not installed and "
-                "--allow-uninstalled was not passed."
+                f"Package '{package}' is not installed locally; "
+                "pass --allow-uninstalled."
             )
             if json_output:
                 typer.echo(json.dumps({"error": msg}))
@@ -511,7 +517,6 @@ def register_commands(app: typer.Typer):
             raise typer.Exit(code=2)
 
         # Resolve the package name against the AUR.
-        from ..discovery import get_aur_package_info
         info = get_aur_package_info([package])
         if package not in info and local is None:
             msg = f"Package '{package}' not found in the AUR."
@@ -576,6 +581,7 @@ def _inspect_history(
         get_head_commit,
         walk_bounded,
     )
+    from ..analysis.pipeline import _collect_tree_files
     from ..full_aur.analyze import TemporalContext, analyze_package_text
     from ..reporting import evaluate_fact, report_body
 
@@ -657,7 +663,13 @@ def _inspect_history(
             source="git_commit",
         )
 
-        # Analyse the diff.
+        # The commit's tree is in hand, so hand it to the analysis: without
+        # it every history result reported ``tree_not_analyzed`` and read as
+        # Inconclusive even for a trivial bump.
+        try:
+            tree_files, _tree_complete = _collect_tree_files(repo, str(commit.id))
+        except Exception:
+            tree_files = []
         try:
             fact = analyze_package_text(
                 pkg_name=package,
@@ -665,6 +677,7 @@ def _inspect_history(
                 new_pkgbuild=new_pkgbuild,
                 maintainer=pkg_info.get("Maintainer", ""),
                 temporal=temporal,
+                tree_manifest=tree_files or None,
                 record=record,
             )
         except Exception as _exc:

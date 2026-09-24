@@ -425,6 +425,37 @@ def test_attempt9_path_injection_undeclared_directory():
     assert "H085" in _rule_ids(fact)
 
 
+def test_cmake_cache_path_type_is_not_a_path_assignment():
+    """``-D<VAR>:PATH=`` and ``:FILEPATH=`` are cmake type annotations.
+
+    Reading them as PATH assignments fired H025 and H085 on a routine
+    ``cmake`` invocation and, because H085 grabs the rest of the line, on a
+    ``$srcdir/`` argument from a later ``-D``.
+    """
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,8 +1,12 @@\n"
+        " pkgname=projecteur\n pkgver=0.10\n pkgrel=1\n"
+        "+prepare() {\n"
+        "+  cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_INSTALL_LIBDIR=lib "
+        '-DDATA_DIR="$srcdir/$pkgname-0.10" "$srcdir/$pkgname-$pkgver"\n'
+        "+}\n"
+    )
+    ids = _rule_ids(scan_diff(diff, package_name="projecteur"))
+    assert "H025" not in ids
+    assert "H085" not in ids
+
+
+def test_a_real_path_assignment_in_a_build_function_is_still_caught():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,8 +1,10 @@\n"
+        " pkgname=x\n pkgver=1\n pkgrel=1\n"
+        "+prepare() {\n"
+        '+  PATH="$srcdir/tools:$PATH" make\n'
+        "+}\n"
+    )
+    assert "H085" in _rule_ids(scan_diff(diff, package_name="x"))
+
+
 #: Modules that read attacker-authored diff or PKGBUILD text. Every one must
 #: split it the way a shell does.
 _MATCHING_MODULES = (

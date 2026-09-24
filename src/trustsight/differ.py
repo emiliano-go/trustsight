@@ -1,5 +1,7 @@
 import fnmatch
 import re
+from collections import Counter
+from typing import NamedTuple
 
 import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
@@ -464,10 +466,67 @@ _CHK_DECL_RE = re.compile(
 )
 
 
-def _touched_checksum_arrays(
-    diff_text: str,
-) -> list[tuple[str, str, bool, bool, bool]]:
-    """``(var, added_contents, added_any, removed_any, decl_removed)``.
+class _ChecksumArray(NamedTuple):
+    """One ``*sums`` array as the diff shows it.
+
+    ``added_text``/``removed_text`` are the ``+``/``-`` bodies that belong
+    to the array, and ``added_items``/``removed_items`` are the tokens parsed
+    from them.  Comparing the two item multisets separates a replaced hash
+    (same count) from a removed entry (fewer tokens), which the old
+    any-removed-line test could not.
+    """
+
+    var: str
+    added_text: str
+    removed_text: str
+    added_items: list[str]
+    removed_items: list[str]
+    added_any: bool
+    removed_any: bool
+    decl_removed: bool
+
+
+def _checksum_items(text: str) -> list[str]:
+    """The tokens of a checksum array body, ignoring parens and commas.
+
+    Handles the quoted and unquoted forms and the ``#`` comment makepkg
+    allows inside the array.  The quotes are kept so both sides of a diff
+    compare identically.
+    """
+    items: list[str] = []
+    current: list[str] = []
+    quote = ""
+    for ch in text:
+        if quote:
+            current.append(ch)
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "'\"":
+            quote = ch
+            current.append(ch)
+        elif ch in "(),":
+            if current:
+                items.append("".join(current))
+                current = []
+        elif ch.isspace():
+            if current:
+                items.append("".join(current))
+                current = []
+        elif ch == "#":
+            if current:
+                items.append("".join(current))
+                current = []
+            break
+        else:
+            current.append(ch)
+    if current:
+        items.append("".join(current))
+    return [item for item in items if any(c.isalnum() for c in item)]
+
+
+def _touched_checksum_arrays(diff_text: str) -> list[_ChecksumArray]:
+    """Every ``*sums`` array the diff touches, with both sides of the array.
 
     A declaration's array may span several lines (the usual PKGBUILD
     formatting splits ``sha256sums=(``, one quoted hash per line, and a
@@ -477,59 +536,88 @@ def _touched_checksum_arrays(
     change as ``unchanged``, and a package that swapped a checksum under a
     stable version reported no integrity finding at all.
 
-    *contents* accumulates only added (``+``) lines, so ``added_any`` says
-    whether any part of the array moved in this diff.  ``removed_any`` says
-    whether an entry was deleted from it.  ``decl_removed`` says the
-    declaration line itself was on the ``-`` side, which distinguishes an
-    entry removed from a surviving array from a whole array replaced - the
-    replacement is an ordinary change, not a removal of one entry.
+    The ``+`` and ``-`` bodies are collected separately and parsed into
+    items, so the caller compares what the array *held* rather than counting
+    the minus lines.  An array cannot span files, so the state is flushed at
+    a file boundary; it can span hunks, so it is not flushed at a hunk
+    header.  A scalar declaration (``.SRCINFO``'s ``md5sums = <hash>``) has
+    no array and is not tracked, so a dropped trailing blank line cannot
+    read as an entry removal.
+
+    ``decl_removed`` says the declaration line itself was on the ``-`` side,
+    which distinguishes an entry removed from a surviving array from a whole
+    array replaced - the replacement is an ordinary change, not a removal of
+    one entry.
     """
-    arrays: list[tuple[str, str, bool, bool, bool]] = []
+    arrays: list[_ChecksumArray] = []
     cur_var: str | None = None
-    cur_content: list[str] = []
-    cur_added = False
-    cur_removed = False
-    cur_decl_removed = False
+    cur_added: list[str] = []
+    cur_removed: list[str] = []
+    added_any = False
+    removed_any = False
+    decl_removed = False
 
     def flush() -> None:
-        nonlocal cur_var, cur_content, cur_added, cur_removed, cur_decl_removed
+        nonlocal cur_var, cur_added, cur_removed, added_any, removed_any, decl_removed
         if cur_var is not None:
-            arrays.append((
-                cur_var, "\n".join(cur_content),
-                cur_added, cur_removed, cur_decl_removed,
+            added_text = "\n".join(cur_added)
+            removed_text = "\n".join(cur_removed)
+            arrays.append(_ChecksumArray(
+                cur_var, added_text, removed_text,
+                _checksum_items(added_text), _checksum_items(removed_text),
+                added_any, removed_any, decl_removed,
             ))
         cur_var = None
-        cur_content = []
-        cur_added = False
-        cur_removed = False
-        cur_decl_removed = False
+        cur_added = []
+        cur_removed = []
+        added_any = False
+        removed_any = False
+        decl_removed = False
 
     for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+        if line.startswith(("+++", "---")):
+            # A new file.  An array cannot span files; leaving it open leaked
+            # one file's state into the next.
+            flush()
+            continue
+        if line.startswith("@@"):
+            # A new hunk.  The array stays open: its opener can be context in
+            # one hunk and an entry can change in the next.
             continue
         sign = line[:1]
         body = line[1:] if sign in "+- " else line
         m = _CHK_DECL_RE.match(body)
         if m:
+            rest = body[m.end():]
+            if "(" not in rest:
+                # A scalar, as ``.SRCINFO`` writes it.  It has no array and
+                # no entry to remove, so it is not tracked.
+                flush()
+                continue
             flush()
             cur_var = m.group(0).split("=", 1)[0].strip()
-            rest = body[m.end():]
             if sign == "+":
-                cur_content.append(rest)
-                cur_added = True
+                cur_added.append(rest)
+                added_any = True
             elif sign == "-":
-                cur_removed = True
-                cur_decl_removed = True
-            if ")" in rest:
+                cur_removed.append(rest)
+                removed_any = True
+                decl_removed = True
+            # A closing ``)`` on the ``-`` side does not end the array: its
+            # ``+`` counterpart (the replacement closing line) is the next
+            # line, and closing here would orphan it and read a changed entry
+            # as a removal.
+            if ")" in rest and sign != "-":
                 flush()
             continue
         if cur_var is not None:
             if sign == "+":
-                cur_content.append(body)
-                cur_added = True
+                cur_added.append(body)
+                added_any = True
             elif sign == "-":
-                cur_removed = True
-            if ")" in body:
+                cur_removed.append(body)
+                removed_any = True
+            if ")" in body and sign != "-":
                 flush()
     flush()
     return arrays
@@ -700,21 +788,32 @@ def detect_checksum_changes(diff_text: str) -> str:
     seen = False
     emptied = False
     entry_removed = False
-    for _var, contents, added_any, removed_any, decl_removed in _touched_checksum_arrays(diff_text):
-        if not (added_any or removed_any):
+    for array in _touched_checksum_arrays(diff_text):
+        if not (array.added_any or array.removed_any):
             # The array is fully context: it did not move in this diff.
             continue
+        added = Counter(array.added_items)
+        removed = Counter(array.removed_items)
+        if added == removed and array.added_items:
+            # The same hashes on both sides: a reformat or re-indentation,
+            # not a checksum change.
+            continue
         seen = True
-        # An entry removed from an array that survives is the integrity
-        # event.  A declaration removed as part of replacing the whole array
-        # is an ordinary change: the new array carries the hashes.
-        if removed_any and not decl_removed:
-            entry_removed = True
-        contents = _resolve_checksum_text(diff_text, contents)
+        contents = _resolve_checksum_text(diff_text, array.added_text)
         if _CHK_SKIP_WORD_RE.search(contents):
             return "changed_from_sha256_to_skip"
-        if "(" in contents and not _CHK_HASH_CHAR_RE.search(contents):
+        if "(" in array.added_text and not _CHK_HASH_CHAR_RE.search(contents):
             emptied = True
+        # An entry removed from an array that survives is the integrity
+        # event.  A hash *replaced* by another keeps the count, so only a
+        # genuine net loss - fewer entries added than removed - is a removal.
+        # A declaration replaced wholesale is an ordinary change: the new
+        # array carries the hashes.
+        if (
+            not array.decl_removed
+            and sum(removed.values()) > sum(added.values())
+        ):
+            entry_removed = True
     if emptied:
         return "checksum_array_emptied"
     if entry_removed:

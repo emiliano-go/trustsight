@@ -62,15 +62,13 @@ def _env(tmp_path, monkeypatch, package_name="testpkg"):
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
-    from trustsight.db import init_db, get_connection
+    from trustsight.db import init_db
     init_db()
-    # Insert a fake installed package so the local check passes.
-    with get_connection() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO packages (name, current_version) VALUES (?, ?)",
-            (package_name, "1.0"),
-        )
-        conn.commit()
+    # The installed gate is the local pacman set.
+    monkeypatch.setattr(
+        "trustsight.discovery.get_all_installed",
+        lambda: {package_name: "1.0"},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -131,10 +129,11 @@ class TestValidation:
         ensure_default_configs()
         from trustsight.db import init_db
         init_db()
+        monkeypatch.setattr("trustsight.discovery.get_all_installed", lambda: {})
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "testpkg"])
             assert result.exit_code == 2
-            assert "--allow-uninstalled was not passed" in _strip_ansi(result.output)
+            assert "not installed locally" in _strip_ansi(result.output)
 
     def test_nonexistent_aur_package_rejected(self, tmp_path, monkeypatch):
         # Package not in AUR and not installed locally.
@@ -146,6 +145,7 @@ class TestValidation:
         ensure_default_configs()
         from trustsight.db import init_db
         init_db()
+        monkeypatch.setattr("trustsight.discovery.get_all_installed", lambda: {})
         with patch("trustsight.discovery.get_aur_package_info", return_value={}):
             result = runner.invoke(app, ["inspect", "--allow-uninstalled", "nosuchpkg"])
             assert result.exit_code == 2
@@ -300,10 +300,11 @@ class TestAllowUninstalled:
         ensure_default_configs()
         from trustsight.db import init_db
         init_db()
+        monkeypatch.setattr("trustsight.discovery.get_all_installed", lambda: {})
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             result = runner.invoke(app, ["inspect", "testpkg"])
             assert result.exit_code == 2
-            assert "--allow-uninstalled was not passed" in _strip_ansi(result.output)
+            assert "not installed locally" in _strip_ansi(result.output)
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +440,23 @@ class TestJsonOutput:
             data = json.loads(result.output)
             for body in data:
                 assert "score" in body
+
+    def test_history_analyses_the_commit_tree(self, tmp_path, monkeypatch):
+        """The commit tree is in hand, so history is not tree-not-analyzed.
+
+        Without the manifest every ``--last`` result read as Inconclusive
+        even for a trivial bump.
+        """
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
+        fetcher._record_fetch(repo)
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            result = runner.invoke(app, ["inspect", "--last", "2", "--json", "testpkg"])
+            data = json.loads(result.output)
+            assert data
+            for body in data:
+                assert "tree_not_analyzed" not in body["coverage_gaps"]
 
 
 # ---------------------------------------------------------------------------

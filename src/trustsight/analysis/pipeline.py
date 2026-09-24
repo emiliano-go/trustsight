@@ -302,7 +302,13 @@ def _binary_metadata_finding(paths: list[str]) -> dict:
 
 
 def _adds_a_dependency(diff_text: str) -> bool:
-    """True when the diff adds a runtime or build dependency.
+    """True when the diff adds a dependency that is not a repo package.
+
+    The gap exists for a name this run did not walk, which is an AUR
+    dependency; a package from an official repository (``lib32-glibc`` in
+    ``[core]``) is resolved by the build system like any other and is not
+    unread code.  The dependency walk already drops non-AUR names, so this
+    predicate applies the same distinction to the added-dependency test.
 
     A tokenizer failure must not read as "no dependency added": that is the
     same neutral value a complete scan returns, and it silently clears
@@ -310,6 +316,7 @@ def _adds_a_dependency(diff_text: str) -> bool:
     not vetted), so it propagates; any other failure is recorded as a
     degraded stage and the caller fails closed on the stage gap.
     """
+    from ..db import is_established_package
     from ..deps import extract_dependency_changes
     from ..tokenizer import TokenizerUnavailable
 
@@ -321,8 +328,12 @@ def _adds_a_dependency(diff_text: str) -> bool:
         log.debug("dependency-change scan failed", exc_info=True)
         note_stage_failure("dependency-change-scan")
         return False
-    return any(added.get(field) for field in
-               ("depends", "makedepends", "checkdepends", "optdepends"))
+    names = {
+        name
+        for field in ("depends", "makedepends", "checkdepends", "optdepends")
+        for name in added.get(field, ())
+    }
+    return any(not is_established_package(name) for name in names)
 
 
 def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False):

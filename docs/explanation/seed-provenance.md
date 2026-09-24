@@ -114,11 +114,22 @@ dependency names, and the maintainer (read with the same
 the fixed schema declared in the script.
 
 **Step 3: hash and package.** `scripts/build_hashed_seed.py` converts the raw
-maintainer records into the v2 hashed format, then
-`scripts/build_release_baselines.py` repackages the `trustsight-seed-v2/`
-directory as `baseline-seed.tar.gz` and signs its exact bytes with the
-distribution key, writing the detached `baseline-seed.tar.gz.sig` used at
-import.
+maintainer records into the v2 hashed format. The source-URL and
+dependency-name corpora have to be handed to it explicitly, or the archive
+carries maintainers alone (which is what leaves a fresh install with URL
+novelty and the D-series rules silent):
+
+```bash
+uv run python scripts/build_hashed_seed.py /tmp/maintainers.jsonl \
+  --out /tmp/seed-v2 --provenance /tmp/seed-provenance.json \
+  --source-urls /tmp/source_urls.jsonl \
+  --dependencies /tmp/dependency_names.jsonl
+```
+
+Then `scripts/build_release_baselines.py` repackages the
+`trustsight-seed-v2/` directory as `baseline-seed.tar.gz` and signs its exact
+bytes with the distribution key, writing the detached
+`baseline-seed.tar.gz.sig` used at import.
 
 Every build records its inputs: `generate_seed.py --provenance-out` writes
 `seed-provenance.json` (the source mirror path and on-disk size, the package,

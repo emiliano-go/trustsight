@@ -103,6 +103,31 @@ evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
 
 **Inconclusive is not Low**: When verdict reads "Inconclusive", the tool could not gather enough data to give a confident answer. Treat it as "look manually." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
 
+### Should I build the dependency corpus?
+
+TrustSight ships a *seed* of prior knowledge, part of which is a corpus of
+every dependency name seen across the AUR. The D-series rules (novel
+dependency, dependency-name typosquat, dependency count) compare a name
+against that corpus, so **without it they stay silent**, and a quiet report is
+quiet for a reason the report does not show. `trustsight status` prints
+`Dependency corpus: Not loaded` when it is missing.
+
+You do not have to build it. Every other rule works without it; what you lose
+is the D-series signal and the URL-novelty comparison. If you want it, the
+published `baseline-seed.tar.gz` carries the corpora and `trustsight seed
+fetch` imports them; when the release channel lags, build it from the public
+AUR mirror yourself (about 2.5 GB of clone, plus the time to walk it):
+
+```bash
+git clone --bare https://github.com/archlinux/aur.git ~/.cache/trustsight/aur.git
+python scripts/generate_seed.py --out /tmp/seed.db --provenance-out /tmp/seed-provenance.json
+trustsight seed-db --file /tmp/seed.db --force
+```
+
+Rebuild every month or so, and after a large batch of AUR activity: the corpus
+is a moving picture, not a fixed one. See [seed
+provenance](../explanation/seed-provenance.md) for what each build records.
+
 ---
 
 ## 4. Dependencies are reviewed too

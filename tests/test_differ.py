@@ -464,6 +464,54 @@ def test_checksum_array_replaced_is_not_an_entry_removal():
     assert detect_checksum_changes(diff) == "checksum_added_or_changed"
 
 
+# --- a "removal" that removed nothing --------------------------------------
+#
+# C004 is CRITICAL; a routine bump that removed no hash must not trip it.
+# Each shape below was reported against a real AUR update.
+
+
+def test_a_dropped_srcinfo_blank_line_is_not_a_checksum_removal():
+    # .SRCINFO writes scalar ``md5sums = <hash>`` lines, so dropping the
+    # blank line after one removed no entry.
+    diff = (
+        "--- a/.SRCINFO\n+++ b/.SRCINFO\n@@ -5,3 +5,2 @@\n"
+        " \tpkgver = 1.0\n \tmd5sums = abcdef\n-\n"
+    )
+    assert detect_checksum_changes(diff) == "unchanged"
+
+
+def test_checksum_array_state_does_not_leak_across_files():
+    # The array in the first file never closes in its hunk, and the line the
+    # second file drops is not a checksum; neither may attach to the other.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+        " pkgname = x\n sha256sums=(\n"
+        "--- a/.SRCINFO\n+++ b/.SRCINFO\n@@ -1,2 +1,2 @@\n"
+        " pkgdesc = x\n-\tanything = else\n"
+    )
+    assert detect_checksum_changes(diff) == "unchanged"
+
+
+def test_a_reindented_checksum_array_is_unchanged():
+    # Tab-to-space re-indentation: the hashes are identical.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " sha512sums=(\n-\t'hashA'\n+\t  'hashA'\n )\n"
+    )
+    assert detect_checksum_changes(diff) == "unchanged"
+
+
+def test_a_changed_hash_that_spans_two_hunks_is_not_an_entry_removal():
+    # The opener is context in the first hunk and the final entry changes in
+    # the second. The count is unchanged, so it is a change, not a removal.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -8,4 +8,4 @@\n"
+        " sha256sums=(\n-  'old1'\n+  'new1'\n   'mid'\n"
+        "@@ -20,3 +20,3 @@\n   'mid2'\n-  'oldN')\n+  'newN')\n"
+    )
+    assert detect_checksum_changes(diff) == "checksum_added_or_changed"
+
+
 def test_gpg_key_removed_under_a_context_opener_is_detected():
     from trustsight.differ import detect_gpg_verification_removed
 

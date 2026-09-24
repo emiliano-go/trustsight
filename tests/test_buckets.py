@@ -32,6 +32,22 @@ def test_trusted_forge_bitbucket():
     assert bucket == "trusted_forge"
 
 
+def test_trusted_forge_sourceforge_and_freedesktop():
+    config = {
+        "trusted_forges": {"domains": ["github.com", "sourceforge.net", "freedesktop.org"]},
+        "official_projects": {"domains": []},
+        "raw_hosting": {"domains": []},
+    }
+    sf, _ = classify_url(
+        "https://downloads.sourceforge.net/project/x/x.tar.gz", config
+    )
+    fd, _ = classify_url(
+        "https://gitlab.freedesktop.org/x/y/-/archive/v1/y-v1.tar.gz", config
+    )
+    assert sf == "trusted_forge"
+    assert fd == "trusted_forge"
+
+
 def test_trusted_forge_subdomain():
     bucket, matched = classify_url("https://raw.githubusercontent.com/user/script.sh", DOMAIN_CONFIG)
     assert bucket == "raw_hosting"  # raw.githubusercontent.com is raw_hosting, overrides forge

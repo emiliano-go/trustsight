@@ -315,15 +315,12 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
 
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
-    from trustsight.db import init_db, get_connection
+    from trustsight.db import init_db
     init_db()
-    # Insert a fake installed package so the --allow-uninstalled gate passes.
-    with get_connection() as conn:
-        conn.execute(
-            "INSERT INTO packages (name, current_version) VALUES (?, ?)",
-            ("testpkg", "1.0"),
-        )
-        conn.commit()
+    # The installed gate is the local pacman set.
+    monkeypatch.setattr(
+        "trustsight.discovery.get_all_installed", lambda: {"testpkg": "1.0"}
+    )
 
     with (
         patch("trustsight.cli.inspect.analyze_package") as mock_analyze,
@@ -357,14 +354,11 @@ def test_cli_inspect_json_emits_the_body(tmp_path, monkeypatch):
 
     from trustsight.config import ensure_default_configs
     ensure_default_configs()
-    from trustsight.db import init_db, get_connection
+    from trustsight.db import init_db
     init_db()
-    with get_connection() as conn:
-        conn.execute(
-            "INSERT INTO packages (name, current_version) VALUES (?, ?)",
-            ("testpkg", "1.0"),
-        )
-        conn.commit()
+    monkeypatch.setattr(
+        "trustsight.discovery.get_all_installed", lambda: {"testpkg": "1.0"}
+    )
 
     with (
         patch("trustsight.cli.inspect.analyze_package") as mock_analyze,

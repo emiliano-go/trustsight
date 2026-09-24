@@ -15,7 +15,7 @@ from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.buildfetch import has_unpinned_build_deps
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
-from ..analysis.structural import _structural_findings
+from ..analysis.structural import _structural_findings, unchanged_upstream_host
 from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
 from ..buckets import classify_urls
 from ..config import load_config, load_thresholds
@@ -417,7 +417,10 @@ def analyze_package_text(
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
 
     source_changes = extract_urls_from_diff(diff_text)
-    source_buckets = classify_urls(source_changes.added_urls)
+    source_buckets = classify_urls(
+        source_changes.added_urls,
+        upstream_host=unchanged_upstream_host(diff_text, new_pkgbuild),
+    )
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, new_pkgbuild
     )

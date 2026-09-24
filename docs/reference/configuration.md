@@ -40,6 +40,7 @@ Map each severity level to its numeric contribution to the base score. FATAL rul
 |-----|------|---------|--------|
 | `trusted_forge` | int | `0` | Well-known forges (github.com, gitlab.com, etc.). Neutral: hosting on a forge is a declared fact reported as `P007`, never a credit (B10). |
 | `official` | int | `0` | Official project domains (kernel.org, python.org, etc.). No score change. |
+| `declared_upstream` | int | `5` | Registered domain of the package's own `url=`, when this diff does not also change `url=`. |
 | `raw_hosting` | int | `15` | Raw/paste hosting (raw.githubusercontent.com, pastebin.com, etc.). |
 | `unknown` | int | `20` | Domain not in any allowlist. |
 | `homograph_attack` | int | `30` | Domain contains visually confusable non-ASCII characters (Cyrillic homoglyphs, etc.). |

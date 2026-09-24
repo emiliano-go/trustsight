@@ -9,6 +9,10 @@
 - Shell completion of package names for `inspect`, `history`, `forget` and `override`.
 - `inspect --full-recipe` analyses the whole recipe, not only the changes since the last review.
 
+### Changed
+
+- A source URL on the registered domain of the package's `url=` is classified `declared_upstream` (+5) instead of `unknown` (+20), unless the same diff changes `url=`.
+
 ### Security
 
 - The sandboxed tokenizer's worker pool refuses a saturated pool at a finite deadline instead of blocking forever on a wedged holder, retires a worker that died while idle instead of handing it to a request that would fail, and closes the child's pipe handles on retirement. The pool still retires workers by request count and CPU budget. Two security gates enforce the bounded wait and the release-artifact/release-tag consistency.

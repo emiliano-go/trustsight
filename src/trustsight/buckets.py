@@ -299,17 +299,29 @@ def _classify_prepared(
     return "unknown", domain
 
 
+def _registered(host: str) -> str:
+    extracted = _extract(host.split(":", 1)[0])
+    return f"{extracted.domain}.{extracted.suffix}" if extracted.suffix else host
+
+
 def classify_urls(
-    urls: list[str], domain_config: dict | None = None
+    urls: list[str], domain_config: dict | None = None, upstream_host: str = ""
 ) -> dict[str, str]:
-    """Classify each URL in a list into a provenance bucket"""
+    """Classify each URL in a list into a provenance bucket.
+
+    An otherwise unknown URL on the registered domain of *upstream_host*
+    (the package's declared ``url=``) is ``declared_upstream``.
+    """
     # Loaded and prepared once here rather than once per URL.
     if domain_config is None:
         domain_config = load_domains()
     prepared = _prepare(domain_config)
+    upstream = _registered(canonical_host(upstream_host)) if upstream_host else ""
     result = {}
     for url in urls:
         bucket, matched_domain = _classify_prepared(url, prepared)
+        if bucket == "unknown" and upstream and _registered(matched_domain) == upstream:
+            bucket = "declared_upstream"
         result[url] = bucket
     return result
 

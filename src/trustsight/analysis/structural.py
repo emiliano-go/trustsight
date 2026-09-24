@@ -282,6 +282,57 @@ def _prebuilt_host_divergence(
     return None
 
 
+def _head_upstream_host(diff_text: str, current_text: str | None) -> str:
+    """The declared ``url=`` host, from the head PKGBUILD when available.
+
+    The git and corpus paths supply the full head file; a caller that gives
+    only a diff (the fixture gates) still sees the scalar when it sits in a
+    hunk's context.
+    """
+    text = current_text
+    if text is None:
+        text = "\n".join(_post_diff_lines(diff_text))
+    return _declared_upstream_host(text)
+
+
+def _upstream_domain_typosquat(
+    added: list[str],
+    source_buckets: dict[str, str],
+    upstream_host: str,
+) -> tuple[str, str, str, int] | None:
+    """Return ``(url, source_registered, upstream_registered, distance)`` for C012.
+
+    Only an upstream already on a trusted forge or official project is
+    eligible, which keeps the near-miss meaningful: a source host that
+    resembles an unknown upstream is not evidence of impersonation.  The
+    suffix must match, so ``github.com`` vs ``github.io`` is a different
+    domain rather than a typo.
+    """
+    from ..buckets import classify_url
+    from ..novelty import _damerau_levenshtein
+
+    upstream_reg = _registered_domain(upstream_host)
+    if not upstream_reg:
+        return None
+    upstream_bucket, _ = classify_url(f"https://{upstream_host}")
+    if upstream_bucket not in _TRUSTED_BUCKETS:
+        return None
+    suffix = upstream_reg.rsplit(".", 1)[-1]
+    limit = 1 if len(upstream_reg) < 8 else 2
+    for url in added:
+        if source_buckets.get(url, "unknown") in _TRUSTED_SOURCE_BUCKETS:
+            continue
+        source_reg = _registered_domain(_url_domain(url))
+        if not source_reg or source_reg == upstream_reg:
+            continue
+        if source_reg.rsplit(".", 1)[-1] != suffix:
+            continue
+        distance = _damerau_levenshtein(source_reg, upstream_reg, limit)
+        if 1 <= distance <= limit:
+            return url, source_reg, upstream_reg, distance
+    return None
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -416,14 +467,7 @@ def _structural_findings(
     # divergence a reviewer has to judge.  The upstream-payload gap itself
     # (the bytes behind the URL) stays outside static analysis.
     if package_name.endswith(_PREBUILT_SUFFIX) and added:
-        # The full head PKGBUILD when the caller has it (the git and corpus
-        # paths do); otherwise the post-diff lines, so a caller that supplies
-        # only a diff - the fixture gates - still sees the `url=` scalar when
-        # it sits in the hunk's context.
-        upstream_text = current_text
-        if upstream_text is None:
-            upstream_text = "\n".join(_post_diff_lines(diff_text))
-        upstream_host = _declared_upstream_host(upstream_text)
+        upstream_host = _head_upstream_host(diff_text, current_text)
         if upstream_host:
             divergence = _prebuilt_host_divergence(
                 added, source_buckets, package_name, upstream_host,
@@ -437,6 +481,24 @@ def _structural_findings(
                     f"not declared upstream {upstream_reg}",
                     line=find_line_in_diff(diff_text, re.escape(url[:80])),
                     url=url, source_host=source_reg, upstream_host=upstream_reg)
+
+    # C012 - a source domain one or two edits from the declared upstream's own
+    # domain.  R013b only sees mixed-script homoglyphs and the package/dep
+    # typosquat never looks at domains, so a pure-ASCII `githab.com` was
+    # invisible.  Scoped to a trusted-forge/official upstream for precision.
+    if added:
+        upstream_host = _head_upstream_host(diff_text, current_text)
+        if upstream_host:
+            typo = _upstream_domain_typosquat(added, source_buckets, upstream_host)
+            if typo is not None:
+                url, source_reg, upstream_reg, distance = typo
+                add("C012", "Source Domain Resembles Declared Upstream", "MEDIUM",
+                    "deception",
+                    f"source host {source_reg} is {distance} edit(s) from "
+                    f"declared upstream {upstream_reg}",
+                    line=find_line_in_diff(diff_text, re.escape(url[:80])),
+                    url=url, source_host=source_reg, upstream_host=upstream_reg,
+                    distance=distance)
 
     if source_array_has_command_substitution(diff_text):
         add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",

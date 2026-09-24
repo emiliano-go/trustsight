@@ -373,3 +373,36 @@ def test_c011_allowlist_exempts_a_known_mirror():
 def test_c011_ignores_non_bin_packages():
     """The suffix is the AUR convention that scopes the rule."""
     assert "C011" not in _fired(_C011_DIFF, "pkhex")
+
+
+# --- C012: source domain typosquats the declared upstream ---
+
+def test_c012_upstream_typosquat_fires():
+    diff = (
+        ' url="https://github.com/acme/tool"\n'
+        "+source=('https://githab.com/acme/tool/archive/v1.0.tar.gz')\n"
+    )
+    assert "C012" in _fired(diff, "tool")
+
+
+def test_c012_trusted_different_forge_does_not_fire():
+    # gitlab.com is two edits from github.com, but both are trusted forges,
+    # and the source bucket exemption keeps a legitimate mirror quiet.
+    diff = "+source=('https://gitlab.com/acme/tool/-/archive/v1/tool.tar.gz')\n"
+    assert "C012" not in _fired(
+        diff, "tool", current_text='url="https://github.com/acme/tool"\n'
+    )
+
+
+def test_c012_different_tld_does_not_fire():
+    diff = "+source=('https://acme.github.io/tool-1.0.tar.gz')\n"
+    assert "C012" not in _fired(
+        diff, "tool", current_text='url="https://github.com/acme/tool"\n'
+    )
+
+
+def test_c012_unknown_upstream_does_not_fire():
+    diff = "+source=('https://exampl.com/pkg-1.0.tar.gz')\n"
+    assert "C012" not in _fired(
+        diff, "tool", current_text='url="https://example.org/pkg"\n'
+    )

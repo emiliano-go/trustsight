@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,4 +1,5 @@
+ # Maintainer: Alice <alice@example.com>
+ pkgname=tool
+ pkgver=1.0
+ url="https://github.com/acme/tool"
++source=('https://githab.com/acme/tool/archive/v1.0.tar.gz')

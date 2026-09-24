@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X025, integrity-change rules C001-C011, dependency rules
+rules X001-X025, integrity-change rules C001-C012, dependency rules
 D001-D004, declared-practice rules P001-P008, and unverifiable rules
 W001-W006.
 
@@ -37,7 +37,7 @@ generated from it by `scripts/build_rules_index.py`.
 |----------|------|-------|-------------------------|
 | [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 37 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
-| [Deception and Anti-Analysis](deception.md) | `deception` | 5 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
+| [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 17 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 8 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 34 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
@@ -94,6 +94,7 @@ is deliberately non-contiguous; see
 | [C009](integrity.md#c009) | Unread Content Moved With The Version | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C010](integrity.md#c010) | Binary Metadata File | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C011](integrity.md#c011) | Prebuilt Binary From Non-Upstream Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C012](deception.md#c012) | Source Domain Resembles Declared Upstream | Integrity-change | MEDIUM | [Deception and Anti-Analysis](deception.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |

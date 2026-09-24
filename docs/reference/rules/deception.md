@@ -23,6 +23,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [C012](#c012) | Source Domain Resembles Declared Upstream | MEDIUM |
 | [H012](#h012) | Strace detection attempt (TracerPid check) | - |
 | [H013](#h013) | Strace log truncated (possible flood evasion) | - |
 | [H067](#h067) | Anti-Analysis Check | HIGH |
@@ -77,3 +78,21 @@ Architecture and feature detection (`uname -m`, `getconf`) is not a probe and
 does not fire.
 
 Fire rate: 0 of 3739.
+
+### C012: Source Domain Resembles Declared Upstream {#c012}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `deception`
+- **Condition:** The recipe's declared `url=` is on a trusted forge or official
+  project, and an added `source=` URL's registrable domain is one or two
+  Damerau-Levenshtein edits from the upstream's registrable domain, with the
+  same TLD suffix (so `github.com` vs `githab.com` fires; `github.com` vs
+  `github.io` does not).
+
+[R013b](system.md#r013) catches only mixed-script homoglyph domains, and the
+package/dependency typosquat never looks at domains, so a pure-ASCII mis-spell
+of the upstream's own host was invisible. The `url=` is declared by the same
+party under review, so this is a heuristic: it names a near-miss for a reviewer
+to judge. Eligibility is limited to a trusted-forge or official upstream, which
+keeps the near-miss meaningful - a source host resembling an *unknown* upstream
+is not evidence of impersonation.

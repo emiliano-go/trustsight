@@ -1150,6 +1150,12 @@
       "R152"
     ]
   },
+  "C012-upstream-typosquat.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "C012"
+    ]
+  },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
       "R001",

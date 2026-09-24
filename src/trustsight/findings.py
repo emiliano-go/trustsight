@@ -41,6 +41,7 @@ TEMPLATES: dict[str, str] = {
     "C006": "maintainer changed; new domains appeared: {new_domains}",
     "C007": "source array contains command substitution $( ) or backticks",
     "C011": "prebuilt binary sources from {source_host}, not declared upstream {upstream_host}",
+    "C012": "source host {source_host} resembles declared upstream {upstream_host}",
 
     # --- Checksum rules ---
     "H001": "checksum set to SKIP{skip_suffix}",

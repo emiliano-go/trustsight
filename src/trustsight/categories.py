@@ -225,6 +225,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "H012": _C.DECEPTION,
     "H013": _C.DECEPTION,
     "H067": _C.DECEPTION,
+    "C012": _C.DECEPTION,
     # --- install and persistence ---------------------------------------
     "R007": _C.INSTALL_AND_PERSIST,
     "R017": _C.INSTALL_AND_PERSIST,

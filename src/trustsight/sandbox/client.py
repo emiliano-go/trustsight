@@ -137,6 +137,17 @@ class _Worker:
             proc.wait(timeout=2)
         except Exception:
             pass
+        finally:
+            # Close the pipe handles even when the kill failed.  A retired
+            # worker that leaves stdin/stdout/stderr open leaks descriptors
+            # across a long full-aur run; the child's death does not close
+            # the parent's ends.
+            for pipe in (proc.stdin, proc.stdout, proc.stderr):
+                if pipe is not None:
+                    try:
+                        pipe.close()
+                    except OSError:
+                        pass
 
     def request(self, body: bytes) -> bytes:
         if self.proc is None or self.proc.stdin is None or self.proc.stdout is None:
@@ -205,34 +216,50 @@ def _child_env() -> dict:
 
 _pool: queue.Queue = queue.Queue()
 _all: list[_Worker] = []
-_lock = threading.Lock()
+_lock = threading.Condition()
 _shutdown = threading.Event()
 
 
 def _acquire() -> _Worker:
-    try:
-        return _pool.get_nowait()
-    except queue.Empty:
-        pass
+    deadline = time.monotonic() + REQUEST_TIMEOUT_SECONDS
     with _lock:
-        if len(_all) < WORKER_POOL_SIZE:
-            worker = _Worker()
+        while not _shutdown.is_set():
             try:
-                worker.start()
-            except OSError as exc:
+                worker = _pool.get_nowait()
+            except queue.Empty:
+                worker = None
+            if worker is not None:
+                if worker.alive():
+                    return worker
+                # A worker that died while idle is not capacity.  Retire it
+                # and keep looking rather than handing it back: the request
+                # would fail and mark the package NOT vetted while an empty
+                # slot was available.
+                try:
+                    worker.stop()
+                finally:
+                    _forget(worker)
+            if len(_all) < WORKER_POOL_SIZE:
+                worker = _Worker()
+                try:
+                    worker.start()
+                except OSError as exc:
+                    raise TokenizerUnavailable(
+                        f"tokenizer_unavailable: could not start the child: {exc}"
+                    ) from exc
+                _all.append(worker)
+                return worker
+            # Saturate at the pool size: wait for capacity, but only for one
+            # request timeout.  Every holder returns or kills within that
+            # bound, so exceeding it means a wedged holder, and refusing is
+            # safer than blocking the whole review on it.
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
                 raise TokenizerUnavailable(
-                    f"tokenizer_unavailable: could not start the child: {exc}"
-                ) from exc
-            _all.append(worker)
-            return worker
-    # Saturate at the pool size: wait for a checked-out worker, which is
-    # bounded because every holder returns or kills within the request
-    # timeout.
-    worker = _pool.get()
-    if worker.alive():
-        return worker
-    worker.stop()
-    return _acquire()
+                    "tokenizer_unavailable: worker pool timed out"
+                )
+            _lock.wait(remaining)
+    raise TokenizerUnavailable("tokenizer_unavailable: worker pool is shutting down")
 
 
 def _worker_cpu_seconds(worker: _Worker) -> float:
@@ -258,32 +285,35 @@ def _worker_cpu_seconds(worker: _Worker) -> float:
 
 
 def _release(worker: _Worker) -> None:
-    if _shutdown.is_set():
+    with _lock:
+        if (
+            not _shutdown.is_set()
+            and worker.alive()
+            and worker.requests < MAX_REQUESTS_PER_WORKER
+            and _worker_cpu_seconds(worker) < CPU_RETIRE_SECONDS
+        ):
+            _pool.put(worker)
+            _lock.notify()
+            return
+    try:
         worker.stop()
+    finally:
         _forget(worker)
-        return
-    if (
-        worker.alive()
-        and worker.requests < MAX_REQUESTS_PER_WORKER
-        and _worker_cpu_seconds(worker) < CPU_RETIRE_SECONDS
-    ):
-        _pool.put(worker)
-        return
-    worker.stop()
-    _forget(worker)
 
 
 def _forget(worker: _Worker) -> None:
     with _lock:
         if worker in _all:
             _all.remove(worker)
+        _lock.notify_all()
 
 
 def _terminate_all() -> None:
-    _shutdown.set()
     with _lock:
+        _shutdown.set()
         workers = list(_all)
         _all.clear()
+        _lock.notify_all()
     for worker in workers:
         worker.stop()
 

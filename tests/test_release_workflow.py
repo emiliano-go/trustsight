@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -201,3 +202,68 @@ def test_a_worktree_build_refuses_untracked_files(tmp_path):
         assert _worktree_tree()
     finally:
         brt.ROOT = monkey
+
+
+def test_release_commit_gate():
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from security_gates import gate_release_artifacts_share_commit
+
+    gate = gate_release_artifacts_share_commit()
+    assert gate.passed, gate.measured
+
+
+@pytest.mark.parametrize(("old", "new"), [
+    ('--rev "${{ steps.head.outputs.sha }}"', '--rev "$GITHUB_SHA"'),
+    ('TARGET: ${{ needs.preflight.outputs.target }}', 'TARGET: master'),
+    ('[ "$tag_sha" != "$TARGET" ]', '[ "$tag_sha" != "master" ]'),
+    ('gh release create "$TAG" --target "$TARGET"', 'gh release create "$TAG" --target master'),
+])
+def test_release_commit_gate_rejects_drift(old, new, tmp_path, monkeypatch):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import security_gates
+
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    text = PUBLISHING_WORKFLOW.read_text(encoding="utf-8")
+    assert old in text
+    (workflows / "publishing.yml").write_text(text.replace(old, new), encoding="utf-8")
+    (scripts / "verify_release.py").write_text(
+        (ROOT / "scripts/verify_release.py").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    monkeypatch.setattr(security_gates, "ROOT", tmp_path)
+    assert not security_gates.gate_release_artifacts_share_commit().passed
+
+
+def test_release_verifier_rebuilds_head_with_the_current_interpreter(tmp_path, monkeypatch):
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import verify_release
+
+    digest = "a" * 64
+    (tmp_path / "pyproject.toml").write_text('[project]\nversion = "1.2.3"\n', encoding="utf-8")
+    packaging = tmp_path / "packaging" / "aur"
+    packaging.mkdir(parents=True)
+    (packaging / "PKGBUILD").write_text(
+        f"pkgver=1.2.3\nsha256sums=('{digest}')\n", encoding="utf-8"
+    )
+    (packaging / ".SRCINFO").write_text("pkgver = 1.2.3\n", encoding="utf-8")
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "trustsight-1.2.3-py3-none-any.whl").touch()
+    (dist / "trustsight-1.2.3.tar.gz").touch()
+    run = Mock()
+    monkeypatch.setattr(verify_release, "ROOT", tmp_path)
+    monkeypatch.setattr(verify_release, "_sha256", lambda path: digest)
+    monkeypatch.setattr(verify_release, "_metadata_version", lambda path: "1.2.3")
+    monkeypatch.setattr(verify_release.subprocess, "run", run)
+    monkeypatch.setattr(sys, "argv", [
+        "verify_release.py", "--tag", "v1.2.3", "--dist", str(dist),
+        "--release-tarball", str(tmp_path / "trustsight-1.2.3.tar.gz"),
+    ])
+
+    assert verify_release.main() == 0
+    run.assert_called_once_with(
+        [sys.executable, "scripts/build_release_tarball.py", "--rev", "HEAD",
+         "--check", digest], cwd=tmp_path, check=True,
+    )

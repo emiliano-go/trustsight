@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import re
 import subprocess
+import sys
 import tarfile
 import tomllib
 import zipfile
@@ -83,7 +84,8 @@ def main() -> int:
     if _sha256(args.release_tarball) != expected_sha:
         raise SystemExit("release tarball checksum does not match PKGBUILD")
     subprocess.run(
-        ["python", "scripts/build_release_tarball.py", "--check", expected_sha],
+        [sys.executable, "scripts/build_release_tarball.py", "--rev", "HEAD",
+         "--check", expected_sha],
         cwd=ROOT,
         check=True,
     )

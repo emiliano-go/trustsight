@@ -60,7 +60,7 @@ def _python_files() -> list[Path]:
 
 
 def _rel(path: Path) -> str:
-    return str(path.relative_to(ROOT))
+    return path.relative_to(ROOT).as_posix()
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
     hits: list[str] = []
     for path in _python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 name = _call_name(node)
@@ -130,8 +130,8 @@ def gate_network_is_confined() -> Gate:
     """Only the four fetch modules may open a connection."""
     hits: list[str] = []
     for path in _python_files():
-        rel = str(path.relative_to(SRC))
-        tree = ast.parse(path.read_text())
+        rel = path.relative_to(SRC).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -162,8 +162,8 @@ def gate_single_network_host() -> Gate:
     hits: list[str] = []
     found = set()
     for path in _python_files():
-        rel = str(path.relative_to(SRC))
-        tree = ast.parse(path.read_text())
+        rel = path.relative_to(SRC).as_posix()
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Assign):
                 continue
@@ -188,9 +188,9 @@ def gate_network_reads_are_bounded() -> Gate:
     """Every outbound request carries an explicit timeout."""
     hits: list[str] = []
     for path in _python_files():
-        if str(path.relative_to(SRC)) not in _NETWORK_MODULES:
+        if path.relative_to(SRC).as_posix() not in _NETWORK_MODULES:
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -214,7 +214,7 @@ def gate_no_path_based_archive_extraction() -> Gate:
     """
     hits: list[str] = []
     for path in _python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
                 name = _call_name(node).split(".")[-1]
@@ -246,7 +246,7 @@ def gate_every_stream_read_is_bounded() -> Gate:
     for path in _python_files():
         if path.name == _BOUNDED_IO_MODULE:
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -303,7 +303,7 @@ def gate_artifact_reads_are_bounded() -> Gate:
             problems.append(f"{rel} is missing")
             continue
         covered.append(rel)
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         owner = _enclosing_functions(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -340,7 +340,7 @@ def gate_sql_is_parameterised() -> Gate:
     """
     hits: list[str] = []
     for path in _python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -517,7 +517,7 @@ def gate_freshness_uses_local_marker() -> Gate:
     and must only execute when the marker is absent.
     """
     fetcher = SRC / "fetcher.py"
-    tree = ast.parse(fetcher.read_text())
+    tree = ast.parse(fetcher.read_text(encoding="utf-8"))
     problems: list[str] = []
 
     # Find _is_current function.
@@ -731,7 +731,7 @@ def gate_untrusted_text_is_sanitised_where_it_is_rendered() -> Gate:
     problems: list[str] = []
 
     for path in sorted(cli.rglob("*.py")):
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if re.search(r"\bstrip_ansi\s*\(", text) or re.search(
             r"^from .*import .*\bstrip_ansi\b", text, re.M
         ):
@@ -742,7 +742,7 @@ def gate_untrusted_text_is_sanitised_where_it_is_rendered() -> Gate:
         path = cli / name
         if not path.exists():
             continue
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
@@ -799,16 +799,59 @@ def gate_tokenizer_module_is_isolated() -> Gate:
     allowed = {"sandbox/expand_worker.py"}
     problems: list[str] = []
     for path in _python_files():
-        rel = str(path.relative_to(SRC))
+        rel = path.relative_to(SRC).as_posix()
         if rel in allowed:
             continue
-        for node in ast.walk(ast.parse(path.read_text())):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 names = [alias.name for alias in node.names]
                 if any(name.endswith("_tokenizer_engine") for name in names):
                     problems.append(f"{_rel(path)}:{node.lineno}")
     return Gate("tokenizer module is isolated", not problems,
                 problems or "engine imported only by the worker")
+
+
+def gate_tokenizer_pool_wait_is_bounded() -> Gate:
+    """A6/A14: a saturated pool refuses at a deadline, never blocks forever.
+
+    The pool saturates at ``WORKER_POOL_SIZE``; past that the caller waits
+    for a checked-out worker.  That wait must carry a finite timeout, so a
+    single wedged holder cannot hang the whole review.
+    """
+    import queue
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from trustsight.sandbox import client
+
+    problems = []
+    occupied = [object() for _ in range(client.WORKER_POOL_SIZE)]
+    observed = []
+
+    def bounded_wait(timeout=None):
+        if timeout is None:
+            raise AssertionError("unbounded pool wait")
+        if not 0 < timeout <= client.REQUEST_TIMEOUT_SECONDS:
+            raise AssertionError(f"invalid pool timeout: {timeout}")
+        observed.append(timeout)
+
+    with patch.multiple(client, _pool=queue.Queue(), _all=occupied,
+                        _Worker=lambda: SimpleNamespace(start=lambda: None)), \
+            patch.object(client._lock, "wait", bounded_wait), \
+            patch.object(client.time, "monotonic",
+                         side_effect=[0.0, 0.0, client.REQUEST_TIMEOUT_SECONDS + 1.0]):
+        try:
+            client._acquire()
+        except client.TokenizerUnavailable:
+            pass
+        except Exception as exc:
+            problems.append(f"pool timeout: {exc}")
+        else:
+            problems.append("saturated pool did not refuse at its deadline")
+    if not observed:
+        problems.append("saturated pool never waited with a bounded timeout")
+    return Gate("tokenizer pool waits are bounded", not problems,
+                problems or "a saturated pool refuses at a bounded deadline")
 
 
 def gate_dead_tokenizer_child_fails_the_package() -> Gate:
@@ -888,7 +931,7 @@ def gate_rendering_is_data_driven() -> Gate:
 
     # No model, no transport, anywhere in the rendering path.
     for module in ("verdict.py", "findings.py"):
-        text = (SRC / module).read_text().lower()
+        text = (SRC / module).read_text(encoding="utf-8").lower()
         for banned in ("openai", "anthropic", "requests", "urllib.request", "httpx"):
             if banned in text:
                 problems.append(f"{module} references {banned}")
@@ -1114,7 +1157,7 @@ def gate_maturity_numbers_are_not_duplicated() -> Gate:
     problems = []
     half = _MATURITY_THRESHOLD // 2
 
-    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text()
+    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text(encoding="utf-8")
     section = doc.split("### B3.")[-1].split("\n### ")[0]
     if f"**{_MATURITY_THRESHOLD}**" not in section:
         problems.append(f"B3 does not state the threshold ({_MATURITY_THRESHOLD})")
@@ -1538,7 +1581,7 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
     hits: list[str] = []
     found = 0
     for path in _python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -1590,7 +1633,7 @@ def gate_a_gap_is_always_shown_with_the_band() -> Gate:
     # verdict_level: the two differ only here, so a display path using the
     # wrong one is exactly the regression this gate exists to catch.
     for module in ("cli/review.py", "cli/inspect.py"):
-        text = (SRC / module).read_text()
+        text = (SRC / module).read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), start=1):
             if "verdict_level(" in line and "risk_label" not in line and '"risk"' not in line:
                 if "risk = verdict_level(fact)" not in line:
@@ -1654,7 +1697,7 @@ def gate_a_baseline_supplies_state_not_rules() -> Gate:
         "set_metadata", "load_rules", "sync_rules", "write_default_file",
         "add_override", "save_overrides",
     }
-    tree = ast.parse((SRC / "full_aur" / "export.py").read_text())
+    tree = ast.parse((SRC / "full_aur" / "export.py").read_text(encoding="utf-8"))
     fn = next(
         node for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef) and node.name == "import_baseline"
@@ -1742,7 +1785,7 @@ def gate_source_urls_are_never_fetched() -> Gate:
     banned = {"urllib.request", "http.client", "socket", "requests", "httpx", "ftplib"}
     fetch_modules = {"fetcher", "discovery", "full_aur.fetch", "full_aur.metadata"}
     for path in sorted((SRC / "analysis").rglob("*.py")):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -1806,7 +1849,7 @@ def gate_suppression_is_never_hidden_by_a_flag() -> Gate:
     JSON body: the key must not sit under a verbosity branch.
     """
     path = SRC / "cli" / "review.py"
-    tree = ast.parse(path.read_text())
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     hits: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.If):
@@ -1900,7 +1943,7 @@ def gate_no_template_grants_permission() -> Gate:
         (f"findings.TEMPLATES[{k}]", v) for k, v in findings.TEMPLATES.items()
     ]
     for module in (verdict, findings):
-        source = (SRC / Path(module.__file__).name).read_text()
+        source = (SRC / Path(module.__file__).name).read_text(encoding="utf-8")
         tree = ast.parse(source)
         for node in ast.walk(tree):
             # Literal segments of an f-string are template text; the
@@ -1984,7 +2027,7 @@ def gate_flag_threshold_is_derived() -> Gate:
     """
     from trustsight.scoring import FLAG_THRESHOLD
 
-    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text()
+    doc = (ROOT / "docs" / "security" / "what-a-result-claims.md").read_text(encoding="utf-8")
     problems = []
     if f"at or below {FLAG_THRESHOLD} points" not in doc:
         problems.append(f"security.md does not state the threshold ({FLAG_THRESHOLD})")
@@ -2270,7 +2313,7 @@ def gate_every_input_bound_is_a_source_constant() -> Gate:
         if not path.exists():
             problems.append(f"{rel} is missing")
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         assigned = {}
         for node in tree.body:  # module level only
             if isinstance(node, ast.Assign):
@@ -2338,7 +2381,7 @@ def gate_no_git_filters_or_hooks() -> Gate:
                  "uploadpack.packObjectsHook", "diff.external", "core.pager")
     hits = []
     for path in _python_files():
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         for lineno, line in enumerate(text.splitlines(), start=1):
             for key in dangerous:
                 if key in line and not line.lstrip().startswith("#"):
@@ -2379,7 +2422,7 @@ def gate_doc_cross_references_resolve() -> Gate:
     for path in docs.rglob("*.md"):
         found = set()
         fenced = False
-        for line in path.read_text().splitlines():
+        for line in path.read_text(encoding="utf-8").splitlines():
             if line.lstrip().startswith("```"):
                 fenced = not fenced
             elif not fenced and line.startswith("#"):
@@ -2389,7 +2432,7 @@ def gate_doc_cross_references_resolve() -> Gate:
     broken: list[str] = []
     for path in sorted(docs.rglob("*.md")):
         fenced = False
-        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             if line.lstrip().startswith("```"):
                 fenced = not fenced
                 continue
@@ -2429,7 +2472,7 @@ def gate_doc_lists_every_gate(gates: list[Gate]) -> Gate:
     doc = ROOT / "docs" / "security" / "enforcement-map.md"
     if not doc.exists():
         return Gate(name, False, "missing")
-    text = doc.read_text()
+    text = doc.read_text(encoding="utf-8")
     documented = set(re.findall(r"^\|\s*`([^`]+)`\s*\|", text, re.MULTILINE))
     enforced = {g.name for g in gates} | {name}
     missing = sorted(enforced - documented)
@@ -2593,7 +2636,7 @@ def gate_api_and_cli_share_the_analysis() -> Gate:
     exercise.
     """
     api = SRC / "api.py"
-    tree = ast.parse(api.read_text())
+    tree = ast.parse(api.read_text(encoding="utf-8"))
     imported: set[str] = set()
     modules: set[str] = set()
     for node in ast.walk(tree):
@@ -3027,7 +3070,7 @@ def gate_ci_installs_from_the_lock() -> Gate:
     if not workflows:
         return Gate("CI installs from the lock", False, "no workflows found")
     for path in workflows:
-        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             stripped = line.strip()
             if "pip install" in stripped:
                 problems.append(f"{path.name}:{lineno} pip install")
@@ -3068,10 +3111,10 @@ def gate_critical_paths_are_synchronised() -> Gate:
 
     owned = {
         line.split()[0].lstrip("/")
-        for line in codeowners.read_text().splitlines()
+        for line in codeowners.read_text(encoding="utf-8").splitlines()
         if line.strip() and not line.lstrip().startswith("#") and len(line.split()) >= 2
     }
-    workflow_text = workflow.read_text()
+    workflow_text = workflow.read_text(encoding="utf-8")
     missing_owners = sorted(path for path in CRITICAL_PATHS if path not in owned)
     missing_workflow = [] if "scripts.critical_paths import CRITICAL_PATHS" in workflow_text else sorted(CRITICAL_PATHS)
     missing_files = sorted(
@@ -3085,7 +3128,7 @@ def gate_critical_paths_are_synchronised() -> Gate:
         problems.append(f"missing signature workflow entries: {missing_workflow}")
     if missing_files:
         problems.append(f"critical paths do not exist: {missing_files}")
-    if "scripts/critical_paths.py" not in contributing.read_text():
+    if "scripts/critical_paths.py" not in contributing.read_text(encoding="utf-8"):
         problems.append("CONTRIBUTING.md does not name the canonical critical-path list")
     return Gate(name, not problems, problems or sorted(CRITICAL_PATHS))
 
@@ -3112,7 +3155,7 @@ def gate_an_audit_does_not_write_history() -> Gate:
 
     from trustsight.novelty import check_maintainer_novelty, check_url_novelty
 
-    novelty = (SRC / "novelty.py").read_text()
+    novelty = (SRC / "novelty.py").read_text(encoding="utf-8")
     problems = []
     if "record: bool = " not in novelty:
         problems.append("novelty.py: check_*_novelty has no record switch")
@@ -3163,7 +3206,7 @@ def gate_an_audit_does_not_write_history() -> Gate:
 def gate_the_history_walk_is_bounded() -> Gate:
     """A14: the history walk and the --last ceiling are source constants."""
     fetcher = SRC / "fetcher.py"
-    text = fetcher.read_text()
+    text = fetcher.read_text(encoding="utf-8")
     problems: list[str] = []
     for const in ("MAX_HISTORY_COMMITS", "MAX_HISTORY_DIFFS"):
         if f"{const} =" not in text:
@@ -3175,7 +3218,7 @@ def gate_the_history_walk_is_bounded() -> Gate:
 def gate_run_diff_assembly_is_bounded() -> Gate:
     """A14/B2: MAX_RUN_DIFF_BYTES is charged across results."""
     fetcher = SRC / "fetcher.py"
-    text = fetcher.read_text()
+    text = fetcher.read_text(encoding="utf-8")
     has_const = "MAX_RUN_DIFF_BYTES" in text
     return Gate("run diff assembly is bounded", has_const,
                 has_const and ["MAX_RUN_DIFF_BYTES"] or "MAX_RUN_DIFF_BYTES not defined")
@@ -3184,7 +3227,7 @@ def gate_run_diff_assembly_is_bounded() -> Gate:
 def gate_a_truncated_history_walk_is_a_declared_gap() -> Gate:
     """B2: HISTORY_TRUNCATED is in the coverage module."""
     coverage = SRC / "coverage.py"
-    text = coverage.read_text()
+    text = coverage.read_text(encoding="utf-8")
     has_gap = "HISTORY_TRUNCATED" in text
     return Gate("a truncated history walk is a declared gap", has_gap,
                 has_gap and ["HISTORY_TRUNCATED"] or "HISTORY_TRUNCATED not in coverage.py")
@@ -3193,7 +3236,7 @@ def gate_a_truncated_history_walk_is_a_declared_gap() -> Gate:
 def gate_every_history_diff_is_scored_independently() -> Gate:
     """B1: the --last path does not aggregate scores."""
     inspect = SRC / "cli" / "inspect.py"
-    text = inspect.read_text()
+    text = inspect.read_text(encoding="utf-8")
     # The path should use analyze_package_text per-commit, not any
     # aggregate scoring function.
     has_agg = "aggregate_score" in text or "combined_score" in text
@@ -3202,6 +3245,36 @@ def gate_every_history_diff_is_scored_independently() -> Gate:
 
 
 # ---------------------------------------------------------------------------
+
+
+def gate_release_artifacts_share_commit() -> Gate:
+    """The tag, the archives and the checksum describe one verified tree.
+
+    ``$GITHUB_SHA`` is the commit the workflow file sits on (the default
+    branch), not the requested target, so an archive built from it can
+    describe a different tree than the tag it is released under.  The
+    preflight builds from the checked-out target, and the publish job
+    refuses a tag that points anywhere else.
+    """
+    workflow = (ROOT / ".github/workflows/publishing.yml").read_text(encoding="utf-8")
+    verifier = (ROOT / "scripts/verify_release.py").read_text(encoding="utf-8")
+    required = (
+        'run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"',
+        'target: ${{ steps.head.outputs.sha }}',
+        '--rev "${{ steps.head.outputs.sha }}"',
+        'TARGET: ${{ needs.preflight.outputs.target }}',
+        'tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG"',
+        '[ "$tag_sha" != "$TARGET" ]',
+        'gh release create "$TAG" --target "$TARGET"',
+    )
+    problems = [f"missing workflow constraint: {item}" for item in required
+                if item not in workflow]
+    if '--rev "$GITHUB_SHA"' in workflow or '--rev "${{ github.sha }}"' in workflow:
+        problems.append("release artifacts are built from the event commit, not the target")
+    if '"--rev", "HEAD"' not in verifier or "sys.executable" not in verifier:
+        problems.append("release verification does not rebuild the checked-out commit")
+    return Gate("release artifacts and tags use the verified commit", not problems,
+                problems or "checkout SHA, committed rebuild, verified tag target")
 
 
 def run_gates() -> list[Gate]:
@@ -3229,7 +3302,9 @@ def run_gates() -> list[Gate]:
         gate_untrusted_text_is_sanitised_where_it_is_rendered(),
         gate_tokenizer_smoke_is_deterministic(),
         gate_tokenizer_module_is_isolated(),
+        gate_tokenizer_pool_wait_is_bounded(),
         gate_dead_tokenizer_child_fails_the_package(),
+        gate_release_artifacts_share_commit(),
         gate_coverage_fails_closed(),
         gate_truncation_is_visible(),
         gate_differ_hostile_input_is_bounded(),

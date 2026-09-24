@@ -40,7 +40,7 @@ class PatternAudit:
 def _literal_patterns() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for path in sorted(SRC.rglob("*.py")):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue

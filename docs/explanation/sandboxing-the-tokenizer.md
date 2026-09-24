@@ -114,6 +114,20 @@ things to watch if the design is revisited.
 
 ## If it changes
 
+Waiting for a busy pool has a five-second deadline. Returning a worker,
+retiring one, or shutting down wakes waiting callers; a saturated or stopped
+pool raises `TokenizerUnavailable`. Dead idle workers are removed before
+replacement, and cleanup closes the child's pipe handles. When a worker's
+process group is gone, cleanup falls back to the child process's `kill()`
+method. This does not provide Windows pipe polling or Linux resource limits on
+Windows.
+
+The response deadline starts after the request is written. A blocked request
+write is not covered by that deadline. Resource-limit setup also currently
+ignores errors, so the presence of `RLIMIT_AS` code is not proof that the
+address-space limit took effect. Both need separate runtime verification and
+hardening before claiming an end-to-end request or memory bound.
+
 The sandbox covers the whole tokenizer module, so `split_lines` and
 `join_line_continuations` are sandboxed too, not only the expansion
 functions that carry the amplification risk. The per-line helpers

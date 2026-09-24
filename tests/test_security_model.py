@@ -9,7 +9,8 @@ the gates assert only the shape of.
 import io
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from types import SimpleNamespace
 
 import pytest
 
@@ -79,6 +80,45 @@ def test_the_doc_and_the_gates_name_the_same_invariants():
 
     gates = [g for g in run_gates() if g.name != "docs/security.md matches the gates"]
     assert gate_doc_lists_every_gate(gates).passed
+
+
+@pytest.mark.parametrize("audit", ["security_gates", "regex_audit"])
+def test_audit_source_reads_are_utf8_on_a_non_utf8_locale(audit, tmp_path, monkeypatch):
+    import importlib
+
+    module = importlib.import_module(audit)
+    source = tmp_path / "probe.py"
+    source.write_text("import re\n# \u0081\nPATTERN = re.compile('probe')\n", encoding="utf-8")
+    read_text = Path.read_text
+
+    def locale_read(path, encoding=None, errors=None):
+        return read_text(path, encoding=encoding or "cp1252", errors=errors)
+
+    monkeypatch.setattr(Path, "read_text", locale_read)
+    monkeypatch.setattr(module, "SRC", tmp_path)
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    if audit == "security_gates":
+        assert module.gate_no_interpreter_calls().passed
+    else:
+        assert module._literal_patterns() == [("probe.py:3", "probe")]
+
+
+def test_tokenizer_import_allowlist_uses_portable_paths(monkeypatch):
+    import security_gates
+
+    worker = SimpleNamespace(
+        relative_to=lambda root: PureWindowsPath("sandbox/expand_worker.py"),
+        read_text=lambda **kwargs: "from trustsight import _tokenizer_engine",
+    )
+    monkeypatch.setattr(security_gates, "_python_files", lambda: [worker])
+    assert security_gates.gate_tokenizer_module_is_isolated().passed
+
+
+def test_tokenizer_pool_wait_gate():
+    from security_gates import gate_tokenizer_pool_wait_is_bounded
+
+    gate = gate_tokenizer_pool_wait_is_bounded()
+    assert gate.passed, gate.measured
 
 
 # --- coverage: what the run could not see ---------------------------------

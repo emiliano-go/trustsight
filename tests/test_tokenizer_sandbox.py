@@ -6,7 +6,12 @@ same answer as the engine, and that a child which cannot answer is a
 refusal rather than a quiet run with the parser missing.
 """
 
+import io
+import queue
+import threading
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -125,3 +130,101 @@ def test_repeated_calls_are_stable_under_threads():
         results = list(pool.map(resolve_added_lines, diffs * 2))
     for i, resolved in enumerate(results):
         assert f"value-{i % len(diffs)}" in " ".join(resolved)
+
+
+def test_stop_closes_pipes_when_the_process_group_is_gone(monkeypatch):
+    proc = SimpleNamespace(pid=123, stdin=io.BytesIO(), stdout=io.BytesIO(),
+                           stderr=None, kill=Mock(), wait=Mock())
+    worker = client._Worker()
+    worker.proc = proc
+
+    def no_group(_pid):
+        raise ProcessLookupError
+
+    monkeypatch.setattr(client.os, "getpgid", no_group)
+
+    worker.stop()
+    worker.stop()
+
+    proc.kill.assert_called_once_with()
+    proc.wait.assert_called_once_with(timeout=2)
+    assert proc.stdin.closed and proc.stdout.closed
+    assert worker.proc is None
+
+
+def test_failed_request_releases_capacity_and_preserves_refusal(monkeypatch):
+    worker = Mock()
+    worker.request.side_effect = client._WorkerError("forced read failure")
+    occupied = [worker]
+    monkeypatch.setattr(client, "_acquire", lambda: worker)
+    monkeypatch.setattr(client, "_all", occupied)
+
+    with pytest.raises(TokenizerUnavailable, match="forced read failure"):
+        client._send("lines", "pkgname=example")
+
+    worker.stop.assert_called_once_with()
+    assert not occupied
+
+
+def test_dead_idle_worker_is_removed_before_replacement(monkeypatch):
+    dead = Mock()
+    dead.alive.return_value = False
+    replacement = Mock()
+    pool = queue.Queue()
+    pool.put(dead)
+    occupied = [dead]
+    monkeypatch.setattr(client, "_pool", pool)
+    monkeypatch.setattr(client, "_all", occupied)
+    monkeypatch.setattr(client, "_shutdown", threading.Event())
+    monkeypatch.setattr(client, "_Worker", lambda: replacement)
+
+    assert client._acquire() is replacement
+    dead.stop.assert_called_once_with()
+    replacement.start.assert_called_once_with()
+    assert occupied == [replacement]
+
+
+def test_waiter_wakes_when_a_failed_worker_frees_capacity(monkeypatch):
+    pool = queue.Queue()
+    condition = threading.Condition()
+    shutdown = threading.Event()
+    waiting = threading.Event()
+    finished = threading.Event()
+    failed, replacement = Mock(), Mock()
+    results = []
+    errors = []
+    wait = condition.wait
+
+    def wait_for_capacity(timeout=None):
+        waiting.set()
+        return wait(timeout)
+
+    def acquire():
+        try:
+            results.append(client._acquire())
+        except Exception as exc:
+            errors.append(exc)
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(client, "_pool", pool)
+    monkeypatch.setattr(client, "_all", [failed])
+    monkeypatch.setattr(client, "_lock", condition)
+    monkeypatch.setattr(client, "_shutdown", shutdown)
+    monkeypatch.setattr(client, "WORKER_POOL_SIZE", 1)
+    monkeypatch.setattr(client, "_Worker", lambda: replacement)
+    monkeypatch.setattr(condition, "wait", wait_for_capacity)
+    thread = threading.Thread(target=acquire, daemon=True)
+    thread.start()
+    try:
+        assert waiting.wait(2), "caller never reached the pool's bounded wait"
+        client._forget(failed)
+        assert finished.wait(2), "retirement did not wake the waiting caller"
+        assert not errors
+        assert results == [replacement]
+    finally:
+        with condition:
+            shutdown.set()
+            condition.notify_all()
+        pool.put(replacement)
+        thread.join(timeout=2)

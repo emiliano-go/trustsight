@@ -12,7 +12,7 @@ python scripts/security_gates.py
 
 | Gate | Invariant | Implementation |
 |------|-----------|----------------|
-| `no interpreter or shell execution` | A1 | source-wide AST scan |
+| `no interpreter or shell execution` | A1 | source-wide AST scan, with explicit UTF-8 reads |
 | `version arguments are shape-checked` | A1 | `discovery._VERSION_ARG_RE` |
 | `network confined to the fetch modules` | A2, A3 | `discovery.py`, `fetcher.py`, `full_aur/fetch.py`, `full_aur/metadata.py`, `release.py` |
 | `declared source URLs are never fetched` | A2 | no raw transport in `src/trustsight/analysis/`, and every fetch helper it imports is name-keyed |
@@ -32,12 +32,14 @@ python scripts/security_gates.py
 | `expansion is bounded and never indirect` | A6 | `tokenizer.py` |
 | `tokenizer hostile-input smoke is deterministic` | A6, A14 | `tokenizer.py` and fixed hostile-input smoke cases |
 | `tokenizer module is isolated` | A6 | no `src/` module imports `_tokenizer_engine` except `sandbox/expand_worker.py` |
+| `tokenizer pool waits are bounded` | A6, A14 | `sandbox/client.py` refuses a saturated pool at a finite deadline rather than blocking forever |
 | `a dead tokenizer child fails the package` | A6, B2 | `sandbox/client.py` raises `TokenizerUnavailable`; the batch runner reports the package as NOT vetted |
 | `regex patterns pass adversarial audit` | A5, A14 | configured and source regex patterns |
 | `untrusted text is sanitised where it is rendered` | A1, B7 | every CLI render path: `safe_text.clean` rather than the weaker `unicode.strip_ansi`, and values wrapped rather than passed to Rich as bare strings |
 | `every live regex is audited` | A5, A14 | every compiled pattern reachable from an imported module, including patterns assembled from parts rather than written as literals |
 | `report rendering is data-driven` | A7 | `verdict.py`, `findings.py` |
 | `no path-based archive extraction` | A8 | `full_aur/fetch.py`, `db._extract_v2_archive` |
+| `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
 | `SQL is parameterised` | A9 | `db.py` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/` |
 | `freshness uses local marker` | A11 | `fetcher._is_current`, `fetcher.last_fetch_time` |
@@ -91,3 +93,7 @@ How each gate is scoped, and the recurring mistake that lets one pass while its 
 The last row is the one that keeps the rest honest: a gate with no entry here is an unstated guarantee, and an entry with no gate is an unsupported promise. Both fail the build.
 
 Detection calibration is enforced separately by `scripts/calibration_gates.py`; see [fire rates](../explanation/fire-rates.md). The taxonomy and the adversarial thread of this model are developed at three depths: [evidence tiers](../reference/evidence-tiers.md) describes the signals; [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md) describes the limits; this page describes the whole.
+
+The security and regex audits read repository text as UTF-8. Security-gate
+path allowlists use forward slashes on every platform. These checks do not
+establish that Linux sandbox controls are available on Windows.

@@ -1,3 +1,4 @@
+import json
 import shutil
 from unittest.mock import patch
 
@@ -338,6 +339,49 @@ def test_cli_inspect_calls_analyze(tmp_path, monkeypatch):
         result = CliRunner().invoke(app, ["inspect", "testpkg"])
         assert result.exit_code == 0, result.stdout
         mock_analyze.assert_called_once_with("testpkg", depth=None, record=False)
+
+
+def test_cli_inspect_json_emits_the_body(tmp_path, monkeypatch):
+    """`inspect --json` must print the body, not silently drop it.
+
+    The single-result path returned ``report_body`` to a caller that threw
+    the value away, so the command exited 0 with empty stdout. The
+    ``--last`` path printed its JSON, so only the single-package surface was
+    affected, and the output-parity test missed it by building the expected
+    body directly rather than through the CLI.
+    """
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    from trustsight.config import ensure_default_configs
+    ensure_default_configs()
+    from trustsight.db import init_db, get_connection
+    init_db()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO packages (name, current_version) VALUES (?, ?)",
+            ("testpkg", "1.0"),
+        )
+        conn.commit()
+
+    with (
+        patch("trustsight.cli.inspect.analyze_package") as mock_analyze,
+        patch("trustsight.discovery.get_aur_package_info") as mock_aur,
+    ):
+        from trustsight.schema import PackageFact, DiffSummary
+        mock_aur.return_value = {"testpkg": {"Version": "1.1"}}
+        mock_analyze.return_value = PackageFact(
+            package_name="testpkg",
+            new_version="1.1",
+            diff_summary=DiffSummary(files_changed=["PKGBUILD"]),
+        )
+        result = CliRunner().invoke(app, ["inspect", "testpkg", "--json", "--score"])
+        assert result.exit_code == 0, result.stdout
+        body = json.loads(result.stdout)
+        assert body["package"] == "testpkg"
+        assert "findings" in body
 
 
 # --- batch orchestration ---

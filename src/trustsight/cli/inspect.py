@@ -545,13 +545,15 @@ def register_commands(app: typer.Typer):
             else:
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
-        _inspect_one(
+        body = _inspect_one(
             fact,
             show_score=_show_score,
             show_risk=_show_risk,
             verbose=verbose,
             json_output=json_output,
         )
+        if body is not None:
+            typer.echo(json.dumps(body, indent=2))
 
 
 def _inspect_history(

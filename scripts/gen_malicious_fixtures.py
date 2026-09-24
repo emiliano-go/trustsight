@@ -370,11 +370,15 @@ def main():
                     expected[k][note_key] = v[note_key]
 
     # Stable key order so regeneration is byte-identical regardless of the
-    # order generators ran in.
+    # order generators ran in.  ``gen_injection_fixtures`` writes this same
+    # file, so both must serialise identically: ``indent=2``, sorted keys
+    # (top level and within each entry), literal UTF-8, one trailing newline.
+    # When they diverge, regeneration is not a fixed point and CI's
+    # ``fixture-determinism`` job reddens.
     expected = {k: expected[k] for k in sorted(expected)}
 
-    with open(args.out / "expected.json", "w") as f:
-        json.dump(expected, f, indent=2, ensure_ascii=False)
+    with open(args.out / "expected.json", "w", encoding="utf-8") as f:
+        json.dump(expected, f, indent=2, sort_keys=True, ensure_ascii=False)
         f.write("\n")
 
     for fname in sorted(expected):

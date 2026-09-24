@@ -1,4 +1,22 @@
 {
+  "C011-prebuilt-non-upstream-bin.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "C011"
+    ]
+  },
+  "C012-upstream-typosquat.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "C012"
+    ]
+  },
+  "C013-fork-swap.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "C013"
+    ]
+  },
   "H001-skip-git-justified.diff": {
     "min_score": 25,
     "must_fire": [
@@ -1078,6 +1096,12 @@
     ],
     "relabelled": "R027 -> H002"
   },
+  "R152-free-hosting-source.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "R152"
+    ]
+  },
   "S001-fork-bomb.diff": {
     "min_score": 30,
     "must_fire": [
@@ -1136,30 +1160,6 @@
     "min_score": 30,
     "must_fire": [
       "X007"
-    ]
-  },
-  "C011-prebuilt-non-upstream-bin.diff": {
-    "min_score": 25,
-    "must_fire": [
-      "C011"
-    ]
-  },
-  "R152-free-hosting-source.diff": {
-    "min_score": 25,
-    "must_fire": [
-      "R152"
-    ]
-  },
-  "C012-upstream-typosquat.diff": {
-    "min_score": 25,
-    "must_fire": [
-      "C012"
-    ]
-  },
-  "C013-fork-swap.diff": {
-    "min_score": 15,
-    "must_fire": [
-      "C013"
     ]
   },
   "control-benign-version-bump.diff": {

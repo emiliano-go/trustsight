@@ -1144,6 +1144,12 @@
       "C011"
     ]
   },
+  "R152-free-hosting-source.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "R152"
+    ]
+  },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
       "R001",

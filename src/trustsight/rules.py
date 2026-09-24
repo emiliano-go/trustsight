@@ -343,22 +343,22 @@ def find_line_in_diff(
 
 
 #: Rules whose pattern is built at runtime rather than written in the TOML.
-GENERATED_PATTERN_RULES = ("R013", "R047", "R048")
+GENERATED_PATTERN_RULES = ("R013", "R047", "R048", "R152")
 
 
 def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
     """Fill in the patterns that are generated rather than declared.
 
-    R013 is assembled from Unicode data and R047/R048 from config, so their
-    TOML entries carry a placeholder and the real pattern only exists once
-    this has run.
+    R013 is assembled from Unicode data and R047/R048/R152 from config, so
+    their TOML entries carry a placeholder and the real pattern only exists
+    once this has run.
 
     A function rather than a loop inside `apply_rules` so that
-    `scripts/regex_audit.py` can audit what actually runs. Those three
+    `scripts/regex_audit.py` can audit what actually runs. Those generated
     patterns were invisible to all three of the audit's collection
     strategies at once: not a TOML literal, not `re.compile("literal")` in
     the source, and not a module-level `re.Pattern`. R013 is the FATAL
-    homoglyph rule, and R047/R048 are built from operator config, so a
+    homoglyph rule, and R047/R048/R152 are built from operator config, so a
     config edit could have slowed the scan with no gate to catch it.
     """
     for rule in rules:
@@ -374,6 +374,9 @@ def resolve_generated_patterns(rules: list[dict]) -> list[dict]:
         elif rule.get("id") == "R048":
             from .config import _free_registrar_tld_pattern
             rule["pattern"] = _free_registrar_tld_pattern()
+        elif rule.get("id") == "R152":
+            from .config import _free_hosting_pattern
+            rule["pattern"] = _free_hosting_pattern()
     return rules
 
 

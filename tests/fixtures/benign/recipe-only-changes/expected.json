@@ -10,5 +10,9 @@
   "C011-same-forge-bin.diff": {
     "must_fire": [],
     "max_score": 0
+  },
+  "R152-forge-source.diff": {
+    "must_fire": [],
+    "max_score": 0
   }
 }

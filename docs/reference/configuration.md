@@ -110,6 +110,7 @@ emitted, not a score.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `free_registrar_tlds` | array of strings | `["tk", "ml", "ga", "cf", "gq", "pw"]` | TLDs flagged by R048 (source URL on free registrar TLD). Update this list as new free TLDs appear. |
+| `free_hosting_domains` | array of strings | `[]` | Free-hosting / dynamic-DNS / tunnel domains flagged by R152 (source URL on an attacker-controllable host). Empty falls back to `hosts.toml free_hosting_domains` and then the shipped list. |
 
 ### `[tools]`
 
@@ -309,6 +310,7 @@ written on first run and never rewritten, so an edited file is always kept.
 | `paste_hosts` | H041, source buckets | Paste and ephemeral file-drop hosts. As `source=` URLs they are weighted by the `raw_hosting` bucket; as upload destinations inside a function they are H041's. |
 | `standard_ports` | R047 | Ports a build may legitimately contact. |
 | `free_registrar_tlds` | R048 | TLDs available at no cost, where a throwaway domain is cheap. |
+| `free_hosting_domains` | R152 | Free-hosting, dynamic-DNS and tunnel domains. A `source=` URL on one of these is flagged; trim the free/static-hosting entries if a legitimate release asset lives there. |
 | `source_schemes` | H034 | Allowlisted `source=` schemes. The base of a `transport+base` token is judged, so `git+https` reads as `https`. |
 | `confusable_domains` | R013b | Popular domains a homoglyph label is tested against. A mixed-script label that resembles none of them stays quiet. |
 | `covert_egress_endpoints` | H071 | DNS-over-HTTPS endpoints. |

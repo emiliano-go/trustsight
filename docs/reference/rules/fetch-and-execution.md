@@ -60,6 +60,7 @@ severity weights and the reserved identifier ranges.
 | [R055](#r055) | Git Clone With Variable Branch | MEDIUM |
 | [R056](#r056) | Download Then Source | CRITICAL |
 | [R057](#r057) | TLS Verification Disabled | HIGH |
+| [R152](#r145) | Source URL On Free-Hosting Or Dynamic-DNS Host | MEDIUM |
 <!-- /generated: page-index -->
 
 ### R001: Remote Script Execution {#r001}
@@ -187,6 +188,14 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Category:** `network`
 - **Pattern:** `https?://[^/\s]*\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\x27\s)]|$)`
 - **Description:** A source URL on a free-registrar TLD (`.tk`, `.ml`, `.ga`, `.cf`, `.gq`, `.pw`). These carry no registration cost and are disproportionately used for throwaway infrastructure. Deliberately excludes `.xyz` and `.top`, which have substantial legitimate use.
+
+### R152: Source URL On Free-Hosting Or Dynamic-DNS Host {#r145}
+
+- **Target:** `raw_line`
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `network`
+- **Pattern:** `https?://[^/\s]*\.(?:duckdns\.org|no\-ip\.org|noip\.com|no\-ip\.biz|ddns\.net|hopto\.org|zapto\.org|sytes\.net|dynu\.com|dynv6\.net|afraid\.org|changeip\.com|dyndns\.org|ngrok\.io|ngrok\.app|ngrok\-free\.app|trycloudflare\.com|localtunnel\.me|loca\.lt|serveo\.net|bore\.pub|pinggy\.io|localhost\.run|lhr\.life|pagekite\.me|portmap\.io|pages\.dev|workers\.dev|r2\.dev|github\.io|gitlab\.io|codeberg\.page|vercel\.app|netlify\.app|web\.app|firebaseapp\.com|surge\.sh|render\.com|onrender\.com|glitch\.me|replit\.dev|herokuapp\.com|deno\.dev|railway\.app)(?:[:/]|["\x27\s)]|$)`
+- **Description:** A source URL hosted on a free-hosting, dynamic-DNS or tunnelling provider. Naming one of these costs nothing and leaving it costs nothing, so a source served from here is a claim a reviewer has to judge rather than an upstream distribution channel. The list is split into dynamic DNS (`duckdns.org`, `no-ip.org`, ...), tunnels (`ngrok-free.app`, `trycloudflare.com`, ...) and free/static hosting (`pages.dev`, `github.io`, `vercel.app`, ...). The free-hosting group is the tunable one: small projects do occasionally publish release assets there, so it is the first thing to trim in `hosts.toml free_hosting_domains` if it misfires. The leading `\.` makes this a subdomain match, so `duckdns.org.evil.com` does not fire.
 
 ### R051: Network Access In pkgver {#r051}
 

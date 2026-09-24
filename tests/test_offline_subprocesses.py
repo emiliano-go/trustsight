@@ -7,6 +7,7 @@ Python children, and ``GIT_ALLOW_PROTOCOL=file`` for git.  These tests pin
 both, and that loopback still works.
 """
 
+import os
 import shutil
 import socket
 import subprocess
@@ -47,9 +48,13 @@ def test_git_subprocess_refuses_a_network_protocol(tmp_path):
     out = subprocess.run(
         ["git", "ls-remote", "https://198.51.100.7/x.git"],
         capture_output=True, text=True, cwd=tmp_path, timeout=30,
+        # Pin the locale on the child itself: the message is asserted below,
+        # so it must not depend on the builder's locale (conftest also sets
+        # LC_ALL=C, but this keeps the test self-contained).
+        env={**os.environ, "LC_ALL": "C"},
     )
     assert out.returncode != 0
-    # The message is localised, so assert git refused and said something,
-    # not the English wording: under LANG=de_DE.UTF-8 this read
-    # "übertragungsart 'https' nicht erlaubt." and the phrase match failed.
-    assert out.stderr.strip(), "git refused the transport but said nothing"
+    # Assert the refusal specifically. A plain network failure also exits
+    # non-zero with a message, so a weaker check would let the guard stop
+    # being tested in a network-less build environment.
+    assert "transport 'https' not allowed" in out.stderr

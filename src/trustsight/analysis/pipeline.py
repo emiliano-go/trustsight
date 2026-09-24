@@ -87,7 +87,7 @@ from .base import (
 from .composition import _meta_annotations
 from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
-from .structural import _structural_findings
+from .structural import _structural_findings, unchanged_upstream_host
 from .version import (
     any_version_scalar_moved,
     compare_installed_to_aur,
@@ -493,7 +493,10 @@ def analyze_package(
         record=record,
     )
 
-    source_buckets = classify_urls(source_changes.added_urls)
+    source_buckets = classify_urls(
+        source_changes.added_urls,
+        upstream_host=unchanged_upstream_host(diff_text, head_pkgbuild),
+    )
 
     resolved_strings, unresolved_strings, resolved_indices = (
         tokenize_and_resolve_indexed(diff_text)
@@ -804,7 +807,10 @@ def scan_diff(
     )
     version_moved = any_version_scalar_moved(diff_text)
 
-    source_buckets = classify_urls(source_changes.added_urls)
+    source_buckets = classify_urls(
+        source_changes.added_urls,
+        upstream_host=unchanged_upstream_host(diff_text, current_text),
+    )
 
     resolved_strings, unresolved_strings, resolved_indices = (
         tokenize_and_resolve_indexed(diff_text)

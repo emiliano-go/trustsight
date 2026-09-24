@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- A source URL on the registered domain of the package's `url=` is classified `declared_upstream` (+5) instead of `unknown` (+20), unless the same diff changes `url=`.
+
 ### Fixed
 
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.

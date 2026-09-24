@@ -607,6 +607,7 @@ INFO = 0
 [source_bucket_weights]
 trusted_forge = 0
 official = 0
+declared_upstream = 5
 raw_hosting = 15
 unknown = 20
 homograph_attack = 30

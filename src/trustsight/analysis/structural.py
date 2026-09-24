@@ -331,6 +331,20 @@ def _head_upstream_host(diff_text: str, current_text: str | None) -> str:
     return _declared_upstream_host(_head_upstream_text(diff_text, current_text))
 
 
+def unchanged_upstream_host(diff_text: str, current_text: str | None) -> str:
+    """The declared ``url=`` host, or "" when this diff adds a ``url=`` line.
+
+    A ``url=`` set in the same change as the source proves nothing about it.
+    """
+    added = "\n".join(
+        line[1:] for line in split_lines(diff_text)
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    if _URL_SCALAR_RE.search(added):
+        return ""
+    return _head_upstream_host(diff_text, current_text)
+
+
 def _fork_source_divergence(
     added: list[str],
     upstream_url: str,

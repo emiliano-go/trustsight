@@ -112,7 +112,10 @@ SHARED_RULES = [
 
 SHARED_CONFIG = {
     "severity_weights": {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5, "INFO": 0},
-    "source_bucket_weights": {"trusted_forge": 0, "official": 0, "raw_hosting": 15, "unknown": 20, "homograph_attack": 30},
+    "source_bucket_weights": {
+        "trusted_forge": 0, "official": 0, "declared_upstream": 5, "raw_hosting": 15,
+        "unknown": 20, "homograph_attack": 30,
+    },
     "novelty_weights": {"url_first_globally": 10, "url_first_in_package": 5, "maintainer_first_in_package": 15},
 }
 

@@ -160,7 +160,7 @@ Extracted by `generate_diff()` in `src/trustsight/differ.py`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `<url>` | `string` | Each added URL maps to its bucket classification: `"trusted_forge"`, `"official"`, `"raw_hosting"`, `"unknown"`, or `"homograph_attack"`. |
+| `<url>` | `string` | Each added URL maps to its bucket classification: `"trusted_forge"`, `"official"`, `"declared_upstream"`, `"raw_hosting"`, `"unknown"`, or `"homograph_attack"`. |
 
 Classified by `classify_urls()` in `src/trustsight/buckets.py`.
 

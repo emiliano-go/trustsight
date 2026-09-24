@@ -59,6 +59,7 @@ Domain reputation classification for every new source URL in the diff.
 |--------|----------|----------|
 | `trusted_forge` | 0 | github.com, gitlab.com, codeberg.org, bitbucket.org |
 | `official` | 0 | kernel.org, python.org, nginx.org, archlinux.org |
+| `declared_upstream` | +5 | Same registered domain as `url=` (e.g. downloads.example.org for example.org), `url=` unchanged |
 | `raw_hosting` | +15 | raw.githubusercontent.com, pastebin.com, gist.github.com |
 | `unknown` | +20 | Domain not in any allowlist |
 | `homograph_attack` | +30 | Domain with Cyrillic homoglyphs (e.g. githab.com) |

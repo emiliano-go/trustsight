@@ -180,7 +180,7 @@ be measured against the static corpus.
 |------|------|------|-----------|------|-------|
 | H028 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
 
-## Structural rules (C001-C012)
+## Structural rules (C001-C013)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.
 

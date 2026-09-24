@@ -33,6 +33,7 @@ severity weights and the reserved identifier ranges.
 | [C009](#c009) | Unread Content Moved With The Version | INFO |
 | [C010](#c010) | Binary Metadata File | HIGH |
 | [C011](#c011) | Prebuilt Binary From Non-Upstream Host | MEDIUM |
+| [C013](#c013) | Source Fork Diverges From Declared Upstream | MEDIUM |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -196,8 +197,27 @@ upstream. Operators can exempt a legitimate non-forge distribution CDN or
 mirror by adding its registered domain to `[source_host_divergence] allow`
 in `config.toml`; the shipped list covers projects that publish prebuilt
 binaries from their own official site while `url=` names a source
-repository. Measured against the 3,739-diff benign corpus, C011's benign
+ repository. Measured against the 3,739-diff benign corpus, C011's benign
 rate is 0.05 %.
+
+### C013: Source Fork Diverges From Declared Upstream {#c013}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `source`
+- **Condition:** The recipe's `url=` names a trusted-forge project
+  (`github.com/<owner>/<repo>`) and an added `source=` URL fetches the same
+  repository name from a **different owner on the same forge**
+  (`github.com/<other>/<repo>`).
+
+The recipe says the upstream is one project and the code comes from a fork of
+it. That is the shape of a maintainer fork, which is a legitimate `-git`
+packaging choice, so the rule names the divergence rather than asserting
+intent: a reviewer sees that the bytes built are not the ones the declared
+upstream publishes. The same repository name is required, which keeps an
+unrelated package by the same owner quiet, and a cross-forge source is
+deliberately not claimed - a mirror on another forge is common and is not
+evidence on its own. `url=` is declared by the same party under review, so the
+rule is a heuristic, not proof.
 
 ### R049: Compiler Plugin Or Loader Override {#r049}
 

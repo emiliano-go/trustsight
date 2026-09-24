@@ -146,7 +146,7 @@ match_target = "resolved"
 
 R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (97 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
 
-C-series rules (C001-C012) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
+C-series rules (C001-C013) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
 S-series sabotage rules (S001-S008) use command-position matching to distinguish build-sandbox cleanup from system damage: `rm -rf "$srcdir/x"` is housekeeping, `rm -rf /` is not.
 

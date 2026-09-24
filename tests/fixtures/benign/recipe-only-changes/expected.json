@@ -18,5 +18,9 @@
   "C012-forge-source.diff": {
     "must_fire": [],
     "max_score": 0
+  },
+  "C013-same-owner-source.diff": {
+    "must_fire": [],
+    "max_score": 0
   }
 }

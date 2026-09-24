@@ -1156,6 +1156,12 @@
       "C012"
     ]
   },
+  "C013-fork-swap.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "C013"
+    ]
+  },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
       "R001",

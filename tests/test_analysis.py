@@ -406,3 +406,37 @@ def test_c012_unknown_upstream_does_not_fire():
     assert "C012" not in _fired(
         diff, "tool", current_text='url="https://example.org/pkg"\n'
     )
+
+
+# --- C013: source fork diverges from the declared upstream ---
+
+def test_c013_fork_swap_fires():
+    diff = (
+        ' url="https://github.com/acme/tool"\n'
+        "+source=('git+https://github.com/attacker/tool.git')\n"
+    )
+    assert "C013" in _fired(diff, "tool-git")
+
+
+def test_c013_same_owner_does_not_fire():
+    assert "C013" not in _fired(
+        "+source=('git+https://github.com/acme/tool.git')\n",
+        "tool-git",
+        current_text='url="https://github.com/acme/tool"\n',
+    )
+
+
+def test_c013_different_repo_does_not_fire():
+    assert "C013" not in _fired(
+        "+source=('git+https://github.com/attacker/other.git')\n",
+        "tool-git",
+        current_text='url="https://github.com/acme/tool"\n',
+    )
+
+
+def test_c013_cross_forge_does_not_fire():
+    assert "C013" not in _fired(
+        "+source=('git+https://gitlab.com/attacker/tool.git')\n",
+        "tool-git",
+        current_text='url="https://github.com/acme/tool"\n',
+    )

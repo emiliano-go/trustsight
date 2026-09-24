@@ -215,8 +215,13 @@ _TRUSTED_SOURCE_BUCKETS = frozenset(
 )
 
 
-def _declared_upstream_host(pkgbuild_text: str | None) -> str:
-    """The host of the PKGBUILD's ``url=`` scalar, or "" when unusable."""
+def _declared_upstream_url(pkgbuild_text: str | None) -> str:
+    """The PKGBUILD's literal ``url=`` value, or "" when unusable.
+
+    A value carrying a shell variable is skipped: resolving it needs the
+    whole recipe, and a wrong upstream is worse than no upstream for C011
+    and C013.
+    """
     if not pkgbuild_text:
         return ""
     match = _URL_SCALAR_RE.search(pkgbuild_text)
@@ -225,7 +230,34 @@ def _declared_upstream_host(pkgbuild_text: str | None) -> str:
     value = match.group(1)
     if "$" in value or "{" in value:
         return ""
-    return _url_domain(value)
+    return value
+
+
+def _declared_upstream_host(pkgbuild_text: str | None) -> str:
+    """The host of the PKGBUILD's ``url=`` scalar, or "" when unusable."""
+    return _url_domain(_declared_upstream_url(pkgbuild_text))
+
+
+def _forge_owner_repo(url: str) -> tuple[str, str, str] | None:
+    """``(registered_forge, owner, repo)`` for a trusted-forge URL, else None."""
+    from urllib.parse import urlparse
+
+    from ..buckets import canonical_host, classify_url
+
+    bucket, _ = classify_url(url)
+    if bucket != "trusted_forge":
+        return None
+    parsed = urlparse(url)
+    forge = _registered_domain(canonical_host(parsed.netloc))
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) < 2:
+        return None
+    owner = parts[0].lower()
+    repo = parts[1][:-4] if parts[1].endswith(".git") else parts[1]
+    repo = repo.lower()
+    if not owner or not repo:
+        return None
+    return forge, owner, repo
 
 
 def _registered_domain(host: str) -> str:
@@ -282,17 +314,47 @@ def _prebuilt_host_divergence(
     return None
 
 
-def _head_upstream_host(diff_text: str, current_text: str | None) -> str:
-    """The declared ``url=`` host, from the head PKGBUILD when available.
+def _head_upstream_text(diff_text: str, current_text: str | None) -> str:
+    """The head PKGBUILD when available, else the post-diff lines.
 
     The git and corpus paths supply the full head file; a caller that gives
-    only a diff (the fixture gates) still sees the scalar when it sits in a
-    hunk's context.
+    only a diff (the fixture gates) still sees the ``url=`` scalar when it
+    sits in a hunk's context.
     """
-    text = current_text
-    if text is None:
-        text = "\n".join(_post_diff_lines(diff_text))
-    return _declared_upstream_host(text)
+    if current_text is not None:
+        return current_text
+    return "\n".join(_post_diff_lines(diff_text))
+
+
+def _head_upstream_host(diff_text: str, current_text: str | None) -> str:
+    """The declared ``url=`` host, from the head PKGBUILD when available."""
+    return _declared_upstream_host(_head_upstream_text(diff_text, current_text))
+
+
+def _fork_source_divergence(
+    added: list[str],
+    upstream_url: str,
+) -> tuple[str, str, str, str, str] | None:
+    """Return ``(url, forge, source_owner, repo, upstream_owner)`` for C013.
+
+    Same forge, same repository name, different owner: the recipe names one
+    project as its upstream and fetches the code from a fork of it.  A
+    cross-forge source is deliberately not claimed here - a mirror on another
+    forge is common and is not evidence on its own.
+    """
+    upstream = _forge_owner_repo(upstream_url)
+    if upstream is None:
+        return None
+    up_forge, up_owner, up_repo = upstream
+    for url in added:
+        source = _forge_owner_repo(url)
+        if source is None:
+            continue
+        src_forge, src_owner, src_repo = source
+        if src_forge != up_forge or src_repo != up_repo or src_owner == up_owner:
+            continue
+        return url, src_forge, src_owner, src_repo, up_owner
+    return None
 
 
 def _upstream_domain_typosquat(
@@ -499,6 +561,26 @@ def _structural_findings(
                     line=find_line_in_diff(diff_text, re.escape(url[:80])),
                     url=url, source_host=source_reg, upstream_host=upstream_reg,
                     distance=distance)
+
+    # C013 - the recipe declares one project as its upstream and fetches the
+    # code from a same-named fork under a different owner on the same forge.
+    # `-git` packages that build a maintainer's fork hit this, so it names the
+    # divergence rather than asserting intent.
+    if added:
+        upstream_url = _declared_upstream_url(
+            _head_upstream_text(diff_text, current_text)
+        )
+        if upstream_url:
+            fork = _fork_source_divergence(added, upstream_url)
+            if fork is not None:
+                url, forge, src_owner, repo, up_owner = fork
+                add("C013", "Source Fork Diverges From Declared Upstream", "MEDIUM",
+                    "source",
+                    f"source is {forge}/{src_owner}/{repo}, upstream declares "
+                    f"{forge}/{up_owner}/{repo}",
+                    line=find_line_in_diff(diff_text, re.escape(url[:80])),
+                    url=url, forge=forge, source_owner=src_owner,
+                    repo=repo, upstream_owner=up_owner)
 
     if source_array_has_command_substitution(diff_text):
         add("C007", "Command Substitution In Source Array", "CRITICAL", "execution",

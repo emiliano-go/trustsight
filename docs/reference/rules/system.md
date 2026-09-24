@@ -86,7 +86,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H097, S001-S008, X001-X025, C001-C012, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H097, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -354,6 +354,10 @@ See [C011: Prebuilt Binary From Non-Upstream Host](integrity.md#c011).
 ### C012 {#c012}
 
 See [C012: Source Domain Resembles Declared Upstream](deception.md#c012).
+
+### C013 {#c013}
+
+See [C013: Source Fork Diverges From Declared Upstream](integrity.md#c013).
 
 ### C005 {#c005}
 

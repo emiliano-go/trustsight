@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `inspect --whole` analyses the whole recipe, not only the changes since the last review.
+
 ### Fixed
 
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.

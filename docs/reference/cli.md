@@ -124,6 +124,7 @@ trustsight inspect <package>
 | `--allow-uninstalled` | Analyse a package that is not in the local pacman set. The name is resolved against the AUR and cloned. Without this flag, `inspect` refuses a name not present locally. |
 | `--last N` | Analyse the N most recent content-bearing commits as N separate results, newest first. `N >= 1` and `N <= 50`. Commits whose diff is empty after filtering (`.SRCINFO`- and `.gitignore`-only regenerations) are skipped and do not count toward N. Combined with `--depth > 0` is refused in this version. |
 | `--record` | Persist observations and analysis history. Runs are read-only by default, so nothing is written unless this flag is passed. |
+| `--whole` | Analyse the whole recipe against an empty base, as if every file had just been added, instead of the changes since the last review. For a first look at a package or before installing one. Combined with `--last` is refused. |
 
 ### Output
 

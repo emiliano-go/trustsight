@@ -183,9 +183,9 @@ def generate_diff_bounded(
     does not read it leaves nothing unexamined; dropping a ``.install``
     because a cap was reached does. Only the second sets the flag.
     """
-    old_commit = repo.get(old_oid)
+    old_commit = repo.get(old_oid) if old_oid else None
     new_commit = repo.get(new_oid)
-    if old_commit is None or new_commit is None:
+    if (old_oid and old_commit is None) or new_commit is None:
         return "", DiffSummary(), False
 
     if max_bytes is None:
@@ -194,7 +194,11 @@ def generate_diff_bounded(
         raise ValueError("max_bytes must be a positive integer")
     max_bytes = min(max_bytes, MAX_GENERATED_DIFF_BYTES)
 
-    diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
+    if old_commit is None:
+        # No base: the whole recipe, as if every file had just been added.
+        diff = new_commit.tree.diff_to_tree(context_lines=context_lines, swap=True)
+    else:
+        diff = repo.diff(old_commit.tree, new_commit.tree, context_lines=context_lines)
 
     filtered_patches: list[str] = []
     generated_bytes = 0

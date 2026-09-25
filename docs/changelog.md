@@ -32,6 +32,7 @@
 ### Changed
 
 - The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
+- The seeded fire-rate tables in [Measured fire rates](reference/rules/system.md#experimental-fire-rates) and [Fire Rates](explanation/fire-rates.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
 
 ### Fixed
 

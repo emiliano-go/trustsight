@@ -517,7 +517,7 @@ See [H016: Hidden Network Fetch In Build](fetch-and-execution.md#h016).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below were measured against the 3,739-diff benign corpus with a 209,909-name dependency corpus. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
+The detailed rows below were measured against the 3,739-diff benign corpus with the published 215,504-name dependency corpus (`baseline-2026-09-24`). They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -525,7 +525,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 
 | Rule | Severity | Fires | Rate | Read |
 |------|----------|-------|------|------|
-| D004 | HIGH | 0 | 0.00 % | No false positive across the 2084 corpus diffs that declare `provides`/`replaces`. |
+| D004 | HIGH | 2 | 0.05 % | Across the 2084 corpus diffs that declare `provides`/`replaces`, `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`; both name an established package they are unrelated to, which is the shape the rule describes. |
 | H017 | HIGH | 4 | 0.12 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
 | H018 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
 | H019 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
@@ -537,11 +537,11 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H025 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
 | H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
 | H027 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
-| H029 | HIGH | 2/202 pkgs | 1.12 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
-| H030 | MEDIUM | 11 | 0.34 % | Measured with seeded DB (209,909-name seed). Well under the 30% gate. |
-| D001 | HIGH | 5 | 0.15 % | Comfortably low for HIGH. All five are real package names that simply nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
+| H029 | HIGH | 2/202 pkgs | 0.99 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
+| H030 | MEDIUM | 5 | 0.13 % | Measured with the published seed. Well under the 30% gate. |
+| D001 | HIGH | 10 | 0.27 % | Comfortably low for HIGH. The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
-| D003 | MEDIUM | 15 | 0.46 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
+| D003 | MEDIUM | 18 | 0.48 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
 | H015 | INFO | 694 | **21.4 %** | Why it is INFO. No narrowing reaches triage quality (`pkgver` unchanged still leaves 11.6 %, a bump that also edits `build()` is 9.8 %), so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
 | H016 | HIGH | 7 | 0.22 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
 | H031 | MEDIUM | 0 | 0.00 % | Needs both an unsafe literal version and its interpolation into a source URL. |
@@ -569,7 +569,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H078 | HIGH/MED/INFO | 6 | 0.18 % | Two introductions and four upstream key rotations. |
 | H079 | HIGH/MED | 3 | 0.09 % | One wine package that genuinely disables FORTIFY_SOURCE. |
 
-Getting D001 from 5.95 % to 0.15 % took two extractor fixes, both found by this measurement rather than by review:
+Getting D001 from 5.95 % to 0.15 % at the time of the fix took two extractor fixes, both found by this measurement rather than by review:
 
 - An unbounded fallback for unquoted array entries read shell fragments (`if`, `[[`, `!`) out of a `package()` body as dependency names.
 - Comments inside dependency arrays contributed every word of the note (`required`, `because`, `disabled`).

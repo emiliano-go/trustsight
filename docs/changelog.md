@@ -29,6 +29,10 @@
 
 - `status` explains what a missing dependency corpus costs and points to the seed-provenance page; `seed fetch` reports the maintainer, source-URL and dependency-name counts and warns when the seed carries only maintainers. The seed build steps show the `--source-urls`/`--dependencies` hand-off, and Quickstart answers whether to build the dependency corpus, and how often.
 
+### Changed
+
+- The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
+
 ### Fixed
 
 - C004 no longer fires without a checksum being removed. The checksum parser now compares the hashes an array held on each side of the diff, scopes an array to its own file, and ignores `.SRCINFO`'s scalar `*sums = <hash>` lines, so a dropped `.SRCINFO` blank line, a tab-to-space re-indentation, or a replaced hash that spans two hunks is no longer reported as a CRITICAL entry removal.

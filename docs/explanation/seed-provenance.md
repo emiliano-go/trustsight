@@ -15,7 +15,7 @@ imported into the user's database on first run (or manually with
 `trustsight-seed-v2/` directory of salted SHA-256 hashes rather than a SQLite
 file of plaintext values. Its three kinds of prior knowledge are:
 
-- **source URLs** (179,956, normalised), with first-seen timestamps
+- **source URLs** (185,902, normalised), with first-seen timestamps
   and use counts;
 - **hashed maintainers**: salted hashes of maintainer *names* only, with
   package counts and first-seen timestamps, so no plaintext identity leaves
@@ -23,8 +23,13 @@ file of plaintext values. Its three kinds of prior knowledge are:
   v3 dropped the email hash and the per-maintainer package list: the salt is
   public, so a salted hash of a guessed address is trivially confirmed and a
   package list re-identifies the person even when the hash does not;
-- **dependency names**: 209,909 dependency names, package names and `provides`
+- **dependency names**: 215,504 dependency names, package names and `provides`
   aliases, with observation counts.
+
+The figures above are the counts in the published `baseline-2026-09-24` seed
+(36,912 hashed maintainers). They grow with each rebuild; the shipped
+`seed_meta.json` and `seed-provenance.json` inside the archive record the
+exact numbers for a given seed.
 
 It exists because a cold database makes novelty meaningless: with an empty
 `source_urls` table every URL, including github.com, is globally novel, and

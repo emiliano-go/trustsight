@@ -72,9 +72,9 @@ The interaction is additive, not multiplicative. Each signal contributes indepen
 ## The seed database
 
 A cold database is not the usual state. TrustSight fetches and imports a
-verified novelty seed on first run. The seed records 179,956 normalized
-source URLs, about 35,903 maintainers, and 209,909 dependency names, plus a bootstrap
-observation count. Maturity uses the greater of that seed count and the local
+verified novelty seed on first run. The current published seed records 185,902
+normalized source URLs, 36,912 maintainers, and 215,504 dependency names, plus a
+bootstrap observation count. Maturity uses the greater of that seed count and the local
 analysis count, not a per-package count. See [`trustsight seed-db`](../reference/cli.md#trustsight-seed-db).
 
 Measured against the AUR mirror, the seed recognises **86%** of the source URLs in a package's most recent update. That figure falls off for older updates (62% mid-history, 20% for the oldest commit in a 30-commit window) because the seed is a snapshot of current `.SRCINFO` state, and historical versions used paths that no longer exist. Since a review always concerns the newest update, 86% is the number that matters in practice; corpus replays over deep history understate it.

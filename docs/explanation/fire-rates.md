@@ -65,12 +65,12 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 |---------|-------|
 | benign corpus size | 3,739 diffs |
 | benign median | 0 |
-| benign 95th percentile | 35 |
-| benign diffs scoring 0 | 68.4% |
-| benign diffs above the 20-point threshold | 11.9% |
-| percentile at which 20 sits | 88.1th |
+| benign 95th percentile | 30 |
+| benign diffs scoring 0 | 70.3% |
+| benign diffs above the 20-point threshold | 7.9% |
+| percentile at which 20 sits | 92.1th |
 | malicious 5th percentile | 60 |
-| malicious minimum | 40 |
+| malicious minimum | 50 |
 
 These are a **point-in-time measurement**, taken after
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited) removed
@@ -80,8 +80,8 @@ malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
 in the same commit.
 
-The 11.9% threshold rate is the practical workload figure: on this locked
-benign corpus, about **1 in 8** updates would be flagged for review. It is more
+The 7.9% threshold rate is the practical workload figure: on this locked
+benign corpus, about **1 in 13** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.
 

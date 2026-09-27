@@ -41,7 +41,7 @@ jobs:
       # module parametrizes over its diffs), so it is checked here rather
       # than in the matrix job, which has no corpus to build.
       - name: Verify the published figures
-        run: uv run pytest tests/test_published_figures.py -q
+        run: uv run --extra dev pytest tests/test_published_figures.py -q
 
       - name: Upload gate results
         if: always()

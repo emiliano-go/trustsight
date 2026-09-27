@@ -286,6 +286,56 @@ def gate_separation(benign: list[dict], malicious: list[dict]) -> Gate:
     )
 
 
+def gate_published_figures(benign: list[dict], malicious: list[dict]) -> Gate:
+    """The published distribution equals the one this scan measures.
+
+    The docs and the site quote these figures, so a scoring change that
+    moves the distribution has to move them in the same commit.  The table
+    is not a threshold the gate sets: it is the published record, and this
+    gate is what keeps the record from outliving the measurement.
+    """
+    published = json.loads(
+        (FIXTURES / "published-figures.json").read_text()
+    )["calibration"]
+    n = len(benign)
+    scores = sorted(r["score"] for r in benign)
+    benign_p95 = percentile(scores, 0.95)
+    critical = sorted(r["score"] for r in malicious if _is_attack_fixture(r))
+    malicious_p5 = percentile(critical, 0.05)
+    measured = {
+        "corpus_diffs": n,
+        "benign_zero_rate_pct": round(
+            sum(1 for s in scores if s == 0) / n * 100, 1),
+        "benign_p95": benign_p95,
+        "malicious_p5": malicious_p5,
+        "malicious_minimum": critical[0] if critical else 0,
+        "benign_above_threshold_pct": round(
+            sum(1 for s in scores if s > 20) / n * 100, 1),
+        "threshold_percentile": round(
+            sum(1 for s in scores if s <= 20) / n * 100, 1),
+        "separation_margin": malicious_p5 - benign_p95,
+        "ruleset_trigger_rate_pct": round(
+            sum(1 for r in benign
+                if any(e["severity"] != "INFO" for e in r["entries"])) / n * 100,
+            1,
+        ),
+    }
+    mismatch = {
+        key: {"measured": measured[key], "published": published.get(key)}
+        for key in measured
+        if key in published and measured[key] != published[key]
+    }
+    return Gate(
+        "published figures match the measurement",
+        not mismatch, measured,
+        {key: published.get(key) for key in measured},
+        "" if not mismatch else (
+            "update docs and tests/fixtures/published-figures.json: "
+            f"{mismatch}"
+        ),
+    )
+
+
 def gate_score_not_size(benign: list[dict]) -> Gate:
     """`|pearson(score, diff_lines)| < 0.30` - a big diff is not a bad one."""
     r = pearson([x["score"] for x in benign], [x["lines"] for x in benign])
@@ -465,7 +515,14 @@ def run_gates(corpus: Path = FIXTURES / "benign-corpus",
     with shipped_config():
         benign = scan_corpus(corpus, sample=sample)
         malicious = scan_malicious(malicious_root) if malicious_root.exists() else []
-        return _evaluate(benign, malicious)
+        gates = _evaluate(benign, malicious)
+        # The published distribution can only be compared against a whole
+        # corpus: a sample moves every percentile.  `_evaluate` stays the
+        # ten plan gates the sampled test run checks; this one rides the CI
+        # job, which replays the corpus whole.
+        if sample == 1:
+            gates.append(gate_published_figures(benign, malicious))
+        return gates
 
 
 def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:

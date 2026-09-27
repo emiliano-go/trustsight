@@ -331,6 +331,41 @@ def test_a_suppression_reaches_every_surface():
         assert SUPPRESSED in out, f"{name} does not show the suppressed rule"
 
 
+@pytest.mark.parametrize("status", ["no_aur_change", "first_seen", "trivial"])
+def test_a_status_line_never_swallows_a_finding(status):
+    """Reported from a real `review --deps` table.
+
+    A dependency whose AUR commit had not moved read `No changes in the AUR
+    since last review` and showed no findings, while the same dependency as
+    a card under a plain `review` showed them. The findings - H029
+    typosquat, H003, SOURCE_BUCKET, NOVELTY - come from the head recipe and
+    the database, not the diff, so an unchanged recipe does not mean nothing
+    fired. The status describes the *diff*; it is not a claim that the
+    finding list is empty.
+    """
+    fact = _fact()
+    # No files changed, so evaluate_fact marks the update trivial.
+    fact.diff_summary = DiffSummary(
+        lines_added=0, lines_removed=0, files_changed=[], file_changes=[])
+    row = _row(fact)
+    assert row["is_trivial"] is True
+
+    if status == "no_aur_change":
+        row["aur_note"] = (
+            "No changes in the AUR since last review (commit deadbeef).")
+    elif status == "first_seen":
+        row["first_seen"] = True
+    # "trivial" is the row as-is: no aur_note, not first_seen, is_trivial.
+
+    rich = _rich(lambda: review_cli._render_results_rich(
+        [row], 1, False, False, False, False))
+    plain = _plain(lambda: review_cli._render_results_plain(
+        [row], 1, False, False, False, False))
+
+    for name, out in (("review rich", rich), ("review plain", plain)):
+        assert REASON in out, f"{name} hid the finding behind the {status} status"
+
+
 # ---------------------------------------------------------------------------
 # The score is on request everywhere, by default nowhere.
 # ---------------------------------------------------------------------------

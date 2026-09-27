@@ -402,20 +402,28 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         file_changes = r.get("file_changes", [])
         is_trivial = r.get("is_trivial", False)
 
-        if r.get("first_seen"):
+        if r.get("aur_note"):
+            typer.echo(f"  {clean(r['aur_note'])}")
+        elif r.get("first_seen"):
             typer.echo("  First analysis. No prior history for this package.")
         elif is_trivial:
             typer.echo("  Only pkgver and sha256sums changed. Review the diff before building.")
         else:
             typer.echo("  The update is not trivial. Review it.")
-            for f in findings:
-                typer.echo(f"  {_finding_line(f)}")
-            if file_changes:
-                for fc in file_changes:
-                    status = fc.get("status", "")
-                    path = fc.get("path", "")
-                    prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
-                    typer.echo(f"  {prefix} {clean(path)}")
+
+        # Findings and files changed are sections of their own, not clauses of
+        # the status: the status describes the diff, and a package whose
+        # commit has not moved still fires non-diff findings (H029, H003,
+        # SOURCE_BUCKET, NOVELTY). Both renderers show them so the status
+        # cannot read as "nothing was found".
+        for f in findings:
+            typer.echo(f"  {_finding_line(f)}")
+        if file_changes:
+            for fc in file_changes:
+                status = fc.get("status", "")
+                path = fc.get("path", "")
+                prefix = {"added": "+", "removed": "-", "modified": "~"}.get(status, " ")
+                typer.echo(f"  {prefix} {clean(path)}")
 
         if show_score and not r.get("failed"):
             risk = r.get("risk_label") or r.get("risk", "")
@@ -503,15 +511,24 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             table.add_row("Status", "Only pkgver and sha256sums changed. Review the diff before building.")
         else:
             table.add_row("Status", "The update is not trivial. Review it.")
-            for f in r.get("findings", []):
-                # The description already ends with `[R001]` - `verdict._render`
-                # puts it there, and the JSON body and the plain renderer both
-                # carry it that way. Adding a second copy in front printed
-                # every finding as
-                #   `PKGBUILD line 4 [R001]  Remote Script Execution: ... [R001]`
-                # and made this renderer disagree with the plain one about the
-                # same finding.
-                table.add_row("", Text(clean(_finding_line(f))))
+
+        # Findings are rendered independently of that status line. The
+        # no-change and trivial branches describe the *diff*; a finding they
+        # would not show is still a finding. H029 (name typosquat), H003,
+        # SOURCE_BUCKET and NOVELTY are computed from the head recipe and the
+        # database, so a package whose commit has not moved still fires them -
+        # and the dependency card and `inspect` have always printed them.
+        # Nesting this loop in the `else` made the status a claim that nothing
+        # was found, which is not what the status says.
+        for f in r.get("findings", []):
+            # The description already ends with `[R001]` - `verdict._render`
+            # puts it there, and the JSON body and the plain renderer both
+            # carry it that way. Adding a second copy in front printed
+            # every finding as
+            #   `PKGBUILD line 4 [R001]  Remote Script Execution: ... [R001]`
+            # and made this renderer disagree with the plain one about the
+            # same finding.
+            table.add_row("", Text(clean(_finding_line(f))))
 
         file_changes = r.get("file_changes", [])
         if file_changes:

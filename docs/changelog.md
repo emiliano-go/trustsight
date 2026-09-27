@@ -45,6 +45,7 @@
 - The AUR `pkgdesc` is trimmed to the 80-character packaging guideline. The previous text was 131 characters and wrapped in package browsers.
 - `packaging/local`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
 - The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.
+- `review` and `review --deps` no longer hide a package's findings behind its status line. The `No changes in the AUR since last review` and trivial-update statuses describe the *diff*, but findings such as H029 (name typosquat), H003, `SOURCE_BUCKET` and `NOVELTY` are computed from the head recipe and the database, so an unchanged commit still fires them. They are now rendered after the status on both the Rich and plain renderers, matching the dependency card and `inspect`.
 
 ## [0.16.1] - 2026-09-23
 

@@ -14,13 +14,21 @@ import hashlib
 import json
 import sys
 from collections import Counter, defaultdict
+from datetime import date
 from pathlib import Path
 
 from trustsight.analysis import scan_diff
-from trustsight.config import load_config, ensure_default_configs
+from trustsight.config import load_config
 from trustsight.rules import load_rules
 
 FIXTURES = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
+
+
+def _pipeline_version() -> str:
+    """The trustsight version this baseline was measured with."""
+    from trustsight import __version__
+
+    return __version__
 
 
 def _corpus_content_hash(corpus_dir: Path) -> str:
@@ -94,9 +102,11 @@ def main():
         print(f"Corpus not found: {args.corpus}", file=sys.stderr)
         sys.exit(1)
 
-    ensure_default_configs()
-    config = load_config()
-    rules = load_rules()
+    # The shipped config, not the machine's: `rules.toml` is written once at
+    # install time and then drifts, so measuring against it makes the numbers
+    # unreproducible.  This is the same isolation the calibration gates use,
+    # so the rates this records are the rates they enforce.
+    from calibration_gates import shipped_config
 
     strata_lookup = {}
     chain_index: dict[str, list[str]] = {}
@@ -114,36 +124,39 @@ def main():
         pkg = diff_file.name.split("__")[0]
         pkg_diffs.setdefault(pkg, []).append(diff_file)
 
-    seen_urls: dict[str, set[str]] = {}
-    observations = 0
     fallbacks = 0
-    for pkg, diff_files in pkg_diffs.items():
-        if args.order == "chain":
-            ordered, ok = _order_by_chain(diff_files, chain_index.get(pkg, []))
-            fallbacks += not ok
-            diff_files = ordered
-        else:
-            diff_files.sort(key=lambda p: p.stem)
-        for diff_file in diff_files:
-            stratum = strata_lookup.get(pkg, "unknown")
-            fact = scan_diff(diff_file.read_text(), rules=rules, config=config,
-                             package_name=pkg, seen_urls=seen_urls,
-                             observation_count=observations if args.warm else 0)
-            observations += 1
-            per_stratum[stratum]["diffs"] += 1
-            per_stratum[stratum]["pkgs"].add(pkg)
-            per_stratum[stratum]["scores"].append(fact.final_score)
-            for entry in fact.score_breakdown:
-                if entry.rule_id in ("SOURCE_BUCKET", "NOVELTY"):
-                    key = f"{entry.rule_id}/{entry.weight}"
-                else:
-                    key = entry.rule_id
-                per_stratum[stratum]["rules"][key] += 1
+    with shipped_config():
+        config = load_config()
+        rules = load_rules()
+        seen_urls: dict[str, set[str]] = {}
+        observations = 0
+        for pkg, diff_files in pkg_diffs.items():
+            if args.order == "chain":
+                ordered, ok = _order_by_chain(diff_files, chain_index.get(pkg, []))
+                fallbacks += not ok
+                diff_files = ordered
+            else:
+                diff_files.sort(key=lambda p: p.stem)
+            for diff_file in diff_files:
+                stratum = strata_lookup.get(pkg, "unknown")
+                fact = scan_diff(diff_file.read_text(), rules=rules, config=config,
+                                 package_name=pkg, seen_urls=seen_urls,
+                                 observation_count=observations if args.warm else 0)
+                observations += 1
+                per_stratum[stratum]["diffs"] += 1
+                per_stratum[stratum]["pkgs"].add(pkg)
+                per_stratum[stratum]["scores"].append(fact.final_score)
+                for entry in fact.score_breakdown:
+                    if entry.rule_id in ("SOURCE_BUCKET", "NOVELTY"):
+                        key = f"{entry.rule_id}/{entry.weight}"
+                    else:
+                        key = entry.rule_id
+                    per_stratum[stratum]["rules"][key] += 1
 
     baseline = {
-        "generated": "2026-07-16",
+        "generated": date.today().isoformat(),
         "corpus_content_sha256": _corpus_content_hash(args.corpus),
-        "pipeline_version": "0.3.0",
+        "pipeline_version": _pipeline_version(),
         "strata": {},
     }
 

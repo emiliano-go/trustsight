@@ -78,7 +78,9 @@ the verification credits. They are not recomputed on every push: the calibration
 gates assert only the property that matters for separation, `benign_p95 <
 malicious_p5`, and print those two numbers. Re-derive the rest with
 `python scripts/rebaseline.py` after any scoring change, and update this table
-in the same commit.
+in the same commit. `rebaseline.py` scans under the shipped config, the same
+isolation the gates use, so its distribution figures and the gate's separation
+numbers come from one basis.
 
 The 7.9% threshold rate is the practical workload figure: on this locked
 benign corpus, about **1 in 13** updates would be flagged for review. It is more

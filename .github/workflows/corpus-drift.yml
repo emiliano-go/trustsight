@@ -51,9 +51,18 @@ jobs:
           import json, os, subprocess
           from pathlib import Path
 
+          # `generated` and `pipeline_version` describe when and with what
+          # the file was written, not what it measures.  A monthly rebuild
+          # necessarily restamps them, so comparing them would file a drift
+          # issue every month regardless of the fire rates.
+          IGNORED = ("generated", "pipeline_version")
+
           def norm(p):
-              return json.dumps(json.loads(Path(p).read_text()),
-                                sort_keys=True, indent=2).splitlines(keepends=True)
+              data = json.loads(Path(p).read_text())
+              for key in IGNORED:
+                  data.pop(key, None)
+              return json.dumps(data, sort_keys=True,
+                                indent=2).splitlines(keepends=True)
 
           import difflib
           delta = "".join(difflib.unified_diff(

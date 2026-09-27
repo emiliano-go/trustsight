@@ -41,7 +41,7 @@ The script:
 
 1. Reads every `*.diff` under `--corpus`, grouping by package.
 2. Replays each package's diffs in true commit order, following the `old_sha -> new_sha` chain in the lock (`--order filename` restores the legacy SHA-hex sort). Order matters because novelty detection is order-dependent.
-3. Runs the full analysis pipeline on each diff.
+3. Runs the full analysis pipeline on each diff, under the **shipped** config (the `shipped_config()` isolation the calibration gates use) rather than the machine's `rules.toml`, so the baseline is reproducible and comparable to the enforced numbers.
 4. Computes per-**stratum** statistics, where a stratum is a package *shape* (`bin_repack`, `vcs_git`, `lang_ecosystem`, `data_fonts`, `dkms_kernel`, `source_patched`, `autotools`, `large_electron`) as assigned by the lock:
    - `n_diffs`, `n_pkgs`
    - `p95` score

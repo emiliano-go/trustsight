@@ -386,13 +386,14 @@ def register_commands(app: typer.Typer):
             raise typer.Exit(code=2)
         if watch:
             if export or sign or bootstrap or resume:
-                typer.secho(
-                    "--export/--sign describe a single artifact, and "
-                    "--bootstrap/--resume a single cycle; run them "
-                    "without --watch.",
-                    fg=typer.colors.RED,
-                )
-                raise typer.Exit(2)
+                msg = ("--export/--sign describe a single artifact, and "
+                       "--bootstrap/--resume a single cycle; run them "
+                       "without --watch.")
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
             if cycles < 0:
                 msg = "--cycles must be 0 (until interrupted) or a positive count"
                 if json_output:

@@ -134,7 +134,13 @@ def config_sync_rules(
     nothing_to_do = not missing and not outdated and not drift
 
     if json_output:
-        added, updated = sync_rules(update_outdated=update)
+        if full:
+            # --full must hold under --json as well: overwrite every rule
+            # block with the shipped version, as the plain branch does.
+            _overwrite_with_shipped(target)
+            added, updated, drift = [], [], []
+        else:
+            added, updated = sync_rules(update_outdated=update)
         typer.echo(json.dumps({
             "target": str(target),
             "added": added,
@@ -157,12 +163,7 @@ def config_sync_rules(
     if update or full:
         if full:
             # Full overwrite: rewrite every rule block with the shipped version.
-            from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
-            blocks = _rule_blocks(DEFAULT_RULES)
-            text = Path(target).read_text().rstrip() + "\n"
-            for rid, block in blocks.items():
-                text = _replace_rule_block(text, rid, block) if rid in _current_rules(text) else text + "\n" + block
-            Path(target).write_text(text)
+            _overwrite_with_shipped(target)
             _print_sync_result("Full sync complete", [], [])
         else:
             added, updated = sync_rules(update_outdated=True)
@@ -177,6 +178,16 @@ def _current_rules(text: str) -> set[str]:
     """Rule ids present in a rules.toml text."""
     import re
     return {m.group(1) for m in re.finditer(r'^id\s*=\s*["\']([^"\']+)["\']', text, re.MULTILINE)}
+
+
+def _overwrite_with_shipped(target: Path):
+    """Rewrite every rule block in *target* with the shipped version."""
+    from ..config import _rule_blocks, _replace_rule_block, DEFAULT_RULES
+    blocks = _rule_blocks(DEFAULT_RULES)
+    text = target.read_text().rstrip() + "\n"
+    for rid, block in blocks.items():
+        text = _replace_rule_block(text, rid, block) if rid in _current_rules(text) else text + "\n" + block
+    target.write_text(text)
 
 
 def _print_sync_result(title: str, added: list[str], updated: list[str], drift: list[tuple] | None = None):

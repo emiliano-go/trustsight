@@ -42,12 +42,14 @@ def pivot_cmd(
     from ..full_aur.pivot import pivot
     from ..iocs import IOC_TYPES
 
-    if type_ is not None and type_ not in IOC_TYPES:
+    if type_ is not None and type_.lower() not in IOC_TYPES:
         _print_colored(
             f"unknown indicator type {type_!r}; expected one of "
             f"{', '.join(sorted(IOC_TYPES))}", "red",
         )
         raise typer.Exit(code=2)
+    # IOC_TYPES is lowercase; accept any casing, as `ioc list` does.
+    type_ = type_.lower() if type_ is not None else None
 
     result = pivot(indicator, type=type_)
 

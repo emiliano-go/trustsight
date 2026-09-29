@@ -379,6 +379,40 @@ def test_sync_without_update_leaves_superseded_pattern(tmp_path, monkeypatch):
     assert r013["pattern"] == legacy
 
 
+def test_sync_rules_full_is_honoured_under_json(tmp_path, monkeypatch):
+    """`config sync-rules --full --json` silently ignored --full: the JSON
+    branch ran only the additive sync, so a customised rule survived a
+    command documented to overwrite it, under a success report."""
+    import json
+
+    from typer.testing import CliRunner
+
+    import trustsight.cli.config as cli_config
+    import trustsight.config as cfg
+    from trustsight.cli.app import app
+
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(cfg, "CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr(cli_config, "CONFIG_DIR", tmp_path / ".config")
+    cfg.ensure_default_configs()
+
+    rules_path = tmp_path / ".config" / "rules.toml"
+    text = rules_path.read_text()
+    # A cosmetic user edit: `name` is not a semantic field, so neither the
+    # additive sync nor drift detection would ever overwrite it.
+    edited = text.replace('name = ', 'name = "USER EDITED" # ', 1)
+    assert edited != text
+    rules_path.write_text(edited)
+
+    result = CliRunner().invoke(app, ["config", "sync-rules", "--full", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["drift"] == []
+    assert "USER EDITED" not in rules_path.read_text()
+
+
 # --- parsed-TOML cache ---
 
 def test_load_toml_picks_up_an_edit_on_disk(tmp_path, monkeypatch):
@@ -556,3 +590,21 @@ def test_shared_config_covers_every_bucket_the_tool_ships():
     fixture = SHARED_CONFIG["source_bucket_weights"]
     missing = sorted(set(shipped) - set(fixture))
     assert not missing, f"buckets never exercised by the shared fixture: {missing}"
+
+
+def test_load_overrides_tolerates_a_latin1_file(tmp_path, monkeypatch):
+    """A hand-edited overrides.json saved in a non-UTF-8 encoding loads as
+    empty rather than crashing every analysis with UnicodeDecodeError.
+
+    The loader already tolerates invalid JSON and unreadable files; the
+    decode step above json.loads raised through filter_triggered_rules,
+    which runs inside every analysis.
+    """
+    from trustsight import override as override_mod
+
+    path = tmp_path / "overrides.json"
+    path.write_bytes(
+        '{"overrides": [{"rule_id": "H001", "reason": "déjà vu"}]}'.encode("latin-1")
+    )
+    monkeypatch.setattr(override_mod, "OVERRIDES_PATH", path)
+    assert override_mod.load_overrides() == []

@@ -551,6 +551,21 @@ def test_pivot_cli_rejects_an_unknown_type(isolated_cli):
     assert "unknown indicator type" in result.output
 
 
+def test_pivot_cli_type_accepts_any_casing(isolated_cli):
+    """IOC_TYPES is lowercase and `ioc list` lowercases before validating;
+    `corpus pivot` compared the raw string, so `--type Domain` worked in one
+    command and exited 2 in the other."""
+    import json
+
+    result = _run("corpus", "pivot", "malware.example", "--type", "Domain")
+    assert result.exit_code == 0
+    assert "No corpus data searched" in result.output
+
+    result = _run("corpus", "pivot", "malware.example", "--type", "DOMAIN", "--json")
+    assert result.exit_code == 0
+    assert json.loads(result.output)["type"] == "domain"
+
+
 def test_pivot_rejects_an_unusable_value(corpus_db):
     from trustsight.full_aur.pivot import pivot
 

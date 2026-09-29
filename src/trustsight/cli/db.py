@@ -72,7 +72,12 @@ def db_vacuum(
     from ..db import get_connection
 
     if not force and not json_output:
-        typer.confirm("Vacuum the database? This may take a while.", abort=True)
+        # Not abort=True: that exits 1, a code the exit-code contract does
+        # not define. A declined confirmation is an operational abort, so
+        # it exits 2 like every other CLI abort path.
+        if not typer.confirm("Vacuum the database? This may take a while."):
+            typer.echo("Aborted.")
+            raise typer.Exit(code=2)
 
     with get_connection() as conn:
         before = get_db_path().stat().st_size
@@ -111,7 +116,10 @@ def db_backup(
         output = str(db_path) + f".{ts}.bak"
 
     out_path = Path(output)
-    if out_path.exists() and db_path != out_path and out_path.samefile(db_path):
+    # samefile covers the equal-path case too: backing up onto the live
+    # database hands sqlite the same file as source and destination, and
+    # conn.backup() never returns.
+    if out_path.exists() and out_path.samefile(db_path):
         msg = f"backup path must differ from the live database: {output}"
         if json_output:
             typer.echo(json.dumps({"error": msg}))

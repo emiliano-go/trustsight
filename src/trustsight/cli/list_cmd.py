@@ -92,13 +92,15 @@ def register_commands(app: typer.Typer):
                 "maintainer": pkg["current_maintainer"] or "",
             })
 
-        # Apply limit after building all rows.
-        if limit:
-            rows = rows[:limit]
-
-        # Sort when --sort is given.
+        # Sort before limiting: get_all_packages returns rows ordered by
+        # name, so limiting first would sort only the alphabetical head and
+        # silently drop the highest-scoring rows the sort was asked for.
         if sort_by and rows:
             rows.sort(key=lambda r: _sort_key(sort_by, r))
+
+        # Apply limit after sorting.
+        if limit:
+            rows = rows[:limit]
 
         if json_output:
             typer.echo(json.dumps(rows, indent=2))

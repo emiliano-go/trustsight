@@ -63,6 +63,39 @@ def test_db_check_json_exits_nonzero_for_a_corrupt_database(tmp_path, monkeypatc
     assert '"status": "corrupt"' in result.output
 
 
+def test_db_backup_refuses_the_live_database_path(tmp_path, monkeypatch):
+    """Backing up onto the live database hands sqlite the same file as
+    source and destination, and ``conn.backup()`` never returns.  The guard
+    excluded exactly that case (``db_path != out_path``), so the equal path
+    hung instead of being refused.  Asserting the error path, not the hang.
+    """
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    result = runner.invoke(
+        app, ["db", "backup", "-o", str(tmp_path / "trustsight.db")]
+    )
+
+    assert result.exit_code == 2
+    assert "must differ from the live database" in result.output
+
+
+def test_db_vacuum_declined_confirmation_exits_2(tmp_path, monkeypatch):
+    """A declined confirmation is an operational abort, and the documented
+    set is {0, 2, 130}: ``typer.confirm(..., abort=True)`` exits 1, a code
+    the contract does not define."""
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    result = runner.invoke(app, ["db", "vacuum"], input="n\n")
+
+    assert result.exit_code == 2
+
+
 def test_inspect_not_found_is_an_error_for_scripting(tmp_path, monkeypatch):
     """`inspect` on a package that exists nowhere exits 2, not 1: nothing
     useful was produced, and the documented contract has no exit 1."""

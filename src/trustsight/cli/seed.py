@@ -252,12 +252,30 @@ def seed_migrate(
                 _print_colored(msg, "yellow")
             raise typer.Exit()
 
+        # Pick the table that actually exists rather than falling through to
+        # one that does not: after the automatic migration has renamed
+        # `maintainers`, a plain `seed migrate` would otherwise die on an
+        # uncaught OperationalError, and `--from-backup` against a database
+        # with no backup would silently migrate the empty plaintext table.
+        if from_backup and "maintainers_deprecated_backup" not in tables:
+            msg = "--from-backup was given, but there is no maintainers_deprecated_backup table."
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+        if not from_backup and "maintainers" not in tables:
+            msg = ("The plaintext maintainers table was already renamed to "
+                   "maintainers_deprecated_backup by the automatic migration; "
+                   "rerun with --from-backup.")
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+
         salt = _ensure_salt(conn)
-        source_table = (
-            "maintainers_deprecated_backup"
-            if from_backup and "maintainers_deprecated_backup" in tables
-            else "maintainers"
-        )
+        source_table = "maintainers_deprecated_backup" if from_backup else "maintainers"
         rows = conn.execute(
             f"SELECT name, first_seen_package_id FROM {source_table}"
         ).fetchall()

@@ -156,6 +156,28 @@ class TestListSort:
         assert data[0]["name"] == "bar"
         assert data[1]["name"] == "foo"
 
+    def test_limit_applies_after_the_sort(self, tmp_path, monkeypatch):
+        """--limit must cut the sorted list, not the alphabetical head.
+
+        get_all_packages returns rows ordered by name, and the limit used to
+        be applied before the sort, so `list --sort risk --limit 5` sorted
+        only the first five alphabetical packages and silently dropped the
+        highest-risk ones.
+        """
+        _env(tmp_path, monkeypatch)
+        from trustsight.db import get_connection
+        with get_connection() as conn:
+            for name, score in [("aaa-low", 5), ("bbb-low", 5), ("ccc-low", 5),
+                                ("ddd-low", 5), ("eee-low", 5), ("zzz-crit", 95)]:
+                _insert_pkg(conn, name)
+                _insert_analysis(conn, _get_pkg_id(conn, name), score, "2026-01-01")
+
+        result = runner.invoke(app, ["list", "--json", "--sort", "risk", "--limit", "5"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        names = [r["name"] for r in data]
+        assert names == ["zzz-crit", "aaa-low", "bbb-low", "ccc-low", "ddd-low"]
+
 
 # ---------------------------------------------------------------------------
 # list --json verdict field

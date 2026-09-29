@@ -29,8 +29,8 @@ from __future__ import annotations
 
 import re
 
-from ..tokenizer import split_lines
-from ..rules import clamp_text, join_line_continuations
+from ..tokenizer import join_line_continuations, split_lines
+from ..rules import clamp_text
 from .buildfetch import BUILD_FUNCTIONS, registry_resolutions
 
 _DEP_FIELDS = ("depends", "makedepends", "checkdepends", "optdepends")

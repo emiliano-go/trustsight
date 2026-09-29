@@ -33,8 +33,8 @@ import re
 from functools import lru_cache
 
 from ..deps import _strip_comment
-from ..tokenizer import split_lines
-from ..rules import ScopeResolver, clamp_text, join_line_continuations
+from ..tokenizer import join_line_continuations, split_lines
+from ..rules import ScopeResolver, clamp_text
 from .build import _recipe_lines
 
 #: Functions makepkg runs while building.  ``package()`` is included: it

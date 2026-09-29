@@ -282,16 +282,25 @@ def reconstruct_literals(text: str) -> tuple[str, bool]:
     return result, not unreconstructed
 
 
-def _glob_to_regex(pat: str) -> re.Pattern:
+#: A ``${var/pat/rep}`` replacement is bash text: backslash quotes the
+#: next character, and the pair collapses to that character alone.
+_REPLACEMENT_ESCAPE_RE = re.compile(r"\\(.)")
+
+
+def _glob_to_regex(pat: str, greedy: bool = True) -> re.Pattern:
     """Translate a bash glob pattern to a regex.  Bash character classes
     and metacharacters are translated; everything else is escaped so that
-    dots, hyphens, etc. are literals rather than regex operators."""
+    dots, hyphens, etc. are literals rather than regex operators.
+
+    ``greedy=False`` translates ``*`` non-greedily, which is what the
+    shortest-match affix operators (``#``/``%``) need."""
     out: list[str] = []
+    star = ".*" if greedy else ".*?"
     i = 0
     while i < len(pat):
         c = pat[i]
         if c == "*":
-            out.append(".*")
+            out.append(star)
         elif c == "?":
             out.append(".")
         elif c == "[":
@@ -311,25 +320,32 @@ def _glob_to_regex(pat: str) -> re.Pattern:
 
 
 def _strip_affix(val: str, op: str, pat: str) -> str:
-    """Apply bash ## / # / %% / % stripping using glob patterns."""
-    regex = _glob_to_regex(pat)
-    if op == "##":
-        m = regex.search(val)
-        return val[m.end() :] if m else val
+    """Apply bash ## / # / %% / % stripping using glob patterns.
+
+    The operators differ on two axes at once: ``#``/``##`` match a prefix
+    of the value and ``%``/``%%`` a suffix, and the single character
+    removes the SHORTEST match while the doubled removes the LONGEST.
+    Anchoring is part of the contract: ``${v##foo}`` on ``barfoo`` removes
+    nothing because ``foo`` is no prefix, and ``${v#*/}`` on ``a/b/c``
+    leaves ``b/c`` (the shortest matching prefix), not ``c``.
+
+    For the suffix forms the pattern is wrapped in a ``.*`` prefix and
+    end-anchored: greedy, the prefix claims as much as it can and the
+    group starts as late as possible (shortest suffix); lazy, it yields
+    as little as it can (longest suffix).
+    """
     if op == "#":
-        m = regex.match(val)
-        return val[m.end() :] if m else val
-    if op == "%%":
-        # find the LAST match of the glob
-        matches = list(regex.finditer(val))
-        if not matches:
-            return val
-        return val[: matches[-1].start()]
+        m = _glob_to_regex(pat, greedy=False).match(val)
+        return val[m.end():] if m else val
+    if op == "##":
+        m = _glob_to_regex(pat).match(val)
+        return val[m.end():] if m else val
     if op == "%":
-        m = regex.search(val)
-        if not m:
-            return val
-        return val[: m.start()]
+        m = re.compile(r".*(" + _glob_to_regex(pat).pattern + r")\Z").match(val)
+        return val[: m.start(1)] if m else val
+    if op == "%%":
+        m = re.compile(r".*?(" + _glob_to_regex(pat).pattern + r")\Z").match(val)
+        return val[: m.start(1)] if m else val
     return val
 
 
@@ -371,10 +387,21 @@ def _expand_one(
         if val is None:
             # Bash treats an unset scalar in ${var/pat/rep} as empty.
             return ""
-        regex = _glob_to_regex(pat)
-        if mode == "//":
-            return regex.sub(rep, val)
-        return regex.sub(rep, val, count=1)
+        # The replacement is bash text, not a re.sub template: a backslash
+        # quotes the next character and everything else stands for itself.
+        # Fed raw, a legal `${x/a/\q}` raised re.error, which the sandbox
+        # escalated to TokenizerUnavailable - one odd expansion must leave
+        # that expansion unresolved, not the whole package unvetted.  The
+        # substitution goes through a function so the text is literal.
+        rep = _REPLACEMENT_ESCAPE_RE.sub(r"\1", rep)
+        try:
+            regex = _glob_to_regex(pat)
+            if mode == "//":
+                return regex.sub(lambda _match: rep, val)
+            return regex.sub(lambda _match: rep, val, count=1)
+        except re.error:
+            # A pattern we cannot compile is refused, not fatal.
+            return None
 
     # ,, , ^^ ^ - case conversion.  `${c,,}` on `c=CURL` is `curl`, which
     # is a command name assembled out of a case operator: the payload rules
@@ -417,7 +444,11 @@ def _expand_one(
         val = vars_.get(name)
         if val is None:
             return ""
-        return _strip_affix(val, op, pat)
+        try:
+            return _strip_affix(val, op, pat)
+        except re.error:
+            # A pattern we cannot compile is refused, not fatal.
+            return None
 
     # :-default  /  :=default
     m = re.match(r"^(\w+):([-=])(.*)$", body)
@@ -1131,7 +1162,11 @@ def tokenize_and_resolve_indexed(
         r, ok = _substitute_with_resolve(line, var_table, array_table)
         expanded = collapse_traversal(_expand_aliases(r, alias_table))
         resolved.append(expanded)
-        if not ok or expanded == line:
+        # "Could not fully resolve" (report-schema.md), not "was literal":
+        # a plain `+echo hello` expands to itself and is not unresolved.
+        # What belongs here is a failed ${...} expansion (not ok) or a
+        # reference that survived substitution ($var nobody declared).
+        if not ok or _VAR_REF_RE.search(expanded):
             unresolved_out.append(line)
     candidate_indices = [raw_index for raw_index, _line in candidates]
     return resolved, unresolved_out, candidate_indices

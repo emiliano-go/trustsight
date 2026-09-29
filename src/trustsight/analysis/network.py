@@ -64,13 +64,18 @@ def _source_url_tokens(diff_text):
                 in_array = False
             continue
         body = line[1:] if line[:1] == "+" else line
-        is_source = bool(_SOURCE_ARRAY_RE.match(body) or _SOURCE_SCALAR_RE.match(body))
+        opens_array = bool(_SOURCE_ARRAY_RE.match(body))
+        is_source = opens_array or bool(_SOURCE_SCALAR_RE.match(body))
         if not in_array and not is_source:
             continue
         for scheme, url in iter_scheme_urls(body, _URL_STOP_CHARS):
             yield scheme, url
         if ")" in body:
             in_array = False
+        elif opens_array:
+            # No closing paren on the opener: continuation lines carry the
+            # rest of the array's URLs.
+            in_array = True
 
 
 def _hosts(config) -> dict:

@@ -17,7 +17,7 @@ import zipfile
 import pytest
 
 from trustsight.analysis import _structural_findings
-from trustsight.analysis.archives import check_archive_trailer
+from trustsight.analysis.archives import _zip_trailing_bytes, check_archive_trailer
 from trustsight.analysis.delivery import scan_tree_manifest
 from trustsight.differ import extract_urls_from_diff
 
@@ -139,6 +139,23 @@ def test_h067_ignores_probe_in_heredoc_data():
 +}
 """
     assert "H067" not in rule_ids(structural(diff))
+
+
+def test_h067_finding_text_drops_the_diff_marker():
+    """The scanned body kept the line's leading ``+``, so the emitted match
+    read ``probes its environment: +  grep TracerPid ...``."""
+    diff = """--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,6 @@
+ pkgname=x
+ pkgver=1.0
++build() {
++  grep TracerPid /proc/self/status
++}
+"""
+    finding = next(f for f in structural(diff) if f["rule_id"] == "H067")
+    assert finding["match"] == (
+        "build() probes its environment: grep TracerPid /proc/self/status")
 
 
 def test_find_line_in_diff_survives_a_lone_trailing_backslash():
@@ -350,6 +367,14 @@ def test_h070_ignores_truncated_or_garbage_input():
     assert check_archive_trailer(b"") is None
     assert check_archive_trailer(b"not an archive") is None
     assert check_archive_trailer(b"\x1f\x8b\x08" + b"\x00" * 8) is None
+    assert check_archive_trailer(b"PK\x05\x06" + b"\x00" * 8) is None
+
+
+def test_zip_trailing_bytes_returns_none_on_a_truncated_eocd():
+    """An EOCD signature with fewer than the record's 22 fixed bytes after
+    it is malformed input: None, not a struct.error and not a guess."""
+    assert _zip_trailing_bytes(b"PK\x05\x06" + b"\x00" * 8) is None
+    assert _zip_trailing_bytes(b"PK\x05\x06") is None
 
 
 # --- H072: write-then-execute ---

@@ -1,0 +1,18 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,2 +1,15 @@
+ pkgname=demo
+ pkgver=1.0
++source=(
++  "fsearch-bin-0.3.1.tar.gz"::"https://github.com/cboxdoerfer/fsearch/archive/0.3.1.tar.gz"
++  'linter'
++  '0001-fix_new_window.patch'
++)
++sha256sums=(
++  'b16ab75556d841bf858633710d71c92f35d34362614b8584b0a5b71690a72c39'
++  '66b92a2bcba6006469d8aecb94612d4f633f47800bbe502d6e2061d5218478b1'
++)
++build() {
++  sudo "$srcdir/linter"
++  make
++}

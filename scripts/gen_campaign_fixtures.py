@@ -228,6 +228,30 @@ add("july-full-kill-chain",
     campaign="july", fidelity="representative",
     must_fire=["H043", "H067", "H068", "H062", "H035"], min_score=60)
 
+# ── August 2026: the adoption-lock wave ────────────────────────────────────
+
+add("aug-fsearch-bin-source-without-checksum",
+    diff(
+        "source=(",
+        '  "fsearch-bin-0.3.1.tar.gz"::"https://github.com/cboxdoerfer/fsearch/archive/0.3.1.tar.gz"',
+        "  'linter'",
+        "  '0001-fix_new_window.patch'",
+        ")",
+        "sha256sums=(",
+        "  'b16ab75556d841bf858633710d71c92f35d34362614b8584b0a5b71690a72c39'",
+        "  '66b92a2bcba6006469d8aecb94612d4f633f47800bbe502d6e2061d5218478b1'",
+        ")",
+        "build() {",
+        '  sudo "$srcdir/linter"',
+        "  make",
+        "}",
+    ),
+    description="fsearch-bin 0.3.1-2: a committed ELF named linter declared "
+                "in source=() with no checksum entry, executed with sudo "
+                "during build()",
+    campaign="aug-adoption-lock", fidelity="representative",
+    must_fire=["H091", "H004"], min_score=65)
+
 # ── Controls: the must-not-fire surface §10 names ──────────────────────────
 
 add("control-arch-check-and-generated-desktop",

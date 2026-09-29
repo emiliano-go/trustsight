@@ -47,6 +47,20 @@ def test_h034_judges_base_of_transport_token():
     assert "H034" not in ids('source=("tor+https://x/y")\n')
 
 
+def test_h034_reads_every_line_of_a_multi_line_source_array():
+    """The array state machine never left the opener line, so only the first
+    URL of the standard one-URL-per-line style was ever scanned."""
+    d = ('+source=("https://ok.example/a.tar.gz"\n'
+         '+        "gopher://evil.example/b.tar.gz")\n')
+    assert "H034" in ids(d)
+
+
+def test_h034_array_closed_on_its_opener_line_does_not_leak_state():
+    d = ('+source=("https://ok.example/a.tar.gz")\n'
+         '+upstream="gopher://evil.example/not-a-source"\n')
+    assert "H034" not in ids(d)
+
+
 # --- H031: version-in-URL injection ---
 
 
@@ -73,6 +87,13 @@ def test_h031_safe_version_not_flagged():
 def test_h031_unsafe_pkgver_not_interpolated_is_quiet():
     d = '+pkgver=1.0;echo evil\nsource=("https://x/static.tar.gz")\n'
     assert "H031" not in ids(d)
+
+
+def test_h031_reads_every_line_of_a_multi_line_source_array():
+    d = ('+pkgver=1.0;echo evil\n'
+         '+source=("https://x/static.tar.gz"\n'
+         '+        "https://x/$pkgver.tar.gz")\n')
+    assert "H031" in ids(d)
 
 
 # --- H071: covert egress ---

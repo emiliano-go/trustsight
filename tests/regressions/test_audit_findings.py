@@ -282,3 +282,33 @@ def test_an_ordinary_source_array_is_not_a_gap(array):
     diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,8 @@\n" + array
     fact = scan_diff(diff, package_name="p")
     assert coverage.STAGE_DEGRADED not in fact.coverage_gaps
+
+
+def test_a_tree_deeper_than_the_recursion_limit_is_walked_not_raised():
+    """The tree's depth is the attacker's choice: ~1500 one-character
+    directories fit in PATH_MAX, and a recursive walk raised RecursionError
+    past the interpreter limit - escaping analysis entirely instead of
+    degrading to the tree_not_analyzed gap."""
+    import sys
+    import pygit2
+    import tempfile
+    from trustsight.analysis.pipeline import _collect_tree_files
+
+    depth = sys.getrecursionlimit() + 200
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = pygit2.init_repository(tmp, bare=True)
+        blob = repo.create_blob(b"payload")
+        builder = repo.TreeBuilder()
+        builder.insert("leaf.txt", blob, pygit2.GIT_FILEMODE_BLOB)
+        tree = builder.write()
+        for _ in range(depth):
+            builder = repo.TreeBuilder()
+            builder.insert("d", tree, pygit2.GIT_FILEMODE_TREE)
+            tree = builder.write()
+        sig = pygit2.Signature("t", "t@example.invalid")
+        commit = repo.create_commit("refs/heads/master", sig, sig, "c", tree, [])
+
+        files, complete = _collect_tree_files(repo, str(commit))
+
+    assert complete
+    assert dict(files)["d/" * depth + "leaf.txt"] == b"payload"

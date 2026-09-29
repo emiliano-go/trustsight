@@ -108,6 +108,10 @@ def _zip_trailing_bytes(data: bytes) -> int | None:
     idx = data.rfind(_ZIP_EOCD)
     if idx == -1:
         return None
+    if idx + 22 > len(data):
+        # The record's fixed 22 bytes run off the buffer: truncated input,
+        # not a trailer anomaly.
+        return None
     comment_len = struct.unpack("<H", data[idx + 20 : idx + 22])[0]
     end = idx + 22 + comment_len
     if end > len(data):

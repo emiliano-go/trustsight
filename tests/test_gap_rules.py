@@ -430,3 +430,41 @@ def test_r104_quiet_on_trap_cleanup():
 def test_r104_quiet_on_trap_with_command():
     """trap 'echo error' ERR is not suppression."""
     assert "R104" not in toml_ids(recipe("trap 'echo error' ERR"))
+
+
+# --- H078 under a context opener ------------------------------------------
+#
+# The dominant AUR edit shape opens the array on a context line and changes
+# one quoted key per `+`/`-` line; the state machine used to arm only on a
+# `+`/`-` opener, so every one of these read as no change at all.
+
+
+def test_h078_multiline_swap_under_a_context_opener_is_high():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n pkgname=demo\n"
+        " validpgpkeys=(\n"
+        "-        'AAAABBBBCCCCDDDD')\n"
+        "+        'EEEEFFFF00001111')\n"
+    )
+    assert sev(diff, "H078") == "HIGH"
+
+
+def test_h078_multiline_addition_under_a_context_opener_is_medium():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,5 @@\n pkgname=demo\n"
+        " validpgpkeys=(\n"
+        "         'AAAABBBBCCCCDDDD'\n"
+        "+        'EEEEFFFF00001111'\n"
+        " )\n"
+    )
+    assert sev(diff, "H078") == "MEDIUM"
+
+
+def test_h078_multiline_introduction_is_info():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,3 @@\n pkgname=demo\n"
+        "+validpgpkeys=(\n"
+        "+        'EEEEFFFF00001111'\n"
+        "+)\n"
+    )
+    assert sev(diff, "H078") == "INFO"

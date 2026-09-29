@@ -128,6 +128,16 @@
   ],
   "min_score": 60
  },
+ "aug-fsearch-bin-source-without-checksum.diff": {
+  "description": "fsearch-bin 0.3.1-2: a committed ELF named linter declared in source=() with no checksum entry, executed with sudo during build()",
+  "campaign": "aug-adoption-lock",
+  "fidelity": "representative",
+  "must_fire": [
+   "H004",
+   "H091"
+  ],
+  "min_score": 65
+ },
  "control-arch-check-and-generated-desktop.diff": {
   "description": "Architecture detection and a generated .desktop consumed by a declared install step",
   "campaign": "control",

@@ -318,7 +318,10 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
     for line in split_lines(diff_text):
         if line.startswith("+++ "):
             path = _diff_file_path(line[4:])
-            if path and path not in seen:
+            # `+++ /dev/null` is a deletion, not a path: recording it put
+            # the literal string "/dev/null" in files_changed, and the
+            # added/removed fix-up below could never find it there.
+            if path and path != "/dev/null" and path not in seen:
                 seen.add(path)
                 if path not in (".SRCINFO", ".gitignore"):
                     file_changes.append({"path": path, "status": "modified"})
@@ -344,11 +347,17 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
     added_paths = new_paths - old_paths
     removed_paths = old_paths - new_paths
     for entry in file_changes:
-        path = entry["path"]
-        if path in added_paths:
+        if entry["path"] in added_paths:
             entry["status"] = "added"
-        elif path in removed_paths:
-            entry["status"] = "removed"
+    # A deleted file has no `+++` side to record in the first loop - its
+    # only header is `--- a/path` opposite `+++ /dev/null` - so it enters
+    # the summary here, already marked removed.  The git producer path
+    # reads the same fact from the delta's `old_file.path`.
+    for path in removed_paths - seen:
+        seen.add(path)
+        if path not in (".SRCINFO", ".gitignore"):
+            file_changes.append({"path": path, "status": "removed"})
+        files_changed.add(path)
 
     file_changes.sort(key=lambda item: (item["path"], item["status"]))
     return DiffSummary(
@@ -579,7 +588,11 @@ def _touched_checksum_arrays(diff_text: str) -> list[_ChecksumArray]:
         decl_removed = False
 
     for line in split_lines(diff_text):
-        if line.startswith(("+++", "---")):
+        # The trailing space is the guard: file headers are `+++ b/path` /
+        # `--- a/path`, so a content line whose text starts with `--` (an
+        # unquoted array element, say) reads as `---…` and must not flush
+        # the array state - the rest of the array would be dropped.
+        if line.startswith(("+++ ", "--- ")):
             # A new file.  An array cannot span files; leaving it open leaked
             # one file's state into the next.
             flush()
@@ -699,6 +712,30 @@ def checksum_array_parity(diff_text: str) -> tuple[int, int, str] | None:
     return None
 
 
+def checksum_array_parity_in_text(recipe_text: str) -> tuple[int, int, str] | None:
+    """``(sources, sums, var)`` when the recipe's declared array is short.
+
+    The diff-based :func:`checksum_array_parity` reads only wholly-added
+    arrays, so an element inserted into an existing ``source=()`` beside an
+    unchanged ``*sums=()`` is invisible to it, and a first-seen recipe has
+    no diff at all.  This variant reads the complete recipe, so no array
+    length is inferred from a hunk: the arrays are fully visible by
+    construction, and the 26-benign-package false positive that made the
+    diff version refuse partial arrays cannot recur.
+    """
+    sources = _text_array_items(recipe_text, _SOURCE_ARRAY_START_RE_TEXT)
+    if sources is None:
+        return None
+    for var in _CHECKSUM_VAR_NAMES:
+        items = _text_array_items(
+            recipe_text, re.compile(r"^\s*" + var + r"\s*=\s*\(", re.MULTILINE))
+        if items is None:
+            continue
+        if len(items) < len(sources):
+            return (len(sources), len(items), var)
+    return None
+
+
 def _quoted_items(contents: str) -> list[str] | None:
     """The array elements in *contents*, or None if it never closed.
 
@@ -737,6 +774,44 @@ def _quoted_items(contents: str) -> list[str] | None:
     return items
 
 
+def _unquoted_close(text: str, start: int = 0) -> int | None:
+    """Index of the first ``)`` outside a quoted span, or None.
+
+    A quoted element may contain a paren, so stopping at the first one
+    would read half an array as a whole one.
+    """
+    quote = ""
+    for i in range(start, len(text)):
+        ch = text[i]
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif ch == ")":
+            return i
+    return None
+
+
+def _text_array_items(text: str, start_re) -> list[str] | None:
+    """Elements of the first array matching *start_re* in a whole file.
+
+    ``None`` when the array never closes.  The closing paren is found by
+    scanning the whole text, not the line, because a multi-line array's
+    ``)`` is on its own line.
+    """
+    match = start_re.search(text)
+    if match is None:
+        return None
+    open_idx = text.find("(", match.start())
+    if open_idx < 0:
+        return None
+    close_idx = _unquoted_close(text, open_idx + 1)
+    if close_idx is None:
+        return None
+    return _quoted_items(text[open_idx:close_idx + 1])
+
+
 def _added_array_items(diff_text: str, start_re) -> list[str] | None:
     """Elements of the first *wholly added* array matching *start_re*.
 
@@ -769,6 +844,37 @@ def _added_array_items(diff_text: str, start_re) -> list[str] | None:
         if ")" in body:
             return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
     return None
+
+
+def source_array_grew_in_diff(diff_text: str) -> bool:
+    """True when a source array gains more lines than it loses in *diff_text*.
+
+    The gate for falling back to :func:`checksum_array_parity_in_text`: an
+    array that already mismatched must not fire merely because the diff
+    touched it, and a pure re-indentation is not a new source.  A hunk
+    boundary ends the region, because the lines after it may belong to an
+    unrelated part of the file.
+    """
+    inside = False
+    added = removed = 0
+    for line in split_lines(diff_text):
+        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+            inside = False
+            continue
+        prefix = line[:1] if line[:1] in ("+", "-", " ") else ""
+        body = line[1:] if prefix else line
+        if not inside:
+            if _SOURCE_ARRAY_START_RE.match(body):
+                inside = True
+            else:
+                continue
+        if prefix == "+":
+            added += 1
+        elif prefix == "-":
+            removed += 1
+        if _unquoted_close(body) is not None:
+            inside = False
+    return added > removed
 
 
 def detect_checksum_changes(diff_text: str) -> str:
@@ -857,6 +963,10 @@ def detect_checksum_removed(diff_text: str) -> bool:
 
 
 _SOURCE_ARRAY_START_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
+#: The same opener anchored per line in a whole file, for the recipe-text
+#: parity: the diff variant is matched against a single line body, where
+#: `^` is already the line start.
+_SOURCE_ARRAY_START_RE_TEXT = re.compile(_SOURCE_ARRAY_START_RE.pattern, re.MULTILINE)
 
 
 def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
@@ -1444,7 +1554,10 @@ def _post_diff_lines(diff_text: str) -> list[str]:
     """
     out: list[str] = []
     for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+        # Header shapes carry a trailing space (`+++ b/x`, `--- a/x`);
+        # without it an added line whose content starts with `++` would be
+        # mistaken for a header and dropped from the post-state.
+        if line.startswith(("+++ ", "--- ", "@@")):
             continue
         if line.startswith("-"):
             continue
@@ -1469,7 +1582,10 @@ def _pre_diff_lines(diff_text: str) -> list[str]:
     """
     out: list[str] = []
     for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+        # Same trailing-space guard as _post_diff_lines: a removed line
+        # whose content starts with `--` is `---…`, not a file header, and
+        # belongs in the pre-state.
+        if line.startswith(("+++ ", "--- ", "@@")):
             continue
         if line.startswith("+"):
             continue

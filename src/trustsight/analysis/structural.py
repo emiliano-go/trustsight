@@ -3,7 +3,9 @@ import re
 from ..differ import (
     _post_diff_lines,
     checksum_array_parity,
+    checksum_array_parity_in_text,
     is_skip_justified,
+    source_array_grew_in_diff,
     source_array_has_command_substitution,
 )
 from .base import _url_domain
@@ -90,26 +92,42 @@ def _signing_key_findings(diff_text: str, add) -> None:
     removed_keys: set[str] = set()
     had_keys_before = False
     in_added = in_removed = False
+    # The dominant AUR edit shape opens the array on a CONTEXT line and
+    # changes one quoted key per `+`/`-` line:
+    #     validpgpkeys=(
+    #    -        'OLDKEY...')
+    #   +        'NEWKEY...')
+    # `array_open` carries that opener, or the `+`/`-` member lines are
+    # never collected (the context branch used to reset the state instead).
+    # It ends on a context line holding `)` or at a file/hunk header - not
+    # on a member line's `)`, because the removal side closes before the
+    # addition side has been read.  Collection is gated by the quoted-hex
+    # entry regex, so a trailing unclosed region gathers nothing real.
+    array_open = False
     for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+        if line.startswith(("+++ ", "--- ", "@@")):
+            array_open = in_added = in_removed = False
             continue
         side = line[0] if line[:1] in ("+", "-", " ") else " "
         body = line[1:] if line[:1] in ("+", "-", " ") else line
         opens = bool(_VALIDPGPKEYS_LINE_RE.match(body))
-        if side == "-" and (opens or in_removed):
+        if side == "-" and (opens or in_removed or array_open):
             had_keys_before = had_keys_before or bool(_VALIDPGPKEYS_ENTRY_RE.search(body))
             removed_keys |= {m.upper() for m in _VALIDPGPKEYS_ENTRY_RE.findall(body)}
-            in_removed = opens and ")" not in body if opens else (")" not in body)
+            in_removed = ")" not in body
             continue
-        if side == "+" and (opens or in_added):
+        if side == "+" and (opens or in_added or array_open):
             added_keys |= {m.upper() for m in _VALIDPGPKEYS_ENTRY_RE.findall(body)}
-            in_added = opens and ")" not in body if opens else (")" not in body)
+            in_added = ")" not in body
             continue
         if side == " ":
-            if opens or _VALIDPGPKEYS_ENTRY_RE.search(body) and in_added:
-                had_keys_before = had_keys_before or bool(
-                    _VALIDPGPKEYS_ENTRY_RE.search(body)
-                )
+            if opens:
+                array_open = ")" not in body
+            elif array_open:
+                if _VALIDPGPKEYS_ENTRY_RE.search(body):
+                    had_keys_before = True
+                if ")" in body:
+                    array_open = False
             in_added = in_removed = False
 
     genuinely_added = added_keys - removed_keys
@@ -467,6 +485,11 @@ def _structural_findings(
     # and no rule looked at the two lengths together. A source slipped in
     # beside a checksum list nobody recounted scored nothing but priors.
     parity = checksum_array_parity(diff_text)
+    if parity is None and current_text and source_array_grew_in_diff(diff_text):
+        # The arrays are not wholly added, but the source list grew: the
+        # lengths are read from the complete recipe instead of the hunk, so
+        # no partially visible array is ever counted.
+        parity = checksum_array_parity_in_text(current_text)
     if parity is not None:
         n_src, n_sum, var = parity
         add("H091", "Checksum Array Shorter Than Source Array", "HIGH",
@@ -634,3 +657,25 @@ def _structural_findings(
                   current_text=current_text)
 
     return findings
+
+
+def recipe_checksum_parity_finding(recipe_text: str) -> dict | None:
+    """H091 for a first-seen recipe, which has no diff to read arrays from.
+
+    A new package is exactly where a source slipped in beside a checksum
+    list nobody recounted is least likely to be noticed, and the fresh
+    analysis path ran no integrity rule at all.
+    """
+    if not recipe_text:
+        return None
+    parity = checksum_array_parity_in_text(recipe_text)
+    if parity is None:
+        return None
+    n_src, n_sum, var = parity
+    return stamp({
+        "rule_id": "H091", "name": "Checksum Array Shorter Than Source Array",
+        "severity": "HIGH", "category": "integrity",
+        "match": f"{n_src} sources declared against {n_sum} {var} entries",
+        "file": "PKGBUILD", "line": None,
+        "params": {"sources": n_src, "sums": n_sum, "var": var},
+    })

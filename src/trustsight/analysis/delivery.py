@@ -91,7 +91,7 @@ def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
             continue
         if i in heredoc_body:
             continue
-        body = _strip_comment(line)
+        body = _strip_comment(line[1:])
         for probe in probes:
             m = probe.search(body)
             if m:

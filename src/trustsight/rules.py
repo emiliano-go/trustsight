@@ -7,7 +7,7 @@ from .config import load_rules
 from .findings import stamp
 from .tokenizer import (
     clean_lines,
-    join_line_continuations,
+    joined_indexed,
     split_lines,
     strip_boms,
 )
@@ -756,6 +756,7 @@ def apply_rules(
     include_experimental: bool = False,
     line_map: dict[int, tuple[str, int]] | None = None,
     resolved_indices: list[int] | None = None,
+    raw_indices: list[int] | None = None,
 ) -> list[dict]:
     """Match rules against diff lines and return triggered findings.
 
@@ -766,6 +767,16 @@ def apply_rules(
     list, which is not a ``line_map`` key once assignment lines are
     omitted: resolved findings would carry no file/line (or, on a
     position collision, the wrong one).
+
+    *raw_indices* does the same for the raw-line side: it parallels
+    *raw_diff_lines* with the ``split_lines(diff_text)`` index each line
+    came from (the first output of
+    :func:`~trustsight.rules.get_raw_diff_lines_indexed`).  ``line_map``
+    is keyed on split-lines positions, and *raw_diff_lines* joins
+    continuations and drops blank lines, so without *raw_indices* a
+    raw-line finding's own index is the wrong domain as soon as one such
+    line precedes the match - it cited the wrong line, or across a file
+    boundary the wrong file.
     """
     if rules is None:
         rules = list(load_rules())
@@ -779,6 +790,22 @@ def apply_rules(
     fn_map = _classify_enclosing_function(raw_diff_lines)
     caller_map = _classify_caller_closure(raw_diff_lines)
 
+    # Candidate indices double as line_map keys, and line_map is keyed by
+    # split_lines(diff_text) position while the raw candidates are indexed
+    # into raw_diff_lines - a different domain once a continuation joins
+    # or a blank line drops.  With raw_indices supplied, move every
+    # raw-derived index into the split-lines domain up front, so scope
+    # checks and file/line lookups agree.  A mismatched list is ignored:
+    # better the legacy lookup than a crash inside matching.
+    to_split = (
+        raw_indices
+        if raw_indices is not None and len(raw_indices) == len(raw_diff_lines)
+        else None
+    )
+    if to_split is not None:
+        ctx_map = {to_split[i]: ctx for i, ctx in ctx_map.items()}
+        fn_map = {to_split[i]: fn for i, fn in fn_map.items()}
+
     # These three candidate lists do not vary per rule, but used to be
     # rebuilt inside the loop: with ~75 rules that was 75 filtering passes
     # over every line of the diff.  Built once and shared, read-only.
@@ -790,7 +817,8 @@ def apply_rules(
     filtered_raw = filter_raw_lines(raw_diff_lines)
     cleaned_raw = clean_lines([ln for _i, ln in filtered_raw])
     raw_candidates = [
-        (i, cleaned) for (i, _ln), cleaned in zip(filtered_raw, cleaned_raw)
+        (to_split[i] if to_split is not None else i, cleaned)
+        for (i, _ln), cleaned in zip(filtered_raw, cleaned_raw)
     ]
     added_candidates = [(i, ln) for i, ln in raw_candidates if ln.startswith("+")]
     if resolved_indices is not None:
@@ -827,7 +855,7 @@ def apply_rules(
     reader_pairs = _to_pairs(raw_diff_lines)
     stripped_reader = strip_boms([ln for _i, ln in reader_pairs])
     reader_candidates = [
-        (i, stripped)
+        (to_split[i] if to_split is not None else i, stripped)
         for (i, ln), stripped in zip(reader_pairs, stripped_reader)
         if not ln.startswith("-") and not _DEP_DECLARATION_RE.match(ln)
     ]
@@ -917,11 +945,27 @@ def apply_rules(
     return triggered
 
 
-def get_raw_diff_lines(diff_text: str) -> list[str]:
-    """Return non-empty diff lines with continuations joined."""
-    lines = []
-    for line in join_line_continuations(split_lines(diff_text)):
+def get_raw_diff_lines_indexed(diff_text: str) -> tuple[list[str], list[int]]:
+    """Return non-empty diff lines with continuations joined, plus the
+    ``split_lines(diff_text)`` index each logical line starts at.
+
+    The index list parallels the line list and is what
+    :func:`apply_rules` needs to attach a file/line to a raw-line finding:
+    :func:`~trustsight.differ.map_diff_lines` is keyed on split-lines
+    positions, and joining continuations and dropping blank lines makes a
+    raw line's own position a different domain - off by the number of
+    dropped lines above it, or onto another file's lines entirely.
+    """
+    lines: list[str] = []
+    indices: list[int] = []
+    for raw_index, line in joined_indexed(split_lines(diff_text)):
         stripped = line.strip()
         if stripped:
             lines.append(stripped)
-    return lines
+            indices.append(raw_index)
+    return lines, indices
+
+
+def get_raw_diff_lines(diff_text: str) -> list[str]:
+    """Return non-empty diff lines with continuations joined."""
+    return get_raw_diff_lines_indexed(diff_text)[0]

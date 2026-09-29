@@ -32,8 +32,8 @@ from __future__ import annotations
 import re
 
 from ..deps import _strip_comment
-from ..tokenizer import resolve_added_lines
-from ..rules import clamp_text, join_line_continuations
+from ..tokenizer import join_line_continuations, resolve_added_lines
+from ..rules import clamp_text
 
 # ---------------------------------------------------------------------------
 # The build sandbox.  makepkg gives a recipe these to work in, and touching
@@ -287,28 +287,27 @@ _DANGEROUS_TARGET_RE = re.compile(
 def _rm_targets_outside_the_build_tree(body: str) -> str | None:
     """The first `rm` argument that names the operator's system, or None.
 
-    Arguments are read one at a time so a sandbox path exempts itself and
-    nothing else. Flags are skipped; `--` ends them.
+    Every `rm` command on the line is asked on its own. Arguments are read
+    one at a time so a sandbox path exempts itself and nothing else. Flags
+    are skipped; `--` ends them.
     """
-    m = re.search(r"(?:\A|[;&|]|\$\()\s*rm\b", body)
-    if m is None:
-        return None
-    rest = body[m.end():]
-    # Stop at the end of this command: what a later command deletes is a
-    # separate question, asked again on its own.
-    rest = re.split(r"[;&|]", rest, maxsplit=1)[0]
-    flags_done = False
-    for arg in rest.split():
-        if not flags_done and arg == "--":
+    for m in re.finditer(r"(?:\A|[;&|]|\$\()\s*rm\b", body):
+        rest = body[m.end():]
+        # Stop at the end of this command: what a later command deletes is a
+        # separate question, asked again when its own `rm` is reached.
+        rest = re.split(r"[;&|]", rest, maxsplit=1)[0]
+        flags_done = False
+        for arg in rest.split():
+            if not flags_done and arg == "--":
+                flags_done = True
+                continue
+            if not flags_done and arg.startswith("-"):
+                continue
             flags_done = True
-            continue
-        if not flags_done and arg.startswith("-"):
-            continue
-        flags_done = True
-        if _SANDBOX_TARGET_RE.match(arg):
-            continue
-        if _DANGEROUS_TARGET_RE.match(arg):
-            return arg
+            if _SANDBOX_TARGET_RE.match(arg):
+                continue
+            if _DANGEROUS_TARGET_RE.match(arg):
+                return arg
     return None
 
 

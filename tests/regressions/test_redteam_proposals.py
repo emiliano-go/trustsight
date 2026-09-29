@@ -156,6 +156,17 @@ def test_one_srcdir_token_is_not_a_licence_to_delete_the_home_directory():
         ['  rm -rf "$srcdir/.git" "$srcdir/.github"'], declared=False)
 
 
+def test_a_later_rm_command_on_the_line_is_asked_on_its_own():
+    """Only the first `rm` on a line was examined, so a sandbox housekeeping
+    command followed by `; rm -rf ~` fired nothing at all."""
+    assert "S002" in _shipped_ids(
+        ['  rm -rf "$srcdir/patches"; rm -rf ~'], declared=False)
+    # Every-clean lines still stand down.
+    assert "S002" not in _shipped_ids(
+        ['  rm -rf "$srcdir/patches"; rm -rf "$pkgdir/usr/share/doc"'],
+        declared=False)
+
+
 @pytest.mark.parametrize("lines,rule", [
     (["  D=/dev/sda", '  dd if=/dev/zero of="$D"'], "S003"),
     (["  U=sshd", '  systemctl stop "$U"'], "S006"),
@@ -404,6 +415,145 @@ def test_h091_does_not_count_what_the_diff_does_not_show(diff):
     from trustsight.differ import checksum_array_parity
 
     assert checksum_array_parity(diff) is None
+
+
+def _fsearch_recipe(malicious: bool) -> str:
+    """The fsearch-bin 0.3.1-2 recipe, with and without the campaign's
+    `linter` source and `sudo "$srcdir/linter"` build line."""
+    sources = [
+        '  "fsearch-bin-0.3.1.tar.gz"::"https://github.com/cboxdoerfer/fsearch/archive/0.3.1.tar.gz"',
+    ]
+    if malicious:
+        sources.append("  'linter'")
+    sources.append("  '0001-fix_new_window.patch'")
+    build = ["  make"]
+    if malicious:
+        build.insert(0, '  sudo "$srcdir/linter"')
+    return "\n".join([
+        "pkgname=fsearch-bin", "pkgver=0.3.1",
+        "source=(", *sources, ")",
+        "sha256sums=(", "  'b16ab755'", "  '66b92a2b'", ")",
+        "build() {", *build, "}",
+    ]) + "\n"
+
+
+def test_h091_reads_the_recipe_when_the_diff_only_shows_context():
+    """The August 2026 campaign inserted one source into an existing
+    `source=()` and left `sha256sums=()` unchanged. The wholly-added guard
+    made the diff version blind to it, and a first-seen recipe has no diff
+    at all, so parity was never read on either path."""
+    from trustsight.analysis.pipeline import analyze_package_text
+    from trustsight.differ import (
+        checksum_array_parity_in_text, source_array_grew_in_diff,
+    )
+
+    clean, malicious = _fsearch_recipe(False), _fsearch_recipe(True)
+    assert checksum_array_parity_in_text(malicious) == (3, 2, "sha256sums")
+    assert checksum_array_parity_in_text(clean) is None
+
+    import difflib
+
+    diff = "\n".join(difflib.unified_diff(
+        clean.splitlines(), malicious.splitlines(),
+        fromfile="PKGBUILD", tofile="PKGBUILD", n=3,
+    ))
+    assert source_array_grew_in_diff(diff) is True
+
+    fact = analyze_package_text("fsearch-bin", clean, malicious)
+    assert "H091" in {e.rule_id for e in fact.score_breakdown}
+
+
+def test_h091_recipe_parity_reads_a_quoted_paren_as_one_element():
+    """A quoted element may contain a paren; stopping at the first one
+    would read half an array as a whole one."""
+    from trustsight.differ import checksum_array_parity_in_text
+
+    recipe = (
+        "source=(\n"
+        '  "a(1).tar.gz"\n'
+        '  "b.tar.gz"\n'
+        ")\n"
+        "sha256sums=(\n"
+        "  'x'\n"
+        ")\n"
+    )
+    assert checksum_array_parity_in_text(recipe) == (2, 1, "sha256sums")
+
+
+@pytest.mark.parametrize("body,expected", [
+    # An element inserted into an existing array.
+    (" source=(\n   \"a\"\n+  'linter'\n   \"b\"\n )\n", True),
+    # An element removed is not growth.
+    (" source=(\n-  'linter'\n   \"b\"\n )\n", False),
+    # A pure re-indentation is not a new source.
+    (" source=(\n-  'linter'\n+    'linter'\n )\n", False),
+    # A hunk boundary ends the region: a later unrelated hunk is not the array.
+    (" source=(\n   \"a\"\n )\n@@ -10,3 +11,4 @@\n build() {\n+  make\n }\n", False),
+])
+def test_h091_fallback_gate_needs_the_source_array_to_grow(body, expected):
+    from trustsight.differ import source_array_grew_in_diff
+
+    assert source_array_grew_in_diff(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n" + body
+    ) is expected
+
+
+def test_h091_without_the_recipe_text_keeps_the_old_refusal():
+    """No complete array to read means no parity, exactly as before: the
+    fallback is additive and cannot count a partial hunk."""
+    import difflib
+
+    from trustsight.analysis.structural import _structural_findings
+    from trustsight.differ import extract_urls_from_diff
+
+    clean, malicious = _fsearch_recipe(False), _fsearch_recipe(True)
+    diff = "\n".join(difflib.unified_diff(
+        clean.splitlines(), malicious.splitlines(),
+        fromfile="PKGBUILD", tofile="PKGBUILD", n=3,
+    ))
+    source_changes = extract_urls_from_diff(diff)
+    without = {f["rule_id"] for f in _structural_findings(diff, source_changes)}
+    with_text = {f["rule_id"] for f in _structural_findings(
+        diff, source_changes, current_text=malicious)}
+    assert "H091" not in without
+    assert "H091" in with_text
+
+
+def test_h091_fallback_does_not_fire_on_a_reformat():
+    """A pre-existing mismatch the diff only re-indents stays silent."""
+    import difflib
+
+    from trustsight.analysis.structural import _structural_findings
+    from trustsight.differ import extract_urls_from_diff
+
+    malicious = _fsearch_recipe(True)
+    reformatted = malicious.replace("  'linter'\n", "    'linter'\n")
+    diff = "\n".join(difflib.unified_diff(
+        reformatted.splitlines(), malicious.splitlines(),
+        fromfile="PKGBUILD", tofile="PKGBUILD", n=3,
+    ))
+    fired = {f["rule_id"] for f in _structural_findings(
+        diff, extract_urls_from_diff(diff), current_text=malicious)}
+    assert "H091" not in fired
+
+
+def test_a_first_analysis_reads_checksum_parity_from_the_recipe(monkeypatch):
+    """A first-seen recipe has no diff, so H091 had no input at all."""
+    import trustsight.analysis.pipeline as pipeline
+    from trustsight.config import load_config
+    from trustsight.schema import NoveltyContext
+
+    monkeypatch.setattr(pipeline, "_recent_update", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_package_is_new", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_collect_tree_files", lambda repo, commit: ([], True))
+    monkeypatch.setattr(pipeline, "build_novelty_context", lambda *a, **k: NoveltyContext())
+    monkeypatch.setattr(pipeline, "get_maintainer_from_commit", lambda repo, commit: "")
+
+    fact = pipeline._make_fresh_analysis(
+        "fsearch-bin", "0.3.1-2", "abc123", 1, object(), load_config(),
+        head_pkgbuild=_fsearch_recipe(True),
+    )
+    assert "H091" in {e.rule_id for e in fact.score_breakdown}
 
 
 @pytest.mark.parametrize("line", [

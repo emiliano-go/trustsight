@@ -5,6 +5,8 @@ Covers:
 - _replace_rule_block NameError in sync-rules wizard
 - Drift-aware sync: sync_rules fixes drifted match_target/severity/category
 - Ctrl+C handling: KeyboardInterrupt during analysis pool doesn't traceback
+- batch failure boundary: a verdict-rendering error fails one package, not
+  the whole batch
 """
 
 
@@ -219,3 +221,46 @@ def test_keyboard_interrupt_during_analysis_does_not_crash():
     src = inspect.getsource(analyze_outdated_batch)
     assert "except KeyboardInterrupt" in src, "Missing KeyboardInterrupt handler"
     assert "cancel_futures=True" in src, "Missing cancel_futures=True"
+
+
+# ---------------------------------------------------------------------------
+# Batch failure boundary: a verdict-rendering error fails one package
+# ---------------------------------------------------------------------------
+
+
+def test_a_verdict_rendering_failure_fails_one_package_not_the_batch(monkeypatch):
+    """`verdict_for` ran outside `_pipeline_one`'s try, so a rule template
+    that raised (an IndexError from a malformed user template, say) escaped
+    through `future.result()` and aborted `analyze_outdated_batch`,
+    discarding every package already analysed.  The contract is "reported,
+    not dropped": the batch must survive and mark that one package failed.
+    """
+    from types import SimpleNamespace
+
+    import trustsight.review as review
+
+    monkeypatch.setattr(review, "prefetch", lambda pkgs, cb=None: {})
+    monkeypatch.setattr(
+        review, "analyze_package",
+        lambda name, **kw: SimpleNamespace(
+            name=name, old_commit=None, new_commit=None),
+    )
+
+    def evaluate(fact):
+        if fact.name == "alpha":
+            raise IndexError("Replacement index 0 out of range")
+        return {"package": fact.name, "verdict": "ok", "suppressed_rules": []}
+
+    monkeypatch.setattr(review, "evaluate_fact", evaluate)
+
+    results = review.analyze_outdated_batch([
+        {"name": "alpha", "current_version": "1.0"},
+        {"name": "beta", "current_version": "2.0"},
+    ])
+
+    by_name = {r["package"]: r for r in results}
+    assert set(by_name) == {"alpha", "beta"}, "the batch must not be aborted"
+    assert by_name["alpha"]["failed"] is True
+    assert by_name["alpha"]["error_type"] == "IndexError"
+    assert "NOT vetted" in by_name["alpha"]["verdict"]
+    assert by_name["beta"].get("failed") is not True

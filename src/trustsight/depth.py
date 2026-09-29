@@ -34,7 +34,9 @@ process uses, and [Part D] lists unbounded resource use from a crafted
 package as a vulnerability. So ``-1`` means "as deep as it goes" up to
 ``MAX_DEPTH_LEVELS`` and ``MAX_DEPTH_NODES``, and stopping early is recorded
 as the ``deps_not_scanned`` coverage gap rather than passed off as a
-finished walk.
+finished walk. A finite depth above ``MAX_DEPTH_LEVELS`` is capped by the
+same ceiling and reported the same way: the walk covered fewer levels than
+were asked for.
 
 A *completed* walk is not a gap. Asking for depth 1 and getting depth 1 is
 a complete answer to the question that was asked, even though a level 2
@@ -227,9 +229,12 @@ def walk_dependencies(
         frontier = nxt
         level += 1
 
-    # Only an exhaustive walk can be cut short by a level ceiling: a finite
-    # depth that completed answered the question it was asked.
-    if frontier and depth == -1 and level > MAX_DEPTH_LEVELS:
+    # A walk the level ceiling stopped below the requested depth did not
+    # complete: ``-1`` asked for everything, and a finite depth above the
+    # ceiling asked for more levels than it got.  A finite depth at or below
+    # the ceiling that ended by its own limit answered the question it was
+    # asked and is not a gap.
+    if frontier and level > MAX_DEPTH_LEVELS and (depth == -1 or depth > MAX_DEPTH_LEVELS):
         result.truncated = True
         result.reason = (
             f"stopped at {MAX_DEPTH_LEVELS} levels; the closure is deeper than "
@@ -308,7 +313,11 @@ def dependency_closure(
         frontier = nxt
         level += 1
 
-    if frontier and depth == -1 and level > MAX_DEPTH_LEVELS:
+    # Same rule as ``walk_dependencies``: a ceiling that cut the walk below
+    # the requested depth (``-1``, or a finite depth above the ceiling) is a
+    # truncation; a finite depth within the ceiling that ended by its own
+    # limit is not.
+    if frontier and level > MAX_DEPTH_LEVELS and (depth == -1 or depth > MAX_DEPTH_LEVELS):
         closure.truncated = True
         closure.reason = (
             f"stopped at {MAX_DEPTH_LEVELS} levels; the closure is deeper "

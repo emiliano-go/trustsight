@@ -383,6 +383,31 @@ def test_review_result_and_cycle_report_serialize_to_json(ts):
     assert json.loads(json.dumps(status.to_dict()))["database_path"] == str(ts.database_path)
 
 
+def test_cycle_report_to_dict_includes_added():
+    """The dataclass carries added/changed/removed and the docs list all
+    three, but to_dict() serialised only changed/removed/processed."""
+    body = CycleReport(added=1, changed=2, removed=3, processed=6).to_dict()
+    assert body["added"] == 1
+    assert body["changed"] == 2
+    assert body["removed"] == 3
+    assert json.loads(json.dumps(body))["added"] == 1
+
+
+def test_coverage_gap_reasons_answers_membership_before_first_lookup():
+    """`in` on the lazy table must not lie on a fresh instance.
+
+    `_LazyGapReasons` never overrode `__contains__`, so membership testing
+    consulted the not-yet-loaded dict and reported False for gaps a keyed
+    lookup would have resolved.
+    """
+    from trustsight.api import _LazyGapReasons
+
+    reasons = _LazyGapReasons()
+    assert "diff_truncated" in reasons
+    assert "deps_not_scanned" in reasons
+    assert "not_a_real_gap" not in reasons
+
+
 def test_review_api_preserves_engine_failures_and_serializes_them(ts, monkeypatch):
     _stub_review(monkeypatch, rows=[{
         "package": "broken",
@@ -816,15 +841,20 @@ def test_forget_removes_a_tracked_package(ts):
     assert get_package_id("doomed") is None
 
 
-def test_prune_refuses_to_act_on_an_empty_rpc_answer(ts, monkeypatch):
-    """A network blip must not be read as "the whole AUR is gone"."""
-    from trustsight.db import upsert_package
+def test_prune_refuses_to_act_on_an_incomplete_rpc_answer(ts, monkeypatch):
+    """A network blip must not be read as "the whole AUR is gone": an
+    answer the RPC never gave is not an answer, and prune deletes nothing
+    on it."""
+    from trustsight.db import get_package_id, upsert_package
 
     upsert_package("alpha", "1.0")
-    monkeypatch.setattr("trustsight.discovery.get_aur_package_info", lambda names: {})
+    monkeypatch.setattr(
+        "trustsight.discovery.get_existing_aur_package_names", lambda names: None
+    )
 
     with pytest.raises(TrustSightError, match="cannot determine"):
         ts.prune()
+    assert get_package_id("alpha") is not None
 
 
 def test_prune_dry_run_reports_without_deleting(ts, monkeypatch):
@@ -832,8 +862,11 @@ def test_prune_dry_run_reports_without_deleting(ts, monkeypatch):
 
     upsert_package("alpha", "1.0")
     upsert_package("gone", "1.0")
+    # An authoritative answer: the AUR confirmed "alpha" and, by its
+    # absence from the reply, that "gone" no longer exists.
     monkeypatch.setattr(
-        "trustsight.discovery.get_aur_package_info", lambda names: {"alpha": {}}
+        "trustsight.discovery.get_existing_aur_package_names",
+        lambda names: {"alpha"},
     )
 
     assert list(ts.prune(dry_run=True)) == ["gone"]

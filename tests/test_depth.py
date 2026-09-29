@@ -16,6 +16,7 @@ from trustsight.depth import (
     DependencyReport,
     RpcMetadata,
     SnapshotMetadata,
+    dependency_closure,
     resolve_depth,
     walk_dependencies,
 )
@@ -159,6 +160,38 @@ def test_a_finite_depth_is_still_bounded_by_the_level_ceiling():
     edges = {f"p{i}": {f"p{i + 1}"} for i in range(MAX_DEPTH_LEVELS + 5)}
     result, _ = _walk("p0", 999, edges, aur=set(edges) | {f"p{MAX_DEPTH_LEVELS + 5}"})
     assert len(result.reports) == MAX_DEPTH_LEVELS
+
+
+def test_a_finite_depth_cut_by_the_ceiling_is_reported_truncated():
+    """`--depth 100` on a deeper closure did not complete, and must say so.
+
+    The walk is still capped at MAX_DEPTH_LEVELS, but stopping there used to
+    report truncated=False, so no deps_not_scanned gap was recorded even
+    though fewer levels were walked than were asked for.  A depth equal to
+    the ceiling, by contrast, got exactly what it asked for.
+    """
+    edges = {f"p{i}": {f"p{i + 1}"} for i in range(MAX_DEPTH_LEVELS + 5)}
+    aur = set(edges) | {f"p{MAX_DEPTH_LEVELS + 5}"}
+    result, _ = _walk("p0", 100, edges, aur=aur)
+    assert len(result.reports) == MAX_DEPTH_LEVELS
+    assert result.truncated is True
+    assert "levels" in result.reason
+
+    complete, _ = _walk("p0", MAX_DEPTH_LEVELS, edges, aur=aur)
+    assert len(complete.reports) == MAX_DEPTH_LEVELS
+    assert complete.truncated is False
+
+
+def test_the_closure_walk_reports_a_finite_depth_cut_by_the_ceiling():
+    """The `review --deps` path carries the same truncation flag."""
+    edges = {f"p{i}": {f"p{i + 1}"} for i in range(MAX_DEPTH_LEVELS + 5)}
+    closure = dependency_closure(
+        ["p0"], depth=100,
+        metadata=_meta(edges, set(edges) | {f"p{MAX_DEPTH_LEVELS + 5}"}),
+    )
+    assert len(closure.levels) == MAX_DEPTH_LEVELS
+    assert closure.truncated is True
+    assert "levels" in closure.reason
 
 
 # ---------------------------------------------------------------------------

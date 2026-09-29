@@ -514,6 +514,19 @@ def test_a_missing_template_field_falls_back_instead_of_raising():
     assert "fallback text" in _render(entry, PackageFact())
 
 
+def test_a_positional_placeholder_falls_back_instead_of_raising():
+    """`str.format` also raises IndexError, which the fallback did not catch.
+
+    rules.toml templates reach `_render` with no load-time validation, so a
+    user-written "hit: {}" must degrade to the reason text rather than slip
+    an IndexError up through `evaluate_fact`.
+    """
+    from trustsight.verdict import _render
+
+    entry = ScoreEntry(rule_id="R001", reason="fallback text", template="hit: {}")
+    assert "fallback text" in _render(entry, PackageFact())
+
+
 def test_nothing_in_the_rendering_path_reaches_the_network():
     import trustsight.findings as findings
     import trustsight.verdict as verdict

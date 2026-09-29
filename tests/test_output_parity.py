@@ -273,6 +273,23 @@ def test_a_finding_with_no_file_does_not_open_with_a_gap():
     ) == "PKGBUILD line 4  d"
 
 
+def test_inspect_names_where_the_finding_is():
+    """#18: `inspect` named the rule but not the location, and finding where
+    a finding actually was took a trip to --json.  Both inspect renderers
+    carry `PKGBUILD line 4` now, regardless of flags; an aggregate entry
+    (no file, no line) gets no prefix."""
+    fact = _fact()
+    for name, out in _terminal_renders(fact).items():
+        if name.startswith("inspect"):
+            assert "PKGBUILD line 4" in out, f"{name} has no location for {RULE}"
+
+    fact.score_breakdown[0].file = ""
+    fact.score_breakdown[0].line = None
+    for name, out in _terminal_renders(fact).items():
+        if name.startswith("inspect"):
+            assert " line " not in out, f"{name} prefixes a file-less finding"
+
+
 def test_a_dependency_card_withholds_the_band_like_everything_else():
     """Reported from a real `review` panel: `Risk (High)` with no flag.
 
@@ -364,6 +381,48 @@ def test_a_status_line_never_swallows_a_finding(status):
 
     for name, out in (("review rich", rich), ("review plain", plain)):
         assert REASON in out, f"{name} hid the finding behind the {status} status"
+
+
+# ---------------------------------------------------------------------------
+# The Status line agrees with the shared triviality definition.
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_status_agrees_with_is_trivial_on_a_w_finding():
+    """A W-series finding is weight-0 and INFO, yet ``reporting.is_trivial``
+    is False for it: its whole content is "something ran that nobody read".
+
+    ``inspect``'s Status line re-derived triviality from weight and severity
+    alone, so the panel printed "Only pkgver and sha256sums changed"
+    directly above its own "Rules Triggered: W003" row, while ``review``
+    and ``inspect --json`` called the same update non-trivial.
+    """
+    fact = PackageFact(
+        package_name=PKG,
+        old_version=OLD,
+        new_version=NEW,
+        diff_summary=DiffSummary(
+            lines_added=1,
+            lines_removed=0,
+            files_changed=[FILE],
+            file_changes=[{"path": FILE, "status": "modified"}],
+        ),
+        score_breakdown=[
+            ScoreEntry(rule_id="W003", severity="INFO", weight=0,
+                       reason="applies a patch this analysis did not read",
+                       file=FILE, line=3),
+        ],
+    )
+
+    assert evaluate_fact(fact)["is_trivial"] is False
+
+    renders = {
+        "inspect rich": _rich(lambda: inspect_cli._inspect_rich(fact)),
+        "inspect plain": _plain(lambda: inspect_cli._inspect_plain(fact)),
+    }
+    for name, out in renders.items():
+        assert "The update is not trivial. Review it." in out, name
+        assert "Only pkgver and sha256sums changed" not in out, name
 
 
 # ---------------------------------------------------------------------------

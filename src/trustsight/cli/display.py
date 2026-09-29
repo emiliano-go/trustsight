@@ -197,6 +197,21 @@ def _fmt_bytes(n: int) -> str:
     return f"{n:.1f}TB"
 
 
+def finding_where(file: str, line: "int | None") -> str:
+    """A finding's location as ``PKGBUILD line 4``, or ``""`` when it has none.
+
+    One definition, shared by the review and inspect renderers: an aggregate
+    entry (no file, no line - ``SOURCE_BUCKET``, a coverage row) gets no
+    location prefix, and a file with no line renders as the file alone.
+    The file is package-derived text, so it is cleaned like every other
+    such cell.
+    """
+    file_part = clean(file or "")
+    if file_part and line is not None:
+        return f"{file_part} line {line}"
+    return file_part
+
+
 def _print_colored(msg: str, color: str = "", stderr: bool = False):
     if HAS_RICH:
         from rich.markup import escape

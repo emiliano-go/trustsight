@@ -290,6 +290,15 @@ class Report:
     :ivar required_by: packages in the reviewed set that declare this one a
         dependency.  The reverse of :attr:`dependencies`, populated by
         ``review --deps``; empty on an ordinary review.
+    :ivar coverage_gaps_carried: the subset of :attr:`coverage_gaps` whose
+        root cause the previous recorded analysis already carried.  Still
+        gaps; labelled "unchanged since the previous review" rather than
+        read as introduced by this diff.
+    :ivar cached: this report serves the recorded analysis unchanged: the
+        AUR HEAD, both versions, the dependency depth and the ruleset were
+        all unchanged, so nothing was re-computed.
+    :ivar cached_at: when the reused analysis was recorded; empty unless
+        :attr:`cached`.
     """
 
     package: str
@@ -372,6 +381,14 @@ class Report:
     the subject is the thing that was asked for.
     """
 
+    coverage_gaps_carried: tuple[str, ...] = ()
+    """The subset of :attr:`coverage_gaps` unchanged since the previous review."""
+
+    cached: bool = False
+    """The recorded analysis was served unchanged (#20); nothing was re-computed."""
+    cached_at: str = ""
+    """When the reused analysis was recorded; empty unless :attr:`cached`."""
+
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
     _evaluated: dict = field(default_factory=dict, repr=False, compare=False)
 
@@ -402,7 +419,7 @@ class Report:
         """The one-line caveat prefixed to the verdict, or "" when there is none."""
         from .coverage import describe
 
-        return describe(list(self.coverage_gaps))
+        return describe(list(self.coverage_gaps), carried=self.coverage_gaps_carried)
 
     @property
     def raw(self) -> dict:
@@ -677,6 +694,7 @@ class CycleReport:
     def to_dict(self) -> dict:
         """Serialize to a plain dict for ``full-aur`` JSON output."""
         return {
+            "added": self.added,
             "changed": self.changed,
             "removed": self.removed,
             "processed": self.processed,
@@ -764,6 +782,11 @@ class _LazyGapReasons(dict):
 
     def __getitem__(self, key):
         return dict.__getitem__(self._load(), key)
+
+    def __contains__(self, key):
+        # `in` is the natural way to test a "gap identifier -> reason" table;
+        # without this it consulted the not-yet-loaded dict and lied.
+        return dict.__contains__(self._load(), key)
 
     def get(self, key, default=None):
         return dict.get(self._load(), key, default)
@@ -889,12 +912,15 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "suppressed_rules": [s.to_dict() for s in report.suppressed],
         "changes": list(report.changes),
         "coverage_gaps": list(report.coverage_gaps),
+        "coverage_gaps_carried": list(report.coverage_gaps_carried),
         "file_changes": [c.to_dict() for c in report.file_changes],
         "ioc_matches": list(report._raw.get("ioc_matches", ())),
         "first_seen": report.first_seen,
         "is_trivial": report.is_trivial,
         "diff_truncated": report.diff_truncated,
         "failed": False,
+        "cached": report.cached,
+        "cached_at": report.cached_at,
         "config_fingerprint": report.config_fingerprint,
         "review_profile": report.review_profile,
         "review_threshold": report.review_threshold,
@@ -939,6 +965,7 @@ def _report_from_fact(fact) -> Report:
         suppressed=_suppressed(evaluated["suppressed_rules"]),
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
+        coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
         file_changes=_file_changes(evaluated["file_changes"]),
         added_urls=tuple(fact.source_changes.added_urls),
         removed_urls=tuple(fact.source_changes.removed_urls),
@@ -965,6 +992,8 @@ def _report_from_fact(fact) -> Report:
         diff_truncated=evaluated["diff_truncated"],
         tree_analyzed=fact.tree_analyzed,
         version_comparison=evaluated["version_comparison"],
+        cached=bool(getattr(fact, "cached", False)),
+        cached_at=getattr(fact, "cached_at", "") or "",
         adapter=fact.adapter,
         review_profile=evaluated["review_profile"],
         review_threshold=evaluated["review_threshold"],
@@ -1023,11 +1052,14 @@ def _report_from_result(row: dict) -> Report:
         suppressed=_suppressed(evaluated["suppressed_rules"]),
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
+        coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
         file_changes=_file_changes(evaluated["file_changes"]),
         first_seen=evaluated["first_seen"],
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
         version_comparison=evaluated["version_comparison"],
+        cached=bool(evaluated.get("cached", False)),
+        cached_at=evaluated.get("cached_at", "") or "",
         required_by=tuple(evaluated.get("required_by", ())),
         review_profile=evaluated["review_profile"],
         review_threshold=evaluated["review_threshold"],
@@ -1688,21 +1720,22 @@ class TrustSight:
 
         :returns: per-package, per-table counts of what would be or was
             deleted.
-        :raises TrustSightError: the AUR RPC returned nothing, so which
-            packages still exist could not be determined.  Deleting on that
-            answer would forget the whole database over a network blip.
+        :raises TrustSightError: the AUR gave no authoritative answer
+            (network failure, retry exhaustion, malformed reply), so which
+            packages still exist could not be determined.  Deleting on a
+            guess would forget the whole database over a network blip.
         """
         from .db import forget_prune, get_all_packages
-        from .discovery import get_aur_package_info
+        from .discovery import get_existing_aur_package_names
 
         self._ensure_ready()
         names = [p["name"] for p in get_all_packages()]
         if not names:
             return {}
-        aur_names = set(get_aur_package_info(names))
-        if not aur_names:
+        existing = get_existing_aur_package_names(names)
+        if existing is None:
             raise TrustSightError(
                 "AUR RPC returned no data; cannot determine which packages "
                 "still exist. Check your network connection and try again."
             )
-        return forget_prune(aur_names, dry_run=dry_run)
+        return forget_prune(existing, dry_run=dry_run)

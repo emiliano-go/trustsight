@@ -18,7 +18,7 @@ from typing import Callable, Optional
 from .analysis import analyze_package
 from .config import CONFIG_DIR, load_config
 from .reporting import evaluate_fact, is_trivial
-from .verdict import no_aur_change_note
+from .verdict import cached_note, no_aur_change_note
 
 log = logging.getLogger(__name__)
 
@@ -421,9 +421,9 @@ def analyze_outdated_batch(
 ) -> list[dict]:
     """Prefetch, analyse and summarise *pkgs*, one result dict per package.
 
-    A package whose analysis raises is reported, not dropped: the result
-    carries ``failed: True`` and a verdict saying it was NOT vetted, since
-    silently omitting it reads as "nothing to see here".
+    A package whose analysis or verdict rendering raises is reported, not
+    dropped: the result carries ``failed: True`` and a verdict saying it was
+    NOT vetted, since silently omitting it reads as "nothing to see here".
     """
     hints = prefetch(pkgs, progress_callback)
 
@@ -450,11 +450,18 @@ def analyze_outdated_batch(
                 # when twenty installed packages all need it.
                 _depth_seen=depth_seen,
                 record=record,
+                # A package whose recorded analysis already covers this HEAD,
+                # version pair, depth and ruleset is served from it (#20),
+                # which is what makes a nightly `review --all` cheap.
+                allow_cached=True,
             )
+            # Verdict rendering stays inside the failure boundary: a rule
+            # template that raises must fail this one package, not abort the
+            # batch through `future.result()` and discard every result.
+            verdict = verdict_for(fact)
         except Exception as exc:
             log.warning("analysis of %s failed unexpectedly", name, exc_info=True)
             return ("fail", entry, None, None, exc)
-        verdict = verdict_for(fact)
         return ("ok", entry, fact, verdict, None)
 
     total = len(pkgs)
@@ -520,7 +527,9 @@ def analyze_outdated_batch(
             evaluated["old_version"] = entry["current_version"]
         if entry.get("latest_version"):
             evaluated["new_version"] = entry["latest_version"]
-        evaluated["aur_note"] = no_aur_change_note(fact)
+        # A cached result says so instead of "No changes in the AUR": the
+        # analysis itself was not re-run, which is a different claim (#20).
+        evaluated["aur_note"] = cached_note(fact) or no_aur_change_note(fact)
         evaluated.pop("raw", None)
         evaluated.pop("fact", None)
         res = evaluated

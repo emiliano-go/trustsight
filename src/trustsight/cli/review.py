@@ -23,6 +23,7 @@ from .display import (
     console,
     display_version,
     err_console,
+    finding_where,
     use_rich,
     use_rich_progress,
 )
@@ -338,10 +339,8 @@ def _finding_line(finding: dict) -> str:
     aggregate such as `SOURCE_BUCKET`) used to open with a stray space
     where the filename would have been.
     """
-    file_part = clean(finding.get("file", "") or "")
-    line = finding.get("line")
+    where = finding_where(finding.get("file", "") or "", finding.get("line"))
     desc = clean(finding.get("description", ""))
-    where = f"{file_part} line {line}" if file_part and line is not None else file_part
     return f"{where}  {desc}" if where else desc
 
 
@@ -765,8 +764,12 @@ def register_commands(app: typer.Typer):
                 if not HAS_RICH:
                     print(f"Warning: {msg}")
                     return
+                from rich.text import Text
                 con = console()
-                con.print(f"[yellow]Warning:[/] {msg}")
+                # Text, not markup interpolation: msg carries --repo values
+                # and paths, and Rich reads a bare str as markup, so a
+                # bracketed substring would be eaten or abort the render.
+                con.print(Text(f"Warning: {clean(msg)}", style="yellow"))
 
             if all_repos_flag:
                 from ..discovery import get_local_repos_from_pacman_conf
@@ -781,7 +784,10 @@ def register_commands(app: typer.Typer):
                         elif not HAS_RICH:
                             print(f"Error: {exc}")
                         else:
-                            console().print(f"[red]Error:[/] {exc}")
+                            from rich.text import Text
+                            # Same markup hazard as _warn above: str(exc)
+                            # carries user-supplied paths and repo names.
+                            console().print(Text(f"Error: {clean(exc)}", style="red"))
                         raise typer.Exit(code=2)
 
             try:

@@ -32,6 +32,8 @@ the codebase allowed to turn coverage into a verdict.
 
 import re
 import threading
+from collections.abc import Collection
+
 from .tokenizer import split_lines
 
 # The gap identifiers.  These are part of the report schema and the
@@ -470,11 +472,24 @@ def gaps_from(
     return gaps
 
 
-def describe(gaps: list[str]) -> str:
-    """One sentence naming every gap, for the verdict text."""
+def describe(gaps: list[str], carried: Collection[str] = ()) -> str:
+    """One sentence naming every gap, for the verdict text.
+
+    A gap in *carried* had the same root cause in the previous recorded
+    analysis (#19): it is still a gap and still fails closed, but the
+    sentence says so instead of reading as a shortfall this diff
+    introduced.
+    """
     if not gaps:
         return ""
-    reasons = [GAP_REASONS[g] for g in gaps if g in GAP_REASONS]
+    reasons = []
+    for gap in gaps:
+        if gap not in GAP_REASONS:
+            continue
+        reason = GAP_REASONS[gap]
+        if gap in carried:
+            reason += " (unchanged since the previous review)"
+        reasons.append(reason)
     if not reasons:
         return ""
     if len(reasons) == 1:

@@ -28,7 +28,11 @@ def _render(entry: ScoreEntry, fact: PackageFact) -> str:
                 params[field] = val
     try:
         return f"{template.format(**params)} [{entry.rule_id}]"
-    except (KeyError, ValueError):
+    except (KeyError, IndexError, ValueError):
+        # A malformed template (a missing key, a bare "{}" with no positional
+        # argument, a bad conversion) must not escape: rules.toml templates
+        # are user-written and get no load-time validation, so the reason
+        # text stands in for whatever the template could not say.
         return f"{entry.reason} [{entry.rule_id}]"
 
 
@@ -114,6 +118,23 @@ def no_aur_change_note(fact) -> str | None:
         else:
             note += "  The two versions could not be compared."
     return note
+
+
+def cached_note(fact) -> str | None:
+    """The #20 status line, when the recorded analysis was served unchanged.
+
+    Distinct from :func:`no_aur_change_note`: that one describes a fresh
+    analysis of an unmoved commit, this one says the analysis itself was
+    not re-run, and when the reused one was recorded.
+    """
+    if not getattr(fact, "cached", False):
+        return None
+    # The stored timestamp is SQLite's ``datetime('now')``: the date is the
+    # part a reader wants, the seconds are noise.
+    when = str(getattr(fact, "cached_at", "") or "").split(" ", 1)[0]
+    if when:
+        return f"Unchanged since last review; reusing the analysis from {when}."
+    return "Unchanged since last review; reusing the recorded analysis."
 
 
 def _version_prefix(fact: PackageFact) -> str:

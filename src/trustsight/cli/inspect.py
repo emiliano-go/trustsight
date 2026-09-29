@@ -28,6 +28,7 @@ from .display import (
     _severity_text,
     _weight_text,
     console,
+    finding_where,
     no_aur_change_note,
     use_rich,
     version_transition,
@@ -67,8 +68,14 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     # band label alone, and the default output withholds the band, so
     # `inspect` with no flags said nothing at all about a partial read -
     # the one light that must never be suppressible.
+    carried = set(getattr(fact, "carried_coverage_gaps", ()))
     for gap in fact.coverage_gaps:
-        rows.append(("Not vetted", f"[yellow]{safe_markup(GAP_REASONS.get(gap, gap))}[/]"))
+        reason = GAP_REASONS.get(gap, gap)
+        # #19: a gap the previous review already carried says so, instead of
+        # reading as a shortfall this diff introduced.
+        if gap in carried:
+            reason += " (unchanged since the previous review)"
+        rows.append(("Not vetted", f"[yellow]{safe_markup(reason)}[/]"))
 
     # No first-seen row here: the Status row at the foot of the panel is
     # unconditional and `_status_text` returns the same sentence, so this
@@ -159,6 +166,11 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
                 segs.append(str(_weight_text(entry.weight)) + " ")
             if show_risk:
                 segs.append(str(_severity_text(entry.severity)) + " ")
+            # Where the finding is, flag or no flag: naming the rule without
+            # the location sent the reader to --json to find it (#18).
+            where = finding_where(entry.file, entry.line)
+            if where:
+                segs.append(Text(where + "  "))
             segs.append(Text(clean(entry.reason)))
             inside.add_row("", Text.assemble(*segs))
 
@@ -218,12 +230,14 @@ def _status_text(fact) -> str:
         return note
     if fact.first_seen:
         return "First analysis. No prior history for this package."
-    if not fact.diff_summary.files_changed:
-        return "Only pkgver and sha256sums changed. Review the diff before building."
-    for e in fact.score_breakdown:
-        if e.weight > 0 or e.severity in ("FATAL", "CRITICAL"):
-            if e.rule_id != "C002":
-                return "The update is not trivial. Review it."
+    # The triviality call must be the shared one: weight-0 findings that
+    # carry no score (the W series, H043/H065) still make the update
+    # non-trivial, and the JSON body and `review` both say so.  A local
+    # re-derivation that looked only at weight and severity printed the
+    # reassuring sentence directly above the finding it contradicted.
+    from ..reporting import is_trivial
+    if not is_trivial(fact):
+        return "The update is not trivial. Review it."
     return "Only pkgver and sha256sums changed. Review the diff before building."
 
 
@@ -231,8 +245,13 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     print(f"TrustSight Inspect: {clean(fact.package_name)}")
     print(f"  Version: {clean(version_transition(fact))}")
     print(f"  Status: {clean(_status_text(fact))}")
+    carried = set(getattr(fact, "carried_coverage_gaps", ()))
     for gap in fact.coverage_gaps:
-        print(f"  [Not fully vetted: {clean(GAP_REASONS.get(gap, gap))}.]")
+        reason = GAP_REASONS.get(gap, gap)
+        # Same provenance marker as the Rich panel above (#19).
+        if gap in carried:
+            reason += " (unchanged since the previous review)"
+        print(f"  [Not fully vetted: {clean(reason)}.]")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
     if fact.maintainer_changed:
@@ -282,7 +301,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
                 segs.append(f"{e.weight:+d}")
             if show_risk:
                 segs.append(f"{clean(e.severity):<8}")
-            segs.append(clean(e.reason))
+            # Same location prefix as the Rich render (#18).
+            where = finding_where(e.file, e.line)
+            segs.append(f"{where}  {clean(e.reason)}" if where else clean(e.reason))
             print(" ".join(segs))
     if fact.ioc_matches:
         print("  IOC baseline matches:")

@@ -16,6 +16,7 @@ both spellings look like sanitising:
 """
 
 import ast
+import contextlib
 import io
 import pathlib
 import re
@@ -183,3 +184,67 @@ def test_a_hostile_finding_reason_survives_rendering_intact():
     rendered = _render(__import__("rich.text", fromlist=["Text"]).Text(clean(reasons[0])))
     assert "\x1b" not in rendered
     assert "\x9b" not in rendered
+
+
+# ---------------------------------------------------------------------------
+# review's own diagnostics carried the same hazard.
+# ---------------------------------------------------------------------------
+
+
+def _review_with_bracketed_value(tmp_path, monkeypatch, argv, **patches):
+    """Run `review` with the Rich renderer forced and recording.
+
+    The warning/error lines are only markup-parsed when Rich draws them, so
+    the console is replaced by one writing to a buffer; what matters is the
+    text that comes back out.
+    """
+    from typer.testing import CliRunner
+
+    from trustsight.cli.app import app
+
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    buffer = io.StringIO()
+    con = Console(file=buffer, force_terminal=False, width=100)
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(patch("trustsight.cli.review.HAS_RICH", True))
+        stack.enter_context(patch("trustsight.cli.review.console", lambda: con))
+        for target, value in patches.items():
+            stack.enter_context(patch(target, value))
+        result = CliRunner().invoke(app, argv)
+    return result, buffer.getvalue()
+
+
+def test_a_bracketed_repo_name_survives_the_review_warning(tmp_path, monkeypatch):
+    """`review --repo '[x]'` printed `Warning: repo '' does not exist.`:
+    `_warn` interpolated the message into a Rich markup string and the
+    bracketed substring was parsed as a tag."""
+    result, out = _review_with_bracketed_value(
+        tmp_path, monkeypatch, ["review", "--repo", "[x]"],
+        **{
+            "trustsight.discovery.get_installed_from_repo": lambda repo: [],
+            "trustsight.discovery._repo_exists": lambda repo: False,
+            "trustsight.discovery.get_repo_newest_versions": lambda repo: {},
+            "trustsight.discovery.get_installed_foreign": lambda: [],
+        },
+    )
+    assert result.exit_code == 0, result.output
+    assert "repo '[x]' does not exist." in out
+
+
+def test_a_bracketed_value_survives_the_all_repos_error(tmp_path, monkeypatch):
+    """The `--all-repos` failure line did the same with ``str(exc)``."""
+    def _broken_conf():
+        raise RuntimeError("cannot parse '[x]' in pacman.conf")
+
+    result, out = _review_with_bracketed_value(
+        tmp_path, monkeypatch, ["review", "--all-repos"],
+        **{
+            "trustsight.discovery.get_local_repos_from_pacman_conf": _broken_conf,
+        },
+    )
+    assert result.exit_code == 2, result.output
+    assert "cannot parse '[x]' in pacman.conf" in out

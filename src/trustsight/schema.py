@@ -121,6 +121,12 @@ class PackageFact:
     coverage_gaps: list[str] = field(default_factory=list)
     unresolved_sources: list[str] = field(default_factory=list)
 
+    # The subset of ``coverage_gaps`` whose root cause was already in the
+    # previous recorded analysis (#19).  Still gaps - they fail closed the
+    # same way - but the report says "unchanged since the previous review"
+    # instead of reading as a shortfall this diff introduced.
+    carried_coverage_gaps: list[str] = field(default_factory=list)
+
     # Newly declared dependency names, as {field: [names]} from
     # deps.extract_dependency_changes.  Populated for the change summary
     # (B7); the D-series rules compute their own view.
@@ -183,6 +189,18 @@ class PackageFact:
     depth_truncated: bool = False
     depth_note: str = ""
 
+    #: The dependency depth this run analysed to (``resolve_depth``'s
+    #: answer).  Recorded so a later run can tell whether the stored
+    #: analysis was produced at the depth it is being asked for.
+    depth: int = 0
+
+    #: True when this fact was served from the recorded analysis rather
+    #: than freshly computed (#20).  ``cached_at`` is the recording's
+    #: timestamp.  Both are runtime markers: a stored row always has
+    #: ``cached=False``, because a cache hit inserts nothing.
+    cached: bool = False
+    cached_at: str = ""
+
 
 def fact_to_dict(fact: PackageFact) -> dict:
     """Serialize a PackageFact to a plain dict."""
@@ -217,6 +235,11 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "previous_maintainer": fact.previous_maintainer,
         "current_maintainer": fact.current_maintainer,
         "pkgver_changed": fact.pkgver_changed,
+        "pkgver_old": fact.pkgver_old,
+        "pkgver_new": fact.pkgver_new,
+        "version_moved": fact.version_moved,
+        "version_comparison": fact.version_comparison,
+        "temporal_source": fact.temporal_source,
         "diff_summary": {
             "lines_added": fact.diff_summary.lines_added,
             "lines_removed": fact.diff_summary.lines_removed,
@@ -248,6 +271,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "changes": fact.changes,
         "dependency_changes": {k: sorted(v) for k, v in fact.dependency_changes.items()},
         "coverage_gaps": fact.coverage_gaps,
+        "carried_coverage_gaps": fact.carried_coverage_gaps,
         "unresolved_sources": fact.unresolved_sources,
         "risk": fact.risk,
         "score_breakdown": [
@@ -271,7 +295,196 @@ def fact_to_dict(fact: PackageFact) -> dict:
             d.to_dict() if hasattr(d, "to_dict") else dict(d)
             for d in fact.dependencies
         ],
+        "depth_truncated": fact.depth_truncated,
+        "depth_note": fact.depth_note,
+        "depth": fact.depth,
+        "cached": fact.cached,
+        "cached_at": fact.cached_at,
     }
+
+
+#: Keys a stored fact must carry before it can be served back (#20).  A row
+#: written by an older version lacks the later additions, and serving a
+#: partial reconstruction would report fields the analysis never computed -
+#: so a short row is a cache miss, not an error.
+_STORED_FACT_KEYS = (
+    "config_fingerprint",
+    "package_name",
+    "old_version",
+    "new_version",
+    "old_commit",
+    "new_commit",
+    "maintainer_changed",
+    "previous_maintainer",
+    "current_maintainer",
+    "pkgver_changed",
+    "pkgver_old",
+    "pkgver_new",
+    "version_moved",
+    "version_comparison",
+    "temporal_source",
+    "diff_summary",
+    "source_changes",
+    "source_buckets",
+    "execution_changes",
+    "novelty_context",
+    "first_seen",
+    "recent_commit_burst",
+    "suppressed_rules",
+    "diff_truncated",
+    "scan_truncated",
+    "tree_analyzed",
+    "changes",
+    "dependency_changes",
+    "coverage_gaps",
+    "carried_coverage_gaps",
+    "unresolved_sources",
+    "risk",
+    "score_breakdown",
+    "final_score",
+    "adapter",
+    "ioc_matches",
+    "dependencies",
+    "depth_truncated",
+    "depth_note",
+    "depth",
+)
+
+
+def fact_from_dict(data: dict) -> PackageFact | None:
+    """Reconstruct a PackageFact from :func:`fact_to_dict` output.
+
+    The round-trip used by the review cache (#20): when the recorded
+    analysis describes exactly what this run was about to compute, the
+    stored fact is served instead of re-running the pipeline.  ``None``
+    when *data* is not a stored fact or predates a key the round-trip
+    needs - an old row is a cache miss, not an error.
+    """
+    if not isinstance(data, dict):
+        return None
+    if any(key not in data for key in _STORED_FACT_KEYS):
+        return None
+
+    from .depth import DependencyReport
+    from .ioc_baseline import IocMatch
+
+    try:
+        diff = data["diff_summary"]
+        source = data["source_changes"]
+        execution = data["execution_changes"]
+        novelty = data["novelty_context"]
+        fact = PackageFact(
+            package_name=data["package_name"],
+            old_version=data["old_version"],
+            new_version=data["new_version"],
+            old_commit=data["old_commit"],
+            new_commit=data["new_commit"],
+            maintainer_changed=data["maintainer_changed"],
+            previous_maintainer=data["previous_maintainer"],
+            current_maintainer=data["current_maintainer"],
+            pkgver_changed=data["pkgver_changed"],
+            pkgver_old=data["pkgver_old"],
+            pkgver_new=data["pkgver_new"],
+            version_moved=data["version_moved"],
+            version_comparison=data["version_comparison"],
+            temporal_source=data["temporal_source"],
+            diff_summary=DiffSummary(
+                lines_added=diff.get("lines_added", 0),
+                lines_removed=diff.get("lines_removed", 0),
+                files_changed=list(diff.get("files_changed", [])),
+                file_changes=list(diff.get("file_changes", [])),
+            ),
+            source_changes=SourceChanges(
+                added_urls=list(source.get("added_urls", [])),
+                removed_urls=list(source.get("removed_urls", [])),
+                checksum_behavior=source.get("checksum_behavior", ""),
+            ),
+            source_buckets=dict(data["source_buckets"]),
+            execution_changes=ExecutionChanges(
+                resolved_commands=list(execution.get("resolved_commands", [])),
+                suspicious_patterns_detected=list(
+                    execution.get("suspicious_patterns_detected", [])),
+                unresolved_patterns=list(execution.get("unresolved_patterns", [])),
+            ),
+            novelty_context=NoveltyContext(
+                url_first_seen_in_this_package=novelty.get(
+                    "url_first_seen_in_this_package", False),
+                url_first_seen_globally=novelty.get("url_first_seen_globally", False),
+                maintainer_first_seen_for_this_package=novelty.get(
+                    "maintainer_first_seen_for_this_package", False),
+            ),
+            first_seen=data["first_seen"],
+            recent_commit_burst=data["recent_commit_burst"],
+            suppressed_rules=list(data["suppressed_rules"]),
+            diff_truncated=data["diff_truncated"],
+            scan_truncated=data["scan_truncated"],
+            tree_analyzed=data["tree_analyzed"],
+            changes=list(data["changes"]),
+            dependency_changes={
+                k: list(v) for k, v in data["dependency_changes"].items()
+            },
+            coverage_gaps=list(data["coverage_gaps"]),
+            carried_coverage_gaps=list(data["carried_coverage_gaps"]),
+            unresolved_sources=list(data["unresolved_sources"]),
+            risk=data["risk"],
+            score_breakdown=[
+                ScoreEntry(
+                    rule_id=e.get("rule_id", ""),
+                    severity=e.get("severity", ""),
+                    weight=e.get("weight", 0),
+                    reason=e.get("reason", ""),
+                    params=dict(e.get("params") or {}),
+                    template=e.get("template", ""),
+                    evidence=dict(e.get("evidence") or {}),
+                    file=e.get("file", ""),
+                    line=e.get("line"),
+                )
+                for e in data["score_breakdown"]
+            ],
+            final_score=data["final_score"],
+            adapter=data["adapter"],
+            ioc_matches=[
+                IocMatch(
+                    type=m.get("type", ""),
+                    value=m.get("value", ""),
+                    source=m.get("source", ""),
+                    confidence=m.get("confidence", ""),
+                    provenance=m.get("provenance", ""),
+                    campaign=m.get("campaign", ""),
+                    added=m.get("added", ""),
+                    surface=m.get("surface", ""),
+                    line=m.get("line"),
+                    expired=m.get("expired", False),
+                )
+                for m in data["ioc_matches"]
+            ],
+            dependencies=[
+                DependencyReport(
+                    name=d.get("name", ""),
+                    depth=d.get("depth", 0),
+                    score=d.get("score", 0),
+                    risk=d.get("risk", ""),
+                    risk_label=d.get("risk_label", ""),
+                    finding_count=d.get("finding_count", 0),
+                    coverage_gaps=tuple(d.get("coverage_gaps", ())),
+                    via=d.get("via", ""),
+                    parent=d.get("parent", ""),
+                    failed=d.get("failed", False),
+                    error=d.get("error", ""),
+                )
+                for d in data["dependencies"]
+            ],
+            depth_truncated=data["depth_truncated"],
+            depth_note=data["depth_note"],
+            depth=data["depth"],
+            cached=data.get("cached", False),
+            cached_at=data.get("cached_at", ""),
+        )
+    except (AttributeError, TypeError):
+        # A sub-structure that is not the shape fact_to_dict writes (a
+        # hand-edited database, a partial write) is a cache miss too.
+        return None
+    return fact
 
 
 def with_changes(fact: PackageFact, diff_text: str = "") -> PackageFact:

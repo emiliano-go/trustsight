@@ -81,7 +81,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
 
     findings = finding_rows(fact)
     verdict = fallback_verdict(fact)
-    coverage_note = describe_coverage(fact.coverage_gaps)
+    coverage_note = describe_coverage(
+        fact.coverage_gaps,
+        carried=getattr(fact, "carried_coverage_gaps", ()),
+    )
     if coverage_note:
         verdict = f"{coverage_note} {verdict}"
 
@@ -111,6 +114,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "suppressed_rules": suppressed_rows(fact),
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
+        "coverage_gaps_carried": list(getattr(fact, "carried_coverage_gaps", ())),
         "file_changes": list(fact.diff_summary.file_changes),
         "first_seen": fact.first_seen,
         "diff_truncated": fact.diff_truncated,
@@ -120,6 +124,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "ioc_matches": list(fact.ioc_matches),
         "dependencies": list(getattr(fact, "dependencies", ())),
         "depth_truncated": bool(getattr(fact, "depth_truncated", False)),
+        # Served from the recorded analysis rather than freshly computed
+        # (#20); both False/"" on a fresh run.
+        "cached": bool(getattr(fact, "cached", False)),
+        "cached_at": getattr(fact, "cached_at", "") or "",
         # `review --deps` reverses the relationship this report describes:
         # the subject is a dependency and the interesting fact is which
         # packages require it. Empty on an ordinary review, where the
@@ -147,6 +155,7 @@ REPORT_KEYS = (
     "file_changes",
     "changes",
     "coverage_gaps",
+    "coverage_gaps_carried",
     "suppressed_rules",
     "ioc_matches",
     "first_seen",
@@ -162,6 +171,8 @@ REPORT_KEYS = (
     "review_profile",
     "review_threshold",
     "flagged",
+    "cached",
+    "cached_at",
 )
 
 #: The aggregate verdict numbers.  Withheld unless the caller asks, because
@@ -242,6 +253,8 @@ def report_body(
         "changes": list(evaluated.get("changes", ())),
         # B2: never dropped, on any path.
         "coverage_gaps": list(evaluated.get("coverage_gaps", ())),
+        # #19: the subset of those gaps unchanged since the previous review.
+        "coverage_gaps_carried": list(evaluated.get("coverage_gaps_carried", ())),
         # B5: unconditional.  A suppression behind a verbosity flag looks
         # exactly like a rule that never matched.
         "suppressed_rules": [dict(r) for r in evaluated.get("suppressed_rules", ())],
@@ -274,6 +287,9 @@ def report_body(
         "review_profile": evaluated.get("review_profile", policy.name),
         "review_threshold": evaluated.get("review_threshold", policy.threshold),
         "flagged": bool(evaluated.get("flagged", False)),
+        # #20: true when the recorded analysis was served unchanged.
+        "cached": bool(evaluated.get("cached", False)),
+        "cached_at": evaluated.get("cached_at", "") or "",
     }
     if include_score:
         body["score"] = evaluated.get("score", 0)
@@ -302,10 +318,13 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "scan_truncated": row.get("scan_truncated", False),
         "changes": list(row.get("changes", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
+        "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
         "version_comparison": row.get("version_comparison", ""),
         "file_changes": list(row.get("file_changes", ())),
         "score_breakdown": findings,
         "suppressed_rules": list(row.get("suppressed_rules", ())),
+        "cached": bool(row.get("cached", False)),
+        "cached_at": row.get("cached_at", "") or "",
     }
     from .review_policy import review_policy
 
@@ -325,6 +344,7 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "changes": list(row.get("changes", ())),
         "required_by": list(row.get("required_by", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
+        "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
         "file_changes": list(row.get("file_changes", ())),
         "first_seen": row.get("first_seen", False),
         "diff_truncated": row.get("diff_truncated", False),
@@ -334,6 +354,8 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "ioc_matches": list(row.get("ioc_matches", ())),
         "dependencies": list(row.get("dependencies", ())),
         "depth_truncated": bool(row.get("depth_truncated", False)),
+        "cached": bool(row.get("cached", False)),
+        "cached_at": row.get("cached_at", "") or "",
         "config_fingerprint": row.get("config_fingerprint", ""),
         "review_profile": policy.name,
         "review_threshold": policy.threshold,

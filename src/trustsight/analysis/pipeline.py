@@ -7,7 +7,7 @@ import time
 import pygit2
 
 from ..buckets import classify_urls
-from ..config import drifted_shipped_rules, load_config
+from ..config import config_fingerprint, drifted_shipped_rules, load_config
 from ..db import (
     effective_observation_count,
     get_last_analysis,
@@ -54,7 +54,7 @@ from ..rules import (
     apply_rules,
     clamp_diff_lines,
     clamp_text,
-    get_raw_diff_lines,
+    get_raw_diff_lines_indexed,
 )
 from .adoption import adoption_findings
 from .buildfetch import has_unpinned_build_deps
@@ -74,6 +74,7 @@ from ..schema import (
     ExecutionChanges,
     NoveltyContext,
     PackageFact,
+    fact_from_dict,
     fact_to_dict,
 )
 from ..tokenizer import split_lines, tokenize_and_resolve_indexed
@@ -87,7 +88,11 @@ from .base import (
 from .composition import _meta_annotations
 from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
-from .structural import _structural_findings, unchanged_upstream_host
+from .structural import (
+    _structural_findings,
+    recipe_checksum_parity_finding,
+    unchanged_upstream_host,
+)
 from .version import (
     any_version_scalar_moved,
     compare_installed_to_aur,
@@ -198,36 +203,44 @@ def _collect_tree_files(
             except Exception:
                 pass
 
+    # Iterative walk on an explicit stack: the tree's depth is the
+    # attacker's choice (a checkout of ~1500 one-character directories fits
+    # in PATH_MAX), and a recursive walk raised RecursionError past the
+    # interpreter limit - escaping analysis entirely instead of degrading
+    # to the tree_not_analyzed gap.
     def walk(tree, prefix: str) -> None:
         nonlocal complete, budget
-        for entry in tree:
-            if entry.type_str == "tree":
-                try:
-                    walk(repo[entry.id], prefix + entry.name + "/")
-                except (KeyError, TypeError, ValueError):
-                    complete = False
-            elif entry.type_str == "blob":
-                try:
-                    blob = repo[entry.id]
-                except (KeyError, TypeError, ValueError):
-                    complete = False
-                    continue
-                path = prefix + entry.name
-                want = head_bytes
-                if budget > 0 and _COMPANION_CONTENT_RE.search(path):
-                    want = max(head_bytes, min(_COMPANION_HEAD_BYTES, budget))
-                data = head_of(blob, want)
-                if data is None:
-                    complete = False
-                    continue
-                if want > head_bytes:
-                    budget -= len(data)
-                    # A companion cut short is a companion partly read, and
-                    # saying the tree was fully examined would be the same
-                    # untruth the size cap used to tell.
-                    if blob.size > len(data):
+        stack = [(tree, prefix)]
+        while stack:
+            cur_tree, cur_prefix = stack.pop()
+            for entry in cur_tree:
+                if entry.type_str == "tree":
+                    try:
+                        stack.append((repo[entry.id], cur_prefix + entry.name + "/"))
+                    except (KeyError, TypeError, ValueError):
                         complete = False
-                files.append((path, data))
+                elif entry.type_str == "blob":
+                    try:
+                        blob = repo[entry.id]
+                    except (KeyError, TypeError, ValueError):
+                        complete = False
+                        continue
+                    path = cur_prefix + entry.name
+                    want = head_bytes
+                    if budget > 0 and _COMPANION_CONTENT_RE.search(path):
+                        want = max(head_bytes, min(_COMPANION_HEAD_BYTES, budget))
+                    data = head_of(blob, want)
+                    if data is None:
+                        complete = False
+                        continue
+                    if want > head_bytes:
+                        budget -= len(data)
+                        # A companion cut short is a companion partly read, and
+                        # saying the tree was fully examined would be the same
+                        # untruth the size cap used to tell.
+                        if blob.size > len(data):
+                            complete = False
+                    files.append((path, data))
 
     try:
         commit = repo.get(commit_oid)
@@ -373,6 +386,53 @@ def _parent_commit(repo, head_commit: str) -> str:
     return str(parents[0].id) if parents else ""
 
 
+def _cached_analysis(
+    package_id: int,
+    head_commit: str,
+    head_version: str,
+    installed_version: str,
+    depth: int | None,
+    config: dict,
+) -> PackageFact | None:
+    """The recorded analysis of *package_id*, when it is this run's answer (#20).
+
+    Served only when everything the run would read is unchanged: the AUR
+    HEAD commit, both version strings, the resolved dependency depth, and
+    the ruleset fingerprint.  Anything else - a moved commit, a version
+    drift, a different ``--depth``, a rules edit, a row written by an older
+    version - is a cache miss, and the caller falls through to a fresh
+    analysis.  The corpus path stores rows with an empty ``new_commit``, so
+    they can never match a real HEAD.
+    """
+    from ..depth import resolve_depth
+
+    row = get_last_analysis(package_id)
+    if row is None:
+        return None
+    if row.get("new_commit") != head_commit:
+        return None
+    if row.get("new_version") != head_version:
+        return None
+    if (row.get("old_version") or "") != (installed_version or ""):
+        return None
+    try:
+        data = json.loads(row.get("fact_json") or "")
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if data.get("config_fingerprint") != config_fingerprint():
+        return None
+    fact = fact_from_dict(data)
+    if fact is None:
+        return None
+    if fact.depth != resolve_depth(depth, config):
+        return None
+    fact.cached = True
+    fact.cached_at = row.get("timestamp", "") or ""
+    return fact
+
+
 def analyze_package(
     pkg_name: str,
     old_commit: str = "",
@@ -384,10 +444,14 @@ def analyze_package(
     _depth_seen: set | None = None,
     record: bool = False,
     full_recipe: bool = False,
+    allow_cached: bool = False,
 ) -> PackageFact:
+    from ..depth import resolve_depth
+
     _ensure_init()
     begin_stage_tracking()
     config = load_config()
+    resolved_depth = resolve_depth(depth, config)
 
     if installed_version is None:
         installed_version = _get_installed_version(pkg_name)
@@ -425,8 +489,25 @@ def analyze_package(
         package_id = get_package_id(pkg_name) or 0
 
     if not head_commit:
-        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record)
+        return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
 
+    # A review run whose HEAD, versions, depth and ruleset all match the
+    # recorded analysis is served that analysis (#20) instead of re-running
+    # the diff, tokenizer, rules, tree and dependency stages.  Review-only:
+    # inspect and the API keep the default ``allow_cached=False``.
+    if allow_cached and not old_commit and not full_recipe and package_id:
+        cached = _cached_analysis(
+            package_id, head_commit, head_version, installed_version,
+            depth, config,
+        )
+        if cached is not None:
+            if record:
+                # No history row: nothing new was analysed.  The sighting
+                # still moves the recorded version, as a fresh run would.
+                update_package_version(pkg_name, head_version)
+            return cached
+
+    last = None
     if full_recipe:
         old_commit = ""
     elif not old_commit:
@@ -456,7 +537,7 @@ def analyze_package(
             # means when there is no review yet.
             old_commit = _parent_commit(repo, head_commit)
             if not old_commit:
-                return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record)
+                return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
 
     # The generator's own truncation has to travel: a patch it declined to
     # retain leaves the assembled text at or under the cap, so measuring the
@@ -515,7 +596,7 @@ def analyze_package(
     resolved_strings, unresolved_strings, resolved_indices = (
         tokenize_and_resolve_indexed(diff_text)
     )
-    raw_lines = get_raw_diff_lines(diff_text)
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
     line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
@@ -523,6 +604,7 @@ def analyze_package(
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
         resolved_indices=resolved_indices,
+        raw_indices=raw_indices,
     )
     tree_manifest, tree_complete = _collect_tree_files(repo, head_commit)
     # A committed binary changing produces an *empty* diff - git emits no
@@ -732,6 +814,7 @@ def analyze_package(
         dependencies=list(depth_result.reports),
         depth_truncated=depth_result.truncated,
         depth_note=depth_result.reason,
+        depth=resolved_depth,
         diff_summary=diff_summary,
         source_changes=source_changes,
         source_buckets=source_buckets,
@@ -757,7 +840,30 @@ def analyze_package(
         ioc_matches=ioc_matches,
     )
 
+    # Dependency changes are part of the fact and of the change summary, so
+    # they are settled before the history write: the stored fact_json is
+    # what the review cache (#20) serves back, and it must read exactly
+    # like the fact this run returns.
+    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
+    fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
     with_changes(fact, diff_text)
+    # #19: a gap whose root cause the previous recorded analysis already
+    # carried is marked as carried, so the report says "unchanged since the
+    # previous review" instead of reading as a shortfall this diff
+    # introduced.  `last` is only populated on the incremental path, so an
+    # explicit old_commit or a full-recipe run fetches the row here; the
+    # fresh path has no previous analysis and keeps the empty list.  This
+    # has to happen before the history write below, or the stored fact
+    # would lack the provenance the next run reads back.
+    if last is None and package_id:
+        last = get_last_analysis(package_id)
+    if last is not None:
+        try:
+            prev = json.loads(last.get("fact_json") or "{}")
+            prev_gaps = prev.get("coverage_gaps", []) if isinstance(prev, dict) else []
+        except (ValueError, TypeError):
+            prev_gaps = []
+        fact.carried_coverage_gaps = [g for g in fact.coverage_gaps if g in prev_gaps]
     if record:
         insert_analysis(
             package_id=package_id,
@@ -775,11 +881,6 @@ def analyze_package(
         if new_maintainer:
             update_package_maintainer(pkg_name, new_maintainer)
         update_aur_orphan_state(pkg_name, aur_orphaned)
-
-    dependency_changes = extract_dependency_changes(diff_text, pkg_name)
-    fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
-    with_changes(fact, diff_text)
-    if record:
         record_dependency_names(sorted(
             name for names in dependency_changes.values() for name in names
         ))
@@ -829,7 +930,7 @@ def scan_diff(
     resolved_strings, unresolved_strings, resolved_indices = (
         tokenize_and_resolve_indexed(diff_text)
     )
-    raw_lines = get_raw_diff_lines(diff_text)
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
     line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
@@ -837,6 +938,7 @@ def scan_diff(
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
         resolved_indices=resolved_indices,
+        raw_indices=raw_indices,
     )
     triggered_rules.extend(
         _structural_findings(
@@ -1022,6 +1124,7 @@ def analyze_package_text(
 def _make_fresh_analysis(
     pkg_name: str, version: str, commit: str, package_id: int, repo, config: dict,
     installed_version: str = "", head_pkgbuild: str = "", record: bool = False,
+    resolved_depth: int = 0,
 ) -> PackageFact:
     """A first analysis: no prior commit to diff against.
 
@@ -1054,6 +1157,9 @@ def _make_fresh_analysis(
     new_pkg = _package_is_new(repo, commit, pkg_name)
     if new_pkg:
         triggered_rules.append(new_pkg)
+    parity = recipe_checksum_parity_finding(head_pkgbuild)
+    if parity:
+        triggered_rules.append(parity)
     tree_manifest: list = []
     tree_complete = True
     if commit:
@@ -1105,6 +1211,7 @@ def _make_fresh_analysis(
         score_breakdown=breakdown,
         risk=risk,
         final_score=score,
+        depth=resolved_depth,
     )
     with_changes(fact)
     if record:

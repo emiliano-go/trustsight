@@ -18,6 +18,12 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "maintainer_changed": bool,
   "previous_maintainer": "string",
   "current_maintainer": "string",
+  "pkgver_changed": bool,
+  "pkgver_old": "string",
+  "pkgver_new": "string",
+  "version_moved": bool,
+  "version_comparison": "string",
+  "temporal_source": "string",
   "diff_summary": {
     "files_changed": ["string"],
     "file_changes": [{"path": "string", "status": "modified"}],
@@ -61,6 +67,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "config_fingerprint": "sha256:...",
   "changes": ["string"],
   "coverage_gaps": ["string"],
+  "carried_coverage_gaps": ["string"],
   "unresolved_sources": ["string"],
   "dependency_changes": {"field_name": ["name1", "name2"]},
   "dependencies": [
@@ -78,6 +85,11 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "error": "string"
     }
   ],
+  "depth_truncated": bool,
+  "depth_note": "string",
+  "depth": int,
+  "cached": bool,
+  "cached_at": "string",
   "risk": "string",
   "adapter": "string",
   "suppressed_rules": [
@@ -122,6 +134,11 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `maintainer_changed` | `bool` | `true` if the committer/author changed between old and new commits (both known). |
 | `previous_maintainer` | `string` | Committer name for the old commit, or empty string. |
 | `current_maintainer` | `string` | Committer name for the HEAD commit. |
+| `pkgver_changed` | `bool` | `true` when the diff itself moved `pkgver`, resolving variables the recipe assigns. pkgver-only; see `version_moved`. |
+| `pkgver_old` / `pkgver_new` | `string` | The resolved old/new `pkgver` behind `pkgver_changed`, so every surface rendering the move reads the same values. |
+| `version_moved` | `bool` | `true` when any pacman version scalar moved: pkgver, pkgrel or epoch. This is the integrity rules' and the verdict's definition of "the version moved". |
+| `version_comparison` | `string` | How the installed version relates to the AUR's declared `pkgver`: `aur_ahead`, `no_aur_change`, `installed_ahead` or `inconclusive`; empty when nothing compared them. |
+| `temporal_source` | `string` | Which clock produced the temporal findings: `git_commit`, `aur_metadata`, `observation_history` or `unknown`. |
 | `first_seen` | `bool` | `true` if this is the first analysis for this package (no prior commit to diff against). |
 | `recent_commit_burst` | `bool` | `true` when the package's recent commit timestamps cluster unusually tightly. |
 | `diff_truncated` | `bool` | `true` when the diff exceeded `[diff] max_diff_bytes` and only a deterministic UTF-8-safe prefix was examined. The score then describes a prefix, not the change; `coverage_gaps` is non-empty and the result cannot be read as a complete clean analysis. |
@@ -129,7 +146,12 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `config_fingerprint` | `string` | `sha256:` digest of the effective ruleset, scoring weights, thresholds and active overrides (B1). Two reports with the same fingerprint were produced by the same instrument; a different fingerprint means a different configuration, not a nondeterministic tool. |
 | `changes` | `list[string]` | Declared facts about what the diff did, whether or not a rule matched (B7): version moves, checksum behaviour, files added or removed, maintainer and source-host changes, and the no-change case. Context, not findings: no severity, no points, never in `triggered_rules`. `.SRCINFO` and `.gitignore` are suppressed as always-noisy. |
 | `scan_truncated` | `bool` | `true` when the diff held more lines than `rules.MAX_SCANNED_LINES` and only its first lines were matched. Distinct from `diff_truncated` because they name different caps: rule matching costs per line, so a diff of many short lines stays under `[diff] max_diff_bytes` and is still cut here. A reader who saw only `diff_truncated` would raise the byte limit and find it changed nothing. |
-| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"unpinned_build_deps"`, `"deps_not_scanned"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. The `"tokenizer_unavailable"` code is not carried here: a dead sandboxed tokenizer fails the package, which is reported through `failed` / `error_type` instead (A6). A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). |
+| `coverage_gaps` | `list[string]` | What this run could not examine, as `"diff_truncated"`, `"scan_truncated"`, `"line_truncated"`, `"tree_not_analyzed"`, `"companion_truncated"`, `"unresolved_source"`, `"unresolved_parse_time"`, `"snapshot_refused"`, `"unpinned_build_deps"`, `"deps_not_scanned"`, `"ruleset_drifted"`, `"stage_degraded"`, `"history_truncated"`, and `"noextract_suppressed"`. The `"tokenizer_unavailable"` code is not carried here: a dead sandboxed tokenizer fails the package, which is reported through `failed` / `error_type` instead (A6). A non-empty list forbids an UNFLAGGED verdict: `risk` is `"Inconclusive"` unless a HIGH or worse finding fired, and in that case the band is shown qualified. Enforced by `coverage.fail_closed` and `coverage.qualified_band`; see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete). A gap whose root cause the previous recorded analysis already carried is named in `carried_coverage_gaps` and rendered with the marker "(unchanged since the previous review)": still a gap, still fail-closed, but not a shortfall this diff introduced. |
+| `carried_coverage_gaps` | `list[string]` | The subset of `coverage_gaps` unchanged since the previous recorded analysis. |
+| `depth_truncated` | `bool` | `true` when the dependency walk stopped before the closure was exhausted; also raises `deps_not_scanned`. |
+| `depth_note` | `string` | Why the dependency walk stopped, for the report text. |
+| `depth` | `int` | The dependency depth this run analysed to (the resolved `[depth] levels` or `--depth`). Recorded so a later run can tell whether the stored analysis covers the depth it is asked for. |
+| `cached` / `cached_at` | `bool` / `string` | Runtime markers of the review cache (#20): `cached` is `true` when the fact was served from the recorded analysis rather than freshly computed, and `cached_at` is the recording's timestamp. A stored row always has `cached: false`, because a cache hit inserts nothing. |
 | `unresolved_sources` | `list[string]` | The `source=` lines behind an `unresolved_source` gap, quoted so the reviewer can see what could not be resolved. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
@@ -236,10 +258,11 @@ There are two JSON shapes, and they are not the same object.
 
   Always present (`reporting.REPORT_KEYS`): `package`, `old_version`,
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
-  `findings`, `file_changes`, `changes`, `coverage_gaps`, `suppressed_rules`,
+  `findings`, `file_changes`, `changes`, `coverage_gaps`, `coverage_gaps_carried`,
+  `suppressed_rules`,
   `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
-  `review_threshold`, `flagged`, `config_fingerprint`.
+  `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`.
 
   On request only:
 
@@ -274,6 +297,23 @@ There are two JSON shapes, and they are not the same object.
   who needs it. Empty on an ordinary review, where the subject is the thing
   that was asked for - the key is always present so a consumer never has to
   special-case its absence.
+
+  `coverage_gaps_carried` is the subset of `coverage_gaps` whose root cause
+  the previous recorded analysis already carried (#19). Carried gaps are
+  still gaps: `fully_vetted` stays `false` and the fail-closed banding is
+  unchanged. What changes is the phrasing: the verdict and the `inspect`
+  renderers mark them "(unchanged since the previous review)" so a repeated
+  review of the same structural shortfall does not read as a new gap this
+  diff introduced.
+
+  `cached` and `cached_at` report the review cache (#20): when a `review`
+  run finds the recorded analysis was made at the same AUR HEAD, the same
+  installed and advertised versions, the same dependency depth and the same
+  ruleset fingerprint, it serves that analysis instead of re-running the
+  pipeline, sets `cached` to `true` and `cached_at` to the recording's
+  timestamp, and writes no new history row. The keys are always present and
+  are `false` / `""` on a fresh analysis. Only `review` serves cached
+  results; `inspect` and the Python API always analyse.
 
   `ReviewResult.to_dict()` and `trustsight review --json` serialize a **list**
   of these report bodies, not a wrapper object. A review can complete its

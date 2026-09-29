@@ -278,7 +278,7 @@ Not reversible. The observations it removes are what the novelty signals count.
 
 ### `prune(*, dry_run=False) -> dict[str, dict]`
 
-Forget every tracked package that no longer exists in the AUR. Raises `TrustSightError` when the AUR RPC returns nothing, rather than reading a network blip as "the whole AUR is gone".
+Forget every tracked package that no longer exists in the AUR. Raises `TrustSightError` when the AUR gave no authoritative answer (network failure, retry exhaustion, malformed reply), rather than reading a network blip as "the whole AUR is gone".
 
 ---
 
@@ -301,6 +301,8 @@ The analysis of one package.
 | `suppressed` | `tuple[SuppressedRule, ...]` | Rules that matched but were silenced by an override. They scored nothing and are reported anyway, because a suppression you cannot see is one you cannot audit. |
 | `changes` | `tuple[str, ...]` | What the diff did, whether or not a rule matched. Context, not findings: no severity, no points. |
 | `coverage_gaps` | `tuple[str, ...]` | What this run could not read. Non-empty forbids a clean verdict. |
+| `coverage_gaps_carried` | `tuple[str, ...]` | The subset of `coverage_gaps` unchanged since the previous recorded analysis. Still gaps; the verdict and `inspect` mark them "(unchanged since the previous review)" so a repeated structural shortfall does not read as introduced by this diff. |
+| `cached`, `cached_at` | `bool`, `str` | Set by `review` when the recorded analysis was served unchanged (#20): same AUR HEAD, versions, depth and ruleset, so nothing was re-computed; `cached_at` is the recording's timestamp. Always `False` / `""` from `inspect`, which never serves cached results. |
 | `file_changes` | `tuple[FileChange, ...]` | Path plus `added` / `removed` / `modified`. |
 | `added_urls`, `removed_urls` | `tuple[str, ...]` | Source URLs. |
 | `source_buckets` | `dict` | URL to its classification, for example `trusted_forge` or `homograph_attack`. |

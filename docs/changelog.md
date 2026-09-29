@@ -8,6 +8,8 @@
 
 - Shell completion of package names for `inspect`, `history`, `forget` and `override`.
 - `inspect --full-recipe` analyses the whole recipe, not only the changes since the last review.
+- `review` reuses the recorded analysis when the package's AUR HEAD, the installed and advertised versions, the dependency depth and the ruleset fingerprint are all unchanged, so a nightly `review --all --record` only re-analyses packages that moved. A reused result carries `cached` and `cached_at` in the JSON body, and its status line names the recording's date. The cache exists only where a `--record` run wrote history; `inspect` and the Python API never serve a cached analysis. (#20)
+- A coverage gap whose root cause the previous recorded analysis already carried is reported as carried: the verdict sentence and the `inspect` renderers append "unchanged since the previous review", and the JSON body carries the subset as `coverage_gaps_carried`. It is still a gap and still forbids an unflagged verdict; only the label changes. (#19)
 
 ### Changed
 
@@ -28,6 +30,7 @@
 ### Documentation
 
 - `status` explains what a missing dependency corpus costs and points to the seed-provenance page; `seed fetch` reports the maintainer, source-URL and dependency-name counts and warns when the seed carries only maintainers. The seed build steps show the `--source-urls`/`--dependencies` hand-off, and Quickstart answers whether to build the dependency corpus, and how often.
+- The bug-report template's reproduction field no longer forces a shell fence around the steps, and the Python version field is optional for AUR installs, which track the system Python. (#21)
 
 ### Changed
 
@@ -36,6 +39,7 @@
 
 ### Fixed
 
+- H091 now reads checksum-array parity from the complete recipe: a first-seen package is checked at all, and an element inserted into an existing `source=()` beside an unchanged `*sums=()` is caught instead of being invisible to the wholly-added-array guard. The diff path only falls back to the recipe text when the source array grew, so a pre-existing mismatch the diff merely touches stays silent.
 - C004 no longer fires without a checksum being removed. The checksum parser now compares the hashes an array held on each side of the diff, scopes an array to its own file, and ignores `.SRCINFO`'s scalar `*sums = <hash>` lines, so a dropped `.SRCINFO` blank line, a tab-to-space re-indentation, or a replaced hash that spans two hunks is no longer reported as a CRITICAL entry removal.
 - `cmake` cache types (`-D<VAR>:PATH=`, `:FILEPATH=`) are no longer read as PATH assignments, so a routine `cmake` invocation no longer trips H025 or H085.
 - `inspect --last` analyses the commit's tree, which it already had in hand, so a history result no longer reports `tree_not_analyzed` and reads as Inconclusive for a trivial bump.
@@ -46,6 +50,7 @@
 - `packaging/local`'s `check()` installs the built wheel into a `--system-site-packages` venv with `python -m installer` instead of `pip install`, so it no longer fetches dependencies from PyPI as the builder and finds the declared `python-pytest`.
 - The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.
 - `review` and `review --deps` no longer hide a package's findings behind its status line. The `No changes in the AUR since last review` and trivial-update statuses describe the *diff*, but findings such as H029 (name typosquat), H003, `SOURCE_BUCKET` and `NOVELTY` are computed from the head recipe and the database, so an unchanged commit still fires them. They are now rendered after the status on both the Rich and plain renderers, matching the dependency card and `inspect`.
+- `inspect`'s text output names the file and line of a finding (`PKGBUILD line 4`) on both renderers, so locating a finding no longer takes a trip to `--json`. (#18)
 
 ## [0.16.1] - 2026-09-23
 

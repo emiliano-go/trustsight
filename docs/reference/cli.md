@@ -83,6 +83,8 @@ Discovery uses a local AUR metadata snapshot by default:
 4. For each outdated package (up to `--limit`): clones/fetches the repository, computes a git diff between the last-analysed commit and HEAD, applies the published R/H/C/D/S/X rule families, classifies source URLs into trust buckets, checks novelty against the local database, calculates a deterministic 0-100 score, and generates a verdict.
 5. Prints one panel per package, and a summary line counting what needed review separately from what was read.
 
+Step 4 is skipped when nothing it reads has changed: if the recorded analysis of a package was made at the same AUR HEAD commit, with the same installed and advertised versions, the same dependency depth and the same ruleset fingerprint, `review` serves that analysis instead of re-running the pipeline. The cache exists only where a `--record` run wrote history, and a reused result says so: its status line reads "Unchanged since last review; reusing the analysis from (date)", and the JSON body sets `cached` and `cached_at`. Any change to the commit, either version, `--depth` or the ruleset forces a fresh analysis, and `inspect` never serves cached results.
+
 With `--deps` the subject changes: step 3's outdated set becomes the *roots* of a dependency closure walked to `--depth`, and it is the dependencies that are analysed and printed, each naming the packages that require it.
 
 If the metadata snapshot is unavailable or corrupt, the tool falls back to the AUR RPC interface (`https://aur.archlinux.org/rpc?v=5&type=info`) for the same comparison.
@@ -276,7 +278,7 @@ trustsight forget --prune [--dry-run]
 |------|-------------|
 | `--prune` | Remove every tracked package that no longer exists in the AUR.  Re-verifies each name against the AUR RPC and removes absent ones.  Useful for cleaning up packages that were deleted from the AUR or that were never in it. |
 | `--dry-run` | Show what would be removed without actually deleting anything.  Only meaningful with `--prune`. |
-| `--yes` | Skip the confirmation prompt when removing named packages (always skips for `--prune`). |
+| `--yes` | Skip the confirmation prompt (both named packages and `--prune`). |
 
 ### Behaviour
 

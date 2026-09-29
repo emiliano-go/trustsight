@@ -264,7 +264,15 @@ def _classify_prepared(
     url: str, prepared: tuple[frozenset, frozenset, frozenset]
 ) -> tuple[str, str]:
     """Classify *url* against already-prepared domain sets."""
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        # urlparse raises on a host it cannot parse - unbalanced IPv6
+        # brackets, which the extractor's URL token regex happily yields
+        # from a package-controlled ``source=`` line.  Classify the same
+        # as any other URL with no usable host: ``unknown`` (the untrusted
+        # default) with the empty domain a netloc-less URL already produces.
+        return "unknown", ""
     domain = _bounded_host(canonical_host(parsed.netloc))
 
     if has_homograph(domain):

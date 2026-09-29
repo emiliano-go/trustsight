@@ -108,6 +108,14 @@ def test_unknown_unusual_tld():
     assert bucket == "unknown"
 
 
+def test_unparseable_url_is_unknown():
+    # urlparse raises ValueError("Invalid IPv6 URL") on unbalanced brackets;
+    # the extractor's URL token regex yields such URLs from a source= line.
+    bucket, matched = classify_url("https://[::1/evil.tar.gz", DOMAIN_CONFIG)
+    assert bucket == "unknown"
+    assert matched == ""
+
+
 def test_raw_hosting_priority_over_forge():
     bucket, matched = classify_url("https://raw.githubusercontent.com/org/repo/script.sh", DOMAIN_CONFIG)
     assert bucket == "raw_hosting"

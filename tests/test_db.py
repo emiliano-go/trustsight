@@ -96,6 +96,31 @@ def test_insert_analysis(db):
     assert hid > 0
 
 
+def test_failed_write_rolls_back_on_the_cached_connection(db):
+    """An exception mid-write must not leave a partial transaction open.
+
+    The connection is cached, so a row written before the failure used to
+    stay uncommitted on it until the next caller's commit() persisted it -
+    a failed insert_analysis surfaced later as an orphaned history row.
+    """
+    pid = upsert_package("myapp", "1.0")
+    with pytest.raises(KeyError):
+        insert_analysis(
+            package_id=pid,
+            old_version="1.0",
+            new_version="2.0",
+            old_commit="abc123",
+            new_commit="def456",
+            final_score=85,
+            raw_diff="+echo hello",
+            fact_json="{}",
+            triggered_rules=[{"rule_id": "R001"}],  # missing "severity"
+        )
+    # The next commit on the cached connection must not persist the partial write.
+    update_package_version("myapp", "2.0")
+    assert get_history(pid) == []
+
+
 def test_get_last_analysis_none(db):
     pid = upsert_package("myapp", "1.0")
     last = get_last_analysis(pid)
@@ -399,6 +424,21 @@ def test_auto_import_is_a_noop_without_a_bundled_seed(db, tmp_path, monkeypatch)
     import trustsight.db as dbmod
 
     monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: tmp_path / "absent.db.gz")
+    assert dbmod.maybe_auto_import_seed(quiet=True) is None
+
+
+def test_auto_import_tolerates_a_corrupt_bundled_seed(db, tmp_path, monkeypatch):
+    """A truncated or damaged bundled seed must not crash the first run.
+
+    The release-fetch path already swallows every failure ("never fail a
+    run over the seed"); the bundled path raised gzip.BadGzipFile (an
+    OSError) and the size cap's ValueError straight through inspect/review.
+    """
+    import trustsight.db as dbmod
+
+    seed = tmp_path / "seed.db.gz"
+    seed.write_bytes(b"not gzip data at all")
+    monkeypatch.setattr(dbmod, "bundled_seed_path", lambda: seed)
     assert dbmod.maybe_auto_import_seed(quiet=True) is None
 
 

@@ -289,6 +289,26 @@ def test_package_typosquat_target_ignores_short_names(db):
     assert package_typosquat_target("yak") is None
 
 
+def test_package_typosquat_target_needs_a_popular_candidate_for_an_unknown_name(db):
+    """The 10x asymmetry must not vanish when the package was never observed.
+
+    pkg_pop == 0 zeroed the threshold, so any candidate passed the
+    popularity filter: a one-observation name read as "far more popular"
+    than a package the corpus had never seen - exactly the names the check
+    exists for.
+    """
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_target
+
+    # A thin corpus: the candidate itself was observed only once.
+    record_dependency_names(["openssl"])
+    assert package_typosquat_target("openss1") is None
+
+    # The check still fires when the candidate genuinely clears the bar.
+    record_dependency_names(["openssl"] * 20)
+    assert package_typosquat_target("openss1") == "openssl"
+
+
 def test_build_novelty_context_is_read_only_by_default(db):
     """The same input against the same database gives the same answer.
 

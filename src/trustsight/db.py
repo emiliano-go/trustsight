@@ -118,6 +118,10 @@ def get_connection():
     per thread: a process only ever works against one database, and closing
     the previous one when the path changes keeps the tests, which point
     DATA_DIR at a fresh tmpdir per case, from accumulating handles.
+
+    A body that raises gets its transaction rolled back: a partial write
+    left open on the cached connection would otherwise be persisted by the
+    next caller's ``commit()``.
     """
     db_path = get_db_path()
     key = str(db_path)
@@ -129,7 +133,11 @@ def get_connection():
             except sqlite3.Error:
                 pass
         _local.cached = (key, _new_connection(db_path))
-    yield _local.cached[1]
+    try:
+        yield _local.cached[1]
+    except Exception:
+        _local.cached[1].rollback()
+        raise
 
 
 def init_db():
@@ -1222,7 +1230,18 @@ def _decompress_sqlite_seed(path: Path) -> Path:
 
 
 def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
-    """Import a trustsight-seed-v2 directory into the user's database."""
+    """Import a trustsight-seed-v2 directory into the user's database.
+
+    The salt is the namespace every maintainer hash lives in, and it
+    affects maintainer hashing only - source URLs and dependency names are
+    stored as plaintext.  When a salt is already stored and the incoming
+    seed was built under a different one, the stored salt wins: replacing
+    it would orphan every existing maintainer row (seeded and locally
+    observed alike), which would then read as "first seen" again.  The
+    seed's own maintainer rows are skipped in that case - they are hashed
+    with the foreign salt and would be unreachable duplicates - and the
+    returned stats carry ``maintainer_seeding_skipped``.
+    """
     meta_path = seed_dir / "seed_meta.json"
     if not meta_path.exists():
         raise ValueError(f"v2 seed missing seed_meta.json: {seed_dir}")
@@ -1234,12 +1253,24 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
 
     conn = _new_connection(get_db_path())
     try:
+        stored_salt = _get_salt(conn)
+        salt_kept = stored_salt is not None and stored_salt != salt
+        if salt_kept:
+            log.warning(
+                "Seed %s was built under a different salt; keeping the "
+                "stored salt and skipping its maintainer rows to preserve "
+                "local maintainer history.",
+                origin,
+            )
+            # Local rows must stay in the stored hash namespace.
+            salt = stored_salt
+
         conn.execute(
             "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
         )
 
         # Migrate any plaintext per-package maintainer records using the
-        # seed's salt, so local observations and the seed share one hash
+        # effective salt, so local observations and the seed share one hash
         # namespace.
         tables = {
             row["name"]
@@ -1274,7 +1305,7 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
         deps = conn.execute("SELECT COUNT(*) AS n FROM dependency_names").fetchone()["n"]
 
         maint_file = seed_dir / "maintainers.jsonl"
-        if maint_file.exists():
+        if maint_file.exists() and not salt_kept:
             _import_v2_maintainers(conn, maint_file)
         maint = conn.execute("SELECT COUNT(*) AS n FROM maintainers_hashed").fetchone()["n"]
 
@@ -1294,14 +1325,18 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
             )
 
         # Store the v2 salt and algorithm so lookups can reproduce hashes.
-        conn.execute(
-            """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
-            (SEED_META_SALT_KEY, salt),
-        )
-        conn.execute(
-            """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
-            (SEED_META_HASH_ALGORITHM_KEY, hash_algorithm),
-        )
+        # A stored salt under a different seed salt was kept above, and the
+        # two keys stay as they are: the seed's rows were skipped, so nothing
+        # in the database is hashed with the incoming values.
+        if not salt_kept:
+            conn.execute(
+                """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+                (SEED_META_SALT_KEY, salt),
+            )
+            conn.execute(
+                """INSERT OR REPLACE INTO seed_meta (key, value) VALUES (?, ?)""",
+                (SEED_META_HASH_ALGORITHM_KEY, hash_algorithm),
+            )
 
         # Provenance.
         conn.execute(
@@ -1324,6 +1359,7 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
         "maintainers": maint,
         "dependency_names": deps,
         "observations": seed_observation_count(),
+        "maintainer_seeding_skipped": salt_kept,
     }
 
 
@@ -1331,13 +1367,18 @@ def _import_v2_source_urls(conn: sqlite3.Connection, path: Path) -> None:
     """Read source_urls.jsonl and insert into the local table."""
     rows = []
     with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
+        for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:
                 continue
             obj = json.loads(line)
+            url = obj.get("url") if isinstance(obj, dict) else None
+            if not url:
+                raise ValueError(
+                    f"{path.name}:{lineno}: source URL row missing \"url\""
+                )
             rows.append((
-                obj["url"],
+                url,
                 obj.get("first_seen_package_id", 0),
                 obj.get("first_seen_globally_timestamp"),
                 obj.get("total_uses", 1),
@@ -1357,13 +1398,18 @@ def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
     """Read dependency_names.jsonl and merge into the local table."""
     rows = []
     with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
+        for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:
                 continue
             obj = json.loads(line)
+            name = obj.get("name") if isinstance(obj, dict) else None
+            if not name:
+                raise ValueError(
+                    f"{path.name}:{lineno}: dependency row missing \"name\""
+                )
             rows.append((
-                obj["name"],
+                name,
                 obj.get("first_seen_globally_timestamp"),
                 obj.get("observation_count", 1),
             ))
@@ -1382,14 +1428,19 @@ def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
     """Read maintainers.jsonl and insert hashed rows."""
     rows = []
     with open(path, "r", encoding="utf-8") as fh:
-        for line in fh:
+        for lineno, line in enumerate(fh, 1):
             line = line.strip()
             if not line:
                 continue
             obj = json.loads(line)
+            name_hash = obj.get("name_hash") if isinstance(obj, dict) else None
+            if not name_hash:
+                raise ValueError(
+                    f"{path.name}:{lineno}: maintainer row missing \"name_hash\""
+                )
             packages = obj.get("packages")
             rows.append((
-                obj["name_hash"],
+                name_hash,
                 obj.get("email_hash"),
                 obj.get("first_seen"),
                 obj.get("package_count", 0),
@@ -1397,11 +1448,18 @@ def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
                 obj.get("source", "seed"),
             ))
     if rows:
+        # Not INSERT OR IGNORE: v3 rows carry a NULL email_hash, and SQLite
+        # treats NULLs as distinct in a primary key, so the ignore never
+        # fires and a re-import duplicated every row.
         conn.executemany(
-            """INSERT OR IGNORE INTO maintainers_hashed
+            """INSERT INTO maintainers_hashed
                (name_hash, email_hash, first_seen, package_count, packages, source)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            rows,
+               SELECT ?, ?, ?, ?, ?, ?
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM maintainers_hashed
+                   WHERE name_hash = ? AND email_hash IS ?
+               )""",
+            [row + (row[0], row[1]) for row in rows],
         )
 
 
@@ -1539,7 +1597,9 @@ def maybe_auto_import_seed(
     is set, the release-channel seed is downloaded, verified against the
     pinned distribution key, and imported.  Any failure on that path is
     silent: a first run without network must behave exactly like a first
-    run without a seed.
+    run without a seed.  The bundled path follows the same policy - a
+    corrupt seed (truncated gzip, oversize member) must never crash the
+    first inspect or review that triggered the import.
 
     Returns import stats, or ``None`` if nothing was done.
     """
@@ -1558,7 +1618,7 @@ def maybe_auto_import_seed(
             return None
     try:
         stats = import_seed(seed)
-    except (FileNotFoundError, sqlite3.Error):
+    except Exception:  # noqa: BLE001 - never fail a run over the seed
         return None
     if not quiet:
         added = stats['urls_added']

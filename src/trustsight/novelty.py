@@ -169,7 +169,14 @@ def package_typosquat_target(pkg_name: str) -> str | None:
     # The popularity of every candidate arrives with the candidate list.
     # Asking per name meant one database round-trip each, which for the
     # default 5000-name list dominated the entire analysis.
-    threshold = pkg_pop * 10
+    #
+    # The base is floored at 1: a never-observed package has pkg_pop == 0,
+    # which zeroes the threshold and lets *any* candidate through, however
+    # thin its own count - the 10x guarantee would be vacuous for exactly
+    # the unknown names this check exists for.  The floored bar of ten
+    # observations is the one db._ESTABLISHED_OBSERVATIONS sets for a name
+    # worth protecting.
+    threshold = max(pkg_pop, 1) * 10
     limit = 1 if len(pkg_name) < 8 else 2
     filtered: list[str] = []
     for cand, cand_pop in top_dependency_pairs():

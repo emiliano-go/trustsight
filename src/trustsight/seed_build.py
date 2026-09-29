@@ -190,6 +190,10 @@ def build_seed(
     now = datetime.now(timezone.utc).isoformat()
 
     # Fold duplicate names so package counts accumulate deterministically.
+    # The key is the normalized identity, not the raw spelling: "Alice",
+    # "alice" and "Alice <alice@x>" all hash to one name_hash, so folding
+    # them apart writes several lines for one person - and a NULL
+    # email_hash primary key does not dedupe them on import.
     by_name: dict[str, dict] = defaultdict(
         lambda: {
             "first_seen": None,
@@ -199,7 +203,7 @@ def build_seed(
     )
     for raw in raw_maintainers:
         rec = _normalise_maintainer(raw)
-        bucket = by_name[rec["name"]]
+        bucket = by_name[_identity_key(rec["name"])]
         if bucket["first_seen"] is None or (
             rec["first_seen"] and rec["first_seen"] < bucket["first_seen"]
         ):

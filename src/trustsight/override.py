@@ -51,11 +51,14 @@ def load_overrides() -> list[RuleOverride]:
     The file is documented as hand-editable, so an entry carrying an
     unexpected key or missing ``rule_id`` is skipped rather than allowed
     to raise: a single typo used to abort every command with a TypeError.
+    The same goes for damage at the file level - invalid JSON, an
+    unreadable file, or text saved in a non-UTF-8 encoding all load as
+    "no overrides" rather than crashing every analysis.
     """
     _ensure_file()
     try:
         data = json.loads(OVERRIDES_PATH.read_text())
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
         return []
     entries = data.get("overrides", [])
     if not isinstance(entries, list):

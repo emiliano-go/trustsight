@@ -99,6 +99,33 @@ def test_build_seed_folds_duplicate_names(tmp_path):
     assert "packages" not in row
 
 
+def test_build_seed_folds_by_normalized_identity(tmp_path, db):
+    """Spelling variants of one person fold into one seed line.
+
+    The fold used to key on the raw name while the hash normalised the
+    identity, so "Alice", "alice" and "alice <alice@x>" produced three
+    lines with the same name_hash - duplicates the importer's NULL
+    email_hash primary key cannot collapse, inflating meta["count"] and
+    splitting the person's package count across fragments.
+    """
+    raw = [
+        {"name": "Alice", "packages": ["pkg-a"]},
+        {"name": "alice", "packages": ["pkg-b"]},
+        {"name": "alice <alice@x>", "packages": ["pkg-c"]},
+    ]
+    result = build_seed(raw, tmp_path)
+    assert result["count"] == 1
+    lines = (Path(result["seed_dir"]) / "maintainers.jsonl").read_text().strip().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["package_count"] == 3
+
+    # Imported, the person is one record with the accumulated count.
+    import_seed(tmp_path)
+    row = lookup_maintainer("alice")
+    assert row is not None
+    assert row["package_count"] == 3
+
+
 def test_import_v2_seed_populates_hashed_maintainers(db, tmp_path):
     seed_dir = _build_v2_seed(tmp_path)
     stats = import_seed(seed_dir)
@@ -133,6 +160,30 @@ def test_import_v2_seed_records_provenance(db, tmp_path):
 
     assert get_metadata(SEED_DIGEST_KEY) is not None
     assert get_metadata("seed_origin") == str(seed_dir)
+
+
+@pytest.mark.parametrize(
+    "filename,lineno",
+    [
+        ("source_urls.jsonl", 2),
+        ("dependency_names.jsonl", 2),
+        ("maintainers.jsonl", 3),  # the default fixture writes two rows
+    ],
+)
+def test_import_v2_seed_rejects_malformed_jsonl_rows(db, tmp_path, filename, lineno):
+    """A seed row without the required key is a ValueError with line
+    context, not a raw KeyError escaping the seed-db CLI's handler."""
+    seed_dir = _build_v2_seed(
+        tmp_path,
+        urls=[{"url": "https://github.com/acme/tool/archive/v1.tar.gz"}],
+        deps=[{"name": "openssl", "observation_count": 100}],
+    )
+    target = seed_dir / "trustsight-seed-v2" / filename
+    with open(target, "a") as fh:
+        fh.write("{}\n")
+
+    with pytest.raises(ValueError, match=f"{filename}:{lineno}"):
+        import_seed(seed_dir)
 
 
 def test_import_v2_from_tar_gz(db, tmp_path):
@@ -197,9 +248,16 @@ def test_is_maintainer_globally_novel_with_hashed_seed(db, tmp_path):
     assert is_maintainer_globally_novel("Never Seen") is True
 
 
-def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path):
+def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path, monkeypatch):
     from trustsight.db import upsert_package
     from trustsight.novelty import check_maintainer_novelty
+
+    # One shared salt for the migration and the seed build.  The migration
+    # mints the local salt (during the import's init_db) before the import
+    # sees the seed, and a seed built under a *different* salt is now
+    # skipped rather than allowed to orphan the rows just migrated.
+    monkeypatch.setattr("trustsight.db._generate_salt", lambda: "f" * 64)
+    monkeypatch.setattr("trustsight.seed_build._generate_salt", lambda: "f" * 64)
 
     pkg_id = upsert_package("demo", "1.0")
 
@@ -220,6 +278,9 @@ def test_maintainer_first_seen_for_package_uses_hashed_table(db, tmp_path):
     assert check_maintainer_novelty("Alice Example", pkg2) is False
     assert check_maintainer_novelty("Carol Fresh", pkg2) is True
     assert check_maintainer_novelty("Carol Fresh", pkg2) is False
+    # The migrated plaintext record survived the seed import: before the
+    # salt was kept rather than replaced, Mallory read as first-seen again.
+    assert check_maintainer_novelty("Mallory", pkg_id) is False
 
 
 def test_seeded_source_url_is_not_novel_in_a_package(db, tmp_path):
@@ -330,6 +391,54 @@ def test_seed_cli_migrate_from_legacy_table(tmp_path, monkeypatch):
     assert is_maintainer_globally_novel("Legacy Maintainer") is False
 
 
+def test_seed_cli_migrate_after_auto_migration_points_at_the_backup(tmp_path, monkeypatch):
+    """Once init_db's automatic migration has renamed ``maintainers`` to
+    ``maintainers_deprecated_backup``, a plain ``seed migrate`` must say so
+    and ask for --from-backup.  It used to select the table that no longer
+    existed and die on an uncaught OperationalError."""
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    legacy = sqlite3.connect(str(tmp_path / "trustsight.db"))
+    legacy.executescript("""
+        CREATE TABLE packages (id INTEGER PRIMARY KEY, name TEXT UNIQUE);
+        CREATE TABLE maintainers (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            first_seen_package_id INTEGER
+        );
+    """)
+    legacy.execute("INSERT INTO packages (id, name) VALUES (0, '__seed__')")
+    legacy.execute(
+        "INSERT INTO maintainers (name, first_seen_package_id) VALUES ('Legacy Dev', 0)"
+    )
+    legacy.commit()
+    legacy.close()
+
+    # The populated legacy table makes the command's own init_db rename it
+    # on the way in, so the run also announces the automatic migration.
+    with pytest.warns(UserWarning, match="Plaintext maintainers table detected"):
+        result = CliRunner().invoke(app, ["seed", "migrate"])
+    assert result.exit_code == 2
+    assert "--from-backup" in result.output
+    assert not isinstance(result.exception, sqlite3.OperationalError)
+
+
+def test_seed_cli_migrate_from_backup_requires_the_backup(tmp_path, monkeypatch):
+    """--from-backup against a database without the backup table silently
+    migrated the (empty) plaintext table instead and reported success."""
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+
+    result = CliRunner().invoke(app, ["seed", "migrate", "--from-backup"])
+    assert result.exit_code == 2
+    assert "maintainers_deprecated_backup" in result.output
+
+    result = CliRunner().invoke(app, ["seed", "migrate", "--from-backup", "--json"])
+    assert result.exit_code == 2
+    payload = json.loads(result.output)
+    assert "maintainers_deprecated_backup" in payload["error"]
+
+
 # --- normalization edge cases (spec §3.3.1: lowercase().strip()) -----------
 
 
@@ -365,6 +474,61 @@ def test_lookup_without_a_salt_returns_none_not_error(db):
     """A cold database (no seed imported, no salt) must answer, not crash."""
     assert lookup_maintainer("Anyone At All") is None
     assert is_maintainer_globally_novel("Anyone At All") is True
+
+
+def test_reimport_under_a_different_salt_keeps_local_history(db, tmp_path, caplog):
+    """A newer seed is built under a fresh salt; re-importing it must not
+    orphan the maintainer rows the database already holds.
+
+    The salt is the hash namespace every maintainer row lives in.  Replacing
+    it made every known maintainer hash unreachable - "first seen" again on
+    the next review - while the seed's rows arrived as duplicates nobody
+    could resolve.  The stored salt wins; the seed's maintainer rows, hashed
+    with the foreign salt, are skipped.
+    """
+    from trustsight.db import upsert_package
+    from trustsight.novelty import check_maintainer_novelty
+
+    seed_dir = _build_v2_seed(tmp_path / "one")
+    first = import_seed(seed_dir)
+    assert first["maintainer_seeding_skipped"] is False
+    with get_connection() as conn:
+        original_salt = _get_salt(conn)
+
+    # A maintainer observed locally between the two imports.
+    pkg_id = upsert_package("demo", "1.0")
+    assert check_maintainer_novelty("Local Dev", pkg_id, record=True) is True
+
+    newer = _build_v2_seed(
+        tmp_path / "two",
+        maintainers=[{"name": "Carol Newcomer", "packages": ["pkg-z"]}],
+    )
+    with caplog.at_level("WARNING", logger="trustsight.db"):
+        stats = import_seed(newer)
+    assert stats["maintainer_seeding_skipped"] is True
+    assert "different salt" in caplog.text
+
+    with get_connection() as conn:
+        assert _get_salt(conn) == original_salt
+        # No unreachable duplicates of the foreign-salt rows.
+        assert conn.execute(
+            "SELECT COUNT(*) AS n FROM maintainers_hashed"
+        ).fetchone()["n"] == 2
+
+    # Seeded and locally observed maintainers are still known.
+    assert is_maintainer_globally_novel("Alice Example") is False
+    assert lookup_maintainer("Alice Example") is not None
+    assert check_maintainer_novelty("Local Dev", pkg_id, record=False) is False
+
+
+def test_reimport_of_the_same_seed_stays_idempotent(db, tmp_path):
+    """Same seed, same salt: nothing is skipped and no rows duplicate."""
+    seed_dir = _build_v2_seed(tmp_path)
+    import_seed(seed_dir)
+    stats = import_seed(seed_dir)
+    assert stats["maintainer_seeding_skipped"] is False
+    assert stats["maintainers"] == 2
+    assert is_maintainer_globally_novel("Alice Example") is False
 
 
 def test_provenance_file_ships_inside_the_seed_dir(tmp_path):

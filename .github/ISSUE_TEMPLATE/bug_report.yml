@@ -40,10 +40,13 @@ body:
     id: python
     attributes:
       label: Python version
-      description: Output of `python --version`. TrustSight supports 3.11+.
+      description: >
+        Output of `python --version`. Only needed for pip / PyPI and
+        source installs - an Arch/AUR install tracks the always-current
+        system Python. TrustSight supports 3.11+.
       placeholder: "Python 3.12.4"
     validations:
-      required: true
+      required: false
   - type: textarea
     id: what-happened
     attributes:
@@ -68,7 +71,6 @@ body:
       placeholder: |
         1. `trustsight inspect some-package`
         2. ...
-      render: shell
     validations:
       required: true
   - type: textarea

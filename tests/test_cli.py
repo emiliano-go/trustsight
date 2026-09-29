@@ -1120,6 +1120,24 @@ def test_full_aur_watch_rejects_export(monkeypatch):
     assert result.exit_code == 2
 
 
+def test_full_aur_watch_rejects_export_as_json_under_the_flag(monkeypatch):
+    """Under --json the conflict error is still a JSON document: everything
+    printed under --json is parsed by scripts (tests/test_cli_json.py), and
+    this path printed plain text while the --cycles check right below it
+    honoured the flag.  TRUSTSIGHT_OFFLINE has to be lifted or the offline
+    refusal fires before the flag check is reached at all."""
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch", lambda **kwargs: []
+    )
+    result = CliRunner().invoke(
+        app, ["full-aur", "--watch", "--export", "/tmp/baseline.tar.zst", "--json"]
+    )
+    assert result.exit_code == 2
+    payload = json.loads(result.stdout)
+    assert "--watch" in payload["error"]
+
+
 # --- review --deps ---------------------------------------------------------
 
 
@@ -1307,3 +1325,83 @@ def test_cli_inspect_full_recipe_refuses_last(tmp_path, monkeypatch):
     result = CliRunner().invoke(app, ["inspect", "example-pkg", "--full-recipe", "--last", "2"])
     assert result.exit_code == 2
     assert "--last and --full-recipe" in result.output
+
+
+# --- forget --prune -------------------------------------------------------
+
+
+def _tracked_for_forget(tmp_path, monkeypatch, names):
+    """A database in *tmp_path* tracking *names*, with the AUR answer one
+    patch away."""
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+
+    from trustsight.db import init_db, upsert_package
+    init_db()
+    for name in names:
+        upsert_package(name, "1.0")
+
+
+def test_forget_prune_removes_what_the_aur_confirms_is_gone(tmp_path, monkeypatch):
+    """A tracked package the AUR no longer lists is pruned; this used to
+    exit 2 on any such package because a short reply was misread as a
+    truncated one."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: {"keep"},
+    )
+
+    from trustsight.db import get_package_id
+    result = CliRunner().invoke(app, ["forget", "--prune", "--yes"])
+    assert result.exit_code == 0, result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is None
+
+
+def test_forget_prune_refuses_when_the_aur_gives_no_answer(tmp_path, monkeypatch):
+    """No authoritative answer means no pruning: a network blip must not
+    empty the database."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: None,
+    )
+
+    from trustsight.db import get_package_id
+    result = CliRunner().invoke(app, ["forget", "--prune", "--yes"])
+    assert result.exit_code == 2
+    assert "cannot determine" in result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is not None
+
+
+def test_forget_prune_asks_before_deleting(tmp_path, monkeypatch):
+    """Without --yes the destructive prune confirms first, like the
+    per-package path does; a dry run never asks and never deletes."""
+    _tracked_for_forget(tmp_path, monkeypatch, ["keep", "gone"])
+    monkeypatch.setattr(
+        "trustsight.cli.forget.get_existing_aur_package_names",
+        lambda names: {"keep"},
+    )
+
+    from trustsight.db import get_package_id
+
+    result = CliRunner().invoke(app, ["forget", "--prune", "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "Would remove" in result.output
+    assert "Are you sure?" not in result.output
+    assert get_package_id("gone") is not None
+
+    result = CliRunner().invoke(app, ["forget", "--prune"], input="n\n")
+    assert result.exit_code == 2, result.output
+    assert "Are you sure?" in result.output
+    assert get_package_id("gone") is not None
+
+    result = CliRunner().invoke(app, ["forget", "--prune"], input="y\n")
+    assert result.exit_code == 0, result.output
+    assert "Removed 1 package(s)" in result.output
+    assert get_package_id("keep") is not None
+    assert get_package_id("gone") is None

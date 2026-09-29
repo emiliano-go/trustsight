@@ -17,10 +17,10 @@ from .display import _print_colored
 # `discovery` pulls `urllib.request`, and `app.py` imports this module to
 # register `forget`, so at module scope every invocation paid for the HTTP
 # stack. The wrapper keeps the name patchable.
-def get_aur_package_info(*args, **kwargs):
-    from ..discovery import get_aur_package_info as _get_aur_package_info
+def get_existing_aur_package_names(*args, **kwargs):
+    from ..discovery import get_existing_aur_package_names as _impl
 
-    return _get_aur_package_info(*args, **kwargs)
+    return _impl(*args, **kwargs)
 
 
 
@@ -57,9 +57,11 @@ def register_commands(app: typer.Typer):
                 else:
                     typer.echo("No packages tracked.")
                 return
-            info = get_aur_package_info(names)
-            aur_names = set(info.keys())
-            if not aur_names and names:
+            aur_names = get_existing_aur_package_names(names)
+            if aur_names is None:
+                # No authoritative answer (network failure, malformed
+                # reply): a guess would be read as "these packages
+                # vanished" and their history deleted. Refuse instead.
                 msg = ("AUR RPC returned no data; cannot determine which packages "
                        "still exist. Check your network connection and try again.")
                 if json_output:
@@ -67,20 +69,21 @@ def register_commands(app: typer.Typer):
                 else:
                     _print_colored(msg, "red")
                 raise typer.Exit(code=2)
-            if len(aur_names) < len(names):
-                # A short reply would be read as "these packages vanished"
-                # and their history deleted.  The RPC batches in one call, so
-                # fewer names than asked for means a truncated response.
-                msg = (
-                    f"AUR RPC replied with {len(aur_names)} of {len(names)} "
-                    "packages; refusing to prune on a partial reply. Retry."
-                )
-                if json_output:
-                    typer.echo(json.dumps({"error": msg}))
-                else:
-                    _print_colored(msg, "red")
-                raise typer.Exit(code=2)
-            removed = forget_prune(aur_names, dry_run=dry_run)
+            removed = forget_prune(aur_names, dry_run=True)
+            if not dry_run:
+                if removed and not yes and not json_output:
+                    typer.echo(f"About to permanently remove {len(removed)} package(s) not in the AUR:")
+                    for name in sorted(removed):
+                        typer.echo(f"  {clean(name)}")
+                    try:
+                        confirm = input("Are you sure? [y/N] ")
+                    except EOFError:
+                        typer.echo("Aborted.")
+                        raise typer.Exit(code=2)
+                    if confirm.lower() not in ("y", "yes"):
+                        typer.echo("Aborted.")
+                        raise typer.Exit(code=2)
+                removed = forget_prune(aur_names, dry_run=False)
             if json_output:
                 typer.echo(json.dumps({"prune": {n: c for n, c in removed.items()}}, indent=2))
             else:

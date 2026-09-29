@@ -180,15 +180,112 @@ def _rpc_backoff_delay(attempt: int) -> float:
 
 
 def _rpc_retry_after(http_error) -> Optional[float]:
-    """Parse Retry-After header from an HTTP error."""
+    """Parse Retry-After header from an HTTP error.
+
+    A negative value is nonsense from a broken or hostile endpoint; the
+    clamp keeps it from reaching ``time.sleep`` as a negative delay, which
+    raises ``ValueError``.
+    """
     headers = getattr(http_error, "headers", None)
     value = headers.get("Retry-After") if headers else None
     if not value:
         return None
     try:
-        return min(float(value), _RPC_BACKOFF_MAX)
+        return min(max(float(value), 0.0), _RPC_BACKOFF_MAX)
     except (TypeError, ValueError):
         return None
+
+
+def _parse_rpc_results(data) -> dict[str, dict]:
+    """Extract ``{name: record}`` from an RPC reply, or raise ValueError.
+
+    Syntactically valid JSON is not necessarily an RPC reply: a proxy or a
+    malfunctioning endpoint can answer ``[]`` or ``"error"``, and an entry
+    that is not a dict carrying a ``Name`` says nothing about which
+    packages exist.  Reading those shapes as "no results" would read them
+    as "these packages vanished", so they are rejected instead.
+    """
+    if not isinstance(data, dict):
+        raise ValueError(f"AUR RPC reply is {type(data).__name__}, not an object")
+    entries = data.get("results")
+    if not isinstance(entries, list):
+        raise ValueError("AUR RPC reply has no results list")
+    results = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or "Name" not in entry:
+            raise ValueError("AUR RPC result entry is not a package record")
+        results[entry["Name"]] = entry
+    return results
+
+
+def _aur_rpc_query(names: list[str]) -> dict[str, dict] | None:
+    """Query the AUR RPC info endpoint for *names*, retrying transient errors.
+
+    Returns ``{name: record}`` on a well-formed reply - possibly empty, which
+    is the AUR saying none of *names* exist - or None when the query produced
+    no authoritative answer (retry exhaustion, malformed reply).  Callers
+    that delete on the answer must key off the None.
+    """
+    url = _aur_info_url(names)
+    for attempt in range(_RPC_MAX_RETRIES + 1):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                return _parse_rpc_results(_load_rpc_json(resp))
+        except urllib.error.HTTPError as exc:
+            if exc.code in _RPC_RETRYABLE_STATUS and attempt < _RPC_MAX_RETRIES:
+                delay = _rpc_retry_after(exc) or _rpc_backoff_delay(attempt)
+                log.debug("AUR RPC HTTP %d; retrying in %.1fs (attempt %d/%d)",
+                          exc.code, delay, attempt + 1, _RPC_MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("AUR RPC query failed for %d package(s): HTTP %s",
+                        len(names), exc.code)
+            break
+        # ``OSError`` covers ``URLError`` and the connection errors it does
+        # not: a dropped RPC connection raises ``TimeoutError``,
+        # ``ConnectionResetError`` or ``http.client.RemoteDisconnected``, all
+        # ``OSError``; a malformed body raises ``UnicodeDecodeError`` and a
+        # wrong-shape reply the ``ValueError`` from ``_parse_rpc_results``.
+        # Missing them let an AUR hiccup escape as a traceback instead of a
+        # failed lookup.
+        except (OSError, ValueError, _RpcResponseTooLarge) as exc:
+            if attempt < _RPC_MAX_RETRIES:
+                delay = _rpc_backoff_delay(attempt)
+                log.debug("AUR RPC error %s; retrying in %.1fs (attempt %d/%d)",
+                          exc, delay, attempt + 1, _RPC_MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            log.warning("AUR RPC query failed for %d package(s): %s", len(names), exc)
+            break
+    return None
+
+
+def _read_fresh_aur_cache(pkg_names: list[str]) -> dict[str, dict]:
+    """Fresh cache entries for *pkg_names*; empty dict on any cache failure."""
+    from .db import read_aur_cache
+    from .config import load_config
+
+    cfg = load_config().get("discovery", {})
+    ttl = cfg.get("cache_ttl_minutes", 60)
+    try:
+        return read_aur_cache(pkg_names, ttl_minutes=ttl)
+    except Exception:
+        return {}
+
+
+def _cache_rpc_results(results: dict[str, dict]) -> None:
+    """Write fresh RPC results to the cache (non-fatal on failure)."""
+    if not results:
+        return
+    from .db import write_aur_cache
+    try:
+        write_aur_cache({
+            name: (r.get("Version", ""), r.get("LastModified"))
+            for name, r in results.items()
+        })
+    except Exception:
+        log.debug("failed to write AUR cache", exc_info=True)
 
 
 def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
@@ -196,22 +293,16 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
 
     Results are cached in the local database.  Cache TTL is controlled by
     ``[discovery] cache_ttl_minutes`` in the config (default: 60).
+
+    The answer is best-effort: when the RPC fails, fresh cache entries are
+    still returned and the failed names are simply absent.  Callers that
+    delete on the answer need ``get_existing_aur_package_names``, which
+    says None instead of guessing.
     """
     if not pkg_names:
         return {}
 
-    # Check cache for fresh entries
-    from .db import read_aur_cache, write_aur_cache
-    from .config import load_config
-
-    cfg = load_config().get("discovery", {})
-    ttl = cfg.get("cache_ttl_minutes", 60)
-
-    try:
-        cached = read_aur_cache(pkg_names, ttl_minutes=ttl)
-    except Exception:
-        cached = {}
-
+    cached = _read_fresh_aur_cache(pkg_names)
     missed = [n for n in pkg_names if n not in cached]
     if not missed:
         return {
@@ -229,51 +320,10 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
             for n, v in cached.items()
         }
 
-    # Query the AUR for packages not in cache, with retry on transient errors.
-    url = _aur_info_url(missed)
-    results = {}
-    for attempt in range(_RPC_MAX_RETRIES + 1):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = _load_rpc_json(resp)
-                results = {r["Name"]: r for r in data.get("results", [])}
-            break
-        except urllib.error.HTTPError as exc:
-            if exc.code in _RPC_RETRYABLE_STATUS and attempt < _RPC_MAX_RETRIES:
-                delay = _rpc_retry_after(exc) or _rpc_backoff_delay(attempt)
-                log.debug("AUR RPC HTTP %d; retrying in %.1fs (attempt %d/%d)",
-                          exc.code, delay, attempt + 1, _RPC_MAX_RETRIES)
-                time.sleep(delay)
-                continue
-            log.warning("AUR RPC query failed for %d package(s): HTTP %s",
-                        len(missed), exc.code)
-            break
-        # ``OSError`` covers ``URLError`` and the connection errors it does
-        # not: a dropped RPC connection raises ``TimeoutError``,
-        # ``ConnectionResetError`` or ``http.client.RemoteDisconnected``, all
-        # ``OSError``, and a malformed body raises ``UnicodeDecodeError``, a
-        # ``ValueError``.  Missing them let an AUR hiccup escape as a
-        # traceback instead of a failed lookup.
-        except (OSError, ValueError, _RpcResponseTooLarge) as exc:
-            if attempt < _RPC_MAX_RETRIES:
-                delay = _rpc_backoff_delay(attempt)
-                log.debug("AUR RPC error %s; retrying in %.1fs (attempt %d/%d)",
-                          exc, delay, attempt + 1, _RPC_MAX_RETRIES)
-                time.sleep(delay)
-                continue
-            log.warning("AUR RPC query failed for %d package(s): %s", len(missed), exc)
-            break
-
-    # Write fresh results to cache (non-fatal on failure)
-    if results:
-        try:
-            write_aur_cache({
-                name: (r.get("Version", ""), r.get("LastModified"))
-                for name, r in results.items()
-            })
-        except Exception:
-            log.debug("failed to write AUR cache", exc_info=True)
+    # A failed query is not "the AUR has none of these": degrade to the
+    # cache, the best-effort answer this function has always given.
+    results = _aur_rpc_query(missed) or {}
+    _cache_rpc_results(results)
 
     # Merge cached + fresh results
     out = {}
@@ -281,6 +331,34 @@ def get_aur_package_info(pkg_names: list[str]) -> dict[str, dict]:
         out[name] = {"Version": v["version"], "LastModified": v.get("last_modified")}
     out.update(results)
     return out
+
+
+def get_existing_aur_package_names(pkg_names: list[str]) -> set[str] | None:
+    """Subset of *pkg_names* confirmed to still exist in the AUR.
+
+    Returns None when the RPC did not produce an authoritative answer
+    (network failure, retry exhaustion, malformed reply), so callers can
+    refuse to act on a guess. Entries from the fresh cache count as
+    existing (60-min TTL)."""
+    if not pkg_names:
+        return set()
+
+    cached = _read_fresh_aur_cache(pkg_names)
+    missed = [n for n in pkg_names if n not in cached]
+    if not missed:
+        return set(pkg_names)
+
+    # Offline forbids the RPC, so a name missing from the fresh cache can
+    # be neither confirmed nor denied: no authoritative answer exists.
+    from .release import offline
+    if offline():
+        return None
+
+    results = _aur_rpc_query(missed)
+    if results is None:
+        return None
+    _cache_rpc_results(results)
+    return set(cached) | set(results)
 
 
 def get_aur_latest_versions(pkg_names: list[str]) -> dict[str, str]:

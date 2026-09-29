@@ -3,10 +3,17 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
+import trustsight.discovery as _discovery_module
+
 pytestmark = pytest.mark.skipif(
     not shutil.which("pacman"),
     reason="pacman not available (non-Arch system)",
 )
+
+# conftest's autouse fixture replaces ``discovery.get_aur_package_info`` with
+# an empty answer for every test.  Tests of that function itself restore the
+# real one, captured here at import time before any fixture has run.
+_REAL_GET_AUR_PACKAGE_INFO = _discovery_module.get_aur_package_info
 
 
 # --- _vercmp ---
@@ -502,3 +509,196 @@ def test_get_aur_package_info_degrades_on_an_undecodable_body(monkeypatch):
 
     monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
     assert disc.get_aur_package_info(["somepkg"]) == {}
+
+
+# --- Retry-After is clamped and the RPC reply shape is validated ----------
+
+
+def test_rpc_retry_after_clamps_a_negative_value():
+    """``Retry-After: -5`` from a broken endpoint must not reach
+    ``time.sleep`` as a negative delay, which raises ``ValueError``."""
+    from types import SimpleNamespace
+
+    from trustsight.discovery import _RPC_BACKOFF_MAX, _rpc_retry_after
+
+    assert _rpc_retry_after(SimpleNamespace(headers={"Retry-After": "-5"})) == 0.0
+    assert _rpc_retry_after(SimpleNamespace(headers={"Retry-After": "3"})) == 3.0
+    assert (
+        _rpc_retry_after(SimpleNamespace(headers={"Retry-After": "999"}))
+        == _RPC_BACKOFF_MAX
+    )
+    assert _rpc_retry_after(SimpleNamespace(headers={"Retry-After": "soon"})) is None
+    assert _rpc_retry_after(SimpleNamespace(headers=None)) is None
+
+
+def test_get_aur_package_info_survives_a_negative_retry_after(monkeypatch):
+    """The retry loop used to pass the negative header value to
+    ``time.sleep`` and escape as a ValueError; now it is a failed lookup."""
+    import io
+    import urllib.error
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(disc, "get_aur_package_info", _REAL_GET_AUR_PACKAGE_INFO)
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    sleeps = []
+    monkeypatch.setattr(disc.time, "sleep", sleeps.append)
+
+    def fake_urlopen(url, timeout=0):
+        raise urllib.error.HTTPError(
+            disc.AUR_RPC_BASE, 429, "Too Many Requests",
+            {"Retry-After": "-5"}, io.BytesIO(b""),
+        )
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_aur_package_info(["somepkg"]) == {}
+    assert sleeps and all(s >= 0 for s in sleeps)
+
+
+@pytest.mark.parametrize("body", [
+    b"[]",
+    b'"error"',
+    b'{"results": ["error"]}',
+    b'{"results": [{"Version": "1.0"}]}',
+])
+def test_get_aur_package_info_degrades_on_a_wrong_shape_reply(monkeypatch, body):
+    """JSON that parses but is not an RPC envelope used to escape as
+    ``AttributeError``/``KeyError``/``TypeError``; it is a failed lookup."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(disc, "get_aur_package_info", _REAL_GET_AUR_PACKAGE_INFO)
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    monkeypatch.setattr(disc.time, "sleep", lambda s: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(body)
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_aur_package_info(["somepkg"]) == {}
+
+
+# --- get_existing_aur_package_names: the authoritative answer prune needs -
+
+
+def test_existing_names_confirms_what_the_rpc_returns(monkeypatch):
+    """The answer is the subset the AUR confirmed; an absent name is
+    authoritatively gone, which is exactly what prune prunes on."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    monkeypatch.setattr(disc.time, "sleep", lambda s: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(
+            b'{"resultcount": 1, "results": [{"Name": "keep", "Version": "1.0"}]}'
+        )
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_existing_aur_package_names(["keep", "gone"]) == {"keep"}
+
+
+def test_existing_names_is_none_when_the_rpc_fails(monkeypatch):
+    """A dropped connection is not an answer: prune must refuse to act."""
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    monkeypatch.setattr(disc.time, "sleep", lambda s: None)
+
+    def fake_urlopen(url, timeout=0):
+        raise ConnectionResetError(104, "reset")
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_existing_aur_package_names(["somepkg"]) is None
+
+
+@pytest.mark.parametrize("body", [b"[]", b'"error"', b'{"results": ["error"]}'])
+def test_existing_names_is_none_on_a_wrong_shape_reply(monkeypatch, body):
+    """A reply that is not an RPC envelope is no answer either."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {})
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    monkeypatch.setattr(disc.time, "sleep", lambda s: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(body)
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_existing_aur_package_names(["somepkg"]) is None
+
+
+def test_existing_names_counts_the_fresh_cache(monkeypatch):
+    """Fresh cache entries count as existing; the RPC is only asked for
+    the rest, and when the cache covers every name it is not asked at all."""
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE")
+    monkeypatch.setattr(db, "write_aur_cache", lambda entries: None)
+    monkeypatch.setattr(disc.time, "sleep", lambda s: None)
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {
+        "keep": {"version": "1.0", "last_modified": None},
+    })
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(
+            b'{"resultcount": 1, "results": [{"Name": "other", "Version": "2.0"}]}'
+        )
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
+    assert disc.get_existing_aur_package_names(["keep", "other"]) == {"keep", "other"}
+
+    # Every name fresh in the cache: the network stays off.
+    def boom(url, timeout=0):
+        raise AssertionError("the RPC must not run when the cache answers")
+
+    monkeypatch.setattr(disc.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {
+        "keep": {"version": "1.0", "last_modified": None},
+        "other": {"version": "2.0", "last_modified": None},
+    })
+    assert disc.get_existing_aur_package_names(["keep", "other"]) == {"keep", "other"}
+
+
+def test_existing_names_offline_can_confirm_but_never_deny(monkeypatch):
+    """Offline the fresh cache can still confirm a package exists, but a
+    name missing from it can be neither confirmed nor denied: no answer."""
+    import trustsight.db as db
+    import trustsight.discovery as disc
+
+    # TRUSTSIGHT_OFFLINE is set by the suite-wide fixture.
+    monkeypatch.setattr(db, "read_aur_cache", lambda names, ttl_minutes=60: {
+        "keep": {"version": "1.0", "last_modified": None},
+    })
+    assert disc.get_existing_aur_package_names(["keep"]) == {"keep"}
+    assert disc.get_existing_aur_package_names(["keep", "gone"]) is None

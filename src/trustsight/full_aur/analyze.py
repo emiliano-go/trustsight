@@ -41,7 +41,7 @@ from ..differ import (
 from ..findings import stamp
 from ..novelty import build_novelty_context, package_typosquat_target
 from ..override import filter_triggered_rules
-from ..rules import apply_rules, clamp_text, get_raw_diff_lines
+from ..rules import apply_rules, clamp_text, get_raw_diff_lines_indexed
 from ..coverage import (
     gaps_from,
     oversized_lines,
@@ -443,7 +443,7 @@ def analyze_package_text(
     resolved_strings, unresolved_strings, resolved_indices = (
         tokenize_and_resolve_indexed(diff_text)
     )
-    raw_lines = get_raw_diff_lines(diff_text)
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
     line_map = map_diff_lines(diff_text)
 
     triggered_rules = apply_rules(
@@ -451,6 +451,7 @@ def analyze_package_text(
         include_experimental=config.get("rules", {}).get("experimental", False),
         line_map=line_map,
         resolved_indices=resolved_indices,
+        raw_indices=raw_indices,
     )
     triggered_rules.extend(metadata_findings)
     triggered_rules.extend(

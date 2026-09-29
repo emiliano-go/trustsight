@@ -273,7 +273,8 @@ def _iter_prefetched(names, fetch_fn, workers: int):
     Analysis stays serial and ordered (novelty reads the observations earlier
     packages recorded), so only the fetch is parallelised: a bounded window of
     fetches is kept in flight and consumed in order.  A fetch that raises
-    yields ``(None, None, None)`` rather than aborting the run.
+    yields ``(None, None, None, False)`` - the same shape ``_fetch_one``
+    returns for a vanished package - rather than aborting the run.
     """
     names = list(names)
     window = max(workers * 3, 24)
@@ -288,7 +289,7 @@ def _iter_prefetched(names, fetch_fn, workers: int):
             try:
                 result = future.result()
             except Exception:
-                result = (None, None, None)
+                result = (None, None, None, False)
             yield name, result
             if idx < len(names):
                 inflight.append((names[idx], pool.submit(fetch_fn, names[idx])))
@@ -399,6 +400,13 @@ def run_baseline_build(
 
     if not to_process:
         _log("Nothing to process")
+        # A removals-only delta takes this path, and the adoption feed still
+        # needs it: H073's introduction-rate and H058's maintainer-activity
+        # baselines count removals.  Recording here rather than only after the
+        # analysis loop keeps the feed complete for every delta shape; the
+        # sweep never runs on this path, so its read-the-feed-first ordering
+        # is untouched.
+        _record_cycle_feed(new_meta, old_meta, added, changed, removed)
         save_metadata(new_meta, _meta_snapshot_path())
         clear_resume_state()
         return result

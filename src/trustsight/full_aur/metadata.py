@@ -277,7 +277,8 @@ def load_metadata(path: Path | None = None) -> dict | None:
 
 
 def load_snapshot(path: Path | None = None) -> tuple[dict, int | None] | None:
-    """Load a snapshot as ``(packages, snapshot_time)``, or None if absent.
+    """Load a snapshot as ``(packages, snapshot_time)``, or None if absent
+    or corrupt.
 
     ``load_metadata`` drops the timestamp, which is how a snapshot could be
     read forever without anyone asking how old it was.  A caller that
@@ -300,8 +301,13 @@ def load_snapshot(path: Path | None = None) -> tuple[dict, int | None] | None:
     except (OSError, ValueError):
         result = None
     else:
-        stamp = data.get("snapshot_time")
-        result = (data.get("packages", {}), stamp if isinstance(stamp, int) else None)
+        if isinstance(data, dict):
+            stamp = data.get("snapshot_time")
+            result = (data.get("packages", {}), stamp if isinstance(stamp, int) else None)
+        else:
+            # Valid JSON, wrong shape ([], "x", ...): as unusable as
+            # unparseable JSON, so it gets the same treatment.
+            result = None
     with _snapshot_cache_lock:
         _snapshot_cache.clear()
         _snapshot_cache[key] = result

@@ -152,11 +152,14 @@ def test_iter_prefetched_yields_none_for_a_failing_fetch():
     def fetch(name):
         if name == "boom":
             raise RuntimeError("network")
-        return (f"ok-{name}", None, None)
+        return (f"ok-{name}", None, None, False)
 
     out = dict(_iter_prefetched(["a", "boom", "b"], fetch, workers=4))
-    assert out["boom"] == (None, None, None)
-    assert out["a"] == ("ok-a", None, None)
+    # The placeholder must match the 4-tuple shape ``_store`` unpacks; a
+    # 3-tuple here raised ValueError out of the analysis loop and aborted
+    # the whole cycle.
+    assert out["boom"] == (None, None, None, False)
+    assert out["a"] == ("ok-a", None, None, False)
 
 
 # --- polite fetching: rate cap + backoff on 429/5xx/reset ---
@@ -251,6 +254,43 @@ def test_http_get_gives_up_after_max_retries(monkeypatch):
     assert calls["n"] == fetch._MAX_RETRIES + 1
 
 
+def test_a_raising_fetch_is_tolerated_and_the_cycle_completes(monkeypatch):
+    """The prefetch error path must reach ``_store`` in the shape it unpacks.
+
+    ``_iter_prefetched`` yields a placeholder for a fetch that raised; it
+    used to be a 3-tuple, so ``_store``'s four-value unpack raised
+    ValueError, escaping the analysis loop (the enclosing try only has a
+    finally for the progress bar) and aborting the whole corpus cycle.
+    """
+    import trustsight.full_aur.pipeline as pipeline
+
+    saved: dict = {}
+    monkeypatch.setattr(pipeline, "fetch_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "load_metadata",
+                        lambda *a, **k: {"demo": {"Version": "1.0", "Maintainer": "a"}})
+    monkeypatch.setattr(pipeline, "diff_metadata",
+                        lambda old, new: {"demo": "modified"})
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            RuntimeError("network")))
+    monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
+    monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "record_alerts", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "save_resume_state",
+                        lambda state: saved.update(state))
+
+    result = pipeline.run_baseline_build()
+
+    # A fetch failure is marked done, so a resume does not retry it forever.
+    assert result.processed == 1
+    assert saved.get("processed") == ["demo"]
+
+
 def test_a_not_vetted_package_survives_the_cycle_and_is_retried(monkeypatch):
     """A6: the tokenizer sandbox failing one package must not abort the cycle.
 
@@ -312,3 +352,56 @@ def test_corpus_diff_uses_the_shell_aware_line_splitter():
     # is what Python's splitlines would have done.
     added = [ln for ln in shell_split(corpus) if ln.startswith("+") and "note" in ln]
     assert len(added) == 1 and "\u2028" in added[0]
+
+
+def test_load_snapshot_treats_non_object_json_as_corrupt(tmp_path):
+    """A snapshot that is valid JSON but not an object reads as corrupt.
+
+    ``data.get`` on a list or a string raised AttributeError, which escaped
+    unguarded callers (``corpus pivot``, the exporter) as a raw traceback;
+    unparseable JSON already degraded to None, and this is the same case.
+    """
+    from trustsight.full_aur.metadata import load_snapshot
+
+    bad_list = tmp_path / "list.json"
+    bad_list.write_text("[]")
+    assert load_snapshot(bad_list) is None
+
+    bad_str = tmp_path / "str.json"
+    bad_str.write_text('"x"')
+    assert load_snapshot(bad_str) is None
+
+    good = tmp_path / "good.json"
+    good.write_text('{"snapshot_time": 5, "packages": {"p": {}}}')
+    assert load_snapshot(good) == ({"p": {}}, 5)
+
+
+def test_removals_only_cycle_still_records_the_adoption_feed(monkeypatch):
+    """A delta with only removals must still reach ``_record_cycle_feed``.
+
+    The ``if not to_process:`` early return used to run before the feed was
+    recorded, silently dropping removal events from cycle_events and skewing
+    the Class D baselines derived from them (H073's introduction rate,
+    H058's maintainer activity).
+    """
+    import trustsight.full_aur.pipeline as pipeline
+
+    old = {
+        "keep": {"Version": "1.0", "Maintainer": "a", "LastModified": 100},
+        "gone": {"Version": "2.0", "Maintainer": "b", "LastModified": 200},
+    }
+    new = {"keep": {"Version": "1.0", "Maintainer": "a", "LastModified": 100}}
+    recorded: list[dict] = []
+    monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: new)
+    monkeypatch.setattr(pipeline, "load_metadata", lambda *a, **k: old)
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "record_cycle_events",
+                        lambda events: recorded.extend(events))
+
+    result = pipeline.run_baseline_build()
+
+    assert result.removed == 1 and result.processed == 0
+    assert [e["package_name"] for e in recorded] == ["gone"]
+    assert recorded[0]["status"] == "removed"

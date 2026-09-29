@@ -199,6 +199,60 @@ def test_property_extraction_works_without_a_srcinfo():
     )
 
 
+def test_multi_line_arrays_keep_their_opening_line_items():
+    """The first item of a multi-line array sits on the opening line.
+
+    The single-line regex needed a closing ``)`` on the same line; when it
+    failed, the multi-line branch set its flag and skipped the line without
+    extracting anything, so ``depends=('gtk3'`` lost gtk3 and a multi-line
+    ``source=(`` lost its first URL - which then never reached
+    source_hosts/source_orgs.  The closing paren sharing the last item's
+    line (``'glib2')``) also never ended the array, letting later quoted
+    strings bleed into the set.
+    """
+    from trustsight.full_aur.properties import extract_properties
+
+    pkgbuild = (
+        "pkgname=p\n"
+        "depends=('gtk3'\n"
+        "         'glib2')\n"
+        "source=('https://github.com/org/repo/archive/v1.tar.gz'\n"
+        "        'https://gitlab.com/other/x.tar.gz')\n"
+        "sha256sums=('abc'\n"
+        "            'def')\n"
+    )
+    props = extract_properties(pkgbuild)
+    assert props["depends"] == frozenset({"gtk3", "glib2"})
+    assert props["source_hosts"] == frozenset({"github.com", "gitlab.com"})
+    assert props["source_orgs"] == frozenset({"github.com/org", "gitlab.com/other"})
+
+
+def test_one_line_function_bodies_are_recorded_and_closed():
+    """``build() { make; }`` has a body, and it ends on the same line.
+
+    The opener counted only ``{``, so a one-line function never closed: its
+    body was never recorded, and every later line - including the whole
+    ``package()`` - was swallowed as build body, corrupting
+    build_system_markers, configure_flags and build_line_count.
+    """
+    from trustsight.full_aur.properties import (
+        _build_function_bodies,
+        extract_properties,
+    )
+
+    body = _build_function_bodies(
+        "build() { make; }\n"
+        'package() { install -Dm755 x "$pkgdir/usr/bin/x"; }\n'
+    )
+    assert "make;" in body
+    assert "-Dm755" in body
+    # build() closed on its own line, so package()'s header is not body text.
+    assert "package()" not in body
+
+    props = extract_properties("pkgname=p\nbuild() { make; }\n")
+    assert props["build_system_markers"] == frozenset({"make"})
+
+
 @pytest.mark.parametrize("loop,committed", [
     ("for i in 1 2 3; do bash r$i.sh; done", ("r1.sh", "r2.sh")),
     ('for f in *.sh; do bash "$f"; done', ("r1.sh", "r2.sh")),

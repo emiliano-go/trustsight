@@ -182,8 +182,12 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                 for d in re.finditer(r"""['\"]([^'\"]+)['\"]""", m.group(1)):
                     depends.add(d.group(1))
                 continue
-            if re.match(r"^\s*depends\s*=\s*\(", stripped):
+            m = re.match(r"^\s*depends\s*=\s*\((.*)", stripped)
+            if m:
+                # multi-line: depends=('a'  - the opening line carries items too
                 in_depends = True
+                for d in re.finditer(r"""['\"]([^'\"]+)['\"]""", m.group(1)):
+                    depends.add(d.group(1))
                 continue
             if in_depends:
                 if stripped.startswith(")"):
@@ -191,6 +195,9 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                     continue
                 for d in re.finditer(r"""['\"]([^'\"]+)['\"]""", stripped):
                     depends.add(d.group(1))
+                # the closing paren may share the last item's line: 'b')
+                if ")" in stripped:
+                    in_depends = False
     props["depends"] = frozenset(depends)
 
     # source_hosts / source_orgs: extracted from source=() entries
@@ -205,8 +212,12 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
             for u in _URL_RE.finditer(m.group(1)):
                 _extract_host_org(u.group(0), hosts, orgs)
             continue
-        if re.match(r"^\s*source(?:_x86_64|_i686|_any)?\s*=\s*\(", stripped):
+        m = re.match(r"^\s*source(?:_x86_64|_i686|_any)?\s*=\s*\((.*)", stripped)
+        if m:
+            # multi-line: source=('https://...'  - opening line carries items too
             in_source = True
+            for u in _URL_RE.finditer(m.group(1)):
+                _extract_host_org(u.group(0), hosts, orgs)
             continue
         if in_source:
             if stripped.startswith(")"):
@@ -214,6 +225,8 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                 continue
             for u in _URL_RE.finditer(stripped):
                 _extract_host_org(u.group(0), hosts, orgs)
+            if ")" in stripped:
+                in_source = False
     props["source_hosts"] = frozenset(hosts)
     props["source_orgs"] = frozenset(orgs)
 
@@ -305,8 +318,21 @@ def _build_function_bodies(pkgbuild: str) -> str:
         stripped = line.strip()
         if not in_func:
             if any(stripped.startswith(t) for t in targets):
-                in_func = True
-                depth = stripped.count("{")
+                if "{" not in stripped:
+                    in_func = True  # the brace arrives on a later line
+                    depth = 0
+                    continue
+                depth = stripped.count("{") - stripped.count("}")
+                opening = stripped.split("{", 1)[1]
+                if depth <= 0:
+                    # one-line body, e.g. build() { make; } - record it and
+                    # stay closed, or every later line is swallowed as this
+                    # function's body
+                    opening = opening.rsplit("}", 1)[0]
+                else:
+                    in_func = True
+                if opening.strip():
+                    lines.append(opening)
             continue
         depth += stripped.count("{")
         depth -= stripped.count("}")

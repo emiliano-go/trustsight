@@ -85,7 +85,7 @@ An epoch overrides normal version comparison, so introducing one forces an
 upgrade regardless of what the version numbers say. A pre-existing epoch never
 surfaces in a hunk, so bumping one is quiet.
 
-Fire rate: 0 of 3739.
+Fire rate: 14 of 3739 (0.37 %).
 
 ### H037: Long-Stable Property Changed {#h037}
 

@@ -470,7 +470,7 @@ because a new build dependency is useless without a build step that invokes
 it. The conjunction also keeps H087 off two neighbours: a dependency added
 with no build change is a packaging fix, and a build function edited with no
 dependency change is [H015](../rules/system.md#h015), which is INFO precisely
-because it fires on 21.4% of benign diffs.
+because it fires on 19.7% of benign diffs.
 
 It is MEDIUM because the shape is not exclusively malicious: a dependency
 correction that also adjusts a build step is an ordinary packaging change.
@@ -481,8 +481,10 @@ and whose build now fetches unpinned code, which is [H088](maintainer-and-metada
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `integrity`
-- **Condition:** A wholly-added `source=()` with more elements than a
-  wholly-added `*sums=()` in the same diff.
+- **Condition:** `source=()` declares more elements than a `*sums=()`.
+  Judged from a wholly-added pair of arrays in the diff, or - when the
+  diff shows the source array growing, or on a first-seen recipe - from
+  the complete recipe text.
 
 makepkg pairs `source=()` with each `*sums=()` by position, and no rule
 looked at the two lengths together. A source slipped in beside a checksum
@@ -490,10 +492,14 @@ list nobody recounted scored nothing but priors - the array declares
 verification for the entries it covers and says nothing about the one added
 past its end.
 
-**A diff shows a hunk, not a file.** An array that opens on a `+` line and
-continues through unchanged entries is only partly visible. The rule reads an
-array only when it opens *and* closes inside added lines with no context line
-between; anything else is not something the diff knows.
+**A diff shows a hunk, not a file.** The diff path still reads an array only
+when it opens *and* closes inside added lines: an array that continues through
+unchanged entries is only partly visible, and counting what is visible reported
+a two-element array as one on 26 benign packages. When the diff shows the
+source array growing, the lengths are read from the complete recipe instead,
+where both arrays are fully visible by construction. A first-seen package has
+no diff at all and is read the same way, so a source slipped in beside a
+checksum list nobody recounted is caught on both paths.
 
 **`name::url` is one source.** makepkg's rename form
 (`"$_pkgsrc"::"git+$url.git"`) is a single element. Elements are split on
@@ -536,7 +542,7 @@ These variables control makepkg's archive compression command. Overriding
 them can pipe decompressed content through an arbitrary binary. Legitimate
 uses are rare (custom compression tuning for size/performance).
 
-Fire rate: ~0.08% on the 3,739-diff benign corpus.
+Fire rate: 0% on the 3,739-diff benign corpus.
 
 ### R091: Privilege Escalation Override {#r091}
 
@@ -563,7 +569,7 @@ Fire rate: 0% on the 3,739-diff benign corpus.
 or perform legitimate cleanup. Legitimate cleanup traps exist but are
 uncommon enough to flag.
 
-Fire rate: ~0.80% on the 3,739-diff benign corpus. Excludes when R104
+Fire rate: ~0.21% on the 3,739-diff benign corpus. Excludes when R104
 already claimed the more specific form.
 
 ### R104: Error Handling Suppressed {#r104}
@@ -593,7 +599,7 @@ Overriding it in a PKGBUILD redirects all source downloads through the
 attacker's chosen binary. Any change to DLAGENTS is flagged: legitimate
 recipes do not modify it.
 
-Fire rate: ~1.55% on the 3,739-diff benign corpus.
+Fire rate: ~0.03% on the 3,739-diff benign corpus.
 
 ### H097: Function Shadowing {#h097}
 

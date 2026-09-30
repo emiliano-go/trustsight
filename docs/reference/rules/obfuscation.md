@@ -100,7 +100,7 @@ looking at.
 A literal that cannot be rebuilt is reported as the inconclusive case.
 Unreconstructable input is never read as UNFLAGGED.
 
-Fire rate: 0 of 3739.
+Fire rate: 58 of 3739 (1.55 %), all weight-0 reconstruction notes.
 
 ### H080: Indirect Command Expansion {#h080}
 

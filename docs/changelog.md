@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-29
+
 ### Added
 
 - Shell completion of package names for `inspect`, `history`, `forget` and `override`.
@@ -14,6 +16,8 @@
 ### Changed
 
 - A source URL on the registered domain of the package's `url=` is classified `declared_upstream` (+5) instead of `unknown` (+20), unless the same diff changes `url=`.
+- The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
+- The seeded fire-rate tables in [Measured fire rates](reference/rules/system.md#experimental-fire-rates) and [Fire Rates](explanation/fire-rates.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
 
 ### Security
 
@@ -32,11 +36,6 @@
 - `status` explains what a missing dependency corpus costs and points to the seed-provenance page; `seed fetch` reports the maintainer, source-URL and dependency-name counts and warns when the seed carries only maintainers. The seed build steps show the `--source-urls`/`--dependencies` hand-off, and Quickstart answers whether to build the dependency corpus, and how often.
 - The bug-report template's reproduction field no longer forces a shell fence around the steps, and the Python version field is optional for AUR installs, which track the system Python. (#21)
 
-### Changed
-
-- The published seed (`baseline-2026-09-24`) now carries the source-URL and dependency-name corpora, not maintainers alone: 185,902 source URLs, 215,504 dependency names and 36,912 hashed maintainers, so `seed fetch` warms novelty and the D-series rules on a fresh install.
-- The seeded fire-rate tables in [Measured fire rates](reference/rules/system.md#experimental-fire-rates) and [Fire Rates](explanation/fire-rates.md) are re-measured against the published 215,504-name corpus: D001 10 hits (0.27 %), D002 0, D003 18 (0.48 %), D004 2 (0.05 %), H030 5 (0.13 %), H029 2/202 (0.99 %). The D-series numbers are not covered by the cold-database CI gate, so these are point-in-time records.
-
 ### Fixed
 
 - H091 now reads checksum-array parity from the complete recipe: a first-seen package is checked at all, and an element inserted into an existing `source=()` beside an unchanged `*sums=()` is caught instead of being invisible to the wholly-added-array guard. The diff path only falls back to the recipe text when the source array grew, so a pre-existing mismatch the diff merely touches stays silent.
@@ -51,6 +50,19 @@
 - The test suite pins `LC_ALL=C`, so a non-English locale no longer fails `check()` where git localises its messages.
 - `review` and `review --deps` no longer hide a package's findings behind its status line. The `No changes in the AUR since last review` and trivial-update statuses describe the *diff*, but findings such as H029 (name typosquat), H003, `SOURCE_BUCKET` and `NOVELTY` are computed from the head recipe and the database, so an unchanged commit still fires them. They are now rendered after the status on both the Rich and plain renderers, matching the dependency card and `inspect`.
 - `inspect`'s text output names the file and line of a finding (`PKGBUILD line 4`) on both renderers, so locating a finding no longer takes a trip to `--json`. (#18)
+- A raw-line rule finding could cite the wrong file and line: raw candidates were indexed into the joined, blank-stripped line list while the file/line map is keyed on the raw diff lines, so one blank or continued line before the match shifted the citation, and a multi-file diff could attribute the wrong file. The tokenizer's bash affix stripping also removed the wrong span (`${v#*/}` on `a/b/c` yielded `c` instead of `b/c`; `${v##foo}` stripped a non-prefix), and a legal escape in a `${var/pat/rep}` replacement crashed the tokenizer into fail-closed instead of leaving that one expansion unresolved.
+- A deleted file was summarised as a modification of `/dev/null`; the real path now appears with status `removed`. A content line starting with `--` or `++` (an unquoted array element, a configure flag at column 0) was read as a diff file header, which could flush checksum-array tracking and hide a hash swap in the same array.
+- H078 (the signing-key set changed) never fired for the dominant multi-line `validpgpkeys` edit shape, where the opener is a context line and the keys change one per `+`/`-` line.
+- A multi-line `source=()` array yielded only its first URL, so H031 and H034 were blind to every entry past the opener line; and only the first `rm` on a line was checked against the build tree, so `rm -rf "$srcdir/x"; rm -rf ~` evaded S002 (CRITICAL).
+- The companion-tree walk recursed per directory level on an attacker-controlled tree: a ~1500-deep tree aborted the analysis with `RecursionError` instead of degrading to the `tree_not_analyzed` gap. The walk is iterative now.
+- `unresolved_patterns` listed every literal added line; it now lists only what the tokenizer could not fully resolve, as documented. `_zip_trailing_bytes` returns None on a truncated EOCD record instead of raising. An unparseable source URL (unbalanced IPv6 brackets) classifies as unknown instead of crashing the analysis.
+- The cached database connection never rolled back, so a write that failed mid-transaction could be committed by the next unrelated `commit()`. Re-importing a seed built under a new salt silently orphaned all maintainer history (known maintainers read as first-seen again); the stored salt now wins, and the seed's maintainer rows are skipped with a warning rather than orphaned alongside it.
+- `forget --prune` was broken from both sides: the CLI refused to prune exactly when a package was gone from the AUR (a shorter reply read as truncation), while the API pruned on a partial cache answer during an outage, deleting tracked packages over a network blip. Both paths now act only on an authoritative AUR answer, and the destructive CLI prune asks for confirmation unless `--yes`. A negative `Retry-After` header or a valid-JSON-but-wrong-shape RPC body now degrade to a failed lookup instead of escaping as tracebacks.
+- `db backup -o` onto the live database path hung forever in `conn.backup()`; the same-file guard now covers the equal-path case. Declining the `db vacuum` confirmation exited 1, a code the exit-code contract does not define; it exits 2. `list --sort X --limit N` limited before sorting, so the alphabetical head was sorted and the highest-risk rows were dropped. `config sync-rules --full --json` ignored `--full`. `seed migrate` crashed once the auto-migration had renamed the table. The `full-aur --watch` flag-conflict error ignored `--json`. `corpus pivot --type` rejected non-lowercase spellings that `ioc list` accepts.
+- One package's verdict-rendering failure aborted the whole review batch, discarding every result; it now fails that package alone. A malformed rule template in `rules.toml` raised `IndexError` through `inspect` instead of falling back to the plain finding line. A finite `--depth` above the ceiling reported a clamped walk as complete instead of truncated, so no `deps_not_scanned` gap was recorded. `COVERAGE_GAP_REASONS` answered `in` with False before the first keyed lookup. `CycleReport.to_dict()` omitted `added`. `inspect`'s status line could print "Only pkgver and sha256sums changed" directly above its own W-series finding; it now reads triviality from the same check the JSON body uses.
+- The corpus pipeline's fetch-failure path yielded a 3-tuple where the consumer unpacks four, so one failed fetch aborted the whole cycle (and `--watch` retried it forever). `extract_properties` dropped the items on the opening line of a multi-line `depends=()` or `source=()` array, and a one-line function body (`build() { make; }`) never closed, so the rest of the recipe was read as build body. A removals-only cycle returned before recording the adoption feed, dropping the removal events the Class D baselines read. A valid-but-non-object metadata snapshot crashed `corpus pivot` and `baseline build` with `AttributeError`.
+- H029's popularity asymmetry was vacuous for an unobserved package (threshold 0), so an unknown name one edit from an equally obscure name could fire HIGH with a false "far more popular" claim. `build_seed` folded maintainers by raw name but hashed the normalized identity, producing duplicate `name_hash` rows and fragment counts. `load_overrides` crashed on a non-UTF-8 `overrides.json`. A corrupt bundled seed crashed the first `review` or `inspect` instead of being skipped. A malformed seed JSONL row raised an uncaught `KeyError` instead of the clean exit-2 error. The anti-analysis probe scan leaked the diff `+` marker into the finding text.
+- The Calibration Gates workflow rebuilt the calibration corpus from `corpus.lock` on every run, and the rebuild is not byte-stable across git versions: CI's copy differed in a handful of diffs and measured a benign flag rate of 7.8% against the published 7.9%, failing the published-figures gate on every push. The corpus now ships as a packed release asset (`baseline-benign-corpus.tar.gz`, CI-only and unsigned), and the workflow verifies the extracted bytes against the `corpus_content_sha256` recorded in `baseline.json`, so every environment replays the same corpus.
 
 ## [0.16.1] - 2026-09-23
 
@@ -4999,4 +5011,6 @@ separate reconciliation.
 [0.15.6]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.6
 [0.15.7]: https://github.com/emiliano-go/trustsight/releases/tag/v0.15.7
 [0.16.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.0
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.16.0...HEAD
+[0.16.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.1
+[0.17.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.0
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.17.0...HEAD

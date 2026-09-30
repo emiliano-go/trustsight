@@ -237,7 +237,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Category:** `build`
 - **Description:** The diff changes any line inside `build()`, `prepare()`, `check()`, or `package()`. Many supply-chain attacks add a single line to one of these functions, so this reports that an executing function was altered.
 
-**INFO, so it contributes nothing to the score.** It fires on 21.4 % of benign diffs because maintainers rewrite build functions routinely, and no narrowing reaches triage quality: restricting to an unchanged `pkgver` still leaves 11.6 %, and the "version bump that also rewrites `build()`" case the rule was first proposed for is 9.8 %. Carrying weight it would simply add points to one benign update in five.
+**INFO, so it contributes nothing to the score.** It fires on 19.7 % of benign diffs because maintainers rewrite build functions routinely, and no narrowing reaches triage quality. Carrying weight it would simply add points to one benign update in five.
 
 At weight 0 it is context for a reviewer rather than a signal, which is why it is the one rule in this group that is **on by default**.
 
@@ -268,7 +268,7 @@ stays quiet, and an interpolated version made only of version characters is
 ordinary packaging. What the rule describes is a value carrying delimiters
 (`;`, whitespace, `/`) being substituted into something the build fetches.
 
-Fire rate: 0 on all 3739 benign-corpus diffs.
+Fire rate: 1 of 3739 (0.03 %).
 
 ### H034: Exotic Source Protocol {#h034}
 
@@ -280,7 +280,7 @@ Fire rate: 0 on all 3739 benign-corpus diffs.
 `data:` URIs carry no `://` and are not scheme tokens, which is an accepted
 gap rather than a silent pass.
 
-Fire rate: 6 of 3739 (0.18 %).
+Fire rate: 7 of 3739 (0.19 %).
 
 ### H041: Upload To Paste Or File-Drop Host {#h041}
 

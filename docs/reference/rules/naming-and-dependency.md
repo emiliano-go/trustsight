@@ -60,7 +60,7 @@ This is the AUR equivalent of the `python-sqlite` vs `pysqlite`, `electron` vs `
 Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, and every legitimate fork are distance-small from `foo`. This rule fires ONLY when all hold:
 
 1. **Similar** - Damerau-Levenshtein ≤2 to a candidate `C`.
-2. **Asymmetric popularity** - `C` is observed 10x+ more often (via `dependency_observation_count`) than this package. A squat impersonates something bigger.
+2. **Asymmetric popularity** - `C` is observed 10x+ more often (via `dependency_observation_count`) than this package, with the threshold floored at ten observations (`max(pkg_pop, 1) * 10`). A squat impersonates something bigger; without the floor a never-observed name would zero the bar and let any thin candidate through.
 3. **Not a variant** - Expected suffixes (`-git`, `-bin`, `-debug`, `-lts`, `-stable`, `-beta`, `-svn`, `-hg`, `-bzr`, `-cvs`, `-wine`, `-appimage`, `-flatpak`, `-nightly`, `-devel`, `-common`) are stripped before comparison.
 
 **Origin:** npm/PyPI/crates typosquat detection - the most exploited supply-chain vector in every other ecosystem. The AUR is defenseless against it.
@@ -133,7 +133,7 @@ either branch, since neither corpus nor pacman data exists to establish what is
 established. H064 always runs; D004 covers the same ground and may
 double-report when it is enabled (it is, by default).
 
-Fire rate: 0 of 3739.
+Fire rate: 2 of 3739 (0.05 %), both established-name claims: `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`.
 
 ### H048: Dependency Vendored Into Source {#h048}
 

@@ -223,7 +223,7 @@ Output:
 │                        https://sketchy-cdn.example.com/payload.tar.gz      │
 │                                                                            │
 │       Rules Triggered                                                      │
-│                        H001 +25 HIGH Checksum Disabled:                    │
+│                        PKGBUILD line 8  H001 +25 HIGH Checksum Disabled:   │
 │                        sha256sums=('SKIP')                                 │
 │                        SOURCE_BUCKET +20 MEDIUM Source URL classified as   │
 │                        unknown                                             │

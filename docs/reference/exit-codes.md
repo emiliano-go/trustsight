@@ -35,10 +35,15 @@ is evidence for a human decision, not an authority that halts a build on its own
 Exit code 2 if the analysis pipeline cannot complete (clone failure, database
 error). Otherwise 0; `inspect` is an information command and does not flag.
 
-### `trustsight db check`
+### `trustsight db`
 
-Returns 0 only when SQLite reports `ok`. A corrupt database, including in
-`--json` mode, emits `{"status": "corrupt", "errors": [...]}` and exits 2.
+- **`check`**: returns 0 only when SQLite reports `ok`. A corrupt database,
+  including in `--json` mode, emits `{"status": "corrupt", "errors": [...]}`
+  and exits 2.
+- **`vacuum`**: declining the confirmation prompt exits 2, like every other
+  abort path.
+- **`backup`**: an output path that is the live database exits 2 rather than
+  hanging in `sqlite3.backup()`.
 
 ### `trustsight history`
 

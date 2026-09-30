@@ -91,8 +91,10 @@ and does not fire.
 
 The conjunction is the rule. `rm -rf` alone is housekeeping; a target of `/`,
 `/*`, `/etc`, `/usr`, `/var`, `/boot`, `/home`, `/root`, `~` or `$HOME` is
-not. A line mentioning `$srcdir` or `$pkgdir` is exempt outright, because a
-recursive delete inside the build tree is what makepkg expects.
+not. A `rm` whose target is `$srcdir` or `$pkgdir` is exempt, because a
+recursive delete inside the build tree is what makepkg expects; the exemption
+is per command, so a benign sandbox delete on a line no longer masks a
+following `rm -rf ~`.
 
 `--no-preserve-root` is matched but not required: its absence does not make
 `rm -rf /` safe, it makes it noisier.

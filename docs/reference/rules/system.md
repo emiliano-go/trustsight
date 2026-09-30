@@ -517,7 +517,7 @@ See [H016: Hidden Network Fetch In Build](fetch-and-execution.md#h016).
 
 ## Measured fire rates {#experimental-fire-rates}
 
-The detailed rows below were measured against the 3,739-diff benign corpus with the published 215,504-name dependency corpus (`baseline-2026-09-24`). They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
+The corpus-dependent rows below (D-series, H029, H030) were measured against the 3,739-diff benign corpus with the published 215,504-name dependency corpus (`baseline-2026-09-24`); the stateless rows are the cold-database replay counts. They are per-rule hit counts from a single run and are not regenerated on each push. All D-series, H016-H019, and H035-H036 rules are **on by default**, as are the code-emitted rules H037-H079. These are **false-positive rates**: every hit is a benign package.
 
 The numbers are enforced, not just recorded. `scripts/calibration_gates.py` replays the corpus against the *shipped* configuration in a temporary directory with a cold database, and fails the build if any scoring rule exceeds a 0.30 fire rate, if benign p95 reaches the malicious p5, if a weight-0 annotation starts scoring, or if a labelled attack fixture stops being detected. It runs on every push. Class C and Class D rules are absent from this table because they cannot fire on a stateless diff at all, which is itself one of the gates.
 
@@ -534,20 +534,20 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H022 | MEDIUM | - | - | Not calibrated: fires when the user's last analysis is > 1 year old, which varies per database. |
 | H023 | INFO | - | - | Not calibrated: zero-weight metadata; context only. |
 | H024 | HIGH | 1 | 0.03 % | Near-zero; matches the predicted rate. |
-| H025 | HIGH/MED | 8 | 0.25 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
+| H025 | HIGH/MED | 10 | 0.27 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
 | H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
-| H027 | INFO | 515 | 15.87 % | INFO weight 0; not a scoring impact. |
+| H027 | INFO | 224 | 5.99 % | INFO weight 0; not a scoring impact. |
 | H029 | HIGH | 2/202 pkgs | 0.99 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
 | H030 | MEDIUM | 5 | 0.13 % | Measured with the published seed. Well under the 30% gate. |
 | D001 | HIGH | 10 | 0.27 % | Comfortably low for HIGH. The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 18 | 0.48 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
-| H015 | INFO | 694 | **21.4 %** | Why it is INFO. No narrowing reaches triage quality (`pkgver` unchanged still leaves 11.6 %, a bump that also edits `build()` is 9.8 %), so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
-| H016 | HIGH | 7 | 0.22 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
-| H031 | MEDIUM | 0 | 0.00 % | Needs both an unsafe literal version and its interpolation into a source URL. |
-| H032 | HIGH | 1 | 0.03 % | A legitimate `$HOME/.config/...log` write from a `post_upgrade`. |
+| H015 | INFO | 738 | **19.7 %** | Why it is INFO. No narrowing reaches triage quality, so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |
+| H016 | HIGH | 8 | 0.21 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
+| H031 | MEDIUM | 1 | 0.03 % | Needs both an unsafe literal version and its interpolation into a source URL. |
+| H032 | HIGH | 0 | 0.00 % | No benign write reaches the build/install-function scope in the current corpus. |
 | H033 | HIGH/MED | 4 | 0.12 % | Maintainers tracking a moving patch branch under a fixed version, which is the shape the rule describes. |
-| H034 | MEDIUM | 6 | 0.18 % | Schemes outside the shipped allowlist. |
+| H034 | MEDIUM | 7 | 0.19 % | Schemes outside the shipped allowlist. |
 | H038 | HIGH | 0 | 0.00 % | `mktemp -d` is excluded wholesale, so private scratch directories never count. |
 | H041 | HIGH | 0 | 0.00 % | The one paste-host reference in the corpus is a gist download, which is H016's. |
 | H039 | HIGH | 0 | 0.00 % | Reads the unit's `ExecStart`, not its filename. |
@@ -556,9 +556,9 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H043 | INFO | 0 | 0.00 % | A benign diff with one or two hits cannot reach three distinct stages. |
 | H056 | tiered | 0 | 0.00 % | With the shipped (empty) list and with a synthetic one. A positive control (`github.com`) fires on 1561 diffs, so the surface extraction is real. |
 | H062 | MEDIUM | 4 | 0.12 % | Packages that legitimately ship pacman hooks. |
-| H063 | MEDIUM | 0 | 0.00 % | An unchanged epoch never surfaces in a hunk. |
-| H064 | HIGH/MED | 0 | 0.00 % | Related name shapes suppress; cold start cannot fire. |
-| H065 | INFO | 0 | 0.00 % | Weight 0. Anchoring the check on an ANSI-C quote opener removed four regex end-anchor false positives. |
+| H063 | MEDIUM | 14 | 0.37 % | All fourteen are benign `epoch=` introductions; an unchanged epoch never surfaces in a hunk. |
+| H064 | HIGH/MED | 2 | 0.05 % | Related name shapes suppress; both hits name an established package from the official repos. |
+| H065 | INFO | 58 | 1.55 % | Weight 0; benign recipes reconstruct literals routinely, so this is context, not a finding. |
 | H067 | HIGH | 0 | 0.00 % | Architecture checks are not probes. |
 | H068 | HIGH | 0 | 0.00 % | A type check on decoded bytes, so encodings do not need enumerating. |
 | H069 | HIGH | 0 | 0.00 % | Heredoc bodies are excluded from command scanning. |

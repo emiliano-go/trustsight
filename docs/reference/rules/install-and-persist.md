@@ -147,7 +147,7 @@ expected scope of an install hook; foreign package managers are not.
 - **Category:** `persistence`
 - **Condition:** A build or install function writes into `$HOME`, `.bashrc`, `.zshrc`, `.profile` or `.config`, outside `$pkgdir` staging.
 
-Fire rate: 1 of 3739 (0.03 %), a legitimate log path written from `post_upgrade`.
+Fire rate: 0 of 3739.
 
 The severity is contextual. A write into a user's home during `build()` is
 HIGH; the same write from an **install scriptlet** is CRITICAL, because pacman

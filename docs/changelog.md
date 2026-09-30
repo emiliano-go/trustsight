@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The watcher's alerting bar is configurable and urgency-aware: `--over-threshold N` (and the `over_threshold` parameter on `refresh_corpus`/`watch`) puts packages scoring above N in the cycle's `over_threshold` list (default 30, the benign corpus's p95). A non-empty list marks the webhook document `priority: urgent` and sends ntfy `Priority: 5`; cluster-only cycles stay at the default priority.
+
 ## [0.17.1] - 2026-09-30
 
 ### Added

@@ -208,7 +208,8 @@ def test_refresh_corpus_forwards_bootstrap(ts, monkeypatch):
 
     ts.refresh_corpus(bootstrap=True)
 
-    assert calls == [{"bootstrap": True, "resume": False, "export_path": None, "sign_key": None}]
+    assert calls == [{"bootstrap": True, "resume": False, "export_path": None, "sign_key": None,
+                        "over_threshold": None}]
 
 
 def test_api_methods_do_not_render_to_stdout_or_stderr(ts, monkeypatch, capsys):

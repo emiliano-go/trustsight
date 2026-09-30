@@ -364,6 +364,7 @@ def register_commands(app: typer.Typer):
         interval: int | None = typer.Option(None, "--interval", help="Seconds between --watch cycles (default 3600, floor 60)"),
         cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
         notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
+        over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Bootstrap or update the full-AUR baseline corpus.
@@ -403,11 +404,12 @@ def register_commands(app: typer.Typer):
                     _print_colored(msg, "red", stderr=True)
                 raise typer.Exit(code=2)
             run_watch(interval=interval, cycles=cycles, json_output=json_output,
-                      notify_url=notify)
+                      notify_url=notify, over_threshold=over_threshold)
             return
         result = run_baseline_build(
             resume=resume, export_path=export, sign_key=sign,
             json_output=json_output, bootstrap=bootstrap,
+            over_threshold=over_threshold,
         )
         if result.refused:
             raise typer.Exit(code=2)

@@ -21,6 +21,7 @@ class _Receiver:
 
     def __init__(self):
         self.requests: list[tuple[str, dict]] = []
+        self.headers_seen: list = []
         server = HTTPServer(("127.0.0.1", 0), self._handler())
         self.url = f"http://127.0.0.1:{server.server_address[1]}/hook"
         self._thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -29,12 +30,14 @@ class _Receiver:
 
     def _handler(self):
         captured = self.requests
+        headers_seen = self.headers_seen
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 length = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(length) or b"{}")
                 captured.append((self.path, body))
+                headers_seen.append(self.headers)
                 self.send_response(200)
                 self.end_headers()
 
@@ -62,6 +65,7 @@ def _cycle(**kw):
 def test_payload_carries_the_alerts_and_the_cycle_counts():
     payload = alert_payload(_cycle(added=3, changed=2, removed=1, processed=5))
     assert payload["event"] == "trustsight.alerts"
+    assert payload["priority"] == "default"
     assert payload["alerts"] == [
         {"package": "evil-pkg", "rule_id": "H026"},
         {"package": "evil-pkg2", "rule_id": "R001"},
@@ -69,6 +73,36 @@ def test_payload_carries_the_alerts_and_the_cycle_counts():
     assert payload["cycle"] == {
         "added": 3, "changed": 2, "removed": 1, "processed": 5,
     }
+    assert payload["over_threshold"] == []
+
+
+def test_over_threshold_marks_the_payload_urgent():
+    cycle = CycleResult(over_threshold=[("hot-pkg", 45), ("warm-pkg", 31)])
+    payload = alert_payload(cycle)
+    assert payload["priority"] == "urgent"
+    assert payload["over_threshold"] == [
+        {"package": "hot-pkg", "score": 45},
+        {"package": "warm-pkg", "score": 31},
+    ]
+
+
+def test_urgent_payload_carries_the_ntfy_priority_header(receiver):
+    cycle = CycleResult(over_threshold=[("hot-pkg", 45)])
+    post_webhook(receiver.url, alert_payload(cycle))
+    [(path, body)] = receiver.requests
+    assert body["priority"] == "urgent"
+    assert receiver.headers_seen[0].get("Priority") == "5"
+
+
+def test_default_payload_carries_no_priority_header(receiver):
+    post_webhook(receiver.url, alert_payload(_cycle()))
+    assert receiver.headers_seen[0].get("Priority") is None
+
+
+def test_over_threshold_alone_triggers_a_notification(receiver):
+    cycle = CycleResult(over_threshold=[("hot-pkg", 45)])
+    assert maybe_notify(cycle, receiver.url) is True
+    assert receiver.requests[0][1]["over_threshold"][0]["package"] == "hot-pkg"
 
 
 def test_post_webhook_delivers_json(receiver):

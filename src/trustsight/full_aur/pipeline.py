@@ -65,6 +65,12 @@ log = logging.getLogger(__name__)
 # someone to notice later.
 _FLAGGED_SCORE = 40
 
+# The benign corpus's p95 (published-figures.json): a score past it is
+# outside everything the benign corpus does, which is the bar a watcher's
+# urgent notification should use.  `flagged` stays at 40 (the report bar);
+# this is the lower, alerting bar.
+_OVER_BENIGN_P95 = 30
+
 # How many of them one cycle prints.  A bootstrap analyses the whole AUR,
 # and an unbounded list would bury the cluster findings under it.
 _FLAGGED_REPORT_LIMIT = 10
@@ -213,6 +219,7 @@ class CycleResult:
     cluster_findings: list[dict] = field(default_factory=list)
     new_alerts: list[tuple[str, str]] = field(default_factory=list)
     flagged: list[tuple[str, int]] = field(default_factory=list)
+    over_threshold: list[tuple[str, int]] = field(default_factory=list)
     elapsed: float = 0.0
     bootstrap: bool = False
     # True when the cycle deliberately did no work and the caller should
@@ -327,12 +334,18 @@ def run_baseline_build(
     json_output: bool = False,
     bootstrap: bool = False,
     depth: Optional[int] = None,
+    over_threshold: Optional[int] = None,
 ) -> CycleResult:
     """Bootstrap or update the full-AUR corpus.
 
     Fetches the metadata snapshot, diffs against the stored copy, downloads
     the changed PKGBUILDs, analyses each package, stores results, and
     optionally exports a signed baseline artifact.
+
+    *over_threshold* is the alerting bar: packages scoring above it land in
+    ``CycleResult.over_threshold``.  ``None`` uses the benign corpus's p95
+    (published-figures.json), the point past which a score is outside
+    everything the benign corpus does.
 
     A from-scratch bootstrap (no prior snapshot) fetches every PKGBUILD in the
     AUR, which is heavy on a shared community mirror.  It is not done by
@@ -344,6 +357,8 @@ def run_baseline_build(
     Returns what the cycle did so ``run_watch`` can report on it; the
     single-shot CLI path ignores the value.
     """
+    if over_threshold is None:
+        over_threshold = _OVER_BENIGN_P95
     _ensure_init()
     result = CycleResult()
     _log = _logger(json_output)
@@ -570,6 +585,10 @@ def run_baseline_build(
         ((name, score) for name, score in scores.items() if score >= _FLAGGED_SCORE),
         key=lambda item: (-item[1], item[0]),
     )
+    result.over_threshold = sorted(
+        ((name, score) for name, score in scores.items() if score > over_threshold),
+        key=lambda item: (-item[1], item[0]),
+    )
     result.new_alerts = record_alerts([
         (member, finding["rule_id"])
         for finding in cluster_findings
@@ -640,6 +659,7 @@ def run_watch(
     sleep: Callable[[float], None] = time.sleep,
     depth: Optional[int] = None,
     notify_url: Optional[str] = None,
+    over_threshold: Optional[int] = None,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted (plan §6.4).
 
@@ -669,7 +689,8 @@ def run_watch(
             # still bounds the total, so a persistently broken cycle cannot
             # spin forever either.
             try:
-                result = run_baseline_build(json_output=json_output, depth=depth)
+                result = run_baseline_build(json_output=json_output, depth=depth,
+                                            over_threshold=over_threshold)
             except Exception as exc:
                 attempts += 1
                 _log(f"Cycle failed ({exc}); retrying in {delay}s")
@@ -683,15 +704,16 @@ def run_watch(
                 _log(f"{len(result.new_alerts)} new alert(s) this cycle")
                 for package, rule_id in result.new_alerts:
                     _log(f"  {rule_id}  {package}")
-                # An unattended watcher needs a push channel: the alert is
-                # announced once here and never again, so the webhook is how
-                # it reaches anyone not reading the log.
-                from ..notify import maybe_notify
-
-                if maybe_notify(result, notify_url):
-                    _log("  alert webhook delivered")
             elif result.cluster_findings:
                 _log("No new alerts; every cluster this cycle was already reported")
+            # An unattended watcher needs a push channel: a cluster alert is
+            # announced once here and never again, and an over-threshold
+            # package is what the watcher exists for - so the webhook is how
+            # either reaches anyone not reading the log.
+            from ..notify import maybe_notify
+
+            if maybe_notify(result, notify_url):
+                _log("  alert webhook delivered")
             if cycles and len(results) >= cycles:
                 break
             sleep(delay)

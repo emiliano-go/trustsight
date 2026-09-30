@@ -101,7 +101,7 @@ def test_watch_passes_json_output_through(monkeypatch):
         lambda **kwargs: seen.update(kwargs) or CycleResult(),
     )
     run_watch(interval=60, cycles=1, json_output=True, sleep=lambda _: None)
-    assert seen == {"json_output": True, "depth": None}
+    assert seen == {"json_output": True, "depth": None, "over_threshold": None}
 
 
 # --- alert deduplication ---

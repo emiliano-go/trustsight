@@ -672,6 +672,9 @@ class CycleReport:
     :ivar elapsed: wall-clock seconds the cycle took.
     :ivar flagged: ``(package, score)`` for everything this cycle scored 40
         or above, worst first.
+    :ivar over_threshold: ``(package, score)`` for everything this cycle
+        scored above the alerting bar (the benign corpus's p95 unless
+        overridden), worst first.
     :ivar cluster_findings: corpus-wide patterns this cycle found.
     :ivar new_alerts: ``(package, rule_id)`` for clusters seen for the
         first time.  A cluster already reported on an earlier cycle is
@@ -686,6 +689,9 @@ class CycleReport:
     elapsed: float = 0.0
     flagged: tuple[tuple[str, int], ...] = ()
     """``(package, score)`` for everything this cycle scored 40 or above, worst first."""
+    over_threshold: tuple[tuple[str, int], ...] = ()
+    """``(package, score)`` for everything this cycle scored above the
+    alerting bar (the benign corpus's p95 unless overridden), worst first."""
     cluster_findings: tuple[ClusterFinding, ...] = ()
     new_alerts: tuple[tuple[str, str], ...] = ()
     """``(package, rule_id)`` for clusters seen for the first time.  A cluster
@@ -701,6 +707,7 @@ class CycleReport:
             "bootstrap": self.bootstrap,
             "elapsed": self.elapsed,
             "flagged": [list(f) for f in self.flagged],
+            "over_threshold": [list(f) for f in self.over_threshold],
             "cluster_findings": [c.to_dict() for c in self.cluster_findings],
             "new_alerts": [list(a) for a in self.new_alerts],
         }
@@ -1077,6 +1084,7 @@ def _cycle_report(result) -> CycleReport:
         bootstrap=result.bootstrap,
         elapsed=result.elapsed,
         flagged=tuple((name, score) for name, score in result.flagged),
+        over_threshold=tuple((name, score) for name, score in result.over_threshold),
         cluster_findings=tuple(
             ClusterFinding(
                 rule_id=f.get("rule_id", ""),
@@ -1489,6 +1497,7 @@ class TrustSight:
         resume: bool = False,
         export_path: Optional[str] = None,
         sign_key: Optional[str] = None,
+        over_threshold: Optional[int] = None,
     ) -> CycleReport:
         """Run one full-AUR corpus cycle: what ``trustsight full-aur`` does.
 
@@ -1498,6 +1507,9 @@ class TrustSight:
         build when no snapshot exists; it takes hours. ``resume=True``
         continues an interrupted build.
 
+        :param over_threshold: the alerting bar for
+            ``CycleReport.over_threshold``.  ``None`` uses the benign
+            corpus's p95.
         :returns: what the cycle added, changed, removed and flagged.
         """
         from .full_aur.pipeline import run_baseline_build
@@ -1505,6 +1517,7 @@ class TrustSight:
         self._ensure_ready()
         return _cycle_report(run_baseline_build(
             bootstrap=bootstrap, resume=resume, export_path=export_path, sign_key=sign_key,
+            over_threshold=over_threshold,
         ))
 
     def watch(
@@ -1512,6 +1525,7 @@ class TrustSight:
         *,
         interval: Optional[int] = None,
         cycles: int = 0,
+        over_threshold: Optional[int] = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> Iterator[CycleReport]:
         """Yield one ``CycleReport`` per corpus cycle, forever by default.
@@ -1535,6 +1549,9 @@ class TrustSight:
             regenerated yet.
         :param cycles: stop after this many cycles (0 = until the caller
             stops iterating).
+        :param over_threshold: the alerting bar for
+            ``CycleReport.over_threshold``.  ``None`` uses the benign
+            corpus's p95.
         :returns: an iterator of one :class:`CycleReport` per cycle.
 
         Example:
@@ -1556,7 +1573,7 @@ class TrustSight:
             delay = watch_interval_seconds(interval)
             count = 0
             while True:
-                yield _cycle_report(run_baseline_build())
+                yield _cycle_report(run_baseline_build(over_threshold=over_threshold))
                 count += 1
                 if cycles and count >= cycles:
                     return

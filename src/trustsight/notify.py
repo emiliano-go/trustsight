@@ -38,11 +38,16 @@ def alert_payload(cycle) -> dict:
 
     Counts travel with the alerts so a receiver can tell "three packages
     changed, one alerted" from "three hundred changed, one alerted"
-    without asking again.
+    without asking again.  ``over_threshold`` carries the packages that
+    scored above the alerting bar, and ``priority`` is "urgent" when the
+    list is non-empty: those are the packages outside everything the
+    benign corpus does.
     """
+    urgent = bool(cycle.over_threshold)
     return {
         "event": "trustsight.alerts",
         "tool": "trustsight",
+        "priority": "urgent" if urgent else "default",
         "cycle": {
             "added": cycle.added,
             "changed": cycle.changed,
@@ -53,16 +58,27 @@ def alert_payload(cycle) -> dict:
             {"package": package, "rule_id": rule_id}
             for package, rule_id in cycle.new_alerts
         ],
+        "over_threshold": [
+            {"package": package, "score": score}
+            for package, score in cycle.over_threshold
+        ],
     }
 
 
 def post_webhook(url: str, payload: dict, timeout: float = _TIMEOUT_S) -> None:
-    """POST *payload* as JSON to *url*.  Raises on any failure."""
+    """POST *payload* as JSON to *url*.  Raises on any failure.
+
+    An urgent payload carries ntfy's ``Priority: max`` header; receivers
+    that are not ntfy ignore it.
+    """
+    headers = {"Content-Type": "application/json",
+               "User-Agent": "trustsight/1.0"}
+    if payload.get("priority") == "urgent":
+        headers["Priority"] = "5"
     req = urllib.request.Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json",
-                 "User-Agent": "trustsight/1.0"},
+        headers=headers,
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -89,7 +105,7 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
     notification was delivered.  Every failure (no URL, no alerts, a dead
     receiver) is quiet by design: the watcher's job is the next cycle.
     """
-    if not cycle.new_alerts:
+    if not cycle.new_alerts and not cycle.over_threshold:
         return False
     url = url if url is not None else notify_url()
     if not url:

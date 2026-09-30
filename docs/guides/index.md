@@ -13,6 +13,7 @@ These pages cover common tasks you'll perform with TrustSight. Each guide is foc
 | [Acting on a Flag](acting-on-a-flag.md) | A package scored above 20 or returned INCONCLUSIVE : what to do next. |
 | [Configuring Rules and Weights](configuring-rules-and-weights.md) | You need to edit `rules.toml` or `config.toml` to match your threat model. |
 | [Tuning False Positives](tuning-false-positives.md) | A rule is firing too often on your package set : how to identify and fix it. |
+| [Watching the AUR Continuously](watching-the-aur.md) | You want an always-on scanner over the whole AUR : the watch loop, service setups, and webhook alerts. |
 
 ## Reference
 

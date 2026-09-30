@@ -247,6 +247,20 @@ for anyone comparing two runs.
 
 Overridden per run by `--depth`.
 
+### `[notify]`
+
+```toml
+[notify]
+webhook = "https://example.invalid/hooks/aur"
+```
+
+Where `full-aur --watch` pushes new alert clusters. With `webhook` set, a
+cycle that produced new alerts POSTs one JSON document (the cycle counts
+plus the `package`/`rule_id` pairs) to the URL; a quiet cycle sends nothing.
+Any receiver that accepts a JSON POST works, and ntfy shows the document as
+the message text. A dead receiver is logged and swallowed: a notification
+must never kill the watch loop. Overridden per run by `--notify`.
+
 ### `[deep]`
 
 !!! note "Reserved, not implemented"

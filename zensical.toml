@@ -99,6 +99,7 @@ Guides = [
   {"Acting on a Flag" = "guides/acting-on-a-flag.md"},
   {"Configuring Rules and Weights" = "guides/configuring-rules-and-weights.md"},
   {"Tuning False Positives" = "guides/tuning-false-positives.md"},
+  {"Watching the AUR Continuously" = "guides/watching-the-aur.md"},
 ]
 
 [[project.nav]]

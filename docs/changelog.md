@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- `full-aur --watch` can push new alert clusters to a webhook: one HTTPS POST of a JSON document (cycle counts plus the `package`/`rule_id` pairs) per cycle that produced alerts, via `--notify URL` or `[notify] webhook` in `config.toml`. ntfy accepts the same POST, so a phone notification is one flag. A dead receiver is logged and swallowed; a quiet cycle sends nothing.
+- A Docker image, published to `ghcr.io/emiliano-go/trustsight` on every release: `docker run ghcr.io/emiliano-go/trustsight:latest full-aur --watch --record` is the always-on scanner in a box. The image is rootless and carries no pacman, which makes it the reproducible cold environment by construction.
+- A [Watching the AUR Continuously](https://docs.trustsight.org/guides/watching-the-aur/) guide: the watch loop, the bootstrap cost, systemd and Docker service setups, and the alerting payload.
+
 ### Fixed
 
 - The calibration replay isolated the config and the database but not the host's pacman: `official_package_names` reads the machine's sync database, so `is_established_package` fired D004/H064 on benign provides-transitions only where pacman exists, and the benign flag rate measured 7.9% on an Arch box against 7.8% anywhere else. `shipped_config` now freezes the official-names answer to empty (the cold machine), the published figures move to the reproducible measurement (7.8% above the 20-point threshold, the 92.2th percentile), and the corpus asset from 0.17.0 keeps the input bytes identical on top.

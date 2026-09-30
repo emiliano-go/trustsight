@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-09-30
+
 ### Added
 
 - `full-aur --watch` can push new alert clusters to a webhook: one HTTPS POST of a JSON document (cycle counts plus the `package`/`rule_id` pairs) per cycle that produced alerts, via `--notify URL` or `[notify] webhook` in `config.toml`. ntfy accepts the same POST, so a phone notification is one flag. A dead receiver is logged and swallowed; a quiet cycle sends nothing.
@@ -5023,4 +5025,5 @@ separate reconciliation.
 [0.16.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.0
 [0.16.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.1
 [0.17.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.0
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.17.0...HEAD
+[0.17.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.1
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.17.1...HEAD

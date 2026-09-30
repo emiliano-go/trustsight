@@ -24,8 +24,8 @@ package. That is the whole load on the AUR, at any watch interval.
 ## Choosing an interval
 
 ```bash
-trustsight full-aur --watch --record            # one cycle per hour (default)
-trustsight full-aur --watch --record --interval 1800
+trustsight full-aur --watch            # one cycle per hour (default)
+trustsight full-aur --watch --interval 1800
 ```
 
 The interval sets alert latency, not politeness: the load is the same
@@ -39,7 +39,7 @@ A watcher nobody reads is a log file. Give it a push channel and new alert
 clusters arrive as one HTTPS POST of a JSON document per cycle:
 
 ```bash
-trustsight full-aur --watch --record --notify https://example.invalid/hooks/aur
+trustsight full-aur --watch --notify https://example.invalid/hooks/aur
 ```
 
 or permanently in `config.toml`:
@@ -75,7 +75,7 @@ Description=TrustSight AUR watcher
 After=network-online.target
 
 [Service]
-ExecStart=/usr/bin/trustsight full-aur --watch --record --interval 1800
+ExecStart=/usr/bin/trustsight full-aur --watch --interval 1800
 Restart=on-failure
 RestartSec=300
 
@@ -102,7 +102,7 @@ docker run -d --name trustsight-watch \
   -v $PWD/trustsight-config:/home/ts/.config/trustsight:ro \
   --restart unless-stopped \
   ghcr.io/emiliano-go/trustsight:latest \
-  full-aur --watch --record --interval 1800
+  full-aur --watch --interval 1800
 ```
 
 The volume holds the database, the corpus state and the resume file, so a

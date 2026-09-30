@@ -13,7 +13,7 @@
 ### Added
 
 - `full-aur --watch` can push new alert clusters to a webhook: one HTTPS POST of a JSON document (cycle counts plus the `package`/`rule_id` pairs) per cycle that produced alerts, via `--notify URL` or `[notify] webhook` in `config.toml`. ntfy accepts the same POST, so a phone notification is one flag. A dead receiver is logged and swallowed; a quiet cycle sends nothing.
-- A Docker image, published to `ghcr.io/emiliano-go/trustsight` on every release: `docker run ghcr.io/emiliano-go/trustsight:latest full-aur --watch --record` is the always-on scanner in a box. The image is rootless and carries no pacman, which makes it the reproducible cold environment by construction.
+- A Docker image, published to `ghcr.io/emiliano-go/trustsight` on every release: `docker run ghcr.io/emiliano-go/trustsight:latest full-aur --watch` is the always-on scanner in a box. The image is rootless and carries no pacman, which makes it the reproducible cold environment by construction.
 - A [Watching the AUR Continuously](https://docs.trustsight.org/guides/watching-the-aur/) guide: the watch loop, the bootstrap cost, systemd and Docker service setups, and the alerting payload.
 
 ### Fixed

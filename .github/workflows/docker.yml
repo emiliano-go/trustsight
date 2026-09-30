@@ -44,6 +44,12 @@ jobs:
           fi
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          # A tag cut before the Dockerfile existed cannot produce an image
+          # of itself; say so rather than failing inside buildx.
+          if [[ ! -f Dockerfile ]]; then
+            echo "::error::tag $TAG predates the Dockerfile; the image stream starts with the next release"
+            exit 1
+          fi
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 

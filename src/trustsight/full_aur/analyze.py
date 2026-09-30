@@ -13,7 +13,9 @@ from typing import Optional
 
 from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.buildfetch import has_unpinned_build_deps
+from ..analysis.composition import naming_cluster_annotation, naming_typosquat_finding
 from ..analysis.longitudinal import longitudinal_findings
+from ..analysis.ioc_match import ioc_baseline_matches
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
 from ..analysis.structural import _structural_findings, unchanged_upstream_host
 from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
@@ -39,7 +41,7 @@ from ..differ import (
     truncate_diff,
 )
 from ..findings import stamp
-from ..novelty import build_novelty_context, package_typosquat_target
+from ..novelty import build_novelty_context
 from ..override import filter_triggered_rules
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines_indexed
 from ..coverage import (
@@ -348,14 +350,12 @@ def analyze_package_text(
         )
 
         if effective_observation_count() > 0:
-            squatted = package_typosquat_target(pkg_name)
-            if squatted:
-                triggered_rules.append(stamp({
-                    "rule_id": "H029", "name": "Package-Name Typosquat",
-                    "severity": "HIGH", "category": "naming",
-                    "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
-                    "params": {"pkg_name": pkg_name, "squatted": squatted},
-                }))
+            typosquat = naming_typosquat_finding(pkg_name)
+            if typosquat:
+                triggered_rules.append(typosquat)
+            cluster = naming_cluster_annotation(triggered_rules, config)
+            if cluster:
+                triggered_rules.append(cluster)
 
         gaps = gaps_from(
             tree_analyzed=bool(tree_manifest),
@@ -387,6 +387,7 @@ def analyze_package_text(
             risk=risk,
             score_breakdown=breakdown,
             final_score=score,
+            ioc_matches=ioc_baseline_matches("", pkg_name, current_text=new_pkgbuild),
         )
 
         # No diff on the first-seen path: there is nothing to compare
@@ -514,14 +515,12 @@ def analyze_package_text(
         }))
 
     if effective_observation_count() > 0:
-        squatted = package_typosquat_target(pkg_name)
-        if squatted:
-            triggered_rules.append(stamp({
-                "rule_id": "H029", "name": "Package-Name Typosquat",
-                "severity": "HIGH", "category": "naming",
-                "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
-                "params": {"pkg_name": pkg_name, "squatted": squatted},
-            }))
+        typosquat = naming_typosquat_finding(pkg_name)
+        if typosquat:
+            triggered_rules.append(typosquat)
+        cluster = naming_cluster_annotation(triggered_rules, config)
+        if cluster:
+            triggered_rules.append(cluster)
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 
@@ -583,6 +582,7 @@ def analyze_package_text(
         temporal_source=temporal.source,
         score_breakdown=breakdown,
         final_score=score,
+        ioc_matches=ioc_baseline_matches(diff_text, pkg_name, current_text=new_pkgbuild),
     )
 
     with_changes(fact, diff_text)

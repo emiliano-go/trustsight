@@ -20,6 +20,7 @@ The file is versioned (``[meta] version``) so a corpus artifact can state
 which indicator set it was analysed against.
 """
 
+import functools
 import logging
 import re
 
@@ -27,9 +28,40 @@ from .config import load_iocs
 
 log = logging.getLogger(__name__)
 
-# The only entry types H056 knows how to match.  A new type needs a matcher
-# in analysis/ioc.py, so an unknown one is dropped rather than ignored.
-IOC_TYPES = frozenset({"package", "domain", "hash"})
+# The entry types H056 and the federation baseline know how to match.  A new
+# type needs a matcher in analysis/ioc.py and analysis/ioc_match.py, so an
+# unknown one is dropped rather than ignored.  This is the single source of
+# truth: `ioc_baseline` imports it too, so the two layers cannot drift.
+IOC_TYPES = frozenset({"package", "domain", "hash", "file_path", "pkgbuild_pattern"})
+
+#: Types the corpus pivot understands.  `file_path` and `pkgbuild_pattern`
+#: describe a file or a line shape, not an artefact a stored corpus row
+#: references, so the inverse lookup has nothing to search.
+PIVOT_IOC_TYPES = frozenset({"package", "domain", "hash"})
+
+#: A `pkgbuild_pattern` is matched as a regex, so it is a weaker claim than
+#: the exact equality the other types make.  It can never reach FATAL: a
+#: confirmed tier is capped at CRITICAL so a regex can never short-circuit
+#: the score to 100 on its own.
+PATTERN_SEVERITY = {
+    "confirmed": "CRITICAL",
+    "high": "HIGH",
+    "medium": "MEDIUM",
+}
+
+#: Bounds on curator-supplied patterns.  A pattern is compiled once per
+#: process and searched per added line, so an unbounded set is a denial of
+#: service a signed baseline could carry.
+PATTERN_MAX_LENGTH = 2000
+MAX_PATTERN_ENTRIES = 500
+
+#: An alternation inside a quantified group — `(a|aa)+` — is the second
+#: classic catastrophic shape.  `regex_safety.has_nested_quantifier` misses
+#: it on purpose (a prefix alternation is linear under some engine shapes),
+#: but it is exponential here, so it is refused statically.  This is a
+#: conservative over-approximation: a pattern that merely *contains* such a
+#: group is refused, which no IOC pattern needs to do.
+_QUANTIFIED_ALTERNATION_RE = re.compile(r"\([^()]*\|[^()]*\)\s*(?:[+*]|\{\d)")
 
 # Confidence tier -> finding severity.  A tier is a claim about the evidence
 # behind the entry, never about how bad the package is.
@@ -56,6 +88,34 @@ _HEX_RE = re.compile(r"^[0-9a-f]+$")
 _HOST_RE = re.compile(r"^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)+$")
 
 
+@functools.lru_cache(maxsize=1024)
+def compile_ioc_pattern(pattern: str) -> re.Pattern | None:
+    """Compile a curator-supplied pattern, or None if unusable or unsafe.
+
+    A signed baseline is third-party text, so the check must itself be safe:
+    it is entirely static.  The measured superlinear check the rule linter
+    uses *runs* the pattern on adversarial input, which hangs on exactly the
+    catastrophic patterns it is meant to reject, so it is not used here.  A
+    nested quantifier, or an alternation inside a quantified group, is
+    refused; both are the classic shape and neither is anything a curator
+    needs.  Cached because the static checks are not free and the same
+    pattern is compiled on every analysis.
+    """
+    if not pattern or len(pattern) > PATTERN_MAX_LENGTH:
+        return None
+    try:
+        compiled = re.compile(pattern)
+    except re.error:
+        return None
+    from .regex_safety import has_nested_quantifier
+
+    if has_nested_quantifier(pattern):
+        return None
+    if _QUANTIFIED_ALTERNATION_RE.search(pattern):
+        return None
+    return compiled
+
+
 class Indicator:
     """One entry of the shipped list."""
 
@@ -72,6 +132,8 @@ class Indicator:
 
     @property
     def severity(self) -> str:
+        if self.type == "pkgbuild_pattern":
+            return PATTERN_SEVERITY.get(self.confidence, DEFAULT_SEVERITY)
         return CONFIDENCE_SEVERITY.get(self.confidence, DEFAULT_SEVERITY)
 
     def evidence(self) -> dict:
@@ -99,8 +161,13 @@ class IndicatorSet:
     def __init__(self, version: int = 0, indicators: list[Indicator] | None = None):
         self.version = version
         self._by_type: dict[str, dict[str, Indicator]] = {t: {} for t in IOC_TYPES}
+        self._patterns: list[tuple[Indicator, re.Pattern]] = []
         for ind in indicators or []:
             self._by_type[ind.type][ind.value] = ind
+            if ind.type == "pkgbuild_pattern":
+                compiled = compile_ioc_pattern(ind.value)
+                if compiled is not None and len(self._patterns) < MAX_PATTERN_ENTRIES:
+                    self._patterns.append((ind, compiled))
 
     def __bool__(self) -> bool:
         return any(self._by_type[t] for t in IOC_TYPES)
@@ -129,6 +196,13 @@ class IndicatorSet:
 
     def match_hash(self, digest: str) -> Indicator | None:
         return self.match("hash", digest)
+
+    def match_file_path(self, path: str) -> Indicator | None:
+        return self.match("file_path", path)
+
+    def patterns(self) -> tuple[tuple[Indicator, re.Pattern], ...]:
+        """The compiled `pkgbuild_pattern` entries, already safety-checked."""
+        return tuple(self._patterns)
 
 
 def normalize(type: str, value: str) -> str | None:
@@ -166,6 +240,23 @@ def normalize(type: str, value: str) -> str | None:
         # (not) - and a silent miss on a confirmed indicator is the worst
         # failure this rule has.
         return value.lower()
+    if type == "file_path":
+        # A committed file the recipe names, or a path a diff touches.
+        # Separators are folded and a leading `./` and trailing `/` dropped;
+        # the path stays case-sensitive, because Linux paths are.
+        path = value.replace("\\", "/")
+        while "//" in path:
+            path = path.replace("//", "/")
+        if path.startswith("./"):
+            path = path[2:]
+        path = path.rstrip("/")
+        if not path or path == ".":
+            return None
+        return path
+    if type == "pkgbuild_pattern":
+        # The canonical form is the pattern text itself; whether it is a
+        # usable, safe pattern is decided by `compile_ioc_pattern`.
+        return value
     return None
 
 
@@ -226,6 +317,12 @@ def load_indicators(data: dict | None = None) -> IndicatorSet:
             log.warning(
                 "iocs.toml: dropping %s entry with unusable value %r",
                 type_, row.get("value"),
+            )
+            continue
+        if type_ == "pkgbuild_pattern" and compile_ioc_pattern(value) is None:
+            log.warning(
+                "iocs.toml: dropping pattern entry that is invalid or risks "
+                "catastrophic backtracking: %r", value,
             )
             continue
         confidence = str(row.get("confidence", "")).strip().lower()

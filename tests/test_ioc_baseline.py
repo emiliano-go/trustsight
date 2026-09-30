@@ -648,3 +648,35 @@ def test_build_ioc_baseline_rejects_a_bad_indicator(tmp_path):
         bib._normalise_entries([{"type": "hash", "value": "not-a-digest"}], "c")
     with pytest.raises(ValueError):
         bib._normalise_entries([{"type": "carrier-pigeon", "value": "x"}], "c")
+
+
+def test_file_path_and_pattern_entries_round_trip(tmp_path: Path, isolated_db):
+    """The two extended types import, and an unsafe pattern is refused."""
+    from trustsight.ioc_baseline import active_patterns, match_file_path
+
+    base = tmp_path / "extended"
+    base.mkdir()
+    (base / "manifest.json").write_text(json.dumps({
+        "version": 1, "source": "test-feed", "created_at": _now_iso(),
+        "expires_at": "", "signature": "", "public_key": "",
+    }), encoding="utf-8")
+    rows = [
+        {"type": "file_path", "value": "./evil.install", "source": "test-feed",
+         "confidence": "confirmed", "provenance": "ASA-2026-0001"},
+        {"type": "pkgbuild_pattern", "value": r"\bnpm\s+install\b",
+         "source": "test-feed", "confidence": "high", "provenance": "ASA-2026-0001"},
+        {"type": "pkgbuild_pattern", "value": r"(a+)+$", "source": "test-feed",
+         "confidence": "high", "provenance": "unsafe"},
+    ]
+    (base / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+
+    import_baseline(base, allow_unsigned=True)
+
+    # The path is normalized on both sides, so `./evil.install` matches.
+    assert match_file_path("evil.install")
+    patterns = active_patterns(source="test-feed")
+    assert len(patterns) == 1
+    entry, compiled = patterns[0]
+    assert entry.value == r"\bnpm\s+install\b"
+    assert compiled.search("  npm install atomic-lockfile")

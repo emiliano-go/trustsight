@@ -15,10 +15,13 @@ from ..deps import extract_dependency_changes
 from ..ioc_baseline import (
     IocMatch,
     active_iocs,
+    active_patterns,
     match_domain,
+    match_file_path,
     match_hash,
     match_package,
 )
+from .ioc_paths import touched_paths
 from .buildfetch import registry_install_names
 from .ioc import _added_bodies, _digests_in, _hosts_in
 from ..tokenizer import split_lines
@@ -112,6 +115,13 @@ def ioc_baseline_matches(
     def source_allowed(source: str) -> bool:
         return not configured_sources or source in configured_sources
 
+    active = active_iocs(source=None, expired=False)
+    if configured_sources:
+        active = [e for e in active if e.source in configured_sources]
+    want_packages = any(e.type == "package" for e in active)
+    want_domains = any(e.type == "domain" for e in active)
+    want_paths = any(e.type == "file_path" for e in active)
+
     # Package name and pkgbase.
     if package_name:
         for m in match_package(package_name):
@@ -145,12 +155,33 @@ def ioc_baseline_matches(
                 add(m, "build_install", _find_line(diff_text, name) or
                     _find_line(diff_text, command[:40]))
 
-    # Domains and hashes from visible text.
-    want_domains = bool(active_iocs(source=None, expired=False))
-    if configured_sources:
-        want_domains = any(
-            active_iocs(source=s, expired=False) for s in configured_sources
-        )
+    # The same surface over the *resolved* lines.  `registry_install_names`
+    # reads the raw text, and the wave-3 campaign spelled `bun add` and the
+    # package name in ANSI-C quoting, so the literal never appears; the
+    # tokenizer resolves it for rule matching but the raw pass cannot see it.
+    # Gated on an active package indicator: with none, this is pure cost on a
+    # hostile input, which is exactly what the bounded-input gate measures.
+    if want_packages:
+        resolved = "\n".join("+" + body for body in _added_bodies(scan_text))
+        if resolved:
+            for _fn, command, name in registry_install_names(resolved):
+                for m in match_package(name):
+                    if source_allowed(m.source):
+                        add(m, "build_install", _find_line(diff_text, name) or
+                            _find_line(diff_text, command[:40]))
+
+    # Domains, hashes, paths and patterns from visible text.
+    if want_paths:
+        for path, _status in touched_paths(diff_text, current_text):
+            for m in match_file_path(path):
+                if source_allowed(m.source):
+                    add(m, "file_path", _find_line(diff_text, path))
+
+    pattern_hits = [
+        (entry, compiled)
+        for entry, compiled in active_patterns()
+        if source_allowed(entry.source)
+    ] if any(e.type == "pkgbuild_pattern" for e in active) else []
 
     for body in _added_bodies(scan_text):
         if want_domains:
@@ -173,5 +204,16 @@ def ioc_baseline_matches(
             for m in match_hash(digest):
                 if source_allowed(m.source):
                     add(m, "artifact_hash", _find_line(diff_text, digest))
+
+        if pattern_hits and body.strip():
+            for entry, compiled in pattern_hits:
+                if compiled.search(body):
+                    add(IocMatch(
+                        type=entry.type, value=entry.value, source=entry.source,
+                        confidence=entry.confidence, provenance=entry.provenance,
+                        campaign=entry.campaign, added=entry.added,
+                        surface="added_line",
+                        line=_find_line(diff_text, body.strip()[:60]),
+                    ), "added_line", _find_line(diff_text, body.strip()[:60]))
 
     return matches

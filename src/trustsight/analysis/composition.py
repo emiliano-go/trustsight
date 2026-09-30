@@ -27,6 +27,7 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..findings import stamp
+from ..novelty import package_typosquat_match
 from ..rules import ScopeResolver
 from ..tokenizer import resolve_added_lines
 from .build import _recipe_lines
@@ -190,3 +191,78 @@ def _meta_annotations(triggered_rules: list[dict], config=None) -> list[dict]:
             "params": {"n_stages": len(stages), "stages": names},
         }))
     return out
+
+
+# ---------------------------------------------------------------------------
+# H029 - package-name typosquat finding
+# ---------------------------------------------------------------------------
+
+
+def naming_typosquat_finding(pkg_name: str) -> dict | None:
+    """The H029 finding for *pkg_name*, or None when no candidate qualifies.
+
+    Shared by the live, corpus and first-seen paths so the tiered check and
+    its evidence cannot drift between them.
+    """
+    match = package_typosquat_match(pkg_name)
+    if not match:
+        return None
+    squatted, tier = match
+    return stamp({
+        "rule_id": "H029", "name": "Package-Name Typosquat",
+        "severity": "HIGH", "category": "naming",
+        "match": f"'{pkg_name}' resembles the far more popular '{squatted}'",
+        "params": {"pkg_name": pkg_name, "squatted": squatted, "tier": tier},
+    })
+
+
+# ---------------------------------------------------------------------------
+# H098 - naming/deception cluster
+# ---------------------------------------------------------------------------
+
+#: Rule ids that each report one independent naming/deception fact.  H098
+#: fires when a package carries two or more of them: H029 alone is a name,
+#: H029 plus a typosquatted dependency or a lookalike source domain is a
+#: method.  Meta rules are absent - they annotate, they do not signal.
+_NAMING_CLUSTER_MEMBERS: dict[str, str] = {
+    "H029": "name resemblance",
+    "D001": "novel dependency",
+    "D002": "typosquatted dependency",
+    "D004": "dependency hijack",
+    "H064": "provides/replaces scope",
+    "C012": "source domain lookalike",
+    "H053": "name/host divergence",
+    "H059": "name/repo divergence",
+    "H026": "untrusted maintainer takeover",
+}
+
+
+def _naming_cluster_threshold(config=None) -> int:
+    """Return the H098 signal threshold from thresholds.toml."""
+    thresholds = load_thresholds().get("h098", {})
+    return int(thresholds.get("min_signals", 2))
+
+
+def naming_cluster_annotation(triggered_rules: list[dict], config=None) -> dict | None:
+    """H098: at least *min_signals* distinct naming/deception signals.
+
+    Unlike the weight-0 H027/H043 annotations, H098 is deliberately
+    weight-bearing: a package that both impersonates a name and redirects
+    its dependencies or source is the attack H029 exists to surface, and
+    the combination is worth points over the single signals.  It runs after
+    H029 is appended, so it sees the name finding, and it is never fed back
+    into H027/H043, which keep their own counts.
+    """
+    present = [
+        f"{rid} ({label})"
+        for rid, label in _NAMING_CLUSTER_MEMBERS.items()
+        if any(r.get("rule_id") == rid for r in triggered_rules)
+    ]
+    if len(present) < _naming_cluster_threshold(config):
+        return None
+    return stamp({
+        "rule_id": "H098", "name": "Naming/Deception Cluster",
+        "severity": "HIGH", "category": "meta",
+        "match": f"{len(present)} naming/deception signals: {', '.join(present)}",
+        "params": {"count": len(present), "members": ", ".join(present)},
+    })

@@ -50,6 +50,7 @@ python scripts/security_gates.py
 | `IOC matches never contribute to the score` | B1 | `PackageFact.ioc_matches` separate from `score_breakdown` |
 | `an expired IOC is never silent` | IOC expiration | `ioc_baseline.active_iocs`, `cli/ioc.py` `[EXPIRED]` label |
 | `IOCs are not in the rule config layer` | config separation | no `ioc` table in `rules.toml`, `patterns.toml`, `thresholds.toml` |
+| `a pattern IOC that risks ReDoS is refused` | A13b pattern safety | `iocs.compile_ioc_pattern` static nested-quantifier and quantified-alternation checks |
 | `reserved names are refused by every writer` | A12, A13 | `db.upsert_package`, `db.save_package_profile`, `db.save_pkgbuild_snapshot` |
 | `a baseline supplies state, not rules` | A13 | `full_aur/export.import_baseline` |
 | `incomplete coverage fails closed` | B2 | `coverage.fail_closed` |

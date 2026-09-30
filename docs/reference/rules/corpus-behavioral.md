@@ -69,14 +69,17 @@ contributes nothing to the score.
 
 ### H056: Known Indicator of Compromise {#h056}
 
-- **Severity:** tiered by the indicator's confidence: `confirmed` is FATAL, `high` is CRITICAL, `medium` is HIGH, an untiered entry is MEDIUM
+- **Severity:** tiered by the indicator's confidence: `confirmed` is FATAL, `high` is CRITICAL, `medium` is HIGH, an untiered entry is MEDIUM. A `pkgbuild_pattern` entry is capped at CRITICAL whatever its tier, because a regex names a shape rather than an exact artefact.
 - **Category:** `ioc`
-- **Condition:** A declared surface exactly matches an entry in `iocs.toml`.
+- **Condition:** A declared surface exactly matches an entry in `iocs.toml`, or an added line matches a `pkgbuild_pattern` entry.
 
-Four surfaces are read: the package's own name; names added to
+Five surfaces are read: the package's own name; names added to
 `depends`/`makedepends`/`optdepends`/`checkdepends`/`provides`/`replaces`/
-`conflicts`; the host of any URL and any bare host token; and any hex digest of
-digest length.
+`conflicts`; the host of any URL and any bare host token; any hex digest of
+digest length; and a file the diff added or modified, or the recipe names via
+`install=` or a local `source=()` entry. A `pkgbuild_pattern` entry is matched
+as a regular expression against added lines; an invalid or
+catastrophic-backtracking pattern is refused at load rather than run.
 The IOC federation stage is separate and reports attributed matches through
 `PackageFact.ioc_matches`; see [IOC Federation](../ioc.md).
 

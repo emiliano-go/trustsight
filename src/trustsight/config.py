@@ -468,6 +468,29 @@ DEFAULT_KNOWN_SUFFIXES = (
     "-wine", "-appimage", "-flatpak", "-nightly", "-devel", "-common",
 )
 
+# Character groups whose members are typographically confusable.  H029 uses
+# them to tell a homoglyph/digit edit (``openss1`` for ``openssl``) from a
+# coincidental one-character difference between two unrelated real words
+# (``plow``/``glow``).  Each string is one group of mutually confusable
+# characters.
+DEFAULT_CONFUSABLE_CHARS = (
+    "0oO", "1lIi", "2zZ", "3eE", "4aA", "5sS",
+    "6bBG", "7tT", "8bB", "9gq",
+)
+
+# H029 candidate popularity floors, in dependency observation count.  The
+# dependency corpus is long-tailed (median observation count 2), so a name
+# in the top-5000 by count can still be globally obscure.  A typosquat
+# impersonates something popular, so a candidate must clear the lower floor
+# before it is considered at all.
+DEFAULT_H029_MIN_OBSERVATIONS = 100
+
+# A non-confusable edit (plain substitution, insertion or deletion) is far
+# more likely a coincidence between two unrelated real words, so it must
+# impersonate a genuinely popular name to fire.  Confusable edits clear the
+# lower floor above.
+DEFAULT_H029_PLAIN_MIN_OBSERVATIONS = 1000
+
 # Paste and ephemeral file-drop hosts (H041).  Bucket classification in
 # trusted_domains.toml [raw_hosting] already weights these *as source URLs*,
 # which is why H041 does not look at source=(): it reads the other
@@ -1661,6 +1684,16 @@ DEFAULT_NAMING = (
     "# edit-distance comparison so foo-git is never confused with foo\n"
     "# (H029).\n"
     "known_suffixes = " + _toml_str_list(DEFAULT_KNOWN_SUFFIXES) + "\n"
+    "\n"
+    "# Confusable character groups (H029): a differing character pair drawn\n"
+    "# from one group is a homoglyph/digit edit, not a coincidence.\n"
+    "confusable_chars = " + _toml_str_list(DEFAULT_CONFUSABLE_CHARS) + "\n"
+    "\n"
+    "# H029 candidate popularity floors (dependency observation count).  The\n"
+    "# lower floor gates every candidate; the higher one gates non-confusable\n"
+    "# edits, which are weaker evidence.\n"
+    "h029_min_candidate_observations = " + str(DEFAULT_H029_MIN_OBSERVATIONS) + "\n"
+    "h029_plain_min_observations = " + str(DEFAULT_H029_PLAIN_MIN_OBSERVATIONS) + "\n"
 )
 
 DEFAULT_HOSTS = (
@@ -1774,6 +1807,15 @@ DEFAULT_THRESHOLDS = (
     "# stability_weight is 0 and no PropertyBreak is emitted, so a cold or\n"
     "# immature database never fires the longitudinal rules.\n"
     "stability_floor = 10\n"
+    "\n"
+    "[h098]\n"
+    "# H098 annotates a package whose findings carry at least this many\n"
+    "# distinct naming/deception signals (name resemblance, novel or\n"
+    "# typosquatted dependency, dependency hijack, provides scope expansion,\n"
+    "# source-domain lookalike, name/host or name/repo divergence, untrusted\n"
+    "# maintainer takeover).  One signal can be a coincidence; two is a\n"
+    "# method.\n"
+    "min_signals = 2\n"
 )
 
 DEFAULT_IOCS = (
@@ -1802,7 +1844,8 @@ DEFAULT_IOCS = (
     "# Each indicator is one [[entries]] table:\n"
     "#\n"
     "# [[entries]]\n"
-    "# type = \"domain\"              # domain | package | hash\n"
+    "# type = \"domain\"              # domain | package | hash | file_path |\n"
+    "#                             # pkgbuild_pattern\n"
     "# value = \"malicious.example\"  # matched exactly, case-insensitively\n"
     "# confidence = \"confirmed\"     # confirmed -> FATAL, high -> CRITICAL,\n"
     "#                              # medium -> HIGH (an entry with no known\n"

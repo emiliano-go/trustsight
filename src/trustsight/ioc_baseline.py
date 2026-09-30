@@ -23,6 +23,7 @@ from pathlib import Path
 
 from .bounded_io import read_file_capped
 from .db import get_connection
+from .iocs import IOC_TYPES, compile_ioc_pattern, normalize as normalize_ioc
 
 import sqlite3
 
@@ -51,7 +52,9 @@ MAX_BASELINE_BYTES = 256 * 1024 * 1024
 #: thousands.
 MAX_BASELINE_ENTRIES = 100_000
 
-_IOC_TYPES = frozenset({"domain", "hash", "package"})
+#: The indicator types, re-exported from the single source of truth so the
+#: federation layer and the legacy H056 list cannot drift apart.
+_IOC_TYPES = IOC_TYPES
 
 _HASH_LENGTHS = frozenset({32, 40, 56, 64, 96, 128})
 _HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
@@ -136,6 +139,14 @@ def _normalize_value(type_: str, value: str) -> str | None:
         return _normalize_domain(value)
     if type_ == "package":
         return value.lower()
+    if type_ == "file_path":
+        return normalize_ioc("file_path", value)
+    if type_ == "pkgbuild_pattern":
+        # A pattern is only stored if it is usable and safe; `compile_ioc_pattern`
+        # is the same check the legacy list applies, so an import cannot carry a
+        # pattern the analyser would refuse to run.
+        canonical = normalize_ioc("pkgbuild_pattern", value)
+        return canonical if canonical and compile_ioc_pattern(canonical) else None
     return None
 
 
@@ -633,3 +644,24 @@ def match_hash(digest: str) -> list[IocMatch]:
 def match_package(name: str) -> list[IocMatch]:
     """Return active package IOC matches for *name*."""
     return match_ioc("package", name)
+
+
+def match_file_path(path: str) -> list[IocMatch]:
+    """Return active file_path IOC matches for *path*."""
+    return match_ioc("file_path", path)
+
+
+def active_patterns(source: str | None = None, expired: bool = False):
+    """Return ``(entry, compiled)`` for every active pattern indicator.
+
+    The pattern was safety-checked at import; it is compiled again here so a
+    stored entry that somehow slipped through is dropped rather than run.
+    """
+    out = []
+    for entry in active_iocs(source=source, expired=expired):
+        if entry.type != "pkgbuild_pattern":
+            continue
+        compiled = compile_ioc_pattern(entry.value)
+        if compiled is not None:
+            out.append((entry, compiled))
+    return out

@@ -9,7 +9,7 @@
 | `~/.config/trustsight/config.toml` | Main configuration (weights, limits). |
 | `~/.config/trustsight/rules.toml` | Definitions for every R-series rule. H-series heuristics are emitted from code and have no entry here. Per-rule `enabled` and `weight_override` controls live in `config.toml`. |
 | `~/.config/trustsight/trusted_domains.toml` | Domain classification lists for source bucket assignment. |
-| `~/.config/trustsight/iocs.toml` | H056 indicator list: confirmed-malicious package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. |
+| `~/.config/trustsight/iocs.toml` | H056 indicator list: confirmed-malicious package names, domains, artifact hashes, file paths and PKGBUILD patterns, each with provenance and a confidence tier. Ships empty. |
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories. |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
 

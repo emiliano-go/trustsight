@@ -1,7 +1,13 @@
 import re
 from datetime import datetime, timezone
 
-from .config import DEFAULT_KNOWN_SUFFIXES, load_naming
+from .config import (
+    DEFAULT_CONFUSABLE_CHARS,
+    DEFAULT_H029_MIN_OBSERVATIONS,
+    DEFAULT_H029_PLAIN_MIN_OBSERVATIONS,
+    DEFAULT_KNOWN_SUFFIXES,
+    load_naming,
+)
 from .db import (
     _get_salt,
     _hash_maintainer_value,
@@ -153,15 +159,78 @@ def _strip_variant_suffix(
     return name
 
 
-def package_typosquat_target(pkg_name: str) -> str | None:
-    """Return a far-more-popular package *pkg_name* appears to squat, or None.
+_SEPARATORS = frozenset("-_. ")
 
-    Asymmetric: only fires when the candidate is *much* more popular
-    (10x+ observation count), so legitimate variants and forks that have
-    grown their own reputation are never flagged.
+
+def _confusable_groups() -> tuple[frozenset[str], ...]:
+    """Configured confusable character groups, shipped defaults if unset."""
+    groups = load_naming().get("naming", {}).get("confusable_chars")
+    if not groups:
+        groups = DEFAULT_CONFUSABLE_CHARS
+    return tuple(frozenset(str(g)) for g in groups if g)
+
+
+def _is_confusable_pair(a: str, b: str) -> bool:
+    """True when *a* and *b* are the same or share a confusable group."""
+    if a == b:
+        return True
+    return any(a in group and b in group for group in _confusable_groups())
+
+
+def _strip_separators(name: str) -> str:
+    return "".join(c for c in name if c not in _SEPARATORS)
+
+
+def _is_adjacent_transposition(a: str, b: str) -> bool:
+    """True when *b* is *a* with exactly one adjacent pair swapped."""
+    if len(a) != len(b):
+        return False
+    wrong = [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
+    if len(wrong) != 2 or wrong[1] != wrong[0] + 1:
+        return False
+    i, j = wrong
+    return a[i] == b[j] and a[j] == b[i]
+
+
+def classify_typosquat_edit(name: str, candidate: str) -> str:
+    """Classify the edit from *name* to *candidate* as H029 confidence.
+
+    ``"confusable"`` covers the edits a typosquat actually uses: an adjacent
+    transposition (``sytsemd`` for ``systemd``), a substitution between
+    confusable glyphs or digits (``openss1`` for ``openssl``), or a
+    separator-only change (``cross-env`` for ``crossenv``).  ``"plain"`` is
+    everything else: two unrelated real words one or two edits apart
+    (``plow``/``glow``), which a bare edit distance cannot distinguish from
+    an attack.
+    """
+    if len(name) == len(candidate):
+        if _is_adjacent_transposition(name, candidate):
+            return "confusable"
+        diffs = [(x, y) for x, y in zip(name, candidate) if x != y]
+        if not diffs or all(_is_confusable_pair(x, y) for x, y in diffs):
+            return "confusable"
+        return "plain"
+    # A pure separator difference is still the same token.
+    if _strip_separators(name) == _strip_separators(candidate):
+        return "confusable"
+    return "plain"
+
+
+def package_typosquat_match(pkg_name: str) -> tuple[str, str] | None:
+    """Return ``(candidate, tier)`` for a package-name squat, or None.
+
+    Asymmetric: only fires when the candidate is *much* more popular (10x+
+    observation count), so legitimate variants and forks that have grown
+    their own reputation are never flagged.  Two further floors keep the
+    long tail out: a candidate must clear ``h029_min_candidate_observations``
+    to be considered at all, and a non-confusable (``plain``) edit must clear
+    the higher ``h029_plain_min_observations``.  The high floor is the
+    safety-first choice: a plain edit against a genuinely popular name still
+    fires, at the cost of some false positives.
     """
     if len(pkg_name) < 4:
         return None
+    naming = load_naming().get("naming", {})
     suffixes = _known_suffixes()
     base = _strip_variant_suffix(pkg_name, suffixes)
     pkg_pop = dependency_observation_count(pkg_name)
@@ -173,27 +242,47 @@ def package_typosquat_target(pkg_name: str) -> str | None:
     # The base is floored at 1: a never-observed package has pkg_pop == 0,
     # which zeroes the threshold and lets *any* candidate through, however
     # thin its own count - the 10x guarantee would be vacuous for exactly
-    # the unknown names this check exists for.  The floored bar of ten
-    # observations is the one db._ESTABLISHED_OBSERVATIONS sets for a name
-    # worth protecting.
+    # the unknown names this check exists for.
     threshold = max(pkg_pop, 1) * 10
+    min_obs = int(
+        naming.get("h029_min_candidate_observations", DEFAULT_H029_MIN_OBSERVATIONS)
+    )
+    plain_min = int(
+        naming.get("h029_plain_min_observations", DEFAULT_H029_PLAIN_MIN_OBSERVATIONS)
+    )
     limit = 1 if len(pkg_name) < 8 else 2
-    filtered: list[str] = []
+
+    best: tuple[int, int, str] | None = None
     for cand, cand_pop in top_dependency_pairs():
         # Edit distance cannot bridge a length gap wider than the limit, so
         # discarding those here keeps the comparison loop small.
         if abs(len(cand) - len(pkg_name)) > limit:
             continue
-        if cand_pop < threshold:
+        if cand_pop < threshold or cand_pop < min_obs:
             continue
         if cand == pkg_name or _strip_variant_suffix(cand, suffixes) == base:
             continue
-        filtered.append(cand)
+        distance = _damerau_levenshtein(pkg_name, cand, limit)
+        if distance > limit:
+            continue
+        # Nearest wins; popularity only breaks a tie.  Compared as
+        # ``-cand_pop`` so a larger count sorts first with ``<``.
+        if best is None or (distance, -cand_pop) < (best[0], -best[1]):
+            best = (distance, cand_pop, cand)
 
-    if not filtered:
+    if best is None:
         return None
+    _, cand_pop, cand = best
+    tier = classify_typosquat_edit(base, _strip_variant_suffix(cand, suffixes))
+    if tier == "plain" and cand_pop < plain_min:
+        return None
+    return cand, tier
 
-    return typosquat_target(pkg_name, filtered)
+
+def package_typosquat_target(pkg_name: str) -> str | None:
+    """Backwards-compatible name-only wrapper around :func:`package_typosquat_match`."""
+    match = package_typosquat_match(pkg_name)
+    return match[0] if match else None
 
 
 def check_url_novelty(

@@ -19,8 +19,8 @@ optional but strongly encouraged.
 
 | Field | Required | Meaning |
 |-------|----------|---------|
-| `type` | yes | `domain`, `hash`, or `package`. |
-| `value` | yes | The indicator. Domains are normalised to the registered domain and IDNA-folded; hashes must be hex of a known length; package names are matched case-insensitively. |
+| `type` | yes | `domain`, `hash`, `package`, `file_path`, or `pkgbuild_pattern`. |
+| `value` | yes | The indicator. Domains are normalised to the registered domain and IDNA-folded; hashes must be hex of a known length; package names are matched case-insensitively; file paths are POSIX-normalised and case-sensitive; patterns are compiled and refused if they risk catastrophic backtracking. |
 | `confidence` | recommended | `confirmed` is the strongest tier. |
 | `provenance` | recommended | Where the indicator comes from: an advisory id or URL. `evidence_url` is accepted and folded into `provenance`. |
 | `campaign` / `incident` | recommended | The incident identifier the entry belongs to. |
@@ -67,3 +67,19 @@ tarball's `hash` or the attacker's `domain`, not the package name. A `package`
 indicator flags that name forever, which becomes a false positive the moment the
 package is cleaned up and re-published. Reserve `package` for names that were
 created solely to carry the payload, and always set `expires_at`.
+
+## Curation notes
+
+`atomic-arch-2026-06.json` deliberately **excludes** some names that appear in
+community compromise lists:
+
+- `ansi-colors`, `minimist`, `chalk` - legitimate or decoy npm packages pulled
+  alongside the payload, not indicators.
+- `temp.sh` - a legitimate file-sharing service the payload uploaded to; it is a
+  network pattern, not an IOC.
+- `raw.gitubusercontent.com` - a typosquat domain mentioned in the aur-general
+  thread but not confirmed as attacker infrastructure.
+
+The AUR package names themselves are kept out of the IOC layer entirely: they
+were remediated, so a `package` entry on them would flag a cleaned-up package
+forever. They live, as an exposure reference only, under `data/aur-compromised/`.

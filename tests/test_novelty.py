@@ -295,7 +295,8 @@ def test_package_typosquat_target_needs_a_popular_candidate_for_an_unknown_name(
     pkg_pop == 0 zeroed the threshold, so any candidate passed the
     popularity filter: a one-observation name read as "far more popular"
     than a package the corpus had never seen - exactly the names the check
-    exists for.
+    exists for.  The absolute candidate floor is the second guard: a
+    candidate in the top-5000 by count can still be globally obscure.
     """
     from trustsight.db import record_dependency_names
     from trustsight.novelty import package_typosquat_target
@@ -304,9 +305,52 @@ def test_package_typosquat_target_needs_a_popular_candidate_for_an_unknown_name(
     record_dependency_names(["openssl"])
     assert package_typosquat_target("openss1") is None
 
-    # The check still fires when the candidate genuinely clears the bar.
-    record_dependency_names(["openssl"] * 20)
+    # Still below the absolute floor of 100 observations.
+    record_dependency_names(["openssl"] * 50)
+    assert package_typosquat_target("openss1") is None
+
+    # The check fires when the candidate genuinely clears the bar.
+    record_dependency_names(["openssl"] * 100)
     assert package_typosquat_target("openss1") == "openssl"
+
+
+def test_confusable_edit_fires_at_the_lower_floor(db):
+    """A homoglyph/digit edit is a real typosquat shape, so a candidate at
+    the absolute floor is enough."""
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_match
+
+    record_dependency_names(["openssl"] * 100)
+    assert package_typosquat_match("openss1") == ("openssl", "confusable")
+    assert package_typosquat_match("0penssl") == ("openssl", "confusable")
+
+
+def test_plain_edit_needs_a_popular_candidate(db):
+    """Two unrelated real words one edit apart must not fire on an obscure
+    candidate.  `plow`/`glow` differ by one leading consonant, which no
+    confusable set covers; it only becomes a finding against a genuinely
+    popular name."""
+    from trustsight.db import record_dependency_names
+    from trustsight.novelty import package_typosquat_match
+
+    record_dependency_names(["glow"] * 100)
+    assert package_typosquat_match("plow") is None
+
+    # The same plain edit against a far more popular name still fires:
+    # safety over precision, at a higher popularity floor.
+    record_dependency_names(["glow"] * 1000)
+    assert package_typosquat_match("plow") == ("glow", "plain")
+
+
+def test_insertion_typosquat_lands_in_the_plain_tier(db):
+    """`cflash` for `clash` is a non-separator insertion, not a confusable
+    edit; it needs the high floor like any other plain edit."""
+    from trustsight.novelty import classify_typosquat_edit
+
+    assert classify_typosquat_edit("cflash", "clash") == "plain"
+    assert classify_typosquat_edit("sytsemd", "systemd") == "confusable"
+    assert classify_typosquat_edit("cross-env", "crossenv") == "confusable"
+    assert classify_typosquat_edit("python-pgmpy", "python-numpy") == "plain"
 
 
 def test_build_novelty_context_is_read_only_by_default(db):

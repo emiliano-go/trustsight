@@ -168,7 +168,8 @@ they are not repeated here.
 | H025 | Build Env Subversion | HIGH/MED | 0.25 % | 8/3739 | All HIGH (LD_ vars). No MEDIUM (CFLAGS/MAKEFLAGS/PATH) fires in corpus. Well under 30% gate. |
 | H026 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
 | H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3739 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
-| H029 | Package-Name Typosquat | HIGH | 0.99 % | 2/202 pkgs | Measured via package-name scan over corpus packages with seeded DB. Well under the 30% gate. Fires on `dosbox-x` and `electron36`. |
+| H029 | Package-Name Typosquat | HIGH | 0.00 % | 0/202 pkgs | Package-name scan over corpus packages with the seeded DB. The absolute candidate floor (100 observations) and the plain-edit floor (1000) removed the prior `dosbox-x` and `electron36` false positives while keeping the confusable-edit detections (`openss1`/`openssl`, `sytsemd`/`systemd`). Well under the 30% gate. |
+| H098 | Naming/Deception Cluster | HIGH | not replayable | - | Depends on H029, which needs the seeded DB, so the stateless corpus replay does not exercise it. See the changelog for the point-in-time measurement. |
 | H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
 | H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 

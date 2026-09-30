@@ -20,5 +20,19 @@
     "confidence": "confirmed",
     "provenance": "EXAMPLE ONLY: the AUR package name from the advisory",
     "campaign": "example-incident"
+  },
+  {
+    "type": "file_path",
+    "value": "src/hooks/deps",
+    "confidence": "high",
+    "provenance": "EXAMPLE ONLY: the hook path a malicious npm package drops",
+    "campaign": "example-incident"
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\bnpm\\s+install\\b",
+    "confidence": "high",
+    "provenance": "EXAMPLE ONLY: a build-time registry install pattern",
+    "campaign": "example-incident"
   }
 ]

@@ -17,7 +17,10 @@ fires); H043 only fires once the aggregated rule hits of one diff span
 import pytest
 
 from trustsight.analysis import _structural_findings, scan_diff
-from trustsight.analysis.composition import _meta_annotations
+from trustsight.analysis.composition import (
+    _meta_annotations,
+    naming_cluster_annotation,
+)
 from trustsight.config import load_config
 from trustsight.differ import extract_urls_from_diff
 
@@ -341,6 +344,33 @@ def test_h043_fires_end_to_end_on_staged_diff():
 def test_h043_silent_on_benign_diff():
     fact = scan_diff(_diff("build() {\n  make\n}\n"), config=load_config())
     assert not any(e.rule_id == "H043" for e in fact.score_breakdown)
+
+
+# --- H098: naming/deception cluster ---
+
+
+def test_h098_fires_on_two_naming_signals():
+    rules = [_stage_stub(r) for r in ("H029", "D001")]
+    hit = naming_cluster_annotation(rules)
+    assert hit and hit["rule_id"] == "H098"
+    assert hit["severity"] == "HIGH"
+
+
+def test_h098_silent_on_one_signal():
+    assert naming_cluster_annotation([_stage_stub("H029")]) is None
+
+
+def test_h098_ignores_unrelated_rules():
+    rules = [_stage_stub(r) for r in ("H029", "H015", "H023")]
+    assert naming_cluster_annotation(rules) is None
+
+
+def test_h098_lists_its_members():
+    rules = [_stage_stub(r) for r in ("H029", "C012", "D002")]
+    hit = naming_cluster_annotation(rules)
+    assert hit["params"]["count"] == 3
+    assert "H029 (name resemblance)" in hit["params"]["members"]
+    assert "C012 (source domain lookalike)" in hit["params"]["members"]
 
 
 # --- H076: a build-time write that leaves the staging root ---

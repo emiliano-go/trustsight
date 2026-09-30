@@ -618,3 +618,69 @@ def test_pivot_cli_emits_json(isolated_cli):
     assert payload["type"] == "domain"
     assert payload["listed"] is False
     assert [m["package"] for m in payload["matches"]] == ["dropper"]
+
+
+# --- extended types: file_path and pkgbuild_pattern -------------------------
+
+
+def _path(value="evil.install", confidence="confirmed"):
+    return {"type": "file_path", "value": value, "confidence": confidence,
+            "provenance": "ASA-2026-0001"}
+
+
+def _pattern(value=r"\bnpm install\b", confidence="confirmed"):
+    return {"type": "pkgbuild_pattern", "value": value, "confidence": confidence,
+            "provenance": "ASA-2026-0001"}
+
+
+_ADDED_FILE_DIFF = (
+    "--- /dev/null\n"
+    "+++ b/evil.install\n"
+    "@@ -0,0 +1,2 @@\n"
+    "+post_install() {\n"
+    "+  npm install atomic-lockfile\n"
+    "+}\n"
+)
+_REMOVED_FILE_DIFF = (
+    "--- a/evil.install\n"
+    "+++ /dev/null\n"
+    "@@ -1,2 +0,0 @@\n"
+    "-post_install() {\n"
+    "-  npm install atomic-lockfile\n"
+    "-}\n"
+)
+
+
+def test_file_path_matches_an_added_file():
+    hits = _fire(_ADDED_FILE_DIFF, indicators=_set(_path("evil.install")))
+    assert [h["params"]["ioc_type"] for h in hits] == ["file_path"]
+    assert hits[0]["params"]["surface"] == "file_path"
+
+
+def test_file_path_does_not_match_a_removed_file():
+    assert _fire(_REMOVED_FILE_DIFF, indicators=_set(_path("evil.install"))) == []
+
+
+def test_file_path_matches_a_declared_install_hook():
+    text = "install=evil.install\nbuild() { :; }\n"
+    hits = _fire("", indicators=_set(_path("evil.install")), current_text=text)
+    assert [h["params"]["surface"] for h in hits] == ["file_path"]
+
+
+def test_file_path_matches_a_local_source_filename():
+    text = "source=('https://example.org/x.tar.gz'\n        'payload.sh')\n"
+    hits = _fire("", indicators=_set(_path("payload.sh")), current_text=text)
+    assert hits and hits[0]["params"]["ioc_value"] == "payload.sh"
+
+
+def test_pattern_fires_on_an_added_line_and_is_capped_at_critical():
+    hits = _fire(_ADDED_FILE_DIFF, indicators=_set(_pattern()))
+    assert [h["params"]["surface"] for h in hits] == ["added_line"]
+    # `confirmed` would be FATAL for an exact type; a regex is capped.
+    assert hits[0]["severity"] == "CRITICAL"
+
+
+def test_an_unsafe_pattern_is_dropped_at_load():
+    loaded = _set(_pattern(r"(a+)+$"))
+    assert loaded.patterns() == ()
+    assert len(loaded) == 0

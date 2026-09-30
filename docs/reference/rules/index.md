@@ -44,7 +44,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 3 | How recently the package or this revision appeared, independent of any diff content. |
-| [Composition](composition.md) | `composition` | 2 | Distinct kinds of finding co-occurred; the combination is the signal, and the points are already scored elsewhere. |
+| [Composition](composition.md) | `composition` | 3 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
 | [Crossfire](crossfire.md) | `crossfire` | 25 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
@@ -198,6 +198,7 @@ is deliberately non-contiguous; see
 | [H095](install-and-persist.md#h095) | Boot Or Image Artifact Built From The Source Tree | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
 | [H096](integrity.md#h096) | Download Agent Override | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
 | [H097](integrity.md#h097) | Function Shadowing | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H098](composition.md#h098) | Naming/Deception Cluster | Heuristic | HIGH | [Composition](composition.md) |
 | [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |

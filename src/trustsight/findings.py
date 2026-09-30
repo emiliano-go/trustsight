@@ -58,7 +58,7 @@ TEMPLATES: dict[str, str] = {
     "H024": "validpgpkeys removed after being populated",
     "H026": "maintainer changed: {previous_maintainer} → {current_maintainer} (new maintainer never seen in the AUR)",
     "H027": "findings span {n_categories} distinct capability categories",
-    "H029": "package name '{pkg_name}' resembles the far more popular '{squatted}'",
+    "H029": "package name '{pkg_name}' resembles the far more popular '{squatted}' ({tier} edit)",
     "H030": "diff adds {n_novel} novel or rare dependencies: {novel_names}",
     "H035": "{position}() invokes foreign package manager: {body}",
     "H036": "{position}() line carries {count} obfuscation indicators: {body}",
@@ -82,6 +82,7 @@ TEMPLATES: dict[str, str] = {
     # --- Phase 3: kill-chain composition ---
     "H040": "{position}() profiles the host: {probe}",
     "H043": "rule hits span {n_stages} distinct kill-chain stages: {stages}",
+    "H098": "{count} naming/deception signals: {members}",
 
     # --- Phase 3: network surface ---
     "H004": "{position}() runs sudo: {body}",
@@ -202,5 +203,6 @@ NON_CONTENT_RULES = {
     "D004": "dependency",
     "R059": "context", "H015": "context", "H023": "context", "H025": "context",
     "H031": "context", "H038": "context", "H043": "composite",
+    "H098": "composite",
     "H065": "reconstruction", "H079": "context",
 }

@@ -151,7 +151,20 @@ def _ioc_findings(diff_text, package_name, config, add, indicators=None,
 
     want_hosts = bool(indicators.values("domain"))
     want_hashes = bool(indicators.values("hash"))
-    if not (want_hosts or want_hashes):
+    want_paths = bool(indicators.values("file_path"))
+    want_patterns = bool(indicators.patterns())
+
+    if want_paths:
+        from .ioc_paths import touched_paths
+
+        for path, status in touched_paths(diff_text, current_text):
+            hit = indicators.match_file_path(path)
+            if hit:
+                report(hit, "file_path",
+                       f"{status} file '{path}' is a known indicator",
+                       _line_of(diff_text, path))
+
+    if not (want_hosts or want_hashes or want_patterns):
         return
 
     for body in _added_bodies(scan_text):
@@ -171,3 +184,9 @@ def _ioc_findings(diff_text, package_name, config, add, indicators=None,
                     report(hit, "artifact_hash",
                            f"PKGBUILD carries known-malicious digest {hit.value}",
                            _line_of(diff_text, hit.value))
+        if want_patterns and body.strip():
+            for ind, compiled in indicators.patterns():
+                if compiled.search(body):
+                    report(ind, "added_line",
+                           f"added line matches known-indicator pattern {ind.value}",
+                           _line_of(diff_text, body.strip()[:60]))

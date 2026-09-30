@@ -1549,6 +1549,30 @@ def gate_ioc_not_in_config_layer() -> Gate:
     return Gate("IOCs are not in the rule config layer", not problems, problems)
 
 
+def gate_pattern_ioc_rejects_redos() -> Gate:
+    """A curator-supplied pattern that risks catastrophic backtracking is refused.
+
+    `pkgbuild_pattern` entries come from third-party baselines, so an unsafe
+    regex would let one curator hang every analysis.  The same check the rule
+    linter uses is applied at compile time: a nested quantifier or a measured
+    superlinear shape must return None, and a benign pattern must compile.
+    """
+    from trustsight.iocs import compile_ioc_pattern
+
+    problems: list[str] = []
+    if compile_ioc_pattern(r"(a+)+$") is not None:
+        problems.append("a nested-quantifier pattern was accepted")
+    if compile_ioc_pattern(r"(a|aa)+$") is not None:
+        problems.append("an ambiguous-alternation pattern was accepted")
+    if compile_ioc_pattern("(") is not None:
+        problems.append("an invalid regex was accepted")
+    if compile_ioc_pattern("") is not None:
+        problems.append("an empty pattern was accepted")
+    if compile_ioc_pattern(r"\bnpm\s+install\b") is None:
+        problems.append("a benign pattern was refused")
+    return Gate("a pattern IOC that risks ReDoS is refused", not problems, problems)
+
+
 def gate_seed_hash_is_deterministic() -> Gate:
     """Reproducibility: same input and salt always produce the same hash.
 
@@ -3323,6 +3347,7 @@ def run_gates() -> list[Gate]:
         gate_ioc_no_score_contribution(),
         gate_ioc_expired_is_never_silent(),
         gate_ioc_not_in_config_layer(),
+        gate_pattern_ioc_rejects_redos(),
         gate_seed_hash_is_deterministic(),
         gate_reserved_names_are_refused_everywhere(),
         gate_a_baseline_supplies_state_not_rules(),

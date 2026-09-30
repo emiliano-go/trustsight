@@ -86,7 +86,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H097, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H098, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -304,7 +304,7 @@ Configured in `config.toml` `[severity_weights]`:
 
 ### FATAL rules {#fatal-rules}
 
-R012 and R013 are shipped FATAL rules. H056 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; H056's severity is derived from the signed/local indicator confidence tier.
+R012 and R013 are shipped FATAL rules. H056 can also emit a FATAL finding when a current package fact matches an IOC whose confidence is `confirmed`; lower-confidence IOC matches use lower severities. A `pkgbuild_pattern` entry is the exception: it matches a regular-expression shape rather than an exact artefact, so it is capped at CRITICAL whatever its tier and can never reach FATAL. FATAL findings contribute **0 weight** to the running total but immediately set `final_score = 100` and risk level `"Critical"`. No other rules are evaluated for weight contribution after a FATAL fires; the short-circuit is in `calculate_score()` at `src/trustsight/scoring.py`. R012 and R013 are the shipped rules protected from configuration removal or downgrade; H056's severity is derived from the signed/local indicator confidence tier.
 
 ---
 
@@ -903,6 +903,11 @@ See [H040: Host Reconnaissance](staging-and-recon.md#h040).
 ### H043 {#h043}
 
 See [H043: Attack-Chain Composition](composition.md#h043).
+
+
+### H098 {#h098}
+
+See [H098: Naming/Deception Cluster](composition.md#h098).
 
 
 ---

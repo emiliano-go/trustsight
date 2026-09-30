@@ -14,22 +14,154 @@
     "type": "package",
     "value": "lockfile-js",
     "confidence": "confirmed",
-    "provenance": "Sonatype-2026-003775",
+    "provenance": "Sonatype-2026-003808",
     "campaign": "atomic-arch-2026-06",
     "incident": "atomic-arch-2026-06",
     "added": "2026-06-01T00:00:00Z",
     "expires_at": "2027-06-30T00:00:00Z",
-    "note": "npm package added as a build dependency by hijacked AUR packages; carried the 'deps' Rust credential-harvesting binary. Created solely to carry the payload."
+    "note": "Wave-2 npm package installed via bun; preinstall hook './lib/install-deps.mjs'. Created solely to carry the payload."
   },
   {
     "type": "package",
     "value": "js-digest",
     "confidence": "confirmed",
-    "provenance": "Sonatype-2026-003775",
+    "provenance": "Sonatype-2026-003808",
     "campaign": "atomic-arch-2026-06",
     "incident": "atomic-arch-2026-06",
     "added": "2026-06-01T00:00:00Z",
     "expires_at": "2027-06-30T00:00:00Z",
-    "note": "npm package added as a build dependency by hijacked AUR packages; carried the 'deps' Rust credential-harvesting binary. Created solely to carry the payload."
+    "note": "Wave-2 npm package installed via bun; preinstall hook './lib/install-deps.mjs'. Created solely to carry the payload."
+  },
+  {
+    "type": "package",
+    "value": "nextfile-js",
+    "confidence": "confirmed",
+    "provenance": "aur-general AUR REPORT THREAD; Sonatype-2026-003808",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-13T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "Wave-3 npm package, installed with the command shell-obfuscated (ANSI-C quoting). Created solely to carry the payload."
+  },
+  {
+    "type": "hash",
+    "value": "6144d433f8a0316869877b5f834c801251bbb936e5f1577c5680878c7443c98b",
+    "confidence": "confirmed",
+    "provenance": "Sonatype-2026-003775; Cloud Security Alliance research note 2026-06-14",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "sha256 of 'deps', the 3,040,376-byte stripped Rust ELF infostealer dropped by atomic-lockfile."
+  },
+  {
+    "type": "hash",
+    "value": "42b59fdbe1b72895b2951412222ebf40",
+    "confidence": "high",
+    "provenance": "Sonatype-2026-003775; Cloud Security Alliance research note 2026-06-14",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "md5 of the same 'deps' ELF. A weaker digest than the sha256, hence the lower tier."
+  },
+  {
+    "type": "hash",
+    "value": "47893d9badc38c54b71321263ce8178c1abb10396e0aadf9793e61ec8829e204",
+    "confidence": "high",
+    "provenance": "SafeDep (atomic-lockfile analysis)",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "sha256 SafeDep reports as dropped by atomic-lockfile@1.4.2 (secondary payload). Not independently re-verified here, so 'high' rather than 'confirmed'."
+  },
+  {
+    "type": "domain",
+    "value": "olrh4mibs62l6kkuvvjyc5lrercqg5tz543r4lsw3o6mh5qb7g7sneid.onion",
+    "confidence": "confirmed",
+    "provenance": "ioctl.fail analysis; SafeDep (atomic-lockfile)",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "Tor hidden-service C2 of the deps infostealer, encoded inside the ELF."
+  },
+  {
+    "type": "file_path",
+    "value": "src/hooks/deps",
+    "confidence": "high",
+    "provenance": "aur-general AUR REPORT THREAD; Sonatype-2026-003775",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "atomic-lockfile preinstall hook path that executes the ELF."
+  },
+  {
+    "type": "file_path",
+    "value": "lib/install-deps.mjs",
+    "confidence": "high",
+    "provenance": "aur-general AUR REPORT THREAD; Sonatype-2026-003808",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "js-digest / lockfile-js preinstall hook path."
+  },
+  {
+    "type": "file_path",
+    "value": "/sys/fs/bpf/hidden_pids",
+    "confidence": "high",
+    "provenance": "ioctl.fail analysis; aur-general AUR REPORT THREAD",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "eBPF rootkit pinned map hiding PIDs."
+  },
+  {
+    "type": "file_path",
+    "value": "/sys/fs/bpf/hidden_names",
+    "confidence": "high",
+    "provenance": "ioctl.fail analysis; aur-general AUR REPORT THREAD",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "eBPF rootkit pinned map hiding filenames."
+  },
+  {
+    "type": "file_path",
+    "value": "/sys/fs/bpf/hidden_inodes",
+    "confidence": "high",
+    "provenance": "ioctl.fail analysis; aur-general AUR REPORT THREAD",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-01T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "eBPF rootkit pinned map hiding socket inodes."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\$'\\\\x[0-9A-Fa-f][0-9A-Fa-f]",
+    "confidence": "high",
+    "provenance": "aur-general AUR REPORT THREAD; boichat",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-13T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "Wave-3 ANSI-C hex-quoting obfuscation marker in an install hook. Ordinary $'\\n' / $'\\t' do not match."
+  },
+  {
+    "type": "pkgbuild_pattern",
+    "value": "\\$'\\\\[1-7][0-7][0-7]",
+    "confidence": "high",
+    "provenance": "aur-general AUR REPORT THREAD; boichat",
+    "campaign": "atomic-arch-2026-06",
+    "incident": "atomic-arch-2026-06",
+    "added": "2026-06-13T00:00:00Z",
+    "expires_at": "2027-06-30T00:00:00Z",
+    "note": "Wave-3 ANSI-C octal-quoting marker. The leading 1-7 excludes \\033 ESC and \\007 BEL colour codes."
   }
 ]

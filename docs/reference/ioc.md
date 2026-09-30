@@ -56,6 +56,8 @@ One JSON object per line:
 {"type": "domain", "value": "evil-cdn.xyz", "source": "emiliano-go", "confidence": "high", "provenance": "ASA-2026-06", "campaign": "atomic-arch-2026-06", "expires_at": "2026-09-15T00:00:00Z"}
 {"type": "hash", "value": "deadbeef...", "source": "emiliano-go", "confidence": "high", "provenance": "vendor report"}
 {"type": "package", "value": "malicious-aur-pkg", "source": "emiliano-go", "provenance": "ASA-2026-06"}
+{"type": "file_path", "value": "src/hooks/deps", "source": "emiliano-go", "confidence": "high", "provenance": "Sonatype-2026-003775"}
+{"type": "pkgbuild_pattern", "value": "\\bnpm\\s+install\\b", "source": "emiliano-go", "confidence": "high", "provenance": "aur-general"}
 ```
 
 Any entry with an unknown `type`, an unusable `value`, or no `source` is
@@ -68,6 +70,16 @@ dropped with a warning; the rest import.
 | `domain` | Host of a `source=` URL (or any referenced host) | Lowercased, IDNA/punycode-folded, reduced to the registered domain, so a subdomain and the `xn--` and unicode spellings all collapse to one value. |
 | `hash` | Digests inside `sha256sums` / `sha512sums` / `md5sums` (and any other hex digest in the visible text) | Lowercased; must be a hex digest of a known length (32/40/56/64/96/128). |
 | `package` | `pkgname` / `pkgbase` and declared dependency names | Lowercased, exact match. |
+| `file_path` | A file the diff **added or modified**, and a file the recipe **names** (`install=`, local `source=()` entries) | Separators folded to `/`, a leading `./` and trailing `/` removed. Case-sensitive. Removals are not a compromise signal and do not match. |
+| `pkgbuild_pattern` | **Added diff lines**, matched as a regular expression | The pattern text, compiled once. Invalid or catastrophic-backtracking patterns are refused at load. |
+
+`file_path` and `pkgbuild_pattern` are the two non-equality types. `file_path`
+is still an exact comparison on a normalized path. `pkgbuild_pattern` is the
+one type that matches a *shape* rather than an artefact, so it is treated as a
+weaker claim: **a pattern finding is never FATAL** - a `confirmed` tier is
+capped at CRITICAL - and an unsafe pattern is refused rather than run. The
+corpus pivot understands `domain`, `hash` and `package` only; the other two
+describe a file or a line, which a stored corpus row does not reference.
 
 ### Signature
 
@@ -111,7 +123,8 @@ Each `IocMatch` carries `type`, `value`, `source`, `confidence`, `provenance`,
 
 These properties are enforced by the gates `an IOC match carries its source`,
 `IOC matches never contribute to the score`, `an expired IOC is never silent`,
-and `IOCs are not in the rule config layer` (see the
+`IOCs are not in the rule config layer`, and `a pattern IOC that risks ReDoS
+is refused` (see the
 [enforcement map](../security.md#part-c-the-enforcement-map)).
 
 ---

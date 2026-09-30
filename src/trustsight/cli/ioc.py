@@ -321,7 +321,7 @@ def ioc_update(
 @ioc_app.command("list")
 def ioc_list(
     source: str | None = typer.Option(None, "--source", help="Filter by source"),
-    type: str | None = typer.Option(None, "--type", help="Filter by type (domain, hash, package)"),
+    type: str | None = typer.Option(None, "--type", help="Filter by type (domain, hash, package, file_path, pkgbuild_pattern)"),
     include_expired: bool = typer.Option(False, "--include-expired", help="Include expired entries"),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):

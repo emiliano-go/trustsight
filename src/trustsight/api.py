@@ -1610,16 +1610,16 @@ class TrustSight:
             indicator could not be classified.
         """
         from .full_aur.pivot import pivot as _pivot
-        from .iocs import IOC_TYPES
+        from .iocs import PIVOT_IOC_TYPES
 
         _validate_text(indicator, name="indicator", maximum=MAX_API_NAME_BYTES)
         if not indicator:
             raise ValueError("indicator must not be empty")
         self._ensure_ready()
-        if type is not None and type not in IOC_TYPES:
+        if type is not None and type not in PIVOT_IOC_TYPES:
             raise TrustSightError(
                 f"unknown indicator type {type!r}; expected one of "
-                f"{', '.join(sorted(IOC_TYPES))}"
+                f"{', '.join(sorted(PIVOT_IOC_TYPES))}"
             )
         result = _pivot(indicator, type=type)
         if result.get("error"):

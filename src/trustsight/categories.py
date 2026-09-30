@@ -136,7 +136,8 @@ _SUMMARIES: dict[RuleCategory, str] = {
     ),
     RuleCategory.COMPOSITION: (
         "Distinct kinds of finding co-occurred; the combination is the "
-        "signal, and the points are already scored elsewhere."
+        "signal. H027 and H043 annotate at weight 0; H098 scores the "
+        "naming/deception cluster."
     ),
     RuleCategory.COUNT_BASED: (
         "A count of indicators crossed a fixed threshold within one artifact "
@@ -362,6 +363,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     # --- composition ---------------------------------------------------
     "H027": _C.COMPOSITION,
     "H043": _C.COMPOSITION,
+    "H098": _C.COMPOSITION,
     # --- count-based ---------------------------------------------------
     "H030": _C.COUNT_BASED,
     "H036": _C.COUNT_BASED,

@@ -1,16 +1,22 @@
-<!-- description: Rules that fire when distinct kinds of finding co-occur. The combination is the signal and the points are already scored, so both carry weight 0 by design. -->
+<!-- description: Rules that fire when distinct kinds of finding co-occur. H027 and H043 are weight-0 annotations; H098 is the deliberate weight-bearing exception. -->
 
 # Composition
 
-Distinct kinds of finding co-occurred. The combination is the signal, and
-the points are already on the board from the rules that fired, so both
-rules here carry weight 0 by design: adding a score for the combination
-would double-count what the individual rules already scored.
+Distinct kinds of finding co-occurred. The combination is the signal.
+
+H027 and H043 carry weight 0 by design: the points are already on the board
+from the rules that fired, and adding a score for the combination would
+double-count what those rules already scored. H098 is the deliberate
+exception. A package that both impersonates a popular name and redirects
+its dependencies or source is the attack H029 exists to surface, so the
+combination carries its own weight rather than relying on the sum of its
+parts. Its members still score individually; the cluster stacks on top by
+design, the same safety-first choice the X007 crossfire cluster makes.
 
 H027 counts distinct capability `category` values across one diff. H043
-counts distinct kill-chain stages. Neither can turn an UNFLAGGED package
-into a flagged one on its own, and neither is a detection: they are
-annotations on findings that other rules produced.
+counts distinct kill-chain stages. H098 counts distinct naming/deception
+signals. None is a detection on its own: they annotate findings that other
+rules produced.
 
 See [the rule system reference](system.md) for the field table, the
 severity weights and the reserved identifier ranges.
@@ -24,6 +30,7 @@ severity weights and the reserved identifier ranges.
 |---|---|---|
 | [H027](#h027) | Capability Density Anomaly | INFO |
 | [H043](#h043) | Attack-Chain Composition | INFO |
+| [H098](#h098) | Naming/Deception Cluster | HIGH |
 <!-- /generated: page-index -->
 
 ### H027: Capability Density Anomaly {#h027}
@@ -75,3 +82,42 @@ single-signal noise.
 
 Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot reach
 three distinct stages.
+
+### H098: Naming/Deception Cluster {#h098}
+
+- **Target:** programmatic (the package's own findings, no new detection)
+- **Severity:** HIGH (weight 25)
+- **Category:** `meta`
+- **Condition:** The findings on one package carry at least `[thresholds] h098.min_signals` (default 2) distinct naming/deception signals.
+
+Members, each one independent:
+
+| Rule | Signal |
+|---|---|
+| H029 | package name resembles a far more popular package |
+| D001 | novel dependency added |
+| D002 | typosquatted dependency |
+| D004 | dependency hijack via `provides`/`replaces` |
+| H064 | `provides`/`replaces` scope expansion |
+| C012 | source domain resembles the declared upstream |
+| H053 | name/host divergence |
+| H059 | name/repo divergence |
+| H026 | untrusted maintainer takeover |
+
+One signal can be a coincidence. A package that is *both* named like a
+popular project *and* pulls in a novel or typosquatted dependency, or
+fetches from a domain resembling its declared upstream, is a method rather
+than a coincidence. H098 is a cluster annotation over findings other rules
+produced, and it runs after H029 so it can count the name finding. It is
+never fed back into H027 or H043, which keep their own counts.
+
+**Why weight-bearing, unlike H027 and H043:** those annotate a single diff
+whose parts already scored separately, where a combination score would
+double-count. H098 is the deliberate exception for the naming/deception
+surface: the members are individually weak (a name, a dependency, a host)
+and the combination is materially stronger than the sum, so the cluster is
+scored once on top. The members still score; the stack is the point. Cite
+X007 for the same design in the crossfire family.
+
+Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot carry
+two naming/deception signals.

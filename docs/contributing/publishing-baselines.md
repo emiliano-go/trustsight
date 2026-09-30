@@ -23,6 +23,20 @@ prefix, and **a baseline release ships the whole family**:
 - `baseline-manifest.json` (per-asset SHA-256, size and signature) plus its
   detached `.sig`.
 
+One further asset is **not** part of the signed family:
+`baseline-benign-corpus.tar.gz` packs the calibration corpus
+(`tests/fixtures/benign-corpus`, the 3,739 diffs named by
+`tests/fixtures/corpus.lock`) for CI alone. The tool never downloads it, so
+it is unsigned; the Calibration Gates workflow verifies the extracted bytes
+against the `corpus_content_sha256` recorded in `tests/fixtures/baseline.json`.
+It exists because reconstruction from the lock is not byte-stable across git
+versions, which moved the measured benign flag rate between environments.
+When `corpus.lock` changes: rebuild the corpus from the lock, run
+`python scripts/pack_calibration_corpus.py` (it refuses a corpus whose hash
+does not match `baseline.json`), upload the asset over the channel release
+named by `CALIBRATION_CORPUS_TAG` in `.github/workflows/calibration.yml`, and
+move that tag in the same commit.
+
 **Two release kinds, kept apart.** Software releases are tagged `vX.Y.Z`
 and carry the program and its release notes, never baseline assets. Channel
 releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)

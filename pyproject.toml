@@ -71,6 +71,7 @@ target-version = "py311"
 "src/trustsight/cli/app.py" = ["E402"]
 "tests/test_api.py" = ["E402"]
 "tests/test_inspect_history.py" = ["E402"]
+"tests/test_pack_calibration_corpus.py" = ["E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

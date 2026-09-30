@@ -75,12 +75,23 @@ def shipped_config():
     numbers unreproducible and can hide a rule that has since been removed
     from the shipped set (or resurrect one that has).  The database is
     isolated for the same reason: novelty and maturity must start cold.
+
+    The host's pacman answer is host state too: with a sync database
+    present, ``official_package_names`` makes ``is_established_package``
+    fire D004/H064 on benign provides-transitions that a machine without
+    pacman (CI, a container) never reports - the benign flag rate measured
+    7.9% with pacman and 7.8% without.  The frozen empty answer is the
+    cold machine every environment can reproduce.
     """
     tmp = Path(tempfile.mkdtemp(prefix="trustsight-gates-"))
     saved_config, saved_data = config_module.CONFIG_DIR, db_module.DATA_DIR
+    saved_official = db_module._official_names
     config_module.CONFIG_DIR = tmp / "config"
     db_module.DATA_DIR = tmp / "data"
     db_module.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    # An empty set, not None: None means "never asked" and would re-query
+    # pacman; the empty answer is what a machine without pacman gives.
+    db_module._official_names = frozenset()
     config_module._toml_cache.clear()
     try:
         ensure_default_configs()
@@ -88,6 +99,7 @@ def shipped_config():
     finally:
         config_module.CONFIG_DIR = saved_config
         db_module.DATA_DIR = saved_data
+        db_module._official_names = saved_official
         config_module._toml_cache.clear()
         shutil.rmtree(tmp, ignore_errors=True)
 

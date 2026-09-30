@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The calibration replay isolated the config and the database but not the host's pacman: `official_package_names` reads the machine's sync database, so `is_established_package` fired D004/H064 on benign provides-transitions only where pacman exists, and the benign flag rate measured 7.9% on an Arch box against 7.8% anywhere else. `shipped_config` now freezes the official-names answer to empty (the cold machine), the published figures move to the reproducible measurement (7.8% above the 20-point threshold, the 92.2th percentile), and the corpus asset from 0.17.0 keeps the input bytes identical on top.
+
 ## [0.17.0] - 2026-09-29
 
 ### Added

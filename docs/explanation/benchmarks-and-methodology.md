@@ -74,7 +74,7 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 |--------|-------|------------------|
 | Benign zero-rate | 70.3% | no minimum; fire-rate cap controls FPs |
 | Ruleset trigger rate | 29.7% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 7.9% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign flag rate | 7.8% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
 | Benign p95 | 30 | < CRITICAL p5 (margin: 30) |
@@ -96,7 +96,7 @@ The benign corpus is divided into eight strata (`source_patched`, `bin_repack`, 
 
 The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 70.3% zero-rate means 70.3% of benign diffs score 0, while **7.9% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 70.3% zero-rate means 70.3% of benign diffs score 0, while **7.8% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

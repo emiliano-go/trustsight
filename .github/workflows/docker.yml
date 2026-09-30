@@ -1,16 +1,20 @@
 name: Docker image
 
-# Publishes the GHCR image for a release.  The `release: published` event
-# only fires once the release workflow has finished its verification and
-# flipped the draft public, so the image can never precede the artifacts it
-# packages.  `workflow_dispatch` rebuilds an existing tag by hand.
+# Publishes the GHCR image for a release.  `release: published` only fires
+# when a human publishes through the UI: the release workflow publishes with
+# GITHUB_TOKEN, and token-triggered events never cascade into workflow runs.
+# `workflow_run` is the chain that does fire after a successful release.
+# `workflow_dispatch` rebuilds an existing tag by hand.
 on:
   release:
     types: [published]
+  workflow_run:
+    workflows: ["Release software"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to build, e.g. v0.17.0
+        description: Release tag to build, e.g. v0.17.1
         required: true
         type: string
 
@@ -26,28 +30,41 @@ jobs:
     permissions:
       contents: read
       packages: write
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.release.tag_name || inputs.tag }}
-
       - name: Resolve the image version
         id: meta
         env:
+          GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
-          PRERELEASE: ${{ github.event.release.prerelease || 'false' }}
         run: |
           set -eu
+          # A workflow_run carries no release reference; the release the
+          # triggering run just published is the newest v* release.
+          if [[ -z "$TAG" ]]; then
+            TAG="$(gh release list --limit 20 --json tagName \
+              --jq '[.[].tagName | select(startswith("v"))][0]')"
+          fi
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::tag $TAG is not a software release tag"
             exit 1
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$(gh release view "$TAG" --json isPrerelease --jq .isPrerelease)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Guard against pre-Dockerfile tags
+        run: |
           # A tag cut before the Dockerfile existed cannot produce an image
           # of itself; say so rather than failing inside buildx.
           if [[ ! -f Dockerfile ]]; then
-            echo "::error::tag $TAG predates the Dockerfile; the image stream starts with the next release"
+            echo "::error::${{ steps.meta.outputs.tag }} predates the Dockerfile; the image stream starts with the next release"
             exit 1
           fi
 

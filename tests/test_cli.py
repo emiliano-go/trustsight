@@ -1105,7 +1105,8 @@ def test_full_aur_watch_invokes_the_loop(monkeypatch):
         app, ["full-aur", "--watch", "--interval", "120", "--cycles", "2"]
     )
     assert result.exit_code == 0, result.output
-    assert seen == {"interval": 120, "cycles": 2, "json_output": False}
+    assert seen == {"interval": 120, "cycles": 2, "json_output": False,
+                    "notify_url": None}
 
 
 def test_full_aur_watch_rejects_export(monkeypatch):

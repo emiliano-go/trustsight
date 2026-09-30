@@ -639,6 +639,7 @@ def run_watch(
     json_output: bool = False,
     sleep: Callable[[float], None] = time.sleep,
     depth: Optional[int] = None,
+    notify_url: Optional[str] = None,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted (plan §6.4).
 
@@ -682,6 +683,13 @@ def run_watch(
                 _log(f"{len(result.new_alerts)} new alert(s) this cycle")
                 for package, rule_id in result.new_alerts:
                     _log(f"  {rule_id}  {package}")
+                # An unattended watcher needs a push channel: the alert is
+                # announced once here and never again, so the webhook is how
+                # it reaches anyone not reading the log.
+                from ..notify import maybe_notify
+
+                if maybe_notify(result, notify_url):
+                    _log("  alert webhook delivered")
             elif result.cluster_findings:
                 _log("No new alerts; every cluster this cycle was already reported")
             if cycles and len(results) >= cycles:

@@ -114,12 +114,14 @@ def gate_no_interpreter_calls() -> Gate:
 # analysis/, is offline by construction: the rule engine must never be
 # able to turn a PKGBUILD into an outbound request.  ``release.py`` is the
 # release channel: it exists to download ``baseline-*`` release assets and
-# nothing else.
+# nothing else.  ``notify.py`` is the watcher's webhook: it POSTs a fixed
+# alert document to one operator-configured URL and reads nothing back.
 _NETWORK_MODULES = {
     "discovery.py",
     "fetcher.py",
     "full_aur/fetch.py",
     "full_aur/metadata.py",
+    "notify.py",
     "release.py",
 }
 
@@ -127,7 +129,7 @@ _NETWORK_CALLS = ("urlopen", "urlretrieve", "clone_repository", "create_connecti
 
 
 def gate_network_is_confined() -> Gate:
-    """Only the four fetch modules may open a connection."""
+    """Only the listed fetch and notify modules may open a connection."""
     hits: list[str] = []
     for path in _python_files():
         rel = path.relative_to(SRC).as_posix()

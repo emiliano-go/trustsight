@@ -160,7 +160,7 @@ When [rich](https://github.com/Textualize/rich) is available:
 │                           curl -fsSL https://example.invalid/p.tar.gz      │
 │                                                                            │
 │        Rules Triggered                                                     │
-│                         R001 Remote Script Execution                       │
+│                         PKGBUILD line 4  R001 Remote Script Execution      │
 │                                                                            │
 │    Unverifiable findings                                                   │
 │                         W001  Executes Code This Analysis Did Not Read     │
@@ -246,7 +246,7 @@ trustsight list [--limit N] [--sort score|risk|name|last-checked]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--limit` | `int` | `0` | Maximum number of packages to show. `0` means unlimited. |
+| `--limit` | `int` | `0` | Maximum number of packages to show, applied after `--sort`. `0` means unlimited. |
 | `--sort` | `str` | alphabetical | Sort results. `score`: highest (worst) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. `last-checked`: oldest first. Packages that have never been analysed sort last. |
 
 ### Output
@@ -276,7 +276,7 @@ trustsight forget --prune [--dry-run]
 
 | Flag | Description |
 |------|-------------|
-| `--prune` | Remove every tracked package that no longer exists in the AUR.  Re-verifies each name against the AUR RPC and removes absent ones.  Useful for cleaning up packages that were deleted from the AUR or that were never in it. |
+| `--prune` | Remove every tracked package that no longer exists in the AUR.  Re-verifies each name against the AUR RPC and removes absent ones.  Useful for cleaning up packages that were deleted from the AUR or that were never in it.  Refuses (exit 2) when the RPC gives no authoritative answer, and prompts before deleting unless `--yes` or `--json` is given. |
 | `--dry-run` | Show what would be removed without actually deleting anything.  Only meaningful with `--prune`. |
 | `--yes` | Skip the confirmation prompt (both named packages and `--prune`). |
 
@@ -464,7 +464,7 @@ Disable with:
 auto_import = false
 ```
 
-Import takes a few seconds for the full seed and is additive: existing rows win, so a seed can never overwrite something learned from a real analysis, and re-importing is a no-op.
+Import takes a few seconds for the full seed and is additive: existing rows win, so a seed can never overwrite something learned from a real analysis, and re-importing is a no-op. If the seed was built under a different salt than the database's, its maintainer rows are skipped with a warning: the stored salt wins, so local maintainer history stays reachable.
 
 ### Maturity handover
 
@@ -493,7 +493,7 @@ trustsight seed fetch [--tag TAG] [--key PATH]
 |------------|-------------|
 | `info` | Show seed metadata and hashing configuration. |
 | `stats` | Show hashed maintainer counts by source. |
-| `migrate` | Migrate plaintext maintainer rows into the hashed store. |
+| `migrate` | Migrate plaintext maintainer rows into the hashed store. Exits 2 when `--from-backup` is given but no `maintainers_deprecated_backup` table exists, or when the plaintext table was already migrated (rerun with `--from-backup`). |
 | `fetch` | Download `baseline-seed.tar.gz` from the release channel, verify its detached Ed25519 signature against the pinned distribution key, and import it. Refuses (exit 2) anything that does not verify. |
 
 ### Flags
@@ -522,8 +522,8 @@ trustsight db backup [--output PATH]
 | Subcommand | Description |
 |------------|-------------|
 | `check` | Run `PRAGMA integrity_check` on the database. Exits 0 on success and 2 if corruption is detected, including with `--json`. |
-| `vacuum` | Reclaim disk space by rebuilding the database file. Prompts for confirmation unless `--force` is passed. |
-| `backup` | Create a safe online backup via `sqlite3.backup()`. No need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. |
+| `vacuum` | Reclaim disk space by rebuilding the database file. Prompts for confirmation unless `--force` is passed; declining exits 2. |
+| `backup` | Create a safe online backup via `sqlite3.backup()`. No need to stop TrustSight. Default output: `<db_path>.YYYYMMDD-HHMMSS.bak`. Refuses (exit 2) an output path that is the live database itself. |
 
 ### Common flags
 
@@ -762,7 +762,7 @@ trustsight corpus pivot <indicator> [--json]
 
 | Flag | Description |
 |------|-------------|
-| `--type` | Force the indicator type (`package`, `domain`, or `hash`) when the shape is ambiguous: a package name spelled like a host, or a name that is all hex of digest length. |
+| `--type` | Force the indicator type (`package`, `domain`, or `hash`), case-insensitively, when the shape is ambiguous: a package name spelled like a host, or a name that is all hex of digest length. |
 | `--json` | Output JSON. |
 
 ### Behaviour

@@ -487,9 +487,18 @@ class RpcMetadata:
 
 
 def default_metadata() -> MetadataProvider:
-    """The snapshot when there is one, the RPC otherwise."""
-    from .full_aur.metadata import load_metadata
+    """The freshest dump this process holds, then the snapshot, then the RPC.
 
+    The fresh dump comes first deliberately: a cycle that just fetched the
+    metadata has the answer in memory, and a --since replay advances no
+    snapshot file, so reading the file there falls to the RPC and the daily
+    rate budget is gone in hours.
+    """
+    from .full_aur.metadata import current_dump, load_metadata
+
+    fresh = current_dump()
+    if fresh:
+        return SnapshotMetadata(fresh)
     try:
         packages = load_metadata()
     except Exception:

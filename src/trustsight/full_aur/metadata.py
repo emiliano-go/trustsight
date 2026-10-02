@@ -14,6 +14,7 @@ import os
 import threading
 import time
 from pathlib import Path
+from typing import Optional
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -92,6 +93,17 @@ def default_metadata_path() -> Path:
 #: The cache holds a single entry, so it never pins an old snapshot's memory.
 _snapshot_cache: dict[tuple[str, int, int], tuple[dict, int | None] | None] = {}
 _snapshot_cache_lock = threading.Lock()
+
+#: The dump fetched by this process, when one was.  A --since replay advances
+#: no snapshot file until it catches up, and without this the depth walk
+#: falls back to the AUR RPC for every dependency name it does not know -
+#: the 429 storm a backfill otherwise runs into.
+_current_dump: Optional[dict] = None
+
+
+def current_dump() -> Optional[dict]:
+    """The metadata dump this process fetched, if it fetched one."""
+    return _current_dump
 
 
 def _stat_key(path: Path) -> tuple[str, int, int] | None:
@@ -232,6 +244,8 @@ def fetch_metadata(on_progress=None) -> dict:
     for entry in data:
         metadata[entry["Name"]] = entry
     _write_validators(response_etag, response_last_modified)
+    global _current_dump
+    _current_dump = metadata
     log.info("loaded metadata for %d packages", len(metadata))
     return metadata
 

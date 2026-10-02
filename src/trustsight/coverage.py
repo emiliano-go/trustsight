@@ -34,6 +34,7 @@ import re
 import threading
 from collections.abc import Collection
 
+from .diffdoc import parse_diff_lines
 from .tokenizer import split_lines
 
 # The gap identifiers.  These are part of the report schema and the
@@ -248,12 +249,12 @@ def unpinned_source_refs(text: str) -> list[str]:
     Returns the offending entries so the report can quote them.
     """
     found: list[str] = []
-    for line in split_lines(text):
-        if line.startswith(("---", "+++", "@@")):
+    for line in parse_diff_lines(split_lines(text)).lines:
+        if line.raw.startswith(("---", "+++", "@@")):
             continue
-        if line.startswith("-"):
+        if line.side == "remove":
             continue
-        body = line[1:] if line[:1] in ("+", " ") else line
+        body = line.content if line.side in ("add", "context") else line.raw
         stripped = body.strip()
         if stripped.startswith("#"):
             continue
@@ -282,14 +283,14 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
     """
     found: list[str] = []
     in_source_array = False
-    for line in split_lines(diff_text):
-        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith("+++") or line.raw.startswith("---") or line.raw.startswith("@@"):
             continue
         # A removal cannot introduce an unresolved source; context ("  ")
         # lines inside an added array still belong to the logical entry.
-        if line.startswith("-"):
+        if line.side == "remove":
             continue
-        body = line[1:] if line[:1] in ("+", " ") else line
+        body = line.content if line.side in ("add", "context") else line.raw
         stripped = body.lstrip()
 
         if in_source_array:
@@ -333,14 +334,14 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
     found: list[str] = []
     depth = 0
     in_source_array = False
-    for line in split_lines(diff_text):
-        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith("+++") or line.raw.startswith("---") or line.raw.startswith("@@"):
             continue
         # Removals belong to the old file; context and added lines make up
         # the new one, so both move the function-depth and array state.
-        if line.startswith("-"):
+        if line.side == "remove":
             continue
-        body = line[1:] if line[:1] in ("+", " ") else line
+        body = line.content if line.side in ("add", "context") else line.raw
         stripped = body.lstrip()
 
         if in_source_array:
@@ -356,7 +357,7 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
 
         opens = bool(_FUNCTION_OPEN_RE.search(stripped))
         if (
-            line.startswith("+")
+            line.side == "add"
             and depth == 0
             and not opens
             and not stripped.startswith("#")

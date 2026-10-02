@@ -11,6 +11,7 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..differ import extract_source_array_urls
+from ..diffdoc import parse_diff_lines
 from ..novelty import normalize_url
 from ..rules import (
     ScopeResolver,
@@ -326,8 +327,8 @@ def _added_line_number(diff_text: str, fragment: str) -> int | None:
     *fragment* (a tiny local analogue of delivery's ``_find_line``, kept
     here because ``delivery`` imports this module)."""
     pattern = re.compile(r"\+.*" + re.escape(fragment[:60]), re.IGNORECASE)
-    for i, line in enumerate(split_lines(diff_text)):
-        if pattern.search(line):
+    for i, line in enumerate(parse_diff_lines(split_lines(diff_text)).lines):
+        if pattern.search(line.raw):
             return i + 1
     return None
 
@@ -459,10 +460,10 @@ _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
 
 def _indirect_expansion_findings(diff_text, config, add) -> None:
     """A command or shell is reached through indirect expansion (H080)."""
-    for line in join_line_continuations(split_lines(diff_text)):
-        if not line.startswith("+") or line.startswith("+++"):
+    for line in parse_diff_lines(join_line_continuations(split_lines(diff_text))).lines:
+        if line.side != "add" or line.raw.startswith("+++"):
             continue
-        body = _strip_comment(line[1:])
+        body = _strip_comment(line.content)
         m = _INDIRECT_EXPANSION_RE.search(body)
         if not m:
             continue
@@ -688,11 +689,11 @@ def _reconstruction_findings(diff_text, config, add) -> None:
     too, and as the inconclusive case - unreconstructable input is never
     read as clean (plan §3.1).
     """
-    raw_lines = join_line_continuations(split_lines(diff_text))
+    raw_lines = parse_diff_lines(join_line_continuations(split_lines(diff_text))).lines
     bodies = [
-        _strip_comment(line[1:])
+        _strip_comment(line.content)
         for line in raw_lines
-        if line.startswith("+") and not line.startswith("+++")
+        if line.side == "add" and not line.raw.startswith("+++")
     ]
     # One round-trip for every line's reconstruction rather than one per
     # line: the body walk is O(lines) and would otherwise be the sandbox's
@@ -771,10 +772,10 @@ def _build_flag_findings(diff_text, config, add) -> None:
     """
     lines = mask_to_recipe(join_line_continuations(split_lines(diff_text)))
     enclosing = _classify_enclosing_function(lines)
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or line.startswith("+++"):
+    for i, line in enumerate(parse_diff_lines(lines).lines):
+        if line.side != "add" or line.raw.startswith("+++"):
             continue
-        body = _strip_comment(line[1:])
+        body = _strip_comment(line.content)
         match = _BUILD_FLAG_ASSIGN_RE.match(body)
         if not match:
             continue

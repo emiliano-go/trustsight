@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import re
 
+from ..diffdoc import parse_diff_lines
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import clamp_text
 from .buildfetch import BUILD_FUNCTIONS, registry_resolutions
@@ -68,7 +69,8 @@ def _changed_kinds(
     scan below missed it and H087 claimed "pkgver did not [move]" about a
     version that did.
     """
-    lines = join_line_continuations(split_lines(clamp_text(diff_text)))
+    lines = parse_diff_lines(
+        join_line_continuations(split_lines(clamp_text(diff_text)))).lines
     kinds = {
         "deps": False,
         "source": False,
@@ -78,9 +80,13 @@ def _changed_kinds(
     }
     depth = 0
     for line in lines:
-        if line.startswith(("+++", "---", "@@")):
+        if line.raw.startswith(("+++", "---", "@@")):
             continue
-        marker, body = line[:1], line[1:] if line[:1] in ("+", "-", " ") else line
+        if line.is_content:
+            marker = {"add": "+", "remove": "-", "context": " "}[line.side]
+            body = line.content
+        else:
+            marker, body = "", line.raw
         stripped = body.lstrip()
 
         opened = _FUNCTION_OPEN_RE.match(stripped)

@@ -32,6 +32,7 @@ from ..config import (
     SCRIPT_EXECUTOR as _SCRIPT_EXECUTOR,
 )
 from ..coverage import note_stage_failure
+from ..diffdoc import parse_diff_lines
 from ..config import (
     DEFAULT_ANTI_ANALYSIS_PROBES,
     load_patterns,
@@ -707,12 +708,14 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
         lines = [" " + ln for ln in lines]
     basenames: set[str] = set()
     in_array = False
-    for line in lines:
-        if line.startswith(("+++", "---", "@@")):
+    for line in parse_diff_lines(lines).lines:
+        if line.raw.startswith(("+++", "---", "@@")):
             continue
-        if line.startswith("-"):
+        if line.side == "remove":
             continue
-        body = line[1:] if line[:1] in ("+", "-") else line
+        # Only the +/- sides lose their prefix; context lines keep the
+        # leading space, as the text walk produced them.
+        body = line.content if line.side == "add" else line.raw
         if not in_array:
             scalar = _SCALAR_SOURCE_RE.match(body)
             if scalar and "(" not in scalar.group(1):
@@ -1368,14 +1371,15 @@ def _service_binary_findings(diff_text, tree_manifest, add, current_text=None) -
     # case; this is the text-only one.
     current_service = False
     body_lines: list[str] = []
-    for raw in split_lines(diff_text):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
         if raw.startswith("+++ "):
             if current_service and body_lines:
                 service_texts.append("\n".join(body_lines))
             current_service = raw[4:].strip().endswith(".service")
             body_lines = []
-        elif current_service and raw.startswith("+") and not raw.startswith("+++"):
-            body_lines.append(raw[1:])
+        elif current_service and line.side == "add" and not raw.startswith("+++"):
+            body_lines.append(line.content)
     if current_service and body_lines:
         service_texts.append("\n".join(body_lines))
 
@@ -1778,8 +1782,8 @@ def _committed_payload_finding(name: str, head: bytes) -> dict | None:
     # `curl … | sh` is the opposite of this rule's subject.
     if name.lower().endswith((".patch", ".diff")):
         text = "\n".join(
-            ln[1:] for ln in split_lines(text)
-            if ln.startswith("+") and not ln.startswith("+++")
+            ln.content for ln in parse_diff_lines(split_lines(text)).lines
+            if ln.side == "add" and not ln.raw.startswith("+++")
         )
     m = _COMMITTED_PAYLOAD_RE.search(text)
     if not m:
@@ -1842,8 +1846,8 @@ def _committed_build_path_finding(name: str, head: bytes) -> dict | None:
         return None
     if name.lower().endswith((".patch", ".diff")):
         text = "\n".join(
-            ln[1:] for ln in split_lines(text)
-            if ln.startswith("+") and not ln.startswith("+++")
+            ln.content for ln in parse_diff_lines(split_lines(text)).lines
+            if ln.side == "add" and not ln.raw.startswith("+++")
         )
     for line in split_lines(text):
         named = _BUILD_ONLY_PATH_RE.search(line)

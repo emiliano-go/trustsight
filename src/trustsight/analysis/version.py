@@ -21,6 +21,7 @@ reports ``no AUR change`` rather than a change.
 
 import re
 
+from ..diffdoc import parse_diff_lines
 from ..tokenizer import resolve_added_lines
 from ..tokenizer import split_lines
 
@@ -263,15 +264,18 @@ def any_version_scalar_moved(diff_text: str) -> bool:
     ``+epoch=0`` (the value was already 0) must not suppress the finding,
     which a lexical token match would allow.
     """
-    lines = split_lines(diff_text or "")
+    doc = parse_diff_lines(split_lines(diff_text or ""))
+    # _variable_table's signature takes the raw lines; the typed document
+    # hands them over unchanged (``raw`` is the line as it appeared).
+    lines = [line.raw for line in doc.lines]
     old_table = _variable_table(lines, frozenset({"-", " "}))
     new_table = _variable_table(lines, frozenset({"+", " "}))
     old_prefixes = frozenset({"-", " "})
     new_prefixes = frozenset({"+", " "})
 
     def resolved(scalar: str, table: dict[str, str], prefixes: frozenset[str]) -> str | None:
-        for line in lines:
-            match = _SCALAR_LINE_RE.match(line)
+        for line in doc.lines:
+            match = _SCALAR_LINE_RE.match(line.raw)
             if match and match.group(1) in prefixes and match.group(2).lower() == scalar:
                 return _resolve_value(_strip_value(match.group(3)), table)
         return None
@@ -298,10 +302,11 @@ def pkgver_move_in_diff(
     *current_text* is the post-diff PKGBUILD, used when the ``pkgver=`` line
     falls outside the hunk; it lets the reference be read even then.
     """
-    lines = split_lines(diff_text or "")
+    doc = parse_diff_lines(split_lines(diff_text or ""))
+    lines = [line.raw for line in doc.lines]
     old_ref = new_ref = context_ref = None
-    for line in lines:
-        match = _PKGVER_LINE_RE.match(line)
+    for line in doc.lines:
+        match = _PKGVER_LINE_RE.match(line.raw)
         if match is None:
             continue
         sign, raw = match.group(1), _strip_value(match.group(2))
@@ -358,7 +363,10 @@ def _epoch_introduced(diff_text: str) -> tuple[bool, str | None]:
     side, the diff introduced the field.  An unchanged ``epoch=`` is not part
     of any hunk and never surfaces here.
     """
-    had_epoch = any(re.match(r"\s*-\s*epoch\s*=", line) for line in split_lines(diff_text))
+    had_epoch = any(
+        re.match(r"\s*-\s*epoch\s*=", line.raw)
+        for line in parse_diff_lines(split_lines(diff_text)).lines
+    )
     if had_epoch:
         return False, None
     for line in resolve_added_lines(diff_text):
@@ -387,8 +395,9 @@ def _epoch_findings(diff_text: str, config, add) -> None:
         line=next(
             (
                 i
-                for i, line in enumerate(split_lines(diff_text), 1)
-                if line.startswith("+") and _EPOCH_ASSIGN_RE.search(line[1:])
+                for i, line in enumerate(
+                    parse_diff_lines(split_lines(diff_text)).lines, 1)
+                if line.raw.startswith("+") and _EPOCH_ASSIGN_RE.search(line.raw[1:])
             ),
             None,
         ),

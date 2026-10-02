@@ -25,6 +25,7 @@ the list records what has already been reported, never what is safe.
 import re
 
 from ..deps import extract_dependency_changes
+from ..diffdoc import parse_diff_lines
 from ..iocs import load_indicators
 from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls
@@ -94,9 +95,9 @@ def _digests_in(body: str):
 def _line_of(diff_text: str, needle: str) -> int | None:
     """1-based diff line carrying *needle* on an added line."""
     lowered = needle.lower()
-    for i, line in enumerate(split_lines(diff_text)):
-        if line.startswith("+") and not line.startswith("+++"):
-            if lowered in line.lower():
+    for i, line in enumerate(parse_diff_lines(split_lines(diff_text)).lines):
+        if line.side == "add" and not line.raw.startswith("+++"):
+            if lowered in line.raw.lower():
                 return i + 1
     return None
 

@@ -33,6 +33,7 @@ import re
 from functools import lru_cache
 
 from ..deps import _strip_comment
+from ..diffdoc import parse_diff_lines
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import ScopeResolver, clamp_text
 from .build import _recipe_lines
@@ -141,13 +142,15 @@ def _registry_resolutions_uncached(
     lines = join_line_continuations(split_lines(clamp_text(diff_text)))
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     found: list[tuple[str, str]] = []
-    for i, line in enumerate(lines):
-        if not line.startswith("+"):
+    for i, line in enumerate(parse_diff_lines(lines).lines):
+        # The raw-line checks are kept: the legacy guard counted any
+        # ``+``-led line, headers included, and only stripped one character.
+        if not line.raw.startswith("+"):
             continue
         function = scopes.within(i, BUILD_FUNCTIONS)
         if function is None:
             continue
-        body = _strip_comment(line[1:])
+        body = _strip_comment(line.raw[1:])
         if not body.strip():
             continue
         if _OFFLINE_RE.search(body):

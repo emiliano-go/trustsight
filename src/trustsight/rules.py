@@ -4,6 +4,7 @@ import threading
 import logging
 
 from .config import load_rules
+from .diffdoc import parse_diff_lines
 from .findings import stamp
 from .tokenizer import (
     clean_lines,
@@ -336,8 +337,8 @@ def find_line_in_diff(
         # An escaped fragment sliced mid-escape leaves a trailing backslash.
         compiled = _compile(re.escape(pattern))
 
-    for index, line in enumerate(split_lines(diff_text)):
-        if compiled.search(line):
+    for index, line in enumerate(parse_diff_lines(split_lines(diff_text)).lines):
+        if compiled.search(line.raw):
             return index + 1
     return None
 

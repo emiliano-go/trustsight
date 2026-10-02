@@ -12,6 +12,7 @@ import re
 
 from ..config import load_ioc_sources
 from ..deps import extract_dependency_changes
+from ..diffdoc import parse_diff_lines
 from ..ioc_baseline import (
     IocMatch,
     active_iocs,
@@ -62,9 +63,9 @@ def _value_in_body(pattern: str, body: str) -> bool:
 def _find_line(diff_text: str, needle: str) -> int | None:
     """1-based diff line carrying *needle* on an added line."""
     lowered = needle.lower()
-    for i, line in enumerate(split_lines(diff_text)):
-        if line.startswith("+") and not line.startswith("+++"):
-            if lowered in line.lower():
+    for i, line in enumerate(parse_diff_lines(split_lines(diff_text)).lines):
+        if line.side == "add" and not line.raw.startswith("+++"):
+            if lowered in line.raw.lower():
                 return i + 1
     return None
 

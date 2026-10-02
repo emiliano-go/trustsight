@@ -11,6 +11,7 @@ import re
 from functools import lru_cache
 
 from .config import DEFAULT_ECOSYSTEM_PREFIXES, DEFAULT_VARIANT_SUFFIXES, load_naming
+from .diffdoc import parse_diff_lines
 from .tokenizer import resolve_added_lines
 from .tokenizer import split_lines
 
@@ -220,12 +221,14 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     found: dict[str, set[str]] = {f: set() for f in DEP_FIELDS}
     field: str | None = None
     span = 0
-    for line in lines:
-        if line.startswith(("+++", "---", "@@")):
+    # *marker* is still "+" or "-"; the typed side is derived from it.
+    wanted = "add" if marker == "+" else "remove"
+    for line in parse_diff_lines(lines).lines:
+        if line.raw.startswith(("+++", "---", "@@")):
             continue
-        if line[:1] in ("+", "-") and line[:1] != marker:
+        if line.side in ("add", "remove") and line.side != wanted:
             continue
-        body = line[1:] if line[:1] in ("+", "-") else line
+        body = line.content if line.side in ("add", "remove") else line.raw
 
         if field is None:
             match = _ARRAY_START_RE.match(body)
@@ -279,12 +282,12 @@ def _with_context_assignments(diff_text: str) -> str:
     a promoted array opener would be read as an added dependency.
     """
     out: list[str] = []
-    for line in split_lines(diff_text):
-        if (line.startswith(" ") and not line.rstrip().endswith("\\")
-                and _SCALAR_ASSIGN_RE.match(line[1:])):
-            out.append("+" + line[1:])
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if (line.side == "context" and not line.raw.rstrip().endswith("\\")
+                and _SCALAR_ASSIGN_RE.match(line.content)):
+            out.append("+" + line.content)
         else:
-            out.append(line)
+            out.append(line.raw)
     return "\n".join(out)
 
 

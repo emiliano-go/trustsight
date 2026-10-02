@@ -291,9 +291,10 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
     lines_added = 0
     lines_removed = 0
 
-    for line in split_lines(diff_text):
-        if line.startswith("+++ "):
-            path = _diff_file_path(line[4:])
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith("+++ "):
+            path = _diff_file_path(raw[4:])
             # `+++ /dev/null` is a deletion, not a path: recording it put
             # the literal string "/dev/null" in files_changed, and the
             # added/removed fix-up below could never find it there.
@@ -303,11 +304,11 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
                     file_changes.append({"path": path, "status": "modified"})
                 files_changed.add(path)
             continue
-        if line.startswith("--- ") or line.startswith("@@"):
+        if raw.startswith("--- ") or raw.startswith("@@"):
             continue
-        if line.startswith("+"):
+        if line.side == "add":
             lines_added += 1
-        elif line.startswith("-"):
+        elif line.side == "remove":
             lines_removed += 1
 
     # Statuses the text diff cannot express in one line: a path that has only
@@ -315,11 +316,12 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
     # removed.
     old_paths: set[str] = set()
     new_paths: set[str] = set()
-    for line in split_lines(diff_text):
-        if line.startswith("--- ") and not line.startswith("--- /dev/null"):
-            old_paths.add(_diff_file_path(line[4:]))
-        elif line.startswith("+++ ") and not line.startswith("+++ /dev/null"):
-            new_paths.add(_diff_file_path(line[4:]))
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith("--- ") and not raw.startswith("--- /dev/null"):
+            old_paths.add(_diff_file_path(raw[4:]))
+        elif raw.startswith("+++ ") and not raw.startswith("+++ /dev/null"):
+            new_paths.add(_diff_file_path(raw[4:]))
     added_paths = new_paths - old_paths
     removed_paths = old_paths - new_paths
     for entry in file_changes:

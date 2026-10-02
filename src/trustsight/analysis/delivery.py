@@ -869,6 +869,48 @@ def install_hook_transition(diff_text: str) -> tuple[str, str, bool]:
     return old_hook, new_hook, hook_in_diff
 
 
+_FLOATING_PATH_RE = re.compile(r"/(?:latest|HEAD)(?:/|$)")
+
+
+def _pinning_of(url: str) -> str:
+    """``"pinned"`` or ``"floating"`` for one source URL (H101).
+
+    A VCS entry is pinned by a `#commit=`/`#tag=` fragment and floating on
+    a branch ref, HEAD, or no fragment at all.  A plain archive URL is
+    floating only when it names a moving target (`/latest/`, `/HEAD`);
+    every other archive carries its version in the path by convention.
+    """
+    fragment = url.split("#", 1)[1] if "#" in url else ""
+    if url.startswith(("git+", "git://")) or fragment:
+        if fragment.startswith(("commit=", "tag=")):
+            return "pinned"
+        return "floating"
+    if _FLOATING_PATH_RE.search(url):
+        return "floating"
+    return "pinned"
+
+
+def pinning_lost(diff_text: str) -> list[tuple[str, str, str]]:
+    """``(local name, old url, new url)`` where an entry went pinned ->
+    floating (H101).
+
+    P008 flags a floating source wherever it stands; the transition rule
+    catches the moment a verifiable package becomes upstream-controlled,
+    which in a watch replay is the signal that matters.  Only same-name
+    entries on both sides compare, the H099 keying.
+    """
+    pre, post = _recipe_states(diff_text)
+    old = _source_urls_by_local_name(pre)
+    new = _source_urls_by_local_name(post)
+    lost: list[tuple[str, str, str]] = []
+    for name in sorted(set(old) & set(new)):
+        if old[name] == new[name]:
+            continue
+        if _pinning_of(old[name]) == "pinned" and _pinning_of(new[name]) == "floating":
+            lost.append((name, old[name], new[name]))
+    return lost
+
+
 def _collect_writes(body: str, fn: str) -> list[tuple[str, str]]:
     """Return ``(kind, path)`` pairs for write commands on *body*.
 

@@ -25,6 +25,7 @@ from .composition import _recon_findings
 from .delivery import (
     _delivery_findings,
     install_hook_transition,
+    pinning_lost,
     source_name_host_swaps,
 )
 from .dependencies import _dependency_findings
@@ -553,6 +554,18 @@ def _structural_findings(
             + ("; hook script is in this diff" if hook_in_diff else ""),
             line=find_line_in_diff(diff_text, r"^[+\s]*install="),
             old=old_hook, new=new_hook)
+
+    # H101 - a verifiable source becomes a moving target.  P008 says where
+    # a floating source stands; this says the package *lost* pinning,
+    # which is the transition a watch replay exists to catch.
+    lost = pinning_lost(diff_text)
+    if lost:
+        name, old_url, new_url = lost[0]
+        add("H101", "Source Pinning Lost", "MEDIUM", "integrity",
+            f"source '{name}' was pinned and now tracks a moving target: "
+            f"{old_url} -> {new_url}",
+            line=find_line_in_diff(diff_text, re.escape(new_url[:80])),
+            local_name=name, old_url=old_url, new_url=new_url)
 
     _unread_carrier_findings(diff_text, version_moved, add)
 

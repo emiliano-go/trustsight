@@ -768,6 +768,107 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
     return frozenset(basenames)
 
 
+# ---------------------------------------------------------------------------
+# Recipe-state transitions (typed core: pre/post RecipeDoc over the diff)
+# ---------------------------------------------------------------------------
+
+_SOURCE_ARRAY_NAME_RE = re.compile(r"^source(?:_[a-z0-9_]+)?$")
+_URL_HOST_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://([^/'\"]+)")
+
+
+def _recipe_states(diff_text: str):
+    """The ``(pre, post)`` RecipeDocs of what the diff shows.
+
+    A diff shows hunks, not a file, so both states are partial: they answer
+    change questions (what did this array or scalar gain) and nothing else.
+    """
+    from ..recipedoc import parse_recipe
+
+    doc = parse_diff_lines(split_lines(diff_text))
+    return (
+        parse_recipe("\n".join(doc.pre_lines())),
+        parse_recipe("\n".join(doc.post_lines())),
+    )
+
+
+def _source_urls_by_local_name(recipe) -> dict[str, str]:
+    """``local name -> url`` for every ``source*`` array the recipe resolved.
+
+    The local name is the ``name::url`` rename when present, else the URL's
+    basename, which is what makepkg calls the downloaded file either way.
+    Only http(s) entries key in: a bare local file has no host to swap.
+    """
+    out: dict[str, str] = {}
+    for array, entries in recipe.arrays.items():
+        if not _SOURCE_ARRAY_NAME_RE.match(array):
+            continue
+        for entry in entries:
+            name, sep, url = entry.partition("::")
+            if not sep:
+                url = name
+                name = _source_basename(url)
+            if not name or not _URL_HOST_RE.match(url):
+                continue
+            # Last occurrence wins: a diff fragment can show a name twice,
+            # and the one that changed is the later one.
+            out[name] = url
+    return out
+
+
+def _registered_domain_of(url: str) -> str:
+    host = _URL_HOST_RE.match(url)
+    if not host:
+        return ""
+    from .structural import _registered_domain
+
+    return _registered_domain(host.group(1))
+
+
+def source_name_host_swaps(diff_text: str) -> list[tuple[str, str, str, str, str]]:
+    """``(local name, old host, new host, old domain, new domain)`` where
+    the name survived but the registered domain moved (H099).
+
+    makepkg's source cache keys on the local name, so renaming the server
+    under a kept name refetches nothing a reviewer would recognise as new:
+    the quiet-swap attack.  Only names visible on both sides of the diff
+    compare, so a partially shown array cannot pair a name with the wrong
+    URL.
+    """
+    pre, post = _recipe_states(diff_text)
+    old = _source_urls_by_local_name(pre)
+    new = _source_urls_by_local_name(post)
+    swaps: list[tuple[str, str, str, str, str]] = []
+    for name in sorted(set(old) & set(new)):
+        if old[name] == new[name]:
+            continue
+        old_host_m, new_host_m = _URL_HOST_RE.match(old[name]), _URL_HOST_RE.match(new[name])
+        old_host = old_host_m.group(1) if old_host_m else ""
+        new_host = new_host_m.group(1) if new_host_m else ""
+        old_dom = _registered_domain_of(old[name])
+        new_dom = _registered_domain_of(new[name])
+        if old_dom and new_dom and old_dom != new_dom:
+            swaps.append((name, old_host, new_host, old_dom, new_dom))
+    return swaps
+
+
+def install_hook_transition(diff_text: str) -> tuple[str, str, bool]:
+    """``(old install=, new install=, hook script in this diff)`` (H100).
+
+    An ``install=`` scalar appearing or retargeting hands root to a hook
+    that was not there before; H017 inspects hook *content*, nothing
+    watched the declaration itself.
+    """
+    pre, post = _recipe_states(diff_text)
+    old_hook = pre.scalars.get("install", "")
+    new_hook = post.scalars.get("install", "")
+    doc = parse_diff_lines(split_lines(diff_text))
+    hook_in_diff = any(
+        f.path.endswith(".install") and f.status != "removed"
+        for f in doc.files
+    )
+    return old_hook, new_hook, hook_in_diff
+
+
 def _collect_writes(body: str, fn: str) -> list[tuple[str, str]]:
     """Return ``(kind, path)`` pairs for write commands on *body*.
 

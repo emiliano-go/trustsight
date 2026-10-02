@@ -22,7 +22,11 @@ from .build import (
     _sudo_findings,
 )
 from .composition import _recon_findings
-from .delivery import _delivery_findings
+from .delivery import (
+    _delivery_findings,
+    install_hook_transition,
+    source_name_host_swaps,
+)
 from .dependencies import _dependency_findings
 from .ioc import _ioc_findings
 from .network import (
@@ -521,6 +525,34 @@ def _structural_findings(
             f"URLs changed: {removed} -> {added}",
             line=find_line_in_diff(diff_text, r"source(?:_[a-z0-9_]+)?\s*=\s*\("),
             added=str(added), removed=str(removed))
+
+    # H099 - the quiet swap: the local name a reviewer recognises stays,
+    # the server behind it changes.  Suppressed on a version move, where a
+    # new host is the ordinary shape of an upstream that relocated.
+    if not version_moved:
+        swaps = source_name_host_swaps(diff_text)
+        if swaps:
+            name, old_host, new_host, old_dom, new_dom = swaps[0]
+            add("H099", "Source Host Swapped Under A Kept Local Name", "HIGH",
+                "source",
+                f"source '{name}' moved from {old_host} to {new_host} "
+                f"with no version change",
+                line=find_line_in_diff(diff_text, re.escape(new_host)),
+                local_name=name, old_domain=old_dom, new_domain=new_dom,
+                old_host=old_host, new_host=new_host)
+
+    # H100 - a root-running hook appears or is retargeted.  HIGH when the
+    # hook script itself ships in the same diff, MEDIUM when the
+    # declaration alone moves (the script may predate it).
+    old_hook, new_hook, hook_in_diff = install_hook_transition(diff_text)
+    if new_hook and old_hook != new_hook:
+        add("H100", "Install Hook Added Or Retargeted",
+            "HIGH" if hook_in_diff else "MEDIUM", "installer",
+            (f"install hook retargeted: {old_hook} -> {new_hook}" if old_hook
+             else f"install hook added: {new_hook}")
+            + ("; hook script is in this diff" if hook_in_diff else ""),
+            line=find_line_in_diff(diff_text, r"^[+\s]*install="),
+            old=old_hook, new=new_hook)
 
     _unread_carrier_findings(diff_text, version_moved, add)
 

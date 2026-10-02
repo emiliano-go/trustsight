@@ -76,10 +76,10 @@ def test_payload_carries_the_alerts_and_the_cycle_counts():
     assert payload["over_threshold"] == []
 
 
-def test_over_threshold_marks_the_payload_urgent():
+def test_over_threshold_stays_at_the_default_priority():
     cycle = CycleResult(over_threshold=[("hot-pkg", 45), ("warm-pkg", 31)])
     payload = alert_payload(cycle)
-    assert payload["priority"] == "urgent"
+    assert payload["priority"] == "default"
     assert payload["over_threshold"] == [
         {"package": "hot-pkg", "score": 45,
          "aur": "https://aur.archlinux.org/packages/hot-pkg"},
@@ -126,7 +126,7 @@ def test_the_title_and_tags_reach_the_headers(receiver):
     post_webhook(receiver.url, alert_payload(cycle))
     headers = receiver.headers_seen[0]
     assert headers.get("Title") == "TrustSight: 1 package(s) over threshold (2026-05-01)"
-    assert headers.get("Tags") == "rotating_light"
+    assert headers.get("Tags") == "eye"
 
 
 def test_the_heartbeat_beats_low_and_daily():
@@ -163,12 +163,13 @@ def test_the_heartbeat_beats_low_and_daily():
         receiver.stop()
 
 
-def test_urgent_payload_carries_the_ntfy_priority_header(receiver):
+def test_an_alert_never_carries_the_ntfy_priority_header(receiver):
+    """The Priority: 5 tier paged at night; alerts stay at the default."""
     cycle = CycleResult(over_threshold=[("hot-pkg", 45)])
     post_webhook(receiver.url, alert_payload(cycle))
     [(path, body)] = receiver.requests
-    assert body["priority"] == "urgent"
-    assert receiver.headers_seen[0].get("Priority") == "5"
+    assert body["priority"] == "default"
+    assert receiver.headers_seen[0].get("Priority") is None
 
 
 def test_default_payload_carries_no_priority_header(receiver):
@@ -241,21 +242,21 @@ def test_a_watch_cycle_with_alerts_posts_once(monkeypatch, receiver):
     ]
 
 
-def test_an_ioc_match_alone_notifies_at_max_priority(receiver):
+def test_an_ioc_match_alone_notifies(receiver):
     """The IOC tier reports outside the score, so a known-bad match on a
     clean-looking package never crosses the alerting bar - and it is
     exactly the package the watcher exists for."""
     cycle = CycleResult(ioc_hits=[("bad-pkg", "hash:deadbeef")])
     assert maybe_notify(cycle, receiver.url) is True
     [(path, body)] = receiver.requests
-    assert body["priority"] == "urgent"
+    assert body["priority"] == "default"
     assert "IOC" in body["title"]
     assert body["ioc_matches"] == [{
         "package": "bad-pkg",
         "indicator": "hash:deadbeef",
         "aur": "https://aur.archlinux.org/packages/bad-pkg",
     }]
-    assert receiver.headers_seen[0].get("Priority") == "5"
+    assert receiver.headers_seen[0].get("Priority") is None
 
 
 def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
@@ -273,4 +274,4 @@ def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
     result = CliRunner().invoke(app, ["full-aur", "--notify", receiver.url])
     assert result.exit_code == 0, result.output
     assert len(receiver.requests) == 1
-    assert receiver.requests[0][1]["priority"] == "urgent"
+    assert receiver.requests[0][1]["priority"] == "default"

@@ -103,10 +103,10 @@ version transition, the AUR change date and the rules that fired. While a
 
 The corpus path fetches recipes over cgit rather than cloning, so there is
 no commit id to report; the AUR `LastModified` and the version transition
-are the anchors that carry the same information. The document is `urgent`
-whenever `over_threshold` is non-empty, which is what sends ntfy
-`Priority: 5`; `title` lands in the notification header on ntfy, with a tag
-for the level.
+are the anchors that carry the same information. `title` lands in the notification header on ntfy, with a tag for the
+level. Alerts never carry a priority: an over-threshold package is worth a
+quiet read in the morning, not a page at night; only the daily heartbeat
+sets one (Priority 2, low).
 
 Once a day the watcher also sends a low-priority heartbeat
 (`trustsight.heartbeat`, ntfy `Priority: 2`) with the cycle counts and,

@@ -42,12 +42,11 @@ def alert_payload(cycle) -> dict:
     without asking again.  ``over_threshold`` carries the packages that
     scored above the alerting bar, each with the context a notification is
     for: the version transition, the AUR change date, the rules that
-    fired and a link to the package page.  ``priority`` is "urgent" when
-    the list is non-empty: those are the packages outside everything the
-    benign corpus does.  While backfilling, ``day`` names the AUR day
-    being replayed.
+    fired and a link to the package page.  ``priority`` is always
+    "default": the urgent tier (ntfy Priority 5) paged at night, which is
+    worse than a quiet panel in the morning.  While backfilling, ``day``
+    names the AUR day being replayed.
     """
-    urgent = bool(cycle.over_threshold) or bool(getattr(cycle, "ioc_hits", []))
     detail = getattr(cycle, "detail", {}) or {}
     day = getattr(cycle, "backfill_day", "") or ""
     over = []
@@ -85,7 +84,7 @@ def alert_payload(cycle) -> dict:
         "event": "trustsight.alerts",
         "tool": "trustsight",
         "title": title,
-        "priority": "urgent" if urgent else "default",
+        "priority": "default",
         "cycle": {
             "added": cycle.added,
             "changed": cycle.changed,
@@ -131,8 +130,9 @@ def heartbeat_payload(cycle) -> dict:
     return payload
 
 
+# Alerts never carry Priority: the urgent tier (5) pages at night, which
+# is worse than a quiet panel in the morning.  The heartbeat alone stays low.
 _PRIORITY_HEADERS = {
-    "urgent": {"Priority": "5", "Tags": "rotating_light"},
     "low": {"Priority": "2", "Tags": "hourglass"},
     "default": {"Tags": "eye"},
 }

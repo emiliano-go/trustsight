@@ -266,3 +266,32 @@ def naming_cluster_annotation(triggered_rules: list[dict], config=None) -> dict 
         "match": f"{len(present)} naming/deception signals: {', '.join(present)}",
         "params": {"count": len(present), "members": ", ".join(present)},
     })
+
+
+# ---------------------------------------------------------------------------
+# H102 - maintainer change with a signing-key change
+# ---------------------------------------------------------------------------
+
+
+def maintainer_keyring_composition(
+    triggered_rules: list[dict], maintainer_changed: bool
+) -> dict | None:
+    """H102: the maintainer changed and the keyring moved in the same diff.
+
+    The xz shape: a new maintainer plus a `validpgpkeys` change means the
+    person now able to sign the sources is not the person the keyring was
+    built for.  Each fact scores on its own (H078, the maintainer tier);
+    the conjunction is the attack, so it stacks HIGH the way X007 stacks
+    its members.  H078's own detection stands in for the keyring delta,
+    the same member-rule composition H098 uses.
+    """
+    if not maintainer_changed:
+        return None
+    if not any(r.get("rule_id") == "H078" for r in triggered_rules):
+        return None
+    return stamp({
+        "rule_id": "H102", "name": "Maintainer Change With Signing Key Change",
+        "severity": "HIGH", "category": "meta",
+        "match": "maintainer changed and validpgpkeys moved in the same diff",
+        "params": {"members": "maintainer, H078"},
+    })

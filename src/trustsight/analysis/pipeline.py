@@ -88,6 +88,7 @@ from .base import (
 )
 from .composition import (
     _meta_annotations,
+    maintainer_keyring_composition,
     naming_cluster_annotation,
     naming_typosquat_finding,
 )
@@ -738,6 +739,11 @@ def analyze_package(
         cluster = naming_cluster_annotation(triggered_rules, config)
         if cluster:
             triggered_rules.append(cluster)
+    # H102 composes on H078 (emitted inside _structural_findings above),
+    # so it runs here regardless of the observation-count gate.
+    keyring = maintainer_keyring_composition(triggered_rules, maintainer_changed)
+    if keyring:
+        triggered_rules.append(keyring)
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

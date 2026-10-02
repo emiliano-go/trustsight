@@ -13,7 +13,7 @@ from typing import Optional
 
 from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.buildfetch import has_unpinned_build_deps
-from ..analysis.composition import naming_cluster_annotation, naming_typosquat_finding
+from ..analysis.composition import maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.ioc_match import ioc_baseline_matches
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
@@ -521,6 +521,10 @@ def analyze_package_text(
         cluster = naming_cluster_annotation(triggered_rules, config)
         if cluster:
             triggered_rules.append(cluster)
+
+    keyring = maintainer_keyring_composition(triggered_rules, maintainer_changed)
+    if keyring:
+        triggered_rules.append(keyring)
 
     rule_ids = [r["rule_id"] for r in triggered_rules]
 

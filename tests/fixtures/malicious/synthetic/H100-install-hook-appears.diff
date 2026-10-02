@@ -1,0 +1,21 @@
+--- PKGBUILD
++++ PKGBUILD
+@@ -3,6 +3,7 @@
+
+ pkgname=demolib
+ pkgver=3.2.0
+ pkgrel=1
++install=demolib.install
+ pkgdesc="Demo library"
+ arch=('x86_64')
+ source=("https://upstream.example.org/demolib/3.2.0/demolib-3.2.0.tar.gz")
+--- /dev/null
++++ demolib.install
+@@ -0,0 +1,7 @@
++post_install() {
++  ldconfig
++}
++
++post_upgrade() {
++  ldconfig
++}

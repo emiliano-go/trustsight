@@ -1162,6 +1162,18 @@
       "X007"
     ]
   },
+  "H099-quiet-source-host-swap.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "H099"
+    ]
+  },
+  "H100-install-hook-appears.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "H100"
+    ]
+  },
   "control-benign-version-bump.diff": {
     "must_not_fire": [
       "R001",

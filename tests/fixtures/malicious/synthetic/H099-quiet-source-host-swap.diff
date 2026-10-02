@@ -1,0 +1,10 @@
+--- PKGBUILD
++++ PKGBUILD
+@@ -14,6 +14,6 @@
+
+ source=("${pkgname%-bin}-2.4.1.tar.gz::https://downloads.upstream.example.org/${pkgname%-bin}/2.4.1/${pkgname%-bin}-2.4.1.tar.gz"
+-        "${pkgname%-bin}-2.4.1.tar.gz::https://downloads.upstream.example.org/${pkgname%-bin}/2.4.1/${pkgname%-bin}-2.4.1.tar.gz"
++        "${pkgname%-bin}-2.4.1.tar.gz::https://files.mirror-cdn-example.net/${pkgname%-bin}/2.4.1/${pkgname%-bin}-2.4.1.tar.gz"
+         "${pkgname%-bin}.desktop::https://downloads.upstream.example.org/${pkgname%-bin}/2.4.1/${pkgname%-bin}.desktop")
+ sha256sums=('9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+             'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')

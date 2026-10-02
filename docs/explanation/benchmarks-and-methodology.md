@@ -52,7 +52,7 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 180 self-authored fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
+| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 182 self-authored fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
 | Separation | benign p95 stays below malicious p5 (strict) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
 | Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
 | Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |

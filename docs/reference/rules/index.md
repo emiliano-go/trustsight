@@ -38,9 +38,9 @@ generated from it by `scripts/build_rules_index.py`.
 | [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 37 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
-| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 17 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
+| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 18 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 8 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 35 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Integrity and Verification](integrity.md) | `integrity` | 36 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 3 | How recently the package or this revision appeared, independent of any diff content. |
@@ -199,6 +199,8 @@ is deliberately non-contiguous; see
 | [H096](integrity.md#h096) | Download Agent Override | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
 | [H097](integrity.md#h097) | Function Shadowing | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H098](composition.md#h098) | Naming/Deception Cluster | Heuristic | HIGH | [Composition](composition.md) |
+| [H099](integrity.md#h099) | Source Host Swapped Under A Kept Local Name | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [H100](install-and-persist.md#h100) | Install Hook Added Or Retargeted | Heuristic | HIGH/MEDIUM | [Install and Persistence](install-and-persist.md) |
 | [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |

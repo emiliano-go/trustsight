@@ -53,6 +53,7 @@ severity weights and the reserved identifier ranges.
 | [H092](#h092) | Metadata Names A Source The Recipe Does Not | HIGH |
 | [H096](#h096) | Download Agent Override | MEDIUM |
 | [H097](#h097) | Function Shadowing | HIGH |
+| [H099](#h099) | Source Host Swapped Under A Kept Local Name | HIGH |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
 | [R078](#r078) | Compression Command Override | MEDIUM |
@@ -530,6 +531,9 @@ the array either way.
 Measured across 50 real AUR repositories, no package has a `.SRCINFO` host
 its PKGBUILD does not also name.
 
+Since v0.17.2 the comparison runs on the review path as well: it used to be
+corpus-only, so a review never compared the metadata against the recipe.
+
 ### R078: Compression Command Override {#r078}
 
 - **Severity:** MEDIUM (weight 15)
@@ -615,3 +619,22 @@ redirects file inclusion. No benign PKGBUILD does any of these.
 Covers shell builtins, makepkg helpers, and common utilities. PKGBUILD
 array variables (`source`, `sha256sums`, `depends`, etc.) are excluded
 because `source=()` is a legitimate array declaration.
+
+### H099: Source Host Swapped Under A Kept Local Name {#h099}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** A `source` entry's local name is unchanged while the
+  registered domain behind it moved, and the version did not move.
+
+makepkg's source cache keys on the local name (the `name::url` rename, or
+the URL's basename), so swapping the server under a kept name refetches
+nothing and shows a reviewer a familiar filename: the quiet swap. The
+comparison is by registered domain, so a move between subdomains or CDNs
+of the same registrable domain (`cdn.example.org` to `dl.example.org`) is
+not a swap. A version bump suppresses the rule: a new release moving to a
+new host is the ordinary shape of an upstream that relocated, and C003
+already records the URL change there.
+
+Only names visible on both sides of the diff compare, so a partially shown
+array cannot pair a name with the wrong URL.

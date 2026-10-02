@@ -32,6 +32,7 @@ severity weights and the reserved identifier ranges.
 | [H089](#h089) | Packaged File Names A Build-Only Path | HIGH |
 | [H093](#h093) | Committed Config Points At A Build-Only Path | HIGH |
 | [H095](#h095) | Boot Or Image Artifact Built From The Source Tree | HIGH |
+| [H100](#h100) | Install Hook Added Or Retargeted | HIGH/MEDIUM |
 | [R007](#r007) | Install File Modification | MEDIUM |
 | [R017](#r017) | Setuid/Setgid Permission | HIGH |
 | [R052](#r052) | Dotfile Written To User Profile | HIGH |
@@ -319,3 +320,19 @@ declared or committed, H090 and H093 read it; if it is neither, it is the
 [W001](unverifiable.md#w001) boundary.
 
 None of these tools appear in the benign corpus with a build-tree argument.
+
+### H100: Install Hook Added Or Retargeted {#h100}
+
+- **Severity:** HIGH (weight 25) when the hook script ships in the same
+  diff; MEDIUM (weight 15) when only the declaration moves.
+- **Category:** `install-and-persist`
+- **Condition:** The `install=` scalar appears, or points at a different
+  hook file than before.
+
+A `.install` hook runs as root on the installer's machine. H017 inspects
+hook *content*; nothing watched the declaration itself, so a package that
+never had a hook could gain one without a finding. The two severities
+separate the shapes: a hook script arriving in the same diff as its
+declaration is the attack's committed form, while a declaration moving to
+an existing script is weaker (the script may predate the diff) and reads
+as MEDIUM.

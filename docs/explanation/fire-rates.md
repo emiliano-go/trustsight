@@ -170,6 +170,8 @@ they are not repeated here.
 | H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3739 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | H029 | Package-Name Typosquat | HIGH | 0.00 % | 0/202 pkgs | Package-name scan over corpus packages with the seeded DB. The absolute candidate floor (100 observations) and the plain-edit floor (1000) removed the prior `dosbox-x` and `electron36` false positives while keeping the confusable-edit detections (`openss1`/`openssl`, `sytsemd`/`systemd`). Well under the 30% gate. |
 | H098 | Naming/Deception Cluster | HIGH | not replayable | - | Depends on H029, which needs the seeded DB, so the stateless corpus replay does not exercise it. See the changelog for the point-in-time measurement. |
+| H099 | Source Host Swapped Under A Kept Local Name | HIGH | 0.08 % | 3/3739 | Three fires, all true-but-benign host moves under a stable version (a mirror change, a redirect consolidation). Well under the 30% gate. |
+| H100 | Install Hook Added Or Retargeted | HIGH/MED | 0.32 % | 12/3739 | Packages do gain `install=` legitimately (fonts, dkms, desktop integration); the finding is factual and marks the hook for review. In line with D003 (0.48 %). |
 | H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
 | H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 

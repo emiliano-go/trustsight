@@ -68,8 +68,17 @@ def test_simple_hunk_lines():
     others = [line for line in doc.lines if not line.is_content]
     assert [line.content for line in others] == [
         "diff --git a/PKGBUILD b/PKGBUILD", "index 111..222 100644",
+        "--- a/PKGBUILD", "+++ b/PKGBUILD", "@@ -1,3 +1,4 @@",
     ]
     assert all(line.side == "other" for line in others)
+
+
+def test_the_document_covers_every_raw_line_exactly_once():
+    # Stream fidelity: doc.lines is split_lines(text), classified.  A
+    # migrated state machine iterates doc.lines and sees exactly what its
+    # legacy walk saw, headers included.
+    doc = parse_diff(SIMPLE)
+    assert [line.raw for line in doc.lines] == SIMPLE.splitlines()
 
 
 def test_line_numbers_track_both_sides():
@@ -202,7 +211,9 @@ def test_no_newline_marker_is_structure():
     )
     doc = parse_diff(text)
     assert [line.content for line in doc.lines if line.is_content] == ["old", "new"]
-    assert sum(1 for line in doc.lines if line.side == "other") == 2
+    assert [
+        line.content for line in doc.lines if line.side == "other"
+    ].count("\\ No newline at end of file") == 2
     assert_parity(text)
 
 

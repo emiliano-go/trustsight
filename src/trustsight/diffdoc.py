@@ -265,11 +265,21 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
                 (current_file, pending_old_path,
                  _status(pending_old_path, current_file)))
             file_hunks.append([])
+            out_lines.append(DiffLine(
+                index=i, side="other", content=line, raw=line,
+                file=current_file, old_lineno=None, new_lineno=None,
+                in_hunk=False,
+            ))
             pending_file_boundary = True
             continue
         if line.startswith("--- "):
             close_hunk()
             pending_old_path = line[4:].strip()
+            out_lines.append(DiffLine(
+                index=i, side="other", content=line, raw=line,
+                file=current_file, old_lineno=None, new_lineno=None,
+                in_hunk=False,
+            ))
             pending_file_boundary = True
             continue
         m = _HUNK_HEADER_RE.match(line)
@@ -281,6 +291,11 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
             new_lineno = hunk_new_start
             hunk_expected = _declared_new_count(line)
             in_hunk = True
+            out_lines.append(DiffLine(
+                index=i, side="other", content=line, raw=line,
+                file=current_file, old_lineno=None, new_lineno=None,
+                in_hunk=False,
+            ))
             pending_hunk_boundary = True
             continue
         if line.startswith("+"):

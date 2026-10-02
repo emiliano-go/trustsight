@@ -37,6 +37,11 @@ _ARRAY_START_RE = re.compile(
     r"^\s*(?:" + "|".join(DEP_FIELDS) + r")(?:_[a-z0-9_]+)?\s*=\s*\("
 )
 
+# Any other array assignment (`sha256sums=(`, `source=(`, ...).  It carries
+# no dependency names, but seeing one while an array is open marks the same
+# hunk boundary as a tracked opener would.
+_UNTRACKED_ARRAY_START_RE = re.compile(r"^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*\(")
+
 _QUOTED_RE = re.compile(r"""['"]([^'"]+)['"]""")
 
 # Arch package names are lowercase alphanumerics plus @._+- and must start
@@ -230,14 +235,21 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
             continue
         body = line.content if line.side in ("add", "remove") else line.raw
 
-        if field is None:
-            match = _ARRAY_START_RE.match(body)
-            if match:
-                field = match.group(0).split("=")[0].strip().split("_")[0]
-                body = body[match.end():]
-                span = 0
-            else:
-                continue
+        match = _ARRAY_START_RE.match(body)
+        if match:
+            # A fresh opener ends whatever array an earlier hunk left open:
+            # hunks cut arrays off, and the next hunk's `sha256sums=(...)`
+            # is not a continuation of the `depends=(` the last one opened.
+            field = match.group(0).split("=")[0].strip().split("_")[0]
+            body = body[match.end():]
+            span = 0
+        elif field is None:
+            continue
+        elif _UNTRACKED_ARRAY_START_RE.match(body):
+            # Same boundary for an array we do not track (sha256sums,
+            # source, ...): the open array ends here, nothing to follow.
+            field = None
+            continue
         else:
             # A diff is a fragment: a hunk can open an array whose closing
             # paren is simply not in the patch.  Without a bound, every

@@ -11,6 +11,7 @@ import json
 import logging
 import re
 
+from ..recipedoc import _function_body_segments
 from ..tokenizer import split_lines
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -309,38 +310,20 @@ def _extract_host_org(url: str, hosts: set[str], orgs: set[str]) -> None:
 
 
 def _build_function_bodies(pkgbuild: str) -> str:
-    """Concatenate build(), prepare(), and package() function bodies."""
-    in_func = False
-    depth = 0
-    lines: list[str] = []
-    targets = ("build()", "prepare()", "package()")
-    for line in split_lines(pkgbuild):
-        stripped = line.strip()
-        if not in_func:
-            if any(stripped.startswith(t) for t in targets):
-                if "{" not in stripped:
-                    in_func = True  # the brace arrives on a later line
-                    depth = 0
-                    continue
-                depth = stripped.count("{") - stripped.count("}")
-                opening = stripped.split("{", 1)[1]
-                if depth <= 0:
-                    # one-line body, e.g. build() { make; } - record it and
-                    # stay closed, or every later line is swallowed as this
-                    # function's body
-                    opening = opening.rsplit("}", 1)[0]
-                else:
-                    in_func = True
-                if opening.strip():
-                    lines.append(opening)
-            continue
-        depth += stripped.count("{")
-        depth -= stripped.count("}")
-        if depth <= 0:
-            in_func = False
-            continue
-        lines.append(line)
-    return "\n".join(lines)
+    """Concatenate build(), prepare(), and package() function bodies.
+
+    A projection of the typed recipe (:mod:`trustsight.recipedoc`): the
+    brace counting and one-line-body handling live there now.  One
+    deliberate divergence from the text walk this replaces: a header
+    spelled ``build ()`` (whitespace before the parens, which bash
+    accepts) is recognised here and was not before; the direction is
+    additive, so a body the walk missed is scanned now, never the
+    reverse.
+    """
+    return "\n".join(
+        body for name, body in _function_body_segments(split_lines(pkgbuild))
+        if name in ("build", "prepare", "package")
+    )
 
 
 # ---------------------------------------------------------------------------

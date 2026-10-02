@@ -40,6 +40,7 @@ from ..fetcher import (
     get_maintainer_from_commit,
     get_pkgbuild_at_commit,
     get_pkgver_from_head,
+    get_srcinfo_at_commit,
     walk_bounded,
 )
 from ..findings import stamp
@@ -638,6 +639,21 @@ def analyze_package(
     binary_meta = binary_metadata_paths(repo, old_commit, head_commit)
     if binary_meta:
         triggered_rules.append(_binary_metadata_finding(binary_meta))
+    # H092 on the review path: the generated metadata and the recipe must
+    # describe the same package.  Host-level, the comparison measured
+    # FP-free on the corpus path, where it has always run.
+    from ..full_aur.properties import metadata_divergence
+
+    for host in metadata_divergence(
+        head_pkgbuild, get_srcinfo_at_commit(repo, head_commit)
+    ):
+        triggered_rules.append(stamp({
+            "rule_id": "H092",
+            "name": "Metadata Names A Source The Recipe Does Not",
+            "severity": "HIGH", "category": "integrity",
+            "match": f".SRCINFO names {host}, which the PKGBUILD never does",
+            "params": {"host": host},
+        }))
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,

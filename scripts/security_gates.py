@@ -1781,6 +1781,9 @@ _ANALYSIS_FETCH_ALLOWED = {
     "get_head_commit",
     "get_maintainer_from_commit",
     "get_pkgbuild_at_commit",
+    # Same shape as get_pkgbuild_at_commit: a tree read keyed by commit id,
+    # for the H092 metadata/recipe comparison on the review path.
+    "get_srcinfo_at_commit",
     "get_pkgver_from_head",
     "last_fetch_time",
     # Local only, despite living in discovery.py next to the RPC: compares

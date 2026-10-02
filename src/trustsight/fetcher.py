@@ -507,6 +507,22 @@ def get_pkgbuild_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
     return _read_blob(tree, "PKGBUILD")
 
 
+def get_srcinfo_at_commit(repo: pygit2.Repository, commit_oid: str) -> str:
+    """Return the .SRCINFO text at *commit_oid*, or "" when unavailable.
+
+    H092 compares the generated metadata against the recipe on the review
+    path, the same comparison the full-AUR corpus path has always run.
+    """
+    try:
+        commit = repo.get(commit_oid)
+        tree = commit.tree
+    except (KeyError, AttributeError, TypeError, ValueError):
+        return ""
+    if tree is None:
+        return ""
+    return _read_blob(tree, ".SRCINFO")
+
+
 def get_maintainer_from_repo(repo: pygit2.Repository) -> Optional[str]:
     """Return the maintainer from *repo*'s HEAD PKGBUILD or .SRCINFO."""
     try:

@@ -57,7 +57,7 @@ def test_simple_hunk_structure():
 
 def test_simple_hunk_lines():
     doc = parse_diff(SIMPLE)
-    sides = [(line.side, line.content) for line in doc.lines]
+    sides = [(line.side, line.content) for line in doc.lines if line.is_content]
     assert sides == [
         ("context", "pkgname=foo"),
         ("remove", "pkgver=1.0"),
@@ -65,6 +65,11 @@ def test_simple_hunk_lines():
         ("context", "pkgrel=1"),
         ("add", "source=(https://example.com/foo.tar.gz)"),
     ]
+    others = [line for line in doc.lines if not line.is_content]
+    assert [line.content for line in others] == [
+        "diff --git a/PKGBUILD b/PKGBUILD", "index 111..222 100644",
+    ]
+    assert all(line.side == "other" for line in others)
 
 
 def test_line_numbers_track_both_sides():
@@ -88,7 +93,9 @@ def test_index_is_the_raw_line_index():
     raw = SIMPLE.splitlines()
     for line in doc.lines:
         assert raw[line.index] == line.raw
-    assert set(doc.line_map()) == {line.index for line in doc.lines}
+    assert set(doc.line_map()) == {
+        line.index for line in doc.lines if line.is_content
+    }
 
 
 def test_post_and_pre_reconstruction():
@@ -171,7 +178,12 @@ def test_dash_dash_dash_content_line_is_not_a_header():
 def test_non_matching_at_lines_are_structure():
     text = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n@@ not a header\n-a\n+b\n"
     doc = parse_diff(text)
-    assert all(line.content != "@ not a header" for line in doc.lines)
+    junk = [line for line in doc.lines if line.raw == "@@ not a header"]
+    assert junk and junk[0].side == "other"
+    assert all(
+        line.content != "@ not a header"
+        for line in doc.lines if line.is_content
+    )
     assert_parity(text)
 
 
@@ -189,7 +201,8 @@ def test_no_newline_marker_is_structure():
         "\\ No newline at end of file\n"
     )
     doc = parse_diff(text)
-    assert [line.content for line in doc.lines] == ["old", "new"]
+    assert [line.content for line in doc.lines if line.is_content] == ["old", "new"]
+    assert sum(1 for line in doc.lines if line.side == "other") == 2
     assert_parity(text)
 
 
@@ -199,7 +212,9 @@ def test_binary_marker_is_structure():
         "Binary files a/PKGBUILD and b/PKGBUILD differ\n"
     )
     doc = parse_diff(text)
-    assert doc.lines == ()
+    assert not any(line.is_content for line in doc.lines)
+    assert all(line.side == "other" for line in doc.lines)
+    assert doc.post_lines() == []
     assert_parity(text)
 
 
@@ -256,7 +271,7 @@ def test_hunk_header_without_counts():
 def test_parse_diff_lines_skips_the_split():
     lines = ["--- a/PKGBUILD", "+++ b/PKGBUILD", "@@ -1 +1 @@", "-a", "+b"]
     doc = parse_diff_lines(lines)
-    assert [line.content for line in doc.lines] == ["a", "b"]
+    assert [line.content for line in doc.lines if line.is_content] == ["a", "b"]
 
 
 def test_in_hunk_survives_a_file_header_legacy_compat():
@@ -270,6 +285,22 @@ def test_in_hunk_survives_a_file_header_legacy_compat():
     stray = [line for line in doc.lines if line.content == "stray"][0]
     assert stray.in_hunk
     assert doc.line_map()[stray.index] == ("other.py", stray.new_lineno)
+    assert_parity(text)
+
+
+def test_boundary_flags_mark_what_the_legacy_walk_saw():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-a\n+b\n"
+        "--- a/foo.install\n+++ b/foo.install\n@@ -5 +5 @@\n-c\n+d\n"
+    )
+    doc = parse_diff(text)
+    by_raw = {line.raw: line for line in doc.lines if line.is_content}
+    # The first line after a file header sees file_boundary; the first
+    # after a hunk header sees hunk_boundary.
+    assert by_raw["-a"].file_boundary and by_raw["-a"].hunk_boundary
+    assert not by_raw["+b"].file_boundary
+    assert by_raw["-c"].file_boundary and by_raw["-c"].hunk_boundary
+    assert by_raw["+d"].file_boundary is False
     assert_parity(text)
 
 

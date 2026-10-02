@@ -26,8 +26,9 @@ behaviours are preserved, not endorsed:
 The security boundary is unchanged: input text is attacker-controlled, the
 parser makes no trust decision, and nothing here guesses.  A line that is
 not diff content (``diff --git``, ``index``, ``Binary files``, ``\ No
-newline``, junk) is classified as structure and reaches no projection that
-legacy code would have fed with content.
+newline``, junk) is classified ``side="other"``: it stays in the document
+so a state machine migrating here sees exactly the lines its legacy walk
+saw, but no projection feeds it anywhere as content.
 """
 
 import re
@@ -54,19 +55,28 @@ _DEFAULT_FILE = "PKGBUILD"
 
 @dataclass(frozen=True)
 class DiffLine:
-    """One content line of a unified diff.
+    """One line of a unified diff.
 
-    ``side`` is ``"add"``, ``"remove"`` or ``"context"``.  ``content`` is
-    the line's text with the one-character diff prefix stripped; ``raw`` is
-    the line as it appeared, prefix included, for readers whose patterns
-    anchor on it.  ``index`` is the 0-based index into the diff's raw
-    lines, which is the key ``map_diff_lines`` used.
+    ``side`` is ``"add"``, ``"remove"``, ``"context"`` or ``"other"`` (a
+    structure or junk line: ``diff --git``, ``index``, ``Binary files``,
+    ``\\ No newline``, a bare ``@@`` that fails the hunk grammar, an empty
+    line).  For the three content sides, ``content`` is the line's text
+    with the one-character diff prefix stripped; for ``"other"`` it is the
+    whole line, which has no prefix.  ``raw`` is the line as it appeared,
+    prefix included, for readers whose patterns anchor on it.  ``index``
+    is the 0-based index into the diff's raw lines, which is the key
+    ``map_diff_lines`` used.
 
-    ``old_lineno``/``new_lineno`` are set only when the line sits inside a
-    hunk (``in_hunk``); both advance per the hunk header.  A removal line's
-    ``new_lineno`` is the number the next post-diff line will carry, kept
-    for parity with the legacy line map; its real position is
+    ``old_lineno``/``new_lineno`` are set only for content lines inside a
+    hunk (``in_hunk``); both advance per the hunk header.  A removal
+    line's ``new_lineno`` is the number the next post-diff line will
+    carry, kept for parity with the legacy line map; its real position is
     ``old_lineno``.
+
+    ``file_boundary``/``hunk_boundary`` mark the first line after a file
+    header (``+++ ``/``--- ``) or a hunk header: those lines are not in
+    ``DiffDoc.lines`` themselves, and a state machine migrating here needs
+    to see the boundary exactly where its legacy walk saw the header.
     """
 
     index: int
@@ -77,6 +87,13 @@ class DiffLine:
     old_lineno: int | None
     new_lineno: int | None
     in_hunk: bool
+    file_boundary: bool = False
+    hunk_boundary: bool = False
+
+    @property
+    def is_content(self) -> bool:
+        """Whether the line is diff content (not structure or junk)."""
+        return self.side != "other"
 
 
 @dataclass(frozen=True)
@@ -114,12 +131,13 @@ class DiffFile:
 
 @dataclass(frozen=True)
 class DiffDoc:
-    """A parsed unified diff: the files, and every content line in order.
+    """A parsed unified diff: the files, and every line in order.
 
-    ``lines`` flattens all hunks plus any content lines seen outside a
-    hunk (malformed input still yields data, classified, never dropped).
-    The projections below reproduce the legacy readers byte for byte; the
-    parity harness proves it over the locked corpus.
+    ``lines`` flattens all hunks plus any lines seen outside a hunk,
+    including structure and junk lines (``side="other"``): malformed input
+    still yields data, classified, never dropped.  The projections below
+    reproduce the legacy readers byte for byte; the parity harness proves
+    it over the locked corpus.
     """
 
     files: tuple[DiffFile, ...]
@@ -134,24 +152,30 @@ class DiffDoc:
         return {
             line.index: (line.file, line.new_lineno)
             for line in self.lines
-            if line.in_hunk
+            if line.in_hunk and line.is_content
         }
 
     def post_lines(self) -> list[str]:
         """The post-diff file text: context and addition contents.
 
-        Projection of ``differ._post_diff_lines``: header lines never
-        contribute, and a content line outside any hunk still counts, as
-        the legacy walk allowed.
+        Projection of ``differ._post_diff_lines``: header and junk lines
+        never contribute, and a content line outside any hunk still
+        counts, as the legacy walk allowed.
         """
-        return [line.content for line in self.lines if line.side != "remove"]
+        return [
+            line.content for line in self.lines
+            if line.side in ("add", "context")
+        ]
 
     def pre_lines(self) -> list[str]:
         """The pre-diff file text: context and removal contents.
 
         Projection of ``differ._pre_diff_lines``.
         """
-        return [line.content for line in self.lines if line.side != "add"]
+        return [
+            line.content for line in self.lines
+            if line.side in ("remove", "context")
+        ]
 
     def added_lines(self) -> list[DiffLine]:
         """Content lines on the ``+`` side, wherever they appeared."""
@@ -205,6 +229,8 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
     hunk_new_start = 0
     hunk_lines: list[DiffLine] = []
     hunk_expected: int | None = None
+    pending_file_boundary = False
+    pending_hunk_boundary = False
 
     def close_hunk() -> None:
         nonlocal hunk_lines, hunk_expected
@@ -239,10 +265,12 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
                 (current_file, pending_old_path,
                  _status(pending_old_path, current_file)))
             file_hunks.append([])
+            pending_file_boundary = True
             continue
         if line.startswith("--- "):
             close_hunk()
             pending_old_path = line[4:].strip()
+            pending_file_boundary = True
             continue
         m = _HUNK_HEADER_RE.match(line)
         if m:
@@ -253,6 +281,7 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
             new_lineno = hunk_new_start
             hunk_expected = _declared_new_count(line)
             in_hunk = True
+            pending_hunk_boundary = True
             continue
         if line.startswith("+"):
             side = "add"
@@ -262,7 +291,18 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
             side = "context"
         else:
             # ``diff --git``, ``index``, ``Binary files``, ``\ No newline``,
-            # empty lines, and bare ``@@``-junk: structure, not content.
+            # empty lines, and bare ``@@``-junk: kept, classified as
+            # structure, so a migrated state machine sees the same lines
+            # its legacy walk saw.
+            entry = DiffLine(
+                index=i, side="other", content=line, raw=line,
+                file=current_file, old_lineno=None, new_lineno=None,
+                in_hunk=in_hunk,
+                file_boundary=pending_file_boundary,
+                hunk_boundary=pending_hunk_boundary,
+            )
+            pending_file_boundary = pending_hunk_boundary = False
+            out_lines.append(entry)
             continue
         if in_hunk:
             if side == "remove":
@@ -281,7 +321,10 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
             index=i, side=side, content=line[1:], raw=line,
             file=current_file, old_lineno=old_no, new_lineno=new_no,
             in_hunk=in_hunk,
+            file_boundary=pending_file_boundary,
+            hunk_boundary=pending_hunk_boundary,
         )
+        pending_file_boundary = pending_hunk_boundary = False
         out_lines.append(entry)
         if in_hunk:
             hunk_lines.append(entry)

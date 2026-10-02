@@ -81,9 +81,86 @@ def test_over_threshold_marks_the_payload_urgent():
     payload = alert_payload(cycle)
     assert payload["priority"] == "urgent"
     assert payload["over_threshold"] == [
-        {"package": "hot-pkg", "score": 45},
-        {"package": "warm-pkg", "score": 31},
+        {"package": "hot-pkg", "score": 45,
+         "aur": "https://aur.archlinux.org/packages/hot-pkg"},
+        {"package": "warm-pkg", "score": 31,
+         "aur": "https://aur.archlinux.org/packages/warm-pkg"},
     ]
+    assert "day" not in payload
+
+
+def test_the_payload_carries_what_fired_and_when():
+    """A notification should say what happened, not only that it did: the
+    version transition, the AUR change date, the rules, and the replayed
+    day while backfilling."""
+    cycle = CycleResult(
+        over_threshold=[("hot-pkg", 45)],
+        backfilling=True,
+        backfill_day="2026-05-01",
+        detail={
+            "hot-pkg": {
+                "score": 45,
+                "old_version": "1.0",
+                "new_version": "1.1",
+                "last_modified": 1777593600,
+                "rules": ["H001", "R001"],
+            }
+        },
+    )
+    payload = alert_payload(cycle)
+    assert payload["day"] == "2026-05-01"
+    assert payload["title"] == "TrustSight: 1 package(s) over threshold (2026-05-01)"
+    assert payload["over_threshold"] == [{
+        "package": "hot-pkg",
+        "score": 45,
+        "aur": "https://aur.archlinux.org/packages/hot-pkg",
+        "version": "1.0 -> 1.1",
+        "last_modified": "2026-05-01 00:00 UTC",
+        "rules": ["H001", "R001"],
+    }]
+
+
+def test_the_title_and_tags_reach_the_headers(receiver):
+    cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
+                        backfill_day="2026-05-01")
+    post_webhook(receiver.url, alert_payload(cycle))
+    headers = receiver.headers_seen[0]
+    assert headers.get("Title") == "TrustSight: 1 package(s) over threshold (2026-05-01)"
+    assert headers.get("Tags") == "rotating_light"
+
+
+def test_the_heartbeat_beats_low_and_daily():
+    from trustsight.notify import HEARTBEAT_SECONDS, maybe_heartbeat
+    from trustsight.full_aur.pipeline import run_watch
+
+    assert HEARTBEAT_SECONDS == 86400
+    receiver = _Receiver()
+    try:
+        assert maybe_heartbeat(
+            CycleResult(backfill_day="2026-05-02"), receiver.url) is True
+        body = receiver.requests[0][1]
+        assert body["event"] == "trustsight.heartbeat"
+        assert body["priority"] == "low"
+        assert body["day"] == "2026-05-02"
+        assert receiver.headers_seen[0].get("Priority") == "2"
+    finally:
+        receiver.stop()
+
+    receiver = _Receiver()
+    try:
+        outcomes = iter([CycleResult(), CycleResult()])
+        import unittest.mock as mock
+        import trustsight.full_aur.pipeline as pipeline_mod
+        with mock.patch.object(pipeline_mod, "run_baseline_build",
+                               lambda **kwargs: next(outcomes)):
+            run_watch(interval=60, cycles=2, sleep=lambda s: None,
+                      notify_url=receiver.url)
+        # One beat for the first cycle; the second is inside the same day.
+        beats = [b for _p, b in receiver.requests
+                 if b.get("event") == "trustsight.heartbeat"]
+        assert len(beats) == 1
+    finally:
+        receiver.stop()
 
 
 def test_urgent_payload_carries_the_ntfy_priority_header(receiver):
@@ -156,7 +233,44 @@ def test_a_watch_cycle_with_alerts_posts_once(monkeypatch, receiver):
     results = run_watch(interval=60, cycles=2, sleep=lambda s: None,
                         notify_url=receiver.url)
     assert len(results) == 2
-    assert len(receiver.requests) == 1
-    assert receiver.requests[0][1]["alerts"] == [
+    alert_docs = [b for _p, b in receiver.requests
+                  if b.get("event") == "trustsight.alerts"]
+    assert len(alert_docs) == 1
+    assert alert_docs[0]["alerts"] == [
         {"package": "pkg-a", "rule_id": "H088"}
     ]
+
+
+def test_an_ioc_match_alone_notifies_at_max_priority(receiver):
+    """The IOC tier reports outside the score, so a known-bad match on a
+    clean-looking package never crosses the alerting bar - and it is
+    exactly the package the watcher exists for."""
+    cycle = CycleResult(ioc_hits=[("bad-pkg", "hash:deadbeef")])
+    assert maybe_notify(cycle, receiver.url) is True
+    [(path, body)] = receiver.requests
+    assert body["priority"] == "urgent"
+    assert "IOC" in body["title"]
+    assert body["ioc_matches"] == [{
+        "package": "bad-pkg",
+        "indicator": "hash:deadbeef",
+        "aur": "https://aur.archlinux.org/packages/bad-pkg",
+    }]
+    assert receiver.headers_seen[0].get("Priority") == "5"
+
+
+def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
+    """python-npx scored 40 inside a bootstrap chunk and nobody was told:
+    the notify call lived only in the watch loop.  The single-shot CLI
+    path posts too."""
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: CycleResult(over_threshold=[("hot-pkg", 45)]),
+    )
+    from trustsight.cli.app import app
+    from typer.testing import CliRunner
+
+    result = CliRunner().invoke(app, ["full-aur", "--notify", receiver.url])
+    assert result.exit_code == 0, result.output
+    assert len(receiver.requests) == 1
+    assert receiver.requests[0][1]["priority"] == "urgent"

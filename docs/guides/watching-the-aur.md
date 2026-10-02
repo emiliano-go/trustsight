@@ -33,6 +33,31 @@ metadata GET plus actual churn either way. Below about 15 minutes you are
 mostly re-downloading a snapshot the AUR has not regenerated; the floor is 60
 seconds (`limits.watch_min_interval`), because a shorter interval only spins.
 
+## Replaying the past with `--since`
+
+A fresh watcher only sees what changes from now on. To scan for a campaign
+that already happened, replay history instead:
+
+```bash
+trustsight full-aur --watch --since 2026-06-01 --notify https://ntfy.sh/mytopic
+```
+
+Each cycle analyses the packages whose AUR `LastModified` falls in one day
+of AUR time, empty days are skipped inside the cycle, and the replay joins
+the live delta stream when it catches up. The clock is the AUR's own
+timestamps, not wall time, so a replay of June 2026 walks June 2026 no
+matter when you start it. The cursor persists in the database: interrupt
+it, restart the container, and the replay continues from the day it
+reached.
+
+Two things to expect on a replay. It alerts through the same
+`over_threshold` bar as the live stream, so a genuinely compromised
+package pings at maximum priority; and the sweep and the adoption feed
+stay out of replay cycles, because they model the live stream and two
+years of history would only distort their baselines. A package that was
+cleaned up after the campaign scores by its *current* recipe: what
+persists is what gets flagged.
+
 ## Alerting over a webhook
 
 A watcher nobody reads is a log file. Give it a push channel and new alert
@@ -49,22 +74,53 @@ or permanently in `config.toml`:
 webhook = "https://example.invalid/hooks/aur"
 ```
 
-The document carries the cycle counts and the alerts:
+The document carries the cycle counts and the alerts. Every
+`over_threshold` entry says what happened, not only that it did: the
+version transition, the AUR change date and the rules that fired. While a
+`--since` replay runs, `day` names the AUR day being analysed.
 
 ```json
 {
   "event": "trustsight.alerts",
   "tool": "trustsight",
+  "title": "TrustSight: 1 package(s) over threshold (2026-05-01)",
+  "priority": "urgent",
+  "day": "2026-05-01",
   "cycle": {"added": 3, "changed": 41, "removed": 2, "processed": 44},
-  "alerts": [{"package": "some-pkg", "rule_id": "H088"}]
+  "alerts": [{"package": "some-pkg", "rule_id": "H088"}],
+  "over_threshold": [
+    {
+      "package": "hot-pkg",
+      "score": 45,
+      "aur": "https://aur.archlinux.org/packages/hot-pkg",
+      "version": "1.0 -> 1.1",
+      "last_modified": "2026-05-01 12:40 UTC",
+      "rules": ["H001", "R001"]
+    }
+  ]
 }
 ```
+
+The corpus path fetches recipes over cgit rather than cloning, so there is
+no commit id to report; the AUR `LastModified` and the version transition
+are the anchors that carry the same information. The document is `urgent`
+whenever `over_threshold` is non-empty, which is what sends ntfy
+`Priority: 5`; `title` lands in the notification header on ntfy, with a tag
+for the level.
+
+Once a day the watcher also sends a low-priority heartbeat
+(`trustsight.heartbeat`, ntfy `Priority: 2`) with the cycle counts and,
+while replaying, the day it has reached. Silence then has only one
+meaning: nothing found, not "the watcher died".
 
 Any receiver that accepts a JSON POST works. ntfy accepts the same POST and
 shows the document as the message text, so `--notify https://ntfy.sh/mytopic`
 is a working phone notification with no further setup. A dead receiver is
 logged and swallowed: a notification must never kill the watch loop. Cycles
-with no new alerts send nothing.
+with no new alerts send nothing. A package matching an IOC baseline entry is
+always urgent, whatever it scored: the IOC tier reports outside the
+heuristic score, so it would otherwise never cross the bar. Single-shot
+cycles (a bootstrap chunk, a plain `full-aur` run) notify like watch cycles.
 
 ## As a systemd service
 

@@ -365,6 +365,7 @@ def register_commands(app: typer.Typer):
         cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
         notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
         over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
+        since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Bootstrap or update the full-AUR baseline corpus.
@@ -379,6 +380,26 @@ def register_commands(app: typer.Typer):
         from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
         init_db()
+        since_ts = None
+        if since is not None:
+            from datetime import datetime, timezone
+            try:
+                since_ts = int(datetime.strptime(since, "%Y-%m-%d")
+                               .replace(tzinfo=timezone.utc).timestamp())
+            except ValueError:
+                msg = f"--since wants a date as YYYY-MM-DD, got {since!r}"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+            if since_ts >= int(datetime.now(timezone.utc).timestamp()):
+                msg = "--since must name a day in the past"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
         if release.offline():
             msg = "full-aur needs the AUR network channel; TRUSTSIGHT_OFFLINE is set."
             if json_output:
@@ -403,13 +424,24 @@ def register_commands(app: typer.Typer):
                 else:
                     _print_colored(msg, "red", stderr=True)
                 raise typer.Exit(code=2)
-            run_watch(interval=interval, cycles=cycles, json_output=json_output,
-                      notify_url=notify, over_threshold=over_threshold)
+            results = run_watch(interval=interval, cycles=cycles, json_output=json_output,
+                                notify_url=notify, over_threshold=over_threshold,
+                                since=since_ts)
+            # A watch that ended on a refusal never analysed anything: the
+            # single-shot path already maps that to exit 2, and the loop is
+            # the same "could not run" case.
+            if results and results[-1].refused:
+                raise typer.Exit(code=2)
             return
         result = run_baseline_build(
             resume=resume, export_path=export, sign_key=sign,
             json_output=json_output, bootstrap=bootstrap,
-            over_threshold=over_threshold,
+            over_threshold=over_threshold, since=since_ts,
         )
+        # Single-shot cycles alert too: a bootstrap chunk is where a
+        # high-scoring package is most likely to land.
+        from ..notify import maybe_notify
+
+        maybe_notify(result, notify)
         if result.refused:
             raise typer.Exit(code=2)

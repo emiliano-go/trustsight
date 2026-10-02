@@ -1106,7 +1106,23 @@ def test_full_aur_watch_invokes_the_loop(monkeypatch):
     )
     assert result.exit_code == 0, result.output
     assert seen == {"interval": 120, "cycles": 2, "json_output": False,
-                    "notify_url": None, "over_threshold": None}
+                    "notify_url": None, "over_threshold": None,
+                    "since": None}
+
+
+def test_full_aur_watch_ending_on_a_refusal_exits_2(monkeypatch):
+    """A watch that never analysed anything is 'could not run', not success:
+    the loop stops on a permanent refusal (no snapshot) and the exit code
+    says so."""
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_watch",
+        lambda **kwargs: [CycleResult(refused=True)],
+    )
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--cycles", "1"])
+    assert result.exit_code == 2
 
 
 def test_full_aur_watch_rejects_export(monkeypatch):
@@ -1406,3 +1422,16 @@ def test_forget_prune_asks_before_deleting(tmp_path, monkeypatch):
     assert "Removed 1 package(s)" in result.output
     assert get_package_id("keep") is not None
     assert get_package_id("gone") is None
+
+
+def test_full_aur_since_rejects_a_bad_date(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--since", "yesterday"])
+    assert result.exit_code == 2
+    assert "YYYY-MM-DD" in result.output
+
+
+def test_full_aur_since_rejects_a_future_date(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_OFFLINE", raising=False)
+    result = CliRunner().invoke(app, ["full-aur", "--watch", "--since", "2999-01-01"])
+    assert result.exit_code == 2

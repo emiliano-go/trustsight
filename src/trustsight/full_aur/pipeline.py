@@ -29,6 +29,7 @@ from ..analysis.base import _ensure_init
 from ..config import load_config
 from ..db import (
     get_connection,
+    get_metadata,
     record_alerts,
     get_pkgbuild_snapshot,
     introduction_rate_history,
@@ -38,6 +39,7 @@ from ..db import (
     is_reserved_name,
     save_package_profile,
     save_pkgbuild_snapshot,
+    set_metadata,
 )
 from ..schema import TemporalContext
 from ..scoring import risk_level
@@ -71,9 +73,30 @@ _FLAGGED_SCORE = 40
 # this is the lower, alerting bar.
 _OVER_BENIGN_P95 = 30
 
+# One day of AUR time per backfill cycle (see run_baseline_build's *since*).
+_SINCE_DAY_SECONDS = 86400
+_SINCE_CURSOR_KEY = "since_cursor"
+_SINCE_ORIGIN_KEY = "since_origin"
+
 # How many of them one cycle prints.  A bootstrap analyses the whole AUR,
 # and an unbounded list would bury the cluster findings under it.
 _FLAGGED_REPORT_LIMIT = 10
+
+
+def _since_cursor() -> Optional[int]:
+    """The active backfill cursor (unix seconds), or None when not replaying."""
+    raw = get_metadata(_SINCE_CURSOR_KEY)
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _set_since_cursor(value: Optional[int]) -> None:
+    set_metadata(_SINCE_CURSOR_KEY, "" if value is None else str(value))
+
 
 def _meta_snapshot_path() -> Path:
     """Where this run reads and writes the metadata snapshot.
@@ -220,6 +243,13 @@ class CycleResult:
     new_alerts: list[tuple[str, str]] = field(default_factory=list)
     flagged: list[tuple[str, int]] = field(default_factory=list)
     over_threshold: list[tuple[str, int]] = field(default_factory=list)
+    ioc_hits: list[tuple[str, str]] = field(default_factory=list)
+    backfilling: bool = False
+    # The AUR day (YYYY-MM-DD) this cycle replayed, when backfilling.
+    backfill_day: str = ""
+    # Per-package alert context: score, version transition, LastModified,
+    # firing rules - what a webhook document is built from.
+    detail: dict[str, dict] = field(default_factory=dict)
     elapsed: float = 0.0
     bootstrap: bool = False
     # True when the cycle deliberately did no work and the caller should
@@ -335,6 +365,7 @@ def run_baseline_build(
     bootstrap: bool = False,
     depth: Optional[int] = None,
     over_threshold: Optional[int] = None,
+    since: Optional[int] = None,
 ) -> CycleResult:
     """Bootstrap or update the full-AUR corpus.
 
@@ -346,6 +377,15 @@ def run_baseline_build(
     ``CycleResult.over_threshold``.  ``None`` uses the benign corpus's p95
     (published-figures.json), the point past which a score is outside
     everything the benign corpus does.
+
+    *since* (a unix timestamp) starts a backfill: instead of diffing the
+    newest metadata against the stored snapshot, the cycle replays change
+    history by AUR ``LastModified``, one day per cycle, analysing every
+    package that changed in that day's window.  The cursor persists in the
+    database, so a backfill resumes after an interruption and joins the
+    live delta when it catches up.  The sweep and the adoption feed stay
+    out of backfill cycles: they model the live stream, and replaying two
+    years into them would only distort the baselines they compute.
 
     A from-scratch bootstrap (no prior snapshot) fetches every PKGBUILD in the
     AUR, which is heavy on a shared community mirror.  It is not done by
@@ -384,7 +424,45 @@ def run_baseline_build(
     resume_state = load_resume_state()
     in_progress = bool(resume_state and resume_state.get("processed"))
 
-    if old_meta is None:
+    backfill_day_end = 0
+    if since is not None:
+        # The flag names the replay's origin; the cursor tracks progress.
+        # A service re-passes the flag on every restart, so resetting on
+        # the flag alone would replay from the start forever: only a
+        # *different* origin starts a new replay.
+        if get_metadata(_SINCE_ORIGIN_KEY) != str(since):
+            # A fresh replay starts over: any resume set from another flow
+            # (a bootstrap in progress) must not subtract names from the bucket.
+            clear_resume_state()
+            resume_state = None
+            in_progress = False
+            _set_since_cursor(since)
+            set_metadata(_SINCE_ORIGIN_KEY, str(since))
+    cursor = _since_cursor()
+    if cursor is not None:
+        # Backfill: one day of AUR time per cycle.  Days with no changes are
+        # skipped inside the cycle, so an empty stretch costs nothing.
+        now = int(time.time())
+        while True:
+            backfill_day_end = cursor + _SINCE_DAY_SECONDS
+            bucket = sorted(
+                name for name, m in new_meta.items()
+                if cursor <= (m.get("LastModified") or 0) < backfill_day_end
+            )
+            if bucket or backfill_day_end >= now:
+                break
+            cursor = backfill_day_end
+        _set_since_cursor(cursor)
+        to_process = bucket
+        added, removed = [], []
+        changed = list(to_process)
+        result.backfilling = True
+        result.backfill_day = time.strftime("%Y-%m-%d", time.gmtime(cursor))
+        _log(
+            f"Backfill since {time.strftime('%Y-%m-%d', time.gmtime(cursor))}: "
+            f"{len(to_process)} package(s) changed that day"
+        )
+    elif old_meta is None:
         # Refuse to start a whole-AUR bootstrap unless it was asked for.  A
         # continuation of one already under way (resume state present, snapshot
         # not yet advanced) is allowed to proceed without re-passing the flag.
@@ -414,6 +492,16 @@ def run_baseline_build(
     to_process = added + changed
 
     if not to_process:
+        if result.backfilling:
+            # The bucket was empty at the head of history: the replay has
+            # caught up with the AUR.  Join the live delta path.
+            save_metadata(new_meta, _meta_snapshot_path())
+            _set_since_cursor(None)
+            set_metadata(_SINCE_ORIGIN_KEY, "")
+            clear_resume_state()
+            result.backfilling = False
+            _log("Backfill caught up; joining the live delta stream")
+            return result
         _log("Nothing to process")
         # A removals-only delta takes this path, and the adoption feed still
         # needs it: H073's introduction-rate and H058's maintainer-activity
@@ -428,6 +516,11 @@ def run_baseline_build(
 
     processed: set[str] = set(resume_state.get("processed", [])) if resume_state else set()
     scores: dict[str, int] = {}
+    # Per-package context for the alert payloads: version transition, the
+    # AUR change date and the rules that fired, so a notification can say
+    # what happened, not only that it did.
+    detail: dict[str, dict] = {}
+    ioc_hits: dict[str, list[str]] = {}
 
     # Cap the work per invocation so even a bootstrap advances in bounded,
     # resumable chunks.  The remainder is picked up on the next run.
@@ -508,6 +601,22 @@ def run_baseline_build(
             last_risk=risk_level(fact.final_score),
         )
         scores[name] = fact.final_score
+        if fact.ioc_matches:
+            # A known-bad match pages at maximum priority whatever the score:
+            # the IOC tier is reported outside the heuristic score, so a clean-
+            # looking package on the list would never cross the alerting bar.
+            for m in fact.ioc_matches:
+                ioc_hits[name].append(f"{m.type}:{m.value}")
+        detail[name] = {
+            "score": fact.final_score,
+            "old_version": old_snapshot["version"] if old_snapshot else "",
+            "new_version": fact.new_version or meta.get("Version", ""),
+            "last_modified": meta.get("LastModified"),
+            "rules": [
+                e.rule_id for e in fact.score_breakdown
+                if e.weight > 0 or e.severity in ("FATAL", "CRITICAL", "HIGH")
+            ],
+        }
         return "ok"
 
     fetch_failures = 0
@@ -557,6 +666,24 @@ def run_baseline_build(
 
     save_resume_state({"processed": sorted(processed)})
 
+    # Per-cycle scores become the cycle's report and its alerts on EVERY
+    # path: a capped chunk used to return without them, which dropped the
+    # over_threshold list for every chunk but the last - the worst findings
+    # of a multi-cycle bootstrap never notified.
+    result.flagged = sorted(
+        ((name, score) for name, score in scores.items() if score >= _FLAGGED_SCORE),
+        key=lambda item: (-item[1], item[0]),
+    )
+    result.over_threshold = sorted(
+        ((name, score) for name, score in scores.items() if score > over_threshold),
+        key=lambda item: (-item[1], item[0]),
+    )
+    result.ioc_hits = sorted(
+        (name, indicator)
+        for name, indicators in ioc_hits.items() for indicator in indicators
+    )
+    result.detail = detail
+
     if partial:
         # More of this transition remains.  Do not advance the snapshot, run
         # the corpus sweep, or export a half-built corpus: the next invocation
@@ -569,26 +696,39 @@ def run_baseline_build(
         result.processed = len(processed)
         return result
 
-    save_metadata(new_meta, _meta_snapshot_path())
-    clear_resume_state()
+    if result.backfilling:
+        # The day is drained.  Advance one day of AUR time; when the next day
+        # reaches into the future, the replay has caught up and the snapshot
+        # joins the live delta path.  The resume set belongs to the day just
+        # finished, so it is cleared either way.
+        now = int(time.time())
+        clear_resume_state()
+        if backfill_day_end >= now:
+            save_metadata(new_meta, _meta_snapshot_path())
+            _set_since_cursor(None)
+            set_metadata(_SINCE_ORIGIN_KEY, "")
+            result.backfilling = False
+            _log("Backfill caught up; joining the live delta stream")
+        else:
+            _set_since_cursor(backfill_day_end)
+        result.processed = len(processed)
+        return result
 
     # The sweep reads the adoption feed as its baseline, so it must run
-    # before this cycle's events are recorded.
+    # before this cycle's events are recorded.  The feed is recorded before
+    # the snapshot advances, as in the removals-only path: a crash between
+    # the two used to leave the snapshot at the new state with the cycle's
+    # events unrecorded, and the next run diffed the loss away.
     cluster_findings = _run_corpus_sweep(new_meta, old_meta, processed, scores)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
+    save_metadata(new_meta, _meta_snapshot_path())
+    clear_resume_state()
     result.cluster_findings = cluster_findings
     result.processed = len(processed)
     # What this cycle analysed, worst first.  Cluster findings describe the
     # corpus; these are the individual packages a watcher would otherwise
-    # have to go looking for in `trustsight list`.
-    result.flagged = sorted(
-        ((name, score) for name, score in scores.items() if score >= _FLAGGED_SCORE),
-        key=lambda item: (-item[1], item[0]),
-    )
-    result.over_threshold = sorted(
-        ((name, score) for name, score in scores.items() if score > over_threshold),
-        key=lambda item: (-item[1], item[0]),
-    )
+    # have to go looking for in `trustsight list`.  Both lists were computed
+    # above the partial-cycle return, so this path only reads them.
     result.new_alerts = record_alerts([
         (member, finding["rule_id"])
         for finding in cluster_findings
@@ -660,6 +800,7 @@ def run_watch(
     depth: Optional[int] = None,
     notify_url: Optional[str] = None,
     over_threshold: Optional[int] = None,
+    since: Optional[int] = None,
 ) -> list[CycleResult]:
     """Run corpus cycles on an interval until interrupted (plan §6.4).
 
@@ -682,6 +823,7 @@ def run_watch(
         + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
     )
     attempts = 0
+    last_heartbeat = 0.0
     try:
         while True:
             # A transient failure (network blip, rate limit) must not kill an
@@ -690,7 +832,8 @@ def run_watch(
             # spin forever either.
             try:
                 result = run_baseline_build(json_output=json_output, depth=depth,
-                                            over_threshold=over_threshold)
+                                            over_threshold=over_threshold,
+                                            since=since)
             except Exception as exc:
                 attempts += 1
                 _log(f"Cycle failed ({exc}); retrying in {delay}s")
@@ -699,6 +842,25 @@ def run_watch(
                 sleep(delay)
                 continue
             attempts = 0
+            if result.refused:
+                from .metadata import load_metadata
+
+                if load_metadata() is None:
+                    # No snapshot exists to diff against, so every cycle
+                    # refuses the same way: an unattended watch would spin
+                    # forever fetching metadata and analysing nothing.
+                    _log(
+                        "No corpus snapshot yet; the watch has nothing to "
+                        "diff against. Run 'trustsight full-aur --bootstrap' "
+                        "first so an initial snapshot exists."
+                    )
+                    results.append(result)
+                    break
+                # A transient refusal (an empty fetch with a snapshot on
+                # disk) did no work: it does not consume the cycle budget.
+                _log(f"Cycle did no work; retrying in {delay}s")
+                sleep(delay)
+                continue
             results.append(result)
             if result.new_alerts:
                 _log(f"{len(result.new_alerts)} new alert(s) this cycle")
@@ -710,13 +872,23 @@ def run_watch(
             # announced once here and never again, and an over-threshold
             # package is what the watcher exists for - so the webhook is how
             # either reaches anyone not reading the log.
-            from ..notify import maybe_notify
+            from ..notify import HEARTBEAT_SECONDS, maybe_heartbeat, maybe_notify
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
+            # Silence is otherwise ambiguous between "nothing found" and
+            # "the watcher is dead": one low-priority beat a day.
+            if time.time() - last_heartbeat > HEARTBEAT_SECONDS:
+                if maybe_heartbeat(result, notify_url):
+                    last_heartbeat = time.time()
             if cycles and len(results) >= cycles:
                 break
-            sleep(delay)
+            # A backfill is a queue, not a schedule: the interval governs the
+            # live stream, and sleeping it would stretch a one-day replay by
+            # a day per day.  A short pause keeps an empty day from becoming
+            # a hot loop, and the live interval resumes when the replay
+            # catches up.
+            sleep(2 if result.backfilling else delay)
     except KeyboardInterrupt:
         _log(f"Watch stopped after {len(results)} cycle(s)")
     return results

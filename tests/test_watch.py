@@ -101,7 +101,8 @@ def test_watch_passes_json_output_through(monkeypatch):
         lambda **kwargs: seen.update(kwargs) or CycleResult(),
     )
     run_watch(interval=60, cycles=1, json_output=True, sleep=lambda _: None)
-    assert seen == {"json_output": True, "depth": None, "over_threshold": None}
+    assert seen == {"json_output": True, "depth": None, "over_threshold": None,
+                    "since": None}
 
 
 # --- alert deduplication ---
@@ -262,3 +263,67 @@ def test_a_capped_cycle_processes_a_chunk_and_resumes(fake_aur, monkeypatch):
     run_baseline_build()                    # chunk 3 completes the transition
     assert _count() == 3
     assert "state" not in store             # resume cleared on completion
+
+
+# --- refused cycles ---
+
+
+def test_a_permanently_refused_cycle_stops_the_watch(monkeypatch):
+    """No snapshot and no --bootstrap: every cycle refuses the same way, so
+    the loop must stop with guidance instead of fetching metadata forever
+    and analysing nothing."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: CycleResult(refused=True),
+    )
+    monkeypatch.setattr(
+        "trustsight.full_aur.metadata.load_metadata", lambda *a, **k: None,
+    )
+    # cycles=5: without the break this returns five refused cycles.
+    results = run_watch(interval=60, cycles=5, sleep=lambda s: None)
+    assert len(results) == 1
+    assert results[0].refused
+
+
+def test_a_transient_refusal_does_not_consume_the_cycle_budget(monkeypatch):
+    """An empty fetch with a snapshot on disk did no work; it must not eat
+    --cycles."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    outcomes = iter([
+        CycleResult(refused=True),
+        CycleResult(refused=True),
+        CycleResult(added=1),
+        CycleResult(added=1),
+    ])
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: next(outcomes),
+    )
+    monkeypatch.setattr(
+        "trustsight.full_aur.metadata.load_metadata",
+        lambda *a, **k: {"pkg": {"Version": "1.0"}},
+    )
+    results = run_watch(interval=60, cycles=2, sleep=lambda s: None)
+    assert len(results) == 2
+    assert all(not r.refused for r in results)
+
+
+def test_the_interval_is_skipped_while_backfilling(monkeypatch):
+    """A backfill is a queue, not a schedule: the live interval resumes
+    only once the replay catches up."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    outcomes = iter([CycleResult(backfilling=True), CycleResult(), CycleResult()])
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: next(outcomes),
+    )
+    slept: list[float] = []
+    results = run_watch(interval=3600, cycles=3, sleep=slept.append)
+    assert len(results) == 3
+    # One short pause after the backfill cycle, then the live interval; the
+    # loop never sleeps after the last cycle.
+    assert slept == [2, 3600]

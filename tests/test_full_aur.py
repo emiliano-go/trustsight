@@ -405,3 +405,213 @@ def test_removals_only_cycle_still_records_the_adoption_feed(monkeypatch):
     assert result.removed == 1 and result.processed == 0
     assert [e["package_name"] for e in recorded] == ["gone"]
     assert recorded[0]["status"] == "removed"
+
+
+def _stub_cycle(monkeypatch, pipeline, scores_by_name, order=None):
+    """Wire a two-package delta cycle with controllable per-package scores."""
+    from types import SimpleNamespace
+
+    meta = {name: {"Version": "1.0", "Maintainer": "m"}
+            for name in scores_by_name}
+    monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: dict(meta))
+    monkeypatch.setattr(pipeline, "load_metadata", lambda *a, **k: dict(meta))
+    monkeypatch.setattr(pipeline, "diff_metadata",
+                        lambda old, new: {name: "modified" for name in meta})
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
+                        lambda *a, **k: ("pkgbuild", None, None, False))
+    monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
+    monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
+    monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "record_alerts", lambda *a, **k: [])
+    if order is not None:
+        monkeypatch.setattr(pipeline, "save_metadata",
+                            lambda *a, **k: order.append("snapshot"))
+        monkeypatch.setattr(pipeline, "_record_cycle_feed",
+                            lambda *a, **k: order.append("feed"))
+    monkeypatch.setattr(
+        pipeline, "analyze_package_text",
+        lambda pkg_name, **kw: SimpleNamespace(
+            new_version="1.0", final_score=scores_by_name[pkg_name],
+            score_breakdown=[], ioc_matches=[]),
+    )
+
+
+def test_a_capped_cycle_still_reports_its_over_threshold_packages(monkeypatch):
+    """A capped chunk returns before the sweep, but its worst packages must
+    still be on the cycle's alert lists.
+
+    The bootstrap is ~60 chunks and the alert lists were computed only after
+    the partial-cycle return, so every chunk but the last reported nothing:
+    the worst findings of a whole bootstrap never notified.
+    """
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"a-hot": 90, "z-calm": 5})
+    monkeypatch.setattr(pipeline, "_max_per_cycle", lambda: 1)
+
+    result = pipeline.run_baseline_build()
+
+    # The chunk is partial, and its scores are still reported.
+    assert result.processed == 1
+    assert result.flagged == [("a-hot", 90)]
+    assert result.over_threshold == [("a-hot", 90)]
+    assert result.detail["a-hot"]["score"] == 90
+    assert result.detail["a-hot"]["new_version"] == "1.0"
+
+
+def test_the_feed_is_recorded_before_the_snapshot_advances(monkeypatch):
+    """A crash between advancing the snapshot and recording the feed lost
+    the cycle from the adoption baselines forever; the feed lands first."""
+    import trustsight.full_aur.pipeline as pipeline
+
+    order: list[str] = []
+    _stub_cycle(monkeypatch, pipeline, {"demo": 5}, order=order)
+
+    pipeline.run_baseline_build()
+
+    assert order == ["feed", "snapshot"]
+
+
+# --- --since backfill ---
+
+_DAY = 86400
+
+
+def _stub_since_cycle(monkeypatch, pipeline, packages):
+    """Wire a backfill cycle: *packages* is {name: (last_modified, score)}."""
+    from types import SimpleNamespace
+
+    meta = {name: {"Version": "1.0", "Maintainer": "m", "LastModified": ts}
+            for name, (ts, _score) in packages.items()}
+    monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: dict(meta))
+    monkeypatch.setattr(pipeline, "load_metadata", lambda *a, **k: dict(meta))
+    monkeypatch.setattr(pipeline, "diff_metadata", lambda old, new: {})
+    monkeypatch.setattr(pipeline, "load_resume_state", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree",
+                        lambda *a, **k: ("pkgbuild", None, None, False))
+    monkeypatch.setattr(pipeline, "is_reserved_name", lambda _n: False)
+    monkeypatch.setattr(pipeline, "_pkg_or_base", lambda _m: "demo")
+    monkeypatch.setattr(pipeline, "save_resume_state", lambda state: None)
+    monkeypatch.setattr(pipeline, "clear_resume_state", lambda: None)
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: [])
+    monkeypatch.setattr(pipeline, "record_alerts", lambda *a, **k: [])
+    monkeypatch.setattr(
+        pipeline, "analyze_package_text",
+        lambda pkg_name, **kw: SimpleNamespace(
+            new_version="1.0", final_score=packages[pkg_name][1],
+            score_breakdown=[], ioc_matches=[]),
+    )
+
+
+def _cursor():
+    from trustsight.db import get_metadata
+    return get_metadata("since_cursor")
+
+
+def _clear_cursor():
+    from trustsight.db import set_metadata
+    set_metadata("since_cursor", "")
+    set_metadata("since_origin", "")
+
+
+def test_since_replays_one_aur_day_per_cycle(monkeypatch):
+    """The backfill processes exactly the packages whose AUR LastModified
+    falls in the cursor's day, alerts on them, and advances one day."""
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    day1 = now - 2 * _DAY
+    day2 = now - _DAY
+    _stub_since_cycle(monkeypatch, pipeline, {
+        "old-pkg": (day1 + 100, 90),
+        "newer-pkg": (day2 + 100, 5),
+    })
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+
+    result = pipeline.run_baseline_build(since=day1)
+
+    try:
+        assert result.backfilling
+        assert result.processed == 1            # only the day-1 package
+        assert result.over_threshold == [("old-pkg", 90)]
+        assert _cursor() == str(day1 + _DAY)    # one day advanced, no more
+    finally:
+        _clear_cursor()
+
+
+def test_since_skips_empty_days_inside_the_cycle(monkeypatch):
+    """Empty days must not become cycles of their own: the cursor walks to
+    the first non-empty day without any package work in between."""
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    day1 = now - 5 * _DAY
+    day4 = now - 2 * _DAY
+    _stub_since_cycle(monkeypatch, pipeline, {"only-pkg": (day4 + 100, 5)})
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+
+    result = pipeline.run_baseline_build(since=day1)
+
+    try:
+        assert result.backfilling
+        assert result.processed == 1
+        assert _cursor() == str(day4 + _DAY)
+    finally:
+        _clear_cursor()
+
+
+def test_since_joins_the_live_stream_when_caught_up(monkeypatch):
+    """When the replay reaches today, the snapshot advances and the cursor
+    clears, so the next cycle is an ordinary delta again."""
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    today = now - 100
+    saved: list = []
+    _stub_since_cycle(monkeypatch, pipeline, {"fresh-pkg": (today, 5)})
+    monkeypatch.setattr(pipeline, "save_metadata",
+                        lambda *a, **k: saved.append("saved"))
+
+    result = pipeline.run_baseline_build(since=now - _DAY)
+
+    try:
+        assert not result.backfilling
+        assert result.processed == 1
+        assert saved == ["saved"]
+        assert _cursor() in (None, "")
+    finally:
+        _clear_cursor()
+
+
+def test_since_resumes_the_cursor_across_a_restart(monkeypatch):
+    """Re-passing the same --since on a service restart must resume the
+    replay, not start it over: the flag names the origin, the cursor
+    tracks progress."""
+    import time as _time
+    import trustsight.full_aur.pipeline as pipeline
+
+    now = int(_time.time())
+    day1 = now - 2 * _DAY
+    day2 = now - _DAY
+    _stub_since_cycle(monkeypatch, pipeline, {
+        "old-pkg": (day1 + 100, 5),
+        "newer-pkg": (day2 + 100, 90),
+    })
+    monkeypatch.setattr(pipeline, "save_metadata", lambda *a, **k: None)
+
+    try:
+        first = pipeline.run_baseline_build(since=day1)
+        assert first.processed == 1 and first.over_threshold == []
+        # Same --since again, as a restarted service would pass: resume,
+        # so day 2 is the bucket now, not day 1 again.
+        second = pipeline.run_baseline_build(since=day1)
+        assert second.processed == 1
+        assert second.over_threshold == [("newer-pkg", 90)]
+    finally:
+        _clear_cursor()

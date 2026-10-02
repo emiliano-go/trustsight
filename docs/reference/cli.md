@@ -644,6 +644,7 @@ trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
 | `--notify URL` | With `--watch`: POST each cycle's new alerts as a JSON document to this webhook. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
 | `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which marks the webhook document `priority: urgent` (ntfy gets `Priority: 5`). Default 30, the benign corpus's p95. |
+| `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
 | `--json` | Output JSON. |
 
 With a prior snapshot present (any `trustsight review` run creates one), a cycle processes only the changed packages, which is the intended cadence: run it periodically and the corpus grows incrementally. A from-scratch bootstrap is the exception, gated behind `--bootstrap`. Either way, each invocation is capped at `[limits] corpus_max_per_cycle` (default 2000) and resumes, so a large amount of work advances in bounded, resumable chunks rather than one avalanche.

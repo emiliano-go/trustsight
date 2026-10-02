@@ -669,6 +669,9 @@ class CycleReport:
     :ivar processed: packages analysed this cycle.
     :ivar bootstrap: whether this cycle was part of an initial whole-AUR
         build.
+    :ivar backfilling: whether this cycle was part of a ``--since`` replay.
+    :ivar ioc_hits: ``(package, indicator)`` for packages whose analysis
+        matched an IOC baseline entry this cycle.
     :ivar elapsed: wall-clock seconds the cycle took.
     :ivar flagged: ``(package, score)`` for everything this cycle scored 40
         or above, worst first.
@@ -686,12 +689,16 @@ class CycleReport:
     removed: int = 0
     processed: int = 0
     bootstrap: bool = False
+    backfilling: bool = False
     elapsed: float = 0.0
     flagged: tuple[tuple[str, int], ...] = ()
     """``(package, score)`` for everything this cycle scored 40 or above, worst first."""
     over_threshold: tuple[tuple[str, int], ...] = ()
     """``(package, score)`` for everything this cycle scored above the
     alerting bar (the benign corpus's p95 unless overridden), worst first."""
+    ioc_hits: tuple[tuple[str, str], ...] = ()
+    """``(package, indicator)`` for packages whose analysis matched an IOC
+    baseline entry this cycle."""
     cluster_findings: tuple[ClusterFinding, ...] = ()
     new_alerts: tuple[tuple[str, str], ...] = ()
     """``(package, rule_id)`` for clusters seen for the first time.  A cluster
@@ -705,9 +712,11 @@ class CycleReport:
             "removed": self.removed,
             "processed": self.processed,
             "bootstrap": self.bootstrap,
+            "backfilling": self.backfilling,
             "elapsed": self.elapsed,
             "flagged": [list(f) for f in self.flagged],
             "over_threshold": [list(f) for f in self.over_threshold],
+            "ioc_hits": [list(f) for f in self.ioc_hits],
             "cluster_findings": [c.to_dict() for c in self.cluster_findings],
             "new_alerts": [list(a) for a in self.new_alerts],
         }
@@ -1082,9 +1091,11 @@ def _cycle_report(result) -> CycleReport:
         removed=result.removed,
         processed=result.processed,
         bootstrap=result.bootstrap,
+        backfilling=result.backfilling,
         elapsed=result.elapsed,
         flagged=tuple((name, score) for name, score in result.flagged),
         over_threshold=tuple((name, score) for name, score in result.over_threshold),
+        ioc_hits=tuple(result.ioc_hits),
         cluster_findings=tuple(
             ClusterFinding(
                 rule_id=f.get("rule_id", ""),
@@ -1498,6 +1509,7 @@ class TrustSight:
         export_path: Optional[str] = None,
         sign_key: Optional[str] = None,
         over_threshold: Optional[int] = None,
+        since: Optional[int] = None,
     ) -> CycleReport:
         """Run one full-AUR corpus cycle: what ``trustsight full-aur`` does.
 
@@ -1510,6 +1522,8 @@ class TrustSight:
         :param over_threshold: the alerting bar for
             ``CycleReport.over_threshold``.  ``None`` uses the benign
             corpus's p95.
+        :param since: a unix timestamp to replay change history from, one
+            AUR day per cycle, or ``None`` for the normal delta.
         :returns: what the cycle added, changed, removed and flagged.
         """
         from .full_aur.pipeline import run_baseline_build
@@ -1517,7 +1531,7 @@ class TrustSight:
         self._ensure_ready()
         return _cycle_report(run_baseline_build(
             bootstrap=bootstrap, resume=resume, export_path=export_path, sign_key=sign_key,
-            over_threshold=over_threshold,
+            over_threshold=over_threshold, since=since,
         ))
 
     def watch(
@@ -1526,6 +1540,7 @@ class TrustSight:
         interval: Optional[int] = None,
         cycles: int = 0,
         over_threshold: Optional[int] = None,
+        since: Optional[int] = None,
         sleep: Callable[[float], None] = time.sleep,
     ) -> Iterator[CycleReport]:
         """Yield one ``CycleReport`` per corpus cycle, forever by default.
@@ -1552,6 +1567,9 @@ class TrustSight:
         :param over_threshold: the alerting bar for
             ``CycleReport.over_threshold``.  ``None`` uses the benign
             corpus's p95.
+        :param since: a unix timestamp to replay change history from, one
+            AUR day per cycle before joining the live stream, or ``None``
+            for the normal delta.
         :returns: an iterator of one :class:`CycleReport` per cycle.
 
         Example:
@@ -1573,7 +1591,8 @@ class TrustSight:
             delay = watch_interval_seconds(interval)
             count = 0
             while True:
-                yield _cycle_report(run_baseline_build(over_threshold=over_threshold))
+                yield _cycle_report(run_baseline_build(over_threshold=over_threshold,
+                                                         since=since))
                 count += 1
                 if cycles and count >= cycles:
                     return

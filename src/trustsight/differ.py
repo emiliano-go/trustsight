@@ -396,7 +396,8 @@ def is_skip_justified(diff_text: str) -> str:
     if _SIG_SRC_RE.search(post):
         return "signature file"
     for reason, check in _SKIP_JUSTIFICATION_CHECKS:
-        if any(check(line) for line in split_lines(diff_text)):
+        if any(check(line.raw)
+               for line in parse_diff_lines(split_lines(diff_text)).lines):
             return reason
     return ""
 
@@ -416,13 +417,16 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     added_urls: set[str] = set()
     removed_urls: set[str] = set()
 
-    for line in split_lines(diff_text):
-        if line.startswith("+") and "http" in line:
-            for u in _URL_TOKEN_RE.findall(line):
+    # Raw lines, headers included: the text walk matched on them, so the
+    # typed document supplies them unchanged.
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith("+") and "http" in raw:
+            for u in _URL_TOKEN_RE.findall(raw):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
                     added_urls.add(_clean_url(u))
-        elif line.startswith("-") and "http" in line:
-            for u in _URL_TOKEN_RE.findall(line):
+        elif raw.startswith("-") and "http" in raw:
+            for u in _URL_TOKEN_RE.findall(raw):
                 if len(removed_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
                     removed_urls.add(_clean_url(u))
 
@@ -563,22 +567,27 @@ def _touched_checksum_arrays(diff_text: str) -> list[_ChecksumArray]:
         removed_any = False
         decl_removed = False
 
-    for line in split_lines(diff_text):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
         # The trailing space is the guard: file headers are `+++ b/path` /
         # `--- a/path`, so a content line whose text starts with `--` (an
         # unquoted array element, say) reads as `---…` and must not flush
-        # the array state - the rest of the array would be dropped.
-        if line.startswith(("+++ ", "--- ")):
-            # A new file.  An array cannot span files; leaving it open leaked
-            # one file's state into the next.
+        # the array state - the rest of the array would be dropped.  The
+        # parser owns that decision now; the boundary flag is where the
+        # header line stood.  An array cannot span files; leaving it open
+        # leaked one file's state into the next.
+        if line.file_boundary:
             flush()
-            continue
-        if line.startswith("@@"):
-            # A new hunk.  The array stays open: its opener can be context in
-            # one hunk and an entry can change in the next.
-            continue
-        sign = line[:1]
-        body = line[1:] if sign in "+- " else line
+        if not line.is_content:
+            # Hunk headers and `@@`-junk never touched the state; other
+            # structure lines fall through with their raw text, as the
+            # legacy walk processed them.
+            if line.raw.startswith("@@"):
+                continue
+            sign = ""
+            body = line.raw
+        else:
+            sign = {"add": "+", "remove": "-", "context": " "}[line.side]
+            body = line.content
         m = _CHK_DECL_RE.match(body)
         if m:
             rest = body[m.end():]
@@ -634,8 +643,9 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     from .tokenizer import TokenizerUnavailable, variable_table
 
     readable = [
-        ln[1:] for ln in split_lines(diff_text)
-        if ln.startswith("+") and not ln.startswith("+++")
+        line.content
+        for line in parse_diff_lines(split_lines(diff_text)).lines
+        if line.side == "add" and not line.raw.startswith("+++")
     ]
     try:
         table, _arrays = variable_table(readable)
@@ -800,11 +810,11 @@ def _added_array_items(diff_text: str, start_re) -> list[str] | None:
     """
     collecting = False
     parts: list[str] = []
-    for line in split_lines(diff_text):
-        if line.startswith("+++") or line.startswith("---"):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith(("+++", "---")):
             continue
-        added = line.startswith("+")
-        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        added = line.side == "add"
+        body = line.content if line.is_content else line.raw
         if not collecting:
             if added and start_re.match(body):
                 collecting = True
@@ -833,12 +843,16 @@ def source_array_grew_in_diff(diff_text: str) -> bool:
     """
     inside = False
     added = removed = 0
-    for line in split_lines(diff_text):
-        if line.startswith("+++") or line.startswith("---") or line.startswith("@@"):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith(("+++", "---", "@@")):
             inside = False
             continue
-        prefix = line[:1] if line[:1] in ("+", "-", " ") else ""
-        body = line[1:] if prefix else line
+        if line.is_content:
+            prefix = {"add": "+", "remove": "-", "context": " "}[line.side]
+            body = line.content
+        else:
+            prefix = ""
+            body = line.raw
         if not inside:
             if _SOURCE_ARRAY_START_RE.match(body):
                 inside = True
@@ -930,10 +944,13 @@ def detect_checksum_removed(diff_text: str) -> bool:
     """
     removed = False
     added = False
-    for line in split_lines(diff_text):
-        if line.startswith("-") and _CHECKSUM_LINE_RE.search(line):
+    # The walk reads raw lines, headers included, so the typed document
+    # supplies them unchanged: a crafted `--- a/sha256sums=x` path reads
+    # as a removal here, exactly as the text walk read it.
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith("-") and _CHECKSUM_LINE_RE.search(line.raw):
             removed = True
-        elif line.startswith("+") and _CHECKSUM_LINE_RE.search(line):
+        elif line.raw.startswith("+") and _CHECKSUM_LINE_RE.search(line.raw):
             added = True
     return removed and not added
 
@@ -958,14 +975,17 @@ def extract_source_array_urls(diff_text: str, side: str = "after") -> set[str]:
     URL that was downgraded from one that was always plain http.
     """
     skip = "-" if side == "after" else "+"
+    skip_side = "remove" if side == "after" else "add"
     urls: set[str] = set()
     in_array = False
-    for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith(("+++", "---", "@@")):
             continue
-        if line.startswith(skip):
+        if line.side == skip_side or line.raw.startswith(skip):
             continue
-        body = line[1:] if line[:1] in ("+", "-") else line
+        # Context lines keep their leading prefix space, as the text walk
+        # produced them; only the +/- sides lose a character.
+        body = line.content if line.side in ("add", "remove") else line.raw
 
         if not in_array:
             if not _SOURCE_ARRAY_START_RE.match(body):
@@ -990,19 +1010,20 @@ def source_array_has_command_substitution(diff_text: str) -> bool:
     just the single line the substitution shares with ``source=``.
     """
     in_array = False
-    for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith(("+++", "---", "@@")):
             continue
-        if _SOURCE_CMD_SUBST_RE.search(line):
+        if _SOURCE_CMD_SUBST_RE.search(raw):
             return True
         if not in_array:
-            if _SOURCE_OPEN_RE.match(line) and ")" not in line:
+            if _SOURCE_OPEN_RE.match(raw) and ")" not in raw:
                 in_array = True
             continue
         # Inside an open array: only added/context lines belong to it.
-        if line.startswith("+") and _CMD_SUBST_RE.search(line):
+        if line.side == "add" and _CMD_SUBST_RE.search(raw):
             return True
-        if ")" in line:
+        if ")" in raw:
             in_array = False
     return False
 

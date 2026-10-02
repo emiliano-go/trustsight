@@ -31,6 +31,7 @@ severity weights and the reserved identifier ranges.
 | [H027](#h027) | Capability Density Anomaly | INFO |
 | [H043](#h043) | Attack-Chain Composition | INFO |
 | [H098](#h098) | Naming/Deception Cluster | HIGH |
+| [H102](#h102) | Maintainer Change With Signing Key Change | HIGH |
 <!-- /generated: page-index -->
 
 ### H027: Capability Density Anomaly {#h027}
@@ -121,3 +122,17 @@ X007 for the same design in the crossfire family.
 
 Fire rate: 0 of 3739. A benign diff with one or two rule hits cannot carry
 two naming/deception signals.
+
+### H102: Maintainer Change With Signing Key Change {#h102}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `composition`
+- **Condition:** The maintainer changed and `validpgpkeys` moved (H078)
+  in the same diff.
+
+The xz shape: a new maintainer plus a keyring change means the person now
+able to sign the sources is not the person the keyring was built for.
+Each fact scores on its own (H078, the maintainer tier); the conjunction
+is the attack, so it stacks the way X007 stacks its members. H078's own
+detection stands in for the keyring delta, the same member-rule
+composition H098 uses.

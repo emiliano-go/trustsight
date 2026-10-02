@@ -86,7 +86,7 @@ A pattern that matches the header while scoping itself to `function_body` theref
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H100, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H102, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1295,6 +1295,14 @@ See [H099: Source Host Swapped Under A Kept Local Name](integrity.md#h099).
 ### H100 {#h100}
 
 See [H100: Install Hook Added Or Retargeted](install-and-persist.md#h100).
+
+### H101 {#h101}
+
+See [H101: Source Pinning Lost](integrity.md#h101).
+
+### H102 {#h102}
+
+See [H102: Maintainer Change With Signing Key Change](composition.md#h102).
 
 ### X024 {#x024}
 

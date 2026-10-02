@@ -54,6 +54,7 @@ severity weights and the reserved identifier ranges.
 | [H096](#h096) | Download Agent Override | MEDIUM |
 | [H097](#h097) | Function Shadowing | HIGH |
 | [H099](#h099) | Source Host Swapped Under A Kept Local Name | HIGH |
+| [H101](#h101) | Source Pinning Lost | MEDIUM |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
 | [R078](#r078) | Compression Command Override | MEDIUM |
@@ -638,3 +639,18 @@ already records the URL change there.
 
 Only names visible on both sides of the diff compare, so a partially shown
 array cannot pair a name with the wrong URL.
+
+### H101: Source Pinning Lost {#h101}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `integrity`
+- **Condition:** A `source` entry moves from pinned (a `#commit=`/`#tag=`
+  fragment, or an archive URL carrying its version) to floating (a branch
+  ref, HEAD, or a `/latest/` path), under the same local name.
+
+P008 reports a floating source wherever one stands; H101 catches the
+*moment* a verifiable package becomes upstream-controlled, which in a
+watch replay is the signal that matters: the package that was pinned
+yesterday and tracks a branch today changed who decides what it builds.
+Only same-name entries on both sides of the diff compare, the H099
+keying, so a partially shown array cannot mis-pair an entry.

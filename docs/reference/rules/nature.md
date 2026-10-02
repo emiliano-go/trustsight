@@ -33,7 +33,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## H-series: **Heuristic** Behavioral Analysis
 
-**Count:** 100 rules (H001-H100)
+**Count:** 102 rules (H001-H102)
 
 **Mechanism:** Engine-defined logic in `analysis/*.py` examines behavioral signals: what changed relative to, what the corpus has seen before, what files exist outside the diff hunk, or what the observation database records. H-series rules need context a single regex cannot see, but unlike C-series and D-series, they reason about *behavioral suspicion* rather than structural invariants or graph properties.
 

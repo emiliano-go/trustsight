@@ -95,7 +95,10 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
         rarities = _rarities_of(all_new)
         magnitude = len(all_new) * (sum(rarities) / len(rarities))
         if magnitude >= _DEP_EXPANSION_GATE:
-            novel = [d for d, r in zip(all_new, rarities) if r > 0.5]
+            # Sorted: the names come out of a set, and the finding text is
+            # part of the recorded analysis, so its order must not depend
+            # on the set's internal layout.
+            novel = sorted(d for d, r in zip(all_new, rarities) if r > 0.5)
             add("H030", "Dependency-Set Expansion", "MEDIUM", "dependency",
                 f"diff adds {len(novel)} novel/rare deps: {novel}",
                 n_novel=len(novel), novel_names=", ".join(novel))

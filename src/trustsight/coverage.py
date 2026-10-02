@@ -56,10 +56,12 @@ HISTORY_TRUNCATED = "history_truncated"
 NOEXTRACT_SUPPRESSED = "noextract_suppressed"
 TOKENIZER_UNAVAILABLE = "tokenizer_unavailable"
 BINARY_METADATA = "binary_metadata"
+PARTIAL_HUNK = "partial_hunk"
 
 GAPS = (
     DIFF_TRUNCATED,
     SCAN_TRUNCATED,
+    PARTIAL_HUNK,
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
     COMPANION_TRUNCATED,
@@ -83,6 +85,11 @@ GAP_REASONS = {
     SCAN_TRUNCATED: (
         "the diff held more lines than the matching limit, so its last lines "
         "were not matched against any rule"
+    ),
+    PARTIAL_HUNK: (
+        "a diff hunk carries fewer lines than its header declares without "
+        "any truncation bound reporting it, so the change was cut mid-hunk "
+        "and its tail was not examined"
     ),
     LINE_TRUNCATED: (
         "a line was longer than the matching limit, so its tail was not "
@@ -404,6 +411,7 @@ def gaps_from(
     ruleset_drifted: bool = False,
     degraded_stages: list[str] | None = None,
     noextract_present: bool = False,
+    partial_hunks: int = 0,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
@@ -415,6 +423,14 @@ def gaps_from(
     # and find it changed nothing, because the line count was the bound.
     if scan_truncated:
         gaps.append(SCAN_TRUNCATED)
+    # A hunk carrying fewer lines than its header declares was cut
+    # mid-stream.  The byte and line caps set their own gaps above, so
+    # this fires only when the cut reported nothing: a fixture sliced by
+    # hand, a stored blob that was capped upstream, a generator that
+    # stopped early.  Every array reader downstream then treated a
+    # fragment as a whole array with no notice.
+    if partial_hunks and not (diff_truncated or scan_truncated):
+        gaps.append(PARTIAL_HUNK)
     if long_lines:
         gaps.append(LINE_TRUNCATED)
     if not tree_analyzed:
@@ -473,13 +489,19 @@ def gaps_from(
     return gaps
 
 
-def describe(gaps: list[str], carried: Collection[str] = ()) -> str:
+def describe(gaps: list[str], carried: Collection[str] = (),
+             details: dict[str, list[str]] | None = None) -> str:
     """One sentence naming every gap, for the verdict text.
 
     A gap in *carried* had the same root cause in the previous recorded
     analysis (#19): it is still a gap and still fails closed, but the
     sentence says so instead of reading as a shortfall this diff
     introduced.
+
+    *details* maps a gap id to the offending lines, where the analysis
+    knows them (an unresolved source assignment is the one case today):
+    the first is quoted so the reviewer is pointed at the exact line
+    rather than a category.
     """
     if not gaps:
         return ""
@@ -488,6 +510,10 @@ def describe(gaps: list[str], carried: Collection[str] = ()) -> str:
         if gap not in GAP_REASONS:
             continue
         reason = GAP_REASONS[gap]
+        if details:
+            offenders = details.get(gap) or []
+            if offenders:
+                reason += f" (first: {offenders[0].strip()[:80]})"
         if gap in carried:
             reason += " (unchanged since the previous review)"
         reasons.append(reason)
@@ -512,6 +538,7 @@ INCOMPLETE_SUFFIX = " (incomplete analysis)"
 GAP_INCONCLUSIVE_REASONS = {
     DIFF_TRUNCATED: "diff truncated: payload may be hidden",
     SCAN_TRUNCATED: "scan truncated: tail of diff not matched by any rule",
+    PARTIAL_HUNK: "diff cut mid-hunk without a declared bound: payload may be hidden",
     LINE_TRUNCATED: "line truncated: payload may be hidden",
     TREE_NOT_ANALYZED: "repository files not examined: payload may be hidden",
     COMPANION_TRUNCATED: (

@@ -84,6 +84,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
     coverage_note = describe_coverage(
         fact.coverage_gaps,
         carried=getattr(fact, "carried_coverage_gaps", ()),
+        details={"unresolved_source": getattr(fact, "unresolved_sources", ())},
     )
     if coverage_note:
         verdict = f"{coverage_note} {verdict}"

@@ -419,7 +419,11 @@ class Report:
         """The one-line caveat prefixed to the verdict, or "" when there is none."""
         from .coverage import describe
 
-        return describe(list(self.coverage_gaps), carried=self.coverage_gaps_carried)
+        return describe(
+            list(self.coverage_gaps),
+            carried=self.coverage_gaps_carried,
+            details={"unresolved_source": self.raw.get("unresolved_sources") or ()},
+        )
 
     @property
     def raw(self) -> dict:

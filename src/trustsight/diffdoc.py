@@ -193,6 +193,19 @@ class DiffDoc:
         """The pre-diff reconstruction as one string."""
         return "\n".join(self.pre_lines())
 
+    def cut_hunks(self) -> list[tuple[str, int]]:
+        """``(file, hunk new-start)`` for hunks carrying fewer lines than
+        the header declares: the stream was cut mid-hunk.
+
+        The parser reports the arithmetic and does not repair it; this is
+        the coverage layer's read of that fact (the ``partial_hunk`` gap).
+        """
+        return [
+            (f.path, h.new_start)
+            for f in self.files for h in f.hunks
+            if h.expected_lines is not None and h.actual_lines < h.expected_lines
+        ]
+
 
 def _header_path(raw: str) -> str:
     """The path from a ``+++`` header, with the legacy walk's exact steps.

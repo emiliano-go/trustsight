@@ -21,6 +21,7 @@ from ..db import (
     update_package_version,
     upsert_package,
 )
+from ..diffdoc import parse_diff_lines
 from ..differ import (
     diff_summary_from_text,
     generate_diff_bounded,
@@ -568,6 +569,9 @@ def analyze_package(
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
+    # A hunk cut mid-stream with no truncation flag set is a silent
+    # partial read; gaps_from declares it as `partial_hunk`.
+    partial_hunks = len(parse_diff_lines(split_lines(diff_text)).cut_hunks())
 
     source_changes = extract_urls_from_diff(diff_text)
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
@@ -794,6 +798,7 @@ def analyze_package(
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
+        partial_hunks=partial_hunks,
     )
 
     score, breakdown, risk = calculate_score(
@@ -1056,6 +1061,7 @@ def scan_diff(
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
+        partial_hunks=len(parse_diff_lines(split_lines(diff_text)).cut_hunks()),
     )
 
     score, breakdown, risk = calculate_score(

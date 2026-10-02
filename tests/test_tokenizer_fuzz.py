@@ -188,6 +188,9 @@ def test_generated_diffs_are_safe_at_the_analysis_boundary():
         assert set(fact.coverage_gaps) <= {
             "diff_truncated",
             "line_truncated",
+            # A random diff is routinely cut mid-hunk with no truncation
+            # bound reporting it; that is exactly the gap's condition.
+            "partial_hunk",
             "tree_not_analyzed",
             "unresolved_source",
             "unresolved_parse_time",

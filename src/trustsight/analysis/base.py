@@ -10,15 +10,22 @@ from ..differ import _has_checksum_in_post_diff
 
 log = logging.getLogger(__name__)
 
-_initialized = False
+_initialized_for: str | None = None
 
 
 def _ensure_init() -> None:
-    global _initialized
-    if not _initialized:
+    global _initialized_for
+    from ..db import get_db_path
+
+    # Keyed on the database path, not a bare boolean: the tests point
+    # DATA_DIR at a fresh tmpdir per case, and a one-shot guard spent the
+    # schema creation on the first directory, leaving every later one
+    # without tables.
+    path = str(get_db_path())
+    if _initialized_for != path:
         ensure_default_configs()
         init_db()
-        _initialized = True
+        _initialized_for = path
 
 
 def _rarities_of(deps: list[str]) -> list[float]:

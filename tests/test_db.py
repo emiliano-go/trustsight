@@ -798,3 +798,20 @@ def test_a_fresh_database_is_stamped_with_the_schema_version(tmp_path, monkeypat
     init_db()
     with get_connection() as conn:
         assert conn.execute("PRAGMA user_version").fetchone()[0] >= 1
+
+
+def test_ensure_init_covers_a_data_dir_change(tmp_path, monkeypatch):
+    """The schema guard used to be one bare boolean: the first tmpdir spent
+    it, and a later DATA_DIR change left the new database with no tables -
+    the ordering-dependent "no such table: cycle_events" failure."""
+    from trustsight.analysis.base import _ensure_init
+    import trustsight.db as db_module
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path / "one")
+    _ensure_init()
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path / "two")
+    _ensure_init()
+
+    with db_module.get_connection() as conn:
+        # Fails with OperationalError when the second path has no schema.
+        conn.execute("SELECT 1 FROM cycle_events LIMIT 1").fetchall()

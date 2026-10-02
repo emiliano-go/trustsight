@@ -408,10 +408,15 @@ _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
 
 def _clean_url(token: str) -> str:
-    # Trailing `)` comes from the array close; trailing `}` from nested
-    # shell defaults like `${A:-${B:-https://example.org}}`.
-    token = re.sub(r"[\)}]+$", "", token)
+    token = re.sub(r"[\)]+$", "", token)
     token = re.sub(r"[\)]+", ")", token)
+    # Trailing braces from a nested shell default (`${A:-${B:-https://x}}`)
+    # are shell syntax, but the `}` closing a `${var}` inside the URL is
+    # part of the template: strip only the braces nothing opened.
+    trailing = len(token) - len(token.rstrip("}"))
+    excess = token.count("}") - token.count("{")
+    if trailing and excess > 0:
+        token = token[:len(token) - min(trailing, excess)]
     token = re.sub(r"[,;\s]+$", "", token)
     return token
 

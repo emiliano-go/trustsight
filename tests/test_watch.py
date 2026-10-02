@@ -281,6 +281,8 @@ def test_a_permanently_refused_cycle_stops_the_watch(monkeypatch):
     monkeypatch.setattr(
         "trustsight.full_aur.metadata.load_metadata", lambda *a, **k: None,
     )
+    from trustsight.db import init_db
+    init_db()
     # cycles=5: without the break this returns five refused cycles.
     results = run_watch(interval=60, cycles=5, sleep=lambda s: None)
     assert len(results) == 1
@@ -327,3 +329,24 @@ def test_the_interval_is_skipped_while_backfilling(monkeypatch):
     # One short pause after the backfill cycle, then the live interval; the
     # loop never sleeps after the last cycle.
     assert slept == [2, 3600]
+
+
+def test_a_refused_cycle_during_a_backfill_retries(monkeypatch):
+    """A --since replay advances no snapshot until it catches up, so a
+    refused cycle during one is transient, not 'no snapshot yet'."""
+    from trustsight.full_aur.pipeline import CycleResult, run_watch
+
+    outcomes = iter([CycleResult(refused=True), CycleResult(added=1)])
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kwargs: next(outcomes),
+    )
+    monkeypatch.setattr(
+        "trustsight.full_aur.metadata.load_metadata", lambda *a, **k: None,
+    )
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline._since_cursor", lambda: 1777593600,
+    )
+    results = run_watch(interval=60, cycles=1, sleep=lambda s: None)
+    assert len(results) == 1
+    assert not results[0].refused

@@ -845,10 +845,13 @@ def run_watch(
             if result.refused:
                 from .metadata import load_metadata
 
-                if load_metadata() is None:
-                    # No snapshot exists to diff against, so every cycle
-                    # refuses the same way: an unattended watch would spin
-                    # forever fetching metadata and analysing nothing.
+                if load_metadata() is None and _since_cursor() is None:
+                    # No snapshot exists to diff against and no replay is in
+                    # flight, so every cycle refuses the same way: an
+                    # unattended watch would spin forever fetching metadata
+                    # and analysing nothing.  A --since replay advances no
+                    # snapshot until it catches up, and that is not a
+                    # refusal.
                     _log(
                         "No corpus snapshot yet; the watch has nothing to "
                         "diff against. Run 'trustsight full-aur --bootstrap' "

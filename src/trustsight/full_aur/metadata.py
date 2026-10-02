@@ -183,12 +183,20 @@ def fetch_metadata(on_progress=None) -> dict:
         resp = urlopen(Request(_METADATA_URL, headers=headers), timeout=HTTP_TIMEOUT)
     except HTTPError as exc:
         if exc.code == 304:
-            log.info("AUR metadata unchanged (304); reusing the stored snapshot")
             existing = load_metadata()
-            return existing if existing is not None else {}
-        raise RuntimeError(
-            f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
-        ) from exc
+            if existing is not None:
+                log.info("AUR metadata unchanged (304); reusing the stored snapshot")
+                return existing
+            # Validators without a snapshot: a --since replay advances no
+            # snapshot while the ETag file was already written, so taking
+            # the 304 at face value hands back an empty dict and every cycle
+            # refuses forever.  Refetch unconditionally.
+            log.info("AUR metadata 304 but no stored snapshot; refetching")
+            resp = urlopen(Request(_METADATA_URL), timeout=HTTP_TIMEOUT)
+        else:
+            raise RuntimeError(
+                f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
+            ) from exc
     except Exception as exc:
         raise RuntimeError(
             f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"

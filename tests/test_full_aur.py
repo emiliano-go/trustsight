@@ -615,3 +615,51 @@ def test_since_resumes_the_cursor_across_a_restart(monkeypatch):
         assert second.over_threshold == [("newer-pkg", 90)]
     finally:
         _clear_cursor()
+
+
+def test_a_304_with_validators_but_no_snapshot_refetches(monkeypatch):
+    """A --since replay advances no snapshot while the ETag file already
+    exists, so taking a 304 at face value hands back an empty dict and
+    every cycle refuses forever.  The fetch falls back to unconditional."""
+    import urllib.error
+    import trustsight.full_aur.metadata as metadata
+
+    calls = []
+
+    body = gzip.compress(b"[]")
+
+    class _Resp:
+        status = 200
+        headers = {"Content-Length": str(len(body)), "ETag": "x",
+                   "Last-Modified": "y"}
+
+        def __init__(self):
+            self._pos = 0
+
+        def read(self, n=-1):
+            chunk = body[self._pos:self._pos + n]
+            self._pos += len(chunk)
+            return chunk
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout=0):
+        calls.append(bool(req.headers))
+        if req.headers:
+            raise urllib.error.HTTPError(req.full_url, 304, "Not Modified", {}, None)
+        return _Resp()
+
+    monkeypatch.setattr(metadata, "urlopen", fake_urlopen)
+    monkeypatch.setattr(metadata, "_read_validators", lambda: ("x", "y"))
+    monkeypatch.setattr(metadata, "load_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(metadata, "_write_validators", lambda *a: None)
+    monkeypatch.setattr(metadata, "save_metadata", lambda *a, **k: None)
+
+    # An empty-body reply parses to no packages; what matters is that the
+    # unconditional refetch happened at all.
+    metadata.fetch_metadata()
+    assert calls == [True, False]

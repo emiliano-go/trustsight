@@ -1,0 +1,8 @@
+--- PKGBUILD
++++ PKGBUILD
+@@ -6,3 +6,3 @@
+
+ pkgdesc="Demo VCS package"
+-source=("demo::git+https://github.com/example/demo#commit=0123456789abcdef0123456789abcdef01234567")
++source=("demo::git+https://github.com/example/demo#branch=main")
+ sha256sums=('SKIP')

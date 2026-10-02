@@ -184,3 +184,100 @@ def test_h092_fires_on_the_review_path(isolated, monkeypatch):
 def test_h092_silent_when_metadata_and_recipe_agree(isolated, monkeypatch):
     fact = _analyze(isolated, monkeypatch, _SRCINFO_EQUIVALENT)
     assert not any(e.rule_id == "H092" for e in fact.score_breakdown)
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: H101 (pinning lost) and H102 (maintainer + keyring composition)
+# ---------------------------------------------------------------------------
+
+def test_h101_fires_when_a_commit_pin_becomes_a_branch():
+    diff = """\
+--- PKGBUILD
++++ PKGBUILD
+@@ -5,3 +5,3 @@
+ source=(
+-        "demo::git+https://github.com/example/demo#commit=0123456789abcdef0123456789abcdef01234567"
++        "demo::git+https://github.com/example/demo#branch=main"
+ )
+"""
+    hits = [f for f in _rules(diff) if f["rule_id"] == "H101"]
+    assert len(hits) == 1
+    assert hits[0]["severity"] == "MEDIUM"
+
+
+def test_h101_silent_on_pinned_to_pinned_and_floating_to_floating():
+    base = """\
+--- PKGBUILD
++++ PKGBUILD
+@@ -5,3 +5,3 @@
+ source=(
+-        "demo::git+https://github.com/example/demo%s"
++        "demo::git+https://github.com/example/demo%s"
+ )
+"""
+    pinned = base % ("#commit=0123456789abcdef0123456789abcdef01234567",
+                     "#commit=abcdefabcdefabcdefabcdefabcdefabcdefabcd")
+    assert not any(f["rule_id"] == "H101" for f in _rules(pinned))
+    floating = base % ("#branch=dev", "#branch=main")
+    assert not any(f["rule_id"] == "H101" for f in _rules(floating))
+
+
+def test_h102_needs_both_members():
+    from trustsight.analysis.composition import maintainer_keyring_composition
+
+    both = maintainer_keyring_composition([{"rule_id": "H078"}], True)
+    assert both is not None and both["rule_id"] == "H102"
+    assert both["severity"] == "HIGH"
+    assert maintainer_keyring_composition([{"rule_id": "H078"}], False) is None
+    assert maintainer_keyring_composition([], True) is None
+
+
+_PKGBUILD_KEYS_1 = (
+    "# Maintainer: Alice <alice@example.invalid>\n"
+    "pkgname=demo\n"
+    "pkgver=1.0\n"
+    "pkgrel=1\n"
+    'source=("https://example.invalid/demo-1.0.tar.gz")\n'
+    "sha256sums=('abc123')\n"
+    "validpgpkeys=('1111111111111111111111111111111111111111')\n"
+)
+_PKGBUILD_KEYS_2 = (
+    "# Maintainer: Mallory <mallory@example.invalid>\n"
+    "pkgname=demo\n"
+    "pkgver=1.0.1\n"
+    "pkgrel=1\n"
+    'source=("https://example.invalid/demo-1.0.1.tar.gz")\n'
+    "sha256sums=('def456')\n"
+    "validpgpkeys=('2222222222222222222222222222222222222222')\n"
+)
+
+
+def test_h102_fires_on_the_xz_shape(isolated, monkeypatch):
+    import trustsight.analysis.pipeline as pipeline
+
+    repo, _ = _repo(isolated, [
+        {"PKGBUILD": _PKGBUILD_KEYS_1},
+        {"PKGBUILD": _PKGBUILD_KEYS_2},
+    ])
+    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: repo)
+    fact = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "H078" in ids, "the member must fire for the composition to see it"
+    assert "H102" in ids
+
+
+def test_h102_silent_when_the_maintainer_stays(isolated, monkeypatch):
+    import trustsight.analysis.pipeline as pipeline
+
+    same_maintainer = _PKGBUILD_KEYS_2.replace(
+        "# Maintainer: Mallory <mallory@example.invalid>",
+        "# Maintainer: Alice <alice@example.invalid>")
+    repo, _ = _repo(isolated, [
+        {"PKGBUILD": _PKGBUILD_KEYS_1},
+        {"PKGBUILD": same_maintainer},
+    ])
+    monkeypatch.setattr(pipeline, "clone_or_fetch", lambda name, mtime=None: repo)
+    fact = pipeline.analyze_package("demo", installed_version="1.0-1", record=True)
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "H078" in ids
+    assert "H102" not in ids

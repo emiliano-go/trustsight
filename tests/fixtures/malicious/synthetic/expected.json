@@ -1191,5 +1191,11 @@
       "R026",
       "R027"
     ]
+  },
+  "H101-source-pinning-lost.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "H101"
+    ]
   }
 }

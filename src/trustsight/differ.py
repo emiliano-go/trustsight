@@ -408,7 +408,9 @@ _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
 
 def _clean_url(token: str) -> str:
-    token = re.sub(r"[\)]+$", "", token)
+    # Trailing `)` comes from the array close; trailing `}` from nested
+    # shell defaults like `${A:-${B:-https://example.org}}`.
+    token = re.sub(r"[\)}]+$", "", token)
     token = re.sub(r"[\)]+", ")", token)
     token = re.sub(r"[,;\s]+$", "", token)
     return token

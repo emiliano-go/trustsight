@@ -38,6 +38,7 @@ from .persistence import _persistence_findings
 from .version import _epoch_findings
 from ..findings import stamp
 from ..rules import find_line_in_diff
+from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
 
 _BINARY_ARTIFACT_RE = re.compile(
@@ -104,12 +105,17 @@ def _signing_key_findings(diff_text: str, add) -> None:
     # addition side has been read.  Collection is gated by the quoted-hex
     # entry regex, so a trailing unclosed region gathers nothing real.
     array_open = False
-    for line in split_lines(diff_text):
-        if line.startswith(("+++ ", "--- ", "@@")):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith(("+++ ", "--- ", "@@")):
             array_open = in_added = in_removed = False
             continue
-        side = line[0] if line[:1] in ("+", "-", " ") else " "
-        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        if line.is_content:
+            side = {"add": "+", "remove": "-", "context": " "}[line.side]
+            body = line.content
+        else:
+            side = " "
+            body = raw
         opens = bool(_VALIDPGPKEYS_LINE_RE.match(body))
         if side == "-" and (opens or in_removed or array_open):
             had_keys_before = had_keys_before or bool(_VALIDPGPKEYS_ENTRY_RE.search(body))
@@ -355,8 +361,9 @@ def unchanged_upstream_host(diff_text: str, current_text: str | None) -> str:
     A ``url=`` set in the same change as the source proves nothing about it.
     """
     added = "\n".join(
-        line[1:] for line in split_lines(diff_text)
-        if line.startswith("+") and not line.startswith("+++")
+        line.content
+        for line in parse_diff_lines(split_lines(diff_text)).lines
+        if line.side == "add" and not line.raw.startswith("+++")
     )
     if _URL_SCALAR_RE.search(added):
         return ""

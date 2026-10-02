@@ -37,6 +37,7 @@ from .base import iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
 from .delivery import _find_line
+from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
@@ -56,14 +57,15 @@ def _source_url_tokens(diff_text):
     """Yield ``(scheme, url)`` for every scheme:// token on an added source
     line (array or scalar / .SRCINFO form)."""
     in_array = False
-    for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@")):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith(("+++", "---", "@@")):
             continue
-        if line.startswith("-"):
-            if in_array and ")" in line:
+        if line.side == "remove":
+            if in_array and ")" in raw:
                 in_array = False
             continue
-        body = line[1:] if line[:1] == "+" else line
+        body = line.content if line.side == "add" else raw
         opens_array = bool(_SOURCE_ARRAY_RE.match(body))
         is_source = opens_array or bool(_SOURCE_SCALAR_RE.match(body))
         if not in_array and not is_source:
@@ -178,11 +180,16 @@ def _git_refs_by_side(diff_text: str) -> dict[str, dict[str, set[tuple[str, str]
     """Map ``side -> repo -> {(ref_kind, ref_value)}`` for every git source
     token in the diff, where side is ``+``, ``-`` or ``" "`` (context)."""
     sides: dict[str, dict[str, set[tuple[str, str]]]] = {"+": {}, "-": {}, " ": {}}
-    for line in split_lines(diff_text):
-        if line.startswith(("+++", "---", "@@", "diff ", "index ")):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        raw = line.raw
+        if raw.startswith(("+++", "---", "@@", "diff ", "index ")):
             continue
-        side = line[0] if line[:1] in ("+", "-", " ") else " "
-        body = line[1:] if line[:1] in ("+", "-", " ") else line
+        if line.is_content:
+            side = {"add": "+", "remove": "-", "context": " "}[line.side]
+            body = line.content
+        else:
+            side = " "
+            body = raw
         for url in _GIT_URL_RE.findall(body):
             match = _GIT_REF_RE.search(url)
             if match:
@@ -196,12 +203,12 @@ def _pin_vars_by_side(diff_text: str) -> dict[str, dict[str, tuple[str, str]]]:
     """Map ``side -> variable -> (digest, trailing comment)`` for pin
     assignments on changed lines."""
     sides: dict[str, dict[str, tuple[str, str]]] = {"+": {}, "-": {}}
-    for line in split_lines(diff_text):
-        if line.startswith(("+++", "---")) or line[:1] not in ("+", "-"):
+    for line in parse_diff_lines(split_lines(diff_text)).lines:
+        if line.raw.startswith(("+++", "---")) or line.side not in ("add", "remove"):
             continue
-        match = _PIN_VAR_RE.match(line[1:])
+        match = _PIN_VAR_RE.match(line.content)
         if match:
-            sides[line[0]][match.group(1).lower()] = (
+            sides["+" if line.side == "add" else "-"][match.group(1).lower()] = (
                 match.group(2).lower(), (match.group(3) or "").strip()
             )
     return sides

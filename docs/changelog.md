@@ -20,7 +20,7 @@
 ### Fixed
 
 - A checksum value could be reported as a novel dependency (D001/D002). A hunk ending inside a dependency array left the dependency walker's array state open, and the next hunk's `sha256sums=('...')` lines were read as its continuation: the balanced same-line array never closed the state, so the hex sums of `sha256sums_x86_64`/`sha256sums_aarch64` scored as dependencies (`alacritree-bin` 0.14.0 scored 80 on exactly this). Any array assignment now ends an array a previous hunk left open, tracked or not.
-- Source URLs extracted from a nested shell default (`${A:-${B:-https://example.org}}`) kept the trailing braces, so the added URL was recorded as `https://registry.npmjs.org}}` and flowed into scoring, novelty and the source buckets with the corruption attached. The URL cleaner strips trailing `}` as it already did `)`.
+- Source URLs extracted from a nested shell default (`${A:-${B:-https://example.org}}`) kept the trailing braces, so the added URL was recorded as `https://registry.npmjs.org}}` and flowed into scoring, novelty and the source buckets with the corruption attached. The URL cleaner strips the braces nothing opened; a balanced `${var}` inside the URL template keeps its closing brace.
 
 ### Changed
 

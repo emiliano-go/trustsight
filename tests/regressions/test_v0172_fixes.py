@@ -82,3 +82,13 @@ def test_nested_shell_default_braces_do_not_leak_into_urls():
 def test_clean_url_strips_trailing_braces_but_keeps_real_path_braces():
     assert _clean_url("https://registry.npmjs.org}}") == "https://registry.npmjs.org"
     assert _clean_url("https://example.invalid/a}b/c") == "https://example.invalid/a}b/c"
+
+
+def test_clean_url_keeps_balanced_variable_braces():
+    # A `${var}` inside the URL template owns its closing brace; only
+    # braces nothing opened are shell noise.
+    assert (_clean_url("https://dl.discordapp.net/apps/linux/${_pkgver:-${pkgver}}/x.zip")
+            == "https://dl.discordapp.net/apps/linux/${_pkgver:-${pkgver}}/x.zip")
+    assert _clean_url("https://example.invalid/${_iso}") == "https://example.invalid/${_iso}"
+    assert (_clean_url("https://github.com/ilanschnell/${pkgname##*-}")
+            == "https://github.com/ilanschnell/${pkgname##*-}")

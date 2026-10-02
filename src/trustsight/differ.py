@@ -7,12 +7,13 @@ import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
 from .coverage import unpinned_source_refs
+from .diffdoc import parse_diff_lines
 from .schema import DiffSummary, SourceChanges
 from .tokenizer import split_lines
 
-_HUNK_HEADER_RE = re.compile(
-    r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@"
-)
+# The hunk-header grammar lives in diffdoc now; the parser's accept set is
+# the legacy ``_HUNK_HEADER_RE`` set, widened only by capturing the
+# old-side start.
 
 # These are parser-side safety rails; the pipeline's configured diff cap still
 # owns the final coverage decision for an analysis.
@@ -86,39 +87,14 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
     lines, with each value being ``(file_name, line_number)``.
     Only content lines (`` `` context, ``+`` addition, ``-`` removal)
     produce entries; header lines are not mapped.
+
+    A projection of the typed parse (:mod:`trustsight.diffdoc`): the
+    file attribution, the hunk gating and the line counter are the
+    parser's decisions now, made once, and the parity harness proves the
+    projection agrees with the walk this replaces over the whole locked
+    corpus.
     """
-    mapping: dict[int, tuple[str, int]] = {}
-    lines = split_lines(diff_text)
-    current_file = "PKGBUILD"
-    new_lineno = 0
-    in_hunk = False
-
-    for i, line in enumerate(lines):
-        if line.startswith("+++ "):
-            # removeprefix, not lstrip: lstrip("b/") strips *characters*,
-            # so "+++ b/build.sh" reported the file as "uild.sh" and every
-            # finding in it cited a path that does not exist.
-            name = line[4:].strip()
-            current_file = name.removeprefix("b/") if name.startswith("b/") else name
-            current_file = current_file[:MAX_DIFF_PATH_BYTES]
-            continue
-        if line.startswith("--- "):
-            continue
-        m = _HUNK_HEADER_RE.match(line)
-        if m:
-            try:
-                new_lineno = int(m.group(1))
-            except ValueError:
-                in_hunk = False
-                continue
-            in_hunk = True
-            continue
-        if in_hunk and line.startswith(("+", " ", "-")):
-            mapping[i] = (current_file, new_lineno)
-            if line.startswith(("+", " ")):
-                new_lineno += 1
-
-    return mapping
+    return parse_diff_lines(split_lines(diff_text)).line_map()
 
 _DELTA_STATUS_MAP = {
     GIT_DELTA_ADDED: "added",
@@ -1551,19 +1527,13 @@ def _post_diff_lines(diff_text: str) -> list[str]:
     Applies the diff: keeps context (`` ``) and addition (``+``) lines,
     drops removal (``-``) and header lines.  Returns lines with their
     diff prefix stripped.
+
+    A projection of the typed parse (:mod:`trustsight.diffdoc`); the
+    header-shape guard (``+++ ``/``--- `` carry a trailing space, so a
+    content line starting with ``++`` survives) is the parser's decision
+    now, made once.
     """
-    out: list[str] = []
-    for line in split_lines(diff_text):
-        # Header shapes carry a trailing space (`+++ b/x`, `--- a/x`);
-        # without it an added line whose content starts with `++` would be
-        # mistaken for a header and dropped from the post-state.
-        if line.startswith(("+++ ", "--- ", "@@")):
-            continue
-        if line.startswith("-"):
-            continue
-        if line.startswith("+") or line.startswith(" "):
-            out.append(line[1:])
-    return out
+    return parse_diff_lines(split_lines(diff_text)).post_lines()
 
 
 def _has_checksum_in_post_diff(diff_text: str) -> bool:
@@ -1578,20 +1548,10 @@ def _pre_diff_lines(diff_text: str) -> list[str]:
     The mirror of :func:`_post_diff_lines`: keeps context (`` ``) and
     removal (``-``) lines, drops additions (``+``) and headers.  Needed to
     answer "was this declared *before*?" when the declaration's own line is
-    context and only its contents changed.
+    context and only its contents changed.  A projection of the typed
+    parse, as its mirror is.
     """
-    out: list[str] = []
-    for line in split_lines(diff_text):
-        # Same trailing-space guard as _post_diff_lines: a removed line
-        # whose content starts with `--` is `---…`, not a file header, and
-        # belongs in the pre-state.
-        if line.startswith(("+++ ", "--- ", "@@")):
-            continue
-        if line.startswith("+"):
-            continue
-        if line.startswith("-") or line.startswith(" "):
-            out.append(line[1:])
-    return out
+    return parse_diff_lines(split_lines(diff_text)).pre_lines()
 
 
 def detect_gpg_verification_removed(diff_text: str) -> bool:

@@ -340,14 +340,15 @@ def _binary_metadata_finding(paths: list[str]) -> dict:
     })
 
 
-def _adds_a_dependency(diff_text: str) -> bool:
-    """True when the diff adds a dependency that is not a repo package.
+def _added_dependency_names(diff_text: str) -> set[str]:
+    """Non-official dependency names this diff adds, from the walked fields.
 
     The gap exists for a name this run did not walk, which is an AUR
     dependency; a package from an official repository (``lib32-glibc`` in
     ``[core]``) is resolved by the build system like any other and is not
-    unread code.  The dependency walk already drops non-AUR names, so this
-    predicate applies the same distinction to the added-dependency test.
+    unread code.  ``optdepends`` is excluded along with the gap test: it
+    is not pulled in by default (the same reason DEPTH_FIELDS excludes
+    it), so a name there is not code the run failed to read.
 
     A tokenizer failure must not read as "no dependency added": that is the
     same neutral value a complete scan returns, and it silently clears
@@ -366,34 +367,78 @@ def _adds_a_dependency(diff_text: str) -> bool:
     except Exception:
         log.debug("dependency-change scan failed", exc_info=True)
         note_stage_failure("dependency-change-scan")
-        return False
+        return set()
     names = {
         name
-        for field in ("depends", "makedepends", "checkdepends", "optdepends")
+        for field in ("depends", "makedepends", "checkdepends")
         for name in added.get(field, ())
     }
-    return any(not is_established_package(name) for name in names)
+    return {name for name in names if not is_established_package(name)}
 
 
-def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False):
+def _adds_a_dependency(diff_text: str) -> bool:
+    """True when the diff adds a dependency that is not a repo package."""
+    return bool(_added_dependency_names(diff_text))
+
+
+def _deps_not_scanned(depth_result, added_names: set[str]) -> bool:
+    """Whether this run leaves an added dependency unread.
+
+    Three ways, and only three: the walk was cut short; the metadata
+    provider could not answer, so "not in the AUR" is not a fact; or an
+    added name the provider *does* know is AUR was not reached.  A name
+    the provider reports as not-AUR is resolved by makepkg's normal
+    dependency handling and is not a gap.
+    """
+    return (
+        depth_result.truncated
+        or (bool(added_names) and depth_result.metadata_unavailable)
+        or depth_result.added_aur_unreported
+    )
+
+
+def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
+                       added_names: set[str] | None = None):
     """Analyse the AUR dependency closure of *pkg_name*.
 
     A dependency is analysed by ``analyze_package`` with ``depth=0``: the
     walk owns the level counting, so a child must not start a walk of its
     own or the closure would be traversed once per node.
+
+    *added_names* are the non-official dependencies this diff added.  They
+    are checked against the same provider the walk used, so the caller can
+    tell "this name is not AUR" (no gap) from "this AUR name was never
+    reached" (a gap).
     """
     from ..depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
 
     resolved = resolve_depth(depth, config)
+    provider = default_metadata()
     if resolved == 0:
-        return DepthResult()
-    return walk_dependencies(
-        pkg_name,
-        depth=resolved,
-        metadata=default_metadata(),
-        analyse=lambda name: analyze_package(name, depth=0, record=record),
-        already_seen=seen,
+        result = DepthResult()
+    else:
+        result = walk_dependencies(
+            pkg_name,
+            depth=resolved,
+            metadata=provider,
+            analyse=lambda name: analyze_package(name, depth=0, record=record),
+            already_seen=seen,
+        )
+    if added_names:
+        reported = {report.name for report in result.reports}
+        try:
+            result.added_aur_unreported = any(
+                name not in reported and provider.is_aur(name)
+                for name in added_names
+            )
+        except Exception:
+            log.debug("added-dependency metadata check failed", exc_info=True)
+            result.metadata_unavailable = True
+    result.metadata_unavailable = (
+        result.metadata_unavailable
+        or not getattr(provider, "available", True)
     )
+    return result
 
 
 def _parent_commit(repo, head_commit: str) -> str:
@@ -781,8 +826,10 @@ def analyze_package(
     # Before scoring, because a truncated walk has to reach `gaps_from`:
     # the band downgrade is decided once inside calculate_score and carried
     # on the fact, so a gap appended afterwards would never fail closed.
+    added_names = _added_dependency_names(diff_text)
     depth_result = _walk_dependencies(
-        pkg_name, depth, config, _depth_seen, record=record
+        pkg_name, depth, config, _depth_seen, record=record,
+        added_names=added_names,
     )
 
     gaps = gaps_from(
@@ -804,10 +851,10 @@ def analyze_package(
         # attacker-controlled new `depends=` reporting a complete analysis
         # of a change it had only half read. The score stays where it was;
         # what changes is that the report stops claiming completeness.
-        deps_not_scanned=(
-            depth_result.truncated
-            or (_adds_a_dependency(diff_text) and not depth_result.reports)
-        ),
+        # A non-AUR name is not unread code: the walk asked the same
+        # provider the rest of the run uses, and --depth 0 is the
+        # operator's own complete answer.
+        deps_not_scanned=_deps_not_scanned(depth_result, added_names),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),

@@ -720,6 +720,49 @@ def test_a_dependency_this_run_did_not_read(field):
     assert gap_weight == 0, f"coverage gap added {gap_weight} points"
 
 
+def test_a_non_aur_dependency_does_not_report_deps_not_scanned():
+    """The walk asked the provider: "not in the AUR" is an answer.
+
+    gtk3-classic, alacrittyforge and friends add dependencies that are not
+    AUR packages; the old test gapped on any non-official name, reporting
+    a shortfall for a name the walk correctly resolved as not-AUR.
+    """
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert not _deps_not_scanned(DepthResult(), {"libfoo"})
+
+
+def test_an_unanswered_walk_reports_deps_not_scanned():
+    """RPC failure is not "not in the AUR"; fail closed on added names."""
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert _deps_not_scanned(DepthResult(metadata_unavailable=True), {"libfoo"})
+    # No added dependency, nothing unread.
+    assert not _deps_not_scanned(DepthResult(metadata_unavailable=True), set())
+
+
+def test_an_unreached_aur_dependency_reports_deps_not_scanned():
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert _deps_not_scanned(DepthResult(added_aur_unreported=True), {"libfoo"})
+
+
+def test_an_added_optdepend_does_not_report_deps_not_scanned():
+    """makepkg does not build optdepends, so a name there is not unread
+    build-time code; the walk's own DEPTH_FIELDS excludes it for the same
+    reason."""
+    from trustsight.analysis import scan_diff
+
+    base = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
+            "+pkgname=p\n+pkgver=1\n")
+    tail = "+source=(https://e.example/x.tar.gz)\n+sha256sums=('SKIP')\n"
+    fact = scan_diff(base + "+optdepends=('libfoo')\n" + tail, package_name="p")
+    assert "deps_not_scanned" not in fact.coverage_gaps
+
+
 def test_a_repo_dependency_does_not_report_deps_not_scanned(monkeypatch):
     """A dependency from an official repo is not unread AUR code.
 

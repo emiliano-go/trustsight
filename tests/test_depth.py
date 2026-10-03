@@ -276,6 +276,30 @@ def test_the_rpc_provider_batches_one_request_per_level():
     assert rpc.deps_of("x") == {"y"}
 
 
+def test_the_rpc_provider_reports_an_unreachable_aur():
+    """A failed request is not "the AUR does not have this"."""
+    def boom(names):
+        raise RuntimeError("rpc down")
+
+    rpc = RpcMetadata(fetch=boom)
+    assert rpc.is_aur("x") is False
+    assert rpc.available is False
+
+
+def test_the_rpc_provider_reports_offline_as_unavailable(monkeypatch):
+    """The default fetch is cache-only offline; a missed name was never
+    asked about, so the caller must not read False as "not in the AUR"."""
+    monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
+    rpc = RpcMetadata()
+    assert rpc.is_aur("x") is False
+    assert rpc.available is False
+
+
+def test_a_snapshot_is_always_available():
+    """A loaded snapshot answers for every name it does not hold."""
+    assert SnapshotMetadata({}).available is True
+
+
 def test_a_report_serialises_to_plain_data():
     dep = DependencyReport(name="d", depth=2, score=30, risk="Medium",
                            risk_label="Medium", finding_count=1,

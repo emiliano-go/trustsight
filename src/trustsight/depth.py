@@ -140,6 +140,14 @@ class DepthResult:
     truncated: bool = False
     #: Why, for the report text.
     reason: str = ""
+    #: The metadata provider could not answer.  "Not in the AUR" and "I
+    #: could not ask" are different answers, and only the second leaves a
+    #: dependency the run failed to read: the caller fails closed on it.
+    metadata_unavailable: bool = False
+    #: An added dependency the provider *does* know is in the AUR was not
+    #: reached by the walk (depth off, or the walk did not seed it), so the
+    #: caller records ``deps_not_scanned``.
+    added_aur_unreported: bool = False
 
     @property
     def flagged(self) -> tuple[DependencyReport, ...]:
@@ -195,6 +203,7 @@ def walk_dependencies(
     """
     result = DepthResult()
     if depth == 0:
+        result.metadata_unavailable = not getattr(metadata, "available", True)
         return result
 
     seen: set[str] = already_seen if already_seen is not None else set()
@@ -214,6 +223,9 @@ def walk_dependencies(
                 result.reason = (
                     f"stopped after {MAX_DEPTH_NODES} dependencies; the closure "
                     "is larger than one run analyses"
+                )
+                result.metadata_unavailable = not getattr(
+                    metadata, "available", True
                 )
                 return result
             seen.add(name)
@@ -240,6 +252,7 @@ def walk_dependencies(
             f"stopped at {MAX_DEPTH_LEVELS} levels; the closure is deeper than "
             "one run walks"
         )
+    result.metadata_unavailable = not getattr(metadata, "available", True)
     return result
 
 
@@ -409,6 +422,11 @@ class SnapshotMetadata:
     def packages(self) -> dict:
         return self._packages
 
+    @property
+    def available(self) -> bool:
+        """A loaded snapshot answers for every name it could not find."""
+        return True
+
     def is_aur(self, name: str) -> bool:
         return name in self._packages
 
@@ -448,7 +466,12 @@ class RpcMetadata:
         from .discovery import get_aur_package_info
 
         self._fetch = fetch or get_aur_package_info
+        #: An injected fetch is the caller's own answer, not the network.
+        self._injected = fetch is not None
         self._cache: dict[str, dict] = {}
+        #: False once a request failed, so a caller can tell "the AUR does
+        #: not have this" from "the AUR was not reachable".
+        self.available = True
 
     @property
     def packages(self) -> dict:
@@ -459,9 +482,18 @@ class RpcMetadata:
         wanted = [n for n in dict.fromkeys(names) if n not in self._cache]
         if not wanted:
             return
+        from .release import offline
+
         try:
-            found = self._fetch(wanted)
+            if offline() and not self._injected:
+                # The default fetch returns cache-only without saying so,
+                # and a name missing from the cache is not "not in the AUR".
+                self.available = False
+                found = {}
+            else:
+                found = self._fetch(wanted)
         except Exception:
+            self.available = False
             found = {}
         for name in wanted:
             self._cache[name] = found.get(name) or {}

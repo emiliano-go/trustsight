@@ -137,6 +137,18 @@ double-report when it is enabled (it is, by default).
 
 Fire rate: 2 of 3739 (0.05 %), both established-name claims: `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`.
 
+**Known false positive: kernel module aliases.** A `linux*` split provides
+module names many packages depend on - `KSMBD-MODULE`, `LINUX-HEADERS`, or
+a lower-case `<module>-module` alias - and H064's widely-provided branch
+fires on it (`linux-versioned-bin` provides `KSMBD-MODULE`). The name
+belongs to the kernel ABI rather than to another project, so there is no
+related project for `is_related_package` to accept. The trigger is kept:
+the same shape is exactly how a package inserts itself in front of a name
+the ecosystem relies on, and suppressing the class would blind the rule to
+the real version of it. Treat it as a documented false positive to weigh,
+not as a rule to silence; the [tuning guide](../../guides/tuning-false-positives.md#known-false-positives)
+has the config for a package set that is mostly kernels.
+
 ### H048: Dependency Vendored Into Source {#h048}
 
 - **Severity:** HIGH (weight 25) for a security-relevant library, MEDIUM (weight 15) otherwise

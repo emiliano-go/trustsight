@@ -264,6 +264,45 @@ def test_d002_fires_on_a_compound_assignment_when_warm(seeded_db, enabled, rules
     assert "D002" in ids and "D001" not in ids
 
 
+def test_d001_ignores_the_recipes_own_split_outputs(seeded_db, enabled, rules):
+    """linux-versioned-bin: the package depends on the outputs it builds.
+
+    The versioned names are new to the AUR by construction, so a
+    --full-recipe run read the summary package's own split outputs as
+    novel dependencies (D001) and as a novel set (H030).
+    """
+    recipe = (
+        '_pkg=linux-versioned\n'
+        '_versioned="linux1.2.3-1"\n'
+        'pkgname=("${_pkg}-bin"\n'
+        '         "${_pkg}-headers-bin"\n'
+        '         "${_versioned}-bin"\n'
+        '         "${_versioned}-headers-bin"\n'
+        '         "${_versioned}-docs-bin")\n'
+        'package() {\n'
+        '  depends=("${_versioned}-bin" "${_versioned}-headers-bin" '
+        '"${_versioned}-docs-bin")\n'
+        '}\n'
+    )
+    diff = HEADER + (
+        '+_pkg=linux-versioned\n'
+        '+_versioned="linux1.2.3-1"\n'
+        '+pkgname=("${_pkg}-bin" "${_pkg}-headers-bin" "${_versioned}-bin" '
+        '"${_versioned}-headers-bin" "${_versioned}-docs-bin")\n'
+        '+package() {\n'
+        '+  depends=("${_versioned}-bin" "${_versioned}-headers-bin" '
+        '"${_versioned}-docs-bin")\n'
+        '+}\n'
+    )
+    fact = scan_diff(
+        diff, rules=rules, config=enabled,
+        package_name="linux-versioned-bin", current_text=recipe,
+    )
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "D001" not in ids
+    assert "H030" not in ids
+
+
 def test_d001_silent_without_a_seeded_corpus(tmp_path, monkeypatch, enabled, rules):
     """An unseeded database must not make every dependency look novel."""
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)

@@ -213,6 +213,45 @@ def is_ignorable(name: str, pkgbase: str = "") -> bool:
     return False
 
 
+def declared_package_names(recipe_text: str) -> set[str]:
+    """The recipe's own ``pkgname=`` entries, resolved.
+
+    A split package legitimately depends on its own outputs - the linux
+    `-versioned-bin` family depends on the versioned names it builds in
+    the same PKGBUILD.  Those names are globally unknown by construction,
+    so D001 read them as novel dependencies and H030 counted them as a
+    novel set whenever the whole recipe was analysed as newly added.
+
+    The typed recipe keeps array entries literal, so the scalars
+    (already resolved by the tokenizer) are folded into them here.  A
+    parse failure returns nothing rather than guessing: an unread recipe
+    must not stand a rule down.
+    """
+    if not recipe_text:
+        return set()
+    from .recipedoc import parse_recipe
+
+    try:
+        doc = parse_recipe(recipe_text)
+    except Exception:
+        return set()
+    entries = doc.arrays.get("pkgname")
+    if not entries:
+        scalar = doc.scalars.get("pkgname")
+        entries = (scalar,) if scalar else ()
+    # Longest name first so `${_pkg}` cannot rewrite the head of
+    # `${_pkgver}`.  Scalar values are already interpolation-folded.
+    ordered = sorted(doc.scalars.items(), key=lambda kv: len(kv[0]), reverse=True)
+    names: set[str] = set()
+    for entry in entries:
+        value = entry
+        for name, replacement in ordered:
+            value = value.replace("${" + name + "}", replacement)
+            value = value.replace("$" + name, replacement)
+        names.add(normalize_dependency(value))
+    return {name for name in names if name and "$" not in name}
+
+
 def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     """Dependency names on one side of the diff, keyed by field.
 

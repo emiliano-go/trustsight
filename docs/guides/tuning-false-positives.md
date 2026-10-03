@@ -98,6 +98,35 @@ Ensure CRITICAL recall stays at **100%**: every known malicious pattern must sti
 
 If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Restore the rule and find another approach.
 
+## Known false positives
+
+Some patterns are deliberately left triggering and documented instead of
+suppressed, because the same shape is a real signal elsewhere.
+
+### Kernel module provides (H064, D004, H098)
+
+A `linux*` split package provides module aliases the whole kernel family
+depends on: `provides=(KSMBD-MODULE)`, `provides=(LINUX-HEADERS)`, or a
+lower-case `<module>-module` name. `is_related_package` cannot accept
+these - they name a kernel ABI, not a sibling project - so H064 (and
+D004 when enabled) fires, and H098 composes it with a second naming
+signal when one is present. The trigger is kept because the same
+"provide a name the ecosystem depends on" shape is the dependency hijack
+the rule exists for. If your package set is mostly kernel splits, the
+tuning is:
+
+```toml
+## config.toml
+[rules.H064]
+weight_override = 0   # reported, worth no points
+[rules.D004]
+enabled = false       # experimental; H064 already covers the ground
+```
+
+H098 needs two distinct naming signals, so removing D004/H064 can clear
+the cluster only where one of them was the second member - investigate
+the other member before assuming the cluster is the same false positive.
+
 ## When not to tune
 
 - **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the database-wide maturity gate accumulates observations.

@@ -652,7 +652,9 @@ def _structural_findings(
 
     _crossfire_findings(diff_text, config or {}, add)
     _sabotage_findings(diff_text, config or {}, add)
-    _dependency_findings(diff_text, package_name, config or {}, add)
+    _dependency_findings(
+        diff_text, package_name, config or {}, add, current_text=current_text,
+    )
     _build_findings(diff_text, config or {}, add, current_text=current_text)
     _sudo_findings(diff_text, config or {}, add, current_text=current_text)
     _build_flag_findings(diff_text, config or {}, add)

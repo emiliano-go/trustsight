@@ -462,8 +462,13 @@ def _structural_findings(
     # once here rather than trust each producer to carry it.
     line_map = map_diff_lines(diff_text)
 
-    def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, **extra) -> None:
-        if line is not None:
+    def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, span=None, **extra) -> None:
+        if span is not None:
+            # A typed-core span is already a real file line: the recipe
+            # knows where the value was read.
+            file = span.file or file
+            line = span.line or None
+        elif line is not None:
             mapped = line_map.get(line - 1)
             if mapped is not None:
                 file, line = mapped
@@ -552,26 +557,26 @@ def _structural_findings(
     if not version_moved:
         swaps = source_name_host_swaps(diff_text)
         if swaps:
-            name, old_host, new_host, old_dom, new_dom = swaps[0]
+            name, old_host, new_host, old_dom, new_dom, span = swaps[0]
             add("H099", "Source Host Swapped Under A Kept Local Name", "HIGH",
                 "source",
                 f"source '{name}' moved from {old_host} to {new_host} "
                 f"with no version change",
-                line=find_line_in_diff(diff_text, re.escape(new_host)),
+                span=span,
                 local_name=name, old_domain=old_dom, new_domain=new_dom,
                 old_host=old_host, new_host=new_host)
 
     # H100 - a root-running hook appears or is retargeted.  HIGH when the
     # hook script itself ships in the same diff, MEDIUM when the
     # declaration alone moves (the script may predate it).
-    old_hook, new_hook, hook_in_diff = install_hook_transition(diff_text)
+    old_hook, new_hook, hook_in_diff, hook_span = install_hook_transition(diff_text)
     if new_hook and old_hook != new_hook:
         add("H100", "Install Hook Added Or Retargeted",
             "HIGH" if hook_in_diff else "MEDIUM", "installer",
             (f"install hook retargeted: {old_hook} -> {new_hook}" if old_hook
              else f"install hook added: {new_hook}")
             + ("; hook script is in this diff" if hook_in_diff else ""),
-            line=find_line_in_diff(diff_text, r"^[+\s]*install="),
+            span=hook_span,
             old=old_hook, new=new_hook)
 
     # H101 - a verifiable source becomes a moving target.  P008 says where
@@ -579,11 +584,11 @@ def _structural_findings(
     # which is the transition a watch replay exists to catch.
     lost = pinning_lost(diff_text)
     if lost:
-        name, old_url, new_url = lost[0]
+        name, old_url, new_url, span = lost[0]
         add("H101", "Source Pinning Lost", "MEDIUM", "integrity",
             f"source '{name}' was pinned and now tracks a moving target: "
             f"{old_url} -> {new_url}",
-            line=find_line_in_diff(diff_text, re.escape(new_url[:80])),
+            span=span,
             local_name=name, old_url=old_url, new_url=new_url)
 
     _unread_carrier_findings(diff_text, version_moved, add)

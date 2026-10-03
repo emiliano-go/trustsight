@@ -854,27 +854,31 @@ def _recipe_states(diff_text: str):
     return recipe_states(parse_diff_lines(split_lines(diff_text)))
 
 
-def _source_urls_by_local_name(recipe) -> dict[str, str]:
-    """``local name -> url`` for every ``source*`` array the recipe resolved.
+def _source_urls_by_local_name(recipe) -> dict[str, tuple[str, object | None]]:
+    """``local name -> (url, span)`` for every ``source*`` array resolved.
 
     The local name is the ``name::url`` rename when present, else the URL's
     basename, which is what makepkg calls the downloaded file either way.
     Only http(s) entries key in: a bare local file has no host to swap.
+    The span is the entry's line in the recipe's provenance, or None when
+    the recipe was built without origins.
     """
-    out: dict[str, str] = {}
+    out: dict[str, tuple[str, object | None]] = {}
     for array, entries in recipe.arrays.items():
         if not _SOURCE_ARRAY_NAME_RE.match(array):
             continue
-        for entry in entries:
+        spans = recipe.array_spans.get(array, ())
+        for index, entry in enumerate(entries):
             name, sep, url = entry.partition("::")
             if not sep:
                 url = name
                 name = _source_basename(url)
             if not name or not _URL_HOST_RE.match(url):
                 continue
+            span = spans[index] if index < len(spans) else None
             # Last occurrence wins: a diff fragment can show a name twice,
             # and the one that changed is the later one.
-            out[name] = url
+            out[name] = (url, span)
     return out
 
 
@@ -887,39 +891,46 @@ def _registered_domain_of(url: str) -> str:
     return _registered_domain(host.group(1))
 
 
-def source_name_host_swaps(diff_text: str) -> list[tuple[str, str, str, str, str]]:
-    """``(local name, old host, new host, old domain, new domain)`` where
-    the name survived but the registered domain moved (H099).
+def source_name_host_swaps(
+    diff_text: str,
+) -> list[tuple[str, str, str, str, str, object | None]]:
+    """``(local name, old host, new host, old domain, new domain, span)``.
 
+    H099's shape: the name survived but the registered domain moved.
     makepkg's source cache keys on the local name, so renaming the server
     under a kept name refetches nothing a reviewer would recognise as new:
     the quiet-swap attack.  Only names visible on both sides of the diff
     compare, so a partially shown array cannot pair a name with the wrong
-    URL.
+    URL.  The span is the new entry's line.
     """
     pre, post = _recipe_states(diff_text)
     old = _source_urls_by_local_name(pre)
     new = _source_urls_by_local_name(post)
-    swaps: list[tuple[str, str, str, str, str]] = []
+    swaps: list[tuple[str, str, str, str, str, object | None]] = []
     for name in sorted(set(old) & set(new)):
-        if old[name] == new[name]:
+        old_url = old[name][0]
+        new_url, new_span = new[name]
+        if old_url == new_url:
             continue
-        old_host_m, new_host_m = _URL_HOST_RE.match(old[name]), _URL_HOST_RE.match(new[name])
+        old_host_m, new_host_m = _URL_HOST_RE.match(old_url), _URL_HOST_RE.match(new_url)
         old_host = old_host_m.group(1) if old_host_m else ""
         new_host = new_host_m.group(1) if new_host_m else ""
-        old_dom = _registered_domain_of(old[name])
-        new_dom = _registered_domain_of(new[name])
+        old_dom = _registered_domain_of(old_url)
+        new_dom = _registered_domain_of(new_url)
         if old_dom and new_dom and old_dom != new_dom:
-            swaps.append((name, old_host, new_host, old_dom, new_dom))
+            swaps.append((name, old_host, new_host, old_dom, new_dom, new_span))
     return swaps
 
 
-def install_hook_transition(diff_text: str) -> tuple[str, str, bool]:
-    """``(old install=, new install=, hook script in this diff)`` (H100).
+def install_hook_transition(
+    diff_text: str,
+) -> tuple[str, str, bool, object | None]:
+    """``(old install=, new install=, hook script in this diff, span)``.
 
-    An ``install=`` scalar appearing or retargeting hands root to a hook
-    that was not there before; H017 inspects hook *content*, nothing
-    watched the declaration itself.
+    H100's shape: an ``install=`` scalar appearing or retargeting hands
+    root to a hook that was not there before; H017 inspects hook
+    *content*, nothing watched the declaration itself.  The span is the
+    declaration's own line.
     """
     pre, post = _recipe_states(diff_text)
     old_hook = pre.scalars.get("install", "")
@@ -929,7 +940,7 @@ def install_hook_transition(diff_text: str) -> tuple[str, str, bool]:
         f.path.endswith(".install") and f.status != "removed"
         for f in doc.files
     )
-    return old_hook, new_hook, hook_in_diff
+    return old_hook, new_hook, hook_in_diff, post.scalar_spans.get("install")
 
 
 _FLOATING_PATH_RE = re.compile(r"/(?:latest|HEAD)(?:/|$)")
@@ -953,9 +964,11 @@ def _pinning_of(url: str) -> str:
     return "pinned"
 
 
-def pinning_lost(diff_text: str) -> list[tuple[str, str, str]]:
-    """``(local name, old url, new url)`` where an entry went pinned ->
-    floating (H101).
+def pinning_lost(
+    diff_text: str,
+) -> list[tuple[str, str, str, object | None]]:
+    """``(local name, old url, new url, span)`` where an entry went pinned
+    to floating (H101).
 
     P008 flags a floating source wherever it stands; the transition rule
     catches the moment a verifiable package becomes upstream-controlled,
@@ -965,12 +978,14 @@ def pinning_lost(diff_text: str) -> list[tuple[str, str, str]]:
     pre, post = _recipe_states(diff_text)
     old = _source_urls_by_local_name(pre)
     new = _source_urls_by_local_name(post)
-    lost: list[tuple[str, str, str]] = []
+    lost: list[tuple[str, str, str, object | None]] = []
     for name in sorted(set(old) & set(new)):
-        if old[name] == new[name]:
+        old_url = old[name][0]
+        new_url, new_span = new[name]
+        if old_url == new_url:
             continue
-        if _pinning_of(old[name]) == "pinned" and _pinning_of(new[name]) == "floating":
-            lost.append((name, old[name], new[name]))
+        if _pinning_of(old_url) == "pinned" and _pinning_of(new_url) == "floating":
+            lost.append((name, old_url, new_url, new_span))
     return lost
 
 

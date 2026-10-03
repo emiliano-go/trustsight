@@ -7,21 +7,18 @@ user-only and ships empty; the semantics, the changed-line anchor and the
 severity cap are in ``docs/explanation/structural-user-rules.md``.
 """
 
-import re
 from urllib.parse import urlparse
 
 from ..buckets import canonical_host
 from ..config import STRUCTURAL_MATCHES, load_structural_rules
 from ..coverage import note_stage_failure
-from ..diffdoc import DiffDoc, parse_diff_lines
+from ..diffdoc import parse_diff_lines
 from ..findings import stamp
-from ..recipedoc import array_diff, parse_recipe, recipe_states
+from ..recipedoc import Span, array_diff, parse_recipe, recipe_states
 from ..rules import _compiled
 from ..tokenizer import split_lines
 
 _MAX_MATCH = 100
-
-_SCALAR_ASSIGNMENT = r"^\s*(?:export\s+|local\s+|declare\s+\S+\s+)?{key}\s*\+?="
 
 
 def apply_structural_rules(
@@ -34,8 +31,9 @@ def apply_structural_rules(
 
     *diff_text* empty means a first-seen package: the complete post-state
     *current_text* is the whole evidence, and the change primitives degrade
-    to presence checks.  Findings are anchored to ``file``/``line`` or
-    dropped; the changed-line anchor is the only evidence a rule may claim.
+    to presence checks.  A diff-derived recipe carries each value's real
+    file, line and side, so a finding is anchored to where the value was
+    read; without that provenance there is no evidence and no finding.
     """
     if rules is None:
         rules = load_structural_rules()
@@ -47,9 +45,7 @@ def apply_structural_rules(
         pre, post = recipe_states(doc)
     else:
         pre = None
-        post = None
-    if current_text:
-        post = parse_recipe(current_text)
+        post = parse_recipe(current_text, file="PKGBUILD") if current_text else None
     if post is None:
         return []
 
@@ -63,24 +59,24 @@ def apply_structural_rules(
         if compiled is None:
             note_stage_failure(f"rule:{rule.get('id', '')}")
             continue
-        finding = _evaluate(rule, compiled, pre, post, doc, current_text)
+        finding = _evaluate(rule, compiled, pre, post)
         if finding is not None:
             findings.append(finding)
     return findings
 
 
-def _evaluate(rule, compiled, pre, post, doc, current_text) -> dict | None:
+def _evaluate(rule, compiled, pre, post) -> dict | None:
     matcher = rule["match"]
     if matcher == "scalar_changed":
-        return _scalar_changed(rule, compiled, pre, post, doc, current_text)
+        return _scalar_changed(rule, compiled, pre, post)
     if matcher == "renamed":
-        return _renamed(rule, compiled, pre, post, doc, current_text)
+        return _renamed(rule, compiled, pre, post)
     if matcher == "entry_removed":
-        return _entry_removed(rule, compiled, pre, post, doc)
-    return _entry_added(rule, compiled, pre, post, doc, current_text, matcher)
+        return _entry_removed(rule, compiled, pre, post)
+    return _entry_added(rule, compiled, pre, post, matcher)
 
 
-def _entry_added(rule, compiled, pre, post, doc, current_text, matcher):
+def _entry_added(rule, compiled, pre, post, matcher):
     name = rule["field"]
     old = pre.arrays.get(name, ()) if pre is not None else ()
     new = post.arrays.get(name, ())
@@ -88,6 +84,7 @@ def _entry_added(rule, compiled, pre, post, doc, current_text, matcher):
         candidates = sorted(new)
     else:
         candidates = sorted(array_diff(old, new).gained)
+    require_side = "add" if pre is not None else ""
     for entry in candidates:
         if matcher == "host_added":
             value = _host_of(entry)
@@ -99,13 +96,13 @@ def _entry_added(rule, compiled, pre, post, doc, current_text, matcher):
             if not compiled.search(value):
                 continue
             params = None
-        where = _anchor(doc, current_text, entry, "add")
-        if where is not None:
-            return _finding(rule, value, where, params)
+        span = _entry_span(post, name, entry, require_side)
+        if span is not None:
+            return _finding(rule, value, span, params)
     return None
 
 
-def _entry_removed(rule, compiled, pre, post, doc):
+def _entry_removed(rule, compiled, pre, post):
     if pre is None:
         return None
     name = rule["field"]
@@ -113,13 +110,13 @@ def _entry_removed(rule, compiled, pre, post, doc):
     for entry in sorted(lost):
         if not compiled.search(entry):
             continue
-        where = _line_of(doc, entry, "remove")
-        if where is not None:
-            return _finding(rule, entry, where)
+        span = _entry_span(pre, name, entry, "remove")
+        if span is not None:
+            return _finding(rule, entry, span)
     return None
 
 
-def _scalar_changed(rule, compiled, pre, post, doc, current_text):
+def _scalar_changed(rule, compiled, pre, post):
     key = rule["field"][len("scalars."):]
     new = post.scalars.get(key)
     if new is None:
@@ -130,27 +127,49 @@ def _scalar_changed(rule, compiled, pre, post, doc, current_text):
             return None
     if not compiled.search(new):
         return None
-    where = _scalar_line(doc, current_text, key)
-    if where is None:
+    span = post.scalar_spans.get(key)
+    if span is None or (pre is not None and span.side != "add"):
         return None
-    return _finding(rule, new, where)
+    return _finding(rule, new, span)
 
 
-def _renamed(rule, compiled, pre, post, doc, current_text):
+def _renamed(rule, compiled, pre, post):
     if pre is None:
         return None
     from .delivery import _source_urls_by_local_name
 
-    old = {url: name for name, url in _source_urls_by_local_name(pre).items()}
-    new = {url: name for name, url in _source_urls_by_local_name(post).items()}
+    old = {url: name for name, (url, _s) in _source_urls_by_local_name(pre).items()}
+    new = {
+        url: (name, span)
+        for name, (url, span) in _source_urls_by_local_name(post).items()
+    }
     for url in sorted(set(old) & set(new)):
-        name = new[url]
+        name, span = new[url]
         if old[url] == name or not compiled.search(name):
             continue
-        where = _anchor(doc, current_text, url, "add")
-        if where is not None:
-            return _finding(rule, name, where,
-                            {"old_name": old[url], "new_name": name, "url": url})
+        if span is None or span.side != "add":
+            continue
+        return _finding(rule, name, span,
+                        {"old_name": old[url], "new_name": name, "url": url})
+    return None
+
+
+def _entry_span(recipe, field: str, entry: str, side: str) -> Span | None:
+    """The span of *entry* in *field*, requiring *side* when it is set.
+
+    Spans and values are built in the same pass, so index i of the span
+    tuple belongs to entry i.  An entry with no span on the required side
+    is not evidence for a change.
+    """
+    values = recipe.arrays.get(field, ())
+    spans = recipe.array_spans.get(field, ())
+    for index, value in enumerate(values):
+        if value != entry or index >= len(spans):
+            continue
+        span = spans[index]
+        if side and span.side != side:
+            continue
+        return span
     return None
 
 
@@ -164,63 +183,15 @@ def _host_of(entry: str) -> str:
     return canonical_host(parsed.hostname)
 
 
-def _anchor(doc: DiffDoc | None, current_text: str | None, needle: str,
-            side: str = "add"):
-    """The ``(file, line)`` of *needle*, or None when the diff lacks it.
-
-    With a diff, only the given side counts: an entry that is not on the
-    changed side is not evidence.  A first-seen package has no diff, so the
-    full post-state text supplies the location instead.
-    """
-    where = _line_of(doc, needle, side)
-    if where is not None:
-        return where
-    if doc is None and current_text and needle:
-        for number, line in enumerate(split_lines(current_text), start=1):
-            if needle in line:
-                return ("PKGBUILD", number)
-    return None
-
-
-def _line_of(doc: DiffDoc | None, needle: str, side: str):
-    """The ``(file, line)`` of *needle* on the diff's given side, or None."""
-    if doc is None or not needle:
-        return None
-    lines = doc.added_lines() if side == "add" else doc.removed_lines()
-    line_map = doc.line_map()
-    for line in lines:
-        if needle in line.content:
-            return line_map.get(line.index)
-    return None
-
-
-def _scalar_line(doc: DiffDoc | None, current_text: str | None, key: str):
-    pattern = re.compile(_SCALAR_ASSIGNMENT.format(key=re.escape(key)))
-    if doc is not None:
-        line_map = doc.line_map()
-        for line in doc.added_lines():
-            if pattern.match(line.content):
-                where = line_map.get(line.index)
-                if where is not None:
-                    return where
-        return None
-    if current_text:
-        for number, line in enumerate(split_lines(current_text), start=1):
-            if pattern.match(line):
-                return ("PKGBUILD", number)
-    return None
-
-
-def _finding(rule, value, where, params=None) -> dict:
-    file, line = where
+def _finding(rule, value, span: Span, params=None) -> dict:
     finding = {
         "rule_id": rule["id"],
         "name": rule.get("name", rule["id"]),
         "severity": rule.get("severity", "MEDIUM"),
         "category": rule.get("category", "structural"),
         "match": str(value)[:_MAX_MATCH],
-        "file": file,
-        "line": line,
+        "file": span.file,
+        "line": span.line or None,
     }
     if params:
         finding["params"] = params

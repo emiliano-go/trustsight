@@ -608,3 +608,44 @@ def test_load_overrides_tolerates_a_latin1_file(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(override_mod, "OVERRIDES_PATH", path)
     assert override_mod.load_overrides() == []
+
+
+def test_structural_rules_load_clamped_and_controlled(tmp_path, monkeypatch):
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    cfg._toml_cache.clear()
+    (tmp_path / "rules.toml").write_text(
+        '[[structural]]\nid = "R900"\nfield = "source"\nmatch = "host_added"\n'
+        'pattern = "evil"\nseverity = "CRITICAL"\n\n'
+        '[[structural]]\nid = "R901"\nfield = "scalars.install"\n'
+        'match = "entry_added"\npattern = "x"\n\n'
+        '[[structural]]\nid = "R902"\nfield = "source"\n'
+        'match = "bogus"\npattern = "x"\n'
+    )
+    (tmp_path / "config.toml").write_text("[rules.R900]\nweight_override = 3\n")
+
+    rules = cfg.load_structural_rules()
+    assert [r["id"] for r in rules] == ["R900"]
+    assert rules[0]["severity"] == "HIGH"
+    assert rules[0]["name"] == "R900"
+    assert rules[0]["category"] == "structural"
+    assert rules[0]["weight_override"] == 3
+
+
+def test_structural_rules_are_part_of_the_fingerprint(tmp_path, monkeypatch):
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    cfg._toml_cache.clear()
+    (tmp_path / "rules.toml").write_text(
+        '[[structural]]\nid = "R900"\nfield = "source"\nmatch = "host_added"\n'
+        'pattern = "evil"\n'
+    )
+    first = cfg.config_fingerprint()
+    (tmp_path / "rules.toml").write_text(
+        '[[structural]]\nid = "R900"\nfield = "source"\nmatch = "host_added"\n'
+        'pattern = "other"\n'
+    )
+    cfg._toml_cache.clear()
+    assert cfg.config_fingerprint() != first

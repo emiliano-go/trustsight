@@ -261,3 +261,82 @@ def test_a_retired_rule_id_is_not_available_for_reuse():
     assert retired <= set(PROGRAMMATIC_IDS)
     # And defining one in rules.toml is refused, not merely discouraged.
     assert _checks(lint_rules([_rule(id="R060")]), "programmatic-id")
+
+
+# --- structural rules ---
+
+
+def _structural(**overrides) -> dict:
+    base = {
+        "id": "R910",
+        "field": "source",
+        "match": "entry_added",
+        "pattern": r"evil\.example",
+        "severity": "MEDIUM",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_a_clean_structural_rule_has_no_findings():
+    from trustsight.lint import lint_structural_rules
+
+    findings = lint_structural_rules([_structural()])
+    assert findings == []
+
+
+def test_structural_pattern_gets_the_backtracking_gate():
+    from trustsight.lint import lint_structural_rules
+
+    findings = lint_structural_rules([_structural(pattern="(a+)+")])
+    assert _checks(findings, "backtracking")[0].level == SEVERITY_ERROR
+
+
+def test_structural_match_and_field_must_pair():
+    from trustsight.lint import lint_structural_rules
+
+    findings = lint_structural_rules([
+        _structural(field="scalars.install", match="entry_added"),
+        _structural(id="R911", field="source", match="scalar_changed"),
+        _structural(id="R912", field="source", match="mystery"),
+    ])
+    assert len(_checks(findings, "field-match")) == 2
+    assert _checks(findings, "match-primitive")
+
+
+def test_structural_renamed_needs_a_source_array():
+    from trustsight.lint import lint_structural_rules
+
+    findings = lint_structural_rules([_structural(match="renamed", field="depends")])
+    assert _checks(findings, "renamed-field")[0].level == SEVERITY_ERROR
+
+
+def test_structural_severity_over_high_is_reported():
+    from trustsight.lint import lint_structural_rules
+
+    findings = lint_structural_rules([_structural(severity="CRITICAL")])
+    assert _checks(findings, "severity-cap")[0].level == SEVERITY_WARNING
+
+
+def test_structural_and_line_rules_share_the_id_space():
+    from trustsight.lint import lint_rules, lint_structural_rules
+
+    seen: dict = {}
+    findings = lint_rules([_rule(id="R900")], seen)
+    findings += lint_structural_rules([_structural(id="R900")], seen)
+    assert _checks(findings, "duplicate-id")
+
+
+def test_lint_rules_file_covers_the_structural_table(tmp_path):
+    from typer.testing import CliRunner
+
+    from trustsight.cli.app import app
+
+    path = tmp_path / "rules.toml"
+    path.write_text(
+        '[[structural]]\nid = "R950"\nfield = "source"\nmatch = "entry_added"\n'
+        'pattern = "(a+)+"\n'
+    )
+    result = CliRunner().invoke(app, ["lint-rules", "--file", str(path)])
+    assert result.exit_code == 2
+    assert "backtracking" in result.output

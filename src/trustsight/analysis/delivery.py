@@ -714,6 +714,16 @@ def _source_basename(url: str) -> str:
     return base
 
 
+#: A version-control source.  What arrives is a *directory*, so the repo
+#: basename is not a declared file: compsize-git declares
+#: `git+https://.../compsize` and H083 then matched the `./compsize` the
+#: recipe builds itself.  Applies to the bare form and the `name::url`
+#: rename (whose name is the checkout directory, not a filename).
+_VCS_SOURCE_RE = re.compile(
+    r"(?:^|::)(?:git|hg|svn|bzr|fossil)(?:\+|://)", re.IGNORECASE
+)
+
+
 #: A scalar ``source = value`` line, the `.SRCINFO` spelling of the array.
 #: Module level because the function below is called once per rule family
 #: that needs the declared names, and compiling this per call was compiling
@@ -771,6 +781,8 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
             scalar = _SCALAR_SOURCE_RE.match(body)
             if scalar and "(" not in scalar.group(1):
                 value = scalar.group(1).strip()
+                if _VCS_SOURCE_RE.search(value):
+                    continue
                 base = value.split("::", 1)[0] if "::" in value else _source_basename(value)
                 if base and base != ")":
                     basenames.add(base)
@@ -810,6 +822,8 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
             # `)` are rare enough that this is safe.
             ent = ent.rstrip(")")
             if not ent:
+                continue
+            if _VCS_SOURCE_RE.search(ent):
                 continue
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:

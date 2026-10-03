@@ -122,6 +122,18 @@ def test_h083_interpreter_runs_declared_source(line, src):
     assert "H083" in _shipped_ids([line], declared=True, source=src), line
 
 
+def test_h083_does_not_read_a_vcs_repo_name_as_a_file():
+    """compsize-git: `git+https://.../compsize` declares a checkout
+    *directory*, not a file named `compsize`.  H083 matched the `./compsize`
+    the recipe builds itself, which no source array ever delivered."""
+    src = "git+https://github.com/justinbrewer/compsize#branch=x"
+    assert "H083" not in _shipped_ids(["./compsize"], declared=True, source=src)
+    assert "H083" in _shipped_ids(
+        ['bash "$srcdir/setup.sh"'], declared=True,
+        source="https://e.example/setup.sh",
+    )
+
+
 @pytest.mark.parametrize("line", [
     "  npm install --production",
     "  pip install -r requirements.txt",

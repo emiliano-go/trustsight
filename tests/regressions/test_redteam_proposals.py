@@ -437,6 +437,46 @@ def _fsearch_recipe(malicious: bool) -> str:
     ]) + "\n"
 
 
+def test_h091_reads_the_last_assignment_of_the_declaration():
+    """ruffle-nightly: `source=()` written twice; the second one wins.
+
+    A later assignment replaces the earlier one in bash, so pairing the
+    first array against the single checksum entry reported a missing sum
+    that makepkg would never see.
+    """
+    from trustsight.differ import (
+        checksum_array_parity, checksum_array_parity_in_text,
+    )
+
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+            '+source=("git+https://x/r.git#tag=v1"\n'
+            '        "extra.key")\n'
+            '+source=("git+https://x/r.git#tag=v1")\n'
+            "+sha256sums=('abc')\n")
+    assert checksum_array_parity(diff) is None
+
+    recipe = (
+        'source=("git+https://x/r.git#tag=v1"\n'
+        '        "extra.key")\n'
+        'source=("git+https://x/r.git#tag=v1")\n'
+        "sha256sums=('abc')\n"
+    )
+    assert checksum_array_parity_in_text(recipe) is None
+
+
+def test_h091_keeps_an_arch_suffixed_source_a_separate_assignment():
+    """`source_x86_64=` is a different variable; it must not replace
+    `source=` in the parity read."""
+    from trustsight.differ import checksum_array_parity_in_text
+
+    recipe = (
+        'source=("a.tar.gz")\n'
+        'source_x86_64=("b.tar.gz" "c.tar.gz")\n'
+        "sha256sums=('x')\n"
+    )
+    assert checksum_array_parity_in_text(recipe) is None
+
+
 def test_h091_reads_the_recipe_when_the_diff_only_shows_context():
     """The August 2026 campaign inserted one source into an existing
     `source=()` and left `sha256sums=()` unchanged. The wholly-added guard

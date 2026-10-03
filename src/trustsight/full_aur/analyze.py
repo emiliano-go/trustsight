@@ -475,6 +475,8 @@ def analyze_package_text(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    from ..analysis.persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     if archive_trailer_finding:
         triggered_rules.append(archive_trailer_finding)
     triggered_rules, suppressed_rules = filter_triggered_rules(

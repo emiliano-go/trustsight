@@ -683,6 +683,8 @@ def analyze_package(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    from .persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
@@ -997,6 +999,8 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+    from .persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
 
     # H087 only.  was_orphaned=-1 means "no recorded observation", so H086
     # and H088 are structurally silent here: the stateless path has no AUR

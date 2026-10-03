@@ -811,7 +811,7 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
 
 #: A plain scalar variable used as a command: `$DKMS`, `${MAKE}`.  An array
 #: subscript or a nameref is deliberately not this shape.
-_PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
+_PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?[\"\']?$")
 
 #: A statically indexed array element used as a command: `${A[0]}`,
 #: `${A[@]}`, `${A[*]}`.  Exempted only when the array's elements were

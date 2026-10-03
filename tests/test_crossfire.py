@@ -136,6 +136,24 @@ def test_x002_still_fires_on_a_dynamic_array_subscript():
     assert "X002" in set(crossfire_techniques(diff))
 
 
+@pytest.mark.parametrize("spelling", [
+    '"$_system_wasm_bindgen"',   # ruffle-nightly
+    '"${_client}"',              # securelink
+    '"${_appimage}"',            # steamcommunity302
+])
+def test_x002_stands_down_for_a_quoted_resolved_variable(spelling):
+    """A quoted resolved scalar is a spelling choice, not a hidden name.
+
+    The old word test allowed a leading quote but not a closing one, so
+    `if "$_system_wasm_bindgen"` read as an unresolvable command word at
+    CRITICAL while the value sat one line above.
+    """
+    name = spelling.strip('"').strip("${}")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n pkgname=p\n"
+            f"+{name}=false\n+  if {spelling}; then :; fi\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+
 def test_x023_stands_down_when_resolution_names_the_fetch():
     """The pipeline rules read the resolved text: `C=curl` is R001's."""
     diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"

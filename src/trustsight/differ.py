@@ -802,26 +802,36 @@ def _unquoted_close(text: str, start: int = 0) -> int | None:
 
 
 def _text_array_items(text: str, start_re) -> list[str] | None:
-    """Elements of the first array matching *start_re* in a whole file.
+    """Elements of the last array matching *start_re* in a whole file.
 
-    ``None`` when the array never closes.  The closing paren is found by
-    scanning the whole text, not the line, because a multi-line array's
-    ``)`` is on its own line.
+    Bash semantics: a later assignment of the same name replaces the
+    earlier one, so `source=(...)` twice means the second array is the
+    declared one.  A later declaration under a *different* name (the
+    arch-suffixed `source_x86_64`) is a separate variable and does not
+    replace it.  ``None`` when the tracked declaration never closes: the
+    closing paren is found by scanning the whole text, not the line,
+    because a multi-line array's ``)`` is on its own line.
     """
-    match = start_re.search(text)
-    if match is None:
-        return None
-    open_idx = text.find("(", match.start())
-    if open_idx < 0:
-        return None
-    close_idx = _unquoted_close(text, open_idx + 1)
-    if close_idx is None:
-        return None
-    return _quoted_items(text[open_idx:close_idx + 1])
+    latest: list[str] | None = None
+    wanted: str | None = None
+    for match in start_re.finditer(text):
+        open_idx = text.find("(", match.start())
+        if open_idx < 0:
+            continue
+        declaration = text[match.start():open_idx].strip()
+        if wanted is None:
+            wanted = declaration
+        if declaration != wanted:
+            continue
+        close_idx = _unquoted_close(text, open_idx + 1)
+        if close_idx is None:
+            return None
+        latest = _quoted_items(text[open_idx:close_idx + 1])
+    return latest
 
 
 def _added_array_items(diff_text: str, start_re) -> list[str] | None:
-    """Elements of the first *wholly added* array matching *start_re*.
+    """Elements of the last *wholly added* array matching *start_re*.
 
     ``None`` unless the array opens and closes inside added lines with no
     context line between. A diff shows a hunk, not a file: an array that
@@ -829,29 +839,51 @@ def _added_array_items(diff_text: str, start_re) -> list[str] | None:
     partly visible, and counting what is visible reported a two-element
     array as one. That mistake fired on 26 benign packages - every
     multi-source recipe whose diff touched one entry.
+
+    The *last* assignment of the tracked declaration wins, as it does in
+    bash: an overridden ``source=`` on the next line is the one makepkg
+    reads.  A later declaration under a different name (`source_x86_64`)
+    is a separate variable and does not replace it.
     """
-    collecting = False
+    latest: list[str] | None = None
+    wanted: str | None = None
+    collecting: str | None = None
     parts: list[str] = []
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         if line.raw.startswith(("+++", "---")):
             continue
         added = line.side == "add"
         body = line.content if line.is_content else line.raw
-        if not collecting:
+        if collecting is None:
             if added and start_re.match(body):
-                collecting = True
-                parts.append(body[body.index("("):])
+                collecting = body[:body.index("(")].strip()
+                if wanted is None:
+                    wanted = collecting
+                parts = [body[body.index("("):]]
                 if ")" in parts[-1]:
-                    return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+                    if collecting == wanted:
+                        latest = _quoted_items(
+                            "(" + "\n".join(parts).split("(", 1)[1]
+                        )
+                    collecting = None
             continue
         if not added:
-            # The array continues into text this diff does not add, so
-            # what it holds in full is not something this function knows.
-            return None
+            # The tracked array continues into text this diff does not add,
+            # so what it holds in full is not something this function
+            # knows; fail closed.  A different declaration going partially
+            # visible is not the one being read.
+            if collecting == wanted:
+                return None
+            collecting = None
+            parts = []
+            continue
         parts.append(body)
         if ")" in body:
-            return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
-    return None
+            if collecting == wanted:
+                latest = _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+            collecting = None
+            parts = []
+    return latest
 
 
 def source_array_grew_in_diff(diff_text: str) -> bool:

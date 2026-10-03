@@ -567,7 +567,13 @@ _EXEC_PREFIX = r"(?:" + _EXEC_WRAPPER + r")*"
 # doing it at every position, for every arm that shares this prefix, which
 # is what put `_EXECUTION_RE` over the adversarial audit's budget.
 _CMD_START = (
-    r"(?:\A\s*+|[;&|{(]\s*+|\b(?:do|then|else|elif)\s++)" + _EXEC_PREFIX
+    # `(?![;&|{(])` after the separator: a command word cannot begin with
+    # another separator, so a run of `;` fails here instead of carrying the
+    # whole arm alternation to the next character.  Without it the audit's
+    # `;` probe cost every arm a scan per position, which is what leaves
+    # `_SOURCE_EXEC_RE` over budget on a slow machine.
+    r"(?:\A\s*+|[;&|{(]\s*+(?![;&|{(])|\b(?:do|then|else|elif)\s++)"
+    + _EXEC_PREFIX
 )
 _EXECUTION_RE = re.compile(
     # `_CMD_START` is factored out of the arms that share it rather than

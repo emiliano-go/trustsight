@@ -8,7 +8,7 @@ TrustSight exposes two configuration files. Together they control which rules fi
 
 | File | Purpose |
 |------|---------|
-| `rules.toml` | Definitions for every R-series regex rule: pattern, severity, target, and scope |
+| `rules.toml` | Definitions for the R-series regex rules and the `[[structural]]` recipe rules: pattern, severity, target, and scope |
 | `config.toml` | Global scoring parameters: `severity_weights`, `source_bucket_weights`, `novelty_weights` |
 
 Both files live in the TrustSight config directory and are read automatically on every run.
@@ -37,6 +37,25 @@ enabled = false
 ```
 
 `enabled` and `weight_override` are read from `config.toml`; they do not change a rule's TOML definition. FATAL rules cannot be disabled, and their score hard-stops at 100, so a weight override has no effect. Code-emitted rules have their own configuration paths where provided, such as `[code_rules]`; `[rules.R###]` does not control them. Always re-run benchmarks after changing an effective weight.
+
+## Structural rules
+
+`rules.toml` also accepts a `[[structural]]` array: rules that ask the typed
+recipe instead of matching a diff line. They use the same `[rules.R###]`
+`enabled` and `weight_override` controls, and their findings score like any
+other rule, capped at `HIGH`.
+
+```toml
+[[structural]]
+id = "R900"
+field = "source"
+match = "host_added"
+pattern = "^(.*\\.)?example\\.com$"
+severity = "MEDIUM"
+```
+
+The primitive list, what a partial diff means, and the cap rationale are in
+[Recipe-Targeted User Rules](../explanation/structural-user-rules.md).
 
 ## Adjusting scoring parameters in config.toml
 

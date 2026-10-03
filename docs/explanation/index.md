@@ -166,3 +166,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Benchmarks and Methodology](benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible eval |
 | [Sandboxing the Tokenizer](sandboxing-the-tokenizer.md) | Why the tokenizer is the component worth isolating, and the conditions for doing it |
 | [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |
+| [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |

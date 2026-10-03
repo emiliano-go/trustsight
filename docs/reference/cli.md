@@ -556,13 +556,13 @@ trustsight db backup [--output PATH]
 
 ## trustsight lint-rules
 
-Check `rules.toml` for rules that are unreachable, over-broad, or malformed.
+Check `rules.toml`, including its `[[structural]]` recipe rules, for rules that are unreachable, over-broad, or malformed.
 
 ```
 trustsight lint-rules [--file PATH] [--json]
 ```
 
-A malformed rule fails silently at runtime. An empty pattern matches every line, and at FATAL severity forces every package to score 100. A pattern that only matches comment text can never fire, because the engine strips comments before matching. Neither failure is visible without a corpus.
+A malformed rule fails silently at runtime. An empty pattern matches every line, and at FATAL severity forces every package to score 100. A pattern that only matches comment text can never fire, because the engine strips comments before matching. Neither failure is visible without a corpus. A structural rule is checked the same way, with one addition: its pattern is measured against a value, its `field` and `match` must pair correctly, and its severity is reported when the cap had to lower it.
 
 ### Flags
 
@@ -590,6 +590,10 @@ A malformed rule fails silently at runtime. An empty pattern matches every line,
 | `end-anchor` | warning | A `raw_line` pattern is anchored with `$`, but raw diff lines keep trailing quotes and parentheses. |
 | `scope-shadowed` | warning | The pattern matches probe lines, but none within its declared scope. |
 | `id-format` / `scope-ignored` | warning | The id does not follow the `R###`/`C###` convention, or `scope` is set on a `resolved` rule, where it is ignored. |
+| `match-primitive` | error | A `[[structural]]` rule names a `match` that is not one of the five primitives. |
+| `field-match` | error | A `[[structural]]` rule pairs an array primitive with `scalars.<name>` or `scalar_changed` with an array, so it can never fire. |
+| `renamed-field` | error | `renamed` is given a field that is not a source array; the local-name keying reads source entries only. |
+| `severity-cap` | warning | A `[[structural]]` rule asks for `FATAL` or `CRITICAL` and is capped at `HIGH`. |
 
 ### How reachability is checked
 

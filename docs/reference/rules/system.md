@@ -169,6 +169,23 @@ Each rule supports these fields:
 | `experimental` | `bool` | (Optional) Skip the rule unless `[rules] experimental = true` in `config.toml`. Used for rules whose false-positive rate has not been measured against the benign corpus. |
 | `include_comments` | `bool` | (Optional) Also match comment lines, which are filtered out for every other rule. Only for rules whose target is the *reader* rather than the shell (R012, R013): a commented-out command does not run, but a comment is exactly where an injection or a hidden character lives. |
 
+### Structural rules {#structural-rules}
+
+A second table in the same file, `[[structural]]`, asks the typed recipe
+instead of the raw line. It has its own fields and five match primitives;
+the design, the partial-diff rule and the severity cap are in
+[Recipe-Targeted User Rules](../../explanation/structural-user-rules.md).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Rule identifier following the R-series convention, `R###`. |
+| `field` | `string` | An array name (`source`, `depends`, `sha256sums`) or `scalars.` plus a scalar name (`scalars.install`). |
+| `match` | `string` | `entry_added`, `entry_removed`, `host_added`, `scalar_changed`, or `renamed`. |
+| `pattern` | `string` | Python regex searched against the value the primitive selects, never against a raw line. |
+| `severity` | `string` | (Optional) Defaults to `MEDIUM`; `FATAL` and `CRITICAL` clamp to `HIGH`. |
+| `name` | `string` | (Optional) Defaults to the id. |
+| `category` | `string` | (Optional) Defaults to `structural`. |
+
 ### R001 {#r001}
 
 See [R001: Remote Script Execution](fetch-and-execution.md#r001).

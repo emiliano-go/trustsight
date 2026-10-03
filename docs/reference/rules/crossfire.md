@@ -112,7 +112,9 @@ Three exclusions keep it precise:
 
 - An assignment is not a command. `font=$(grep ...)` names no executable.
 - A variable the tokenizer resolved to a literal is a spelling choice, not an
-  evasion.
+  evasion: `$DKMS` where `DKMS=dkms`, or `${A[0]}` where `A=(curl)`. A dynamic
+  subscript (`${A[$i]}`), a nameref, or a command substitution does not resolve
+  and still fires.
 - A glob needs a name character before the metacharacter, so the `[` of
   `if [ -f x ]` is not a command name.
 
@@ -469,7 +471,11 @@ weight 0 when no tool reads it.
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a pipeline ends in a shell and does not start with a network
-client.
+client. The pipeline is read after variable, array and alias resolution, so
+`C=curl; $C u | bash` is R001's and `C=aria2c; $C u | bash` is
+[X009](#x009)'s; this rule is for the pipeline that is still not a fetch
+after resolution (a command substitution or a nameref the tokenizer refuses
+to fold).
 
 | Fires | Quiet |
 |---|---|

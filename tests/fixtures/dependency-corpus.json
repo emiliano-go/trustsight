@@ -1,0 +1,15 @@
+{
+  "description": "Small committed dependency corpus for the warm D-series gate. Names common enough that a fixture adding one of them is not novel; the warm fixtures add names absent from this list. Seeded ten times each by warm_dependency_corpus() in scripts/calibration_gates.py, the same warm-up tests/test_deps_rules.py uses.",
+  "names": [
+    "cmake",
+    "curl",
+    "ffmpeg",
+    "git",
+    "glibc",
+    "meson",
+    "ninja",
+    "openssl",
+    "python-requests",
+    "sudo"
+  ]
+}

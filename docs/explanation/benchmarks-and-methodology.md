@@ -31,8 +31,8 @@ The benign corpus includes package updates that are not perfectly clean: routine
 The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
 
 - **CRITICAL** p5 = 60
-- **Benign** p95 = 30
-- Gap = +30 points
+- **Benign** p95 = 25
+- Gap = +35 points
 
 Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
 
@@ -42,7 +42,7 @@ Absolute p95 on either class is not useful in isolation. A tool that scores ever
 
 The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
 
-If the CRITICAL p5 is 60 and the benign p95 is 30, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 30-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
+If the CRITICAL p5 is 60 and the benign p95 is 25, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 35-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
 
 The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
 
@@ -52,7 +52,7 @@ The benchmark enforces three gates:
 
 | Gate | Requirement | What it prevents |
 |------|-------------|------------------|
-| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 180 self-authored fixtures across historical, holdout, evasion, synthetic and campaign groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
+| Malicious fixture coverage | Every labelled malicious fixture still detects what it is labelled for (skips known_gap) | A change that weakens detection of a labelled fixture is rejected. The committed corpus is 181 self-authored fixtures across historical, holdout, evasion, synthetic, campaign and warm groups; `scripts/verify_fixtures.py` enforces record-to-diff completeness. This is not independently sampled recall. |
 | Separation | benign p95 stays below malicious p5 (strict) | A change that narrows the gap (by reducing malicious scores or inflating benign scores) is rejected. |
 | Benign fire rates | No scoring rule fires on >= 30% of benign diffs | Prevents weight inflation: a rule that becomes a census on benign packages is rejected. |
 | Score-not-size + weight-zero annotations | \|Pearson(score, diff_lines)\| < 0.30; weight-0 rules move the score by exactly 0 | Prevents measuring activity instead of risk. |
@@ -72,12 +72,12 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 70.3% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 29.7% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 7.8% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign zero-rate | 70.6% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 29.4% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
+| Benign flag rate | 7.7% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
-| Benign p95 | 30 | < CRITICAL p5 (margin: 30) |
+| Benign p95 | 25 | < CRITICAL p5 (margin: 35) |
 | Tests | Run `uv run --with pytest python -m pytest` for the current checkout | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
@@ -96,7 +96,7 @@ The benign corpus is divided into eight strata (`source_patched`, `bin_repack`, 
 
 The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 70.3% zero-rate means 70.3% of benign diffs score 0, while **7.8% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 70.6% zero-rate means 70.6% of benign diffs score 0, while **7.7% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

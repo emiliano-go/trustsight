@@ -60,6 +60,24 @@ def test_build_novelty_context_url_added(db):
     ctx = build_novelty_context(["https://brandnew.com/pkg.tar.gz"], 1)
     assert ctx.url_first_seen_globally is True
     assert ctx.url_first_seen_in_this_package is True
+    # The signal names the URL that made it true: a NOVELTY row without one
+    # cannot be checked, and cannot be told from a comment artefact.
+    assert ctx.url_first_seen_globally_url == "https://brandnew.com/pkg.tar.gz"
+    assert ctx.url_first_seen_in_this_package_url == "https://brandnew.com/pkg.tar.gz"
+
+
+def test_build_novelty_context_names_the_first_novel_url(db):
+    urls = ["https://first.com/a.tar.gz", "https://second.com/b.tar.gz"]
+    ctx = build_novelty_context(urls, 1)
+    assert ctx.url_first_seen_globally_url == "https://first.com/a.tar.gz"
+    assert ctx.url_first_seen_in_this_package_url == "https://first.com/a.tar.gz"
+
+
+def test_build_novelty_context_skips_already_seen_url_in_the_name(db):
+    check_url_novelty("https://existing.com/pkg.tar.gz", 1)
+    urls = ["https://existing.com/pkg.tar.gz", "https://brandnew.com/new.tar.gz"]
+    ctx = build_novelty_context(urls, 1)
+    assert ctx.url_first_seen_globally_url == "https://brandnew.com/new.tar.gz"
 
 
 def test_build_novelty_context_maintainer(db):

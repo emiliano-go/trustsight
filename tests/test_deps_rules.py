@@ -150,6 +150,44 @@ def test_multiline_array_addition_is_found():
     assert extract_dependency_changes(diff, "mypkg")["depends"] == {"newdep"}
 
 
+def test_compound_assignment_is_parsed():
+    """`depends+=('x')` is the same declaration appended.
+
+    Requiring a bare `=` made the whole line invisible to every D-rule and
+    to the change summary, which is the parser half of the evasion gap.
+    """
+    diff = HEADER + "+depends+=('evil-pkg' 'evil-pkg2')\n"
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == {
+        "evil-pkg", "evil-pkg2",
+    }
+
+
+def test_compound_assignment_with_arch_suffix_is_parsed():
+    diff = HEADER + "+depends_x86_64+=('evil-pkg')\n"
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == {"evil-pkg"}
+
+
+def test_compound_assignment_appends_to_a_context_array():
+    diff = HEADER + " depends=('glibc')\n+depends+=('newdep')\n"
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == {"newdep"}
+
+
+def test_rewrapping_into_a_compound_assignment_adds_nothing():
+    diff = HEADER + (
+        "-depends=('glibc' 'curl')\n"
+        "+depends=('glibc')\n"
+        "+depends+=('curl')\n"
+    )
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == set()
+
+
+def test_dependency_changes_reports_a_compound_assignment(enabled, rules):
+    """B7: the change summary sees what the parser sees."""
+    diff = HEADER + "+depends+=('evil-pkg')\n"
+    fact = scan_diff(diff, rules=rules, config=enabled, package_name="mypkg")
+    assert fact.dependency_changes.get("depends") == ["evil-pkg"]
+
+
 # --- typosquatting ---
 
 @pytest.mark.parametrize("name,target", [
@@ -183,6 +221,12 @@ def test_source_array_urls_exclude_build_downloads():
     assert urls == {"https://good.example/a.tar.gz"}
 
 
+def test_source_compound_assignment_is_a_declared_source():
+    """`source+=(url)` declares the URL; H016 must see it as declared."""
+    diff = HEADER + "+source+=('https://good.example/a.tar.gz')\n"
+    assert extract_source_array_urls(diff) == {"https://good.example/a.tar.gz"}
+
+
 # --- D001/D002 end to end, against an isolated seeded database ---
 
 @pytest.fixture
@@ -210,6 +254,16 @@ def test_d002_supersedes_d001_for_a_typosquat(seeded_db, enabled, rules):
     assert "D002" in ids and "D001" not in ids
 
 
+def test_d001_fires_on_a_compound_assignment_when_warm(seeded_db, enabled, rules):
+    diff = HEADER + "+depends+=('totally-unknown-backdoor')\n"
+    assert "D001" in fired(diff, enabled, rules)
+
+
+def test_d002_fires_on_a_compound_assignment_when_warm(seeded_db, enabled, rules):
+    ids = fired(HEADER + "+depends+=('openss1')\n", enabled, rules)
+    assert "D002" in ids and "D001" not in ids
+
+
 def test_d001_silent_without_a_seeded_corpus(tmp_path, monkeypatch, enabled, rules):
     """An unseeded database must not make every dependency look novel."""
     monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
@@ -228,6 +282,20 @@ def test_rules_are_silent_when_disabled(disabled, rules):
 def test_d003_fires_on_new_network_makedepends(enabled, rules):
     diff = HEADER + "-makedepends=('cmake')\n+makedepends=('cmake' 'curl')\n"
     assert "D003" in fired(diff, enabled, rules)
+
+
+def test_d003_fires_on_a_compound_assignment(enabled, rules):
+    """D003 is not corpus-based, so it proves the parser fix cold."""
+    diff = HEADER + "+makedepends+=('git')\n"
+    assert "D003" in fired(diff, enabled, rules)
+
+
+def test_h016_silent_when_source_is_declared_with_a_compound_assignment(enabled, rules):
+    diff = HEADER + (
+        "+source+=('https://good.example/a.tar.gz')\n"
+        "+build() {\n+  curl https://good.example/a.tar.gz -o a\n+}\n"
+    )
+    assert "H016" not in fired(diff, enabled, rules)
 
 
 def test_d003_silent_when_network_tool_already_present(enabled, rules):

@@ -44,6 +44,8 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   "novelty_context": {
     "url_first_seen_in_this_package": bool,
     "url_first_seen_globally": bool,
+    "url_first_seen_in_this_package_url": "string",
+    "url_first_seen_globally_url": "string",
     "maintainer_first_seen_for_this_package": bool
   },
   "score_breakdown": [
@@ -98,6 +100,12 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
       "severity": "string",
       "override_reason": "string",
       "override_package": "string or null"
+    }
+  ],
+  "acknowledged_urls": [
+    {
+      "url": "string",
+      "reason": "string"
     }
   ],
   "ioc_matches": [
@@ -156,6 +164,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"` or `"corpus"`. |
 | `suppressed_rules` | `list[dict]` | Rules suppressed by user override. Each entry has `rule_id`, `severity`, `override_reason`, and `override_package`. These did not contribute to the score. |
+| `acknowledged_urls` | `list[dict]` | Source URLs explicitly acknowledged for this package (`trustsight override add-url`). Each entry has `url` and `reason`. They did not score SOURCE_BUCKET or NOVELTY; a different URL, or the same URL in another package, is judged as before. Reported rather than dropped: an acknowledgement the report does not show is indistinguishable from a URL that never existed. |
 | `ioc_matches` | `list[dict]` | IOC federation baseline hits. Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
@@ -202,6 +211,8 @@ Resolution performed by `tokenize_and_resolve()` in `src/trustsight/tokenizer.py
 |-------|------|-------------|
 | `url_first_seen_in_this_package` | `bool` | `true` if at least one added URL has never been seen before for this package (after URL normalisation). |
 | `url_first_seen_globally` | `bool` | `true` if at least one added URL has never been seen before in any package in the corpus (after URL normalisation). |
+| `url_first_seen_in_this_package_url` | `string` | The URL that made `url_first_seen_in_this_package` true; `""` when the signal is false. The NOVELTY finding names it. |
+| `url_first_seen_globally_url` | `string` | The URL that made `url_first_seen_globally` true; `""` when the signal is false. |
 | `maintainer_first_seen_for_this_package` | `bool` | `true` if the current maintainer has never been recorded for this package before. |
 
 **Note:** The `NoveltyContext` dataclass also carries `observation_count` (int), but this field is **not** serialised in `fact_to_dict()`. It is used internally by `calculate_score()` for the maturity multiplier.
@@ -259,7 +270,7 @@ There are two JSON shapes, and they are not the same object.
   Always present (`reporting.REPORT_KEYS`): `package`, `old_version`,
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `coverage_gaps_carried`,
-  `suppressed_rules`,
+  `suppressed_rules`, `acknowledged_urls`,
   `ioc_matches`, `first_seen`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
   `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`.

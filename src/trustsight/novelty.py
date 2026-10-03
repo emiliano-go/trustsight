@@ -429,7 +429,11 @@ def build_novelty_context(
         )
         if first_for_pkg:
             ctx.url_first_seen_in_this_package = True
+            if not ctx.url_first_seen_in_this_package_url:
+                ctx.url_first_seen_in_this_package_url = url
         if first_global:
             ctx.url_first_seen_globally = True
+            if not ctx.url_first_seen_globally_url:
+                ctx.url_first_seen_globally_url = url
 
     return ctx

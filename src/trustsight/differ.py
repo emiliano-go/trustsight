@@ -7,7 +7,7 @@ import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
 from .coverage import unpinned_source_refs
-from .diffdoc import parse_diff_lines
+from .diffdoc import parse_diff_lines, strip_diff_path_prefix
 from .schema import DiffSummary, SourceChanges
 from .tokenizer import split_lines
 
@@ -347,15 +347,16 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
 
 
 def _diff_file_path(header: str) -> str:
-    """The path from a `---`/`+++` header, git's `a/`,`b/` prefix stripped."""
+    """The path from a `---`/`+++` header, git's path prefix stripped.
+
+    The prefix may be a mnemonic one (`c/` for a commit diff) when the
+    reviewer's git config sets `diff.mnemonicprefix`; `strip_diff_path_prefix`
+    handles both spellings.
+    """
     path = header.strip()
     if "\t" in path:
         path = path.split("\t", 1)[0]
-    for prefix in ("a/", "b/"):
-        if path.startswith(prefix):
-            path = path[len(prefix):]
-            break
-    return path
+    return strip_diff_path_prefix(path)
 
 
 # `^[+ ]`, not `^\+`: a VCS source is a fact about the package whether or
@@ -408,10 +409,27 @@ _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
 
 def _clean_url(token: str) -> str:
-    token = re.sub(r"[\)]+$", "", token)
+    # A URL written in angle brackets - a maintainer line's
+    # `<https://aur.archlinux.org/account/foo>` is the common case - keeps
+    # the closing `>` in the token, and a source URL with a `>` on the end
+    # is a URL no bucket or novelty lookup will ever recognise.  The
+    # closing bracket is punctuation, not part of the address.
+    token = re.sub(r"[\)<>]+$", "", token)
     token = re.sub(r"[\)]+", ")", token)
     token = re.sub(r"[,;\s]+$", "", token)
     return token
+
+
+def _is_comment_line(raw: str) -> bool:
+    """True when a raw diff line is a whole-line comment.
+
+    A URL in a comment cannot reach the build: it is not in ``source=()``,
+    not ``url=``, and no function runs it.  Scoring it as a source URL made
+    ``# Maintainer: Name <https://aur.archlinux.org/account/name>`` the
+    package's most suspicious source, which is the opposite of evidence.
+    """
+    body = raw[1:] if raw[:1] in "+-" else raw
+    return body.lstrip().startswith("#")
 
 
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
@@ -423,6 +441,8 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # typed document supplies them unchanged.
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         raw = line.raw
+        if _is_comment_line(raw):
+            continue
         if raw.startswith("+") and "http" in raw:
             for u in _URL_TOKEN_RE.findall(raw):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
@@ -957,7 +977,12 @@ def detect_checksum_removed(diff_text: str) -> bool:
     return removed and not added
 
 
-_SOURCE_ARRAY_START_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
+# `source+=(...)` is the same declaration appended, and requiring a bare
+# `=` made it invisible here: a URL declared with `+=` did not count as
+# declared, so a build fetch of it read as an undeclared download (H016).
+_SOURCE_ARRAY_START_RE = re.compile(
+    r"^\s*source(?:_[a-z0-9_]+)?\s*\+?=\s*\("
+)
 #: The same opener anchored per line in a whole file, for the recipe-text
 #: parity: the diff variant is matched against a single line body, where
 #: `^` is already the line start.

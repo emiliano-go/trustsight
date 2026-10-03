@@ -208,6 +208,13 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         for r in fact.suppressed_rules:
             inside.add_row("", Text(f"  {clean(r['rule_id'])}  {clean(r.get('override_reason', ''))}"))
 
+    if getattr(fact, "acknowledged_urls", None):
+        inside.add_row("", "")
+        inside.add_row("[yellow]Acknowledged source URLs[/]", "")
+        for r in fact.acknowledged_urls:
+            inside.add_row("", Text(
+                f"  {clean(r.get('url', ''))}  {clean(r.get('reason', ''))}"))
+
     if show_score:
         inside.add_row("", "")
         total = sum(e.weight for e in fact.score_breakdown) if fact.score_breakdown else 0
@@ -322,6 +329,10 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
             print(f"    {clean(r['rule_id'])} {clean(r.get('override_reason', ''))}")
+    if getattr(fact, "acknowledged_urls", None):
+        print("  Acknowledged source URLs (did not affect the score):")
+        for r in fact.acknowledged_urls:
+            print(f"    {clean(r.get('url', ''))} {clean(r.get('reason', ''))}")
     if show_score:
         print(f"  Score: {fact.final_score}/100 ({verdict_label(fact)})")
     elif show_risk:

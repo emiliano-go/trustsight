@@ -32,9 +32,12 @@ DEP_FIELDS = (
 _CONSTRAINT_RE = re.compile(r"[<>=].*$")
 
 # Arch-suffixed arrays (depends_x86_64) are where -bin packages put their
-# real dependencies, so they count too.
+# real dependencies, so they count too.  The compound assignment `+=` is
+# the same declaration appended: requiring a bare `=` made
+# `depends+=('evil-pkg')` invisible to every D-rule and to the change
+# summary, so the parser had to see it before any rule could.
 _ARRAY_START_RE = re.compile(
-    r"^\s*(?:" + "|".join(DEP_FIELDS) + r")(?:_[a-z0-9_]+)?\s*=\s*\("
+    r"^\s*(" + "|".join(DEP_FIELDS) + r")(?:_[a-z0-9_]+)?\s*\+?=\s*\("
 )
 
 _QUOTED_RE = re.compile(r"""['"]([^'"]+)['"]""")
@@ -233,7 +236,10 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
         if field is None:
             match = _ARRAY_START_RE.match(body)
             if match:
-                field = match.group(0).split("=")[0].strip().split("_")[0]
+                # The field is the capture group, not `group(0).split("=")`:
+                # the operator may be `+=` and the name may carry an arch
+                # suffix, and the old split left `depends+` as the key.
+                field = match.group(1)
                 body = body[match.end():]
                 span = 0
             else:

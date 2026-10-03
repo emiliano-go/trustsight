@@ -104,6 +104,30 @@ def shipped_config():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+@contextmanager
+def warm_dependency_corpus():
+    """The shipped config plus the committed dependency corpus.
+
+    D001/D002 answer from ``dependency_names``, and the main gates run cold
+    on purpose: an unseeded install must not make every dependency look
+    novel.  This context is the warm half of that pair, seeding a small
+    committed corpus so the corpus-dependent rules can be gated without
+    moving the cold corpus figures.
+    """
+    with shipped_config() as tmp:
+        from trustsight.db import init_db, record_dependency_names
+
+        init_db()
+        names = json.loads(
+            (FIXTURES / "dependency-corpus.json").read_text()
+        )["names"]
+        # Ten observations each, the same warm-up the seeded-DB unit tests
+        # use: enough for the typosquat candidate ranking to include them.
+        for _ in range(10):
+            record_dependency_names(names)
+        yield tmp
+
+
 class Gate:
     """One §10 gate: a measurement, a threshold, and how it failed."""
 
@@ -176,13 +200,19 @@ def scan_corpus(corpus: Path, sample: int = 1) -> list[dict]:
 
 
 def scan_malicious(root: Path) -> list[dict]:
-    """Scan the labelled malicious fixtures, carrying their expectations."""
+    """Scan the labelled malicious fixtures, carrying their expectations.
+
+    The ``warm`` group is skipped: its rules read the dependency corpus and
+    this is the cold scanner.  ``gate_d_series_warm`` scans it under the
+    seeded corpus and asserts the cold half itself.
+    """
     ensure_default_configs()
     config = load_config()
     rules = load_rules()
 
     results: list[dict] = []
-    for group in sorted(p for p in root.iterdir() if p.is_dir()):
+    for group in sorted(
+            p for p in root.iterdir() if p.is_dir() and p.name != "warm"):
         expected_path = group / "expected.json"
         expected = json.loads(expected_path.read_text()) if expected_path.exists() else {}
         for path in sorted(group.glob("*.diff")):
@@ -502,22 +532,122 @@ def gate_malicious_recall(malicious: list[dict]) -> Gate:
     )
 
 
+#: Entries that describe the analysis rather than the shape.  A known-gap
+#: fixture scoring only from these is still open: a coverage note or an
+#: unknown-host prior is not a detection.
+_GAP_PRIOR_RULES = frozenset({"COVERAGE", "SOURCE_BUCKET", "NOVELTY"})
+
+
+def _gap_detected_by_another_rule(result: dict) -> list[str]:
+    """Scored findings on a known-gap fixture whose named rule did not fire.
+
+    The gap record names the rule that was *meant* to catch the shape.
+    When a later rule catches it instead, ``must_fire`` still fails and the
+    fixture sits filed under "we do not detect this" forever: that is how
+    the array-subscript, nameref and command-substitution gaps survived
+    after the crossfire family closed them.  A fixture that clears its
+    score bar with a real finding is covered, whatever rule produced it.
+    """
+    expected = result["expected"]
+    if not expected.get("known_gap"):
+        return []
+    must = expected.get("must_fire", [])
+    if all(rule in result["fired"] for rule in must):
+        # The named rule fired; the label's own check reports it.
+        return []
+    min_score = expected.get("min_score")
+    if min_score is not None and result["score"] < min_score:
+        return []
+    return sorted(result["scored"] - _GAP_PRIOR_RULES)
+
+
 def gate_known_gaps_unchanged(malicious: list[dict]) -> Gate:
     """A fixture marked as an uncovered gap must still be uncovered.
 
     Recording a gap is honest; leaving the record stale is not.  When a new
     rule closes one, this gate fails so the label is removed rather than
     quietly keeping a passing fixture filed under "we do not detect this".
+    A gap closed by a *different* rule than the one filed is reported the
+    same way: the shape is covered, and the fixture names the wrong rule.
     """
     closed = [
         result["name"] for result in malicious
         if result["expected"].get("known_gap") and not _fixture_failures(result)
     ]
+    other_rule = [
+        f"{result['name']} ({', '.join(_gap_detected_by_another_rule(result))})"
+        for result in malicious
+        if _gap_detected_by_another_rule(result)
+    ]
     total = sum(1 for r in malicious if r["expected"].get("known_gap"))
+    problems = closed + other_rule
     return Gate(
-        "known gaps still open (relabel if closed)", not closed,
-        {"open": total - len(closed), "newly_covered": closed}, 0,
-        "" if not closed else f"now detected, drop known_gap: {closed}",
+        "known gaps still open (relabel if closed)", not problems,
+        {
+            "open": total - len(closed) - len(other_rule),
+            "newly_covered": closed,
+            "detected_by_another_rule": other_rule,
+        },
+        0,
+        "" if not problems else f"now detected, drop known_gap: {problems}",
+    )
+
+
+def gate_d_series_warm(
+    warm_root: Path = FIXTURES / "malicious" / "warm",
+) -> Gate:
+    """The corpus-dependent rules fire warm and stay silent cold.
+
+    D001/D002 read ``dependency_names``; the main gates run cold by design,
+    so the evasion fixtures that add a novel dependency can only be gated
+    under a seeded corpus.  This gate scans the warm fixtures twice: once
+    with the committed corpus loaded, where the labels must pass, and once
+    cold, where D001/D002 must not fire.  The pair is the property the
+    cold-start guard exists for.
+    """
+    expected = json.loads((warm_root / "expected.json").read_text())
+    fixtures = sorted(warm_root.glob("*.diff"))
+    failures: list[str] = []
+    warm_fired: dict[str, list[str]] = {}
+
+    with warm_dependency_corpus():
+        ensure_default_configs()
+        config = load_config()
+        rules = load_rules()
+        for path in fixtures:
+            fact = scan_diff(path.read_text(errors="replace"), rules=rules,
+                             config=config, package_name=path.stem, seen_urls={})
+            fired = {e.rule_id for e in fact.score_breakdown}
+            scored = {
+                e.rule_id for e in fact.score_breakdown
+                if e.weight != 0 or e.severity == "FATAL"
+            }
+            warm_fired[path.name] = sorted(fired)
+            failures.extend(_fixture_failures({
+                "name": path.name,
+                "score": fact.final_score,
+                "fired": fired,
+                "scored": scored,
+                "expected": expected.get(path.name, {}),
+            }))
+
+    with shipped_config():
+        ensure_default_configs()
+        config = load_config()
+        rules = load_rules()
+        for path in fixtures:
+            fact = scan_diff(path.read_text(errors="replace"), rules=rules,
+                             config=config, package_name=path.stem, seen_urls={})
+            cold = {"D001", "D002"} & {e.rule_id for e in fact.score_breakdown}
+            if cold:
+                failures.append(f"{path.name}: {sorted(cold)} fired cold")
+
+    return Gate(
+        "D-series warm fixtures fire warm and stay silent cold",
+        not failures,
+        {"warm": warm_fired, "failures": failures},
+        0,
+        "" if not failures else "; ".join(failures[:6]),
     )
 
 
@@ -528,6 +658,9 @@ def run_gates(corpus: Path = FIXTURES / "benign-corpus",
         benign = scan_corpus(corpus, sample=sample)
         malicious = scan_malicious(malicious_root) if malicious_root.exists() else []
         gates = _evaluate(benign, malicious)
+        warm_root = malicious_root / "warm"
+        if warm_root.exists():
+            gates.append(gate_d_series_warm(warm_root))
         # The published distribution can only be compared against a whole
         # corpus: a sample moves every percentile.  `_evaluate` stays the
         # ten plan gates the sampled test run checks; this one rides the CI

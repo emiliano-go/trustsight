@@ -104,7 +104,29 @@ def test_extract_urls_ignores_comments():
     diff = """+# https://example.com/not-a-real-url
 +echo hello"""
     result = extract_urls_from_diff(diff)
-    assert "https://example.com/not-a-real-url" in result.added_urls  # still extracted from + line
+    assert result.added_urls == []
+
+
+def test_extract_urls_ignores_removed_comment_urls():
+    diff = """-# https://example.com/not-a-real-url
+-echo hello"""
+    result = extract_urls_from_diff(diff)
+    assert result.removed_urls == []
+
+
+def test_extract_urls_strips_angle_brackets():
+    # The maintainer comment is a whole-line comment and skipped entirely;
+    # a URL in a comment is not the only shape the brackets take, so the
+    # cleaning is exercised on an added source line.
+    diff = "+source=(<https://example.com/pkg.tar.gz>)"
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://example.com/pkg.tar.gz"]
+
+
+def test_extract_urls_maintainer_comment_is_not_a_source():
+    diff = "+# Maintainer: Rhinoceros <https://aur.archlinux.org/account/rhinoceros>"
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == []
 
 
 def test_extract_urls_with_variable_interpolation():
@@ -579,6 +601,20 @@ def test_diff_summary_from_text_lists_files_and_counts_body_lines():
     assert summary.files_changed == ["PKGBUILD"]
     assert summary.lines_added == 1
     assert summary.lines_removed == 0
+    assert {c["path"] for c in summary.file_changes} == {"PKGBUILD"}
+
+
+def test_diff_summary_strips_a_mnemonic_prefix():
+    """`diff.mnemonicprefix = true` names a commit diff `c/PKGBUILD`."""
+    from trustsight.differ import diff_summary_from_text
+
+    diff = (
+        "diff --git c/PKGBUILD c/PKGBUILD\n"
+        "--- c/PKGBUILD\n+++ c/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgver=1.0\n+source=(\"https://example.org/x.tar.gz\")\n"
+    )
+    summary = diff_summary_from_text(diff)
+    assert summary.files_changed == ["PKGBUILD"]
     assert {c["path"] for c in summary.file_changes} == {"PKGBUILD"}
 
 

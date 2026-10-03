@@ -48,7 +48,11 @@ from ..novelty import (
     normalize_url,
 )
 from ..deps import extract_dependency_changes
-from ..override import filter_triggered_rules
+from ..override import (
+    acknowledged_url_rows,
+    filter_triggered_rules,
+    match_url_acks,
+)
 from ..rules import (
     apply_rules,
     clamp_diff_lines,
@@ -274,8 +278,27 @@ def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
     """
     if not tree_manifest:
         return False
-    names = {m.group(1).rsplit("/", 1)[-1]
-             for m in _SCRIPTLET_ATTR_RE.finditer(diff_text)}
+    raw_names = {m.group(1).rsplit("/", 1)[-1]
+                 for m in _SCRIPTLET_ATTR_RE.finditer(diff_text)}
+    if not raw_names:
+        return False
+    # `install="${pkgname}.install"` is the same file `.SRCINFO` names
+    # resolved (`install = foo.install`), and the manifest carries it.
+    # Comparing only the raw spelling made a hook that was read report as
+    # one that was not, because `$pkgname` never appears in a manifest.
+    # A successful resolution pass replaces the unresolved spellings with
+    # the literals; a failed one keeps them, so the gap stays closed-fail.
+    try:
+        from ..tokenizer import resolve_added_lines
+
+        resolved = "\n".join(resolve_added_lines(diff_text))
+    except Exception:
+        log.debug("scriptlet name resolution failed", exc_info=True)
+        names = raw_names
+    else:
+        names = {n for n in raw_names if "$" not in n}
+        names |= {m.group(1).rsplit("/", 1)[-1]
+                  for m in _SCRIPTLET_ATTR_RE.finditer(resolved)}
     if not names:
         return False
     have = {path.rsplit("/", 1)[-1] for path, _head in tree_manifest}
@@ -584,8 +607,15 @@ def analyze_package(
 
     maintainer_changed = bool(old_maintainer and new_maintainer and old_maintainer != new_maintainer)
 
+    # An acknowledged URL is known to the operator for this package, so it
+    # contributes no novelty and no bucket prior.  The structural rules
+    # keep the full URL list and bucket map: an ack is about the generic
+    # provenance score, not about switching off a concrete finding.
+    url_acks = match_url_acks(pkg_name, source_changes.added_urls)
+    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
+
     novelty = build_novelty_context(
-        source_changes.added_urls,
+        scored_urls,
         package_id,
         maintainer=new_maintainer,
         record=record,
@@ -645,6 +675,7 @@ def analyze_package(
             package_name=pkg_name, config=config,
             current_text=clamp_text(head_pkgbuild),
             tree_manifest=tree_manifest,
+            whole_recipe=full_recipe,
         )
     )
     if tree_manifest:
@@ -781,7 +812,9 @@ def analyze_package(
     )
 
     score, breakdown, risk = calculate_score(
-        triggered_rules, source_buckets, novelty, config,
+        triggered_rules,
+        {u: b for u, b in source_buckets.items() if u not in url_acks},
+        novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
@@ -828,6 +861,7 @@ def analyze_package(
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
@@ -920,6 +954,8 @@ def scan_diff(
     diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
 
     source_changes = extract_urls_from_diff(diff_text)
+    url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}
+    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, current_text
     )
@@ -1012,13 +1048,17 @@ def scan_diff(
     pkgs_seen = seen_urls if seen_urls is not None else {}
     pkg_set = pkgs_seen.setdefault(package_name, set())
     global_set = pkgs_seen.setdefault(_GLOBAL_URL_KEY, set())
-    for url in source_changes.added_urls:
+    for url in scored_urls:
         nurl = normalize_url(url)
         if nurl not in pkg_set:
             novelty.url_first_seen_in_this_package = True
+            if not novelty.url_first_seen_in_this_package_url:
+                novelty.url_first_seen_in_this_package_url = url
             pkg_set.add(nurl)
         if nurl not in global_set:
             novelty.url_first_seen_globally = True
+            if not novelty.url_first_seen_globally_url:
+                novelty.url_first_seen_globally_url = url
             global_set.add(nurl)
 
     unresolved_sources = unresolved_source_lines(diff_text)
@@ -1043,7 +1083,9 @@ def scan_diff(
     )
 
     score, breakdown, risk = calculate_score(
-        triggered_rules, source_buckets, novelty, config,
+        triggered_rules,
+        {u: b for u, b in source_buckets.items() if u not in url_acks},
+        novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
@@ -1066,6 +1108,7 @@ def scan_diff(
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         pkgver_changed=pkgver_changed,
         version_moved=version_moved,
         pkgver_old=_pkgver_old or "",

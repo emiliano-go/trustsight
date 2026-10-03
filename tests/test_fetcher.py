@@ -111,6 +111,38 @@ def test_a_future_dated_commit_cannot_suppress_fetches(repo, monkeypatch):
     assert calls, "future-dated commit suppressed a needed fetch"
 
 
+def test_an_empty_clone_is_rebuilt(tmp_path, monkeypatch):
+    """A clone interrupted before its first fetch left an empty repo.
+
+    It was treated as cached, so every later run analysed an empty tree and
+    reported a coverage gap instead of refetching.
+    """
+    cache = tmp_path / "repos"
+    cache.mkdir()
+    monkeypatch.setattr("trustsight.fetcher.CACHE_DIR", cache)
+    pygit2.init_repository(str(cache / "demo"))  # unborn HEAD, no refs
+
+    source = tmp_path / "source"
+    src = pygit2.init_repository(str(source))
+    author = pygit2.Signature("Tester", "tester@example.com")
+    blob = src.create_blob(b"pkgver=1.0\n")
+    builder = src.TreeBuilder()
+    builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+    src.create_commit("HEAD", author, author, "initial", builder.write(), [])
+
+    calls = []
+    real_clone = pygit2.clone_repository
+
+    def fake_clone(url, dest, callbacks=None):
+        calls.append(url)
+        return real_clone(str(source), dest)
+
+    monkeypatch.setattr(pygit2, "clone_repository", fake_clone)
+    result = clone_or_fetch("demo")
+    assert calls, "the empty clone was not rebuilt"
+    assert get_head_commit(result), "the rebuilt clone has no HEAD"
+
+
 def test_clone_or_fetch_skips_the_network_when_current(repo, monkeypatch):
     """A current clone is returned without touching the remote."""
     fetched = _record_fetch(repo)

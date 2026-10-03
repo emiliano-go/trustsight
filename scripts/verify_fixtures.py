@@ -18,7 +18,7 @@ import json
 import sys
 from pathlib import Path
 
-CATEGORIES = ("historical", "holdout", "evasion", "synthetic", "campaign")
+CATEGORIES = ("historical", "holdout", "evasion", "synthetic", "campaign", "warm")
 
 
 def main():

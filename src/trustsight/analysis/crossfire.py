@@ -798,6 +798,13 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
             bare = _PLAIN_VAR_RE.match(word)
             if bare and bare.group(1) in resolvable:
                 break
+            # A static array subscript on a known array resolves to a
+            # literal, so it is a spelling choice like `$DKMS`; a dynamic
+            # subscript or an unknown array is not in *resolvable* and the
+            # word is yielded for X002 to claim.
+            element = _ARRAY_VAR_RE.match(word)
+            if element and element.group(1) in resolvable:
+                break
             yield word
             break
 
@@ -805,6 +812,14 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
 #: A plain scalar variable used as a command: `$DKMS`, `${MAKE}`.  An array
 #: subscript or a nameref is deliberately not this shape.
 _PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
+
+#: A statically indexed array element used as a command: `${A[0]}`,
+#: `${A[@]}`, `${A[*]}`.  Exempted only when the array's elements were
+#: parsed from the recipe, so the word is known to resolve; `${A[$i]}` and
+#: `${A[-1]}` do not match and stay with X002.
+_ARRAY_VAR_RE = re.compile(
+    r"^[\"\']?\$\{([A-Za-z_][A-Za-z0-9_]*)\[(?:\*|@|\d+)\]\}[\"\']?$"
+)
 
 #: `DKMS=$(which dkms)` then `$DKMS add ...`: a PATH lookup names its
 #: executable *literally* inside the substitution, so the command is not
@@ -1844,10 +1859,11 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     without re-deriving them, and so a caller can ask "what evasion is in
     this diff" without going through the scorer.
     """
-    raw_lines = split_lines(clamp_text(diff_text))
+    clamped = clamp_text(diff_text) or ""
+    raw_lines = split_lines(clamped)
     lines = join_line_continuations(raw_lines)
     from ..rules import _classify_enclosing_function
-    from ..tokenizer import variable_table
+    from ..tokenizer import resolve_added_lines, variable_table
 
     enclosing = _classify_enclosing_function(lines)
     files = _file_at_line(lines)
@@ -1858,8 +1874,17 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
     ]
     try:
-        var_table, _array_table = variable_table(readable)
-        resolvable = frozenset(var_table) | _path_lookup_names(readable)
+        var_table, array_table = variable_table(readable)
+        # An array whose elements are statically known is as readable as a
+        # scalar: `A=(curl)` then `${A[0]}` resolves to `curl`, so X002
+        # stands down for the static subscript and the payload rules own
+        # the resolved pipeline.  A dynamic subscript (`${A[$i]}`) is not
+        # exempted by the word check below, so it still fires.
+        resolvable = (
+            frozenset(var_table)
+            | frozenset(array_table)
+            | _path_lookup_names(readable)
+        )
     except Exception:
         # Without the table every command word reads as unresolvable, which
         # is X002's whole trigger condition inverted: the family goes quiet
@@ -1867,6 +1892,22 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         log.debug("variable table resolution failed", exc_info=True)
         note_stage_failure("variable-resolution")
         resolvable = frozenset(_path_lookup_names(readable))
+
+    # The resolved counterpart of every line, index-aligned by the
+    # tokenizer's own contract ("order and count are preserved").  The
+    # pipeline rules below ask whether the pipeline is a fetch; the text
+    # the shell runs is the resolved one, so a fetch that resolution made
+    # literal belongs to R001/R002/X009 and not to the evasion family.
+    # X002 does not use this: a word is exempted only when the tokenizer
+    # can read it statically (a known scalar or a static array subscript),
+    # because partial-quote and ANSI-C spellings resolve through literal
+    # reconstruction and must still be claimed as techniques.
+    try:
+        resolved_lines = resolve_added_lines(clamped)
+    except Exception:
+        log.debug("line resolution failed", exc_info=True)
+        note_stage_failure("variable-resolution")
+        resolved_lines = list(lines)
     carried = _continuation_lines(raw_lines, len(lines))
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
@@ -1922,6 +1963,15 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         body = _strip_comment(raw)
         if not body.strip():
             continue
+        # The same line after variable/array/alias resolution.  Falls back
+        # to the raw body when the resolved list is out of step, which
+        # fires toward looking rather than going quiet.
+        resolved_line = resolved_lines[index] if index < len(resolved_lines) else ""
+        resolved_body = (
+            _strip_comment(resolved_line[1:])
+            if resolved_line.startswith("+")
+            else body
+        )
         line_no = index + 1
         # Which file the line is in decides whether it is shell; the
         # function it sits in no longer decides anything, because
@@ -1955,6 +2005,12 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # X002 is the one position-sensitive rule here, so it is the one
         # that must stand down on a line whose command position lives
         # further up. The rest match on content and are unaffected.
+        #
+        # The stand-down is in `_command_words`: a known scalar or a static
+        # array subscript resolves to a literal (`A=(curl)` then `${A[0]}`
+        # is `curl`), so R001 owns the pipeline and X002 claiming it too
+        # would score one command twice.  A dynamic `${A[$i]}` or a nameref
+        # does not resolve and is still yielded.
         if index not in carried:
             for word in _command_words(body, resolvable):
                 for shape, pattern in X002_SHAPES:
@@ -1998,8 +2054,13 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
                     written_configs.clear()
                     break
 
-        sink = _pipeline_sink(body)
-        head = body.split("|", 1)[0]
+        # The pipeline rules read the resolved text: what the shell pipes is
+        # the expansion, not the spelling.  A resolved `curl ... | bash` is
+        # R001's, and a resolved `aria2c ... | bash` is X009's; X023 is for
+        # the pipeline that is *still* not a fetch after resolution (a
+        # command substitution or nameref the tokenizer refuses to fold).
+        sink = _pipeline_sink(resolved_body)
+        head = resolved_body.split("|", 1)[0]
 
         # X009 wanted the shell immediately after the pipe, so one filter
         # in between hid the whole chain: `dig +short txt e | head -c 2000
@@ -2010,7 +2071,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # The sink is the one `_pipeline_sink` already computes for X016,
         # so both arms now ask about the *end* of the pipeline rather than
         # about the character after the first bar.
-        if X009_RE.search(body) or (
+        if X009_RE.search(resolved_body) or (
                 sink and _X009_CLIENT_RE.search(head)
                 and _X016_KNOWN_EXECUTOR_RE.match(sink)):
             record("X009", line_no, "uncatalogued fetch to a shell", body.strip())

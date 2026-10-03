@@ -54,6 +54,11 @@ class NoveltyContext:
 
     url_first_seen_in_this_package: bool = False
     url_first_seen_globally: bool = False
+    #: The URL that made each signal true.  A NOVELTY row without it read
+    #: as a finding about nothing: the reader could not tell a real source
+    #: URL from a comment artefact, and could not check the claim.
+    url_first_seen_in_this_package_url: str = ""
+    url_first_seen_globally_url: str = ""
     maintainer_first_seen_for_this_package: bool = False
     observation_count: int = 0
 
@@ -99,6 +104,13 @@ class PackageFact:
 
     first_seen: bool = False
     suppressed_rules: list[dict] = field(default_factory=list)
+
+    # Source URLs the operator explicitly acknowledged for this package
+    # (`trustsight override add-url`).  They do not score SOURCE_BUCKET or
+    # NOVELTY, and they are reported here rather than dropped: a
+    # suppression the report does not show is indistinguishable from a
+    # detection that never happened.
+    acknowledged_urls: list[dict] = field(default_factory=list)
 
     # True when the diff was larger than the configured cap and only its
     # first max_diff_bytes were examined.  The score then describes a
@@ -260,11 +272,14 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "novelty_context": {
             "url_first_seen_in_this_package": fact.novelty_context.url_first_seen_in_this_package,
             "url_first_seen_globally": fact.novelty_context.url_first_seen_globally,
+            "url_first_seen_in_this_package_url": fact.novelty_context.url_first_seen_in_this_package_url,
+            "url_first_seen_globally_url": fact.novelty_context.url_first_seen_globally_url,
             "maintainer_first_seen_for_this_package": fact.novelty_context.maintainer_first_seen_for_this_package,
         },
         "first_seen": fact.first_seen,
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
+        "acknowledged_urls": fact.acknowledged_urls,
         "diff_truncated": fact.diff_truncated,
         "scan_truncated": fact.scan_truncated,
         "tree_analyzed": fact.tree_analyzed,
@@ -331,6 +346,7 @@ _STORED_FACT_KEYS = (
     "first_seen",
     "recent_commit_burst",
     "suppressed_rules",
+    "acknowledged_urls",
     "diff_truncated",
     "scan_truncated",
     "tree_analyzed",
@@ -410,12 +426,19 @@ def fact_from_dict(data: dict) -> PackageFact | None:
                 url_first_seen_in_this_package=novelty.get(
                     "url_first_seen_in_this_package", False),
                 url_first_seen_globally=novelty.get("url_first_seen_globally", False),
+                url_first_seen_in_this_package_url=novelty.get(
+                    "url_first_seen_in_this_package_url", ""),
+                url_first_seen_globally_url=novelty.get(
+                    "url_first_seen_globally_url", ""),
                 maintainer_first_seen_for_this_package=novelty.get(
                     "maintainer_first_seen_for_this_package", False),
             ),
             first_seen=data["first_seen"],
             recent_commit_burst=data["recent_commit_burst"],
             suppressed_rules=list(data["suppressed_rules"]),
+            # `.get`, not `[...]`: a fact stored before this field existed
+            # is still a valid cache row, and a missing ack list is empty.
+            acknowledged_urls=list(data.get("acknowledged_urls", [])),
             diff_truncated=data["diff_truncated"],
             scan_truncated=data["scan_truncated"],
             tree_analyzed=data["tree_analyzed"],

@@ -380,6 +380,8 @@ Suppress a rule that misfires on your packages, with a recorded reason.
 trustsight override list
 trustsight override add <rule_id> --reason "..." [--package NAME]
 trustsight override rm <rule_id> [--package NAME]
+trustsight override add-url <package> <url> --reason "..."
+trustsight override rm-url <package> <url>
 trustsight override wizard <package>
 ```
 
@@ -392,9 +394,11 @@ goes away is worse than no finding at all, because it trains you to skim.
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | Show configured overrides. This is the default when no subcommand is given. |
+| `list` | Show configured rule overrides and acknowledged source URLs. This is the default when no subcommand is given. |
 | `add <rule_id>` | Suppress a rule. `--reason` is required. |
 | `rm <rule_id>` | Stop suppressing a rule. Exits non-zero if no override matched. |
+| `add-url <package> <url>` | Acknowledge one source URL for one package. `--reason` is required. |
+| `rm-url <package> <url>` | Stop acknowledging a URL. Exits non-zero if no acknowledgement matched. |
 | `wizard <package>` | Interactive wizard: analyses the package, shows triggered non-FATAL rules, and prompts you to suppress each with a reason. |
 
 ### Flags
@@ -418,6 +422,22 @@ most want switched off, and both indicate the package is trying to deceive the
 reviewer rather than merely doing something unusual.
 
 Overrides live in `~/.config/trustsight/overrides.json`.
+
+### Acknowledging one URL instead of one rule
+
+A rule override is too coarse for a source URL: suppressing SOURCE_BUCKET
+for a package also hides the *next* URL the package adds, which is the swap
+TrustSight exists to catch. `override add-url` names the URL, and only that
+URL in that package stops scoring SOURCE_BUCKET and NOVELTY. A different
+URL, or the same URL in another package, is judged as before. Matching is
+after normalisation, so a routine version bump of the same URL stays
+acknowledged.
+
+An acknowledgement suppresses the score contribution only. Concrete rules
+that match the URL (C011, C012, H016, and the rest) still fire, and the
+report shows the acknowledged URL under **Acknowledged source URLs**, with
+the reason, so a suppression cannot be mistaken for a URL that never
+existed.
 
 ---
 

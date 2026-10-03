@@ -650,6 +650,7 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
 trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
+trustsight full-aur --transitions PACKAGE [--json]
 ```
 
 ### Flags
@@ -666,7 +667,12 @@ trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
 | `--notify URL` | With `--watch`: POST each cycle's new alerts as a JSON document to this webhook. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
 | `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which marks the webhook document `priority: urgent` (ntfy gets `Priority: 5`). Default 30, the benign corpus's p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
+| `--transitions PACKAGE` | Print the recorded property timeline for PACKAGE and exit. Read-only and works offline; cannot be combined with `--watch`, `--bootstrap`, `--export`, `--sign` or `--since`. |
 | `--json` | Output JSON. |
+
+### Property timelines
+
+Every cycle hashes each tracked property of each analysed package (source hosts and orgs, dependencies, configure flags, version scheme, install hook, and the rest). When a value changes, a row is appended to the `property_transitions` table; the current-value row the longitudinal rules read is unchanged. `trustsight full-aur --transitions PACKAGE` prints that history per property key, oldest first, with `--json` for the machine form. It answers "when did this package's source hosts move" after the fact: the run that recorded the change is long gone, but the transition is not.
 
 With a prior snapshot present (any `trustsight review` run creates one), a cycle processes only the changed packages, which is the intended cadence: run it periodically and the corpus grows incrementally. A from-scratch bootstrap is the exception, gated behind `--bootstrap`. Either way, each invocation is capped at `[limits] corpus_max_per_cycle` (default 2000) and resumes, so a large amount of work advances in bounded, resumable chunks rather than one avalanche.
 

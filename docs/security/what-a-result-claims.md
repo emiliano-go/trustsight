@@ -88,9 +88,9 @@ Twenty was originally the 95th percentile of the benign corpus. It is not any mo
 |---------|-------|
 | benign median | 0 |
 | benign 95th percentile | 25 |
-| benign diffs scoring 0 | 70.6% |
-| benign diffs above 20 | 7.7% |
-| percentile that 20 now sits at | 92.3th |
+| benign diffs scoring 0 | 70.7% |
+| benign diffs above 20 | 7.6% |
+| percentile that 20 now sits at | 92.4th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 50 |
 
@@ -98,7 +98,7 @@ So about one benign diff in thirteen lands above the threshold: in practice a re
 
 The property the calibration gates actually enforce is the one that matters for separation: **benign p95 (25) stays below malicious p5 (60)**, a margin of 35. Twenty remains the published threshold because moving it is a calibration decision with its own evidence, not a bookkeeping fix to keep a sentence true.
 
-**The 7.7% benign flag rate is a security property, not just a workload characteristic.** About one in thirteen benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because twelve of thirteen flags were benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 25 < p5 60) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
+**The 7.6% benign flag rate is a security property, not just a workload characteristic.** About one in thirteen benign updates flagging means a reviewer who hits several in a row is reading mostly noise, and a reviewer who skims because twelve of thirteen flags were benign is precisely the fatigue failure [B9](#b9-no-output-grants-permission-to-skip-review) spends a section preventing structurally. The separation metric (p95 25 < p5 60) is the gate that matters for detection quality; it does not bound what the reader will still be reading at month three. This rate is accepted because the alternative - subtractive weights that let a package declare its way under the threshold - would corrupt the calibration (see [B10](#b10-positive-evidence-is-reported-never-credited)), and because the tool's design (evidence first, score on request) makes each individual flag cheap to triage. But the rate itself is a cost the model imposes on the reviewer, and a reviewer who stops reading carefully is a failure mode the model does not currently bound.
 
 Be precise about what is automated here. `scripts/calibration_gates.py` re-computes **benign p95 and malicious p5 on every push** and fails the build if they cross. The other figures in the table above are a point-in-time measurement, not a per-push one; they are published in [fire rates](../explanation/fire-rates.md) and have to be re-derived with `scripts/rebaseline.py` when scoring changes. A number in this table is only as current as the last person who ran that script.
 

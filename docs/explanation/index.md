@@ -146,7 +146,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- The current test suite, **70.6% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
+- The current test suite, **70.7% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 25**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).

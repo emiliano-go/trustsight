@@ -1348,6 +1348,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 70.6 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 70.7 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 25 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

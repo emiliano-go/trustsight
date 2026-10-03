@@ -184,3 +184,15 @@ def recipe_from_post_state(doc: DiffDoc) -> RecipeDoc:
     this array gain), not whole-recipe questions.
     """
     return parse_recipe("\n".join(doc.post_lines()))
+
+
+def recipe_states(doc: DiffDoc) -> tuple[RecipeDoc, RecipeDoc]:
+    """The ``(pre, post)`` RecipeDocs of what the diff shows.
+
+    A diff shows hunks, not a file, so both states are partial: they answer
+    change questions (what did this array or scalar gain) and nothing else.
+    """
+    return (
+        parse_recipe("\n".join(doc.pre_lines())),
+        parse_recipe("\n".join(doc.post_lines())),
+    )

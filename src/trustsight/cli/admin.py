@@ -10,6 +10,7 @@ from ..config import (
     drifted_shipped_rules,
     ensure_default_configs,
     load_rules,
+    load_structural_rules,
     missing_shipped_rules,
     outdated_shipped_rules,
 )
@@ -24,7 +25,7 @@ from ..db import (
     seed_observation_count,
     import_seed,
 )
-from ..lint import SEVERITY_ERROR, lint_rules
+from ..lint import SEVERITY_ERROR, lint_rules, lint_structural_rules
 from ..safe_text import clean
 from .display import (
     _print_colored,
@@ -256,14 +257,20 @@ def register_commands(app: typer.Typer):
                 _print_colored(f"Rules file not found: {path}", "red", stderr=True)
                 raise typer.Exit(code=2)
             with open(path, "rb") as fh:
-                rules = tomllib.load(fh).get("rules", [])
+                loaded = tomllib.load(fh)
+            rules = loaded.get("rules", [])
+            structural = loaded.get("structural", [])
             source = path
         else:
             ensure_default_configs()
             rules = load_rules()
+            structural = load_structural_rules()
             source = CONFIG_DIR / "rules.toml"
 
-        findings = lint_rules(rules)
+        seen_ids: dict = {}
+        findings = lint_rules(rules, seen_ids)
+        findings.extend(lint_structural_rules(structural, seen_ids))
+        total_rules = len(rules) + len(structural)
         missing = [] if file else missing_shipped_rules()
         outdated = [] if file else outdated_shipped_rules()
 
@@ -273,7 +280,7 @@ def register_commands(app: typer.Typer):
         if json_output:
             data = {
                 "source": str(source),
-                "total_rules": len(rules),
+                "total_rules": total_rules,
                 "errors": len(errors),
                 "warnings": len(warnings),
                 "findings": [
@@ -294,7 +301,7 @@ def register_commands(app: typer.Typer):
 
             con = console()
             if not findings:
-                con.print(f"[green]\u2713[/] {len(rules)} rules, no issues.")
+                con.print(f"[green]\u2713[/] {total_rules} rules, no issues.")
             else:
                 table = Table(title=f"Rule Lint: {source}")
                 table.add_column("Rule", style="cyan")
@@ -308,13 +315,13 @@ def register_commands(app: typer.Typer):
                                   Text(clean(f.check)), Text(clean(f.message)))
                 con.print(table)
                 con.print(
-                    f"\n{len(rules)} rules checked: "
+                    f"\n{total_rules} rules checked: "
                     f"[red]{len(errors)} error(s)[/], [yellow]{len(warnings)} warning(s)[/]"
                 )
         else:
             for f in findings:
                 print(f"{f.level.upper():<8} {f.rule_id:<8} {f.check:<20} {f.message}")
-            print(f"\n{len(rules)} rules checked: {len(errors)} error(s), {len(warnings)} warning(s)")
+            print(f"\n{total_rules} rules checked: {len(errors)} error(s), {len(warnings)} warning(s)")
 
         if missing:
             msg = (

@@ -275,6 +275,18 @@ def precompile_shipped_patterns() -> None:
     precompile_patterns(r.get("pattern", "") for r in generated)
 
 
+def precompile_structural_patterns() -> None:
+    """Vet the operator's structural rule patterns, single-threaded.
+
+    Same reason as :func:`precompile_shipped_patterns`: the wall-clock
+    safety probe must not run under pool contention, or a structural rule
+    could vanish for one package in a batch and not another.
+    """
+    from .config import load_structural_rules
+
+    precompile_patterns(r.get("pattern", "") for r in load_structural_rules())
+
+
 #: Verdicts for dynamic patterns, kept so the answer is decided once.
 #:
 #: `backtracking_risk` *times* probe matches, so the verdict was both

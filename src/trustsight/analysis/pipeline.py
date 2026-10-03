@@ -103,6 +103,7 @@ from .structural import (
     recipe_checksum_parity_finding,
     unchanged_upstream_host,
 )
+from .structural_rules import apply_structural_rules
 from .version import (
     any_version_scalar_moved,
     compare_installed_to_aur,
@@ -744,6 +745,13 @@ def analyze_package(
             whole_recipe=full_recipe,
         )
     )
+    triggered_rules.extend(
+        apply_structural_rules(
+            clamp_text(diff_text),
+            current_text=clamp_text(head_pkgbuild),
+            package_name=pkg_name,
+        )
+    )
     if tree_manifest:
         from .delivery import scan_tree_manifest
         triggered_rules.extend(
@@ -1010,6 +1018,7 @@ def scan_diff(
     tree_manifest: list[tuple[str, bytes]] | None = None,
     current_text: str | None = None,
     tree_complete: bool = True,
+    structural_rules: list[dict] | None = None,
 ) -> PackageFact:
     begin_stage_tracking()
     if config is None:
@@ -1061,6 +1070,14 @@ def scan_diff(
             package_name=package_name, config=config,
             current_text=clamp_text(current_text),
             tree_manifest=tree_manifest,
+        )
+    )
+    triggered_rules.extend(
+        apply_structural_rules(
+            clamp_text(diff_text),
+            current_text=clamp_text(current_text),
+            rules=structural_rules,
+            package_name=package_name,
         )
     )
     # Same blind spot as the git path, read from the marker git wrote: a
@@ -1285,6 +1302,9 @@ def _make_fresh_analysis(
     parity = recipe_checksum_parity_finding(head_pkgbuild)
     if parity:
         triggered_rules.append(parity)
+    triggered_rules.extend(
+        apply_structural_rules("", current_text=head_pkgbuild, package_name=pkg_name)
+    )
     tree_manifest: list = []
     tree_complete = True
     if commit:

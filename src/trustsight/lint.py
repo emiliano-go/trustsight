@@ -19,6 +19,7 @@ The checks fall into three groups:
 import re
 from dataclasses import dataclass
 
+from .config import STRUCTURAL_MATCHES, STRUCTURAL_SEVERITY_CEILING
 from .rules import _COMMENT_OR_DEP_RE, apply_rules
 from .regex_safety import (
     BACKTRACK_BUDGET_S as _BACKTRACK_BUDGET_S,
@@ -49,6 +50,14 @@ def _is_valid_scope(value: str) -> bool:
 
 
 REQUIRED_FIELDS = ("id", "name", "pattern", "severity", "category")
+
+#: A structural rule names the recipe field and primitive instead of a
+#: match target, so its required set and its pattern subject differ.
+STRUCTURAL_REQUIRED_FIELDS = ("id", "field", "match", "pattern")
+
+#: ``renamed`` keys source arrays only: the local-name map reads the
+#: ``name::url`` forms the source rewriters and H099 already key on.
+_SOURCE_ARRAY_RE = re.compile(r"^source(?:_[a-z0-9_]+)?$")
 
 #: `H` is accepted so a user-written rule that reuses a heuristic rule's id
 #: is reported as a *duplicate* rather than as a malformed one.  The
@@ -278,7 +287,7 @@ def _check_structure(rule: dict, seen_ids: dict[str, int], index: int) -> list[L
     return findings
 
 
-def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
+def _check_pattern(rule: dict, subject: str = "line") -> tuple[list[LintFinding], re.Pattern | None]:
     """compile the pattern and check for emptiness, matches-everything, and backtracking risk"""
     rid = rule.get("id", "<unknown>")
     pattern = rule.get("pattern")
@@ -288,8 +297,8 @@ def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
     if not pattern.strip():
         return [LintFinding(
             rid, SEVERITY_ERROR, "empty-pattern",
-            "pattern is empty; it matches every line, so this rule fires on "
-            "every package"
+            f"pattern is empty; it matches every {subject}, so this rule "
+            "fires on every package"
             + (" and, being FATAL, forces every score to 100"
                if rule.get("severity") == "FATAL" else ""),
         )], None
@@ -307,7 +316,7 @@ def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
     if _pattern_matches_empty(compiled):
         findings.append(LintFinding(
             rid, SEVERITY_ERROR, "matches-everything",
-            "pattern matches the empty string, so it fires on every line",
+            f"pattern matches the empty string, so it fires on every {subject}",
         ))
 
     elapsed = _backtracking_risk(compiled)
@@ -316,13 +325,13 @@ def _check_pattern(rule: dict) -> tuple[list[LintFinding], re.Pattern | None]:
             rid, SEVERITY_ERROR, "backtracking",
             f"pattern took {elapsed * 1000:.0f}ms on a {_BACKTRACK_REPS}-character "
             f"adversarial input; cost grows exponentially, so a crafted "
-            f"PKGBUILD line could hang the scan",
+            f"PKGBUILD {subject} could hang the scan",
         ))
     elif is_superlinear(compiled):
         findings.append(LintFinding(
             rid, SEVERITY_ERROR, "backtracking",
             "pattern cost grows faster than its input; it is cheap on a short "
-            "line and expensive on a long one, so a crafted PKGBUILD line "
+            f"line and expensive on a long one, so a crafted PKGBUILD {subject} "
             "could stall the scan without ever looking slow in a test",
         ))
 
@@ -400,10 +409,100 @@ def _check_reachability(rule: dict, compiled: re.Pattern) -> list[LintFinding]:
     return findings
 
 
-def lint_rules(rules: list[dict]) -> list[LintFinding]:
+def lint_structural_rules(
+    structural: list[dict], seen_ids: dict[str, int] | None = None
+) -> list[LintFinding]:
+    """Validate the ``[[structural]]`` recipe-rule array.
+
+    ``seen_ids`` may be shared with :func:`lint_rules` so an id defined in
+    both tables is one duplicate rather than two rules.  The pattern checks
+    are the same gate the line rules get, with "value" as the subject: a
+    structural pattern never sees a diff line.
+    """
+    findings: list[LintFinding] = []
+    if seen_ids is None:
+        seen_ids = {}
+    for index, rule in enumerate(structural):
+        rid = rule.get("id", f"<structural #{index}>")
+        for field in STRUCTURAL_REQUIRED_FIELDS:
+            if not rule.get(field):
+                findings.append(LintFinding(
+                    rid, SEVERITY_ERROR, "required-field",
+                    f"missing required field '{field}'",
+                ))
+
+        if "id" in rule:
+            if not _ID_RE.match(str(rule["id"])):
+                findings.append(LintFinding(
+                    rid, SEVERITY_WARNING, "id-format",
+                    f"id '{rule['id']}' does not match the R### convention",
+                ))
+            if rule["id"] in _programmatic_ids():
+                findings.append(LintFinding(
+                    rid, SEVERITY_ERROR, "programmatic-id",
+                    f"id '{rule['id']}' is emitted from code rather than from "
+                    f"rules.toml; defining it here makes one id mean two "
+                    f"different things",
+                ))
+            if rule["id"] in seen_ids:
+                findings.append(LintFinding(
+                    rid, SEVERITY_ERROR, "duplicate-id",
+                    f"id '{rule['id']}' already defined at position "
+                    f"{seen_ids[rule['id']]}",
+                ))
+            else:
+                seen_ids[rule["id"]] = index
+
+        severity = rule.get("severity")
+        if severity and severity not in VALID_SEVERITIES:
+            findings.append(LintFinding(
+                rid, SEVERITY_ERROR, "severity",
+                f"unknown severity '{severity}' (expected one of "
+                f"{', '.join(sorted(VALID_SEVERITIES))})",
+            ))
+        elif severity in ("FATAL", "CRITICAL"):
+            findings.append(LintFinding(
+                rid, SEVERITY_WARNING, "severity-cap",
+                f"severity '{severity}' is capped at "
+                f"{STRUCTURAL_SEVERITY_CEILING} for structural rules",
+            ))
+
+        match = rule.get("match")
+        field = str(rule.get("field", ""))
+        if match not in STRUCTURAL_MATCHES:
+            findings.append(LintFinding(
+                rid, SEVERITY_ERROR, "match-primitive",
+                f"unknown match '{match}' (expected one of "
+                f"{', '.join(sorted(STRUCTURAL_MATCHES))})",
+            ))
+        else:
+            is_scalar = field.startswith("scalars.")
+            if is_scalar != (match == "scalar_changed"):
+                findings.append(LintFinding(
+                    rid, SEVERITY_ERROR, "field-match",
+                    f"match '{match}' does not apply to field '{field}'; "
+                    f"scalar_changed needs scalars.<name> and the array "
+                    f"primitives need an array name",
+                ))
+            if match == "renamed" and not _SOURCE_ARRAY_RE.match(field):
+                findings.append(LintFinding(
+                    rid, SEVERITY_ERROR, "renamed-field",
+                    f"renamed keys source arrays only, not '{field}'",
+                ))
+
+        pattern_findings, _compiled = _check_pattern(rule, subject="value")
+        findings.extend(pattern_findings)
+
+    return findings
+
+
+def lint_rules(
+    rules: list[dict], seen_ids: dict[str, int] | None = None
+) -> list[LintFinding]:
     """Lint a rule list, returning findings ordered by rule position."""
     findings: list[LintFinding] = []
-    seen_ids: dict[str, int] = {}
+    if seen_ids is None:
+        seen_ids = {}
 
     for index, rule in enumerate(rules):
         findings.extend(_check_structure(rule, seen_ids, index))

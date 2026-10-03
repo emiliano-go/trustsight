@@ -848,18 +848,10 @@ _URL_HOST_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://([^/'\"]+)")
 
 
 def _recipe_states(diff_text: str):
-    """The ``(pre, post)`` RecipeDocs of what the diff shows.
+    """The ``(pre, post)`` RecipeDocs of what the diff shows."""
+    from ..recipedoc import recipe_states
 
-    A diff shows hunks, not a file, so both states are partial: they answer
-    change questions (what did this array or scalar gain) and nothing else.
-    """
-    from ..recipedoc import parse_recipe
-
-    doc = parse_diff_lines(split_lines(diff_text))
-    return (
-        parse_recipe("\n".join(doc.pre_lines())),
-        parse_recipe("\n".join(doc.post_lines())),
-    )
+    return recipe_states(parse_diff_lines(split_lines(diff_text)))
 
 
 def _source_urls_by_local_name(recipe) -> dict[str, str]:

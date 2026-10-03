@@ -2238,6 +2238,89 @@ def load_rules() -> list[dict]:
     return rules
 
 
+#: The five structural primitives.  Each names a fact about the typed recipe
+#: rather than a line: an entry gained or lost, a host gained, a scalar
+#: changed, a source local name renamed under a kept URL.
+STRUCTURAL_MATCHES = frozenset({
+    "entry_added",
+    "entry_removed",
+    "host_added",
+    "scalar_changed",
+    "renamed",
+})
+
+#: What a structural rule's severity may claim at most.  A primitive over the
+#: parsed recipe is a weaker claim than a content match, and a user-authored
+#: pattern has no corpus measurement behind it.  FATAL and CRITICAL clamp
+#: here; the rule still runs.
+STRUCTURAL_SEVERITY_CEILING = "HIGH"
+
+_STRUCTURAL_CLAMPED = {"FATAL": STRUCTURAL_SEVERITY_CEILING,
+                       "CRITICAL": STRUCTURAL_SEVERITY_CEILING}
+
+
+def clamp_structural_severity(severity: str) -> str:
+    """Return *severity* capped at :data:`STRUCTURAL_SEVERITY_CEILING`."""
+    return _STRUCTURAL_CLAMPED.get(severity, severity)
+
+
+def load_structural_rules() -> list[dict]:
+    """Load ``[[structural]]`` recipe rules from rules.toml.
+
+    The table is user-only: it ships empty and is never synced, so the
+    entries on disk are the only ones that exist.  A malformed entry is
+    skipped and logged rather than failing a whole analysis; ``trustsight
+    lint-rules`` reports the same conditions as errors.  ``[rules.R###]``
+    controls in ``config.toml`` apply by id, exactly as for a line rule.
+    """
+    raw = load_toml("rules.toml").get("structural", [])
+    controls = load_config().get("rules", {})
+    rules: list[dict] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            _log.warning("ignoring non-table structural rule %r", entry)
+            continue
+        rule = dict(entry)
+        rid = rule.get("id")
+        match = rule.get("match")
+        field = rule.get("field")
+        pattern = rule.get("pattern")
+        if not (isinstance(rid, str) and rid and isinstance(match, str)
+                and isinstance(field, str) and field
+                and isinstance(pattern, str) and pattern):
+            _log.warning("ignoring structural rule with missing fields: %r", rule)
+            continue
+        if match not in STRUCTURAL_MATCHES:
+            _log.warning("ignoring structural rule %s: unknown match %r", rid, match)
+            continue
+        is_scalar = field.startswith("scalars.")
+        if is_scalar != (match == "scalar_changed"):
+            _log.warning(
+                "ignoring structural rule %s: match %r does not apply to field %r",
+                rid, match, field,
+            )
+            continue
+        severity = str(rule.get("severity") or "MEDIUM")
+        if severity in _STRUCTURAL_CLAMPED:
+            _log.warning(
+                "capping structural rule %s severity %s at %s",
+                rid, severity, STRUCTURAL_SEVERITY_CEILING,
+            )
+            severity = _STRUCTURAL_CLAMPED[severity]
+        rule["severity"] = severity
+        if not rule.get("name"):
+            rule["name"] = rid
+        if not rule.get("category"):
+            rule["category"] = "structural"
+        control = controls.get(rid, {})
+        if isinstance(control, dict):
+            for key in ("enabled", "weight_override"):
+                if key in control:
+                    rule[key] = control[key]
+        rules.append(rule)
+    return rules
+
+
 def _standard_port_pattern() -> str:
     """Generate the R047 non-standard-port exclusion pattern from config."""
     hosts = load_hosts().get("hosts", {})
@@ -2359,10 +2442,20 @@ def config_fingerprint() -> str:
               "enabled", "weight_override", "exclude_if_matches")
         }
 
+    def structural_key(rule: dict) -> dict:
+        return {
+            k: rule.get(k) for k in
+            ("id", "field", "match", "pattern", "severity", "category",
+             "enabled", "weight_override")
+        }
+
     config = load_config()
     material = {
         "rules": sorted((rule_key(r) for r in load_rules()),
                         key=lambda r: r.get("id") or ""),
+        "structural_rules": sorted(
+            (structural_key(r) for r in load_structural_rules()),
+            key=lambda r: r.get("id") or ""),
         "severity_weights": config.get("severity_weights", {}),
         "source_bucket_weights": config.get("source_bucket_weights", {}),
         "novelty_weights": config.get("novelty_weights", {}),

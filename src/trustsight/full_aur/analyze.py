@@ -47,6 +47,7 @@ from ..override import (
     filter_triggered_rules,
     match_url_acks,
 )
+from ..analysis.structural_rules import apply_structural_rules
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines_indexed
 from ..coverage import (
     gaps_from,
@@ -349,6 +350,11 @@ def analyze_package_text(
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
         if archive_trailer_finding:
             triggered_rules.append(archive_trailer_finding)
+        triggered_rules.extend(
+            apply_structural_rules(
+                "", current_text=clamp_text(new_pkgbuild), package_name=pkg_name
+            )
+        )
         triggered_rules, suppressed_rules = filter_triggered_rules(
             triggered_rules, package=pkg_name
         )
@@ -468,6 +474,13 @@ def analyze_package_text(
             package_name=pkg_name, config=config,
             current_text=clamp_text(new_pkgbuild),
             tree_manifest=tree_manifest,
+        )
+    )
+    triggered_rules.extend(
+        apply_structural_rules(
+            clamp_text(diff_text),
+            current_text=clamp_text(new_pkgbuild),
+            package_name=pkg_name,
         )
     )
     if tree_manifest:

@@ -42,7 +42,11 @@ from ..differ import (
 )
 from ..findings import stamp
 from ..novelty import build_novelty_context
-from ..override import filter_triggered_rules
+from ..override import (
+    acknowledged_url_rows,
+    filter_triggered_rules,
+    match_url_acks,
+)
 from ..rules import apply_rules, clamp_text, get_raw_diff_lines_indexed
 from ..coverage import (
     gaps_from,
@@ -418,6 +422,8 @@ def analyze_package_text(
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
 
     source_changes = extract_urls_from_diff(diff_text)
+    url_acks = match_url_acks(pkg_name, source_changes.added_urls)
+    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
     source_buckets = classify_urls(
         source_changes.added_urls,
         upstream_host=unchanged_upstream_host(diff_text, new_pkgbuild),
@@ -435,7 +441,7 @@ def analyze_package_text(
     )
 
     novelty = build_novelty_context(
-        source_changes.added_urls,
+        scored_urls,
         package_id,
         maintainer=maintainer,
         record=record,
@@ -469,6 +475,8 @@ def analyze_package_text(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    from ..analysis.persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     if archive_trailer_finding:
         triggered_rules.append(archive_trailer_finding)
     triggered_rules, suppressed_rules = filter_triggered_rules(
@@ -548,7 +556,9 @@ def analyze_package_text(
     )
 
     score, breakdown, risk = calculate_score(
-        triggered_rules, source_buckets, novelty, config,
+        triggered_rules,
+        {u: b for u, b in source_buckets.items() if u not in url_acks},
+        novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
@@ -575,6 +585,7 @@ def analyze_package_text(
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         diff_truncated=diff_truncated,
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,

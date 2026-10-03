@@ -45,6 +45,13 @@ CASES = [
     ("override list", ["override", "list"]),
     ("override add", ["override", "add", "H001", "--reason", "test"]),
     ("override rm", ["override", "rm", "H001"]),
+    ("override add-url", [
+        "override", "add-url", "demo", "https://example.com/p.tar.gz",
+        "--reason", "test",
+    ]),
+    ("override rm-url", [
+        "override", "rm-url", "demo", "https://example.com/p.tar.gz",
+    ]),
     ("db check", ["db", "check"]),
     ("db vacuum", ["db", "vacuum", "--force"]),
     ("db backup", ["db", "backup"]),

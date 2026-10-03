@@ -4,6 +4,7 @@ import threading
 import logging
 
 from .config import load_rules
+from .deps import _strip_comment
 from .diffdoc import parse_diff_lines
 from .findings import stamp
 from .tokenizer import (
@@ -596,6 +597,49 @@ def _function_bodies(lines: list[str]) -> dict[str, list[str]]:
     return bodies
 
 
+def _blank_quoted(line: str) -> str:
+    """Blank literal text inside quotes, keeping command substitutions.
+
+    A function name in a printed message is data.  The exception is
+    ``$(...)`` and backticks: they execute even inside double quotes, so a
+    double-quoted span that carries one is left intact rather than risk
+    dropping a real call edge (``echo "$(_fetch)"`` calls ``_fetch``).
+    Single quotes suppress substitution, so they are always blank.
+    """
+    out: list[str] = []
+    i = 0
+    n = len(line)
+    while i < n:
+        ch = line[i]
+        if ch == "'":
+            end = line.find("'", i + 1)
+            end = n if end == -1 else end + 1
+            out.append(" " * (end - i))
+            i = end
+        elif ch == '"':
+            j = i + 1
+            escaped = False
+            while j < n:
+                c = line[j]
+                if escaped:
+                    escaped = False
+                elif c == "\\":
+                    escaped = True
+                elif c == '"':
+                    break
+                j += 1
+            span = line[i:j + 1]
+            if "$(" in span or "`" in span:
+                out.append(span)
+            else:
+                out.append(" " * len(span))
+            i = j + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+
 def _caller_closure_map(lines: list[str]) -> dict[str, frozenset[str]]:
     """Return ``{function_name: names that transitively call it}``.
 
@@ -625,8 +669,16 @@ def _caller_closure_map(lines: list[str]) -> dict[str, frozenset[str]]:
     for name, body in bodies.items():
         found = set()
         for line in body:
-            stripped = line.lstrip("+").lstrip()
-            for match in call_re.finditer(stripped):
+            # Comments and quoted strings are not shell: a comment in
+            # ``post_install()`` reading "a package name" made
+            # ``callers['package'] = {post_install}``, so a genuine
+            # ``chmod 4755`` in ``package()`` was labelled
+            # "package(), called from post_install()" and scored as an
+            # install hook.
+            readable = _blank_quoted(
+                _strip_comment(line.lstrip("+").lstrip())
+            )
+            for match in call_re.finditer(readable):
                 found.add(match.group(1))
         found.discard(name)
         calls[name] = found

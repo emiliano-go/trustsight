@@ -216,6 +216,27 @@ class SuppressedRule:
 
 
 @dataclass(frozen=True)
+class AcknowledgedUrl:
+    """A source URL explicitly acknowledged for this package.
+
+    It did not contribute to SOURCE_BUCKET or NOVELTY.  It is reported
+    anyway: an acknowledgement a caller cannot see is one it cannot audit,
+    and the whole point of an ack (against a rule override) is that it
+    covers one URL rather than the next one the package adds.
+
+    :ivar url: the acknowledged URL.
+    :ivar reason: the reason recorded with the acknowledgement.
+    """
+
+    url: str
+    reason: str = ""
+
+    def to_dict(self) -> dict:
+        """Serialize to a plain dict."""
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class FileChange:
     """A single file that was added, removed, or modified in a diff.
 
@@ -250,6 +271,8 @@ class Report:
         review.
     :ivar findings: rules that fired, with the evidence that made them fire.
     :ivar suppressed: rules that matched but an override silenced.
+    :ivar acknowledged_urls: source URLs acknowledged for this package;
+        they did not score SOURCE_BUCKET or NOVELTY.
     :ivar changes: what the diff did, whether or not a rule matched.
         Context, not findings.
     :ivar coverage_gaps: non-empty means part of the change was not read.
@@ -317,6 +340,8 @@ class Report:
 
     findings: tuple[Finding, ...] = ()
     suppressed: tuple[SuppressedRule, ...] = ()
+    acknowledged_urls: tuple[AcknowledgedUrl, ...] = ()
+    """Source URLs acknowledged for this package; they did not score SOURCE_BUCKET or NOVELTY."""
     changes: tuple[str, ...] = ()
     """What the diff did, whether or not a rule matched.  Context, not findings."""
 
@@ -930,6 +955,7 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
             for f in report.findings
         ],
         "suppressed_rules": [s.to_dict() for s in report.suppressed],
+        "acknowledged_urls": [a.to_dict() for a in report.acknowledged_urls],
         "changes": list(report.changes),
         "coverage_gaps": list(report.coverage_gaps),
         "coverage_gaps_carried": list(report.coverage_gaps_carried),
@@ -983,6 +1009,10 @@ def _report_from_fact(fact) -> Report:
         verdict=evaluated["verdict"],
         findings=findings,
         suppressed=_suppressed(evaluated["suppressed_rules"]),
+        acknowledged_urls=tuple(
+            AcknowledgedUrl(url=r.get("url", ""), reason=r.get("reason", ""))
+            for r in evaluated.get("acknowledged_urls", ())
+        ),
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
         coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
@@ -1070,6 +1100,10 @@ def _report_from_result(row: dict) -> Report:
         verdict=evaluated["verdict"],
         findings=findings,
         suppressed=_suppressed(evaluated["suppressed_rules"]),
+        acknowledged_urls=tuple(
+            AcknowledgedUrl(url=r.get("url", ""), reason=r.get("reason", ""))
+            for r in evaluated.get("acknowledged_urls", ())
+        ),
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
         coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),

@@ -363,12 +363,14 @@ def calculate_score(
         w = int(raw_w * m)
         if w > 0:
             base += w
+            url = novelty.url_first_seen_globally_url
+            where = f": {url}" if url else ""
             breakdown.append(
                 ScoreEntry(
                     rule_id="NOVELTY",
                     severity="HIGH" if raw_w > 10 else "MEDIUM",
                     weight=w,
-                    reason=f"Source URL first seen globally (maturity={m:.2f})",
+                    reason=f"Source URL first seen globally{where} (maturity={m:.2f})",
                 )
             )
     if novelty.url_first_seen_in_this_package:
@@ -378,12 +380,14 @@ def calculate_score(
         w = int(raw_w * m)
         if w > 0:
             base += w
+            url = novelty.url_first_seen_in_this_package_url
+            where = f": {url}" if url else ""
             breakdown.append(
                 ScoreEntry(
                     rule_id="NOVELTY",
                     severity="MEDIUM",
                     weight=w,
-                    reason=f"Source URL first seen in this package (maturity={m:.2f})",
+                    reason=f"Source URL first seen in this package{where} (maturity={m:.2f})",
                 )
             )
     if novelty.maintainer_first_seen_for_this_package:

@@ -396,7 +396,13 @@ def clone_or_fetch(
         cached = None
         try:
             cached = pygit2.Repository(str(path))
-            _head_commit_id(cached)
+            if not _head_commit_id(cached):
+                # A clone interrupted before its first fetch leaves a valid
+                # but empty repository.  It read as a cached clone, so every
+                # later run analysed an empty tree and reported a coverage
+                # gap instead of refetching.  An AUR package always has
+                # commits, so no commit means the clone is incomplete.
+                raise pygit2.GitError("cached clone has no commits")
         except (_TimeoutError, pygit2.GitError):
             # The clone itself is unreadable, so rebuild it below.  A failing
             # *fetch* is not grounds for deleting a good clone: under the

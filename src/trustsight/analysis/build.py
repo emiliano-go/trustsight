@@ -487,6 +487,12 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
     # message context the rule engine already computes has to be consulted
     # here too.
     context = _classify_line_context(lines)
+    # A heredoc that only prints is the multi-line half of the message
+    # context above: `cat <<'MESSAGE'` listing instructions is not a
+    # command.  The helper lives in delivery, which imports this module, so
+    # the import is deferred.
+    from .delivery import _printed_heredoc_body_indices
+    printed_heredoc = _printed_heredoc_body_indices(lines)
 
     high_found = False
     med_found = False
@@ -572,7 +578,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
                 continue
-            if context.get(i) == "message":
+            if context.get(i) == "message" or i in printed_heredoc:
                 continue
             body = _strip_comment(line)
             if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
@@ -621,7 +627,7 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _INSTALL_HOOKS):
                 continue
-            if context.get(i) == "message":
+            if context.get(i) == "message" or i in printed_heredoc:
                 continue
             body = _strip_comment(line)
             if foreign_re.search(body):

@@ -2535,6 +2535,10 @@ def _parity_fact():
         coverage_gaps=["line_truncated"],
         changes=["PKGBUILD modified"],
         suppressed_rules=[{"rule_id": "R099", "severity": "LOW"}],
+        acknowledged_urls=[{
+            "url": "https://example.org/known.tar.gz",
+            "reason": "reviewed 2026-10-01",
+        }],
     )
 
 

@@ -50,7 +50,11 @@ from ..novelty import (
     normalize_url,
 )
 from ..deps import extract_dependency_changes
-from ..override import filter_triggered_rules
+from ..override import (
+    acknowledged_url_rows,
+    filter_triggered_rules,
+    match_url_acks,
+)
 from ..rules import (
     apply_rules,
     clamp_diff_lines,
@@ -277,8 +281,27 @@ def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
     """
     if not tree_manifest:
         return False
-    names = {m.group(1).rsplit("/", 1)[-1]
-             for m in _SCRIPTLET_ATTR_RE.finditer(diff_text)}
+    raw_names = {m.group(1).rsplit("/", 1)[-1]
+                 for m in _SCRIPTLET_ATTR_RE.finditer(diff_text)}
+    if not raw_names:
+        return False
+    # `install="${pkgname}.install"` is the same file `.SRCINFO` names
+    # resolved (`install = foo.install`), and the manifest carries it.
+    # Comparing only the raw spelling made a hook that was read report as
+    # one that was not, because `$pkgname` never appears in a manifest.
+    # A successful resolution pass replaces the unresolved spellings with
+    # the literals; a failed one keeps them, so the gap stays closed-fail.
+    try:
+        from ..tokenizer import resolve_added_lines
+
+        resolved = "\n".join(resolve_added_lines(diff_text))
+    except Exception:
+        log.debug("scriptlet name resolution failed", exc_info=True)
+        names = raw_names
+    else:
+        names = {n for n in raw_names if "$" not in n}
+        names |= {m.group(1).rsplit("/", 1)[-1]
+                  for m in _SCRIPTLET_ATTR_RE.finditer(resolved)}
     if not names:
         return False
     have = {path.rsplit("/", 1)[-1] for path, _head in tree_manifest}
@@ -320,14 +343,15 @@ def _binary_metadata_finding(paths: list[str]) -> dict:
     })
 
 
-def _adds_a_dependency(diff_text: str) -> bool:
-    """True when the diff adds a dependency that is not a repo package.
+def _added_dependency_names(diff_text: str) -> set[str]:
+    """Non-official dependency names this diff adds, from the walked fields.
 
     The gap exists for a name this run did not walk, which is an AUR
     dependency; a package from an official repository (``lib32-glibc`` in
     ``[core]``) is resolved by the build system like any other and is not
-    unread code.  The dependency walk already drops non-AUR names, so this
-    predicate applies the same distinction to the added-dependency test.
+    unread code.  ``optdepends`` is excluded along with the gap test: it
+    is not pulled in by default (the same reason DEPTH_FIELDS excludes
+    it), so a name there is not code the run failed to read.
 
     A tokenizer failure must not read as "no dependency added": that is the
     same neutral value a complete scan returns, and it silently clears
@@ -346,34 +370,78 @@ def _adds_a_dependency(diff_text: str) -> bool:
     except Exception:
         log.debug("dependency-change scan failed", exc_info=True)
         note_stage_failure("dependency-change-scan")
-        return False
+        return set()
     names = {
         name
-        for field in ("depends", "makedepends", "checkdepends", "optdepends")
+        for field in ("depends", "makedepends", "checkdepends")
         for name in added.get(field, ())
     }
-    return any(not is_established_package(name) for name in names)
+    return {name for name in names if not is_established_package(name)}
 
 
-def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False):
+def _adds_a_dependency(diff_text: str) -> bool:
+    """True when the diff adds a dependency that is not a repo package."""
+    return bool(_added_dependency_names(diff_text))
+
+
+def _deps_not_scanned(depth_result, added_names: set[str]) -> bool:
+    """Whether this run leaves an added dependency unread.
+
+    Three ways, and only three: the walk was cut short; the metadata
+    provider could not answer, so "not in the AUR" is not a fact; or an
+    added name the provider *does* know is AUR was not reached.  A name
+    the provider reports as not-AUR is resolved by makepkg's normal
+    dependency handling and is not a gap.
+    """
+    return (
+        depth_result.truncated
+        or (bool(added_names) and depth_result.metadata_unavailable)
+        or depth_result.added_aur_unreported
+    )
+
+
+def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
+                       added_names: set[str] | None = None):
     """Analyse the AUR dependency closure of *pkg_name*.
 
     A dependency is analysed by ``analyze_package`` with ``depth=0``: the
     walk owns the level counting, so a child must not start a walk of its
     own or the closure would be traversed once per node.
+
+    *added_names* are the non-official dependencies this diff added.  They
+    are checked against the same provider the walk used, so the caller can
+    tell "this name is not AUR" (no gap) from "this AUR name was never
+    reached" (a gap).
     """
     from ..depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
 
     resolved = resolve_depth(depth, config)
+    provider = default_metadata()
     if resolved == 0:
-        return DepthResult()
-    return walk_dependencies(
-        pkg_name,
-        depth=resolved,
-        metadata=default_metadata(),
-        analyse=lambda name: analyze_package(name, depth=0, record=record),
-        already_seen=seen,
+        result = DepthResult()
+    else:
+        result = walk_dependencies(
+            pkg_name,
+            depth=resolved,
+            metadata=provider,
+            analyse=lambda name: analyze_package(name, depth=0, record=record),
+            already_seen=seen,
+        )
+    if added_names:
+        reported = {report.name for report in result.reports}
+        try:
+            result.added_aur_unreported = any(
+                name not in reported and provider.is_aur(name)
+                for name in added_names
+            )
+        except Exception:
+            log.debug("added-dependency metadata check failed", exc_info=True)
+            result.metadata_unavailable = True
+    result.metadata_unavailable = (
+        result.metadata_unavailable
+        or not getattr(provider, "available", True)
     )
+    return result
 
 
 def _parent_commit(repo, head_commit: str) -> str:
@@ -590,8 +658,15 @@ def analyze_package(
 
     maintainer_changed = bool(old_maintainer and new_maintainer and old_maintainer != new_maintainer)
 
+    # An acknowledged URL is known to the operator for this package, so it
+    # contributes no novelty and no bucket prior.  The structural rules
+    # keep the full URL list and bucket map: an ack is about the generic
+    # provenance score, not about switching off a concrete finding.
+    url_acks = match_url_acks(pkg_name, source_changes.added_urls)
+    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
+
     novelty = build_novelty_context(
-        source_changes.added_urls,
+        scored_urls,
         package_id,
         maintainer=new_maintainer,
         record=record,
@@ -666,6 +741,7 @@ def analyze_package(
             package_name=pkg_name, config=config,
             current_text=clamp_text(head_pkgbuild),
             tree_manifest=tree_manifest,
+            whole_recipe=full_recipe,
         )
     )
     if tree_manifest:
@@ -673,6 +749,8 @@ def analyze_package(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    from .persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     triggered_rules, suppressed_rules = filter_triggered_rules(
         triggered_rules, package=pkg_name
     )
@@ -774,8 +852,10 @@ def analyze_package(
     # Before scoring, because a truncated walk has to reach `gaps_from`:
     # the band downgrade is decided once inside calculate_score and carried
     # on the fact, so a gap appended afterwards would never fail closed.
+    added_names = _added_dependency_names(diff_text)
     depth_result = _walk_dependencies(
-        pkg_name, depth, config, _depth_seen, record=record
+        pkg_name, depth, config, _depth_seen, record=record,
+        added_names=added_names,
     )
 
     gaps = gaps_from(
@@ -797,10 +877,10 @@ def analyze_package(
         # attacker-controlled new `depends=` reporting a complete analysis
         # of a change it had only half read. The score stays where it was;
         # what changes is that the report stops claiming completeness.
-        deps_not_scanned=(
-            depth_result.truncated
-            or (_adds_a_dependency(diff_text) and not depth_result.reports)
-        ),
+        # A non-AUR name is not unread code: the walk asked the same
+        # provider the rest of the run uses, and --depth 0 is the
+        # operator's own complete answer.
+        deps_not_scanned=_deps_not_scanned(depth_result, added_names),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
@@ -808,7 +888,9 @@ def analyze_package(
     )
 
     score, breakdown, risk = calculate_score(
-        triggered_rules, source_buckets, novelty, config,
+        triggered_rules,
+        {u: b for u, b in source_buckets.items() if u not in url_acks},
+        novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
@@ -855,6 +937,7 @@ def analyze_package(
         ),
         novelty_context=novelty,
         suppressed_rules=suppressed_rules,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
@@ -947,6 +1030,8 @@ def scan_diff(
     diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
 
     source_changes = extract_urls_from_diff(diff_text)
+    url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}
+    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, current_text
     )
@@ -988,6 +1073,8 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+    from .persistence import stand_down_committed_staging
+    triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
 
     # H087 only.  was_orphaned=-1 means "no recorded observation", so H086
     # and H088 are structurally silent here: the stateless path has no AUR
@@ -1039,13 +1126,17 @@ def scan_diff(
     pkgs_seen = seen_urls if seen_urls is not None else {}
     pkg_set = pkgs_seen.setdefault(package_name, set())
     global_set = pkgs_seen.setdefault(_GLOBAL_URL_KEY, set())
-    for url in source_changes.added_urls:
+    for url in scored_urls:
         nurl = normalize_url(url)
         if nurl not in pkg_set:
             novelty.url_first_seen_in_this_package = True
+            if not novelty.url_first_seen_in_this_package_url:
+                novelty.url_first_seen_in_this_package_url = url
             pkg_set.add(nurl)
         if nurl not in global_set:
             novelty.url_first_seen_globally = True
+            if not novelty.url_first_seen_globally_url:
+                novelty.url_first_seen_globally_url = url
             global_set.add(nurl)
 
     unresolved_sources = unresolved_source_lines(diff_text)
@@ -1071,7 +1162,9 @@ def scan_diff(
     )
 
     score, breakdown, risk = calculate_score(
-        triggered_rules, source_buckets, novelty, config,
+        triggered_rules,
+        {u: b for u, b in source_buckets.items() if u not in url_acks},
+        novelty, config,
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
@@ -1094,6 +1187,7 @@ def scan_diff(
         source_buckets=source_buckets,
         execution_changes=exec_changes,
         novelty_context=novelty,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         pkgver_changed=pkgver_changed,
         version_moved=version_moved,
         pkgver_old=_pkgver_old or "",

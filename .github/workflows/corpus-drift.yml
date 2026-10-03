@@ -4,6 +4,13 @@ on:
     - cron: "0 6 1 * *"
   workflow_dispatch:
 
+# The tag of the channel release carrying baseline-benign-corpus.tar.gz.
+# It moves in the same commit as corpus.lock: the asset IS the corpus the
+# lock names, packed by scripts/pack_calibration_corpus.py.  The same env
+# as calibration.yml, because both jobs must measure the same bytes.
+env:
+  CALIBRATION_CORPUS_TAG: baseline-2026-09-24
+
 permissions:
   issues: write
 
@@ -20,22 +27,21 @@ jobs:
       - name: Install
         run: uv sync --locked --extra dev --python 3.12
 
-      # Unlike mirror-check, this job caches the fetched AUR objects: it is
-      # measuring rule drift, not mirror availability, so re-fetching the
-      # same commits every month buys nothing. Keyed on the lock, so a
-      # corpus change forces a cold rebuild.
-      - name: Cache AUR objects
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.cache/trustsight/aur.git
-          key: aur-objects-${{ hashFiles('tests/fixtures/corpus.lock') }}
-          restore-keys: aur-objects-
-
-      - name: Reconstruct corpus from lock
+      # The corpus is the packed release asset, not a rebuild from the
+      # lock: `git diff -W` output is not byte-stable across git versions,
+      # so a reconstruction here produced a different corpus than the one
+      # baseline.json was measured on, and the hash and a few rates drifted
+      # on every run.  That filed an issue every month regardless of rule
+      # drift.  calibration.yml downloads the same asset and verifies the
+      # extracted bytes against baseline.json; this job now does too, so a
+      # reported drift is a rule change and not a runner difference.
+      - name: Fetch the calibration corpus
         run: |
-          uv run python scripts/build_corpus.py --from-manifest \
-            --manifest tests/fixtures/corpus.lock \
-            --out tests/fixtures/benign-corpus
+          curl -fL --retry 3 -o /tmp/baseline-benign-corpus.tar.gz \
+            "https://github.com/emiliano-go/trustsight/releases/download/${CALIBRATION_CORPUS_TAG}/baseline-benign-corpus.tar.gz"
+          mkdir -p tests/fixtures/benign-corpus
+          tar -xzf /tmp/baseline-benign-corpus.tar.gz -C tests/fixtures/benign-corpus
+          uv run python scripts/pack_calibration_corpus.py --check
 
       - name: Compute current baseline
         run: |
@@ -103,6 +109,9 @@ jobs:
               '```',
               'python scripts/rebaseline.py',
               '```',
+              '',
+              'Materialise the corpus first if it is absent (it is not committed);',
+              'see docs/contributing/re-baselining.md.',
               '',
               `Run: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             ].join('\n');

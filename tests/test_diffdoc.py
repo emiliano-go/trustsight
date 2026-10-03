@@ -55,6 +55,21 @@ def test_simple_hunk_structure():
     assert hunk.actual_lines == 4
 
 
+MNEMONIC = SIMPLE.replace("a/PKGBUILD", "c/PKGBUILD").replace("b/PKGBUILD", "c/PKGBUILD")
+
+
+def test_mnemonic_prefixes_are_stripped():
+    """`diff.mnemonicprefix = true` emits `c/` for a commit diff.
+
+    A reviewer with that setting on saw every location as `c/PKGBUILD`;
+    the file is the same one the default `b/` spelling names.
+    """
+    doc = parse_diff(MNEMONIC)
+    f = doc.files[0]
+    assert f.path == "PKGBUILD"
+    assert all(line.file == "PKGBUILD" for line in doc.lines if line.is_content)
+
+
 def test_simple_hunk_lines():
     doc = parse_diff(SIMPLE)
     sides = [(line.side, line.content) for line in doc.lines if line.is_content]

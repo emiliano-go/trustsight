@@ -113,6 +113,7 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "verdict": verdict,
         "findings": findings,
         "suppressed_rules": suppressed_rows(fact),
+        "acknowledged_urls": [dict(row) for row in (fact.acknowledged_urls or ())],
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
         "coverage_gaps_carried": list(getattr(fact, "carried_coverage_gaps", ())),
@@ -158,6 +159,7 @@ REPORT_KEYS = (
     "coverage_gaps",
     "coverage_gaps_carried",
     "suppressed_rules",
+    "acknowledged_urls",
     "ioc_matches",
     "first_seen",
     "is_trivial",
@@ -259,6 +261,11 @@ def report_body(
         # B5: unconditional.  A suppression behind a verbosity flag looks
         # exactly like a rule that never matched.
         "suppressed_rules": [dict(r) for r in evaluated.get("suppressed_rules", ())],
+        # B5 again: an acknowledged URL is a suppression the reader must
+        # see, or it is indistinguishable from a URL that never existed.
+        "acknowledged_urls": [
+            dict(r) for r in evaluated.get("acknowledged_urls", ())
+        ],
         "ioc_matches": [_ioc_row(m) for m in evaluated.get("ioc_matches", ())],
         "first_seen": bool(evaluated.get("first_seen", False)),
         "is_trivial": bool(evaluated.get("is_trivial", False)),

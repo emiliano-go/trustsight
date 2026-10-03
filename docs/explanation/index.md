@@ -131,7 +131,7 @@ The score maps to a verdict class:
 | 21+ | FLAGGED | Signals warrant review before updating |
 | Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change; requires manual review |
 
-The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 30; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 30-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
+The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 25; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 35-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
 
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 
@@ -146,8 +146,8 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 ## Key numbers
 
-- The current test suite, **70.3% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
-- **CRITICAL p5 = 60**, **benign p95 = 30**: the gap that matters.
+- The current test suite, **70.7% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
+- **CRITICAL p5 = 60**, **benign p95 = 25**: the gap that matters.
 - Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).
 

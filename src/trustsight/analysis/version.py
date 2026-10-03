@@ -378,20 +378,29 @@ def _epoch_introduced(diff_text: str) -> tuple[bool, str | None]:
     return False, None
 
 
-def _epoch_findings(diff_text: str, config, add) -> None:
+def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False) -> None:
     """A diff introduces ``epoch=`` where none existed (H063, MEDIUM).
 
     Introducing an epoch overrides the version ordering: a nonzero epoch
     makes the package sort above anything that shares its pkgver/pkgrel,
     which is how a package can be pushed ahead of an established one.
     ``epoch=0`` merely initialises the field and is closer to a no-op.
+
+    A whole-recipe analysis has no ``-`` side, so every field is "new" by
+    construction and "newly introduced" would be a claim the run cannot
+    support: the epoch is merely present.  The finding is kept (the reader
+    still wants to know the field is there), but it says what it knows.
     """
     introduced, value = _epoch_introduced(diff_text)
     if not introduced:
         return
     severity = "MEDIUM" if value and value != "0" else "INFO"
+    if whole_recipe:
+        reason = f"epoch={value} present" if value else "epoch present"
+    else:
+        reason = f"epoch={value} newly introduced" if value else "epoch newly introduced"
     add("H063", "Epoch Introduced", severity, "version",
-        f"epoch={value} newly introduced" if value else "epoch newly introduced",
+        reason,
         line=next(
             (
                 i

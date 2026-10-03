@@ -259,6 +259,27 @@ def test_a_committed_install_scriptlet_body_is_scanned():
     assert "evil.example" in text
 
 
+def test_a_variable_routed_install_file_in_the_manifest_is_read():
+    """`install="${pkgname}.install"` names a file the manifest carries.
+
+    Comparing only the raw spelling made the hook report as unread, because
+    `$pkgname` never appears in a manifest; the resolved spelling is the one
+    `.SRCINFO` records.
+    """
+    from trustsight.analysis.pipeline import _scriptlet_files_unread
+
+    diff = "+pkgname=foo\n+install=\"${pkgname}.install\"\n"
+    manifest = [("foo.install", b"post_install() { :; }\n")]
+    assert _scriptlet_files_unread(diff, manifest) is False
+
+
+def test_an_install_file_absent_from_the_manifest_is_still_a_gap():
+    from trustsight.analysis.pipeline import _scriptlet_files_unread
+
+    diff = "+pkgname=foo\n+install=\"${pkgname}.install\"\n"
+    assert _scriptlet_files_unread(diff, [("PKGBUILD", b"")]) is True
+
+
 def test_the_new_crossfire_patterns_stay_linear():
     import time
 

@@ -7,7 +7,7 @@ import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
 from .coverage import unpinned_source_refs
-from .diffdoc import parse_diff_lines
+from .diffdoc import parse_diff_lines, strip_diff_path_prefix
 from .schema import DiffSummary, SourceChanges
 from .tokenizer import split_lines
 
@@ -347,15 +347,16 @@ def diff_summary_from_text(diff_text: str) -> DiffSummary:
 
 
 def _diff_file_path(header: str) -> str:
-    """The path from a `---`/`+++` header, git's `a/`,`b/` prefix stripped."""
+    """The path from a `---`/`+++` header, git's path prefix stripped.
+
+    The prefix may be a mnemonic one (`c/` for a commit diff) when the
+    reviewer's git config sets `diff.mnemonicprefix`; `strip_diff_path_prefix`
+    handles both spellings.
+    """
     path = header.strip()
     if "\t" in path:
         path = path.split("\t", 1)[0]
-    for prefix in ("a/", "b/"):
-        if path.startswith(prefix):
-            path = path[len(prefix):]
-            break
-    return path
+    return strip_diff_path_prefix(path)
 
 
 # `^[+ ]`, not `^\+`: a VCS source is a fact about the package whether or
@@ -408,7 +409,12 @@ _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
 
 def _clean_url(token: str) -> str:
-    token = re.sub(r"[\)]+$", "", token)
+    # A URL written in angle brackets - a maintainer line's
+    # `<https://aur.archlinux.org/account/foo>` is the common case - keeps
+    # the closing `>` in the token, and a source URL with a `>` on the end
+    # is a URL no bucket or novelty lookup will ever recognise.  The
+    # closing bracket is punctuation, not part of the address.
+    token = re.sub(r"[\)<>]+$", "", token)
     token = re.sub(r"[\)]+", ")", token)
     # Trailing braces from a nested shell default (`${A:-${B:-https://x}}`)
     # are shell syntax, but the `}` closing a `${var}` inside the URL is
@@ -421,6 +427,18 @@ def _clean_url(token: str) -> str:
     return token
 
 
+def _is_comment_line(raw: str) -> bool:
+    """True when a raw diff line is a whole-line comment.
+
+    A URL in a comment cannot reach the build: it is not in ``source=()``,
+    not ``url=``, and no function runs it.  Scoring it as a source URL made
+    ``# Maintainer: Name <https://aur.archlinux.org/account/name>`` the
+    package's most suspicious source, which is the opposite of evidence.
+    """
+    body = raw[1:] if raw[:1] in "+-" else raw
+    return body.lstrip().startswith("#")
+
+
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
@@ -430,6 +448,8 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # typed document supplies them unchanged.
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         raw = line.raw
+        if _is_comment_line(raw):
+            continue
         if raw.startswith("+") and "http" in raw:
             for u in _URL_TOKEN_RE.findall(raw):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
@@ -789,26 +809,36 @@ def _unquoted_close(text: str, start: int = 0) -> int | None:
 
 
 def _text_array_items(text: str, start_re) -> list[str] | None:
-    """Elements of the first array matching *start_re* in a whole file.
+    """Elements of the last array matching *start_re* in a whole file.
 
-    ``None`` when the array never closes.  The closing paren is found by
-    scanning the whole text, not the line, because a multi-line array's
-    ``)`` is on its own line.
+    Bash semantics: a later assignment of the same name replaces the
+    earlier one, so `source=(...)` twice means the second array is the
+    declared one.  A later declaration under a *different* name (the
+    arch-suffixed `source_x86_64`) is a separate variable and does not
+    replace it.  ``None`` when the tracked declaration never closes: the
+    closing paren is found by scanning the whole text, not the line,
+    because a multi-line array's ``)`` is on its own line.
     """
-    match = start_re.search(text)
-    if match is None:
-        return None
-    open_idx = text.find("(", match.start())
-    if open_idx < 0:
-        return None
-    close_idx = _unquoted_close(text, open_idx + 1)
-    if close_idx is None:
-        return None
-    return _quoted_items(text[open_idx:close_idx + 1])
+    latest: list[str] | None = None
+    wanted: str | None = None
+    for match in start_re.finditer(text):
+        open_idx = text.find("(", match.start())
+        if open_idx < 0:
+            continue
+        declaration = text[match.start():open_idx].strip()
+        if wanted is None:
+            wanted = declaration
+        if declaration != wanted:
+            continue
+        close_idx = _unquoted_close(text, open_idx + 1)
+        if close_idx is None:
+            return None
+        latest = _quoted_items(text[open_idx:close_idx + 1])
+    return latest
 
 
 def _added_array_items(diff_text: str, start_re) -> list[str] | None:
-    """Elements of the first *wholly added* array matching *start_re*.
+    """Elements of the last *wholly added* array matching *start_re*.
 
     ``None`` unless the array opens and closes inside added lines with no
     context line between. A diff shows a hunk, not a file: an array that
@@ -816,29 +846,51 @@ def _added_array_items(diff_text: str, start_re) -> list[str] | None:
     partly visible, and counting what is visible reported a two-element
     array as one. That mistake fired on 26 benign packages - every
     multi-source recipe whose diff touched one entry.
+
+    The *last* assignment of the tracked declaration wins, as it does in
+    bash: an overridden ``source=`` on the next line is the one makepkg
+    reads.  A later declaration under a different name (`source_x86_64`)
+    is a separate variable and does not replace it.
     """
-    collecting = False
+    latest: list[str] | None = None
+    wanted: str | None = None
+    collecting: str | None = None
     parts: list[str] = []
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         if line.raw.startswith(("+++", "---")):
             continue
         added = line.side == "add"
         body = line.content if line.is_content else line.raw
-        if not collecting:
+        if collecting is None:
             if added and start_re.match(body):
-                collecting = True
-                parts.append(body[body.index("("):])
+                collecting = body[:body.index("(")].strip()
+                if wanted is None:
+                    wanted = collecting
+                parts = [body[body.index("("):]]
                 if ")" in parts[-1]:
-                    return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+                    if collecting == wanted:
+                        latest = _quoted_items(
+                            "(" + "\n".join(parts).split("(", 1)[1]
+                        )
+                    collecting = None
             continue
         if not added:
-            # The array continues into text this diff does not add, so
-            # what it holds in full is not something this function knows.
-            return None
+            # The tracked array continues into text this diff does not add,
+            # so what it holds in full is not something this function
+            # knows; fail closed.  A different declaration going partially
+            # visible is not the one being read.
+            if collecting == wanted:
+                return None
+            collecting = None
+            parts = []
+            continue
         parts.append(body)
         if ")" in body:
-            return _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
-    return None
+            if collecting == wanted:
+                latest = _quoted_items("(" + "\n".join(parts).split("(", 1)[1])
+            collecting = None
+            parts = []
+    return latest
 
 
 def source_array_grew_in_diff(diff_text: str) -> bool:
@@ -964,7 +1016,12 @@ def detect_checksum_removed(diff_text: str) -> bool:
     return removed and not added
 
 
-_SOURCE_ARRAY_START_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
+# `source+=(...)` is the same declaration appended, and requiring a bare
+# `=` made it invisible here: a URL declared with `+=` did not count as
+# declared, so a build fetch of it read as an undeclared download (H016).
+_SOURCE_ARRAY_START_RE = re.compile(
+    r"^\s*source(?:_[a-z0-9_]+)?\s*\+?=\s*\("
+)
 #: The same opener anchored per line in a whole file, for the recipe-text
 #: parity: the diff variant is matched against a single line body, where
 #: `^` is already the line start.

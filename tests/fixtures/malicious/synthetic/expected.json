@@ -145,6 +145,13 @@
       "H087"
     ]
   },
+  "R001-array-routed-command.diff": {
+    "description": "curl is stored in an array and reached through ${A[0]}; the tokenizer folds the static subscript, so the resolved pipeline is R001's and X002 stands down rather than scoring the same command twice",
+    "min_score": 30,
+    "must_fire": [
+      "R001"
+    ]
+  },
   "R001-curl-pipe-bash.diff": {
     "max_score": 70,
     "min_score": 40,
@@ -1136,12 +1143,6 @@
     "min_score": 30,
     "must_fire": [
       "X001"
-    ]
-  },
-  "X002-array-routed-command.diff": {
-    "min_score": 30,
-    "must_fire": [
-      "X002"
     ]
   },
   "X002-partial-quote-command.diff": {

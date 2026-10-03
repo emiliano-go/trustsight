@@ -18,6 +18,7 @@ already owns.
 
 import os
 import re
+import shlex
 
 from ..deps import _strip_comment
 from ..rules import ScopeResolver
@@ -336,6 +337,76 @@ def _outside_staging_findings(diff_text, config, add, current_text=None) -> None
                 f"{fn}() writes to {path}, outside $pkgdir/$srcdir",
                 line=i + 1, position=fn, path=path)
             return
+
+
+# ---------------------------------------------------------------------------
+# R054 stand-down: staging a committed file is not writing persistence
+# ---------------------------------------------------------------------------
+
+#: R054's verbs whose leading operands are sources.  `cat`/`printf`/`echo`/
+#: `tee`/`dd`/`mkdir`/`>` create or transform the file in the recipe, so a
+#: match on those is never stood down.
+_R054_STAGING_VERBS = frozenset({"install", "cp", "mv", "ln", "rsync"})
+
+
+def _stages_only_committed(match: str, committed: frozenset[str]) -> bool:
+    """True when every source operand is a file committed in the tree.
+
+    R054 claims a unit dropped outside the package root by the build.  A
+    committed file staged into `$pkgdir` is the ordinary way a package
+    ships its own unit, and the file itself is read by H039/R054's own
+    unit analysis.  The stand-down is deliberately narrow: a heredoc, a
+    redirect, `/dev/stdin`, an absolute or `$srcdir` source, a non-staging
+    verb, or any argument that does not parse keeps the finding.
+    """
+    body = match.lstrip("+-").lstrip()
+    if "<<" in body or ">" in body:
+        return False
+    try:
+        tokens = shlex.split(body)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+    verb = tokens[0].rsplit("/", 1)[-1]
+    if verb not in _R054_STAGING_VERBS:
+        return False
+    operands = [t for t in tokens[1:] if not t.startswith("-")]
+    if len(operands) < 2:
+        return False
+    sources = operands[:-1]
+    for source in sources:
+        cleaned = source.strip("\"'").strip("./")
+        if not cleaned or cleaned.startswith(("/", "$", "~", "{")) or "$" in cleaned:
+            return False
+        if cleaned not in committed and not any(
+            c.startswith(cleaned + "/") for c in committed
+        ):
+            return False
+    return True
+
+
+def stand_down_committed_staging(
+    triggered: list[dict],
+    tree_manifest: list[tuple[str, bytes]] | None,
+) -> list[dict]:
+    """Drop R054 findings that stage a file committed in the recipe's tree.
+
+    ``tree_manifest`` is the repo tree ``(path, head_bytes)``.  A missing
+    tree (an incomplete read, the corpus path with no snapshot) leaves
+    every finding in place: an unread tree cannot stand a rule down.
+    """
+    if not triggered or not tree_manifest:
+        return triggered
+    committed = frozenset(
+        path.lstrip("./") for path, _head in tree_manifest
+    )
+    return [
+        finding
+        for finding in triggered
+        if finding.get("rule_id") != "R054"
+        or not _stages_only_committed(finding.get("match") or "", committed)
+    ]
 
 
 # ---------------------------------------------------------------------------

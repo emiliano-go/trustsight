@@ -9,8 +9,11 @@ from ..override import (
     FATAL_RULES,
     OVERRIDES_PATH,
     add_override,
+    add_url_ack,
     list_overrides,
+    list_url_acks,
     remove_override,
+    remove_url_ack,
 )
 from ..safe_text import clean
 from .completion import installed_packages
@@ -34,16 +37,19 @@ override_app = typer.Typer(
 def override_list(
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
-    """List all rule overrides."""
+    """List all rule overrides and acknowledged source URLs."""
     ensure_default_configs()
     overrides = list_overrides()
-    if not overrides:
+    url_acks = list_url_acks()
+
+    if not overrides and not url_acks:
         msg = (
             f"No overrides configured. File: {OVERRIDES_PATH}\n"
-            f"Add one with: trustsight override add R010 --reason \"...\""
+            f"Add one with: trustsight override add R010 --reason \"...\"\n"
+            f"Acknowledge a URL with: trustsight override add-url PACKAGE URL --reason \"...\""
         )
         if json_output:
-            typer.echo(json.dumps({"overrides": []}))
+            typer.echo(json.dumps({"overrides": [], "url_acks": []}))
         elif use_rich():
             console().print(msg)
         else:
@@ -51,38 +57,61 @@ def override_list(
         return
 
     if json_output:
-        data = [
-            {"rule_id": o.rule_id, "package": o.package, "reason": o.reason, "created_at": o.created_at}
-            for o in overrides
-        ]
-        typer.echo(json.dumps(data, indent=2))
+        typer.echo(json.dumps({
+            "overrides": [
+                {"rule_id": o.rule_id, "package": o.package,
+                 "reason": o.reason, "created_at": o.created_at}
+                for o in overrides
+            ],
+            "url_acks": [
+                {"package": a.package, "url": a.url,
+                 "reason": a.reason, "created_at": a.created_at}
+                for a in url_acks
+            ],
+        }, indent=2))
         return
 
     if use_rich():
         from rich.box import SIMPLE_HEAD
         from rich.table import Table
-        table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
-        table.add_column("Rule", style="cyan")
-        table.add_column("Scope")
-        table.add_column("Reason", overflow="fold")
-        table.add_column("Added", style="dim")
         from rich.text import Text
-        for o in overrides:
-            # `Text`, not a bare string: Rich reads markup in a plain str,
-            # so a `[green]` in the value recolours the row and an
-            # unbalanced tag aborts the render of everything after it.
-            table.add_row(Text(clean(o.rule_id)),
-                          Text(clean(o.package or "all packages")),
-                          Text(clean(o.reason)), Text(clean(o.created_at)))
-        console().print(table)
-        console().print(
+        con = console()
+        if overrides:
+            table = Table(title=f"Rule overrides ({OVERRIDES_PATH})", box=SIMPLE_HEAD)
+            table.add_column("Rule", style="cyan")
+            table.add_column("Scope")
+            table.add_column("Reason", overflow="fold")
+            table.add_column("Added", style="dim")
+            for o in overrides:
+                # `Text`, not a bare string: Rich reads markup in a plain str,
+                # so a `[green]` in the value recolours the row and an
+                # unbalanced tag aborts the render of everything after it.
+                table.add_row(Text(clean(o.rule_id)),
+                              Text(clean(o.package or "all packages")),
+                              Text(clean(o.reason)), Text(clean(o.created_at)))
+            con.print(table)
+        if url_acks:
+            table = Table(title="Acknowledged source URLs", box=SIMPLE_HEAD)
+            table.add_column("Package", style="cyan")
+            table.add_column("URL", overflow="fold")
+            table.add_column("Reason", overflow="fold")
+            table.add_column("Added", style="dim")
+            for a in url_acks:
+                table.add_row(Text(clean(a.package)), Text(clean(a.url)),
+                              Text(clean(a.reason)), Text(clean(a.created_at)))
+            con.print(table)
+        con.print(
             f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
-            f"finding is never suppressed.[/]"
+            f"finding is never suppressed. An acknowledged URL stops scoring "
+            f"SOURCE_BUCKET and NOVELTY for that package only.[/]"
         )
     else:
         for o in overrides:
             print(f"{clean(o.rule_id):<8} {clean(o.package or 'all'):<20} "
                   f"{clean(o.reason)}")
+        for a in url_acks:
+            print(f"{'URL':<8} {clean(a.package):<20} {clean(a.url)}  "
+                  f"{clean(a.reason)}")
 
 
 @override_app.command("add")
@@ -116,6 +145,67 @@ def override_add(
         }))
     else:
         _print_colored(msg, "green")
+
+
+@override_app.command("add-url")
+def override_add_url(
+    package: str = typer.Argument(..., help="Package the URL belongs to"),
+    url: str = typer.Argument(..., help="Source URL to acknowledge"),
+    reason: str = typer.Option(..., "--reason", help="Why this URL is known (required)"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Acknowledge one source URL for one package.
+
+    The URL no longer scores SOURCE_BUCKET or NOVELTY for this package.
+    A different URL, or the same URL in another package, is judged as
+    before; that is the difference from a rule override.
+    """
+    ensure_default_configs()
+    try:
+        ack = add_url_ack(package, url, reason)
+    except ValueError as exc:
+        msg = str(exc)
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if json_output:
+        typer.echo(json.dumps({
+            "status": "ok",
+            "package": ack.package,
+            "url": ack.url,
+            "reason": ack.reason,
+        }))
+    else:
+        _print_colored(
+            f"URL acknowledged: {ack.url} for {ack.package}", "green"
+        )
+
+
+@override_app.command("rm-url")
+def override_rm_url(
+    package: str = typer.Argument(..., help="Package the URL belongs to"),
+    url: str = typer.Argument(..., help="Source URL to stop acknowledging"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Remove an acknowledged source URL."""
+    ensure_default_configs()
+    if remove_url_ack(package, url):
+        msg = f"URL acknowledgement removed: {url} for {package}"
+        if json_output:
+            typer.echo(json.dumps({
+                "status": "ok", "package": package, "url": url,
+            }))
+        else:
+            _print_colored(msg, "green")
+    else:
+        msg = f"No acknowledgement for {url} in {package}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "yellow")
+        raise typer.Exit(code=2)
 
 
 @override_app.command("wizard")

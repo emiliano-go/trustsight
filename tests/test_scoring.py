@@ -152,6 +152,17 @@ def test_score_novelty_url_first_globally():
     assert any(e.rule_id == "NOVELTY" for e in breakdown)
 
 
+def test_score_novelty_reason_names_the_url():
+    novelty = NoveltyContext(
+        url_first_seen_globally=True,
+        url_first_seen_globally_url="https://new.example/p.tar.gz",
+        observation_count=50,
+    )
+    _score, breakdown, _level = calculate_score([], {}, novelty, SHARED_CONFIG)
+    reason = next(e.reason for e in breakdown if e.rule_id == "NOVELTY")
+    assert "https://new.example/p.tar.gz" in reason
+
+
 def test_score_novelty_url_first_in_package():
     novelty = NoveltyContext(url_first_seen_in_this_package=True, observation_count=50)
     score, breakdown, level = calculate_score([], {}, novelty, SHARED_CONFIG)

@@ -798,13 +798,28 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
             bare = _PLAIN_VAR_RE.match(word)
             if bare and bare.group(1) in resolvable:
                 break
+            # A static array subscript on a known array resolves to a
+            # literal, so it is a spelling choice like `$DKMS`; a dynamic
+            # subscript or an unknown array is not in *resolvable* and the
+            # word is yielded for X002 to claim.
+            element = _ARRAY_VAR_RE.match(word)
+            if element and element.group(1) in resolvable:
+                break
             yield word
             break
 
 
 #: A plain scalar variable used as a command: `$DKMS`, `${MAKE}`.  An array
 #: subscript or a nameref is deliberately not this shape.
-_PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$")
+_PLAIN_VAR_RE = re.compile(r"^[\"\']?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?[\"\']?$")
+
+#: A statically indexed array element used as a command: `${A[0]}`,
+#: `${A[@]}`, `${A[*]}`.  Exempted only when the array's elements were
+#: parsed from the recipe, so the word is known to resolve; `${A[$i]}` and
+#: `${A[-1]}` do not match and stay with X002.
+_ARRAY_VAR_RE = re.compile(
+    r"^[\"\']?\$\{([A-Za-z_][A-Za-z0-9_]*)\[(?:\*|@|\d+)\]\}[\"\']?$"
+)
 
 #: `DKMS=$(which dkms)` then `$DKMS add ...`: a PATH lookup names its
 #: executable *literally* inside the substitution, so the command is not
@@ -892,6 +907,38 @@ def _unquoted_paren_delta(text: str) -> int:
         elif ch == ")":
             depth -= 1
     return depth
+
+
+#: A dependency array opener.  Its values are data: an optdepends
+#: description routinely spells a command - `payload_dumper: OTA payload
+#: extraction (cargo install payload_dumper)` - and X011 read the
+#: parenthesised install as an instruction.  The line that *runs*
+#: `cargo install` is elsewhere and still fires.
+_DEP_ARRAY_OPEN_RE = re.compile(
+    r"^\s*(?:depends|makedepends|optdepends|checkdepends)"
+    r"(?:_[a-z0-9_]+)?\s*\+?=\s*\("
+)
+
+
+def _dependency_array_lines(lines: list[str]) -> set[int]:
+    """Indices inside a dependency array's value.
+
+    Tracked across ``+`` and context lines and abandoned on a removed one,
+    like :func:`_continuation_lines`: a hunk can open the array and show
+    only part of it.  The depth is counted outside quotes
+    (:func:`_unquoted_paren_delta`), because an optdepends description may
+    contain a paren that closes nothing.
+    """
+    out: set[int] = set()
+    depth = 0
+    for index, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
+        body = _strip_comment(line[1:] if line[:1] in "+ " else line)
+        if depth > 0 or _DEP_ARRAY_OPEN_RE.match(body):
+            out.add(index)
+            depth = max(0, depth + _unquoted_paren_delta(body))
+    return out
 
 
 def _continuation_lines(raw_lines: list[str], joined_count: int) -> set[int]:
@@ -1522,15 +1569,73 @@ def _pipeline_sink(body: str) -> str | None:
 # `find -exec` is narrowed to an executor because the ordinary use is the
 # rule's opposite: `find "$pkgdir" -type f -exec chmod 644 {} +` is how
 # permissions get fixed, and claiming it would claim the ecosystem.
+#
+# The find arm is separate so the `-c` script can be read before firing.
+# `find ... -exec sh -c 'for f; do mv "$f" ...; done' sh {} +` is a static
+# rename loop; only a script that itself reaches an executor or the network
+# is the hiding place this rule is for.  `find -exec sh file.sh` (no `-c`)
+# stays claimed: the file is a script.
+_X017_FIND_RE = re.compile(
+    r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
+    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?"
+    r"(?P<x017executor>" + SCRIPT_EXECUTOR + r")\b",
+    re.IGNORECASE,
+)
+
+#: What a `find -exec ... -c` script must reach to stay X017's.
+_X017_SCRIPT_DANGER_RE = re.compile(
+    r"\b(?:" + SCRIPT_EXECUTOR + r")\b"
+    r"|(?:" + _NETWORK_CLIENT + r")\b"
+    r"|\beval\b|\bsource\b|\bbase64\b|\bxxd\b",
+    re.IGNORECASE,
+)
+
 X017_RE = re.compile(
     r"--checkpoint-action\s*=\s*[\"']?exec"
     r"|--to-command\s*="
-    r"|\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
-    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?(?:" + SCRIPT_EXECUTOR + r")\b"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)enable\s+(?:-\w+\s+)*-f\b"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)hash\s+(?:-\w+\s+)*-p\b",
     re.IGNORECASE,
 )
+
+
+def _x017_find_runs_a_script(
+    body: str, match: re.Match, lines: list[str], index: int
+) -> bool:
+    """Whether a `find ... -exec` hands the executor something that runs.
+
+    Reads the command string after `-c`; a quoted argument is allowed to
+    span lines (it is not a backslash continuation), so the following
+    lines are read to the closing quote.  When the spelling is unreadable
+    the rule fires toward looking.  Without `-c` the executor is running a
+    file, which is the shape the rule names.
+    """
+    rest = body[match.end():]
+    if not re.match(r"\s*-c\b", rest):
+        return True
+    quoted = re.match(r"\s*-c\s+'([^']*)'", rest, re.DOTALL) or \
+        re.match(r'\s*-c\s+"([^"]*)"', rest, re.DOTALL)
+    if quoted is not None:
+        script = quoted.group(1)
+    else:
+        opener = re.match(r"\s*-c\s+(['\"])", rest)
+        if opener is None:
+            token = re.match(r"\s*-c\s+(\S+)", rest)
+            if token is None:
+                return True
+            script = token.group(1)
+        else:
+            quote = opener.group(1)
+            parts = [rest[opener.end():]]
+            for follower in lines[index + 1:index + 41]:
+                text = follower[1:] if follower[:1] in "+-" else follower
+                end = text.find(quote)
+                if end != -1:
+                    parts.append(text[:end])
+                    break
+                parts.append(text)
+            script = "\n".join(parts)
+    return bool(_X017_SCRIPT_DANGER_RE.search(script))
 
 
 # ---------------------------------------------------------------------------
@@ -1778,7 +1883,7 @@ def _consumer_at(lines: list[str], index: int) -> bool:
 # pass-through but the actual value was set in a function.  Good PKGBUILDs
 # assign literal values to these variables.
 _SENSITIVE_VAR_RE = re.compile(
-    r"(?:DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
+    r"(?P<x024var>DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
     r"|PACMAN_AUTH|CFLAGS|CXXFLAGS|LDFLAGS|MAKEFLAGS|RUSTFLAGS"
     r"|PATH|LD_PRELOAD|LD_LIBRARY_PATH|PYTHONPATH)"
     r"\s*\+?=",
@@ -1796,6 +1901,27 @@ X024_RE = re.compile(
     r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",
     re.IGNORECASE,
 )
+
+#: The name an indirect value expands.  Read from the matched span alone:
+#: a back-reference stand-down pattern measured >1s on the audit's
+#: full-length line, and the assignment is already delimited by the match.
+_X024_VALUE_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _x024_is_passthrough(body: str, match: re.Match) -> bool:
+    """True when the indirect value is the assigned variable's own name.
+
+    `PATH="$PATH:$HOME/.cargo/bin"` appends to the existing value and
+    `CGO_CFLAGS="${CFLAGS}"` forwards the standard flags: both are the
+    value the reviewer already sees, not one hidden in another variable.
+    The sensitive-variable pattern has no left boundary, so `CGO_CFLAGS`
+    matches as `CFLAGS` and the comparison is against that tail name -
+    which is what lets the CGO family through.
+    """
+    var = match.group("x024var")
+    value = body[match.start():match.end()]
+    expansion = _X024_VALUE_VAR_RE.search(value)
+    return bool(expansion and expansion.group(1) == var)
 
 
 # ---------------------------------------------------------------------------
@@ -1844,10 +1970,11 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     without re-deriving them, and so a caller can ask "what evasion is in
     this diff" without going through the scorer.
     """
-    raw_lines = split_lines(clamp_text(diff_text))
+    clamped = clamp_text(diff_text) or ""
+    raw_lines = split_lines(clamped)
     lines = join_line_continuations(raw_lines)
     from ..rules import _classify_enclosing_function
-    from ..tokenizer import variable_table
+    from ..tokenizer import resolve_added_lines, variable_table
 
     enclosing = _classify_enclosing_function(lines)
     files = _file_at_line(lines)
@@ -1858,8 +1985,17 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
     ]
     try:
-        var_table, _array_table = variable_table(readable)
-        resolvable = frozenset(var_table) | _path_lookup_names(readable)
+        var_table, array_table = variable_table(readable)
+        # An array whose elements are statically known is as readable as a
+        # scalar: `A=(curl)` then `${A[0]}` resolves to `curl`, so X002
+        # stands down for the static subscript and the payload rules own
+        # the resolved pipeline.  A dynamic subscript (`${A[$i]}`) is not
+        # exempted by the word check below, so it still fires.
+        resolvable = (
+            frozenset(var_table)
+            | frozenset(array_table)
+            | _path_lookup_names(readable)
+        )
     except Exception:
         # Without the table every command word reads as unresolvable, which
         # is X002's whole trigger condition inverted: the family goes quiet
@@ -1867,7 +2003,32 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         log.debug("variable table resolution failed", exc_info=True)
         note_stage_failure("variable-resolution")
         resolvable = frozenset(_path_lookup_names(readable))
+
+    # The resolved counterpart of every line, index-aligned by the
+    # tokenizer's own contract ("order and count are preserved").  The
+    # pipeline rules below ask whether the pipeline is a fetch; the text
+    # the shell runs is the resolved one, so a fetch that resolution made
+    # literal belongs to R001/R002/X009 and not to the evasion family.
+    # X002 does not use this: a word is exempted only when the tokenizer
+    # can read it statically (a known scalar or a static array subscript),
+    # because partial-quote and ANSI-C spellings resolve through literal
+    # reconstruction and must still be claimed as techniques.
+    try:
+        resolved_lines = resolve_added_lines(clamped)
+    except Exception:
+        log.debug("line resolution failed", exc_info=True)
+        note_stage_failure("variable-resolution")
+        resolved_lines = list(lines)
     carried = _continuation_lines(raw_lines, len(lines))
+    #: X011 stands down inside a dependency array: the words there are a
+    #: description, not a command the build runs.
+    dependency_data = _dependency_array_lines(lines)
+    #: X015 stands down inside a heredoc that only prints.  A `cat
+    #: <<'MESSAGE'` body listing `systemctl --user enable --now x` is an
+    #: instruction to the user, not work scheduled at build time.  Deferred
+    #: because `delivery` imports this module's neighbours.
+    from .delivery import _printed_heredoc_body_indices
+    printed_heredoc = _printed_heredoc_body_indices(lines)
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
     #: until a build step reads it.
@@ -1922,6 +2083,15 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         body = _strip_comment(raw)
         if not body.strip():
             continue
+        # The same line after variable/array/alias resolution.  Falls back
+        # to the raw body when the resolved list is out of step, which
+        # fires toward looking rather than going quiet.
+        resolved_line = resolved_lines[index] if index < len(resolved_lines) else ""
+        resolved_body = (
+            _strip_comment(resolved_line[1:])
+            if resolved_line.startswith("+")
+            else body
+        )
         line_no = index + 1
         # Which file the line is in decides whether it is shell; the
         # function it sits in no longer decides anything, because
@@ -1955,6 +2125,12 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # X002 is the one position-sensitive rule here, so it is the one
         # that must stand down on a line whose command position lives
         # further up. The rest match on content and are unaffected.
+        #
+        # The stand-down is in `_command_words`: a known scalar or a static
+        # array subscript resolves to a literal (`A=(curl)` then `${A[0]}`
+        # is `curl`), so R001 owns the pipeline and X002 claiming it too
+        # would score one command twice.  A dynamic `${A[$i]}` or a nameref
+        # does not resolve and is still yielded.
         if index not in carried:
             for word in _command_words(body, resolvable):
                 for shape, pattern in X002_SHAPES:
@@ -1998,8 +2174,13 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
                     written_configs.clear()
                     break
 
-        sink = _pipeline_sink(body)
-        head = body.split("|", 1)[0]
+        # The pipeline rules read the resolved text: what the shell pipes is
+        # the expansion, not the spelling.  A resolved `curl ... | bash` is
+        # R001's, and a resolved `aria2c ... | bash` is X009's; X023 is for
+        # the pipeline that is *still* not a fetch after resolution (a
+        # command substitution or nameref the tokenizer refuses to fold).
+        sink = _pipeline_sink(resolved_body)
+        head = resolved_body.split("|", 1)[0]
 
         # X009 wanted the shell immediately after the pipe, so one filter
         # in between hid the whole chain: `dig +short txt e | head -c 2000
@@ -2010,7 +2191,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # The sink is the one `_pipeline_sink` already computes for X016,
         # so both arms now ask about the *end* of the pipeline rather than
         # about the character after the first bar.
-        if X009_RE.search(body) or (
+        if X009_RE.search(resolved_body) or (
                 sink and _X009_CLIENT_RE.search(head)
                 and _X016_KNOWN_EXECUTOR_RE.match(sink)):
             record("X009", line_no, "uncatalogued fetch to a shell", body.strip())
@@ -2050,7 +2231,12 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X021", line_no, "the file the executor runs is not a literal",
                    body.strip())
 
-        if X017_RE.search(body):
+        find_exec = _X017_FIND_RE.search(body)
+        if find_exec is not None:
+            if _x017_find_runs_a_script(body, find_exec, lines, index):
+                record("X017", line_no, "a tool is given a command to run",
+                       body.strip())
+        elif X017_RE.search(body):
             record("X017", line_no, "a tool is given a command to run",
                    body.strip())
 
@@ -2066,7 +2252,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if X010_RE.search(body):
             record("X010", line_no, "interpreter reaches the network", body.strip())
 
-        if X015_RE.search(body):
+        if index not in printed_heredoc and X015_RE.search(body):
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
@@ -2080,7 +2266,8 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X013", line_no, "fetch redirected or trust replaced",
                    body.strip())
 
-        if X024_RE.search(body):
+        indirect = X024_RE.search(body)
+        if indirect is not None and not _x024_is_passthrough(body, indirect):
             record("X024", line_no,
                    "sensitive variable assigned an indirect value",
                    body.strip())
@@ -2091,7 +2278,9 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # ./evil.pkg.tar.zst` installs a local package as root, scriptlets
         # and all, and the leading `./` is not a mitigation.
         distro = _DISTRO_INSTALL_RE.search(body)
-        if X011_RE.search(body) and (distro or not X011_STANDDOWN_RE.search(body)):
+        if (index not in dependency_data
+                and X011_RE.search(body)
+                and (distro or not X011_STANDDOWN_RE.search(body))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())
 

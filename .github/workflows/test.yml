@@ -70,6 +70,7 @@ jobs:
       - run: uv run python scripts/gen_malicious_fixtures.py
       - run: uv run python scripts/gen_campaign_fixtures.py
       - run: uv run python scripts/gen_injection_fixtures.py
+      - run: uv run python scripts/gen_warm_fixtures.py
       - run: uv run python scripts/verify_fixtures.py
       - name: Fail if regeneration changed the committed record
         run: git diff --exit-code -- tests/fixtures/malicious/

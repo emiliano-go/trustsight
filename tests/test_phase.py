@@ -53,6 +53,50 @@ def test_h063_ignores_comment_mention():
     assert "H063" not in ids("+# reset epoch here\n")
 
 
+def test_h063_whole_recipe_says_present_not_newly_introduced():
+    """A whole-recipe run has no ``-`` side, so every field is "new" by
+    construction and "newly introduced" claims more than the run knows."""
+    finding = next(
+        f for f in _structural_findings(
+            "+epoch=1\n+pkgrel=1\n", extract_urls_from_diff("+epoch=1\n+pkgrel=1\n"),
+            {}, config={}, whole_recipe=True,
+        ) if f["rule_id"] == "H063"
+    )
+    assert finding["match"] == "epoch=1 present"
+
+
+def test_h063_line_is_the_file_line_not_the_diff_index():
+    """The finding must point at the file, not the position in the stream.
+
+    The diff carries a preceding file, so the old diff-stream index was
+    off by that file's length (the issue reported 11 for a line that is
+    9, and full-recipe findings could cite lines past EOF).
+    """
+    diff = (
+        "diff --git a/.SRCINFO b/.SRCINFO\n"
+        "index 1111111..2222222 100644\n"
+        "--- a/.SRCINFO\n"
+        "+++ b/.SRCINFO\n"
+        "@@ -1 +1,2 @@\n"
+        " pkgbase = demo\n"
+        "+\tpkgver = 1.0\n"
+        "diff --git a/PKGBUILD b/PKGBUILD\n"
+        "index 3333333..4444444 100644\n"
+        "--- a/PKGBUILD\n"
+        "+++ b/PKGBUILD\n"
+        "@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n"
+        "+epoch=1\n"
+        " pkgrel=1\n"
+    )
+    finding = next(
+        f for f in _structural_findings(
+            diff, extract_urls_from_diff(diff), {}, config={},
+        ) if f["rule_id"] == "H063"
+    )
+    assert (finding["file"], finding["line"]) == ("PKGBUILD", 2)
+
+
 # --- H064: provides/replaces scope expansion ---
 
 

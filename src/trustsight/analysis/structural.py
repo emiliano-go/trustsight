@@ -5,6 +5,7 @@ from ..differ import (
     checksum_array_parity,
     checksum_array_parity_in_text,
     is_skip_justified,
+    map_diff_lines,
     source_array_grew_in_diff,
     source_array_has_command_substitution,
 )
@@ -448,11 +449,29 @@ def _structural_findings(
     config: dict | None = None,
     current_text: str | None = None,
     tree_manifest: list[tuple[str, bytes]] | None = None,
+    whole_recipe: bool = False,
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
+    # Every code-emitted finding names its location as a 1-based index into
+    # the diff stream (`find_line_in_diff`, `_epoch_findings`, the IOC
+    # `_line_of`).  That is not a line of the file: a hunk header and every
+    # preceding file move the number, so `PKGBUILD line 126` pointed at a
+    # comment and a full-recipe finding could cite line 148 of a 115-line
+    # file.  The typed parse already knows the true location; project it
+    # once here rather than trust each producer to carry it.
+    line_map = map_diff_lines(diff_text)
 
     def add(rule_id: str, name: str, severity: str, category: str, match: str, file: str = "PKGBUILD", line: int | None = None, **extra) -> None:
+        if line is not None:
+            mapped = line_map.get(line - 1)
+            if mapped is not None:
+                file, line = mapped
+            else:
+                # An index the parse does not map is a header or a line
+                # that does not exist in the new file; a wrong location is
+                # worse than none (B8).
+                line = None
         finding = {
             "rule_id": rule_id, "name": name, "severity": severity,
             "category": category, "match": match,
@@ -678,7 +697,9 @@ def _structural_findings(
 
     _crossfire_findings(diff_text, config or {}, add)
     _sabotage_findings(diff_text, config or {}, add)
-    _dependency_findings(diff_text, package_name, config or {}, add)
+    _dependency_findings(
+        diff_text, package_name, config or {}, add, current_text=current_text,
+    )
     _build_findings(diff_text, config or {}, add, current_text=current_text)
     _sudo_findings(diff_text, config or {}, add, current_text=current_text)
     _build_flag_findings(diff_text, config or {}, add)
@@ -702,7 +723,7 @@ def _structural_findings(
     # alone shows only the hunk around the pin.
     _moved_git_ref_findings(diff_text, config or {}, add, current_text=current_text)
     _covert_egress_findings(diff_text, config or {}, add)
-    _epoch_findings(diff_text, config or {}, add)
+    _epoch_findings(diff_text, config or {}, add, whole_recipe=whole_recipe)
     # H056 reads the current file where the caller has it: an indicator that
     # predates this diff is still a fact about the package being reviewed.
     _ioc_findings(diff_text, package_name, config or {}, add,

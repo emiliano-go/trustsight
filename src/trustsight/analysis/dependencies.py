@@ -4,7 +4,11 @@ from ..config import (
     load_thresholds,
 )
 from ..db import dependency_observation_count, is_established_package, top_dependency_names
-from ..deps import extract_dependency_changes, is_related_package
+from ..deps import (
+    declared_package_names,
+    extract_dependency_changes,
+    is_related_package,
+)
 from ..novelty import is_dependency_novel, typosquat_target
 from .base import _code_rule_enabled, _rarities_of
 
@@ -85,12 +89,18 @@ def _scope_expansion_findings(diff_text, package_name, config, add) -> None:
                 return
 
 
-def _dependency_findings(diff_text, package_name, config, add) -> None:
+def _dependency_findings(diff_text, package_name, config, add, current_text=None) -> None:
     added_deps = extract_dependency_changes(diff_text, package_name)
+    # A split package's own outputs are new to the AUR by construction;
+    # D001/H030 must not read a dependency on them as an outside name.
+    self_outputs = declared_package_names(current_text) if current_text else set()
 
     all_new: list[str] = []
     for field in ("depends", "makedepends", "optdepends", "checkdepends"):
-        all_new.extend(added_deps.get(field, ()))
+        all_new.extend(
+            name for name in added_deps.get(field, ())
+            if name not in self_outputs
+        )
     if len(all_new) >= 3:
         rarities = _rarities_of(all_new)
         magnitude = len(all_new) * (sum(rarities) / len(rarities))
@@ -114,7 +124,7 @@ def _dependency_findings(diff_text, package_name, config, add) -> None:
         candidates: list[str] | None = None
         for field in ("depends", "makedepends", "optdepends", "checkdepends"):
             for name in sorted(added_deps.get(field, ())):
-                if not is_dependency_novel(name):
+                if name in self_outputs or not is_dependency_novel(name):
                     continue
                 impersonated = None
                 if "D002" in wanted:

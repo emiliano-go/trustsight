@@ -489,6 +489,57 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
                 break
     return frozenset(body)
 
+
+#: A heredoc opener that only prints.  ``cat``/``echo``/``printf`` with no
+#: redirect produce a message: the body is not a command and is not handed
+#: to anything that runs it.  ``tee`` is deliberately absent - its argument
+#: is a file, so ``tee x <<EOF`` writes x.
+_PRINTED_HEREDOC_OPENER_RE = re.compile(
+    r"^\s*(?:cat|echo|printf)\b(?![^\n]*>)"
+)
+
+
+def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Indices of lines inside a heredoc that only prints its body.
+
+    H017/H035/X015 read commands in install hooks; a ``cat <<'MESSAGE'``
+    body that *advises* the user to run ``sudo pacman -S`` is
+    documentation, and the opener is the only line that says so.  A
+    redirect (``cat > out <<EOF``), a pipe into an executor
+    (``cat <<EOF | sh``), or any opener that is not cat/echo/printf stays
+    eligible: the body may be a script some later line runs.
+    """
+    return set(_printed_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _printed_heredoc_body_indices_cached(
+    lines: tuple[str, ...],
+) -> frozenset[int]:
+    body: set[int] = set()
+    delims: list[tuple[str, bool]] = []
+    for i, line in enumerate(lines):
+        content = line[1:] if line[:1] in ("+", "-") else line
+        stripped = content.strip()
+        if delims and stripped == delims[-1][0]:
+            delims.pop()
+            continue
+        if delims:
+            if delims[-1][1]:
+                body.add(i)
+            continue
+        for m in _HEREDOC_OPEN_RE.finditer(content):
+            if not m.group(2):
+                continue
+            printed = bool(
+                _PRINTED_HEREDOC_OPENER_RE.match(content)
+                and not _HEREDOC_PIPED_RE.search(content[m.end():])
+            )
+            delims.append((m.group(2), printed))
+            break
+    return frozenset(body)
+
+
 # An interpreter/compiler/source command must sit at a command position
 # (line start or after ``;``/``&``/``|``), never inside a filename like
 # ``completions/zsh`` or as a bare argument like ``cp -a . dir``.
@@ -516,7 +567,13 @@ _EXEC_PREFIX = r"(?:" + _EXEC_WRAPPER + r")*"
 # doing it at every position, for every arm that shares this prefix, which
 # is what put `_EXECUTION_RE` over the adversarial audit's budget.
 _CMD_START = (
-    r"(?:\A\s*+|[;&|{(]\s*+|\b(?:do|then|else|elif)\s++)" + _EXEC_PREFIX
+    # `(?![;&|{(])` after the separator: a command word cannot begin with
+    # another separator, so a run of `;` fails here instead of carrying the
+    # whole arm alternation to the next character.  Without it the audit's
+    # `;` probe cost every arm a scan per position, which is what leaves
+    # `_SOURCE_EXEC_RE` over budget on a slow machine.
+    r"(?:\A\s*+|[;&|{(]\s*+(?![;&|{(])|\b(?:do|then|else|elif)\s++)"
+    + _EXEC_PREFIX
 )
 _EXECUTION_RE = re.compile(
     # `_CMD_START` is factored out of the arms that share it rather than
@@ -663,6 +720,16 @@ def _source_basename(url: str) -> str:
     return base
 
 
+#: A version-control source.  What arrives is a *directory*, so the repo
+#: basename is not a declared file: compsize-git declares
+#: `git+https://.../compsize` and H083 then matched the `./compsize` the
+#: recipe builds itself.  Applies to the bare form and the `name::url`
+#: rename (whose name is the checkout directory, not a filename).
+_VCS_SOURCE_RE = re.compile(
+    r"(?:^|::)(?:git|hg|svn|bzr|fossil)(?:\+|://)", re.IGNORECASE
+)
+
+
 #: A scalar ``source = value`` line, the `.SRCINFO` spelling of the array.
 #: Module level because the function below is called once per rule family
 #: that needs the declared names, and compiling this per call was compiling
@@ -720,6 +787,8 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
             scalar = _SCALAR_SOURCE_RE.match(body)
             if scalar and "(" not in scalar.group(1):
                 value = scalar.group(1).strip()
+                if _VCS_SOURCE_RE.search(value):
+                    continue
                 base = value.split("::", 1)[0] if "::" in value else _source_basename(value)
                 if base and base != ")":
                     basenames.add(base)
@@ -759,6 +828,8 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
             # `)` are rare enough that this is safe.
             ent = ent.rstrip(")")
             if not ent:
+                continue
+            if _VCS_SOURCE_RE.search(ent):
                 continue
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:

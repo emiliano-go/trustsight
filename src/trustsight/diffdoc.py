@@ -207,17 +207,33 @@ class DiffDoc:
         ]
 
 
+#: Git's diff path prefixes.  ``a/`` and ``b/`` are the defaults; with
+#: ``diff.mnemonicprefix = true`` libgit2 emits ``c/`` (commit), ``i/``
+#: (index), ``w/`` (worktree) or ``o/`` (object) instead.  TrustSight
+#: diffs commit trees, so a reviewer with that setting on saw every
+#: location as ``c/PKGBUILD``.  Exactly one prefix is stripped: a real
+#: path that begins with one of these letters arrives with the diff
+#: prefix in front of it (``b/c/real``), so one strip is the path.
+_DIFF_PATH_PREFIXES = ("a/", "b/", "c/", "i/", "w/", "o/")
+
+
+def strip_diff_path_prefix(name: str) -> str:
+    """*name* with one git diff path prefix removed, if it carries one."""
+    for prefix in _DIFF_PATH_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
 def _header_path(raw: str) -> str:
     """The path from a ``+++`` header, with the legacy walk's exact steps.
 
-    ``map_diff_lines`` strips, removes a ``b/`` prefix, and caps at
+    ``map_diff_lines`` strips, removes the diff path prefix, and caps at
     ``MAX_DIFF_PATH_BYTES``; it deliberately does not split a trailing tab
     (that is ``_diff_file_path``'s convention, used by the summary), and
     matching it is what keeps the line map a pure projection.
     """
-    name = raw.strip()
-    if name.startswith("b/"):
-        name = name[len("b/"):]
+    name = strip_diff_path_prefix(raw.strip())
     return name[:MAX_DIFF_PATH_BYTES]
 
 

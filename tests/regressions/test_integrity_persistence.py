@@ -415,6 +415,31 @@ def test_ld_so_conf_d_is_a_persistence_plant():
     )
 
 
+def test_r054_staging_a_committed_unit_is_not_a_persistence_plant():
+    """et-rs-bin: `install -Dm644 systemctl/et.service "$pkgdir/..."` ships
+    the package's own committed unit file.  R054 claims a unit dropped from
+    somewhere the reader cannot see, and the committed file *is* read."""
+    manifest = [("PKGBUILD", b"x"), ("systemctl/et.service", b"[Unit]\n")]
+    line = ('  install -Dm644 systemctl/et.service '
+            '"$pkgdir/usr/lib/systemd/system/et.service"')
+    assert "R054" not in _shipped_ids(
+        [line], declared=False, fn="package", manifest=manifest,
+    )
+    # `/dev/stdin` and a source outside the tree keep firing.
+    for source in ("/dev/stdin", "other/x.service"):
+        assert "R054" in _shipped_ids(
+            [f'  install -Dm644 {source} '
+             '"$pkgdir/usr/lib/systemd/system/x.service"'],
+            declared=False, fn="package", manifest=manifest,
+        ), source
+    # A heredoc body is content the recipe creates, not a committed file.
+    assert "R054" in _shipped_ids(
+        ["  install -Dm644 /dev/stdin "
+         "\"$pkgdir/usr/lib/systemd/system/x.service\" <<'EOF'"],
+        declared=False, fn="package", manifest=manifest,
+    )
+
+
 @pytest.mark.parametrize("assignment", [
     'export BASH_ENV="/tmp/evil.sh"',
     'export ENV="$srcdir/e.sh"',

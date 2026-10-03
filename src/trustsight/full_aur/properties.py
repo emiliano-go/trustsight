@@ -341,6 +341,9 @@ def update_properties(
 
     Returns breaks so rules can consume them in the same analysis.
     The stored ``stable_for_n`` is updated AFTER the break is reported.
+    Every changed value is appended to ``property_transitions``, whatever
+    its stability weight: the timeline is the raw observation log, and the
+    weight only decides whether a break is scored.
     """
     breaks: list[PropertyBreak] = []
     for key, value in extracted.items():
@@ -367,6 +370,13 @@ def update_properties(
                 "WHERE package_name=? AND property_key=?", (package, key),
             )
             continue
+
+        conn.execute(
+            "INSERT INTO property_transitions "
+            "(package_name, property_key, old_value, new_value, observed_at) "
+            "VALUES (?,?,?,?,?)",
+            (package, key, old_ser, ser, observed_at),
+        )
 
         w = stability_weight(stable_n, floor)
         if w > 0.0:

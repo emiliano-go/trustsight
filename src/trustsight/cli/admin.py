@@ -18,6 +18,8 @@ from ..db import (
     dependency_table_populated,
     effective_observation_count,
     get_all_packages,
+    get_package_id,
+    get_property_transitions,
     init_db,
     seed_observation_count,
     import_seed,
@@ -78,6 +80,68 @@ def _dependency_corpus_note(plain: bool = False) -> str:
         "https://docs.trustsight.org/explanation/seed-provenance/."
     )
     return body if plain else f"\n[yellow]{body}[/]"
+
+
+def _print_property_transitions(package: str, json_output: bool = False) -> None:
+    """Render one package's recorded property timeline, read-only."""
+    if get_package_id(package) is None:
+        msg = (f"Package '{package}' has not been analysed yet. "
+               f"Run 'trustsight full-aur' first.")
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "yellow", stderr=True)
+        raise typer.Exit(code=2)
+
+    rows = get_property_transitions(package)
+    if not rows:
+        if json_output:
+            typer.echo(json.dumps([]))
+        else:
+            print(f"No property transitions recorded for '{package}'.")
+        return
+
+    if json_output:
+        typer.echo(json.dumps([
+            {
+                "observed_at": r.get("observed_at", ""),
+                "property_key": r.get("property_key", ""),
+                "old_value": r.get("old_value"),
+                "new_value": r.get("new_value"),
+            }
+            for r in rows
+        ], indent=2))
+        return
+
+    if use_rich():
+        from rich.table import Table
+        from rich.text import Text
+
+        con = console()
+        table = Table(title=Text(f"Property transitions: {clean(package)}"))
+        table.add_column("Date", style="dim")
+        table.add_column("Property")
+        table.add_column("Old")
+        table.add_column("-> New")
+        for r in rows:
+            old = r.get("old_value")
+            table.add_row(
+                Text((r.get("observed_at") or "")[:10]),
+                Text(clean(r.get("property_key", ""))),
+                Text(clean(old) if old is not None else "(none)"),
+                Text(clean(r.get("new_value") or "")),
+            )
+        con.print(table)
+        return
+
+    for r in rows:
+        old = r.get("old_value")
+        print(
+            f"{(r.get('observed_at') or '')[:10]:<12} "
+            f"{clean(r.get('property_key', '')):<22} "
+            f"{clean(old) if old is not None else '(none)'} -> "
+            f"{clean(r.get('new_value') or '')}"
+        )
 
 
 def register_commands(app: typer.Typer):
@@ -366,6 +430,7 @@ def register_commands(app: typer.Typer):
         notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
         over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
         since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
+        transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Bootstrap or update the full-AUR baseline corpus.
@@ -380,6 +445,18 @@ def register_commands(app: typer.Typer):
         from ..full_aur.pipeline import run_baseline_build, run_watch
         ensure_default_configs()
         init_db()
+        if transitions is not None:
+            if watch or bootstrap or export or sign or since is not None:
+                msg = ("--transitions is a read-only view and cannot be "
+                       "combined with --watch/--bootstrap/--export/--sign/"
+                       "--since")
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+            _print_property_transitions(transitions, json_output=json_output)
+            return
         since_ts = None
         if since is not None:
             from datetime import datetime, timezone

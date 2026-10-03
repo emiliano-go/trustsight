@@ -25,12 +25,20 @@ TABLE = """CREATE TABLE IF NOT EXISTS package_properties (
     first_seen TEXT NOT NULL,
     last_changed TEXT NOT NULL,
     PRIMARY KEY (package_name, property_key)
+);
+CREATE TABLE IF NOT EXISTS property_transitions (
+    id INTEGER PRIMARY KEY,
+    package_name TEXT NOT NULL,
+    property_key TEXT NOT NULL,
+    old_value TEXT,
+    new_value TEXT NOT NULL,
+    observed_at TEXT NOT NULL
 )"""
 
 
 def conn():
     c = sqlite3.connect(":memory:")
-    c.execute(TABLE)
+    c.executescript(TABLE)
     return c
 
 

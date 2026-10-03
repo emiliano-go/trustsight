@@ -287,6 +287,17 @@ def init_db():
                 PRIMARY KEY (package_name, property_key)
             );
 
+            CREATE TABLE IF NOT EXISTS property_transitions (
+                id INTEGER PRIMARY KEY,
+                package_name TEXT NOT NULL,
+                property_key TEXT NOT NULL,
+                old_value TEXT,
+                new_value TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_property_transitions_package
+                ON property_transitions(package_name);
+
             CREATE TABLE IF NOT EXISTS pkgbuild_snapshots (
                 package_name TEXT PRIMARY KEY,
                 pkgbuild_text TEXT NOT NULL,
@@ -1689,6 +1700,25 @@ def get_history(package_id: int, limit: int = 20, *, from_date: str | None = Non
         return [dict(r) for r in rows]
 
 
+def get_property_transitions(
+    package_name: str, *, property_key: str | None = None
+) -> list[dict]:
+    """Return recorded property-value transitions for *package_name*.
+
+    Ordered by property key, oldest first within a key, so each key's rows
+    read as a timeline.  An unknown package yields an empty list.
+    """
+    with get_connection() as conn:
+        query = "SELECT * FROM property_transitions WHERE package_name = ?"
+        params: list = [package_name]
+        if property_key:
+            query += " AND property_key = ?"
+            params.append(property_key)
+        query += " ORDER BY property_key, id"
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
 
 def get_all_packages() -> list[dict]:
     """Return every package row excluding internal sentinels, ordered by name."""
@@ -1934,8 +1964,9 @@ def forget_package(name: str) -> dict[str, int]:
         pkg_id = pkg["id"]
 
         # alert_state, pkgbuild_snapshots, package_profiles, package_properties
-        # are keyed by package_name directly.
-        for table in ("alert_state", "pkgbuild_snapshots", "package_profiles", "package_properties"):
+        # and property_transitions are keyed by package_name directly.
+        for table in ("alert_state", "pkgbuild_snapshots", "package_profiles",
+                      "package_properties", "property_transitions"):
             cur = conn.execute(f"DELETE FROM {table} WHERE package_name = ?", (name,))
             counts[table] = cur.rowcount
 

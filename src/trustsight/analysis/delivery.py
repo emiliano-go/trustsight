@@ -489,6 +489,57 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
                 break
     return frozenset(body)
 
+
+#: A heredoc opener that only prints.  ``cat``/``echo``/``printf`` with no
+#: redirect produce a message: the body is not a command and is not handed
+#: to anything that runs it.  ``tee`` is deliberately absent - its argument
+#: is a file, so ``tee x <<EOF`` writes x.
+_PRINTED_HEREDOC_OPENER_RE = re.compile(
+    r"^\s*(?:cat|echo|printf)\b(?![^\n]*>)"
+)
+
+
+def _printed_heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Indices of lines inside a heredoc that only prints its body.
+
+    H017/H035/X015 read commands in install hooks; a ``cat <<'MESSAGE'``
+    body that *advises* the user to run ``sudo pacman -S`` is
+    documentation, and the opener is the only line that says so.  A
+    redirect (``cat > out <<EOF``), a pipe into an executor
+    (``cat <<EOF | sh``), or any opener that is not cat/echo/printf stays
+    eligible: the body may be a script some later line runs.
+    """
+    return set(_printed_heredoc_body_indices_cached(tuple(lines)))
+
+
+@lru_cache(maxsize=8)
+def _printed_heredoc_body_indices_cached(
+    lines: tuple[str, ...],
+) -> frozenset[int]:
+    body: set[int] = set()
+    delims: list[tuple[str, bool]] = []
+    for i, line in enumerate(lines):
+        content = line[1:] if line[:1] in ("+", "-") else line
+        stripped = content.strip()
+        if delims and stripped == delims[-1][0]:
+            delims.pop()
+            continue
+        if delims:
+            if delims[-1][1]:
+                body.add(i)
+            continue
+        for m in _HEREDOC_OPEN_RE.finditer(content):
+            if not m.group(2):
+                continue
+            printed = bool(
+                _PRINTED_HEREDOC_OPENER_RE.match(content)
+                and not _HEREDOC_PIPED_RE.search(content[m.end():])
+            )
+            delims.append((m.group(2), printed))
+            break
+    return frozenset(body)
+
+
 # An interpreter/compiler/source command must sit at a command position
 # (line start or after ``;``/``&``/``|``), never inside a filename like
 # ``completions/zsh`` or as a bare argument like ``cp -a . dir``.

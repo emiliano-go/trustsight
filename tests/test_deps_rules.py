@@ -415,6 +415,36 @@ def test_h017_silent_on_a_benign_hook(all_enabled, rules):
     assert "H017" not in fired(diff, all_enabled, rules)
 
 
+def test_h017_silent_when_a_hook_comment_names_another_function(all_enabled, rules):
+    """securelink: `# ...requires a package name...` inside post_install()
+    made a genuine `chmod 4755` in package() report as hook work.
+
+    The call graph scanned comments verbatim, so the comment word
+    "package" created the edge post_install -> package.
+    """
+    diff = HEADER + (
+        "+post_install() {\n"
+        "+  # Upstream's installer requires a package name at /tmp/slp.\n"
+        "+  :\n"
+        "+}\n"
+        "+package() {\n"
+        '+  chmod 4755 "$pkgdir/opt/x/chrome-sandbox"\n'
+        "+}\n"
+    )
+    assert "H017" not in fired(diff, all_enabled, rules)
+
+
+def test_h017_silent_when_the_command_is_printed_in_a_heredoc(all_enabled, rules):
+    diff = HEADER + (
+        "+post_install() {\n"
+        "+  cat <<'MESSAGE'\n"
+        "+  chmod 4755 /usr/bin/evil\n"
+        "+MESSAGE\n"
+        "+}\n"
+    )
+    assert "H017" not in fired(diff, all_enabled, rules)
+
+
 # --- H018: patch input from outside the build tree ---
 
 @pytest.mark.parametrize("cmd", [
@@ -495,6 +525,23 @@ def test_h035_silent_on_make_install_with_destdir(all_enabled, rules):
 
 def test_h035_silent_on_benign_hook(all_enabled, rules):
     diff = HEADER + "+post_install() {\n+  echo nothing\n+}\n"
+    assert "H035" not in fired(diff, all_enabled, rules)
+
+
+def test_h035_silent_when_the_command_is_printed_in_a_heredoc(all_enabled, rules):
+    """mixtapes-git: a printed advisory naming `sudo pacman -S` is not a run.
+
+    The heredoc body is a message; only the opener line decides whether it
+    is data or a script handed to an interpreter.
+    """
+    diff = HEADER + (
+        "+_check_webkitgtk() {\n"
+        "+  cat <<EOF\n"
+        "+  >>>     sudo pacman -S extra/webkitgtk-6.0\n"
+        "+EOF\n"
+        "+}\n"
+        "+post_install() { _check_webkitgtk; }\n"
+    )
     assert "H035" not in fired(diff, all_enabled, rules)
 
 

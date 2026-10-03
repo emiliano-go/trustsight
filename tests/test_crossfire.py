@@ -957,3 +957,53 @@ def test_x025_quiet_on_single_line_shadow():
             " pkgname=demo\n"
             "+msg() { echo 'clean'; }\n")
     assert "X025" not in set(crossfire_techniques(diff))
+
+
+# ---------------------------------------------------------------------------
+# Data that spells a command: dependency descriptions and printed heredocs
+# ---------------------------------------------------------------------------
+
+
+def test_x011_ignores_a_dependency_description():
+    """lfff: an optdepends description that *describes* a cargo install.
+
+    The value of a dependency array is data.  The parenthesised
+    `cargo install payload_dumper` is how a user would install the
+    optional tool, not a command the build runs.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+            " pkgname=demo\n"
+            "+optdepends=(\n"
+            "+  'payload_dumper: OTA payload extraction "
+            "(cargo install payload_dumper)'\n"
+            "+)\n")
+    assert "X011" not in set(crossfire_techniques(diff))
+
+
+def test_x011_still_fires_on_the_line_that_runs_it():
+    assert "X011" in _fire("cargo install wasm-bindgen-cli")
+
+
+def test_x015_ignores_a_printed_heredoc():
+    """melody-git: `cat <<'MESSAGE'` advises the user to enable a unit.
+
+    The body is a message.  Following it into X015 made a printed
+    instruction look like work scheduled on the building machine.
+    """
+    diff = ("--- a/melody.install\n+++ b/melody.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  cat <<'MESSAGE'\n"
+            "+  systemctl --user enable --now melody-agent.service\n"
+            "+MESSAGE\n"
+            "+}\n")
+    assert "X015" not in set(crossfire_techniques(diff))
+
+
+def test_x015_still_fires_on_a_heredoc_handed_to_a_shell():
+    diff = ("--- a/x.install\n+++ b/x.install\n@@ -0,0 +1,5 @@\n"
+            "+post_install() {\n"
+            "+  cat <<EOF | sh\n"
+            "+  systemctl --user enable --now x.service\n"
+            "+EOF\n"
+            "+}\n")
+    assert "X015" in set(crossfire_techniques(diff))

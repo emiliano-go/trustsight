@@ -909,6 +909,38 @@ def _unquoted_paren_delta(text: str) -> int:
     return depth
 
 
+#: A dependency array opener.  Its values are data: an optdepends
+#: description routinely spells a command - `payload_dumper: OTA payload
+#: extraction (cargo install payload_dumper)` - and X011 read the
+#: parenthesised install as an instruction.  The line that *runs*
+#: `cargo install` is elsewhere and still fires.
+_DEP_ARRAY_OPEN_RE = re.compile(
+    r"^\s*(?:depends|makedepends|optdepends|checkdepends)"
+    r"(?:_[a-z0-9_]+)?\s*\+?=\s*\("
+)
+
+
+def _dependency_array_lines(lines: list[str]) -> set[int]:
+    """Indices inside a dependency array's value.
+
+    Tracked across ``+`` and context lines and abandoned on a removed one,
+    like :func:`_continuation_lines`: a hunk can open the array and show
+    only part of it.  The depth is counted outside quotes
+    (:func:`_unquoted_paren_delta`), because an optdepends description may
+    contain a paren that closes nothing.
+    """
+    out: set[int] = set()
+    depth = 0
+    for index, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
+        body = _strip_comment(line[1:] if line[:1] in "+ " else line)
+        if depth > 0 or _DEP_ARRAY_OPEN_RE.match(body):
+            out.add(index)
+            depth = max(0, depth + _unquoted_paren_delta(body))
+    return out
+
+
 def _continuation_lines(raw_lines: list[str], joined_count: int) -> set[int]:
     """Joined-line indices whose command position belongs to an earlier line.
 
@@ -1909,6 +1941,15 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         note_stage_failure("variable-resolution")
         resolved_lines = list(lines)
     carried = _continuation_lines(raw_lines, len(lines))
+    #: X011 stands down inside a dependency array: the words there are a
+    #: description, not a command the build runs.
+    dependency_data = _dependency_array_lines(lines)
+    #: X015 stands down inside a heredoc that only prints.  A `cat
+    #: <<'MESSAGE'` body listing `systemctl --user enable --now x` is an
+    #: instruction to the user, not work scheduled at build time.  Deferred
+    #: because `delivery` imports this module's neighbours.
+    from .delivery import _printed_heredoc_body_indices
+    printed_heredoc = _printed_heredoc_body_indices(lines)
     found: dict[str, list[tuple[int, str, str]]] = {}
     #: X012 is the one rule here that spans two lines: an override is inert
     #: until a build step reads it.
@@ -2127,7 +2168,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if X010_RE.search(body):
             record("X010", line_no, "interpreter reaches the network", body.strip())
 
-        if X015_RE.search(body):
+        if index not in printed_heredoc and X015_RE.search(body):
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
@@ -2152,7 +2193,9 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # ./evil.pkg.tar.zst` installs a local package as root, scriptlets
         # and all, and the leading `./` is not a mitigation.
         distro = _DISTRO_INSTALL_RE.search(body)
-        if X011_RE.search(body) and (distro or not X011_STANDDOWN_RE.search(body)):
+        if (index not in dependency_data
+                and X011_RE.search(body)
+                and (distro or not X011_STANDDOWN_RE.search(body))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())
 

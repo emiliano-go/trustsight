@@ -452,6 +452,56 @@ def _finding_line(finding: dict) -> str:
     return clean(" ".join(parts))
 
 
+def _explain_lines(fact, repo) -> list[str]:
+    """What the parser believed: the recipe and diff documents.
+
+    ``--explain`` renders the typed core's own view (the RecipeDoc of the
+    analysed PKGBUILD and the DiffDoc summary of the analysed diff) so
+    triage and rule authoring work from what the parser saw, not from a
+    re-read of the raw text.
+    """
+    from ..diffdoc import parse_diff_lines
+    from ..differ import generate_diff_bounded
+    from ..fetcher import get_pkgbuild_at_commit
+    from ..recipedoc import parse_recipe
+    from ..tokenizer import split_lines
+
+    lines = ["Parser view:"]
+    text = get_pkgbuild_at_commit(repo, fact.new_commit) if fact.new_commit else ""
+    if text:
+        recipe = parse_recipe(text)
+        scalars = ", ".join(
+            f"{k}={v}" for k, v in sorted(recipe.scalars.items())
+            if k in ("pkgname", "pkgver", "pkgrel", "epoch", "url", "install")
+        )
+        lines.append(f"  scalars: {scalars or '(none resolved)'}")
+        for name in sorted(recipe.arrays):
+            entries = recipe.arrays[name]
+            lines.append(
+                f"  array {name}: {len(entries)} "
+                f"entr{'y' if len(entries) == 1 else 'ies'}"
+            )
+        lines.append(f"  functions: {', '.join(recipe.functions) or '(none)'}")
+        if recipe.unresolved:
+            lines.append(f"  unresolved ({len(recipe.unresolved)}):")
+            lines.extend(f"    {u}" for u in recipe.unresolved[:5])
+    else:
+        lines.append("  (no PKGBUILD at the analysed commit)")
+    if fact.old_commit and fact.new_commit:
+        diff_text, _summary, _trunc = generate_diff_bounded(
+            repo, fact.old_commit, fact.new_commit
+        )
+        doc = parse_diff_lines(split_lines(diff_text))
+        n_hunks = sum(len(f.hunks) for f in doc.files)
+        lines.append(f"  diff: {len(doc.files)} file(s), {n_hunks} hunk(s)")
+        for f in doc.files:
+            lines.append(f"    {f.path} ({f.status}, {len(f.hunks)} hunk(s))")
+        cuts = doc.cut_hunks()
+        if cuts:
+            lines.append(f"  cut hunks: {cuts}")
+    return lines
+
+
 def _inspect_one(fact, *, show_score, show_risk, verbose, json_output):
     """Render a single PackageFact to the appropriate surface."""
     if json_output:
@@ -497,6 +547,10 @@ def register_commands(app: typer.Typer):
         full_recipe: bool = typer.Option(
             False, "--full-recipe",
             help="Analyse the whole recipe as if newly added, not only the last change",
+        ),
+        explain: bool = typer.Option(
+            False, "--explain",
+            help="Show what the parser believed: the recipe and diff documents",
         ),
     ):
         """Show a detailed analysis of a single package."""
@@ -602,6 +656,15 @@ def register_commands(app: typer.Typer):
             verbose=verbose,
             json_output=json_output,
         )
+        if explain:
+            from ..fetcher import clone_or_fetch
+            repo = clone_or_fetch(package)
+            lines = _explain_lines(fact, repo)
+            if json_output:
+                if body is not None:
+                    body["explain"] = lines
+            else:
+                typer.echo("\n".join(lines))
         if body is not None:
             typer.echo(json.dumps(body, indent=2))
 

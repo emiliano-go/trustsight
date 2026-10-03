@@ -643,11 +643,17 @@ def test_forget_package_deletes_everything(db):
         conn.execute(
             "INSERT INTO alert_state (package_name, rule_id, first_seen) "
             "VALUES (?, 'R001', datetime('now'))", ("goner",))
+        conn.execute(
+            "INSERT INTO property_transitions "
+            "(package_name, property_key, old_value, new_value, observed_at) "
+            "VALUES (?, 'source_hosts', '[]', '[\"x\"]', datetime('now'))",
+            ("goner",))
         conn.commit()
     counts = forget_package("goner")
     assert counts.get("packages") == 1
     assert counts.get("analysis_history") == 1
     assert counts.get("triggered_rules") == 1
+    assert counts.get("property_transitions") == 1
     assert get_package_id("goner") is None
 
 

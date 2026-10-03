@@ -113,6 +113,58 @@ def test_update_properties_is_idempotent():
     assert row[0] == 2
 
 
+# --- property_transitions timeline ---
+
+
+def _transitions(c, pkg):
+    return c.execute(
+        "SELECT property_key, old_value, new_value, observed_at "
+        "FROM property_transitions WHERE package_name=? ORDER BY id", (pkg,)
+    ).fetchall()
+
+
+def test_changed_value_writes_one_transition_row():
+    c = conn()
+    _breaks(c, "pkg", "t1", source_hosts={"github.com"})
+    _breaks(c, "pkg", "t2", source_hosts={"evil.example"})
+    rows = _transitions(c, "pkg")
+    assert len(rows) == 1
+    assert rows[0] == (
+        "source_hosts", canonical({"github.com"}), canonical({"evil.example"}), "t2",
+    )
+
+
+def test_stable_values_write_no_transition_rows():
+    c = conn()
+    for i in range(3):
+        _breaks(c, "pkg", f"t{i}", source_hosts={"github.com"})
+    assert _transitions(c, "pkg") == []
+
+
+def test_first_observation_writes_no_transition_row():
+    c = conn()
+    _breaks(c, "pkg", "t1", source_hosts={"github.com"})
+    assert _transitions(c, "pkg") == []
+
+
+def test_subfloor_change_still_writes_a_transition_row():
+    c = conn()
+    _breaks(c, "pkg", "t1", source_hosts={"github.com"})
+    assert _breaks(c, "pkg", "t2", source_hosts={"evil.example"}) == []
+    assert len(_transitions(c, "pkg")) == 1
+
+
+def test_rapid_second_change_keeps_the_intermediate_value():
+    c = conn()
+    _breaks(c, "pkg", "t1", source_hosts={"a.example"})
+    _breaks(c, "pkg", "t2", source_hosts={"b.example"})
+    _breaks(c, "pkg", "t3", source_hosts={"c.example"})
+    assert _transitions(c, "pkg") == [
+        ("source_hosts", canonical({"a.example"}), canonical({"b.example"}), "t2"),
+        ("source_hosts", canonical({"b.example"}), canonical({"c.example"}), "t3"),
+    ]
+
+
 # --- longitudinal_findings consumer ---
 
 

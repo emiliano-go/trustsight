@@ -486,3 +486,70 @@ class TestExitCode:
             # With 1 commit, there's no parent to diff against, so 0 results
             assert result.exit_code == 2
             assert "error" in json.loads(result.output)
+
+
+# ---------------------------------------------------------------------------
+# full-aur --transitions (property timelines)
+# ---------------------------------------------------------------------------
+
+class TestPropertyTransitions:
+    def _seed(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        from trustsight.db import get_connection, upsert_package
+        from trustsight.full_aur.properties import update_properties
+
+        upsert_package("timeline-pkg", "1.0")
+        with get_connection() as conn:
+            update_properties(conn, "timeline-pkg",
+                              {"source_hosts": {"github.com"}},
+                              "2026-05-01T00:00:00+00:00")
+            update_properties(conn, "timeline-pkg",
+                              {"source_hosts": {"evil.example"}},
+                              "2026-05-02T00:00:00+00:00")
+            update_properties(conn, "timeline-pkg",
+                              {"source_hosts": {"evil.example"}},
+                              "2026-05-03T00:00:00+00:00")
+            conn.commit()
+
+    def test_plain_output_shows_only_the_change(self, tmp_path, monkeypatch):
+        self._seed(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["full-aur", "--transitions", "timeline-pkg"])
+        assert result.exit_code == 0
+        out = _strip_ansi(result.output)
+        assert out.count("source_hosts") == 1
+        assert '"github.com"' in out
+        assert '"evil.example"' in out
+        assert "2026-05-02" in out
+
+    def test_json_output_is_the_timeline(self, tmp_path, monkeypatch):
+        self._seed(tmp_path, monkeypatch)
+        result = runner.invoke(
+            app, ["full-aur", "--transitions", "timeline-pkg", "--json"]
+        )
+        assert result.exit_code == 0
+        assert json.loads(result.output) == [{
+            "observed_at": "2026-05-02T00:00:00+00:00",
+            "property_key": "source_hosts",
+            "old_value": '["github.com"]',
+            "new_value": '["evil.example"]',
+        }]
+
+    def test_known_package_without_transitions_is_empty(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        from trustsight.db import upsert_package
+        upsert_package("quiet-pkg", "1.0")
+        result = runner.invoke(app, ["full-aur", "--transitions", "quiet-pkg"])
+        assert result.exit_code == 0
+        assert "No property transitions" in _strip_ansi(result.output)
+
+    def test_unknown_package_exits_2(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        result = runner.invoke(app, ["full-aur", "--transitions", "ghost"])
+        assert result.exit_code == 2
+
+    def test_build_flags_are_refused(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        result = runner.invoke(
+            app, ["full-aur", "--transitions", "pkg", "--watch"]
+        )
+        assert result.exit_code == 2

@@ -127,6 +127,7 @@ trustsight inspect <package>
 | `--last N` | Analyse the N most recent content-bearing commits as N separate results, newest first. `N >= 1` and `N <= 50`. Commits whose diff is empty after filtering (`.SRCINFO`- and `.gitignore`-only regenerations) are skipped and do not count toward N. Combined with `--depth > 0` is refused in this version. |
 | `--record` | Persist observations and analysis history. Runs are read-only by default, so nothing is written unless this flag is passed. |
 | `--full-recipe` | Analyse the whole recipe against an empty base, as if every file had just been added, instead of the changes since the last review. For a first look at a package or before installing one. Combined with `--last` is refused. |
+| `--explain` | Show what the parser believed: the typed recipe view of the analysed PKGBUILD (resolved scalars, arrays, functions, unresolved assignments) and the typed diff summary (files, hunks, cut hunks). For triage and rule authoring; in `--json` the lines ride an `explain` key. |
 
 ### Output
 

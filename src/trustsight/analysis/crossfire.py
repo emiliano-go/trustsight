@@ -1569,15 +1569,73 @@ def _pipeline_sink(body: str) -> str | None:
 # `find -exec` is narrowed to an executor because the ordinary use is the
 # rule's opposite: `find "$pkgdir" -type f -exec chmod 644 {} +` is how
 # permissions get fixed, and claiming it would claim the ecosystem.
+#
+# The find arm is separate so the `-c` script can be read before firing.
+# `find ... -exec sh -c 'for f; do mv "$f" ...; done' sh {} +` is a static
+# rename loop; only a script that itself reaches an executor or the network
+# is the hiding place this rule is for.  `find -exec sh file.sh` (no `-c`)
+# stays claimed: the file is a script.
+_X017_FIND_RE = re.compile(
+    r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
+    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?"
+    r"(?P<x017executor>" + SCRIPT_EXECUTOR + r")\b",
+    re.IGNORECASE,
+)
+
+#: What a `find -exec ... -c` script must reach to stay X017's.
+_X017_SCRIPT_DANGER_RE = re.compile(
+    r"\b(?:" + SCRIPT_EXECUTOR + r")\b"
+    r"|(?:" + _NETWORK_CLIENT + r")\b"
+    r"|\beval\b|\bsource\b|\bbase64\b|\bxxd\b",
+    re.IGNORECASE,
+)
+
 X017_RE = re.compile(
     r"--checkpoint-action\s*=\s*[\"']?exec"
     r"|--to-command\s*="
-    r"|\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
-    r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?(?:" + SCRIPT_EXECUTOR + r")\b"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)enable\s+(?:-\w+\s+)*-f\b"
     r"|(?:\A\s*|[;&|(]\s*|&&\s*)hash\s+(?:-\w+\s+)*-p\b",
     re.IGNORECASE,
 )
+
+
+def _x017_find_runs_a_script(
+    body: str, match: re.Match, lines: list[str], index: int
+) -> bool:
+    """Whether a `find ... -exec` hands the executor something that runs.
+
+    Reads the command string after `-c`; a quoted argument is allowed to
+    span lines (it is not a backslash continuation), so the following
+    lines are read to the closing quote.  When the spelling is unreadable
+    the rule fires toward looking.  Without `-c` the executor is running a
+    file, which is the shape the rule names.
+    """
+    rest = body[match.end():]
+    if not re.match(r"\s*-c\b", rest):
+        return True
+    quoted = re.match(r"\s*-c\s+'([^']*)'", rest, re.DOTALL) or \
+        re.match(r'\s*-c\s+"([^"]*)"', rest, re.DOTALL)
+    if quoted is not None:
+        script = quoted.group(1)
+    else:
+        opener = re.match(r"\s*-c\s+(['\"])", rest)
+        if opener is None:
+            token = re.match(r"\s*-c\s+(\S+)", rest)
+            if token is None:
+                return True
+            script = token.group(1)
+        else:
+            quote = opener.group(1)
+            parts = [rest[opener.end():]]
+            for follower in lines[index + 1:index + 41]:
+                text = follower[1:] if follower[:1] in "+-" else follower
+                end = text.find(quote)
+                if end != -1:
+                    parts.append(text[:end])
+                    break
+                parts.append(text)
+            script = "\n".join(parts)
+    return bool(_X017_SCRIPT_DANGER_RE.search(script))
 
 
 # ---------------------------------------------------------------------------
@@ -1825,7 +1883,7 @@ def _consumer_at(lines: list[str], index: int) -> bool:
 # pass-through but the actual value was set in a function.  Good PKGBUILDs
 # assign literal values to these variables.
 _SENSITIVE_VAR_RE = re.compile(
-    r"(?:DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
+    r"(?P<x024var>DLAGENTS|COMPRESS(?:ZST|XZ|GZ|BZ2|LZ4|LRZ|LZO|LZ|Z)"
     r"|PACMAN_AUTH|CFLAGS|CXXFLAGS|LDFLAGS|MAKEFLAGS|RUSTFLAGS"
     r"|PATH|LD_PRELOAD|LD_LIBRARY_PATH|PYTHONPATH)"
     r"\s*\+?=",
@@ -1843,6 +1901,27 @@ X024_RE = re.compile(
     r"(?:" + _INDIRECT_VALUE_RE.pattern + r")",
     re.IGNORECASE,
 )
+
+#: The name an indirect value expands.  Read from the matched span alone:
+#: a back-reference stand-down pattern measured >1s on the audit's
+#: full-length line, and the assignment is already delimited by the match.
+_X024_VALUE_VAR_RE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _x024_is_passthrough(body: str, match: re.Match) -> bool:
+    """True when the indirect value is the assigned variable's own name.
+
+    `PATH="$PATH:$HOME/.cargo/bin"` appends to the existing value and
+    `CGO_CFLAGS="${CFLAGS}"` forwards the standard flags: both are the
+    value the reviewer already sees, not one hidden in another variable.
+    The sensitive-variable pattern has no left boundary, so `CGO_CFLAGS`
+    matches as `CFLAGS` and the comparison is against that tail name -
+    which is what lets the CGO family through.
+    """
+    var = match.group("x024var")
+    value = body[match.start():match.end()]
+    expansion = _X024_VALUE_VAR_RE.search(value)
+    return bool(expansion and expansion.group(1) == var)
 
 
 # ---------------------------------------------------------------------------
@@ -2152,7 +2231,12 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X021", line_no, "the file the executor runs is not a literal",
                    body.strip())
 
-        if X017_RE.search(body):
+        find_exec = _X017_FIND_RE.search(body)
+        if find_exec is not None:
+            if _x017_find_runs_a_script(body, find_exec, lines, index):
+                record("X017", line_no, "a tool is given a command to run",
+                       body.strip())
+        elif X017_RE.search(body):
             record("X017", line_no, "a tool is given a command to run",
                    body.strip())
 
@@ -2182,7 +2266,8 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
             record("X013", line_no, "fetch redirected or trust replaced",
                    body.strip())
 
-        if X024_RE.search(body):
+        indirect = X024_RE.search(body)
+        if indirect is not None and not _x024_is_passthrough(body, indirect):
             record("X024", line_no,
                    "sensitive variable assigned an indirect value",
                    body.strip())

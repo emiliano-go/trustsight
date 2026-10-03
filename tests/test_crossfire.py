@@ -933,6 +933,33 @@ def test_x024_quiet_on_literal_assignment(command):
     assert "X024" not in _fire(command)
 
 
+@pytest.mark.parametrize("command", [
+    'export PATH="$PATH:$HOME/.cargo/bin"',
+    'MAKEFLAGS="$MAKEFLAGS -j$(nproc)"',
+    'export CGO_CPPFLAGS="${CPPFLAGS}"',
+    'export CGO_CFLAGS="${CFLAGS}"',
+    'export CGO_CXXFLAGS="${CXXFLAGS}"',
+    'export CGO_LDFLAGS="${LDFLAGS}"',
+])
+def test_x024_quiet_on_a_passthrough(command):
+    """The value begins by expanding the assigned variable itself.
+
+    `PATH="$PATH:..."` appends and `CGO_CFLAGS="${CFLAGS}"` forwards the
+    standard flags; both are the value the reviewer already sees, not an
+    indirect value hidden in a variable.
+    """
+    assert "X024" not in _fire(command)
+
+
+@pytest.mark.parametrize("command", [
+    'CGO_CFLAGS="$EVIL"',
+    'CFLAGS="${_evil}"',
+    'PATH="${_newpath}"',
+])
+def test_x024_still_fires_when_the_value_is_not_the_same_variable(command):
+    assert "X024" in _fire(command)
+
+
 # ---------------------------------------------------------------------------
 # X025: multi-line function shadow
 # ---------------------------------------------------------------------------

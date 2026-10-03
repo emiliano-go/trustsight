@@ -1,0 +1,184 @@
+"""A bounded lexical scan of PKGBUILD-like lines.
+
+Both the typed recipe's function-body reader and the rule engine's scope
+classifier count braces, and both counted them on the raw line.  That got
+``echo "}"`` wrong in one reader and ``# }`` wrong in the other.  This
+module is the one place that decides which text is code, so the two
+readers can no longer disagree.
+
+It is a lexical scan, not a shell parser: it resolves nothing, follows no
+command substitution, and blanks only what shell would not execute as
+written.  ``$(...)`` and backticks inside double quotes stay code because
+they execute; a heredoc body does not, and neither does a comment.
+"""
+
+import re
+from dataclasses import dataclass
+
+_HEREDOC_SHAPE_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+
+
+@dataclass(frozen=True)
+class LexedLine:
+    """One line with the lexical facts both brace counters need.
+
+    ``code`` is the line with quoted data, comments and heredoc bodies
+    blanked (positions preserved).  ``brace_delta`` counts only braces in
+    ``code``; ``closes_line`` says the code's last non-space character is
+    an unquoted ``}``, the shape the scope classifier balances on.
+    """
+
+    text: str
+    code: str
+    brace_delta: int
+    opens_brace: bool
+    closes_line: bool
+    heredoc_body: bool
+
+
+def _diff_boundary(line: str) -> bool:
+    """True for an outer-diff file or hunk header (never prefixed data)."""
+    return line.startswith(("diff --git ", "@@ ", "--- ", "+++ ")) or line in (
+        "---", "+++",
+    )
+
+
+def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:
+    """Lex *lines* in order; heredoc state spans lines either way.
+
+    ``fragment=True`` says this is a partial diff: quote state resets each
+    line and a heredoc ends at a diff file or hunk header.  A fragment can
+    hold an unterminated quote or heredoc whose closer is outside the hunk,
+    and letting either span lines blanks the rest of the file; the
+    whole-file recipe read (the default) keeps the state, because a quoted
+    string or heredoc there really does continue.
+    """
+    out: list[LexedLine] = []
+    in_single = in_double = in_backtick = False
+    sub_depth = 0
+    heredoc: str | None = None
+    heredoc_tabs = False
+    for line in lines:
+        if fragment:
+            in_single = in_double = in_backtick = False
+            sub_depth = 0
+            if heredoc is not None and _diff_boundary(line):
+                heredoc = None
+        if heredoc is not None:
+            probe = line.lstrip("\t") if heredoc_tabs else line
+            # A diff line keeps its +/- prefix, which is not part of the
+            # shell text: ``+EOF`` terminates the heredoc ``EOF``.
+            probe = probe.lstrip("+-")
+            blank = " " * len(line)
+            if probe.strip() == heredoc:
+                heredoc = None
+            out.append(LexedLine(line, blank, 0, False, False, True))
+            continue
+        code, in_single, in_double, in_backtick, sub_depth, opener = _scan(
+            line, in_single, in_double, in_backtick, sub_depth
+        )
+        if opener is not None:
+            heredoc, heredoc_tabs = opener
+        out.append(LexedLine(
+            text=line,
+            code=code,
+            brace_delta=code.count("{") - code.count("}"),
+            opens_brace="{" in code,
+            closes_line=code.rstrip().endswith("}"),
+            heredoc_body=False,
+        ))
+    return out
+
+
+def _scan(line, in_single, in_double, in_backtick, sub_depth):
+    """Return ``(code, states..., heredoc)`` for one line."""
+    out: list[str] = []
+    i, n = 0, len(line)
+    opener: tuple[str, bool] | None = None
+    while i < n:
+        ch = line[i]
+        if in_single:
+            if ch == "'":
+                in_single = False
+            out.append(" ")
+            i += 1
+            continue
+        if in_backtick:
+            if ch == "`":
+                in_backtick = False
+            out.append(ch)
+            i += 1
+            continue
+        if in_double:
+            if sub_depth > 0:
+                if ch == "\\" and i + 1 < n:
+                    out.append(line[i:i + 2])
+                    i += 2
+                    continue
+                if ch == "(":
+                    sub_depth += 1
+                elif ch == ")":
+                    sub_depth -= 1
+                out.append(ch)
+                i += 1
+                continue
+            if ch == "\\" and i + 1 < n:
+                out.append("  ")
+                i += 2
+                continue
+            if ch == '"':
+                in_double = False
+                out.append(" ")
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and line[i + 1] == "(":
+                sub_depth = 1
+                out.append("$(")
+                i += 2
+                continue
+            if ch == "`":
+                in_backtick = True
+                out.append(ch)
+                i += 1
+                continue
+            out.append(" ")
+            i += 1
+            continue
+        if ch == "\\" and i + 1 < n:
+            out.append("  ")
+            i += 2
+            continue
+        if ch == "'":
+            in_single = True
+            out.append(" ")
+            i += 1
+            continue
+        if ch == '"':
+            in_double = True
+            out.append(" ")
+            i += 1
+            continue
+        if ch == "`":
+            in_backtick = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "#" and (
+            i == 0
+            or line[i - 1].isspace()
+            or line[i - 1] in ";|&("
+            # ``+# note`` is a diff's comment line: the prefix is not shell.
+            or (i == 1 and line[0] in "+-")
+        ):
+            out.append(" " * (n - i))
+            break
+        if ch == "<" and i + 1 < n and line[i + 1] == "<" and opener is None:
+            match = _HEREDOC_SHAPE_RE.match(line, i)
+            if match:
+                opener = (match.group(2), match.group(0).startswith("<<-"))
+                out.append(" " * (match.end() - i))
+                i = match.end()
+                continue
+        out.append(ch)
+        i += 1
+    return "".join(out), in_single, in_double, in_backtick, sub_depth, opener

@@ -31,6 +31,7 @@ from ..config import (
     load_patterns,
 )
 from ..deps import _strip_comment
+from ..line_lex import lex_lines
 from ..rules import _classify_enclosing_function
 from ..tokenizer import resolve_added_lines
 from .base import iter_scheme_urls, mask_to_recipe
@@ -492,11 +493,16 @@ def _parse_time_fetch_findings(diff_text, config, add) -> None:
     """
     lines = mask_to_recipe(resolve_added_lines(diff_text))
     enclosing = _classify_enclosing_function(lines)
+    lexed = lex_lines(lines, fragment=True)
     patterns = _parse_time_fetch_patterns(config)
     fetch_funcs = _fetch_function_names(diff_text, config)
     in_array = False
     for i, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):
+            continue
+        if lexed[i].heredoc_body:
+            # A fetch spelled inside a heredoc is text the heredoc writes,
+            # not a command the recipe runs at parse time.
             continue
         body = _strip_comment(line[1:])
         stripped = body.strip()

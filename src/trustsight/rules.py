@@ -7,6 +7,7 @@ from .config import load_rules
 from .deps import _strip_comment
 from .diffdoc import parse_diff_lines
 from .findings import stamp
+from .line_lex import lex_lines
 from .tokenizer import (
     clean_lines,
     joined_indexed,
@@ -494,27 +495,28 @@ def _classify_line_context(lines: list[str]) -> dict[int, str]:
     contexts: dict[int, str] = {}
     depth = 0
     previous = ""
-    for i, line in enumerate(lines):
+    for i, lex in enumerate(lex_lines(lines, fragment=True)):
+        line = lex.text
         if _starts_a_new_file(line, previous):
             depth = 0
             contexts[i] = "other"
             previous = line
             continue
         previous = line
-        stripped = line.lstrip("+").lstrip()
+        code = lex.code.lstrip("+").lstrip()
         if _is_message_line(line):
             contexts[i] = "message"
-        elif depth > 0 or _inline_body(stripped):
+        elif depth > 0 or _inline_body(code):
             contexts[i] = "function_body"
         else:
             contexts[i] = "other"
-        if _FUNCTION_OPEN_RE.search(stripped):
+        if _FUNCTION_OPEN_RE.search(code):
             depth += 1
             # Opened and closed on one line, so it must not leave the
             # counter raised for everything that follows.
-            if stripped.rstrip().endswith("}"):
+            if code.rstrip().endswith("}"):
                 depth -= 1
-        elif _FUNCTION_CLOSE_RE.search(stripped):
+        elif _FUNCTION_CLOSE_RE.search(code):
             depth = max(0, depth - 1)
     return contexts
 
@@ -573,28 +575,29 @@ def _enclosing_function_map_cached(lines: tuple[str, ...]) -> dict[int, str]:
     enclosing: dict[int, str] = {}
     stack: list[str] = []
     previous = ""
-    for i, line in enumerate(lines):
+    for i, lex in enumerate(lex_lines(lines, fragment=True)):
+        line = lex.text
         if _starts_a_new_file(line, previous):
             stack.clear()
             previous = line
             continue
         previous = line
-        stripped = line.lstrip("+").lstrip()
-        match = _FUNCTION_NAME_RE.search(stripped)
+        code = lex.code.lstrip("+").lstrip()
+        match = _FUNCTION_NAME_RE.search(code)
         if stack:
             enclosing[i] = stack[-1]
-        elif match and _inline_body(stripped):
+        elif match and _inline_body(code):
             # Code sharing the line with its own `pkgver() {` header is
             # inside that function, so a scope naming it must match.
             enclosing[i] = match.group(1)
         if match:
             stack.append(match.group(1))
-        elif _FUNCTION_OPEN_RE.search(stripped):
+        elif _FUNCTION_OPEN_RE.search(code):
             stack.append("")
-        if _FUNCTION_OPEN_RE.search(stripped):
-            if stripped.rstrip().endswith("}") and stack:
+        if _FUNCTION_OPEN_RE.search(code):
+            if code.rstrip().endswith("}") and stack:
                 stack.pop()
-        elif _FUNCTION_CLOSE_RE.search(stripped) and stack:
+        elif _FUNCTION_CLOSE_RE.search(code) and stack:
             stack.pop()
     return enclosing
 

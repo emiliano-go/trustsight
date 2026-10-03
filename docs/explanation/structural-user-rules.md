@@ -63,7 +63,9 @@ changed-line anchored instead.
 
 An entry is **gained** only when `array_diff(pre, post)` reports it gained
 AND the diff carries it on an added line. It is **lost** only when the diff
-carries it on a removed line. An unchanged entry appears on an added line
+carries it on a removed line. The delta is a multiset: an entry added twice
+counts twice and a duplicate removal is a loss, so multiplicity is never
+silently dropped. An unchanged entry appears on an added line
 only when its line was rewritten, and then the removed counterpart is in the
 pre state, so it is not reported as gained. An entry the diff never shows at
 all cannot be reported in either direction, which is the intended silence:

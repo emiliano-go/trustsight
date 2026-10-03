@@ -104,3 +104,16 @@ def variable_table(
     """Resolve assignments among added lines into scalar and array tables."""
     variables, arrays = request("variable_table", additions)
     return variables, arrays
+
+
+def variable_table_spans(
+    additions: list[str],
+) -> tuple[dict[str, str], dict[str, list[str]], dict]:
+    """The variable tables plus each value's source line index.
+
+    The tables are exactly what :func:`variable_table` returns; ``spans``
+    maps scalar names to their assignment line and array names to their
+    opener, closer and per-entry lines, indexed into *additions*.
+    """
+    variables, arrays, spans = request("variable_table_spans", additions)
+    return variables, arrays, spans

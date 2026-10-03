@@ -115,6 +115,9 @@ def _dispatch(op: str, payload: object) -> object:
     if op == "variable_table":
         variables, arrays = engine._variable_table(payload)
         return [variables, arrays]
+    if op == "variable_table_spans":
+        variables, arrays, spans = engine._variable_table_with_spans(payload)
+        return [variables, arrays, spans]
     if op == "clean_lines":
         return [
             engine.collapse_traversal(engine.strip_leading_bom(line))

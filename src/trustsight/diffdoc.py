@@ -177,6 +177,26 @@ class DiffDoc:
             if line.side in ("remove", "context")
         ]
 
+    def post_origins(self) -> list[tuple[str, int, str]]:
+        """``(file, line, side)`` for each :meth:`post_lines` entry.
+
+        A line the diff does not number carries 0, which reads as unknown
+        rather than as line zero of a file.
+        """
+        return [
+            (line.file, line.new_lineno or 0, line.side)
+            for line in self.lines
+            if line.side in ("add", "context")
+        ]
+
+    def pre_origins(self) -> list[tuple[str, int, str]]:
+        """``(file, line, side)`` for each :meth:`pre_lines` entry."""
+        return [
+            (line.file, line.old_lineno or 0, line.side)
+            for line in self.lines
+            if line.side in ("remove", "context")
+        ]
+
     def added_lines(self) -> list[DiffLine]:
         """Content lines on the ``+`` side, wherever they appeared."""
         return [line for line in self.lines if line.side == "add"]

@@ -693,26 +693,50 @@ def _strip_outer_quotes(value: str) -> str:
     return value
 
 
-def _collect_array_entries(additions: list[str], start_idx: int) -> tuple[int, list[str]]:
+def _split_with_lines(text: str) -> list[tuple[str, int]]:
+    """``shlex.split`` tokens paired with their 1-based source line.
+
+    ``shlex`` exposes no token offset, but ``lineno`` read *before* each
+    ``get_token`` is the line the token starts on, including a token whose
+    quoted text spans lines.
+    """
+    lexer = shlex.shlex(text, posix=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    out: list[tuple[str, int]] = []
+    while True:
+        line = lexer.lineno
+        token = lexer.get_token()
+        if token is None:
+            break
+        out.append((token, line))
+    return out
+
+
+def _collect_array_entries(
+    additions: list[str], start_idx: int
+) -> tuple[int, list[str], list[int]]:
     """Collect the entries of a ``name=( ...)`` array starting at *start_idx*.
 
-    Returns the index of the line that closed the array and the list of
-    entries (outer quotes removed by ``shlex``).  Nested parentheses inside
-    quotes are ignored; the closing ``)`` that balances the opener is not
-    included in the parsed content.
+    Returns the index of the line that closed the array, the entries
+    (outer quotes removed by ``shlex``), and each entry's source line
+    index in *additions*.  Nested parentheses inside quotes are ignored;
+    the closing ``)`` that balances the opener is not included in the
+    parsed content.
     """
     first = additions[start_idx]
     m = _ARRAY_ASSIGNMENT_RE.match(first)
     if not m:
-        return start_idx, []
+        return start_idx, [], []
     # *rest* is the text after the opening ``(`` on the first line; the
     # opener itself is represented by the initial depth of 1.
     rest = m.group(3)
     depth = 1
     in_single = in_double = False
     parts: list[str] = []
+    offsets: list[int] = []
     i = start_idx
-    for line in [rest] + additions[start_idx + 1 :]:
+    for line_offset, line in enumerate([rest] + additions[start_idx + 1 :]):
         content: list[str] = []
         j = 0
         while j < len(line):
@@ -759,14 +783,23 @@ def _collect_array_entries(additions: list[str], start_idx: int) -> tuple[int, l
             content.append(ch)
             j += 1
         parts.append("".join(content))
+        offsets.append(line_offset)
         if depth == 0:
             break
         i += 1
-    try:
-        entries = [e for e in shlex.split(" ".join(parts)) if e]
-    except ValueError:
-        entries = []
-    return i, entries
+    entries: list[str] = []
+    entry_lines: list[int] = []
+    if parts:
+        try:
+            for token, line_no in _split_with_lines("\n".join(parts)):
+                if not token:
+                    continue
+                index = min(max(line_no - 1, 0), len(offsets) - 1)
+                entries.append(token)
+                entry_lines.append(start_idx + offsets[index])
+        except ValueError:
+            entries, entry_lines = [], []
+    return i, entries, entry_lines
 
 
 def _substitute(
@@ -992,8 +1025,24 @@ def _variable_table(
     additions: list[str],
 ) -> tuple[dict[str, str], dict[str, list[str]]]:
     """Resolve assignments among added lines into scalar and array tables."""
+    var_table, array_table, _spans = _variable_table_with_spans(additions)
+    return var_table, array_table
+
+
+def _variable_table_with_spans(
+    additions: list[str],
+) -> tuple[dict[str, str], dict[str, list[str]], dict]:
+    """The variable tables plus each value's source line index.
+
+    Spans index into *additions*.  A scalar records the assignment line
+    that last set it (a ``+=`` chain's final line); an array records its
+    opener and closer lines and each entry's first line.  The tables'
+    values are unchanged, so every existing caller reads what it read.
+    """
     var_table: dict[str, str] = {}
     array_table: dict[str, list[str]] = {}
+    scalar_lines: dict[str, int] = {}
+    array_spans: dict[str, dict] = {}
     i = 0
     while i < len(additions):
         line = additions[i]
@@ -1001,12 +1050,20 @@ def _variable_table(
         arr_match = _ARRAY_ASSIGNMENT_RE.match(line)
         if arr_match:
             name, op = arr_match.group(1), arr_match.group(2)
-            close_idx, entries = _collect_array_entries(additions, i)
+            close_idx, entries, entry_lines = _collect_array_entries(additions, i)
             if entries:
                 if op == "+=":
                     array_table.setdefault(name, []).extend(entries)
+                    span = array_spans.setdefault(
+                        name, {"open": i, "close": close_idx, "entries": []}
+                    )
+                    span["entries"].extend(entry_lines)
+                    span["close"] = close_idx
                 else:
                     array_table[name] = entries
+                    array_spans[name] = {
+                        "open": i, "close": close_idx, "entries": list(entry_lines),
+                    }
             i = close_idx + 1
             continue
         scalar_match = _ASSIGNMENT_RE.match(line)
@@ -1024,6 +1081,7 @@ def _variable_table(
                     var_table[name] = var_table.get(name, "") + value
                 else:
                     var_table[name] = value
+                scalar_lines[name] = i
         i += 1
 
     for _ in range(10):
@@ -1036,7 +1094,10 @@ def _variable_table(
         var_table = new_table
         if sum(len(v) for v in var_table.values()) > _MAX_TABLE_BYTES:
             break
-    return var_table, array_table
+    return var_table, array_table, {
+        "scalars": scalar_lines,
+        "arrays": array_spans,
+    }
 
 
 def resolve_added_lines(diff_text: str) -> list[str]:

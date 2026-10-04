@@ -174,6 +174,7 @@ they are not repeated here.
 | H101 | Source Pinning Lost | MEDIUM | 0.03 % | 1/3739 | One fire, a true-but-benign move from a commit pin to a branch on a -git package. Well under the 30% gate. | Three fires, all true-but-benign host moves under a stable version (a mirror change, a redirect consolidation). Well under the 30% gate. |
 | H100 | Install Hook Added Or Retargeted | HIGH/MED | 0.32 % | 12/3739 |
 | H102 | Maintainer Change With Signing Key Change | HIGH | not replayable | - | Needs a maintainer change plus H078; the stateless corpus replay has no maintainer history. Unit and integration tests pin both directions. | Packages do gain `install=` legitimately (fonts, dkms, desktop integration); the finding is factual and marks the hook for review. In line with D003 (0.48 %). |
+| H103 | Metadata And Recipe Disagree | HIGH | not replayable | - | The stateless corpus replay passes no `.SRCINFO`, so the comparison never runs; the review path reads it at HEAD. Unit and integration tests pin both directions. |
 | H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
 | H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 

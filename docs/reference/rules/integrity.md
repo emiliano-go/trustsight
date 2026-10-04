@@ -55,6 +55,7 @@ severity weights and the reserved identifier ranges.
 | [H097](#h097) | Function Shadowing | HIGH |
 | [H099](#h099) | Source Host Swapped Under A Kept Local Name | HIGH |
 | [H101](#h101) | Source Pinning Lost | MEDIUM |
+| [H103](#h103) | Metadata And Recipe Disagree | HIGH |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
 | [R078](#r078) | Compression Command Override | MEDIUM |
@@ -508,6 +509,26 @@ checksum list nobody recounted is caught on both paths.
 *unquoted* whitespace, not by a token pattern.
 
 Zero occurrences in the 3,739-diff benign corpus.
+
+### H103: Metadata And Recipe Disagree {#h103}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** `.SRCINFO` and the PKGBUILD disagree on the `install=` hook,
+  a checksum array, or `depends`, with both documents stating the field and
+  neither carrying an unresolved variable.
+
+H092 compares the hosts the two documents name. This rule compares the
+fields that decide what the build installs, fetches and verifies: a
+metadata file that names a different install hook, a different set of
+checksums, or a different dependency list describes a build other than the
+one makepkg will run, and an AUR helper reading the metadata may resolve a
+different closure than the recipe builds.
+
+A stale `.SRCINFO` is the ordinary benign shape, so a differing `pkgver`
+alone does not fire. Values are compared as sets, so reordering is silent,
+and any field carrying an unresolved `$variable` is treated as not seen
+rather than as a divergence.
 
 ### H092: Metadata Names A Source The Recipe Does Not {#h092}
 

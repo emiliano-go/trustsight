@@ -33,8 +33,9 @@ def test_h034_fires_on_websocket_scheme():
     assert "H034" in ids('source=("wss://x.example/y")\n')
 
 
-def test_h034_fires_on_scalar_source_line():
-    assert "H034" in ids('source = "tftp://x.example/y"\n')
+def test_h034_ignores_the_srcinfo_scalar_spelling():
+    """`source = value` is `.SRCINFO` metadata; makepkg never reads it."""
+    assert "H034" not in ids('source = "tftp://x.example/y"\n')
 
 
 def test_h034_allowlisted_base_schemes_stay_quiet():
@@ -299,3 +300,12 @@ def test_h033_quiet_on_a_variable_driven_version_bump():
         ' source=("git+https://h.example/r.git#commit=$_commit")\n'
     )
     assert "H033" not in ids(d)
+
+
+def test_h034_reads_a_srcinfo_scalar_source():
+    diff = (
+        "--- a/.SRCINFO\n+++ b/.SRCINFO\n@@ -1,2 +1,2 @@\n"
+        " pkgbase = p\n"
+        "+source = tftp://x.example/y\n"
+    )
+    assert "H034" in ids(diff)

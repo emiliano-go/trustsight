@@ -204,5 +204,6 @@ NON_CONTENT_RULES = {
     "R059": "context", "H015": "context", "H023": "context", "H025": "context",
     "H031": "context", "H038": "context", "H043": "composite",
     "H098": "composite",
+    "H103": "integrity",
     "H065": "reconstruction", "H079": "context",
 }

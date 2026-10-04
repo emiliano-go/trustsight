@@ -734,15 +734,26 @@ def analyze_package(
     # FP-free on the corpus path, where it has always run.
     from ..full_aur.properties import metadata_divergence
 
-    for host in metadata_divergence(
-        head_pkgbuild, get_srcinfo_at_commit(repo, head_commit)
-    ):
+    srcinfo_text = get_srcinfo_at_commit(repo, head_commit)
+    for host in metadata_divergence(head_pkgbuild, srcinfo_text):
         triggered_rules.append(stamp({
             "rule_id": "H092",
             "name": "Metadata Names A Source The Recipe Does Not",
             "severity": "HIGH", "category": "integrity",
             "match": f".SRCINFO names {host}, which the PKGBUILD never does",
             "params": {"host": host},
+        }))
+    from .crossfile import metadata_recipe_divergence
+
+    divergent = metadata_recipe_divergence(head_pkgbuild, srcinfo_text)
+    if divergent:
+        triggered_rules.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "HIGH", "category": "integrity",
+            "match": (".SRCINFO and the PKGBUILD disagree on "
+                      + ", ".join(divergent)),
+            "params": {"fields": ", ".join(divergent)},
         }))
     triggered_rules.extend(
         _structural_findings(

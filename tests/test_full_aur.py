@@ -663,3 +663,28 @@ def test_a_304_with_validators_but_no_snapshot_refetches(monkeypatch):
     # unconditional refetch happened at all.
     metadata.fetch_metadata()
     assert calls == [True, False]
+
+
+def test_h103_reaches_the_corpus_first_seen_path():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+
+    pkgbuild = (
+        "pkgname=demo\npkgver=1.0\ninstall=demo.install\n"
+        "source=('https://example.invalid/demo-1.0.tar.gz')\n"
+        "sha256sums=('aaaa')\n"
+    )
+    srcinfo = (
+        "pkgbase = demo\n\tpkgver = 1.0\n\tinstall = demo.install\n"
+        "\tsource = https://example.invalid/demo-1.0.tar.gz\n"
+        "\tsha256sums = bbbb\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(), srcinfo=srcinfo,
+    )
+    assert any(e.rule_id == "H103" for e in fact.score_breakdown)

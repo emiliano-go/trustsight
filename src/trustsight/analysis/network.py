@@ -44,7 +44,7 @@ from ..tokenizer import split_lines
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
 _SOURCE_ARRAY_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
-_SOURCE_SCALAR_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S+)")
+_SRCINFO_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 # URL tokens are found by scanning for "://" (see base.iter_scheme_urls);
 # the regex form was quadratic on a line with no scheme at all.
 _URL_STOP_CHARS = frozenset(" \t\r\n'\")")
@@ -56,20 +56,29 @@ _URL_STOP_CHARS = frozenset(" \t\r\n'\")")
 
 def _source_url_tokens(diff_text):
     """Yield ``(scheme, url)`` for every scheme:// token on an added source
-    line (array or scalar / .SRCINFO form)."""
+    array line.  The per-line ``source = value`` spelling is read only
+    inside a ``.SRCINFO`` section, where it is a real generated
+    declaration; in PKGBUILD text makepkg never reads it."""
+    from ..file_kinds import files_at_line, is_srcinfo_file
+
+    raw = split_lines(diff_text)
+    files = files_at_line(raw)
     in_array = False
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
-        raw = line.raw
-        if raw.startswith(("+++", "---", "@@")):
+    for line in parse_diff_lines(raw).lines:
+        raw_line = line.raw
+        if raw_line.startswith(("+++", "---", "@@")):
             continue
         if line.side == "remove":
-            if in_array and ")" in raw:
+            if in_array and ")" in raw_line:
                 in_array = False
             continue
-        body = line.content if line.side == "add" else raw
+        body = line.content if line.side == "add" else raw_line
         opens_array = bool(_SOURCE_ARRAY_RE.match(body))
-        is_source = opens_array or bool(_SOURCE_SCALAR_RE.match(body))
-        if not in_array and not is_source:
+        scalar_source = (
+            is_srcinfo_file(files.get(line.index, ""))
+            and bool(_SRCINFO_SOURCE_RE.match(body))
+        )
+        if not in_array and not opens_array and not scalar_source:
             continue
         for scheme, url in iter_scheme_urls(body, _URL_STOP_CHARS):
             yield scheme, url

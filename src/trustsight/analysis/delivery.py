@@ -734,7 +734,9 @@ _VCS_SOURCE_RE = re.compile(
 #: Module level because the function below is called once per rule family
 #: that needs the declared names, and compiling this per call was compiling
 #: it eight times for every diff.
-_SCALAR_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
+
+
+_SRCINFO_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 
 
 def _declared_source_basenames(
@@ -744,8 +746,11 @@ def _declared_source_basenames(
 
     Unlike ``extract_source_array_urls`` (scheme URLs only), this keeps bare
     filenames (`dkms.conf`, `postinst.sh`), honours ``name::url`` renames,
-    and reads both the PKGBUILD ``source=(...)`` form and the per-line
-    ``source = value`` form used in ``.SRCINFO``.
+    and reads the PKGBUILD ``source=(...)`` form.  The per-line
+    ``source = value`` spelling is accepted only inside a ``.SRCINFO``
+    section of the diff, where it is a real (generated, resolved)
+    declaration; in PKGBUILD text makepkg never reads it, so honouring it
+    there let a line the build ignores mark a download as declared.
 
     Eight rule families ask for this.  *current_text* is the post-diff
     PKGBUILD: the declaration routinely sits outside the changed hunk, so
@@ -758,10 +763,14 @@ def _declared_source_basenames(
     than the cached object: the result is documented as a set and handing
     every caller the same one would let a future mutation reach the others.
     """
-    return set(_declared_source_basenames_cached(
-        current_text if current_text is not None else diff_text,
-        current_text is not None,
-    ))
+    if current_text is None:
+        return set(_declared_source_basenames_cached(diff_text, False))
+    # The whole PKGBUILD supplies the arrays; the diff is still read for a
+    # `.SRCINFO` section, whose generated, resolved `source = value` lines
+    # name the files the build actually downloads.
+    return set(_declared_source_basenames_cached(current_text, True)) | set(
+        _declared_source_basenames_cached(diff_text, False)
+    )
 
 
 @lru_cache(maxsize=8)
@@ -773,6 +782,9 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
     # added line there is not part of the declared end state.
     if whole_file:
         lines = [" " + ln for ln in lines]
+    from ..file_kinds import files_at_line, is_srcinfo_file
+
+    files = files_at_line(lines)
     basenames: set[str] = set()
     in_array = False
     for line in parse_diff_lines(lines).lines:
@@ -784,15 +796,16 @@ def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[
         # leading space, as the text walk produced them.
         body = line.content if line.side == "add" else line.raw
         if not in_array:
-            scalar = _SCALAR_SOURCE_RE.match(body)
-            if scalar and "(" not in scalar.group(1):
-                value = scalar.group(1).strip()
-                if _VCS_SOURCE_RE.search(value):
+            if not whole_file and is_srcinfo_file(files.get(line.index, "")):
+                scalar = _SRCINFO_SOURCE_RE.match(body)
+                if scalar:
+                    value = scalar.group(1).strip()
+                    if not _VCS_SOURCE_RE.search(value):
+                        base = (value.split("::", 1)[0] if "::" in value
+                                else _source_basename(value))
+                        if base and base != ")":
+                            basenames.add(base)
                     continue
-                base = value.split("::", 1)[0] if "::" in value else _source_basename(value)
-                if base and base != ")":
-                    basenames.add(base)
-                continue
             if not _SOURCE_ARRAY_START_RE.match(body):
                 continue
             in_array = True

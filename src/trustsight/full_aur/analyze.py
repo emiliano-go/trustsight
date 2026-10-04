@@ -14,6 +14,7 @@ from typing import Optional
 from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.buildfetch import has_unpinned_build_deps
 from ..analysis.composition import maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
+from ..analysis.crossfile import metadata_recipe_divergence
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.ioc_match import ioc_baseline_matches
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
@@ -348,6 +349,16 @@ def analyze_package_text(
             "severity": "HIGH", "category": "integrity",
             "match": f".SRCINFO names {host}, which the PKGBUILD never does",
             "params": {"host": host},
+        }))
+    divergent = metadata_recipe_divergence(new_pkgbuild, srcinfo)
+    if divergent:
+        metadata_findings.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "HIGH", "category": "integrity",
+            "match": (".SRCINFO and the PKGBUILD disagree on "
+                      + ", ".join(divergent)),
+            "params": {"fields": ", ".join(divergent)},
         }))
 
     if old_pkgbuild is None:

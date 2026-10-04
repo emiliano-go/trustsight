@@ -358,10 +358,18 @@ is no general precedence rule across sibling files.
 
 ### `naming.toml`
 
-Ecosystem prefixes (D004, H064) and variant suffixes (D002, H029, H052, H053).
-These decide when two package names belong to the same project, which is what
-keeps a package claiming its own project's names from firing a scope-expansion
-rule.
+| Key | Rules | Default | Contents |
+|-----|-------|---------|----------|
+| `variant_suffixes` | D002, D004, H029, H052, H053 | shipped list | Suffixes that mark a variant of the same upstream project rather than a different project. |
+| `ecosystem_prefixes` | D004, H064 | shipped list | Prefixes shared by thousands of unrelated packages; never evidence of a common project. |
+| `known_suffixes` | H029 | shipped list | Expected package-variant suffixes stripped before the edit-distance comparison, so `foo-git` is never confused with `foo`. |
+| `confusable_chars` | H029 | shipped list | Confusable character groups: a differing character pair drawn from one group is a homoglyph/digit edit, not a coincidence. |
+| `h029_min_candidate_observations` | H029 | `100` | Dependency observations a candidate name must have before any edit can fire. The dependency corpus is long-tailed, so the floor keeps globally obscure names out. |
+| `h029_plain_min_observations` | H029 | `1000` | Higher floor for a plain edit (two unrelated real words one or two edits apart); a confusable edit fires at the lower floor. |
+
+Ecosystem prefixes (D004, H064) and variant suffixes decide when two package
+names belong to the same project, which is what keeps a package claiming its
+own project's names from firing a scope-expansion rule.
 
 ### `thresholds.toml`
 
@@ -378,6 +386,7 @@ rule.
 | `h073.min_history_cycles` / `h073.z_score` / `h073.min_introduced` | H073 | `3` / `3.0` / `3` | Baseline length, deviation and floor for the corpus introduction rate. |
 | `h064.widely_provided_observations` | H064 | `25` | Observations that make a provided name widely provided. |
 | `h074.window_days` | H074 | `14` | How recent the modification must be after an adoption. |
+| `h098.min_signals` | H098 | `2` | Distinct naming/deception signals a package's findings must carry before the cluster is scored. One signal can be a coincidence; two is a method. |
 | `longitudinal.stability_floor` | Class C | `10` | Consecutive observations a property must hold before a change is reported at all. |
 
 ### `iocs.toml`

@@ -81,6 +81,23 @@ capped at CRITICAL - and an unsafe pattern is refused rather than run. The
 corpus pivot understands `domain`, `hash` and `package` only; the other two
 describe a file or a line, which a stored corpus row does not reference.
 
+### Pattern safety and caps
+
+A signed baseline is third-party text, so `pkgbuild_pattern` entries are
+checked statically at load - never by running the pattern on adversarial
+input, which is exactly what hangs on the shapes being rejected:
+
+- A **nested quantifier** (`(a+)+`) or a **quantified alternation**
+  (`(a|aa)+`) is refused; both are the classic catastrophic-backtracking
+  shapes, and neither is anything a curator needs.
+- An invalid regex, an empty pattern, or one longer than 2,000 characters is
+  refused.
+- At most 500 pattern entries load; the rest are ignored, so an unbounded
+  set cannot become a per-line denial of service.
+- A refused pattern is dropped with a warning, and the analysis marks itself
+  degraded rather than matching a smaller list than the operator believes is
+  loaded.
+
 ### Signature
 
 `signature` is a detached Ed25519 signature over the canonical

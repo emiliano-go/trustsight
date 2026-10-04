@@ -739,6 +739,15 @@ def _resolves_to_a_literal(word: str, scalar_values: dict) -> bool:
     return bool(litt) and bool(_LITERAL_WORD_RE.match(litt))
 
 
+#: The privilege tools whose option can take a de-escalation *target* rather
+#: than a command (`sudo -u $SUDO_USER …`).  `doas`/`run0` share the idiom;
+#: `env` does not, because its first non-assignment word is the program.
+_PRIVILEGE_WRAPPERS = frozenset({"sudo", "doas", "run0"})
+
+#: `-u`, `--user`, `-g`, `--group`, and the `=`-joined spellings.
+_ACCOUNT_OPTION_RE = re.compile(r"^-{1,2}(?:u|user|g|group)(?:=(.*))?$")
+
+
 def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
                    scalar_values: dict | None = None):
     """Each command-position word on *body* that is not a literal.
@@ -769,6 +778,7 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
             continue
         seen_wrapper = False
         wrapper = ""
+        account_option = False
         for token in part.split():
             if token.startswith("(("):
                 # `if (( $(vercmp $2 x) >= 0 ))` - arithmetic. The check at
@@ -800,14 +810,48 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
                     break
                 if wrapper == "type" and word in ("-p", "-P", "-a"):
                     break
-                continue
+                # A privilege tool's account option takes a target that
+                # names an account, not a command.  `-u x` leaves it as the
+                # next token; `--user=x` carries it inline.
+                inline_word = None
+                if wrapper in _PRIVILEGE_WRAPPERS:
+                    account_match = _ACCOUNT_OPTION_RE.match(word)
+                    if account_match is not None:
+                        inline = account_match.group(1)
+                        if inline is None:
+                            account_option = True
+                        else:
+                            inline = inline.strip("\"'")
+                            # `--user=${A[0]}` hides a name in the account
+                            # slot: scan the inline value.  `--user=root`
+                            # is a literal account, and `--user=$SUDO_USER`
+                            # the de-escalation idiom; neither is a command.
+                            if (
+                                not _PLAIN_VAR_RE.match(inline)
+                                and ("$" in inline or "`" in inline)
+                            ):
+                                inline_word = inline
+                if inline_word is None:
+                    continue
+                word = inline_word
             if word.strip("\"'") in _WRAPPERS:
                 seen_wrapper = True
                 wrapper = word.strip("\"'")
+                account_option = False
                 continue
             bare = _PLAIN_VAR_RE.match(word)
             if bare and bare.group(1) in resolvable:
                 break
+            if account_option:
+                # The word right after `sudo -u`/`--user`/`-g` is the target
+                # account, not the command.  A dynamic target is the
+                # de-escalation idiom (`sudo -u $SUDO_USER env … fcitx5`);
+                # a literal one (`sudo -u root`) is an ordinary escalation.
+                # Neither is a command *name*, so both keep scanning: a
+                # hidden command after the target (`sudo -u X ${A[0]} …`) is
+                # still yielded.
+                account_option = False
+                continue
             # A static array subscript on a known array resolves to a
             # literal, so it is a spelling choice like `$DKMS`; a dynamic
             # subscript or an unknown array is not in *resolvable* and the

@@ -27,13 +27,16 @@ severity = "MEDIUM"
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier following the R-series convention, `R###`. |
-| `field` | `string` | An array name (`source`, `depends`, `sha256sums`) or `scalars.` plus a scalar name (`scalars.install`). |
-| `match` | `string` | One of the five primitives below. |
-| `pattern` | `string` | Python regex searched against the value the primitive selects, never against a raw line. |
+| `id` | `string` | **Required.** Rule identifier; `lint-rules` warns when it does not follow the `R###` convention and errors when it names a rule the code already emits. |
+| `field` | `string` | **Required.** An array name (`source`, `depends`, `sha256sums`) or `scalars.` plus a scalar name (`scalars.install`). |
+| `match` | `string` | **Required.** One of the five primitives below. |
+| `pattern` | `string` | **Required.** Python regex searched against the value the primitive selects, never against a raw line. |
 | `severity` | `string` | Optional, defaults to `MEDIUM`. `FATAL` and `CRITICAL` clamp to `HIGH`. |
 | `name` | `string` | Optional, defaults to the id. |
 | `category` | `string` | Optional, defaults to `structural`. |
+
+An entry missing any required field is skipped at load and logged; `lint-rules`
+reports the same condition as an error.
 
 `[rules.R###]` controls in `config.toml` (`enabled`, `weight_override`) apply
 to a structural entry exactly as they do to a line rule. A rule refused by the
@@ -122,9 +125,10 @@ one pattern about structure may claim without corpus evidence.
 - No arbitrary keyed arrays. `renamed` and `host_added` understand the source
   entry forms (`name::url`, plain URLs, VCS entries) that the source rewriters
   and H099 already key on; other arrays have no key semantics.
-- No ids outside the R namespace. `C`, `H`, `X`, `W` and the rest are reserved
-  for code-emitted rules; a structural entry claims an `R` id and is reserved
-  against the programmatic ids exactly as a line rule is.
+- No ids the code already emits. The loader accepts any non-empty id, but
+  `lint-rules` warns when it does not follow `R###` and errors when it names a
+  programmatic rule, because one id would then mean two different things. An
+  `R###` id in the line-rule range is the convention for the same reason.
 - No score above `HIGH`, and no FATAL short-circuit.
 
 ## See also

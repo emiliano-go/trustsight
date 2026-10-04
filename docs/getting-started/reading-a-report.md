@@ -253,6 +253,17 @@ band at all.
 
 ---
 
+## Seeing what the parser believed
+
+A report shows findings, not the parse they came from. `trustsight inspect
+PACKAGE --explain` renders the typed core's own view: the `RecipeDoc` of the
+analysed PKGBUILD (resolved scalars, array sizes, functions, the assignments
+the tokenizer refused) and the `DiffDoc` summary of the analysed diff (files,
+hunks, cut hunks). It is the triage answer to "why did this rule not fire" -
+you see the value the rule actually compared, not the text you expected. In
+`--json` the lines ride an `explain` key, so a script can assert on the parse
+without re-parsing the PKGBUILD itself.
+
 ## Next steps
 
 - [Guides: real workflows](../guides/index.md): CI integration, batch review, alert thresholds.

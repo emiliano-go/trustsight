@@ -226,19 +226,21 @@ for report in result:
 
 ## Corpus
 
-### `refresh_corpus(*, bootstrap=False, resume=False, export_path=None, sign_key=None) -> CycleReport`
+### `refresh_corpus(*, bootstrap=False, resume=False, export_path=None, sign_key=None, over_threshold=None, since=None) -> CycleReport`
 
 Run one full-AUR corpus cycle. Equivalent to `trustsight full-aur`.
 
 Refreshes the AUR metadata snapshot, analyses what changed since the stored copy, runs the corpus-wide sweep and records the adoption feed. With no prior snapshot, `bootstrap=False` refuses the whole-AUR scrape; pass `bootstrap=True` to permit the initial bootstrap, which takes hours. `resume=True` continues an interrupted build.
 
-### `watch(*, interval=None, cycles=0, sleep=time.sleep) -> Iterator[CycleReport]`
+`over_threshold` is the alerting bar for `CycleReport.over_threshold`; `None` uses the benign corpus's p95 (30). `since` is a unix timestamp to replay change history from, one AUR day per cycle, or `None` for the normal delta.
+
+### `watch(*, interval=None, cycles=0, over_threshold=None, since=None, sleep=time.sleep) -> Iterator[CycleReport]`
 
 `trustsight full-aur --watch` as a generator. Each cycle is exactly what `refresh_corpus` does once; the loop adds repetition plus memory. A cluster appears in `new_alerts` the first time it is seen and is then counted, not re-announced, so a quiet cycle yields a report with nothing new in it rather than the same forty-package adoption again.
 
 The generator sleeps between cycles, so it blocks the calling thread. Stop it by breaking out of the loop or closing it; state is durable at every yield, since each cycle saves the snapshot and the resume file before it returns.
 
-`interval` is in seconds and defaults to `limits.watch_interval` (3600). Values below `limits.watch_min_interval` (60) are clamped up: a shorter interval only re-downloads a snapshot the AUR has not regenerated yet. `cycles=0` means "until the caller stops iterating".
+`interval` is in seconds and defaults to `limits.watch_interval` (3600). Values below `limits.watch_min_interval` (60) are clamped up: a shorter interval only re-downloads a snapshot the AUR has not regenerated yet. `cycles=0` means "until the caller stops iterating". `over_threshold` and `since` are the same knobs `refresh_corpus` takes; the webhook is CLI-only.
 
 ```python
 for cycle in ts.watch(interval=1800):
@@ -300,6 +302,7 @@ The analysis of one package.
 | `findings` | `tuple[Finding, ...]` | Rules that fired with positive weight, plus every FATAL and CRITICAL. |
 | `suppressed` | `tuple[SuppressedRule, ...]` | Rules that matched but were silenced by an override. They scored nothing and are reported anyway, because a suppression you cannot see is one you cannot audit. |
 | `changes` | `tuple[str, ...]` | What the diff did, whether or not a rule matched. Context, not findings: no severity, no points. |
+| `ioc_matches` | `tuple[IocMatch, ...]` | Signed-baseline indicator hits, reported outside the heuristic score. Populated on every path now, including `analyze_text` and corpus builds. |
 | `coverage_gaps` | `tuple[str, ...]` | What this run could not read. Non-empty forbids a clean verdict. |
 | `coverage_gaps_carried` | `tuple[str, ...]` | The subset of `coverage_gaps` unchanged since the previous recorded analysis. Still gaps; the verdict and `inspect` mark them "(unchanged since the previous review)" so a repeated structural shortfall does not read as introduced by this diff. |
 | `cached`, `cached_at` | `bool`, `str` | Set by `review` when the recorded analysis was served unchanged (#20): same AUR HEAD, versions, depth and ruleset, so nothing was re-computed; `cached_at` is the recording's timestamp. Always `False` / `""` from `inspect`, which never serves cached results. |
@@ -342,7 +345,7 @@ Derived properties: `flagged` (score above the 20-point threshold), `fully_vette
 
 ### `CycleReport`
 
-`added`, `changed`, `removed`, `processed`, `bootstrap`, `elapsed`, `flagged` (`(package, score)` pairs scoring 40 or above, worst first), `cluster_findings`, `new_alerts` (`(package, rule_id)` pairs for clusters seen for the first time).
+`added`, `changed`, `removed`, `processed`, `bootstrap`, `backfilling` (this cycle is part of a `--since` replay), `elapsed`, `flagged` (`(package, score)` pairs scoring 40 or above, worst first), `over_threshold` (`(package, score)` pairs scoring above the alerting bar, worst first), `ioc_hits` (`(package, indicator)` pairs whose analysis matched a baseline entry), `cluster_findings`, `new_alerts` (`(package, rule_id)` pairs for clusters seen for the first time).
 
 ### `ClusterFinding`
 

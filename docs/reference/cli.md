@@ -192,6 +192,12 @@ either flag the band is withheld everywhere, dependency cards included, and the
 border is blue. When both are given the Score row wins, since it already names
 the band.
 
+When the comparison had to fall back to the parent commit because no recorded
+baseline existed, a `Compared` row says so (`The parent commit only; no
+recorded baseline, so earlier history was not examined.`), in the rich panel
+and the plain fallback alike; the JSON body carries the same fact as
+`comparison_base: "parent"`.
+
 The plain-text fallback carries the **same sections** in the same order, and
 nothing is dropped from it: a field on one renderer and not the other is a
 difference in information, which

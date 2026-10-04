@@ -700,7 +700,47 @@ def _opens_a_value(token: str) -> bool:
     )
 
 
-def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
+#: A variable reference inside a word: `$name` or `${name}`.  No operator
+#: (``${c//x/}``) and no subscript are accepted: those assemble a name the
+#: scalar table cannot reproduce, so they stay with X002.
+_WORD_VAR_RE = re.compile(r"\$(\{)?([A-Za-z_][A-Za-z0-9_]*)(?(1)\})")
+
+#: The literal shape a fully-resolved command word must have: no remaining
+#: expansion, substitution or shell metacharacter.  A `/` is allowed (a
+#: path), but the word must not be empty.
+_LITERAL_WORD_RE = re.compile(r"^[A-Za-z0-9_./+-]+$")
+
+
+def _resolves_to_a_literal(word: str, scalar_values: dict) -> bool:
+    """True when *word* is expansions of known scalars and nothing else.
+
+    `${_arch}-cmake` with `_arch=x86_64-w64-mingw32` collapses to a literal
+    command name; `${D}url` with `D` unknown does not.  Only scalar
+    expansions are folded - an operator, subscript or command substitution
+    inside the word is assembly the table cannot reproduce, so the word is
+    left for X002.
+    """
+    if not word or not scalar_values:
+        return False
+    if "$(" in word or "`" in word or "${!" in word:
+        return False
+    stripped = word.strip("\"'")
+    resolved = []
+    last = 0
+    for match in _WORD_VAR_RE.finditer(stripped):
+        resolved.append(stripped[last:match.start()])
+        value = scalar_values.get(match.group(2))
+        if value is None:
+            return False
+        resolved.append(value)
+        last = match.end()
+    resolved.append(stripped[last:])
+    litt = "".join(resolved).strip("\"'")
+    return bool(litt) and bool(_LITERAL_WORD_RE.match(litt))
+
+
+def _command_words(body: str, resolvable: frozenset[str] = frozenset(),
+                   scalar_values: dict | None = None):
     """Each command-position word on *body* that is not a literal.
 
     A command word is not always the first token. Every one of these hides
@@ -775,6 +815,16 @@ def _command_words(body: str, resolvable: frozenset[str] = frozenset()):
             element = _ARRAY_VAR_RE.match(word)
             if element and element.group(1) in resolvable:
                 break
+            # A *spliced* name (`${_arch}-cmake`, `ba${x}sh`) is a spelling
+            # choice too when every expansion in it is a known scalar: the
+            # tokenizer never folds a mid-word splice, so `${_arch}-cmake`
+            # stayed unresolvable and X002 fired CRITICAL on a build target
+            # that is plain text one line up.  Resolve the word with the
+            # scalar table; if it collapses to a literal command name, it
+            # is not an evasion.  An unknown variable, an empty result or
+            # any surviving shell metacharacter keeps it yielded.
+            if _resolves_to_a_literal(word, scalar_values):
+                break
             yield word
             break
 
@@ -812,6 +862,29 @@ def _path_lookup_names(lines: list[str]) -> set[str]:
     names = set()
     for line in lines:
         match = _PATH_LOOKUP_ASSIGN_RE.match(line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+#: A `for name in ...` loop, capturing the loop variable.  `read -r name`,
+#: `while read name` and `case` variables are rarer; `for` is the one that
+#: builds command names from a triple (`${_arch}-cmake`).
+_FOR_LOOP_RE = re.compile(r"^\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b")
+
+
+def _loop_variable_names(lines: list[str]) -> set[str]:
+    """Variables bound by a `for … in` loop.
+
+    A loop variable is iteration, not assembly: `${_arch}-cmake` inside
+    `for _arch in …` names a real program (`x86_64-w64-mingw32-cmake`) for
+    every value the loop takes, and the value is the loop *list*, not a
+    hidden string.  The tokenizer does not fold a loop binding, so without
+    this X002 scored the build target CRITICAL.
+    """
+    names: set[str] = set()
+    for line in lines:
+        match = _FOR_LOOP_RE.match(line)
         if match:
             names.add(match.group(1))
     return names
@@ -1961,11 +2034,22 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # stands down for the static subscript and the payload rules own
         # the resolved pipeline.  A dynamic subscript (`${A[$i]}`) is not
         # exempted by the word check below, so it still fires.
+        loop_vars = _loop_variable_names(readable)
         resolvable = (
             frozenset(var_table)
             | frozenset(array_table)
+            | loop_vars
             | _path_lookup_names(readable)
         )
+        # The scalar *values*, so a spliced name (`${_arch}-cmake`) whose
+        # expansions are all known can be collapsed to a literal.  A loop
+        # variable has no single value; it iterates a list, so any literal
+        # stands in and the *name* splice (`${_arch}-cmake`) collapses to a
+        # literal command-name shape.  The loop list's own contents are the
+        # payload rules' business, not this one's.
+        scalar_values = dict(var_table)
+        for name in loop_vars:
+            scalar_values.setdefault(name, "x")
     except Exception:
         # Without the table every command word reads as unresolvable, which
         # is X002's whole trigger condition inverted: the family goes quiet
@@ -1973,6 +2057,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         log.debug("variable table resolution failed", exc_info=True)
         note_stage_failure("variable-resolution")
         resolvable = frozenset(_path_lookup_names(readable))
+        scalar_values = {}
 
     # The resolved counterpart of every line, index-aligned by the
     # tokenizer's own contract ("order and count are preserved").  The
@@ -2102,7 +2187,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         # would score one command twice.  A dynamic `${A[$i]}` or a nameref
         # does not resolve and is still yielded.
         if index not in carried:
-            for word in _command_words(body, resolvable):
+            for word in _command_words(body, resolvable, scalar_values):
                 for shape, pattern in X002_SHAPES:
                     if pattern.match(word):
                         record("X002", line_no, shape, body.strip())

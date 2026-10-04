@@ -94,7 +94,7 @@ Ensure CRITICAL recall stays at **100%**: every known malicious pattern must sti
 |--------|-------|
 | CRITICAL recall | 100% |
 | CRITICAL p5 | 60 |
-| Benign p95 | 25 |
+| Benign p95 | 30 |
 
 If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Restore the rule and find another approach.
 

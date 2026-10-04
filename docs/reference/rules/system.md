@@ -554,7 +554,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H025 | HIGH/MED | 10 | 0.27 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
 | H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
 | H027 | INFO | 224 | 5.99 % | INFO weight 0; not a scoring impact. |
-| H029 | HIGH | 2/202 pkgs | 0.99 % | Measured via package-name scan with seeded DB. Fires on `dosbox-x` and `electron36`. |
+| H029 | HIGH | 0/202 pkgs | 0.00 % | Measured via package-name scan with seeded DB. The confusable/plain observation floors removed the `dosbox-x` and `electron36` false positives. |
 | H030 | MEDIUM | 5 | 0.13 % | Measured with the published seed. Well under the 30% gate. |
 | D001 | HIGH | 10 | 0.27 % | Comfortably low for HIGH. The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |

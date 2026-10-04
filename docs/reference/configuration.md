@@ -382,8 +382,9 @@ rule.
 
 ### `iocs.toml`
 
-`[meta] version` plus `[[entries]]` of `type` (`package`, `domain` or `hash`),
-`value`, `confidence`, `provenance`, `campaign` and `added`. The confidence
+`[meta] version` plus `[[entries]]` of `type` (`package`, `domain`, `hash`,
+`file_path` or `pkgbuild_pattern`), `value`, `confidence`, `provenance`,
+`campaign` and `added`. The confidence
 tier decides severity: `confirmed` is FATAL, `high` is CRITICAL, `medium` is
 HIGH. The shipped file is empty, and a miss is uninformative.
 

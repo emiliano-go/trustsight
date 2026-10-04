@@ -49,7 +49,7 @@ corpus state.
 ### H029: Package-Name Typosquat {#h029-rule}
 
 - **Target:** programmatic (package name against seeded candidate list)
-- **Severity:** HIGH (weight 25) - corpus rate 1.12 % (package-name scan)
+- **Severity:** HIGH (weight 25) - corpus rate 0.00 % (0/202, package-name scan)
 - **Category:** `naming`
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 

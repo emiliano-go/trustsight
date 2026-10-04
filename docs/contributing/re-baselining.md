@@ -13,7 +13,7 @@ Trigger a re-baseline after any of the following:
 - A **pattern** change in `rules.toml`
 - Fixing a **bug** that affects scoring
 
-If in doubt, re-baseline. The monthly **Corpus Drift Detection** workflow rebuilds the corpus and opens an issue when the stored baseline no longer matches, so a stale baseline surfaces eventually, but nothing blocks a merge on it.
+If in doubt, re-baseline. The monthly **Corpus Drift Detection** workflow downloads the packed corpus release asset, re-derives the baseline and opens an issue when it no longer matches, so a stale baseline surfaces eventually, but nothing blocks a merge on it.
 
 ## Materialise the corpus first
 

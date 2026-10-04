@@ -79,11 +79,12 @@ to mean something - gated identically to the other novelty signals via
 
 - **Severity:** MEDIUM (weight 15), INFO for a bare `epoch=0`
 - **Category:** `version`
-- **Condition:** A diff introduces `epoch=` where the previous revision had none.
+- **Condition:** A diff introduces `epoch=` where the previous revision had none. Under `--full-recipe` there is no previous revision, so the finding says `epoch=N present` rather than claiming the field is new.
 
 An epoch overrides normal version comparison, so introducing one forces an
 upgrade regardless of what the version numbers say. A pre-existing epoch never
-surfaces in a hunk, so bumping one is quiet.
+surfaces in a hunk, so bumping one is quiet. `epoch=0` is INFO: it initialises
+the field without changing the ordering.
 
 Fire rate: 14 of 3739 (0.37 %).
 

@@ -668,8 +668,8 @@ trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 | `--watch` | Keep running cycles on an interval until interrupted. |
 | `--interval SECONDS` | Seconds between `--watch` cycles. Defaults to `[limits] watch_interval` (3600) and is clamped to `[limits] watch_min_interval` (60). |
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
-| `--notify URL` | With `--watch`: POST each cycle's new alerts as a JSON document to this webhook. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
-| `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which marks the webhook document `priority: urgent` (ntfy gets `Priority: 5`). Default 30, the benign corpus's p95. |
+| `--notify URL` | POST each cycle's new alerts as a JSON document to this webhook, on single-shot cycles and `--watch` alike. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
+| `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 30, the benign corpus's p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
 | `--transitions PACKAGE` | Print the recorded property timeline for PACKAGE and exit. Read-only and works offline; cannot be combined with `--watch`, `--bootstrap`, `--export`, `--sign` or `--since`. |
 | `--limit N` | With `--transitions`: show only the newest N rows (default 500; `0` shows all). The write path already caps rows per property key. |
@@ -774,7 +774,7 @@ trustsight ioc export [<dir>] [--source SOURCE] [--json]
 | `--source` | Override or filter by baseline source name. |
 | `--allow-unsigned` | Import a baseline whose signature is missing or cannot be verified. Use only for local baselines. |
 | `--path` | Baseline directory to re-import with `ioc update`. Can be repeated. |
-| `--type` | Filter `ioc list` by indicator type (`package`, `domain`, or `hash`). |
+| `--type` | Filter `ioc list` by indicator type (`package`, `domain`, `hash`, `file_path`, or `pkgbuild_pattern`). |
 | `--include-expired` | Include expired entries in `ioc list`. |
 
 ---

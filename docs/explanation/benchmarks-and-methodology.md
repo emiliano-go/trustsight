@@ -86,7 +86,7 @@ The numbers are not aspirational; they are the measured state of the current rul
 
 - **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. Two runs on different machines with the same lock file produce identical results.
 - **Baseline committed** as `baseline.json`: benchmark results are checked into the repository. Every commit can be compared against the baseline to detect regressions.
-- **Regeneration** is monthly: `corpus-drift.yml` rebuilds the locked corpus, re-derives the baseline and compares it against the committed `baseline.json`, filing an issue on any change. Reproducibility comes from that committed baseline plus git history.
+- **Regeneration** is monthly: `corpus-drift.yml` downloads the packed corpus release asset (the same bytes `calibration.yml` uses, not a rebuild whose `git diff -W` output is not byte-stable across git versions), re-derives the baseline and compares it against the committed `baseline.json`, filing an issue on any change. Reproducibility comes from that committed baseline plus git history.
 
 The pinned corpus prevents a common failure mode in security tooling: benchmarks that improve over time because the corpus drifted toward easier samples. Pinning freezes the corpus, so any improvement or regression is from the tool, not the data.
 

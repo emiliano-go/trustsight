@@ -51,9 +51,8 @@ it, restart the container, and the replay continues from the day it
 reached.
 
 Two things to expect on a replay. It alerts through the same
-`over_threshold` bar as the live stream, so a genuinely compromised
-package pings at maximum priority; and the sweep and the adoption feed
-stay out of replay cycles, because they model the live stream and two
+`over_threshold` bar as the live stream; and the sweep and the adoption
+feed stay out of replay cycles, because they model the live stream and two
 years of history would only distort their baselines. A package that was
 cleaned up after the campaign scores by its *current* recipe: what
 persists is what gets flagged.
@@ -77,14 +76,17 @@ webhook = "https://example.invalid/hooks/aur"
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the
 version transition, the AUR change date and the rules that fired. While a
-`--since` replay runs, `day` names the AUR day being analysed.
+`--since` replay runs, `day` names the AUR day being analysed. The
+alerting bar is `--over-threshold N` (the `over_threshold` argument on
+`refresh_corpus`/`watch`); the default is 30, the benign corpus's 95th
+percentile.
 
 ```json
 {
   "event": "trustsight.alerts",
   "tool": "trustsight",
   "title": "TrustSight: 1 package(s) over threshold (2026-05-01)",
-  "priority": "urgent",
+  "priority": "default",
   "day": "2026-05-01",
   "cycle": {"added": 3, "changed": 41, "removed": 2, "processed": 44},
   "alerts": [{"package": "some-pkg", "rule_id": "H088"}],
@@ -97,7 +99,8 @@ version transition, the AUR change date and the rules that fired. While a
       "last_modified": "2026-05-01 12:40 UTC",
       "rules": ["H001", "R001"]
     }
-  ]
+  ],
+  "ioc_matches": []
 }
 ```
 
@@ -117,10 +120,12 @@ Any receiver that accepts a JSON POST works. ntfy accepts the same POST and
 shows the document as the message text, so `--notify https://ntfy.sh/mytopic`
 is a working phone notification with no further setup. A dead receiver is
 logged and swallowed: a notification must never kill the watch loop. Cycles
-with no new alerts send nothing. A package matching an IOC baseline entry is
-always urgent, whatever it scored: the IOC tier reports outside the
-heuristic score, so it would otherwise never cross the bar. Single-shot
-cycles (a bootstrap chunk, a plain `full-aur` run) notify like watch cycles.
+with no new alerts send nothing. A package matching an IOC baseline entry
+is listed in the document's `ioc_matches` whatever it scored: the IOC tier
+reports outside the heuristic score, so it would otherwise never cross the
+bar, and the match is a fact to read rather than a higher priority.
+Single-shot cycles (a bootstrap chunk, a plain `full-aur` run) notify like
+watch cycles.
 
 ## As a systemd service
 

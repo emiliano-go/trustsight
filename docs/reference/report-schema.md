@@ -110,7 +110,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
   ],
   "ioc_matches": [
     {
-      "type": "domain | hash | package",
+      "type": "domain | hash | package | file_path | pkgbuild_pattern",
       "value": "string",
       "source": "string",
       "confidence": "string",
@@ -184,8 +184,8 @@ Extracted by `generate_diff()` in `src/trustsight/differ.py`.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `added_urls` | `list[string]` | HTTP/HTTPS URLs found on diff lines starting with `+`. |
-| `removed_urls` | `list[string]` | HTTP/HTTPS URLs found on diff lines starting with `-`. |
+| `added_urls` | `list[string]` | HTTP/HTTPS URLs found on added (`+`) diff lines, excluding whole-line comments: a URL in a comment cannot reach the build. |
+| `removed_urls` | `list[string]` | HTTP/HTTPS URLs found on removed (`-`) diff lines, excluding whole-line comments. |
 | `checksum_behavior` | `string` | One of: `"unchanged"`, `"changed_from_sha256_to_skip"`, `"checksum_array_emptied"`, `"checksum_added_or_changed"`. Detected by `detect_checksum_changes()` in `src/trustsight/differ.py`. |
 
 ### `source_buckets`

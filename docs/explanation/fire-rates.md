@@ -169,12 +169,13 @@ they are not repeated here.
 | H026 | Untrusted Maintainer Takeover | HIGH | TBD | - | Corpus does not replay maintainer changes; requires live repo. Predicted low on warm DB. |
 | H027 | Capability Density Anomaly | INFO | 15.87 % | 515/3739 | INFO weight 0; 30% gate does not apply. 1 in 6 diffs have hits in 3+ categories. |
 | H029 | Package-Name Typosquat | HIGH | 0.00 % | 0/202 pkgs | Package-name scan over corpus packages with the seeded DB. The absolute candidate floor (100 observations) and the plain-edit floor (1000) removed the prior `dosbox-x` and `electron36` false positives while keeping the confusable-edit detections (`openss1`/`openssl`, `sytsemd`/`systemd`). Well under the 30% gate. |
-| H098 | Naming/Deception Cluster | HIGH | not replayable | - | Depends on H029, which needs the seeded DB, so the stateless corpus replay does not exercise it. See the changelog for the point-in-time measurement. |
-| H099 | Source Host Swapped Under A Kept Local Name | HIGH | 0.08 % | 3/3739 |
-| H101 | Source Pinning Lost | MEDIUM | 0.03 % | 1/3739 | One fire, a true-but-benign move from a commit pin to a branch on a -git package. Well under the 30% gate. | Three fires, all true-but-benign host moves under a stable version (a mirror change, a redirect consolidation). Well under the 30% gate. |
-| H100 | Install Hook Added Or Retargeted | HIGH/MED | 0.32 % | 12/3739 |
-| H102 | Maintainer Change With Signing Key Change | HIGH | not replayable | - | Needs a maintainer change plus H078; the stateless corpus replay has no maintainer history. Unit and integration tests pin both directions. | Packages do gain `install=` legitimately (fonts, dkms, desktop integration); the finding is factual and marks the hook for review. In line with D003 (0.48 %). |
-| H103 | Metadata And Recipe Disagree | HIGH | not replayable | - | The stateless corpus replay passes no `.SRCINFO`, so the comparison never runs; the review path reads it at HEAD. Unit and integration tests pin both directions. |
+| H092 | Metadata Names A Source The Recipe Does Not | HIGH | not replayable | - | The stateless corpus replay passes no `.SRCINFO`, so the host comparison never runs; the review path reads it at HEAD, and the full-AUR corpus path has always run it. |
+| H098 | Naming/Deception Cluster | HIGH | not replayable | - | Depends on H029, which needs the seeded DB, so the stateless corpus replay does not exercise it. |
+| H099 | Source Host Swapped Under A Kept Local Name | HIGH | 0.08 % | 3/3739 | Three fires, all true-but-benign host moves under a stable version (a mirror change, a redirect consolidation). Well under the 30% gate. |
+| H100 | Install Hook Added Or Retargeted | HIGH/MED | 0.32 % | 12/3739 | Packages do gain `install=` legitimately (fonts, dkms, desktop integration); the finding is factual and marks the hook for review. In line with D003 (0.48 %). |
+| H101 | Source Pinning Lost | MEDIUM | 0.03 % | 1/3739 | One fire, a true-but-benign move from a commit pin to a branch on a -git package. Well under the 30% gate. |
+| H102 | Maintainer Change With Signing Key Change | HIGH | not replayable | - | Needs a maintainer change plus H078; the stateless corpus replay has no maintainer history. Unit and integration tests pin both directions. |
+| H103 | Metadata And Recipe Disagree | HIGH | not replayable | - | The stateless corpus replay passes no `.SRCINFO`, so the comparison never runs; the review path reads it at HEAD, and a full-AUR cycle compares the fetched metadata. Unit and integration tests pin both directions. |
 | H035 | Foreign Pkg Manager In Hook | HIGH | 0.00 % | 0/3243 | Zero false positives. |
 | H036 | Shell Obfuscation Density | MEDIUM | 0.00 % | 0/3243 | Zero false positives. |
 

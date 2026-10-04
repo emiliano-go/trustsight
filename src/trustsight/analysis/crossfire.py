@@ -52,7 +52,7 @@ from ..config import (
 )
 from ..coverage import note_stage_failure
 from ..deps import _strip_comment
-from ..file_kinds import is_shell_file
+from ..file_kinds import files_at_line, is_shell_file
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import clamp_text
 
@@ -70,30 +70,6 @@ _EXECUTING_SCOPES = (
     "pre_upgrade", "pre_remove", "post_remove",
 )
 
-
-
-_DIFF_TARGET_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
-
-
-def _file_at_line(lines: list[str]) -> dict[int, str]:
-    """``{line_index: path}`` from the diff's own ``+++`` headers.
-
-    Which file a hunk belongs to decides whether its lines are shell at
-    all. Without it the only available gate was "inside a function makepkg
-    calls", which is both too narrow (top-level code runs when makepkg
-    *sources* the recipe) and too broad (a `.desktop` file's lines are not
-    shell in any scope).
-    """
-    files: dict[int, str] = {}
-    current = None
-    for index, line in enumerate(lines):
-        match = _DIFF_TARGET_RE.match(line)
-        if match:
-            current = match.group(1).strip()
-            continue
-        if current is not None:
-            files[index] = current
-    return files
 
 
 def _executes(function: str | None) -> bool:
@@ -1971,7 +1947,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
     from ..tokenizer import resolve_added_lines, variable_table
 
     enclosing = _classify_enclosing_function(lines)
-    files = _file_at_line(lines)
+    files = files_at_line(lines)
     # Names the tokenizer reduced to a literal value. A command word that
     # resolves is not an evasion; one that does not is the whole point.
     readable = [

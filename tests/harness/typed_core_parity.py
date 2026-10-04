@@ -163,7 +163,7 @@ def main(argv: list[str]) -> int:
     with gzip.open(args.check, "rt") as fh:
         baseline = json.load(fh)
     failures = compare(baseline, current)
-    for failure in failures[:60]:
+    for failure in failures[:2000]:
         print(f"PARITY FAIL {failure}")
     print(
         f"typed-core parity: {len(current['findings'])} findings, "

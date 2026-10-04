@@ -32,7 +32,7 @@ severity weights and the reserved identifier ranges.
 | [H089](#h089) | Packaged File Names A Build-Only Path | HIGH |
 | [H093](#h093) | Committed Config Points At A Build-Only Path | HIGH |
 | [H095](#h095) | Boot Or Image Artifact Built From The Source Tree | HIGH |
-| [H100](#h100) | Install Hook Added Or Retargeted | HIGH/MEDIUM |
+| [H100](#h100) | Install Hook Added Or Retargeted | HIGH |
 | [R007](#r007) | Install File Modification | MEDIUM |
 | [R017](#r017) | Setuid/Setgid Permission | HIGH |
 | [R052](#r052) | Dotfile Written To User Profile | HIGH |

@@ -24,6 +24,11 @@ def is_shell_file(path: str) -> bool:
     return bool(SHELL_FILE_RE.search(path or ""))
 
 
+def is_srcinfo_file(path: str) -> bool:
+    """True for a ``.SRCINFO`` path, the one place ``key = value`` is real."""
+    return (path or "").rsplit("/", 1)[-1] == ".SRCINFO"
+
+
 def files_at_line(lines: list[str]) -> dict[int, str]:
     """``{line_index: path}`` from the diff's own ``+++`` headers.
 

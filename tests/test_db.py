@@ -839,3 +839,10 @@ def test_get_property_transitions_limits_to_the_newest(db):
     rows = get_property_transitions("p", limit=3)
     assert [r["new_value"] for r in rows] == ["new7", "new8", "new9"]
     assert len(get_property_transitions("p", limit=0)) == 10
+
+
+def test_checkpoint_wal_is_best_effort(db):
+    from trustsight.db import checkpoint_wal
+
+    checkpoint_wal()
+    checkpoint_wal()

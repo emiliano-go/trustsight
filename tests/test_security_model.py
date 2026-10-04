@@ -1105,3 +1105,24 @@ def test_every_input_bound_is_a_literal():
 
     gate = gate_every_input_bound_is_a_source_constant()
     assert gate.passed, gate.measured
+
+
+def test_import_refuses_a_manifest_naming_another_key(tmp_path, monkeypatch):
+    from trustsight.full_aur import export
+    from trustsight.full_aur.export import InvalidSignatureError, import_baseline
+
+    data = {
+        "manifest": {
+            "version": export._ARTIFACT_VERSION,
+            "distribution_pubkey": "00" * 32,
+        },
+        "metadata_snapshot_hash": "",
+        "profiles": [],
+        "snapshots": [],
+    }
+    monkeypatch.setattr(export, "_read_artifact", lambda path: (data, b"sig"))
+    monkeypatch.setattr(export, "verify_artifact", lambda *args, **kwargs: True)
+    artifact = tmp_path / "baseline.tar.zst"
+    artifact.write_bytes(b"x")
+    with pytest.raises(InvalidSignatureError, match="different distribution key"):
+        import_baseline(str(artifact))

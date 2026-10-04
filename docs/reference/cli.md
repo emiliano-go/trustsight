@@ -722,7 +722,7 @@ Interrupting with Ctrl-C ends the loop, during a cycle or during the wait. Nothi
 
 ## trustsight import-baseline
 
-Import a signed baseline corpus artifact. Verifies the signature, then merges profiles, priors, and the metadata snapshot into the local database. After import the database is warm: no cold-start floor, real `stable_for_n` values, populated priors.
+Import a signed baseline corpus artifact. Verifies the signature, then merges profiles, priors, and the metadata snapshot into the local database. After import the database is warm: no cold-start floor, real `stable_for_n` values, populated priors. The signed manifest's `distribution_pubkey` must match the key this build pins; a mismatch is refused, so a publish job that signed with a key the release does not pin cannot slip through.
 
 ```
 trustsight import-baseline <path>

@@ -355,6 +355,16 @@ def import_baseline(
         pubkey = _load_trusted_pubkey(pubkey_path)
         if not verify_artifact(canonical, sig, pubkey):
             raise InvalidSignatureError("Baseline signature verification failed.")
+        # The manifest is inside the signed bytes, so this cannot be a
+        # forgery; it catches a publish job that signed with a key the
+        # release does not pin, which is the mistake rotation makes.
+        named = str(manifest.get("distribution_pubkey", "")).strip().lower()
+        if named and named != pubkey.hex():
+            raise InvalidSignatureError(
+                "The signed manifest names a different distribution key than "
+                "the one this build pins; refusing to import. Re-pin the key "
+                "or fetch a baseline signed with it."
+            )
         log.info("signature verified")
 
     imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0,

@@ -28,6 +28,7 @@ except ImportError:  # pragma: no cover - rich is a dependency, but degrade grac
 from ..analysis.base import _ensure_init
 from ..config import load_config
 from ..db import (
+    checkpoint_wal,
     get_connection,
     get_metadata,
     record_alerts,
@@ -397,6 +398,29 @@ def run_baseline_build(
     Returns what the cycle did so ``run_watch`` can report on it; the
     single-shot CLI path ignores the value.
     """
+    try:
+        return _run_baseline_build(
+            resume=resume, export_path=export_path, sign_key=sign_key,
+            json_output=json_output, bootstrap=bootstrap, depth=depth,
+            over_threshold=over_threshold, since=since,
+        )
+    finally:
+        # A cycle can write thousands of rows; leave the WAL small
+        # instead of waiting for the next manual vacuum.
+        checkpoint_wal()
+
+
+def _run_baseline_build(
+    resume: bool = False,
+    export_path: Optional[str] = None,
+    sign_key: Optional[str] = None,
+    json_output: bool = False,
+    bootstrap: bool = False,
+    depth: Optional[int] = None,
+    over_threshold: Optional[int] = None,
+    since: Optional[int] = None,
+) -> CycleResult:
+    """The cycle body; the public wrapper checkpoints the WAL."""
     if over_threshold is None:
         over_threshold = _OVER_BENIGN_P95
     _ensure_init()

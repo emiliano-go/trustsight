@@ -1963,6 +1963,19 @@ def maintainer_activity_history() -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def checkpoint_wal() -> None:
+    """Truncate the write-ahead log after a write-heavy cycle.
+
+    Best effort: a checkpoint is maintenance, and a reader holding the
+    database open must not turn a completed cycle into a failure.
+    """
+    try:
+        with get_connection() as conn:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    except sqlite3.Error:
+        log.debug("wal checkpoint failed", exc_info=True)
+
+
 def forget_package(name: str) -> dict[str, int]:
     """Delete all rows for *name* across every table that references it.
 

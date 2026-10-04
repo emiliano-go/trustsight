@@ -306,6 +306,64 @@ _SUDO_CMD_START_RE = re.compile(
 _SUDO_BACKTICK_RE = re.compile(
     r"`\s*(?:" + _PRIVILEGE_TOOL + r")\b", re.IGNORECASE)
 
+# A `-u`/`--user`/`-g`/`--group` option, then the target token.  Matched by
+# hand rather than with a wildcard-bearing regex: the target is one shell
+# word, and a regex with `[^)]*`/`[^`]*`/`[^}]*` alternations measured
+# superlinear on full-length adversarial lines (the adversarial regex audit
+# refuses it).  String ops are linear and the shape is simple.
+#
+# The `sudo -u "$SUDO_USER"` idiom is how an install hook runs a per-user
+# daemon as that user after a root install; it *drops* privilege, so scoring
+# it as an escalation was backwards.  Only a dynamic target stands down: a
+# literal `sudo -u root` (or `-u 0`, or any named user) still runs a command
+# as another account, and the payload that hides there is real.
+_USER_OPTIONS = ("-u", "--user", "-g", "--group")
+
+# A target that names a *variable* rather than a literal account: `$SUDO_USER`,
+# `${SUDO_USER}`, any `${...}` expansion, a `$(...)` or backtick substitution.
+def _is_dynamic_account(target: str) -> bool:
+    token = target.strip().strip("\"'")
+    if not token:
+        return False
+    if token.startswith("$(") or token.startswith("`"):
+        return True
+    if token.startswith("${"):
+        return True
+    if token.startswith("$"):
+        # `$SUDO_USER`, `$user`, `$UID` - a variable, not a named account.
+        return True
+    return False
+
+
+def _drops_to_a_variable(after: str) -> bool:
+    """True when the option directly after the tool names a dynamic account.
+
+    *after* is the body from just past the tool name.  The first option must
+    be `-u`/`--user`/`-g`/`--group` (either `-u x` or `--user=x`) and its
+    target must be a variable/substitution; a literal account keeps the
+    invocation an escalation.
+    """
+    rest = after.lstrip()
+    if rest[:1] == '"' or rest[:1] == "'":
+        # A quoted tool name (`"sudo"`); drop the quote before the option.
+        rest = rest[1:].lstrip("\"'")
+    if not rest.startswith("-"):
+        return False
+    option, _, remainder = rest.partition(" ")
+    name, eq, inline = option.partition("=")
+    if name not in _USER_OPTIONS:
+        return False
+    if eq:
+        return _is_dynamic_account(inline)
+    target = remainder.strip()
+    # The target may itself be a quoted expansion; take the whole leading
+    # word up to the next unquoted space or separator.
+    for i, ch in enumerate(target):
+        if ch in " \t;&|)":
+            target = target[:i]
+            break
+    return _is_dynamic_account(target)
+
 
 def _backtick_sudo_executes(body: str) -> bool:
     """True when *body* runs ``sudo`` through a backtick substitution.
@@ -318,6 +376,24 @@ def _backtick_sudo_executes(body: str) -> bool:
         if body[:m.start()].count("'") % 2 == 0:
             return True
     return False
+
+
+def _sudo_escalates(body: str) -> bool:
+    """True when *body* runs a privilege tool as root (not a user drop).
+
+    Scans every command-position ``sudo``/``doas``/``pkexec``/``run0`` and
+    ignores the ones whose first option target is the dynamic
+    ``sudo -u "$SUDO_USER"`` idiom: that *drops* to the invoking user and is
+    the ordinary shape of an install hook that starts a per-user daemon.  A
+    second, real escalation on the same line still fires.
+    """
+    for match in _SUDO_CMD_START_RE.finditer(body):
+        # Inspect the option directly after the tool name (`match.end()`),
+        # so `sudo -u $SUDO_USER` stands down and `sudo cmd -u x` does not.
+        if _drops_to_a_variable(body[match.end():]):
+            continue
+        return True
+    return _backtick_sudo_executes(body)
 
 _SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
 
@@ -363,7 +439,7 @@ def _sudo_findings(diff_text, config, add, current_text=None) -> None:
         if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         body = _strip_comment(line[1:])
-        if _SUDO_CMD_START_RE.search(body) or _backtick_sudo_executes(body):
+        if _sudo_escalates(body):
             add("H004", "Privilege Escalation", "CRITICAL", "privilege",
                 f"{scopes.label(i, _SCOPE_FUNCTIONS)}() escalates privilege: "
                 f"{body.strip()[:80]}",

@@ -212,6 +212,52 @@ def test_h004_sudo_backtick_no_false_positive_on_string():
     assert "H004" not in triggered
 
 
+def test_h004_sudo_user_drop_is_not_escalation():
+    """`sudo -u $SUDO_USER` drops privilege; an install hook that restarts
+    a per-user daemon is the ordinary benign shape (the alert that started
+    this)."""
+    triggered = _structural_sudo(
+        '+post_install() {\n'
+        '+  sudo -u "$SUDO_USER" env XDG_RUNTIME_DIR=/run/user/1 fcitx5 -r -d\n'
+        '+}\n')
+    assert "H004" not in triggered
+
+
+def test_h004_sudo_user_dynamic_targets_stand_down():
+    for body in (
+        '  sudo -u $SUDO_USER cmd',
+        '  sudo --user "$SUDO_USER" cmd',
+        '  sudo -u $(id -u "$SUDO_USER") cmd',
+        '  sudo -u ${SUDO_USER} cmd',
+        '  sudo -g "$SUDO_USER" cmd',
+        '  doas -u "$SUDO_USER" cmd',
+    ):
+        triggered = _structural_sudo(f'+post_install() {{\n+{body}\n+}}\n')
+        assert "H004" not in triggered, body
+
+
+def test_h004_literal_target_still_escalates():
+    """A named user or literal root is a real drop to another account and
+    must keep firing; only the dynamic `$SUDO_USER` idiom stands down."""
+    for body in (
+        '  sudo -u root rm -rf /',
+        '  sudo -u 0 cmd',
+        '  sudo -u alice cmd',
+        '  sudo -g nogroup cmd',
+        '  sudo pacman -S x',
+    ):
+        triggered = _structural_sudo(f'+build() {{\n+{body}\n+}}\n')
+        assert "H004" in triggered, body
+
+
+def test_h004_second_escalation_on_the_same_line_fires():
+    triggered = _structural_sudo(
+        '+build() {\n'
+        '+  sudo -u "$SUDO_USER" x; sudo -u root y\n'
+        '+}\n')
+    assert "H004" in triggered
+
+
 # --- H075: indirect remote-code execution (hardening) ---
 
 def _structural_h075(diff_text: str) -> list[str]:

@@ -226,6 +226,12 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
 
     inside.add_row("", "")
     inside.add_row("[bold]Status[/]", _status_text(fact))
+    if fact.comparison_base == "parent":
+        inside.add_row(
+            "[bold]Compared[/]",
+            "The parent commit only; no recorded baseline, so earlier "
+            "history was not examined.",
+        )
 
     con.print()
     con.print(Panel(inside, title=Text(f"TrustSight Inspect: {clean(fact.package_name)}"), border_style=border))
@@ -261,6 +267,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print(f"  [Not fully vetted: {clean(reason)}.]")
     if fact.first_seen:
         print("  [First analysis] No prior history; novelty carries no weight yet.")
+    if fact.comparison_base == "parent":
+        print("  [Compared] The parent commit only; no recorded baseline, "
+              "so earlier history was not examined.")
     if fact.maintainer_changed:
         print(f"  Maintainer changed: {clean(fact.previous_maintainer)} -> {clean(fact.current_maintainer)}")
     elif fact.current_maintainer:

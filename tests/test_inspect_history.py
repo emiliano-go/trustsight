@@ -587,3 +587,27 @@ class TestComparisonBase:
 
         assert fact.comparison_base == "recorded"
         assert "parent_baseline" not in fact.coverage_gaps
+
+
+class TestComparisonBaseRendering:
+    def _fact(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
+        fetcher.get_head_commit(repo)
+        fetcher._record_fetch(repo)
+        from trustsight.analysis.pipeline import analyze_package
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            return analyze_package("testpkg", installed_version="1.0", depth=0)
+
+    def test_plain_output_names_the_parent_base(self, tmp_path, monkeypatch):
+        import contextlib
+        import io
+
+        from trustsight.cli import inspect as inspect_cli
+
+        fact = self._fact(tmp_path, monkeypatch)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            inspect_cli._inspect_plain(fact)
+        assert "parent commit only" in buffer.getvalue()

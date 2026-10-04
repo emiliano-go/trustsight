@@ -131,6 +131,37 @@ def test_multi_line_source_array():
     assert len(resolved) > 0
 
 
+def test_array_comments_are_not_entries():
+    """A `#` note inside an array is not a dependency name.
+
+    codex-desktop-git annotates its depends array with a multi-line comment.
+    Reading the comment words as names made H103 report the `.SRCINFO` and
+    the recipe disagreeing on `depends`, because the parser saw the comment
+    in one document and not the other.
+    """
+    from trustsight.tokenizer import variable_table
+
+    variables, arrays = variable_table([
+        "depends=(",
+        "  'bash'",
+        "  # Electron runtime libraries: the Depends field of the deb",
+        "  'zsh'",
+        ")",
+    ])
+    assert arrays["depends"] == ["bash", "zsh"]
+
+
+def test_array_comment_hash_inside_a_value_is_data():
+    from trustsight.tokenizer import variable_table
+
+    _, arrays = variable_table([
+        "source=('https://example.com/a.tar.gz#sha256=abc')",
+        "depends=('a#b' 'c')",
+    ])
+    assert arrays["source"] == ["https://example.com/a.tar.gz#sha256=abc"]
+    assert arrays["depends"] == ["a#b", "c"]
+
+
 def test_resolve_added_lines_preserves_positions():
     """Regression: resolution was zipped against tokenize_and_resolve, whose
     output omits assignment lines.  An added assignment made the sequences

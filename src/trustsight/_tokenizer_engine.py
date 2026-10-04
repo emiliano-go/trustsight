@@ -739,6 +739,14 @@ def _collect_array_entries(
     for line_offset, line in enumerate([rest] + additions[start_idx + 1 :]):
         content: list[str] = []
         j = 0
+        # A ``#`` that opens a comment (unquoted, at a word boundary) runs to
+        # the end of the line and is not array data.  Without this the words
+        # of an inline note inside ``depends=( # note )`` were read as
+        # dependency names - H103 then reported the metadata and the recipe
+        # disagreeing on ``depends`` because the comment lived in one and not
+        # the other.
+        comment = False
+        boundary = True
         while j < len(line):
             ch = line[j]
             if in_double:
@@ -746,32 +754,46 @@ def _collect_array_entries(
                     content.append(ch)
                     content.append(line[j + 1])
                     j += 2
+                    boundary = False
                     continue
                 if ch == '"':
                     in_double = False
                 content.append(ch)
                 j += 1
+                boundary = False
                 continue
             if in_single:
                 if ch == "'":
                     in_single = False
                 content.append(ch)
                 j += 1
+                boundary = False
                 continue
+            if comment:
+                # Skip the rest of this physical line; the array may continue
+                # on the next one, so only the comment text is dropped.
+                break
             if ch == '"':
                 in_double = True
                 content.append(ch)
                 j += 1
+                boundary = False
                 continue
             if ch == "'":
                 in_single = True
                 content.append(ch)
+                j += 1
+                boundary = False
+                continue
+            if ch == "#" and boundary:
+                comment = True
                 j += 1
                 continue
             if ch == '(':
                 depth += 1
                 content.append(ch)
                 j += 1
+                boundary = False
                 continue
             if ch == ')':
                 depth -= 1
@@ -779,8 +801,10 @@ def _collect_array_entries(
                     break
                 content.append(ch)
                 j += 1
+                boundary = False
                 continue
             content.append(ch)
+            boundary = ch.isspace() or ch in ";|&("
             j += 1
         parts.append("".join(content))
         offsets.append(line_offset)

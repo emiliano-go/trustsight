@@ -9,6 +9,7 @@ from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_D
 from .coverage import unpinned_source_refs
 from .diffdoc import parse_diff_lines, strip_diff_path_prefix
 from .schema import DiffSummary, SourceChanges
+from .line_lex import strip_comment
 from .tokenizer import split_lines
 
 # The hunk-header grammar lives in diffdoc now; the parser's accept set is
@@ -427,18 +428,6 @@ def _clean_url(token: str) -> str:
     return token
 
 
-def _is_comment_line(raw: str) -> bool:
-    """True when a raw diff line is a whole-line comment.
-
-    A URL in a comment cannot reach the build: it is not in ``source=()``,
-    not ``url=``, and no function runs it.  Scoring it as a source URL made
-    ``# Maintainer: Name <https://aur.archlinux.org/account/name>`` the
-    package's most suspicious source, which is the opposite of evidence.
-    """
-    body = raw[1:] if raw[:1] in "+-" else raw
-    return body.lstrip().startswith("#")
-
-
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
@@ -448,14 +437,19 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # typed document supplies them unchanged.
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         raw = line.raw
-        if _is_comment_line(raw):
-            continue
-        if raw.startswith("+") and "http" in raw:
-            for u in _URL_TOKEN_RE.findall(raw):
+        prefix = raw[:1] if raw[:1] in "+-" else ""
+        # A URL in a comment cannot reach the build: it is not in
+        # ``source=()``, not ``url=``, and no function runs it.  The comment
+        # boundary is the tokenizer's: a `#` inside quotes, in a URL
+        # fragment (``x#sha256=``) or in ``${var#…}`` is data, so a plain
+        # split on `#` would cut a real URL.
+        body = strip_comment(raw[len(prefix):])
+        if prefix == "+" and "http" in body:
+            for u in _URL_TOKEN_RE.findall(body):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
                     added_urls.add(_clean_url(u))
-        elif raw.startswith("-") and "http" in raw:
-            for u in _URL_TOKEN_RE.findall(raw):
+        elif prefix == "-" and "http" in body:
+            for u in _URL_TOKEN_RE.findall(body):
                 if len(removed_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:
                     removed_urls.add(_clean_url(u))
 

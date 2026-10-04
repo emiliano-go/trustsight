@@ -43,6 +43,48 @@ def _diff_boundary(line: str) -> bool:
     )
 
 
+def _opens_a_comment(line: str, index: int) -> bool:
+    """True when ``line[index]`` is an unquoted ``#`` that starts a comment.
+
+    The rule ``_scan`` already applies, exposed so the URL reader and the
+    brace counter cannot disagree: a ``#`` opens a comment at the start of a
+    line, after whitespace or ``;|&(``, or right after a diff's ``+``/``-``
+    prefix.  Everything else - a ``#`` inside quotes, in a URL fragment
+    (``x#sha256=``) or in ``${var#…}`` - is data.
+    """
+    return line[index] == "#" and (
+        index == 0
+        or line[index - 1].isspace()
+        or line[index - 1] in ";|&("
+        or (index == 1 and line[0] in "+-")
+    )
+
+
+def strip_comment(line: str) -> str:
+    """Return *line* up to an unquoted ``#`` comment, quotes preserved.
+
+    Unlike :func:`lex_lines`, quoted data is kept: a URL reader needs the
+    URL in ``source=("…")``, which lives inside quotes.  Only the trailing
+    comment is dropped, using the same boundary :func:`_scan` recognises.
+    """
+    quote = ""
+    index = 0
+    while index < len(line):
+        ch = line[index]
+        if quote:
+            if ch == "\\" and quote == '"':
+                index += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "'\"":
+            quote = ch
+        elif _opens_a_comment(line, index):
+            return line[:index]
+        index += 1
+    return line
+
+
 def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:
     """Lex *lines* in order; heredoc state spans lines either way.
 
@@ -163,13 +205,7 @@ def _scan(line, in_single, in_double, in_backtick, sub_depth):
             out.append(ch)
             i += 1
             continue
-        if ch == "#" and (
-            i == 0
-            or line[i - 1].isspace()
-            or line[i - 1] in ";|&("
-            # ``+# note`` is a diff's comment line: the prefix is not shell.
-            or (i == 1 and line[0] in "+-")
-        ):
+        if ch == "#" and _opens_a_comment(line, i):
             out.append(" " * (n - i))
             break
         if ch == "<" and i + 1 < n and line[i + 1] == "<" and opener is None:

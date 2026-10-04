@@ -114,6 +114,33 @@ def test_extract_urls_ignores_removed_comment_urls():
     assert result.removed_urls == []
 
 
+def test_extract_urls_ignores_a_trailing_comment():
+    """#27: a `#` comment after a real source is not itself a source."""
+    diff = '+source=("https://example.org/a.tar.gz") # see https://stackoverflow.com/q/1'
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://example.org/a.tar.gz"]
+
+
+def test_extract_urls_keeps_a_url_fragment_hash():
+    """A `#` inside a quoted URL is the address, not a comment."""
+    diff = '+source=("https://example.org/a.tar.gz#sha256=abc")'
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://example.org/a.tar.gz#sha256=abc"]
+
+
+def test_extract_urls_keeps_a_parameter_expansion_hash():
+    """`${var#prefix}` strips a prefix; the `#` is not a comment."""
+    diff = '+url=${_u#https://} # trailing comment'
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://"]
+
+
+def test_extract_urls_keeps_a_hash_inside_quotes():
+    diff = '+echo "see # https://example.com/kept"'
+    result = extract_urls_from_diff(diff)
+    assert result.added_urls == ["https://example.com/kept"]
+
+
 def test_extract_urls_strips_angle_brackets():
     # The maintainer comment is a whole-line comment and skipped entirely;
     # a URL in a comment is not the only shape the brackets take, so the

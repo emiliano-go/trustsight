@@ -36,7 +36,12 @@ dependencies = [
 license-files = ["LICENSE"]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = [
+    "pytest",
+    "ruff",
+    "tree-sitter>=0.23",
+    "tree-sitter-bash>=0.23",
+]
 docs = [
     # Pinned to the versions in uv.lock.  The docs site is also built by an
     # external service that runs `pip install -e '.[docs]'` and does not read

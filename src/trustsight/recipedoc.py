@@ -42,7 +42,14 @@ from .tokenizer import (
 _ASSIGNMENT_SHAPE_RE = re.compile(
     r"^\s*(?:export\s+|local\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*(\+?=)"
 )
-_FUNCTION_OPEN_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)")
+#: Bash accepts hyphens, dots and a few more characters in function names;
+#: `package_google-chrome-bin()` is an ordinary AUR shape.
+_FUNCTION_NAME_CLASS = r"[A-Za-z0-9_@.+][A-Za-z0-9_@.+-]*"
+
+_FUNCTION_OPEN_RE = re.compile(
+    rf"^\s*(?:function\s+({_FUNCTION_NAME_CLASS})\s*(?:\(\s*\))?"
+    rf"|({_FUNCTION_NAME_CLASS})\s*\(\s*\))"
+)
 
 
 @dataclass(frozen=True)
@@ -222,6 +229,11 @@ def _function_segments(lines: list[str]) -> list[tuple[str, str, int]]:
     body there.  Braces inside quotes, comments or a heredoc body are not
     code and do not move the count (``line_lex`` decides which text is
     code once for this reader and the rule scope classifier).
+
+    Both Bash spellings are recognised: ``name()`` and ``function name``
+    (with or without the parentheses), including hyphenated names such as
+    ``package_google-chrome-bin``.  A tree-sitter differential test pins
+    the set against a real grammar.
     """
     segments: list[tuple[str, str, int]] = []
     current: str | None = None
@@ -245,7 +257,7 @@ def _function_segments(lines: list[str]) -> list[tuple[str, str, int]]:
             m = _FUNCTION_OPEN_RE.match(stripped)
             if not m:
                 continue
-            name = m.group(1)
+            name = m.group(1) or m.group(2)
             if not lex.opens_brace:
                 # The brace arrives on a later line.
                 current = name

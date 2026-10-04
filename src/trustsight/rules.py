@@ -93,13 +93,19 @@ def _has_unquoted_redirect(line: str) -> bool:
 # carrying a `function_body` or named scope skipped the whole region.
 # Renaming `package` to `package_x-bin` was a one-word way out of them.
 _FUNCTION_NAME_CLASS = r"[A-Za-z0-9_@.+][A-Za-z0-9_@.+-]*"
-_FUNCTION_OPEN_RE = re.compile(rf"^\s*{_FUNCTION_NAME_CLASS}\s*\(\s*\)\s*\{{")
+_FUNCTION_OPEN_RE = re.compile(
+    rf"^\s*(?:function\s+{_FUNCTION_NAME_CLASS}\s*(?:\(\s*\))?"
+    rf"|{_FUNCTION_NAME_CLASS}\s*\(\s*\))\s*\{{"
+)
 _FUNCTION_CLOSE_RE = re.compile(r"^\s*\}")
 
 # Same shape, but capturing the name so a rule can scope itself to one
 # function.  "curl in build()" is routine; "curl in pkgver()" is not, and
 # a plain function_body scope cannot tell them apart.
-_FUNCTION_NAME_RE = re.compile(rf"^({_FUNCTION_NAME_CLASS})\s*\(\s*\)\s*\{{")
+_FUNCTION_NAME_RE = re.compile(
+    rf"^\s*(?:function\s+({_FUNCTION_NAME_CLASS})\s*(?:\(\s*\))?"
+    rf"|({_FUNCTION_NAME_CLASS})\s*\(\s*\))\s*\{{"
+)
 
 
 def _starts_a_new_file(line: str, previous: str) -> bool:
@@ -587,14 +593,15 @@ def _enclosing_function_map_cached(lines: tuple[str, ...]) -> dict[int, str]:
         previous = line
         code = lex.code.lstrip("+").lstrip()
         match = _FUNCTION_NAME_RE.search(code)
+        name = (match.group(1) or match.group(2)) if match else None
         if stack:
             enclosing[i] = stack[-1]
         elif match and _inline_body(code):
             # Code sharing the line with its own `pkgver() {` header is
             # inside that function, so a scope naming it must match.
-            enclosing[i] = match.group(1)
+            enclosing[i] = name
         if match:
-            stack.append(match.group(1))
+            stack.append(name)
         elif _FUNCTION_OPEN_RE.search(code):
             stack.append("")
         if _FUNCTION_OPEN_RE.search(code):

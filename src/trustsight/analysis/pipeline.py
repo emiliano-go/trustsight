@@ -583,11 +583,17 @@ def analyze_package(
             return cached
 
     last = None
+    # What this run compares against, carried on the fact so a first review
+    # cannot read as a whole-history verdict.
+    comparison_base = ""
+    parent_baseline = False
     if full_recipe:
         old_commit = ""
+        comparison_base = "none"
     elif not old_commit:
         last = get_last_analysis(package_id)
         if last is not None:
+            comparison_base = "recorded"
             stored_commit = last.get("new_commit")
             if stored_commit:
                 old_commit = stored_commit
@@ -609,7 +615,10 @@ def analyze_package(
             # without this the first review of a package would have no diff
             # to look at at all.  The previous commit in the AUR repository
             # is the honest base: it is what "changes since last review"
-            # means when there is no review yet.
+            # means when there is no review yet - but it is one commit, not
+            # the package's history, so the run says so with a gap.
+            comparison_base = "parent"
+            parent_baseline = True
             old_commit = _parent_commit(repo, head_commit)
             if not old_commit:
                 return _make_fresh_analysis(pkg_name, head_version, head_commit, package_id, repo, config, installed_version=installed_version, head_pkgbuild=head_pkgbuild, record=record, resolved_depth=resolved_depth)
@@ -889,6 +898,7 @@ def analyze_package(
         # provider the rest of the run uses, and --depth 0 is the
         # operator's own complete answer.
         deps_not_scanned=_deps_not_scanned(depth_result, added_names),
+        parent_baseline=parent_baseline,
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
@@ -949,6 +959,7 @@ def analyze_package(
         recent_commit_burst=recent_commit_burst,
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
+        comparison_base=comparison_base,
         tree_analyzed=(bool(tree_manifest) and tree_complete
                        and not _scriptlet_files_unread(
                            diff_text, tree_manifest)),
@@ -1347,6 +1358,7 @@ def _make_fresh_analysis(
         diff_summary=DiffSummary(),
         novelty_context=novelty,
         first_seen=True,
+        comparison_base="none",
         temporal_source="git_commit",
         tree_analyzed=(bool(tree_manifest) and tree_complete
                        and not _scriptlet_files_unread(

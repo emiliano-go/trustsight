@@ -50,11 +50,11 @@ UNPINNED_BUILD_DEPS = "unpinned_build_deps"
 COMPANION_TRUNCATED = "companion_truncated"
 UNPINNED_SOURCE_REF = "unpinned_source_ref"
 DEPS_NOT_SCANNED = "deps_not_scanned"
+PARENT_BASELINE = "parent_baseline"
 RULESET_DRIFTED = "ruleset_drifted"
 STAGE_DEGRADED = "stage_degraded"
 HISTORY_TRUNCATED = "history_truncated"
 NOEXTRACT_SUPPRESSED = "noextract_suppressed"
-TOKENIZER_UNAVAILABLE = "tokenizer_unavailable"
 BINARY_METADATA = "binary_metadata"
 PARTIAL_HUNK = "partial_hunk"
 
@@ -72,10 +72,10 @@ GAPS = (
     UNPINNED_BUILD_DEPS,
     RULESET_DRIFTED,
     DEPS_NOT_SCANNED,
+    PARENT_BASELINE,
     STAGE_DEGRADED,
     HISTORY_TRUNCATED,
     NOEXTRACT_SUPPRESSED,
-    TOKENIZER_UNAVAILABLE,
 )
 
 GAP_REASONS = {
@@ -130,6 +130,10 @@ GAP_REASONS = {
         "the AUR dependency walk stopped before the closure was exhausted, so "
         "some packages this build will pull in were never analysed"
     ),
+    PARENT_BASELINE: (
+        "there was no recorded analysis for this package, so only the change "
+        "from the parent commit was examined, not the package's history"
+    ),
     RULESET_DRIFTED: (
         "the installed rules.toml differs from the shipped rule set in a "
         "field that changes what a rule detects, so this analysis did not "
@@ -147,10 +151,6 @@ GAP_REASONS = {
     NOEXTRACT_SUPPRESSED: (
         "noextract=() suppresses extraction of source archives whose "
         "contents could not be examined"
-    ),
-    TOKENIZER_UNAVAILABLE: (
-        "the sandboxed tokenizer could not answer for this input, so no "
-        "expanded text was produced; the package is reported as not vetted"
     ),
 }
 
@@ -408,6 +408,7 @@ def gaps_from(
     snapshot_refused: bool = False,
     unpinned_build_deps: bool = False,
     deps_not_scanned: bool = False,
+    parent_baseline: bool = False,
     ruleset_drifted: bool = False,
     degraded_stages: list[str] | None = None,
     noextract_present: bool = False,
@@ -463,6 +464,12 @@ def gaps_from(
     # level 2 exists.
     if deps_not_scanned:
         gaps.append(DEPS_NOT_SCANNED)
+    # No prior observation is not "nothing suspicious": the tool compared
+    # the parent commit, so the package's earlier history is outside what
+    # this run can claim.  The gap keeps a first review from reading as a
+    # whole-history verdict.
+    if parent_baseline:
+        gaps.append(PARENT_BASELINE)
     # `rules.toml` is written once, at install time, and never rewritten.
     # A user who never hand-edits rules therefore runs whatever the
     # defaults were on the day the tool first ran - and `sync-rules`
@@ -563,6 +570,9 @@ GAP_INCONCLUSIVE_REASONS = {
     DEPS_NOT_SCANNED: (
         "dependency walk cut short: part of the closure was never analysed"
     ),
+    PARENT_BASELINE: (
+        "no recorded baseline: only the parent commit was compared"
+    ),
     RULESET_DRIFTED: (
         "installed rules differ from shipped: checks did not run as documented"
     ),
@@ -574,9 +584,6 @@ GAP_INCONCLUSIVE_REASONS = {
     ),
     NOEXTRACT_SUPPRESSED: (
         "noextract=() suppresses extraction: source archive contents not examined"
-    ),
-    TOKENIZER_UNAVAILABLE: (
-        "the sandboxed tokenizer did not run: the recipe was not expanded"
     ),
 }
 

@@ -7,6 +7,7 @@ from trustsight.schema import (
     PackageFact,
     ScoreEntry,
     SourceChanges,
+    fact_from_dict,
     fact_to_dict,
 )
 
@@ -162,6 +163,20 @@ def test_fact_to_dict_full():
     assert d["final_score"] == 85
     assert d["source_buckets"]["https://evil.com/payload.tar.gz"] == "unknown"
     assert len(d["execution_changes"]["resolved_commands"]) == 1
+
+
+def test_comparison_base_roundtrips_through_storage():
+    fact = PackageFact(
+        package_name="firefox",
+        new_version="100.0",
+        comparison_base="parent",
+        final_score=0,
+    )
+    restored = fact_from_dict(fact_to_dict(fact))
+    assert restored.comparison_base == "parent"
+    older = fact_to_dict(PackageFact(package_name="old", new_version="1.0"))
+    del older["comparison_base"]
+    assert fact_from_dict(older).comparison_base == ""
 
 
 def test_fact_to_dict_roundtrip():

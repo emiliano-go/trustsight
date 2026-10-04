@@ -553,3 +553,37 @@ class TestPropertyTransitions:
             app, ["full-aur", "--transitions", "pkg", "--watch"]
         )
         assert result.exit_code == 2
+
+
+# ---------------------------------------------------------------------------
+# First-review comparison base
+# ---------------------------------------------------------------------------
+
+class TestComparisonBase:
+    def test_a_first_review_names_the_parent_baseline(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
+        fetcher.get_head_commit(repo)
+        fetcher._record_fetch(repo)
+        from trustsight.analysis.pipeline import analyze_package
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+
+        assert fact.comparison_base == "parent"
+        assert "parent_baseline" in fact.coverage_gaps
+        assert fact.risk == "Inconclusive"
+
+    def test_a_recorded_analysis_reports_the_recorded_base(self, tmp_path, monkeypatch):
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
+        fetcher.get_head_commit(repo)
+        fetcher._record_fetch(repo)
+        from trustsight.analysis.pipeline import analyze_package
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            analyze_package("testpkg", installed_version="1.0", depth=0, record=True)
+            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+
+        assert fact.comparison_base == "recorded"
+        assert "parent_baseline" not in fact.coverage_gaps

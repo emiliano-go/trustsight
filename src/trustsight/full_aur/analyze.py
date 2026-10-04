@@ -20,7 +20,7 @@ from ..analysis.maintainer import _check_untrusted_maintainer_takeover
 from ..analysis.structural import _structural_findings, unchanged_upstream_host
 from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
 from ..buckets import classify_urls
-from ..config import load_config, load_thresholds
+from ..config import drifted_shipped_rules, load_config, load_thresholds
 from ..db import (
     effective_observation_count,
     get_connection,
@@ -48,13 +48,21 @@ from ..override import (
     match_url_acks,
 )
 from ..analysis.structural_rules import apply_structural_rules
-from ..rules import apply_rules, clamp_text, get_raw_diff_lines_indexed
+from ..rules import (
+    apply_rules,
+    clamp_diff_lines,
+    clamp_text,
+    get_raw_diff_lines_indexed,
+)
 from ..coverage import (
+    begin_stage_tracking,
     gaps_from,
     oversized_lines,
     parse_time_substitution_lines,
+    stage_failures,
     unresolved_source_lines,
 )
+from ..diffdoc import parse_diff_lines
 from ..scoring import calculate_score
 from ..schema import (
     with_changes,
@@ -290,6 +298,10 @@ def analyze_package_text(
         A fully-scored PackageFact.
     """
     config = load_config()
+    # The corpus path must fail closed on a degraded stage exactly as the
+    # review paths do: without this, a refused rule or a failed checksum
+    # read produced a clean-looking corpus entry.
+    begin_stage_tracking()
     # Before either producer builds a fact: a truncated walk has to reach
     # `gaps_from`, because the band downgrade is decided inside
     # calculate_score and carried on the fact rather than re-derived.
@@ -371,6 +383,8 @@ def analyze_package_text(
             tree_analyzed=bool(tree_manifest),
             snapshot_refused=snapshot_refused,
             deps_not_scanned=depth_result.truncated,
+            ruleset_drifted=bool(drifted_shipped_rules()),
+            degraded_stages=stage_failures(),
         )
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config, coverage_gaps=gaps
@@ -388,6 +402,7 @@ def analyze_package_text(
             # database had one.  The incremental path below carries it.
             current_maintainer=maintainer,
             first_seen=True,
+            comparison_base="none",
             temporal_source=temporal.source,
             tree_analyzed=bool(tree_manifest),
             coverage_gaps=gaps,
@@ -426,6 +441,10 @@ def analyze_package_text(
     diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
+    # The byte cap is not a bound on matching work: 5 MiB of short lines is
+    # over a million lines.  The review paths clamp by line count; the
+    # corpus path must too, or a package chooses how long its cycle runs.
+    diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
 
     source_changes = extract_urls_from_diff(diff_text)
     url_acks = match_url_acks(pkg_name, source_changes.added_urls)
@@ -557,8 +576,11 @@ def analyze_package_text(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
+    partial_hunks = len(parse_diff_lines(split_lines(diff_text)).cut_hunks())
     gaps = gaps_from(
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
+        partial_hunks=partial_hunks,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
@@ -566,6 +588,8 @@ def analyze_package_text(
         snapshot_refused=snapshot_refused,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
         deps_not_scanned=depth_result.truncated,
+        ruleset_drifted=bool(drifted_shipped_rules()),
+        degraded_stages=stage_failures(),
     )
 
     score, breakdown, risk = calculate_score(
@@ -600,6 +624,8 @@ def analyze_package_text(
         suppressed_rules=suppressed_rules,
         acknowledged_urls=acknowledged_url_rows(url_acks),
         diff_truncated=diff_truncated,
+        scan_truncated=scan_truncated,
+        comparison_base="recorded",
         tree_analyzed=bool(tree_manifest),
         coverage_gaps=gaps,
         dependencies=list(depth_result.reports),

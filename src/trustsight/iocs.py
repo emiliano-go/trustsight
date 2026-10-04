@@ -294,7 +294,7 @@ def _version(data: dict) -> int:
         return 0
 
 
-def load_indicators(data: dict | None = None) -> IndicatorSet:
+def load_indicators(data: dict | None = None, on_skip=None) -> IndicatorSet:
     """Load and validate iocs.toml into an :class:`IndicatorSet`.
 
     A malformed entry is dropped with a warning, never coerced: an entry
@@ -303,14 +303,24 @@ def load_indicators(data: dict | None = None) -> IndicatorSet:
     compared for equality.  A missing or unknown confidence tier is kept at
     the lowest severity rather than dropped - the indicator is still real,
     only its evidence is undeclared.
+
+    *on_skip* is called with a short label for each dropped entry, so an
+    analysis can mark itself degraded rather than matching a smaller list
+    than the operator believes is loaded.
     """
     if data is None:
         data = load_iocs()
     indicators: list[Indicator] = []
+
+    def skipped(label: str) -> None:
+        if on_skip is not None:
+            on_skip(label)
+
     for row in _entry_rows(data):
         type_ = str(row.get("type", "")).strip().lower()
         if type_ not in IOC_TYPES:
             log.warning("iocs.toml: dropping entry with unknown type %r", row.get("type"))
+            skipped(type_ or "unknown-type")
             continue
         value = normalize(type_, row.get("value", ""))
         if value is None:
@@ -318,12 +328,14 @@ def load_indicators(data: dict | None = None) -> IndicatorSet:
                 "iocs.toml: dropping %s entry with unusable value %r",
                 type_, row.get("value"),
             )
+            skipped(type_)
             continue
         if type_ == "pkgbuild_pattern" and compile_ioc_pattern(value) is None:
             log.warning(
                 "iocs.toml: dropping pattern entry that is invalid or risks "
                 "catastrophic backtracking: %r", value,
             )
+            skipped(type_)
             continue
         confidence = str(row.get("confidence", "")).strip().lower()
         if confidence not in CONFIDENCE_SEVERITY:

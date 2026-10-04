@@ -2264,7 +2264,7 @@ def clamp_structural_severity(severity: str) -> str:
     return _STRUCTURAL_CLAMPED.get(severity, severity)
 
 
-def load_structural_rules() -> list[dict]:
+def load_structural_rules(on_skip=None) -> list[dict]:
     """Load ``[[structural]]`` recipe rules from rules.toml.
 
     The table is user-only: it ships empty and is never synced, so the
@@ -2272,13 +2272,24 @@ def load_structural_rules() -> list[dict]:
     skipped and logged rather than failing a whole analysis; ``trustsight
     lint-rules`` reports the same conditions as errors.  ``[rules.R###]``
     controls in ``config.toml`` apply by id, exactly as for a line rule.
+
+    *on_skip* is called with the skipped rule's id when an entry is
+    dropped.  An analysis passes a callback that marks the run degraded,
+    so an operator's broken rule shrinks the detection surface loudly
+    instead of silently.
     """
     raw = load_toml("rules.toml").get("structural", [])
     controls = load_config().get("rules", {})
     rules: list[dict] = []
+
+    def skipped(label: str) -> None:
+        if on_skip is not None:
+            on_skip(label)
+
     for entry in raw:
         if not isinstance(entry, dict):
             _log.warning("ignoring non-table structural rule %r", entry)
+            skipped("unparsed")
             continue
         rule = dict(entry)
         rid = rule.get("id")
@@ -2289,9 +2300,11 @@ def load_structural_rules() -> list[dict]:
                 and isinstance(field, str) and field
                 and isinstance(pattern, str) and pattern):
             _log.warning("ignoring structural rule with missing fields: %r", rule)
+            skipped(str(rid or "unidentified"))
             continue
         if match not in STRUCTURAL_MATCHES:
             _log.warning("ignoring structural rule %s: unknown match %r", rid, match)
+            skipped(rid)
             continue
         is_scalar = field.startswith("scalars.")
         if is_scalar != (match == "scalar_changed"):
@@ -2299,6 +2312,7 @@ def load_structural_rules() -> list[dict]:
                 "ignoring structural rule %s: match %r does not apply to field %r",
                 rid, match, field,
             )
+            skipped(rid)
             continue
         severity = str(rule.get("severity") or "MEDIUM")
         if severity in _STRUCTURAL_CLAMPED:

@@ -24,6 +24,7 @@ the list records what has already been reported, never what is safe.
 
 import re
 
+from ..coverage import note_stage_failure
 from ..deps import extract_dependency_changes
 from ..diffdoc import parse_diff_lines
 from ..iocs import load_indicators
@@ -115,7 +116,12 @@ def _ioc_findings(diff_text, package_name, config, add, indicators=None,
     ``indicators`` is injectable so the corpus-side pivot and the tests can
     match against a set that is not the user's installed list.
     """
-    indicators = load_indicators() if indicators is None else indicators
+    indicators = (
+        load_indicators(
+            on_skip=lambda label: note_stage_failure(f"config:ioc:{label}")
+        )
+        if indicators is None else indicators
+    )
     if not indicators:
         return
 

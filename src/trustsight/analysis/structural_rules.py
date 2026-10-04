@@ -36,7 +36,9 @@ def apply_structural_rules(
     read; without that provenance there is no evidence and no finding.
     """
     if rules is None:
-        rules = load_structural_rules()
+        rules = load_structural_rules(
+            on_skip=lambda rid: note_stage_failure(f"config:structural:{rid}")
+        )
     if not rules:
         return []
 

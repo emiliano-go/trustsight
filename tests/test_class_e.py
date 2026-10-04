@@ -359,7 +359,7 @@ def test_scan_diff_reports_a_confirmed_indicator_as_fatal(monkeypatch):
     from trustsight.config import load_config
 
     monkeypatch.setattr("trustsight.analysis.ioc.load_indicators",
-                        lambda: _set(_domain()))
+                        lambda **_kwargs: _set(_domain()))
     diff = (
         "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
         "-source=('https://example.org/x.tar.gz')\n"
@@ -379,7 +379,7 @@ def test_scan_diff_reads_the_current_file_when_given(monkeypatch):
     from trustsight.config import load_config
 
     monkeypatch.setattr("trustsight.analysis.ioc.load_indicators",
-                        lambda: _set(_domain()))
+                        lambda **_kwargs: _set(_domain()))
     diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n-pkgrel=1\n+pkgrel=2\n"
     current = "pkgname=demo\nsource=('https://malware.example/x.tar.gz')\n"
 

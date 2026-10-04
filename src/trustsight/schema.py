@@ -103,6 +103,12 @@ class PackageFact:
     novelty_context: NoveltyContext = field(default_factory=NoveltyContext)
 
     first_seen: bool = False
+    # What this run compared against: "recorded" (a stored observation of
+    # this package), "parent" (the immediately preceding commit, because no
+    # observation existed), "none" (no diff at all), or "" (not applicable,
+    # e.g. a caller-supplied diff).  A first review must not read as a
+    # whole-history verdict, so the base travels with the fact.
+    comparison_base: str = ""
     suppressed_rules: list[dict] = field(default_factory=list)
 
     # Source URLs the operator explicitly acknowledged for this package
@@ -277,6 +283,7 @@ def fact_to_dict(fact: PackageFact) -> dict:
             "maintainer_first_seen_for_this_package": fact.novelty_context.maintainer_first_seen_for_this_package,
         },
         "first_seen": fact.first_seen,
+        "comparison_base": fact.comparison_base,
         "recent_commit_burst": fact.recent_commit_burst,
         "suppressed_rules": fact.suppressed_rules,
         "acknowledged_urls": fact.acknowledged_urls,
@@ -434,6 +441,9 @@ def fact_from_dict(data: dict) -> PackageFact | None:
                     "maintainer_first_seen_for_this_package", False),
             ),
             first_seen=data["first_seen"],
+            # `.get`: a fact stored before this field existed is still a
+            # valid cache row and simply reports no comparison base.
+            comparison_base=data.get("comparison_base", ""),
             recent_commit_burst=data["recent_commit_burst"],
             suppressed_rules=list(data["suppressed_rules"]),
             # `.get`, not `[...]`: a fact stored before this field existed

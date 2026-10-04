@@ -337,6 +337,14 @@ def test_every_gap_has_an_urgency_wording():
     assert set(GAP_INCONCLUSIVE_REASONS) == set(GAPS)
 
 
+def test_parent_baseline_is_a_real_gap():
+    from trustsight.coverage import GAP_REASONS, GAPS, gaps_from
+
+    assert "parent_baseline" in GAPS
+    assert "parent_baseline" in GAP_REASONS
+    assert gaps_from(parent_baseline=True) == ["parent_baseline"]
+
+
 def test_an_unknown_gap_falls_back_to_generic_wording():
     """A gap name written by a newer build still surfaces, worded generically."""
     from trustsight.coverage import inconclusive_label

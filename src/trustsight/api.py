@@ -289,6 +289,8 @@ class Report:
     :ivar dependency_changes: dependencies added or removed by this update.
     :ivar first_seen: no prior history, so novelty signals carry no weight
         yet.
+    :ivar comparison_base: what this run compared against, one of
+        ``"recorded"``, ``"parent"``, ``"none"``, or ``""``.
     :ivar is_trivial: the change was too small to warrant findings.
     :ivar diff_truncated: the diff was clamped before the rules read it.
     :ivar tree_analyzed: the AUR git tree was walked, not only the diff.
@@ -363,6 +365,8 @@ class Report:
 
     first_seen: bool = False
     """No prior history: novelty signals carry no weight yet."""
+    comparison_base: str = ""
+    """"recorded", "parent", "none", or "" when no comparison applied."""
     is_trivial: bool = False
     diff_truncated: bool = False
     tree_analyzed: bool = False
@@ -962,6 +966,7 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "file_changes": [c.to_dict() for c in report.file_changes],
         "ioc_matches": list(report._raw.get("ioc_matches", ())),
         "first_seen": report.first_seen,
+        "comparison_base": report.comparison_base,
         "is_trivial": report.is_trivial,
         "diff_truncated": report.diff_truncated,
         "failed": False,
@@ -1038,6 +1043,7 @@ def _report_from_fact(fact) -> Report:
         ioc_matches=tuple(getattr(fact, "ioc_matches", ()) or ()),
         scan_truncated=bool(getattr(fact, "scan_truncated", False)),
         first_seen=fact.first_seen,
+        comparison_base=getattr(fact, "comparison_base", ""),
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
         tree_analyzed=fact.tree_analyzed,
@@ -1109,6 +1115,7 @@ def _report_from_result(row: dict) -> Report:
         coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
         file_changes=_file_changes(evaluated["file_changes"]),
         first_seen=evaluated["first_seen"],
+        comparison_base=evaluated.get("comparison_base", ""),
         is_trivial=evaluated["is_trivial"],
         diff_truncated=evaluated["diff_truncated"],
         version_comparison=evaluated["version_comparison"],

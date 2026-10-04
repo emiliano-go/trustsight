@@ -5,6 +5,8 @@ constructs that fooled them: quoted braces, comments, heredocs and
 escapes, for the scanner itself and for each reader's projection.
 """
 
+import pytest
+
 from trustsight.line_lex import lex_lines
 from trustsight.recipedoc import parse_recipe
 from trustsight.rules import _classify_line_context, _enclosing_function_map
@@ -104,3 +106,17 @@ def test_a_quoted_header_string_does_not_open_a_function():
     enclosing = _enclosing_function_map(lines)
     assert enclosing.get(3) == "build"
     assert all(name == "build" for name in enclosing.values() if name)
+
+
+@pytest.mark.parametrize("boundary", [
+    "@@ -1,2 +1,2 @@",
+    "--- a/PKGBUILD",
+    "+++ b/PKGBUILD",
+    "---",
+    "+++",
+])
+def test_a_fragment_ends_a_heredoc_at_each_boundary(boundary):
+    lines = ["+cat <<EOF", "+}", boundary, "+pkgver=2"]
+    lexed = lex_lines(lines, fragment=True)
+    assert lexed[1].heredoc_body
+    assert not lexed[3].heredoc_body

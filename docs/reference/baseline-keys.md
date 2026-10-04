@@ -26,6 +26,25 @@ secret `BASELINE_SIGNING_KEY`, which the
 sign the `baseline-*` assets at release time. Rotation means cutting a release
 that pins a new public key; there is no in-band revocation.
 
+### Rotation drill
+
+1. Generate a new ed25519 keypair, replace
+   `src/trustsight/full_aur/baseline_pubkey.pem` and this page's fingerprint
+   and raw-hex rows in the same commit, and land it with a signed commit
+   (the key file is a critical path).
+2. Replace the `BASELINE_SIGNING_KEY` Actions secret with the new private
+   key.
+3. Cut a channel release (`baseline-<date>`) signed with the new key. Old
+   baselines stop verifying the moment a release pins the new key, so every
+   asset the channel serves is republished.
+4. The signed manifest carries `distribution_pubkey` (the raw key as hex) so
+   a publish job can record which key signed it. The runtime authority is
+   always the pinned file, never the manifest field.
+
+The fingerprint test in `tests/test_security_model.py` asserts the shipped
+bytes, the documented fingerprint and the documented raw hex all agree, so a
+key swap cannot be silent.
+
 ### The release channel
 
 Every baseline the tool consumes at runtime is distributed as a release asset

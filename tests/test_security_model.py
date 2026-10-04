@@ -1031,6 +1031,19 @@ def test_the_shipped_baseline_key_is_pinned_and_valid():
     assert len(key) == 32
 
 
+def test_the_shipped_baseline_key_matches_the_documented_fingerprint():
+    """A 32-byte key swap must not pass every gate but the doc's table."""
+    import hashlib
+
+    from trustsight.full_aur.export import _TRUSTED_PUBKEY_FILE
+
+    raw = _TRUSTED_PUBKEY_FILE.read_bytes()
+    fingerprint = "sha256:" + hashlib.sha256(raw).hexdigest()
+    docs = (ROOT / "docs" / "reference" / "baseline-keys.md").read_text()
+    assert fingerprint in docs
+    assert raw.hex() in docs
+
+
 def test_a_non_key_file_is_reported_as_no_pinned_key(tmp_path):
     """The placeholder detection is about length: a build that pins a non-key
     file refuses with NoTrustedKeyError rather than the forged-signature error

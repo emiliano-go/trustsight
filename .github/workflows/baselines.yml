@@ -148,6 +148,7 @@ jobs:
         env:
           BASELINE_SIGNING_KEY: ${{ secrets.BASELINE_SIGNING_KEY }}
         run: |
+          umask 077
           if [ -z "$BASELINE_SIGNING_KEY" ]; then
             echo "no BASELINE_SIGNING_KEY secret configured; cannot sign assets" >&2
             exit 1

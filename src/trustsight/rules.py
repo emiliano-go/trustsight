@@ -6,6 +6,7 @@ import logging
 from .config import load_rules
 from .deps import _strip_comment
 from .diffdoc import parse_diff_lines
+from .file_kinds import is_shell_file
 from .findings import stamp
 from .line_lex import lex_lines
 from .tokenizer import (
@@ -873,6 +874,17 @@ def apply_rules(
     if to_split is not None:
         ctx_map = {to_split[i]: ctx for i, ctx in ctx_map.items()}
         fn_map = {to_split[i]: fn for i, fn in fn_map.items()}
+
+    # A companion file that is not shell cannot be inside a makepkg
+    # function: a `build() {` in a .desktop file, a patch or a BUILD.gn is
+    # text the build never runs.  The line map is the one place the file is
+    # known, and it is keyed in the same domain after the remap above.
+    if line_map:
+        for index in list(ctx_map):
+            where = line_map.get(index)
+            if where is not None and not is_shell_file(where[0]):
+                ctx_map[index] = "other"
+                fn_map.pop(index, None)
 
     # These three candidate lists do not vary per rule, but used to be
     # rebuilt inside the loop: with ~75 rules that was 75 filtering passes

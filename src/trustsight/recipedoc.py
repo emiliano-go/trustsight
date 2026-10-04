@@ -30,7 +30,12 @@ from difflib import SequenceMatcher
 
 from .diffdoc import DiffDoc
 from .line_lex import lex_lines
-from .tokenizer import TokenizerUnavailable, split_lines, variable_table_spans
+from .tokenizer import (
+    TokenizerUnavailable,
+    joined_indexed,
+    split_lines,
+    variable_table_spans,
+)
 
 #: An assignment line, for the unresolved list: the shape the tokenizer's
 #: table builder accepts, captured here so a refusal can be named.
@@ -290,18 +295,28 @@ def parse_recipe(
     ``(file, line, side)``; pass the diff's origins when the text was
     rebuilt from a diff so spans name real file lines.  Without it, a span
     is ``(file, index + 1)``.
+
+    Backslash continuations are joined before reading, as the rule engine
+    joins them; provenance maps a joined line back to its first physical
+    line, so a value split across a continuation is still read and its span
+    names where the assignment starts.
     """
-    lines = split_lines(text)
+    physical = split_lines(text)
+    pairs = joined_indexed(physical)
+    lines = [line for _first, line in pairs]
+    first = [index for index, _line in pairs]
+
+    def origin(index: int) -> Span:
+        source_index = first[index] if 0 <= index < len(first) else index
+        if origins is not None and 0 <= source_index < len(origins):
+            origin_file, origin_line, side = origins[source_index]
+            return Span(origin_file, origin_line, side)
+        return Span(file, source_index + 1)
+
     try:
         scalars, arrays, provenance = variable_table_spans(lines)
     except TokenizerUnavailable:
         raise
-
-    def origin(index: int) -> Span:
-        if origins is not None and 0 <= index < len(origins):
-            origin_file, origin_line, side = origins[index]
-            return Span(origin_file, origin_line, side)
-        return Span(file, index + 1)
 
     unresolved = tuple(
         line.strip() for line in lines

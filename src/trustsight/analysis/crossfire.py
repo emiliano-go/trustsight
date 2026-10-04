@@ -52,6 +52,7 @@ from ..config import (
 )
 from ..coverage import note_stage_failure
 from ..deps import _strip_comment
+from ..file_kinds import is_shell_file
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import clamp_text
 
@@ -70,13 +71,6 @@ _EXECUTING_SCOPES = (
 )
 
 
-#: Files whose every line is shell: the recipe, pacman's scriptlets, and any
-#: shell companion the recipe ships. A `.patch` is excluded even though it
-#: contains shell-looking text - the text is a payload for `patch`, and the
-#: rules that read a patch are H018's, not these.
-_SHELL_FILE_RE = re.compile(
-    r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh))$", re.IGNORECASE
-)
 
 _DIFF_TARGET_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
 
@@ -2104,7 +2098,7 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
         if path is None:
             executing = _executes(enclosing.get(index))
         else:
-            executing = bool(_SHELL_FILE_RE.search(path))
+            executing = is_shell_file(path)
 
         # X006 is checked on every line, not only a `source=` one: the two
         # shapes it carries - a URL shortener and a raw-IP host - are never

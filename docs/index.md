@@ -69,6 +69,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Why Static Analysis](explanation/why-static-analysis.md) | SAST by design, customization surface. |
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
 | [Recipe-Targeted User Rules](explanation/structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap. |
+| [Cross-File Consistency](explanation/cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks. |
 
 ## Guides
 

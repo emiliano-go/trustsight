@@ -167,3 +167,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Sandboxing the Tokenizer](sandboxing-the-tokenizer.md) | Why the tokenizer is the component worth isolating, and the conditions for doing it |
 | [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |
 | [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |
+| [Cross-File Consistency](cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks |

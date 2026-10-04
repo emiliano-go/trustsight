@@ -29,6 +29,7 @@ diff lines is an H-series heuristic instead. Each R rule has:
 | `severity`    | `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`        |
 | `category`    | Risk category, e.g. `network`, `integrity`            |
 | `match_target`| Where to match: `raw_line` or `resolved`      |
+| `scope`       | (Optional, `raw_line` only) Line contexts (`function_body`, `message`, `other`) or a named PKGBUILD function (`pkgver`) to restrict matching to. |
 
 Example:
 
@@ -41,6 +42,22 @@ severity = "CRITICAL"
 category = "network"
 match_target = "raw_line"
 ```
+
+### What a rule sees
+
+A pattern is matched against *logical* lines: a trailing backslash joins a
+command split across physical lines, so `curl \` + `https://… | bash` is one
+line to the regex. Only lines carrying the same diff marker are joined, so an
+addition is never spliced onto a removal.
+
+`scope` (optional, `raw_line` only) restricts which lines a rule checks.
+Scope classification is shell-file aware: lines from a companion file whose
+extension is not a shell one are blanked first, so a `build() {` in a
+`.desktop` file or a patch cannot place the rest of that file inside a
+function. Function detection reads both spellings - `build() {` and
+`function build {`, with or without parentheses - and hyphenated names. The
+[rule system reference](../reference/rules/system.md#how-scope-reduces-false-positives)
+covers the call graph, the `message` rules and the linter warnings.
 
 ## H-series rules (code)
 

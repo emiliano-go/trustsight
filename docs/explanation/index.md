@@ -168,3 +168,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |
 | [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |
 | [Cross-File Consistency](cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks |
+| [The Typed Core](the-typed-core.md) | `DiffDoc`, `RecipeDoc`, `array_diff`/`array_alignment`, `line_lex`, provenance, and the parity harnesses |

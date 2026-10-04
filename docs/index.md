@@ -70,6 +70,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
 | [Recipe-Targeted User Rules](explanation/structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap. |
 | [Cross-File Consistency](explanation/cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks. |
+| [The Typed Core](explanation/the-typed-core.md) | `DiffDoc`, `RecipeDoc`, `array_diff`/`array_alignment`, `line_lex`, provenance, and the parity harnesses. |
 
 ## Guides
 

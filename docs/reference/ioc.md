@@ -137,6 +137,10 @@ Each `IocMatch` carries `type`, `value`, `source`, `confidence`, `provenance`,
   reported, labelled expired, so a lapsed indicator never reads as clean. Only
   `trustsight ioc list` hides expired entries by default (pass
   `--include-expired`).
+- **A cleaned-up package name is not an indicator.** A `package` entry flags the
+  name forever, a false positive the moment the malicious commit is reverted.
+  Compromised-but-remediated names live in a separate point-in-time exposure
+  reference under `data/aur-compromised/`, which H056 never matches.
 
 These properties are enforced by the gates `an IOC match carries its source`,
 `IOC matches never contribute to the score`, `an expired IOC is never silent`,

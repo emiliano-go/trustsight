@@ -151,6 +151,7 @@ Explanation = [
   {"Sandboxing the Tokenizer" = "explanation/sandboxing-the-tokenizer.md"},
   {"Recipe-Targeted User Rules" = "explanation/structural-user-rules.md"},
   {"Cross-File Consistency" = "explanation/cross-file-consistency.md"},
+  {"The Typed Core" = "explanation/the-typed-core.md"},
 ]
 
 [[project.nav]]

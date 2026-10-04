@@ -70,8 +70,11 @@ created solely to carry the payload, and always set `expires_at`.
 
 ## Curation notes
 
-`atomic-arch-2026-06.json` deliberately **excludes** some names that appear in
-community compromise lists:
+`atomic-arch-2026-06.json` carries the full payload indicator set from the
+report: `nextfile-js`, the `deps` ELF `sha256`/`md5`, a secondary `sha256`, the
+Tor C2 onion, the two install-hook paths, the three eBPF pinned maps, and the
+two wave-3 ANSI-C obfuscation markers. It deliberately **excludes** some names
+that appear in community compromise lists:
 
 - `ansi-colors`, `minimist`, `chalk` - legitimate or decoy npm packages pulled
   alongside the payload, not indicators.

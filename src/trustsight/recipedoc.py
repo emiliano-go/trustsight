@@ -158,10 +158,27 @@ def array_diff(old: tuple[str, ...] | list[str],
     )
 
 
+#: The largest old x new cell count array_alignment will match.  The
+#: matcher is quadratic and the arrays come from a package, so 5,000
+#: entries a side already costs seconds.  The cap refuses rather than
+#: truncates: a half-aligned pair would misreport moved entries as
+#: deletions and insertions.
+MAX_ALIGNMENT_CELLS = 4_000_000
+
+
+class AlignmentTooLarge(ValueError):
+    """The arrays exceed :data:`MAX_ALIGNMENT_CELLS`."""
+
+
 def array_alignment(old: tuple[str, ...] | list[str],
                     new: tuple[str, ...] | list[str]) -> ArrayAlignment:
     """Match array occurrences by position, reporting insertions and deletions."""
     old_t, new_t = tuple(old), tuple(new)
+    if len(old_t) * len(new_t) > MAX_ALIGNMENT_CELLS:
+        raise AlignmentTooLarge(
+            f"array_alignment: {len(old_t)}x{len(new_t)} exceeds the "
+            f"{MAX_ALIGNMENT_CELLS}-cell cap"
+        )
     matcher = SequenceMatcher(a=old_t, b=new_t, autojunk=False)
     pairs: list[tuple[int, int, str]] = []
     inserted: list[tuple[int, str]] = []

@@ -246,3 +246,21 @@ def test_subfloor_break_is_never_consumed():
 def test_unknown_property_key_is_quiet():
     b = _pb("mystery_prop", {"x"}, {"y"})
     assert _ids("", [b]) == set()
+
+
+def test_transition_rows_are_capped_per_key():
+    from trustsight.full_aur.properties import MAX_PROPERTY_TRANSITIONS_PER_KEY
+
+    c = conn()
+    for i in range(MAX_PROPERTY_TRANSITIONS_PER_KEY + 5):
+        _breaks(c, "pkg", f"t{i}", source_hosts={f"h{i}.example"})
+    count = c.execute(
+        "SELECT COUNT(*) FROM property_transitions WHERE package_name='pkg'"
+    ).fetchone()[0]
+    assert count == MAX_PROPERTY_TRANSITIONS_PER_KEY
+    # The first observation only creates the row; of the 260 changes that
+    # follow, the newest 256 are kept (ids 5 through 260).
+    oldest = c.execute(
+        "SELECT MIN(id) FROM property_transitions WHERE package_name='pkg'"
+    ).fetchone()[0]
+    assert oldest == 5

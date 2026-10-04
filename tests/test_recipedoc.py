@@ -201,3 +201,13 @@ def test_empty_recipe():
     assert doc.arrays == {}
     assert doc.functions == {}
     assert doc.unresolved == ()
+
+
+def test_array_alignment_refuses_over_the_cell_cap():
+    import pytest
+
+    from trustsight.recipedoc import MAX_ALIGNMENT_CELLS, AlignmentTooLarge
+
+    side = int(MAX_ALIGNMENT_CELLS ** 0.5) + 1
+    with pytest.raises(AlignmentTooLarge):
+        array_alignment(("a",) * side, ("a",) * side)

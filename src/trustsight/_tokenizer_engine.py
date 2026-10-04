@@ -1089,15 +1089,32 @@ def _variable_table_with_spans(
         for k, v in var_table.items():
             substituted, _ = _substitute_with_resolve(v, var_table, array_table)
             new_table[k] = substituted if len(substituted) <= _MAX_VALUE_LEN else v
-        if new_table == var_table:
-            break
+        changed = new_table != var_table
         var_table = new_table
-        if sum(len(v) for v in var_table.values()) > _MAX_TABLE_BYTES:
+        # Checked every pass, including the first: the loop used to break
+        # on equality before looking, and counted only the scalar table, so
+        # a no-substitution recipe could return an array table of any size.
+        if _table_bytes(var_table, array_table) > _MAX_TABLE_BYTES:
+            # Refuse, never truncate: a shortened depends/source list is a
+            # wrong analysis, not a smaller one, and A6 says an unresolved
+            # value must read as not seen.
+            raise ValueError(
+                f"variable table exceeds {_MAX_TABLE_BYTES} bytes; refusing"
+            )
+        if not changed:
             break
     return var_table, array_table, {
         "scalars": scalar_lines,
         "arrays": array_spans,
     }
+
+
+def _table_bytes(scalars: dict[str, str], arrays: dict[str, list[str]]) -> int:
+    """Total bytes the tables hold, arrays included."""
+    total = sum(len(value) for value in scalars.values())
+    for entries in arrays.values():
+        total += sum(len(entry) for entry in entries)
+    return total
 
 
 def resolve_added_lines(diff_text: str) -> list[str]:

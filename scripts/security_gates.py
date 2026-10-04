@@ -2298,6 +2298,9 @@ def gate_score_is_deterministic_under_a_fingerprint() -> Gate:
 # bound the content controls.
 _BOUND_CONSTANTS = {
     "rules.py": ["MAX_RULE_LINE_BYTES", "MAX_SCANNED_LINES"],
+    "recipedoc.py": ["MAX_ALIGNMENT_CELLS"],
+    "full_aur/properties.py": ["MAX_PROPERTY_ITEMS",
+                               "MAX_PROPERTY_TRANSITIONS_PER_KEY"],
     "_tokenizer_engine.py": ["_MAX_EXPANSION_PASSES", "_MAX_VALUE_LEN",
                              "_MAX_LINE_LEN", "_MAX_TABLE_BYTES"],
     "sandbox/protocol.py": ["MAX_FRAME_BYTES", "MAX_RESPONSE_BYTES"],

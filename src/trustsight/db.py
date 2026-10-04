@@ -297,6 +297,8 @@ def init_db():
             );
             CREATE INDEX IF NOT EXISTS idx_property_transitions_package
                 ON property_transitions(package_name);
+            CREATE INDEX IF NOT EXISTS idx_property_transitions_key
+                ON property_transitions(package_name, property_key);
 
             CREATE TABLE IF NOT EXISTS pkgbuild_snapshots (
                 package_name TEXT PRIMARY KEY,
@@ -1701,20 +1703,33 @@ def get_history(package_id: int, limit: int = 20, *, from_date: str | None = Non
 
 
 def get_property_transitions(
-    package_name: str, *, property_key: str | None = None
+    package_name: str, *, property_key: str | None = None, limit: int | None = 500
 ) -> list[dict]:
     """Return recorded property-value transitions for *package_name*.
 
     Ordered by property key, oldest first within a key, so each key's rows
-    read as a timeline.  An unknown package yields an empty list.
+    read as a timeline.  *limit* bounds the newest rows returned (``None``
+    means no bound); the write path already caps rows per key.  An unknown
+    package yields an empty list.
     """
     with get_connection() as conn:
-        query = "SELECT * FROM property_transitions WHERE package_name = ?"
+        where = "WHERE package_name = ?"
         params: list = [package_name]
         if property_key:
-            query += " AND property_key = ?"
+            where += " AND property_key = ?"
             params.append(property_key)
-        query += " ORDER BY property_key, id"
+        if limit:
+            # Newest rows overall, then ordered for display.
+            query = (
+                f"SELECT * FROM (SELECT * FROM property_transitions {where} "
+                f"ORDER BY id DESC LIMIT ?) ORDER BY property_key, id"
+            )
+            params.append(limit)
+        else:
+            query = (
+                f"SELECT * FROM property_transitions {where} "
+                f"ORDER BY property_key, id"
+            )
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 

@@ -821,3 +821,21 @@ def test_ensure_init_covers_a_data_dir_change(tmp_path, monkeypatch):
     with db_module.get_connection() as conn:
         # Fails with OperationalError when the second path has no schema.
         conn.execute("SELECT 1 FROM cycle_events LIMIT 1").fetchall()
+
+
+def test_get_property_transitions_limits_to_the_newest(db):
+    from trustsight.db import get_connection, get_property_transitions
+
+    with get_connection() as conn:
+        for i in range(10):
+            conn.execute(
+                "INSERT INTO property_transitions (package_name, property_key, "
+                "old_value, new_value, observed_at) "
+                "VALUES ('p', 'source_hosts', ?, ?, ?)",
+                (f"old{i}", f"new{i}", f"t{i}"),
+            )
+        conn.commit()
+
+    rows = get_property_transitions("p", limit=3)
+    assert [r["new_value"] for r in rows] == ["new7", "new8", "new9"]
+    assert len(get_property_transitions("p", limit=0)) == 10

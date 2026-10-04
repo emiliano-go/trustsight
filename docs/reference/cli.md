@@ -654,7 +654,7 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
 trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--json]
-trustsight full-aur --transitions PACKAGE [--json]
+trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 ```
 
 ### Flags
@@ -672,6 +672,7 @@ trustsight full-aur --transitions PACKAGE [--json]
 | `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which marks the webhook document `priority: urgent` (ntfy gets `Priority: 5`). Default 30, the benign corpus's p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
 | `--transitions PACKAGE` | Print the recorded property timeline for PACKAGE and exit. Read-only and works offline; cannot be combined with `--watch`, `--bootstrap`, `--export`, `--sign` or `--since`. |
+| `--limit N` | With `--transitions`: show only the newest N rows (default 500; `0` shows all). The write path already caps rows per property key. |
 | `--json` | Output JSON. |
 
 ### Property timelines

@@ -46,6 +46,23 @@ def value_hash(value: Any) -> str:
 # emitted; overridden by ``[longitudinal] stability_floor`` in thresholds.toml.
 STABILITY_FLOOR_DEFAULT = 10
 
+#: Most transition rows kept per (package, key).  The table is append-only
+#: and the package controls how often its properties change, so without a
+#: cap a churning recipe grows the database without bound.
+MAX_PROPERTY_TRANSITIONS_PER_KEY = 256
+
+#: Most items kept per extracted set property.  ``canonical`` is unbounded,
+#: so a multi-megabyte depends array would otherwise be stored whole in
+#: every transition row.
+MAX_PROPERTY_ITEMS = 512
+
+
+def _bounded(values) -> frozenset[str]:
+    """A set property capped at :data:`MAX_PROPERTY_ITEMS`, deterministic."""
+    if len(values) <= MAX_PROPERTY_ITEMS:
+        return frozenset(values)
+    return frozenset(sorted(values)[:MAX_PROPERTY_ITEMS])
+
 
 def stability_weight(stable_for_n: int, floor: int = STABILITY_FLOOR_DEFAULT) -> float:
     """Weight a property break by how long the value held.
@@ -164,7 +181,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     desc_match = _PKGDESC_RE.search(new_pkgbuild)
     pkgdesc = desc_match.group(1) if desc_match else ""
     tokens = _tokenize_desc(pkgdesc)
-    props["pkgdesc_tokens"] = frozenset(tokens)
+    props["pkgdesc_tokens"] = _bounded(tokens)
 
     # depends: prefer .SRCINFO (structured), fall back to PKGBUILD regex
     depends: set[str] = set()
@@ -199,7 +216,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                 # the closing paren may share the last item's line: 'b')
                 if ")" in stripped:
                     in_depends = False
-    props["depends"] = frozenset(depends)
+    props["depends"] = _bounded(depends)
 
     # source_hosts / source_orgs: extracted from source=() entries
     hosts: set[str] = set()
@@ -228,8 +245,8 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
                 _extract_host_org(u.group(0), hosts, orgs)
             if ")" in stripped:
                 in_source = False
-    props["source_hosts"] = frozenset(hosts)
-    props["source_orgs"] = frozenset(orgs)
+    props["source_hosts"] = _bounded(hosts)
+    props["source_orgs"] = _bounded(orgs)
 
     # build_system_markers
     markers: set[str] = set()
@@ -239,7 +256,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
             markers.add(name)
     if not markers:
         markers.add("none")
-    props["build_system_markers"] = frozenset(markers)
+    props["build_system_markers"] = _bounded(markers)
 
     # build_line_count
     line_count = len(split_lines(body)) if body.strip() else 0
@@ -250,7 +267,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     for line in split_lines(body):
         for m in _FLAG_RE.finditer(line):
             flags.add(m.group(1))
-    props["configure_flags"] = frozenset(flags)
+    props["configure_flags"] = _bounded(flags)
 
     # install_hook_present
     install_match = _INSTALL_RE.search(new_pkgbuild)
@@ -263,7 +280,7 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
             m = re.match(r"^\s*license\s*=\s*['\"]?([^'\"]+)", line)
             if m:
                 licenses.add(m.group(1))
-        props["license"] = frozenset(licenses)
+        props["license"] = _bounded(licenses)
 
     return props
 
@@ -376,6 +393,15 @@ def update_properties(
             "(package_name, property_key, old_value, new_value, observed_at) "
             "VALUES (?,?,?,?,?)",
             (package, key, old_ser, ser, observed_at),
+        )
+        # Keep the newest observations per key; the row is a timeline, not
+        # a ledger, and the package decides how fast it grows.
+        conn.execute(
+            "DELETE FROM property_transitions WHERE package_name=? AND "
+            "property_key=? AND id NOT IN ("
+            "SELECT id FROM property_transitions WHERE package_name=? AND "
+            "property_key=? ORDER BY id DESC LIMIT ?)",
+            (package, key, package, key, MAX_PROPERTY_TRANSITIONS_PER_KEY),
         )
 
         w = stability_weight(stable_n, floor)

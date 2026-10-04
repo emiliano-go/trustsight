@@ -83,7 +83,9 @@ def _dependency_corpus_note(plain: bool = False) -> str:
     return body if plain else f"\n[yellow]{body}[/]"
 
 
-def _print_property_transitions(package: str, json_output: bool = False) -> None:
+def _print_property_transitions(
+    package: str, json_output: bool = False, limit: int | None = 500
+) -> None:
     """Render one package's recorded property timeline, read-only."""
     if get_package_id(package) is None:
         msg = (f"Package '{package}' has not been analysed yet. "
@@ -94,7 +96,7 @@ def _print_property_transitions(package: str, json_output: bool = False) -> None
             _print_colored(msg, "yellow", stderr=True)
         raise typer.Exit(code=2)
 
-    rows = get_property_transitions(package)
+    rows = get_property_transitions(package, limit=limit)
     if not rows:
         if json_output:
             typer.echo(json.dumps([]))
@@ -438,6 +440,7 @@ def register_commands(app: typer.Typer):
         over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
         since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
         transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
+        limit: int = typer.Option(500, "--limit", help="With --transitions, the newest rows to show (0 = all)"),
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
     ):
         """Bootstrap or update the full-AUR baseline corpus.
@@ -462,7 +465,16 @@ def register_commands(app: typer.Typer):
                 else:
                     _print_colored(msg, "red", stderr=True)
                 raise typer.Exit(code=2)
-            _print_property_transitions(transitions, json_output=json_output)
+            if limit < 0:
+                msg = "--limit must be 0 (all rows) or a positive count"
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
+            _print_property_transitions(
+                transitions, json_output=json_output, limit=limit or None
+            )
             return
         since_ts = None
         if since is not None:

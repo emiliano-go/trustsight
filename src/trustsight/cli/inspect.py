@@ -741,10 +741,16 @@ def register_commands(app: typer.Typer):
             raise typer.Exit(code=2)
         diffs = None
         if diff_path:
+            from pathlib import Path
+
+            from ..api import MAX_API_TEXT_BYTES
+            from ..bounded_io import read_file_capped
+
             try:
-                with open(diff_path, encoding="utf-8", errors="replace") as fh:
-                    diffs = {package: fh.read()}
-            except OSError as exc:
+                raw = read_file_capped(
+                    Path(diff_path), MAX_API_TEXT_BYTES, what="diff")
+                diffs = {package: raw.decode("utf-8", errors="replace")}
+            except Exception as exc:
                 _print_colored(f"could not read {diff_path}: {exc}",
                                "red", stderr=True)
                 raise typer.Exit(code=2)

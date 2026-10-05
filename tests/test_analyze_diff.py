@@ -31,7 +31,10 @@ def ts(tmp_path, monkeypatch):
 
 
 def _corpus_diff():
-    path = sorted(_CORPUS.glob("*.diff"))[0]
+    paths = sorted(_CORPUS.glob("*.diff"))
+    if not paths:
+        pytest.skip("the locked corpus is not present in this checkout")
+    path = paths[0]
     return path.stem, path.read_text(encoding="utf-8", errors="replace")
 
 

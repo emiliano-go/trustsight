@@ -69,6 +69,12 @@ def strip_comment_stateful(line: str, quote: str = "") -> tuple[str, str]:
     line.  The state is the same one :func:`lex_lines` tracks, so the two
     readers cannot disagree about what is quoted.
     """
+    # Fast path for the common line: no quote open, no quote, no comment.
+    # The character loop below is O(len) in Python, and a pathological
+    # multi-megabyte line pays it in every reader; the C-speed scans make
+    # the no-op case free.
+    if not quote and "#" not in line and "'" not in line and '"' not in line:
+        return line, quote
     index = 0
     while index < len(line):
         ch = line[index]
@@ -126,6 +132,13 @@ def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:
             if probe.strip() == heredoc:
                 heredoc = None
             out.append(LexedLine(line, blank, 0, False, False, True))
+            continue
+        # Fast path for the ordinary line: nothing that could change the
+        # lexical state, so the character loop is skipped.  A pathological
+        # multi-megabyte line otherwise pays that loop in every scope
+        # classifier that re-lexes the same diff.
+        if not any(ch in line for ch in "{}#'\"\\`<"):
+            out.append(LexedLine(line, line, 0, False, False, False))
             continue
         code, in_single, in_double, in_backtick, sub_depth, opener = _scan(
             line, in_single, in_double, in_backtick, sub_depth

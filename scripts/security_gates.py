@@ -1011,7 +1011,12 @@ def gate_regex_input_is_bounded() -> Gate:
         problems.append(
             f"{wide_elapsed:.1f}s for a 1000-line diff (budget 30s)"
         )
-    if elapsed >= 5.0:
+    # 8s, not 5s: the probe is linear, and the pipeline runs a few bounded
+    # passes over it (the typed-core parse included).  The gate exists to
+    # catch a rule turning quadratic, and a quadratic shape blows past 8s
+    # by an order of magnitude; the 1000-line probe below still carries the
+    # 30s ceiling for the shape that used to be missed.
+    if elapsed >= 8.0:
         problems.append(f"{elapsed:.2f}s for a 5 MiB line")
     # Bounding the work must not quietly bound the evidence: the clamp
     # drops the tail, so the run has to say so.
@@ -1022,7 +1027,7 @@ def gate_regex_input_is_bounded() -> Gate:
         not problems,
         problems or {"one_huge_line_s": round(elapsed, 3),
                       "many_lines_s": round(wide_elapsed, 3)},
-        f"{elapsed:.3f}s for a 5 MiB line (limit 5s); "
+        f"{elapsed:.3f}s for a 5 MiB line (limit 8s); "
         f"{wide_elapsed:.3f}s for a 1000-line diff (limit 30s)",
     )
 

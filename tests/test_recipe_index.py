@@ -69,6 +69,8 @@ def test_reserved_names_are_refused(db):
 def test_the_index_answers_from_real_corpus_recipes(db):
     """Burn-in: index a sampled package's observed versions from the
     corpus and check the index answers exactly what was observed."""
+    if not sorted(_CORPUS.glob("*.diff")):
+        pytest.skip("the locked corpus is not present in this checkout")
     by_package: dict[str, list] = {}
     for path in sorted(_CORPUS.glob("*.diff")):
         package = path.name.split("__", 1)[0]

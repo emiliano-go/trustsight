@@ -603,7 +603,7 @@ def analyze_package_text(
     unresolved_sources = unresolved_source_lines(diff_text)
     parse_time_subs = parse_time_substitution_lines(diff_text)
     unresolved_assignments = unresolved_assignment_rows(
-        new_pkgbuild or "", file="PKGBUILD",
+        clamp_text(new_pkgbuild) or "", file="PKGBUILD",
         extra_lines=[*unresolved_sources, *parse_time_subs])
     cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
     partial_files = partial_install_files(diff_text)
@@ -666,7 +666,7 @@ def analyze_package_text(
         unresolved_assignments=unresolved_assignments,
         partial_hunks=cut_hunk_details(cut_hunks),
         partial_files=partial_files,
-        change=change_delta(diff_text).to_dict(),
+        change=change_delta(clamp_text(diff_text)).to_dict(),
         risk=risk,
         temporal_source=temporal.source,
         score_breakdown=breakdown,

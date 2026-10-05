@@ -39,7 +39,11 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..findings import stamp
-from ..rules import ScopeResolver, _classify_enclosing_function
+from ..rules import (
+    MAX_RULE_LINE_BYTES,
+    ScopeResolver,
+    _classify_enclosing_function,
+)
 from ..tokenizer import resolve_added_lines, split_lines
 from .build import (
     _CRITICAL_FUNCTIONS,
@@ -91,6 +95,10 @@ def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
         if not line.startswith("+") or not scopes.within(i, _SCOPE_FUNCTIONS):
             continue
         if i in heredoc_body:
+            continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
         for probe in probes:
@@ -1230,6 +1238,10 @@ def _write_execute_findings(diff_text, config, add, current_text=None) -> None:
             continue
         if i in heredoc_body:
             continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
         body = _strip_comment(line[1:])
 
         for kind, path in _collect_writes(body, fn):
@@ -1556,6 +1568,10 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
             continue
         if i in heredoc_body:
             continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
         body = _strip_comment(line[1:])
 
         for path in _collect_fetch_outputs(body):
@@ -1729,6 +1745,10 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
             continue
         if i in heredoc_body:
             continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
         body = _strip_comment(line[1:])
 
         for _kind, wpath in _collect_writes(body, fn):
@@ -1797,6 +1817,10 @@ def _installed_executables(diff_text: str, current_text=None) -> set[tuple[str, 
         if not line.startswith("+") or fn is None:
             continue
         if i in heredoc_body:
+            continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
         if not _INSTALL_CMD_RE.search(body):
@@ -1928,6 +1952,10 @@ def _path_injection_findings(diff_text, tree_manifest, add, current_text=None) -
         if not line.startswith("+") or fn is None:
             continue
         if i in heredoc_body:
+            continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
         for m in _PATH_ASSIGN_RE.finditer(body):
@@ -2101,6 +2129,10 @@ def _committed_execution_findings(diff_text, tree_manifest, add, current_text=No
         if not line.startswith("+") or fn is None:
             continue
         if i in heredoc_body:
+            continue
+        # A line the rules engine clamps cannot be read by the pairing
+        # passes either; the run already declares `line_truncated`.
+        if len(line) > MAX_RULE_LINE_BYTES:
             continue
         body = _strip_comment(line[1:])
 

@@ -900,14 +900,16 @@ def analyze_package(
 
     unresolved_sources = unresolved_source_lines(diff_text)
     # Spec §1: the one change-as-data construction site, shared by the
-    # prose summary and the JSON `change` object.
-    change = change_delta(diff_text).to_dict()
+    # prose summary and the JSON `change` object.  Clamped like every other
+    # reader: a pathological line costs the tokenizer per parse, and the
+    # run already declares the clamp as a coverage gap.
+    change = change_delta(clamp_text(diff_text)).to_dict()
     # Spec §8 v1: name every assignment the tokenizer refused on the
     # analysed surface (the full post-state PKGBUILD here), plus the
     # refusals the coverage layer knows independently.
     parse_time_subs = parse_time_substitution_lines(diff_text)
     unresolved_assignments = unresolved_assignment_rows(
-        head_pkgbuild or "", file="PKGBUILD",
+        clamp_text(head_pkgbuild) or "", file="PKGBUILD",
         extra_lines=[*unresolved_sources, *parse_time_subs])
     partial_files = partial_install_files(diff_text)
     # Before scoring, because a truncated walk has to reach `gaps_from`:
@@ -1219,7 +1221,7 @@ def scan_diff(
             global_set.add(nurl)
 
     unresolved_sources = unresolved_source_lines(diff_text)
-    change = change_delta(diff_text).to_dict()
+    change = change_delta(clamp_text(diff_text)).to_dict()
     surface_doc = parse_diff_lines(split_lines(diff_text))
     cut_hunks = surface_doc.cut_hunks()
     partial_hunk_details = cut_hunk_details(cut_hunks)
@@ -1228,7 +1230,7 @@ def scan_diff(
     # origins, so each refusal names the file it came from).
     parse_time_subs = parse_time_substitution_lines(diff_text)
     unresolved_assignments = unresolved_assignment_rows(
-        current_text or "\n".join(surface_doc.post_lines()),
+        clamp_text(current_text or "\n".join(surface_doc.post_lines())),
         file="PKGBUILD" if current_text else "",
         origins=None if current_text else surface_doc.post_origins(),
         extra_lines=[*unresolved_sources, *parse_time_subs],

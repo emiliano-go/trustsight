@@ -30,22 +30,13 @@ from trustsight.regex_safety import (
 
 
 def _flagged(pattern: str) -> bool:
-    """The exact decision `rules._compiled` makes, sampled a few times.
-
-    `is_superlinear` is a timing measurement, so one sample on a loaded
-    runner can miss a genuinely quadratic pattern: contention inflates the
-    small-n time and hides the growth ratio.  A quadratic pattern is
-    detected on every idle sample, so the retry removes the flake without
-    weakening the corpus checks below, which assert the growth directly.
-    """
-    if has_nested_quantifier(pattern):
-        return True
+    """The exact decision `rules._compiled` makes."""
     compiled = re.compile(pattern)
-    for _ in range(3):
-        if (backtracking_risk(compiled) > BACKTRACK_BUDGET_S
-                or is_superlinear(compiled)):
-            return True
-    return False
+    return (
+        has_nested_quantifier(pattern)
+        or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+        or is_superlinear(compiled)
+    )
 
 
 # Every one of these doubles its runtime for a few added repetitions, and
@@ -820,3 +811,25 @@ def test_a_timing_refusal_is_decided_once(monkeypatch):
     assert calls["n"] == probed, "the cached refusal was re-probed"
 
     rules._pattern_cache.pop(pattern, None)
+
+
+def test_a_diluted_ratio_escalates_before_allowing(monkeypatch):
+    """A fast CPU can dilute the four-times probe below the ratio
+    threshold.  The checker must take the longer baseline before it allows
+    a quadratic pattern; trusting the diluted ratio is how a `sudo`
+    matcher passed on the machine that reported it and then made
+    `makepkg`'s check() fail."""
+    import trustsight.regex_safety as rs
+
+    compiled = re.compile(QUADRATIC[1][0])  # the sudo matcher
+    calls = {"n": 0}
+    real = rs.growth_ratio
+
+    def first_call_diluted(pattern, *args, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return 5.0  # inside the suspicious band, below refusal
+        return real(pattern, *args, **kwargs)
+
+    monkeypatch.setattr(rs, "growth_ratio", first_call_diluted)
+    assert rs.is_superlinear(compiled), "the diluted ratio was trusted"

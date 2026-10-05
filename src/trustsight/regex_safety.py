@@ -291,6 +291,12 @@ def _branches_overlap(left: str, right: str) -> bool:
     return left == right and bool(left)
 
 
+#: Below this growth the 4096-character measurement is trusted outright:
+#: no superlinear shape has measured this low in the corpus, and escalating
+#: every quiet pattern would put the longer probe on the startup path.
+_BORDERLINE_GROWTH = 3.0
+
+
 def is_superlinear(compiled: re.Pattern) -> bool:
     """Whether *compiled* costs more than linearly in its input length.
 
@@ -300,11 +306,24 @@ def is_superlinear(compiled: re.Pattern) -> bool:
     quadratic pattern stays over budget on every measurement. Without the
     second reading the linter reported a clean ruleset as unlinted depending
     on what else was running.
+
+    A *borderline* ratio escalates to a four-times longer baseline instead
+    of being trusted. On a fast CPU the fixed match overhead dilutes the
+    ratio: the quadratic ``sudo`` matcher measured under the 10x threshold
+    on the machine that reported it, while the same pattern costs hundreds
+    of milliseconds at the longer baseline. Four times the input costs four
+    times the time when linear and about sixteen when quadratic, so the
+    shape separates there without a machine-dependent constant, and the
+    absolute cost at that length is the second, speed-independent signal.
     """
     ratio = growth_ratio(compiled)
-    if ratio <= SUPERLINEAR_GROWTH:
+    if ratio <= _BORDERLINE_GROWTH:
         return False
-    return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
+    if ratio > SUPERLINEAR_GROWTH:
+        return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
+    long_ratio, long_cost = _growth(compiled, LONG_PROBE_LEN * 4)
+    return (long_ratio > SUPERLINEAR_GROWTH
+            or long_cost > BACKTRACK_BUDGET_S)
 
 
 def has_nested_quantifier(pattern: str) -> bool:
@@ -339,7 +358,37 @@ def _time_search(compiled: re.Pattern, text: str) -> float:
     return time.perf_counter() - start
 
 
-def growth_ratio(compiled: re.Pattern) -> float:
+def _growth(compiled: re.Pattern,
+            long_len: int = LONG_PROBE_LEN) -> tuple[float, float]:
+    """``(worst growth ratio, worst long-probe seconds)`` for *compiled*.
+
+    The ratio is the shape signal; the absolute cost at the longer length
+    is the speed-independent one. Both come from one set of measurements.
+    """
+    worst_ratio = 0.0
+    worst_long = 0.0
+    # ``or _FALLBACK_ALPHABET``: a pattern with no derivable alphabet has
+    # not been measured, and an unmeasured pattern is unknown rather than
+    # safe. Several characters are tried instead of one so the fallback has
+    # some chance of being input the pattern can actually consume.
+    alphabets = _representatives(compiled.pattern) or list(_FALLBACK_ALPHABET)
+    for char in alphabets[:2]:
+        short_text = char * (long_len // 4) + "!"
+        long_text = char * long_len + "!"
+        # Three measurements each; median filters out scheduler noise.
+        shorts = sorted(_time_search(compiled, short_text) for _ in range(3))
+        longs = sorted(_time_search(compiled, long_text) for _ in range(3))
+        short_med = shorts[1]  # median
+        long_med = longs[1]    # median
+        worst_long = max(worst_long, long_med)
+        if long_med < _GROWTH_FLOOR_S:
+            continue
+        worst_ratio = max(worst_ratio, long_med / max(short_med, 1e-9))
+    return worst_ratio, worst_long
+
+
+def growth_ratio(compiled: re.Pattern,
+                 long_len: int = LONG_PROBE_LEN) -> float:
     """How much slower *compiled* gets when its input grows four times.
 
     The absolute budget alone misses a quadratic pattern with a small
@@ -352,24 +401,7 @@ def growth_ratio(compiled: re.Pattern) -> float:
     minimum which can still be inflated when both measurements land in a
     noisy window.
     """
-    worst = 0.0
-    # ``or _FALLBACK_ALPHABET``: a pattern with no derivable alphabet has
-    # not been measured, and an unmeasured pattern is unknown rather than
-    # safe. Several characters are tried instead of one so the fallback has
-    # some chance of being input the pattern can actually consume.
-    alphabets = _representatives(compiled.pattern) or list(_FALLBACK_ALPHABET)
-    for char in alphabets[:2]:
-        short_text = char * (LONG_PROBE_LEN // 4) + "!"
-        long_text = char * LONG_PROBE_LEN + "!"
-        # Three measurements each; median filters out scheduler noise.
-        shorts = sorted(_time_search(compiled, short_text) for _ in range(3))
-        longs = sorted(_time_search(compiled, long_text) for _ in range(3))
-        short_med = shorts[1]  # median
-        long_med = longs[1]    # median
-        if long_med < _GROWTH_FLOOR_S:
-            continue
-        worst = max(worst, long_med / max(short_med, 1e-9))
-    return worst
+    return _growth(compiled, long_len)[0]
 
 
 def backtracking_risk(compiled: re.Pattern) -> float:

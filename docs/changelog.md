@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+## [0.17.4] - 2026-10-05
+
+### Fixed
+
+- **The escalated regex-safety decision reads shape, not absolute cost, and supersedes 0.17.3.** 0.17.3 also refused a borderline pattern when its cost at the longer baseline crossed the budget; under load a genuinely linear shipped pattern (ratio near 4 at both lengths) crossed it while the quadratic matcher held 13 and up on every reading, so the shipped-pattern audit and the AUR `check()` failed. The escalated case now takes the smaller of two growth readings at four times the probe length and refuses above 8x, the geometric midpoint of the 4x a linear pattern shows and the 16x a quadratic one shows: the shipped linear patterns measure 3.8 to 4.4 there and the quadratic `sudo` matcher 13 to 25. On a fast machine the first, diluted reading still escalates, so the machine-speed fix 0.17.3 delivered stands.
+
 ## [0.17.3] - 2026-10-05
 
 ### Fixed

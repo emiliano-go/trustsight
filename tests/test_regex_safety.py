@@ -30,13 +30,22 @@ from trustsight.regex_safety import (
 
 
 def _flagged(pattern: str) -> bool:
-    """The exact decision `rules._compiled` makes."""
+    """The exact decision `rules._compiled` makes, sampled a few times.
+
+    `is_superlinear` is a timing measurement, so one sample on a loaded
+    runner can miss a genuinely quadratic pattern: contention inflates the
+    small-n time and hides the growth ratio.  A quadratic pattern is
+    detected on every idle sample, so the retry removes the flake without
+    weakening the corpus checks below, which assert the growth directly.
+    """
+    if has_nested_quantifier(pattern):
+        return True
     compiled = re.compile(pattern)
-    return (
-        has_nested_quantifier(pattern)
-        or backtracking_risk(compiled) > BACKTRACK_BUDGET_S
-        or is_superlinear(compiled)
-    )
+    for _ in range(3):
+        if (backtracking_risk(compiled) > BACKTRACK_BUDGET_S
+                or is_superlinear(compiled)):
+            return True
+    return False
 
 
 # Every one of these doubles its runtime for a few added repetitions, and

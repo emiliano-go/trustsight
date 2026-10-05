@@ -10,6 +10,7 @@ pkgbase = trustsight
 	makedepends = python-wheel
 	makedepends = python-hatchling
 	makedepends = python-pytest
+	makedepends = python-hypothesis
 	depends = python
 	depends = python-pygit2
 	depends = python-tldextract

@@ -296,6 +296,14 @@ def _branches_overlap(left: str, right: str) -> bool:
 #: every quiet pattern would put the longer probe on the startup path.
 _BORDERLINE_GROWTH = 3.0
 
+#: The refusal threshold at the four-times-longer baseline. Four times the
+#: input costs four times the time when linear and sixteen when quadratic,
+#: so 8, their geometric midpoint, is the balanced boundary between the two
+#: hypotheses. The shipped linear patterns measure 3.8 to 4.4 there and the
+#: quadratic matcher 13 to 25, so the boundary sits about twice away from
+#: either side.
+_ESCALATED_GROWTH = 8.0
+
 
 def is_superlinear(compiled: re.Pattern) -> bool:
     """Whether *compiled* costs more than linearly in its input length.
@@ -327,9 +335,9 @@ def is_superlinear(compiled: re.Pattern) -> bool:
     if ratio > SUPERLINEAR_GROWTH:
         return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
     longer = LONG_PROBE_LEN * 4
-    if _growth(compiled, longer)[0] <= SUPERLINEAR_GROWTH:
+    if _growth(compiled, longer)[0] <= _ESCALATED_GROWTH:
         return False
-    return _growth(compiled, longer)[0] > SUPERLINEAR_GROWTH
+    return _growth(compiled, longer)[0] > _ESCALATED_GROWTH
 
 
 def has_nested_quantifier(pattern: str) -> bool:

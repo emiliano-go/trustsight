@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [0.17.3] - 2026-10-05
+
+### Fixed
+
+- **The regex safety check is no longer machine-dependent.** `is_superlinear` measured growth at one probe length, and on a fast CPU the fixed match overhead diluted the ratio enough that a quadratic `sudo` matcher was allowed and shipped through the linter; `makepkg`'s `check()` then failed when building the AUR package. A borderline ratio now escalates to a four-times longer baseline and refuses on either the growth ratio or the absolute cost there, so the decision does not depend on machine speed.
+- **The `report --diff` read is bounded.** It used an unbounded `read()`, which the security gate refused; it now goes through `read_file_capped`.
+- **The published calibration figures are refreshed to the 0.17.2 measurement.** The typed-core rules moved the benign distribution (zero-rate 67.8%, p95 35, flag rate 10.3%, percentile 89.7, margin 25, ruleset trigger rate 32.2%), and the figures and every page that quotes them were updated together.
+- **The Docker image workflow resolves the release tag before checkout**, where `gh` has no repository to infer; `GH_REPO` is set for that step.
+- **Corpus-dependent tests skip when the locked corpus is not in the checkout**, which is the publishing runner; the hostile-input probe budget moves to 8 seconds with the rationale that the probe is linear and the typed core adds bounded passes, while the 1000-line probe keeps the 30-second quadratic ceiling.
+
 ## [0.17.2] - 2026-10-05
 
 ### Security

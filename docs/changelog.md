@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.17.2] - 2026-10-05
+
 ### Security
 
 - **The 271 recorded harness bypasses are closed.** The adversarial harness (`trustsight-harness`, rounds 1-6) held 271 distinct verified bypasses: a fetch whose output grammar named no file, paired with an execution sink the rule set did not read. The fixes, all measured against the harness and the 3,739-diff benign corpus:

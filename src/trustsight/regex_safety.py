@@ -309,21 +309,27 @@ def is_superlinear(compiled: re.Pattern) -> bool:
 
     A *borderline* ratio escalates to a four-times longer baseline instead
     of being trusted. On a fast CPU the fixed match overhead dilutes the
-    ratio: the quadratic ``sudo`` matcher measured under the 10x threshold
-    on the machine that reported it, while the same pattern costs hundreds
-    of milliseconds at the longer baseline. Four times the input costs four
-    times the time when linear and about sixteen when quadratic, so the
-    shape separates there without a machine-dependent constant, and the
-    absolute cost at that length is the second, speed-independent signal.
+    ratio: four times the input measures at least four times the time even
+    for a purely linear pattern, so a quadratic one whose asymptotic 16x is
+    diluted toward 4 lands in the same band as an honest linear pattern,
+    and the longer baseline reduces the dilution sixteenfold.
+
+    The escalated decision re-measures the ratio, and only the smaller of
+    two readings counts. The absolute cost is deliberately not a refusal
+    there: under load a genuinely linear shipped pattern (ratio near 4 at
+    both lengths) crossed the budget at the longer length while the
+    quadratic matcher stayed above 13 on every reading, so cost alone
+    failed the shipped-pattern audit. The ratio kept the two apart.
     """
     ratio = growth_ratio(compiled)
     if ratio <= _BORDERLINE_GROWTH:
         return False
     if ratio > SUPERLINEAR_GROWTH:
         return min(ratio, growth_ratio(compiled)) > SUPERLINEAR_GROWTH
-    long_ratio, long_cost = _growth(compiled, LONG_PROBE_LEN * 4)
-    return (long_ratio > SUPERLINEAR_GROWTH
-            or long_cost > BACKTRACK_BUDGET_S)
+    longer = LONG_PROBE_LEN * 4
+    if _growth(compiled, longer)[0] <= SUPERLINEAR_GROWTH:
+        return False
+    return _growth(compiled, longer)[0] > SUPERLINEAR_GROWTH
 
 
 def has_nested_quantifier(pattern: str) -> bool:

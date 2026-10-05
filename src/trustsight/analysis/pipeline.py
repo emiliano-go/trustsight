@@ -7,7 +7,12 @@ import time
 import pygit2
 
 from ..buckets import classify_urls
-from ..config import config_fingerprint, drifted_shipped_rules, load_config
+from ..config import (
+    config_fingerprint,
+    drifted_shipped_rules,
+    load_config,
+    load_rules,
+)
 from ..db import (
     effective_observation_count,
     get_last_analysis,
@@ -63,13 +68,17 @@ from ..rules import (
 )
 from .adoption import adoption_findings
 from .buildfetch import has_unpinned_build_deps
+from ..changes import change_delta
 from ..coverage import (
     begin_stage_tracking,
+    cut_hunk_details,
     gaps_from,
     note_stage_failure,
     stage_failures,
     oversized_lines,
     parse_time_substitution_lines,
+    resolution_coverage,
+    unresolved_assignment_rows,
     unresolved_source_lines,
 )
 from ..scoring import calculate_score
@@ -100,6 +109,7 @@ from .ioc_match import ioc_baseline_matches
 from .maintainer import _check_untrusted_maintainer_takeover
 from .structural import (
     _structural_findings,
+    partial_install_files,
     recipe_checksum_parity_finding,
     unchanged_upstream_host,
 )
@@ -649,8 +659,10 @@ def analyze_package(
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
     # A hunk cut mid-stream with no truncation flag set is a silent
-    # partial read; gaps_from declares it as `partial_hunk`.
-    partial_hunks = len(parse_diff_lines(split_lines(diff_text)).cut_hunks())
+    # partial read; gaps_from declares it as `partial_hunk`, and the
+    # details name the file, the hunk and the missing line count.
+    cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
+    partial_hunk_details = cut_hunk_details(cut_hunks)
 
     source_changes = extract_urls_from_diff(diff_text)
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
@@ -755,6 +767,15 @@ def analyze_package(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
+    # Spec X028: only the immediately preceding recorded review of this
+    # package composes; a gap in history degrades to no-firing.
+    previous_diff = ""
+    if last is not None:
+        try:
+            if last.get("new_commit") == old_commit:
+                previous_diff = str(last.get("raw_diff") or "")
+        except AttributeError:
+            previous_diff = ""
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -763,6 +784,7 @@ def analyze_package(
             current_text=clamp_text(head_pkgbuild),
             tree_manifest=tree_manifest,
             whole_recipe=full_recipe,
+            previous_diff=previous_diff,
         )
     )
     triggered_rules.extend(
@@ -877,6 +899,17 @@ def analyze_package(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
+    # Spec §1: the one change-as-data construction site, shared by the
+    # prose summary and the JSON `change` object.
+    change = change_delta(diff_text).to_dict()
+    # Spec §8 v1: name every assignment the tokenizer refused on the
+    # analysed surface (the full post-state PKGBUILD here), plus the
+    # refusals the coverage layer knows independently.
+    parse_time_subs = parse_time_substitution_lines(diff_text)
+    unresolved_assignments = unresolved_assignment_rows(
+        head_pkgbuild or "", file="PKGBUILD",
+        extra_lines=[*unresolved_sources, *parse_time_subs])
+    partial_files = partial_install_files(diff_text)
     # Before scoring, because a truncated walk has to reach `gaps_from`:
     # the band downgrade is decided once inside calculate_score and carried
     # on the fact, so a gap appended afterwards would never fail closed.
@@ -896,7 +929,7 @@ def analyze_package(
         binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
-        parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        parse_time_substitutions=parse_time_subs,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, head_pkgbuild),
         # A dependency this diff *adds* and this run did not analyse is
         # unread code the package now pulls in. Dependency findings never
@@ -913,7 +946,8 @@ def analyze_package(
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
-        partial_hunks=partial_hunks,
+        partial_hunks=len(cut_hunks),
+        partial_files=partial_files,
     )
 
     score, breakdown, risk = calculate_score(
@@ -976,6 +1010,10 @@ def analyze_package(
                            diff_text, tree_manifest)),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,
+        unresolved_assignments=unresolved_assignments,
+        partial_hunks=partial_hunk_details,
+        partial_files=partial_files,
+        change=change,
         risk=risk,
         temporal_source="git_commit",
         score_breakdown=breakdown,
@@ -989,6 +1027,8 @@ def analyze_package(
     # like the fact this run returns.
     dependency_changes = extract_dependency_changes(diff_text, pkg_name)
     fact.dependency_changes = {k: sorted(v) for k, v in dependency_changes.items() if v}
+    fact.resolution_coverage = resolution_coverage(
+        resolved_strings, unresolved_strings, triggered_rules, load_rules())
     with_changes(fact, diff_text)
     # #19: a gap whose root cause the previous recorded analysis already
     # carried is marked as carried, so the report says "unchanged since the
@@ -1179,6 +1219,21 @@ def scan_diff(
             global_set.add(nurl)
 
     unresolved_sources = unresolved_source_lines(diff_text)
+    change = change_delta(diff_text).to_dict()
+    surface_doc = parse_diff_lines(split_lines(diff_text))
+    cut_hunks = surface_doc.cut_hunks()
+    partial_hunk_details = cut_hunk_details(cut_hunks)
+    # Spec §8 v1: the analysed surface is the caller's post-state text
+    # when given, else the diff's own post projection (with per-file
+    # origins, so each refusal names the file it came from).
+    parse_time_subs = parse_time_substitution_lines(diff_text)
+    unresolved_assignments = unresolved_assignment_rows(
+        current_text or "\n".join(surface_doc.post_lines()),
+        file="PKGBUILD" if current_text else "",
+        origins=None if current_text else surface_doc.post_origins(),
+        extra_lines=[*unresolved_sources, *parse_time_subs],
+    )
+    partial_files = partial_install_files(diff_text)
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
@@ -1188,7 +1243,7 @@ def scan_diff(
         binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
-        parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        parse_time_substitutions=parse_time_subs,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, current_text),
         # This path analyses no dependencies at all, so any dependency the
         # diff adds is code the package now pulls in and this run did not
@@ -1197,7 +1252,8 @@ def scan_diff(
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         noextract_present=_has_noextract(diff_text),
-        partial_hunks=len(parse_diff_lines(split_lines(diff_text)).cut_hunks()),
+        partial_hunks=len(cut_hunks),
+        partial_files=partial_files,
     )
 
     score, breakdown, risk = calculate_score(
@@ -1238,6 +1294,10 @@ def scan_diff(
                            diff_text, tree_manifest)),
         coverage_gaps=gaps,
         unresolved_sources=unresolved_sources,
+        unresolved_assignments=unresolved_assignments,
+        partial_hunks=partial_hunk_details,
+        partial_files=partial_files,
+        change=change,
         risk=risk,
         score_breakdown=breakdown,
         final_score=score,
@@ -1245,6 +1305,8 @@ def scan_diff(
     )
     deps_added = extract_dependency_changes(diff_text, package_name)
     fact.dependency_changes = {k: sorted(v) for k, v in deps_added.items() if v}
+    fact.resolution_coverage = resolution_coverage(
+        resolved_strings, unresolved_strings, triggered_rules, load_rules())
     return with_changes(fact, diff_text)
 
 

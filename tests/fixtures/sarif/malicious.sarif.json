@@ -1,0 +1,82 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "TrustSight",
+          "informationUri": "https://docs.trustsight.org/",
+          "rules": [
+            {
+              "id": "C011",
+              "name": "prebuilt binary sources from {source_host}, not declared upstream {upstream_host}",
+              "shortDescription": {
+                "text": "prebuilt binary sources from {source_host}, not declared upstream {upstream_host}"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            },
+            {
+              "id": "SOURCE_BUCKET",
+              "name": "SOURCE_BUCKET",
+              "shortDescription": {
+                "text": "SOURCE_BUCKET"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "C011",
+          "level": "warning",
+          "message": {
+            "text": "prebuilt binary sources from iusearchbtw.nl, not declared upstream github.com [C011]"
+          },
+          "partialFingerprints": {
+            "trustsight/v1": "56de8612b3d1ae5c609b280ea80aef16c8033ab6d8937afd1e3415d37bb4eaeb"
+          },
+          "properties": {
+            "package": "C011-prebuilt-non-upstream-bin",
+            "severity": "MEDIUM",
+            "file": "PKGBUILD",
+            "line": 5
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "PKGBUILD"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "SOURCE_BUCKET",
+          "level": "warning",
+          "message": {
+            "text": "Source URL classified as unknown (https://downloads.iusearchbtw.nl/PKHeX-26.08.26.tar.gz) [SOURCE_BUCKET]"
+          },
+          "partialFingerprints": {
+            "trustsight/v1": "29b3fc520945e68fcf720d8feb76369aa9661d00dc9e8e514a1465d267ae8a5d"
+          },
+          "properties": {
+            "package": "C011-prebuilt-non-upstream-bin",
+            "severity": "MEDIUM",
+            "file": "",
+            "line": null
+          }
+        }
+      ]
+    }
+  ]
+}

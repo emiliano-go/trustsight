@@ -309,6 +309,28 @@ def init_db():
                 captured_at TEXT NOT NULL
             );
 
+            /* Spec §11: the corpus as documents.  Per observed package
+               version, the RecipeDoc's scalars and arrays (never the full
+               text) are stored so "has this exact source-array tuple
+               appeared before" is set membership rather than a statistical
+               guess.  Bounded per package like every other corpus table. */
+            CREATE TABLE IF NOT EXISTS recipe_observations (
+                package_name TEXT NOT NULL,
+                observed_at TEXT NOT NULL,
+                scalars_json TEXT NOT NULL,
+                PRIMARY KEY (package_name, observed_at)
+            );
+
+            CREATE TABLE IF NOT EXISTS recipe_array_observations (
+                package_name TEXT NOT NULL,
+                array_name TEXT NOT NULL,
+                entries_hash TEXT NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_recipe_array_observations
+                ON recipe_array_observations(
+                    package_name, array_name, entries_hash);
+
             CREATE TABLE IF NOT EXISTS alert_state (
                 package_name TEXT NOT NULL,
                 rule_id TEXT NOT NULL,
@@ -1850,6 +1872,110 @@ def save_pkgbuild_snapshot(
             (package_name, pkgbuild_text, srcinfo_text, version, last_modified),
         )
         conn.commit()
+
+
+#: Most observations kept per package in the document index.  Bounded
+#: like every other corpus table: the index answers "seen before", and an
+#: unbounded history of near-identical tuples buys nothing.
+MAX_RECIPE_OBSERVATIONS_PER_PACKAGE = 128
+
+
+def _array_entries_hash(entries) -> str:
+    import hashlib
+    import json as _json
+
+    payload = _json.dumps(
+        [str(entry) for entry in entries], separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8", "replace")).hexdigest()
+
+
+def record_recipe_document(
+    package_name: str,
+    scalars: dict,
+    arrays: dict,
+    observed_at: Optional[str] = None,
+) -> None:
+    """Store one observed RecipeDoc's scalars and arrays (spec §11).
+
+    Not the full text: the index exists for exact tuple history, and a
+    stored PKGBUILD would be another unbounded attacker-authored payload.
+    """
+    if package_name in _RESERVED_NAMES or package_name.startswith("__"):
+        raise ValueError(f"reserved package name: {package_name!r}")
+    import json as _json
+
+    scalars_json = _json.dumps(
+        {str(k): str(v) for k, v in scalars.items()},
+        separators=(",", ":"), sort_keys=True)
+    with get_connection() as conn:
+        if observed_at is None:
+            conn.execute(
+                """INSERT OR REPLACE INTO recipe_observations
+                   (package_name, observed_at, scalars_json)
+                   VALUES (?, datetime('now'), ?)""",
+                (package_name, scalars_json),
+            )
+            observed_at = conn.execute(
+                "SELECT observed_at FROM recipe_observations "
+                "WHERE package_name = ? ORDER BY observed_at DESC LIMIT 1",
+                (package_name,),
+            ).fetchone()["observed_at"]
+        else:
+            conn.execute(
+                """INSERT OR REPLACE INTO recipe_observations
+                   (package_name, observed_at, scalars_json)
+                   VALUES (?, ?, ?)""",
+                (package_name, observed_at, scalars_json),
+            )
+        for name, entries in arrays.items():
+            conn.execute(
+                """INSERT INTO recipe_array_observations
+                   (package_name, array_name, entries_hash, observed_at)
+                   VALUES (?, ?, ?, ?)""",
+                (package_name, str(name), _array_entries_hash(entries),
+                 observed_at),
+            )
+        conn.execute(
+            """DELETE FROM recipe_array_observations
+               WHERE package_name = ? AND observed_at NOT IN (
+                   SELECT observed_at FROM recipe_observations
+                   WHERE package_name = ?
+                   ORDER BY observed_at DESC LIMIT ?)""",
+            (package_name, package_name, MAX_RECIPE_OBSERVATIONS_PER_PACKAGE),
+        )
+        conn.execute(
+            """DELETE FROM recipe_observations
+               WHERE package_name = ? AND observed_at NOT IN (
+                   SELECT observed_at FROM recipe_observations
+                   WHERE package_name = ?
+                   ORDER BY observed_at DESC LIMIT ?)""",
+            (package_name, package_name, MAX_RECIPE_OBSERVATIONS_PER_PACKAGE),
+        )
+        conn.commit()
+
+
+def array_seen_before(package_name: str, array_name: str, entries) -> bool:
+    """True when this exact array tuple was observed before (spec §11)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT 1 FROM recipe_array_observations
+               WHERE package_name = ? AND array_name = ? AND entries_hash = ?
+               LIMIT 1""",
+            (package_name, array_name, _array_entries_hash(entries)),
+        ).fetchone()
+    return row is not None
+
+
+def tuple_observation_count(package_name: str, array_name: str,
+                            entries) -> int:
+    """How many distinct observations held this exact array tuple."""
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT COUNT(DISTINCT observed_at) FROM recipe_array_observations
+               WHERE package_name = ? AND array_name = ? AND entries_hash = ?""",
+            (package_name, array_name, _array_entries_hash(entries)),
+        ).fetchone()
+    return int(row[0] or 0)
 
 
 def get_package_profile(package_name: str) -> Optional[dict]:

@@ -173,7 +173,14 @@ def fallback_verdict(fact: PackageFact) -> str:
     if fact.maintainer_changed:
         reasons.append("maintainer changed")
     if not reasons:
-        reasons.append("no structural changes")
+        # Spec §2: a run with an open coverage gap cannot claim "no
+        # structural changes" - it does not know what it did not see.  The
+        # qualified phrasing is still a claim, but one bounded by what was
+        # actually read.
+        if fact.coverage_gaps:
+            reasons.append("no structural changes in the examined portion")
+        else:
+            reasons.append("no structural changes")
     change_summary = "; ".join(reasons)
 
     fired = [e for e in fact.score_breakdown if e.weight > 0 or e.severity == "FATAL"]

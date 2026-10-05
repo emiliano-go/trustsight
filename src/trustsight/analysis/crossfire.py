@@ -2406,7 +2406,45 @@ def crossfire_techniques(diff_text: str) -> dict[str, list[tuple[int, str, str]]
                "function shadow defined across multiple lines",
                raw_lines[shadow_line - 1].strip())
 
-    return found
+    return resolve_ownership(found)
+
+
+#: Addendum 1 §6.0: declarative ownership.  Each row is ``owner ->
+#: owners it yields to`` when both matched the same line.  The resolver
+#: applies the table after production, so a new X rule adds a row here
+#: instead of another pairwise conditional.  On the locked corpus no line
+#: carries two techniques, so this pass is a no-op there by measurement.
+CROSSFIRE_OWNERSHIP = (
+    ("X002", ("X001",)),   # a decoded-then-executed name is X001's
+    ("X009", ("X001",)),
+    ("X015", ("X011",)),   # dependency-array words belong to X011
+    ("X023", ("X009",)),   # a resolved uncatalogued fetch is X009's
+)
+
+
+def resolve_ownership(found: dict) -> dict:
+    """Assign each matched line exactly one owner (spec §6.0).
+
+    A rule yields on a line when an owner it yields to matched the same
+    line.  Returns a new dict; the input is left untouched.
+    """
+    if not found:
+        return found
+    yields = dict(CROSSFIRE_OWNERSHIP)
+    owners_by_line: dict[int, set[str]] = {}
+    for rule_id, hits in found.items():
+        for hit in hits:
+            owners_by_line.setdefault(hit[0], set()).add(rule_id)
+    resolved: dict = {}
+    for rule_id, hits in found.items():
+        superseded = set(yields.get(rule_id, ()))
+        kept = [
+            hit for hit in hits
+            if not (superseded & owners_by_line.get(hit[0], set()))
+        ]
+        if kept:
+            resolved[rule_id] = kept
+    return resolved
 
 
 _NAMES = {
@@ -2441,12 +2479,13 @@ _NAMES = {
 X007_MIN_TECHNIQUES = 2
 
 
-def _crossfire_findings(diff_text, config, add) -> None:
+def _crossfire_findings(diff_text, config, add, previous_diff: str = "") -> None:
     """Emit X001-X006 and the X007 cluster.
 
     Each rule reports once per diff: a second `${A[0]}` tells the reader
     nothing the first did not, and counting occurrences would let a noisy
-    recipe outscore a careful attack.
+    recipe outscore a careful attack.  *previous_diff* is the immediately
+    preceding recorded review of the same package, for X028.
     """
     techniques = crossfire_techniques(diff_text)
 
@@ -2467,3 +2506,9 @@ def _crossfire_findings(diff_text, config, add) -> None:
         add("X007", "Multiple Evasion Techniques", "CRITICAL", "evasion",
             f"{len(techniques)} evasion techniques in one diff: {shapes}",
             line=None, count=len(techniques), techniques=shapes)
+
+    # Addendum 1: the refusal family.  Deliberately outside the techniques
+    # dict above, so X007 keeps counting known techniques only (spec X027).
+    from .refusals import refusal_findings
+
+    refusal_findings(diff_text, config, add, previous_diff=previous_diff)

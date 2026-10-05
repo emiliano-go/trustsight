@@ -379,6 +379,32 @@ def test_sync_without_update_leaves_superseded_pattern(tmp_path, monkeypatch):
     assert r013["pattern"] == legacy
 
 
+def test_superseded_r051_and_r057_patterns_are_repaired(tmp_path, monkeypatch):
+    """The shipped R051 client list and R057 flag list both grew; an install
+    holding either old pattern must be recognized and repaired, or it fails
+    closed on `ruleset_drifted` forever."""
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    cfg.ensure_default_configs()
+    path = tmp_path / "rules.toml"
+    text = path.read_text()
+    shipped = {r["id"]: r["pattern"] for r in cfg.shipped_rules()}
+    for rid in ("R051", "R057"):
+        legacy = next(iter(cfg.LEGACY_RULE_PATTERNS[rid]))
+        assert shipped[rid] in text
+        text = text.replace(shipped[rid], legacy)
+    path.write_text(text)
+
+    assert set(cfg.outdated_shipped_rules()) >= {"R051", "R057"}
+    _, updated = cfg.sync_rules(update_outdated=True)
+    assert set(updated) >= {"R051", "R057"}
+    repaired = {r["id"]: r["pattern"] for r in cfg.load_rules()}
+    assert repaired["R051"] == shipped["R051"]
+    assert repaired["R057"] == shipped["R057"]
+    assert cfg.drifted_shipped_rules() == []
+
+
 def test_sync_rules_full_is_honoured_under_json(tmp_path, monkeypatch):
     """`config sync-rules --full --json` silently ignored --full: the JSON
     branch ran only the additive sync, so a customised rule survived a

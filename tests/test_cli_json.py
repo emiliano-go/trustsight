@@ -31,6 +31,8 @@ runner = CliRunner()
 CASES = [
     ("review", ["review"]),
     ("inspect", ["inspect", "pkg"]),
+    ("explain", ["explain", "pkg", "C003"]),
+    ("lint", ["lint", "/nonexistent"]),
     ("history", ["history", "pkg"]),
     ("list", ["list"]),
     ("forget", ["forget", "pkg", "--yes"]),

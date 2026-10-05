@@ -34,6 +34,8 @@ def _main(
 # Register all command modules
 from .review import register_commands as _register_review
 from .inspect import register_commands as _register_inspect
+from .explain import register_commands as _register_explain
+from .lint import register_commands as _register_lint
 from .history import register_commands as _register_history
 from .list_cmd import register_commands as _register_list
 from .forget import register_commands as _register_forget
@@ -44,6 +46,8 @@ from .seed import register_commands as _register_seed
 
 _register_review(app)
 _register_inspect(app)
+_register_explain(app)
+_register_lint(app)
 _register_history(app)
 _register_list(app)
 _register_forget(app)

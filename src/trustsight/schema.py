@@ -138,6 +138,27 @@ class PackageFact:
     # forbids a clean verdict: see coverage.fail_closed.
     coverage_gaps: list[str] = field(default_factory=list)
     unresolved_sources: list[str] = field(default_factory=list)
+    # Spec §8 v1: every assignment the tokenizer refused on the analysed
+    # surface, as {name, line, file}.  Additive: it names the boundary of
+    # analysis to the reader and never changes a finding or a score.
+    unresolved_assignments: list[dict] = field(default_factory=list)
+    # The hunks behind a PARTIAL_HUNK gap, each as
+    # "FILE @@ NEWSTART: header declares N new line(s), M parsed" (see
+    # coverage.cut_hunk_details).  The gap's generic reason names the
+    # category; these name the cut.
+    partial_hunks: list[str] = field(default_factory=list)
+    # Install-script files whose diff showed only part of the file, behind
+    # a PARTIAL_FILE_ANALYSIS gap (spec §9).
+    partial_files: list[str] = field(default_factory=list)
+
+    # Spec §1: the typed change-as-data view, ``ChangeDelta.to_dict()``.
+    # The prose summary and the JSON ``change`` object both render this, so
+    # they cannot disagree.  Empty on facts stored before the field existed.
+    change: dict = field(default_factory=dict)
+
+    # Addendum 2 R1: how much of the diff the tokenizer could read, and
+    # which resolution-coupled R-rules matched.  Additive.
+    resolution_coverage: dict = field(default_factory=dict)
 
     # The subset of ``coverage_gaps`` whose root cause was already in the
     # previous recorded analysis (#19).  Still gaps - they fail closed the
@@ -295,6 +316,11 @@ def fact_to_dict(fact: PackageFact) -> dict:
         "coverage_gaps": fact.coverage_gaps,
         "carried_coverage_gaps": fact.carried_coverage_gaps,
         "unresolved_sources": fact.unresolved_sources,
+        "unresolved_assignments": fact.unresolved_assignments,
+        "partial_hunks": fact.partial_hunks,
+        "partial_files": fact.partial_files,
+        "change": fact.change,
+        "resolution_coverage": fact.resolution_coverage,
         "risk": fact.risk,
         "score_breakdown": [
             {
@@ -459,6 +485,14 @@ def fact_from_dict(data: dict) -> PackageFact | None:
             coverage_gaps=list(data["coverage_gaps"]),
             carried_coverage_gaps=list(data["carried_coverage_gaps"]),
             unresolved_sources=list(data["unresolved_sources"]),
+            # `.get`: rows written before the field existed still serve.
+            unresolved_assignments=[
+                dict(a) for a in data.get("unresolved_assignments", [])
+            ],
+            partial_hunks=list(data.get("partial_hunks", [])),
+            partial_files=list(data.get("partial_files", [])),
+            change=dict(data.get("change", {})),
+            resolution_coverage=dict(data.get("resolution_coverage", {})),
             risk=data["risk"],
             score_breakdown=[
                 ScoreEntry(

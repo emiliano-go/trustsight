@@ -19,9 +19,11 @@ from .build import (
     _function_shadow_findings,
     _indirect_expansion_findings,
     _indirect_remote_execution_findings,
+    _INTERPRETER_FETCH,
     _reconstruction_findings,
     _sudo_findings,
 )
+from ..config import NETWORK_CLIENT
 from .composition import _recon_findings
 from .delivery import (
     _delivery_findings,
@@ -40,9 +42,16 @@ from .network import (
     _moved_git_ref_findings,
     _version_in_url_findings,
 )
-from .persistence import _persistence_findings
+from .persistence import (
+    _HOME_PREFIX_RE,
+    _persistence_findings,
+    _raw_targets,
+    _WW_DIR_RE,
+)
 from .version import _epoch_findings
 from ..findings import stamp
+from ..line_lex import strip_comment
+from ..recipedoc import parse_recipe, recipe_states
 from ..rules import find_line_in_diff
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
@@ -450,6 +459,7 @@ def _structural_findings(
     current_text: str | None = None,
     tree_manifest: list[tuple[str, bytes]] | None = None,
     whole_recipe: bool = False,
+    previous_diff: str = "",
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
@@ -534,11 +544,77 @@ def _structural_findings(
             line=find_line_in_diff(diff_text, r"source\s*=\s*\("),
             sources=n_src, sums=n_sum, var=var)
 
+    # One parse serves the function-scoped rules below, the array-order
+    # rule and the install-script analysis; a refusal leaves them silent
+    # (the coverage layer already names the boundary).
+    scope_doc = None
+    try:
+        scope_doc = parse_diff_lines(split_lines(diff_text))
+        scope_pre, scope_post = recipe_states(scope_doc)
+    except Exception:
+        scope_pre = scope_post = None
+
+    # C014 (spec §6, re-filed from H099 per Addendum 3): a checksum array
+    # reordered during a content change.  Set semantics discard position,
+    # so a hash shuffled away from the slot a reviewer checks was invisible;
+    # reorder alone is reformatting, so the default gate requires the array
+    # to have changed content (or moved a SKIP) too.
+    for name, delta, span in array_order_changes(
+            diff_text, config, pre=scope_pre, post=scope_post):
+        add("C014", "Array Order Manipulation", "MEDIUM", "integrity",
+            f"{name} entries changed order"
+            + (f" (gained {len(delta.gained)}, lost {len(delta.lost)})"
+               if delta.gained or delta.lost else " (SKIP position moved)"),
+            span=span, array=name,
+            gained=", ".join(delta.gained), lost=", ".join(delta.lost))
+
+    # C015 (spec §7, re-filed from H100 per Addendum 3): a fetch in
+    # package().  Sources belong in prepare/build, where the checksum
+    # arrays apply; fetching at artifact-assembly time bypasses that
+    # accounting.  Reads RecipeDoc.functions only - the whole body, never a
+    # line walk.  (H076 already owns the write-outside-$pkgdir half of §7
+    # for package(), so no second rule is filed for it.)
+    if scope_post is not None:
+        client = _package_fetch_client(
+            scope_post.functions.get("package", ""))
+        if client:
+                add("C015", "Fetch In package()", "HIGH", "network",
+                    f"package() fetches with '{client}'; sources must be "
+                    "fetched in prepare/build where checksums apply",
+                    span=scope_post.function_spans.get("package"),
+                    client=client[:40])
+
+    # C016/C017 (spec §9, re-filed from H102/H103 per Addendum 3): a
+    # complete .install script's hook bodies, read as functions.
+    if scope_doc is not None:
+        findings.extend(install_script_findings(scope_doc))
+
+    # Addendum 4: G1/G3/G4/G5/G6/G7 predicates over the same parse.
+    addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
+                       source_changes, config or {}, add)
+
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
-        if not version_moved:
+        # F8: a version move only stands the tamper signal down when the
+        # diff adds no new code capability.  A bump that also starts
+        # downloading or running something is the checksum-refresh shape
+        # used as cover.  Gated by `[thresholds] c001.require_capability_signal`
+        # (default true) because it touches the most common operation there
+        # is; one config flip reverts to the old C002-for-every-bump rule.
+        gate = ((config or {}).get("thresholds", {})
+                .get("c001", {}).get("require_capability_signal", True))
+        capability = None
+        if version_moved and gate:
+            capability = capability_in_diff(diff_text, current_text)
+        if not version_moved or capability:
+            match = (
+                "sha256sums changed but source URLs and pkgver/pkgrel/epoch "
+                "unchanged"
+                if not version_moved
+                else "checksum updated with a version bump that also adds "
+                     f"{capability}"
+            )
             add("C001", "Checksum Changed Without Source Change With Stable Version",
-                "HIGH", "integrity",
-                "sha256sums changed but source URLs and pkgver/pkgrel/epoch unchanged",
+                "HIGH", "integrity", match,
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
             add("C002", "Checksum Updated With Version Bump", "INFO", "integrity",
@@ -700,7 +776,8 @@ def _structural_findings(
             "source=() contains $( ) or backtick substitution",
             line=find_line_in_diff(diff_text, r"\$\(|`"))
 
-    _crossfire_findings(diff_text, config or {}, add)
+    _crossfire_findings(diff_text, config or {}, add,
+                        previous_diff=previous_diff)
     _sabotage_findings(diff_text, config or {}, add)
     _dependency_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,
@@ -735,6 +812,439 @@ def _structural_findings(
                   current_text=current_text)
 
     return findings
+
+
+#: C015's matcher: a fetch client at a command position, so a client name
+#: inside a quoted dependency list or a comment is not a fetch.  The
+#: interpreter arm additionally requires a scheme-bearing address on the
+#: line, because `python -m pip install .` installs the local source.
+_FETCH_IN_PACKAGE_RE = re.compile(
+    r"(?:^|[;&|(])\s*(?:" + NETWORK_CLIENT + r")\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+_INTERPRETER_FETCH_RE = re.compile(_INTERPRETER_FETCH, re.IGNORECASE)
+#: Scheme markers as substrings.  A regex that hunts for a scheme is
+#: retried from every position on a hostile full-length line (the regex
+#: audit measures exactly that); the substring check is linear and exact
+#: for the question asked ("is there an address on this line").
+_SCHEME_MARKERS = ("://", "magnet:", "ipfs:", "ipns:")
+
+
+def _line_has_scheme(line: str) -> bool:
+    lowered = line.lower()
+    return any(marker in lowered for marker in _SCHEME_MARKERS)
+
+
+def _package_fetch_client(body: str) -> str | None:
+    """The first fetch command in a function body, or ``None``.
+
+    Command-position only (see the regexes above); an assignment whose
+    value is literal data is skipped, while a command substitution
+    (``x=$(curl ...)``) is still a fetch.
+    """
+    for raw_line in split_lines(body):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if (re.match(r"(?:export\s+|local\s+)?[A-Za-z_]\w*\s*\+?=", stripped)
+                and "$(" not in stripped and "`" not in stripped):
+            continue
+        match = _FETCH_IN_PACKAGE_RE.search(raw_line)
+        if match:
+            return match.group(0).strip()
+        interpreter = _INTERPRETER_FETCH_RE.search(raw_line)
+        if interpreter and _line_has_scheme(raw_line):
+            return interpreter.group(0)
+    return None
+
+
+#: The checksum arrays makepkg reads, without their arch suffixes.
+_CHECKSUM_ARRAY_NAMES = frozenset({
+    "md5sums", "sha1sums", "sha224sums", "sha256sums", "sha384sums",
+    "sha512sums", "b2sums",
+})
+
+
+def _is_checksum_array(name: str) -> bool:
+    return (name in _CHECKSUM_ARRAY_NAMES
+            or name.split("_", 1)[0] in _CHECKSUM_ARRAY_NAMES)
+
+
+def _skip_positions(entries) -> set[int]:
+    return {
+        index for index, entry in enumerate(entries)
+        if entry.strip().upper() in ("SKIP", "NONE")
+    }
+
+
+def _require_content_change(config) -> bool:
+    """The ``c014.require_content_change`` gate (spec §6; ``h099`` alias)."""
+    thresholds = (config or {}).get("thresholds", {})
+    section = thresholds.get("c014") or thresholds.get("h099") or {}
+    return bool(section.get("require_content_change", True))
+
+
+def array_order_changes(diff_text: str, config: dict | None = None,
+                        pre=None, post=None):
+    """Checksum arrays whose entries moved, with delta and span (spec §6).
+
+    Returns ``[(array_name, ArrayDelta, span)]``.  Ordering facts come from
+    the typed recipe arrays (positions are preserved there); the rule never
+    re-reads diff text.  A reorder with no content change and no SKIP
+    movement is reformatting, so the default gate stands it down.
+    """
+    from ..recipedoc import array_diff, recipe_states
+
+    if pre is None or post is None:
+        try:
+            pre, post = recipe_states(parse_diff_lines(split_lines(diff_text)))
+        except Exception:
+            return []
+    require_content = _require_content_change(config)
+    names = {name for name in pre.arrays if _is_checksum_array(name)}
+    names |= {name for name in post.arrays if _is_checksum_array(name)}
+    changes = []
+    for name in sorted(names):
+        old = pre.arrays.get(name, ())
+        new = post.arrays.get(name, ())
+        delta = array_diff(old, new)
+        if not delta.reordered:
+            continue
+        content_changed = bool(delta.gained or delta.lost)
+        skip_moved = _skip_positions(old) != _skip_positions(new)
+        if require_content and not (content_changed or skip_moved):
+            continue
+        spans = post.array_spans.get(name) or pre.array_spans.get(name) or ()
+        changes.append((name, delta, spans[0] if spans else None))
+    return changes
+
+
+#: Addendum 4: checksum strength order, strongest first.
+_CHECKSUM_STRENGTH = ("b2sums", "sha512sums", "sha256sums", "sha1sums",
+                      "md5sums")
+_HARDENING_OPTIONS = frozenset(
+    {"!strip", "!debug", "!lto", "!fortify", "!debugsplit"})
+
+
+def _family_values(arrays, base: str) -> tuple[str, ...]:
+    """Every ``base``/``base_<arch>`` array's entries, concatenated."""
+    out: list[str] = []
+    for key in sorted(arrays):
+        if key == base or key.startswith(base + "_"):
+            out.extend(arrays[key])
+    return tuple(out)
+
+
+def _removed_declarations(doc) -> set[str]:
+    """Array names whose declaration line is removed and not re-added."""
+    if doc is None:
+        return set()
+    removed: set[str] = set()
+    added: set[str] = set()
+    for line in doc.lines:
+        match = re.match(r"\s*([A-Za-z_]\w*)\s*\+?=", line.content)
+        if not match:
+            continue
+        if line.side == "remove":
+            removed.add(match.group(1))
+        elif line.side == "add":
+            added.add(match.group(1))
+    return removed - added
+
+
+def _url_host(url: str) -> str:
+    from ..buckets import canonical_host
+
+    if "://" not in url:
+        return ""
+    return canonical_host(url.split("://", 1)[1].split("/", 1)[0])
+
+
+def _userinfo_urls(urls) -> list[str]:
+    """URLs carrying userinfo before the host (credentials in a source)."""
+    return [url for url in urls if "://" in url
+            and "@" in url.split("://", 1)[1].split("/", 1)[0]]
+
+
+def _ip_literal_hosts(hosts) -> list[str]:
+    import ipaddress
+
+    out: list[str] = []
+    for host in hosts:
+        try:
+            ipaddress.ip_address(host.strip("[]"))
+        except ValueError:
+            continue
+        out.append(host)
+    return out
+
+
+def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
+                       config, add) -> None:
+    """G1/G3/G4/G5/G6/G7 predicates over the typed core (Addendum 4)."""
+    from ..recipedoc import array_diff
+
+    # G1 (C020): credentials embedded in a gained source URL.  The value
+    # itself is never printed - evidence shows the host only.
+    if _userinfo_urls(source_changes.added_urls):
+        hosts = []
+        for url in _userinfo_urls(source_changes.added_urls):
+            host = _url_host(url)
+            if host and host not in hosts:
+                hosts.append(host)
+        add("C020", "Credentials In A Source URL", "HIGH", "source",
+            "gained source URL(s) carry embedded credentials for "
+            + ", ".join(hosts),
+            line=find_line_in_diff(diff_text, r"://[^/\s'\"]*@"),
+            hosts=", ".join(hosts))
+
+    # G6 (C024): an added/modified .install no install= declaration names.
+    if scope_doc is not None:
+        declared = post.scalars.get("install", "") if post is not None else ""
+        if not declared:
+            for file in scope_doc.files:
+                if file.path.endswith(".install") and file.status != "removed":
+                    add("C024", "Install Script Not Declared", "MEDIUM",
+                        "composition",
+                        f"{file.path} is shipped but install= does not name "
+                        "it; pacman never runs the hook",
+                        file=file.path, line=None)
+                    break
+
+    if pre is None or post is None:
+        return
+
+    # G3 (C021): a test/dependency array removed while a build function
+    # changed - dropping the checks that would catch a payload.
+    for name in ("checkdepends", "optdepends"):
+        lost = array_diff(_family_values(pre.arrays, name),
+                          _family_values(post.arrays, name)).lost
+        if not lost:
+            continue
+        touched = any(
+            pre.functions.get(fn) != post.functions.get(fn)
+            for fn in ("build", "prepare", "check")
+        )
+        if touched:
+            add("C021", "Dependency Removal During A Build Change", "MEDIUM",
+                "composition",
+                f"{name} lost {', '.join(sorted(set(lost))[:3])} while a "
+                "build function changed",
+                line=None, field=name, lost=", ".join(sorted(set(lost))[:5]))
+
+    # G4 (C022): verification downgraded to a weaker algorithm.  The
+    # strongest array must be *declared removed in this diff* (a partial
+    # post projection that simply does not show it is not a removal), and
+    # a strictly weaker array must remain.
+    present = {base: _family_values(pre.arrays, base)
+               for base in _CHECKSUM_STRENGTH}
+    post_present = {base: _family_values(post.arrays, base)
+                    for base in _CHECKSUM_STRENGTH}
+    removed_names = _removed_declarations(scope_doc)
+    strongest = next((base for base in _CHECKSUM_STRENGTH if present[base]), None)
+    strongest_gone = strongest is not None and (
+        strongest in removed_names
+        or (strongest in post.arrays and not post_present[strongest])
+    )
+    if strongest is not None and strongest_gone:
+        weaker = [base for base in _CHECKSUM_STRENGTH
+                  if base != strongest and post_present[base]]
+        # Stands down when every array was removed together: H002 owns it.
+        if weaker and any(post_present.values()):
+            add("C022", "Checksum Strength Downgraded", "HIGH", "integrity",
+                f"{strongest} removed or emptied while "
+                f"{', '.join(weaker)} remains",
+                line=None, lost=strongest, retained=", ".join(weaker))
+
+    # G5 (C023): a gained host that is a bare IP literal.
+    literal_hosts = _ip_literal_hosts(
+        sorted({_url_host(url) for url in source_changes.added_urls} - {""}))
+    if literal_hosts:
+        add("C023", "IP-Literal Source Host", "MEDIUM", "source",
+            "gained source host(s) are IP literals: "
+            + ", ".join(literal_hosts[:3]),
+            line=None, hosts=", ".join(literal_hosts[:5]))
+
+    # G7 (C025): a hardening option gained.
+    gained_options = array_diff(
+        pre.arrays.get("options", ()), post.arrays.get("options", ())).gained
+    hardening = sorted(set(gained_options) & _HARDENING_OPTIONS)
+    if hardening:
+        add("C025", "Hardening Option Disabled", "LOW", "build",
+            "options gained hardening-disabling entries: "
+            + ", ".join(hardening),
+            line=None, options=", ".join(hardening))
+
+
+#: A hook that runs an interpreter or a shell explicitly.  Command-position
+#: anchored, so `install -m` and a quoted word cannot match.
+_HOOK_INTERPRETER_RE = re.compile(
+    r"(?:^|[;&|(])\s*(?:/(?:usr/)?bin/)?"
+    r"(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b(?!\s*[=<])"
+    r"|(?:^|[;&|(])\s*(?:/(?:usr/)?bin/)?"
+    r"(?:python[23]?|perl|ruby|node|php)\b",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+#: User-writable or temporary locations a root hook has no business
+#: writing to (spec §9, re-filed from H103).
+_XDG_PREFIX_RE = re.compile(r"^\$?\{?XDG_[A-Z_]+\}?(?:/|$)")
+_RUNTIME_USER_RE = re.compile(r"^/run/user/")
+#: Root's home, spelled absolutely: a hook running as root writing into
+#: ``/root/.config`` is the same shape as ``$HOME``.
+_ROOT_HOME_RE = re.compile(r"^/root(?:/|$)")
+
+
+def _user_writable_target(target: str) -> bool:
+    value = target.strip().strip("\"'")
+    return bool(
+        _HOME_PREFIX_RE.match(value)
+        or _WW_DIR_RE.match(value)
+        or _XDG_PREFIX_RE.match(value)
+        or _RUNTIME_USER_RE.match(value)
+        or _ROOT_HOME_RE.match(value)
+    )
+
+
+def _hook_names(recipe) -> list[str]:
+    return [
+        name for name in recipe.functions
+        if name.endswith(("_install", "_upgrade", "_remove"))
+    ]
+
+
+def partial_install_files(diff_text: str) -> list[str]:
+    """Install-script files whose diff is not the whole file (spec §9).
+
+    Added files are complete by construction.  A modified file counts as
+    complete only when its first hunk starts at line 1 and no hunk was cut
+    (``DiffDoc.cut_hunks``); anything else is a fragment, and the hook
+    rules must not read it as a whole script.
+    """
+    try:
+        doc = parse_diff_lines(split_lines(diff_text))
+    except Exception:
+        return []
+    cuts = {path for path, *_rest in doc.cut_hunks()}
+    partial: list[str] = []
+    for file in doc.files:
+        if not file.path.endswith(".install") or file.status == "removed":
+            continue
+        if file.status == "added":
+            continue
+        if not file.hunks or file.hunks[0].new_start != 1 or file.path in cuts:
+            partial.append(file.path)
+    return partial
+
+
+def install_script_findings(doc) -> list[dict]:
+    """C016/C017 over complete ``.install`` scripts (spec §9, re-filed).
+
+    The file's post-state text is read as a ``RecipeDoc``; every hook body
+    is a function.  Findings attribute to the ``.install`` file and its own
+    line numbers via the recipe's spans.  A partial file is skipped here:
+    :func:`partial_install_files` declares it as a coverage gap instead.
+    """
+    cuts = {path for path, *_rest in doc.cut_hunks()}
+    out: list[dict] = []
+    for file in doc.files:
+        if not file.path.endswith(".install") or file.status == "removed":
+            continue
+        if (file.status != "added"
+                and (not file.hunks or file.hunks[0].new_start != 1
+                     or file.path in cuts)):
+            continue
+        text = "\n".join(
+            line.content for line in doc.lines
+            if line.file == file.path and line.side in ("add", "context")
+        )
+        origins = [
+            (line.file, line.new_lineno or 0, line.side)
+            for line in doc.lines
+            if line.file == file.path and line.side in ("add", "context")
+        ]
+        try:
+            recipe = parse_recipe(text, origins=origins)
+        except Exception:
+            continue
+        for name in _hook_names(recipe):
+            body = recipe.functions.get(name, "")
+            if not body:
+                continue
+            span = recipe.function_spans.get(name)
+            match = _HOOK_INTERPRETER_RE.search(body)
+            if match:
+                out.append(stamp({
+                    "rule_id": "C016",
+                    "name": "Interpreter Invocation In Install Hook",
+                    "severity": "HIGH", "category": "execution",
+                    "match": f"{name}() invokes '{match.group(0).strip()}'; "
+                             "a hook runs as root at pacman time",
+                    "file": span.file if span else file.path,
+                    "line": span.line if span else None,
+                    "params": {"hook": name, "interpreter": match.group(0).strip()[:40]},
+                }))
+            for raw_line in split_lines(body):
+                for target in _raw_targets(strip_comment(raw_line)):
+                    if _user_writable_target(target):
+                        out.append(stamp({
+                            "rule_id": "C017",
+                            "name": "Install Hook Writes To A User-Writable Location",
+                            "severity": "HIGH", "category": "persistence",
+                            "match": f"{name}() writes to {target.strip()}; "
+                                     "the hook runs as root",
+                            "file": span.file if span else file.path,
+                            "line": span.line if span else None,
+                            "params": {"hook": name, "path": target.strip()[:80]},
+                        }))
+                        break
+    return out
+
+
+def capability_in_diff(diff_text: str, current_text: str | None = None) -> str | None:
+    """A new fetch or non-source execution added in a critical function.
+
+    F8's predicate: a version bump that also starts downloading or running
+    something is not the benign checksum refresh C002 describes.  Returns a
+    short description, or ``None`` when the diff adds no such capability.
+    """
+    import os
+
+    from .delivery import (
+        _BUILD_FUNCTIONS,
+        _H072_BENIGN_EXEC,
+        _collect_executions,
+        _declared_source_basenames,
+        _FETCH_CLIENT_RE,
+        _recipe_lines,
+        resolve_added_lines,
+    )
+    from ..line_lex import strip_comment
+    from ..rules import ScopeResolver
+
+    lines = resolve_added_lines(diff_text)
+    scopes = ScopeResolver(lines, _recipe_lines(current_text))
+    source_basenames = _declared_source_basenames(diff_text, current_text)
+    for i, line in enumerate(lines):
+        fn = scopes.within(i, _BUILD_FUNCTIONS)
+        if not line.startswith("+") or fn is None:
+            continue
+        body = strip_comment(line[1:])
+        client = _FETCH_CLIENT_RE.search(body)
+        if client:
+            return f"a network fetch ({client.group(0)[:40]})"
+        for path in _collect_executions(body):
+            base = os.path.basename(path)
+            # Only a *script-like* execution is a capability: `python -m
+            # unittest` in a newly added check() is ordinary test
+            # infrastructure, while `bash stage.sh` / `escript f.erl` is a
+            # file being run.  A module name has no dot and no path.
+            if "." not in base and "/" not in path:
+                continue
+            if base and base not in _H072_BENIGN_EXEC \
+                    and base not in source_basenames:
+                return f"an execution of {path}"
+    return None
 
 
 def recipe_checksum_parity_finding(recipe_text: str) -> dict | None:

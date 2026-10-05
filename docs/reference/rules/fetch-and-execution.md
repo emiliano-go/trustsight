@@ -25,6 +25,8 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C007](#c007) | Command Substitution In Source Array | CRITICAL |
+| [C015](#c015) | Fetch In package() | HIGH |
+| [C016](#c016) | Interpreter Invocation In Install Hook | HIGH |
 | [H003](#h003) | Insecure Download Protocol | LOW |
 | [H004](#h004) | Privilege Escalation | CRITICAL |
 | [H009](#h009) | Network connection attempt | - |
@@ -203,7 +205,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Severity:** HIGH (weight 25)
 - **Category:** `packaging`
 - **Scope:** `['pkgver']`
-- **Pattern:** `\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b`
+- **Pattern:** `\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b`
 - **Description:** `pkgver()` runs during version resolution, before a reviewer sees the build. Network access there executes ahead of any inspection step. Scoped to `pkgver` so that `curl` in `build()` is unaffected, and matched against fetching subcommands only; `git describe`, the standard VCS idiom, is local and must not fire.
 
 ### R055: Git Clone With Variable Branch {#r055}
@@ -227,8 +229,8 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Target:** `resolved`
 - **Severity:** HIGH (weight 25)
 - **Category:** `network`
-- **Pattern:** `(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)`
-- **Description:** Detects `curl --insecure` / `curl -k` and `wget --no-check-certificate`. Disabling certificate verification makes the transport trivially interceptable. The `-k` match requires a preceding word boundary so that flags such as `--keepalive-time` do not trigger it.
+- **Pattern:** `(?:curl\s+[^;&|]*?(?:--insecure|-k)\b|wget\s+[^;&|]*?--no-check-certificate\b|git\s+-c\s+http\.sslVerify=false\b|GIT_SSL_NO_VERIFY\s*=|pip\s+[^;&|]*?--trusted-host\b|npm\s+[^;&|]*?--strict-ssl=false\b|deno\s+[^;&|]*?--unsafely-ignore-certificate-errors\b)`
+- **Description:** Detects the documented TLS-off flag of every catalogued client: `curl --insecure`/`-k`, `wget --no-check-certificate`, `git -c http.sslVerify=false`, `pip --trusted-host`, `npm --strict-ssl=false` and `deno --unsafely-ignore-certificate-errors`, plus the `GIT_SSL_NO_VERIFY` environment assignment. Disabling certificate verification makes the transport trivially interceptable. The `-k` match requires a preceding word boundary so that flags such as `--keepalive-time` do not trigger it. `--no-verify` is deliberately absent: for bun and cargo it skips lifecycle scripts, not TLS.
 
 ### H015: Critical Build Function Modified {#h015}
 
@@ -253,6 +255,8 @@ On by default. See [`[code_rules]`](../configuration.md#code_rules).
 - **Description:** A command inside `build()`, `prepare()`, `check()`, or `package()` downloads a URL that does not appear in `source=()`. This is the classic route around checksum verification: the declared sources verify cleanly while the real payload arrives at compile time.
 
 The comparison is against a **source-array-scoped** URL extraction, not the general `extract_urls_from_diff()`. That helper collects URLs from any added line, including the offending `curl` line itself, so comparing against it would mean the rule could never fire. A fetch of a URL already declared in `source=()` does not fire.
+
+A client that names its remote with no scheme at all is covered too: `sftp -b - u@h`, `ftp -n h`, `nc h 4444` and `ssh u@h cmd` yield the bare host, and it is compared against the canonical hosts of the declared sources. `git fetch origin` names a *remote*, not a host, so it is deliberately outside this arm; its chain is H082's.
 
 On by default. See [`[code_rules]`](../configuration.md#code_rules).
 
@@ -426,7 +430,11 @@ them. Detected by `_committed_execution_findings()` in
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `network_execution`
-- **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, or `>` form) or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
+- **Condition:** Inside a build/package/check/prepare function (install hooks already have H017), a line downloads to a file with `curl`/`wget`/`aria2c`/`axel` (`-o`, `--output`, `--output-document`, glued or spaced, a `>` redirect, or a stdout-dash piped to `tee`), or with an interpreter one-liner (`python3 -c ... urlretrieve`, `perl -e ... getstore`, and the rest), and the same scope later executes that file. "The same scope" follows the call graph: a fetch in a helper and the execution in the `build()` that calls it are one operation.
+
+The **unattributed arm** covers the clients whose output grammar names no file: `sftp`/`ftp`/`ssh`/`nc`, `git fetch`/`pull`, `rclone moveto`/`move`/`bisync`/`copyurl`, `ipfs get`, `aws s3 cp`, `gsutil cp`, `b2 download`, `cvs`, `tftp`, `openssl s_client`, `npx`, a glued or server-decided flag, and a fetch-spec-in-file (`wget -i`, `aria2c -i`, `lftp -f`, `curl --config`). A later execution of an undeclared, non-benign file in the same reachable scope pairs with it; pairing crosses makepkg phases in order (`prepare` -> `build` -> `check` -> `package`), treats a loop variable (`bash "$f"`) as an unknown path, and follows a rename of a fetched file (`awk '1' repo/x.sh > run.me; escript run.me`). Executions under `$pkgdir` are the package's own output and are exempt. A scheme-bearing URL is left to H016 and the attributed arm, so one command is not scored twice.
+
+The execution side is the same sink vocabulary H083 uses: shells, `sh -s < f`, interpreter `< f`, process substitution (`python3 < <(curl ...)`), `/dev/fd/N`, and `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`, `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest. Detected by `_fetch_then_execute_findings()` in `src/trustsight/analysis/delivery.py`.
 
 This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
 pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
@@ -509,3 +517,30 @@ surface where the behaviour is ordinary, and the subset that is not
 ordinary is scored.
 
 Zero occurrences in the benign corpus.
+
+### C015: Fetch In package() {#c015}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `network`
+- **Condition:** A fetch client at a command position in the `package()`
+  body. Sources belong in `prepare`/`build`, where the checksum arrays
+  apply; fetching at artifact-assembly time bypasses source-array
+  accounting.
+
+Reads `RecipeDoc.functions["package"]` only. A client name inside a quoted
+dependency list or a comment is not a fetch, and `python -m pip install .`
+(a local install) stands down because the interpreter arm requires a
+scheme-bearing address on the line. Measured on the locked benign corpus:
+7/3,739 (0.19%).
+
+### C016: Interpreter Invocation In Install Hook {#c016}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `execution`
+- **Condition:** An interpreter or explicit shell (`bash -c`, `sh`,
+  `python`, `perl`, `ruby`, `node`, `php`) at a command position inside a
+  `*_install`/`*_upgrade`/`*_remove` hook body. The hook runs as root at
+  pacman time.
+
+Only complete `.install` files are read (see the `partial_file_analysis`
+coverage gap). Measured on the locked benign corpus: 0/3,739.

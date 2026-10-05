@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X025, integrity-change rules C001-C013, dependency rules
+rules X001-X031, integrity-change rules C001-C025, dependency rules
 D001-D004, declared-practice rules P001-P008, and unverifiable rules
 W001-W006.
 
@@ -35,25 +35,25 @@ generated from it by `scripts/build_rules_index.py`.
 <!-- generated: legend -->
 | Category | Slug | Rules | What a rule here claims |
 |----------|------|-------|-------------------------|
-| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 37 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
+| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 39 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
-| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 18 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
-| [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 8 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
-| [Integrity and Verification](integrity.md) | `integrity` | 38 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
+| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 19 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
+| [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 9 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
+| [Integrity and Verification](integrity.md) | `integrity` | 42 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 3 | How recently the package or this revision appeared, independent of any diff content. |
-| [Composition](composition.md) | `composition` | 4 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
+| [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 25 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 31 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 6 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
-25 rules detect tokenizer defeat and command reconstruction; see
+31 rules detect tokenizer defeat and command reconstruction; see
 [crossfire.md](crossfire.md) for the family boundary and rule descriptions.
 
 ## Reading a rule entry
@@ -96,6 +96,16 @@ is deliberately non-contiguous; see
 | [C011](integrity.md#c011) | Prebuilt Binary From Non-Upstream Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
 | [C012](deception.md#c012) | Source Domain Resembles Declared Upstream | Integrity-change | MEDIUM | [Deception and Anti-Analysis](deception.md) |
 | [C013](integrity.md#c013) | Source Fork Diverges From Declared Upstream | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C014](integrity.md#c014) | Array Order Manipulation | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C015](fetch-and-execution.md#c015) | Fetch In package() | Integrity-change | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [C016](fetch-and-execution.md#c016) | Interpreter Invocation In Install Hook | Integrity-change | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [C017](install-and-persist.md#c017) | Install Hook Writes To A User-Writable Location | Integrity-change | HIGH | [Install and Persistence](install-and-persist.md) |
+| [C020](integrity.md#c020) | Credentials In A Source URL | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C021](composition.md#c021) | Dependency Removal During A Build Change | Integrity-change | MEDIUM | [Composition](composition.md) |
+| [C022](integrity.md#c022) | Checksum Strength Downgraded | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
+| [C023](integrity.md#c023) | IP-Literal Source Host | Integrity-change | MEDIUM | [Integrity and Verification](integrity.md) |
+| [C024](composition.md#c024) | Install Script Not Declared | Integrity-change | MEDIUM | [Composition](composition.md) |
+| [C025](staging-and-recon.md#c025) | Hardening Option Disabled | Integrity-change | LOW | [Staging and Reconnaissance](staging-and-recon.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
@@ -280,6 +290,12 @@ is deliberately non-contiguous; see
 | [X023](crossfire.md#x023) | Command Output Executed As A Script | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X024](crossfire.md#x024) | Indirect Sensitive Assignment | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X025](crossfire.md#x025) | Multi-Line Function Shadow | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X026](crossfire.md#x026) | Unresolved Constructs In Executable Positions | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
+| [X027](crossfire.md#x027) | Refusal Cluster | Crossfire | CRITICAL | [Crossfire](crossfire.md) |
+| [X028](crossfire.md#x028) | Pattern Completed Across Commits | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X029](crossfire.md#x029) | Encoded Material At Rest | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
+| [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001` to `P008`) are not detections

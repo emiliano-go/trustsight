@@ -41,6 +41,9 @@ dev = [
     "ruff",
     "tree-sitter>=0.23",
     "tree-sitter-bash>=0.23",
+    # Property-based parser tests (spec §12): the locked corpus proves
+    # equivalence; Hypothesis explores the contract itself.
+    "hypothesis",
 ]
 docs = [
     # Pinned to the versions in uv.lock.  The docs site is also built by an

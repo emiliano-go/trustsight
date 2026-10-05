@@ -18,10 +18,20 @@ from ..analysis.crossfile import metadata_recipe_divergence
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.ioc_match import ioc_baseline_matches
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
-from ..analysis.structural import _structural_findings, unchanged_upstream_host
+from ..analysis.structural import (
+    _structural_findings,
+    partial_install_files,
+    unchanged_upstream_host,
+)
 from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
 from ..buckets import classify_urls
-from ..config import drifted_shipped_rules, load_config, load_thresholds
+from ..changes import change_delta
+from ..config import (
+    drifted_shipped_rules,
+    load_config,
+    load_rules,
+    load_thresholds,
+)
 from ..db import (
     effective_observation_count,
     get_connection,
@@ -57,10 +67,14 @@ from ..rules import (
 )
 from ..coverage import (
     begin_stage_tracking,
+    cut_hunk_details,
     gaps_from,
+    note_stage_failure,
     oversized_lines,
     parse_time_substitution_lines,
+    resolution_coverage,
     stage_failures,
+    unresolved_assignment_rows,
     unresolved_source_lines,
 )
 from ..diffdoc import parse_diff_lines
@@ -587,15 +601,21 @@ def analyze_package_text(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
-    partial_hunks = len(parse_diff_lines(split_lines(diff_text)).cut_hunks())
+    parse_time_subs = parse_time_substitution_lines(diff_text)
+    unresolved_assignments = unresolved_assignment_rows(
+        new_pkgbuild or "", file="PKGBUILD",
+        extra_lines=[*unresolved_sources, *parse_time_subs])
+    cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
+    partial_files = partial_install_files(diff_text)
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
-        partial_hunks=partial_hunks,
+        partial_hunks=len(cut_hunks),
+        partial_files=partial_files,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
         long_lines=oversized_lines(raw_lines),
-        parse_time_substitutions=parse_time_substitution_lines(diff_text),
+        parse_time_substitutions=parse_time_subs,
         snapshot_refused=snapshot_refused,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
         deps_not_scanned=depth_result.truncated,
@@ -643,6 +663,10 @@ def analyze_package_text(
         depth_truncated=depth_result.truncated,
         depth_note=depth_result.reason,
         unresolved_sources=unresolved_sources,
+        unresolved_assignments=unresolved_assignments,
+        partial_hunks=cut_hunk_details(cut_hunks),
+        partial_files=partial_files,
+        change=change_delta(diff_text).to_dict(),
         risk=risk,
         temporal_source=temporal.source,
         score_breakdown=breakdown,
@@ -650,6 +674,8 @@ def analyze_package_text(
         ioc_matches=ioc_baseline_matches(diff_text, pkg_name, current_text=new_pkgbuild),
     )
 
+    fact.resolution_coverage = resolution_coverage(
+        resolved_strings, unresolved_strings, triggered_rules, load_rules())
     with_changes(fact, diff_text)
     if record:
         insert_analysis(
@@ -663,6 +689,18 @@ def analyze_package_text(
             fact_json=json.dumps(fact_to_dict(fact)),
             triggered_rules=triggered_rules,
         )
+
+        # Spec §11: index this version's RecipeDoc arrays and scalars for
+        # exact tuple history.  The index is analysis-side; the signed
+        # seed/baseline pipeline is untouched.
+        from ..recipedoc import parse_recipe
+        from ..db import record_recipe_document
+
+        try:
+            recipe = parse_recipe(new_pkgbuild or "", file="PKGBUILD")
+            record_recipe_document(pkg_name, recipe.scalars, recipe.arrays)
+        except Exception:
+            note_stage_failure("recipe-index")
 
         update_package_version(pkg_name, new_version)
         if maintainer:

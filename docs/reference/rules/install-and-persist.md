@@ -22,6 +22,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [C017](#c017) | Install Hook Writes To A User-Writable Location | HIGH |
 | [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
 | [H023](#h023) | Install Hook Present | INFO |
 | [H032](#h032) | Write To User Home Or RC | HIGH |
@@ -336,3 +337,16 @@ separate the shapes: a hook script arriving in the same diff as its
 declaration is the attack's committed form, while a declaration moving to
 an existing script is weaker (the script may predate the diff) and reads
 as MEDIUM.
+
+### C017: Install Hook Writes To A User-Writable Location {#c017}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `persistence`
+- **Condition:** A hook writes to `$HOME`/`~`, `/root`, `/tmp`,
+  `/var/tmp`, `/dev/shm`, `$XDG_*` or `/run/user/...`. The hook runs as
+  root at pacman time, so a user-writable destination is a privilege
+  boundary crossing.
+
+System destinations (`/etc/skel`, `/usr/...`) are not this rule's
+business; the S-series and H032/H038 own hook writes to system paths.
+Measured on the locked benign corpus: 0/3,739.

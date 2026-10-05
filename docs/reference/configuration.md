@@ -375,6 +375,7 @@ own project's names from firing a scope-expansion rule.
 
 | Key | Rule | Default | Meaning |
 |-----|------|---------|---------|
+| `c001.require_capability_signal` | C001 | `true` | A version move only downgrades the checksum-tamper signal to C002 when the diff adds no new fetch or script execution in a critical function. One flip restores the historical behaviour. |
 | `h036.obfuscation_density` | H036 | `3` | Distinct obfuscation indicators on one line before it is reported. |
 | `h043.attack_chain_stages` | H043 | `3` | Distinct kill-chain stages that must co-occur. |
 | `h045.min_packages` / `h045.window_days` | H045 | `10` / `7` | Cluster size and window for mass adoption. |
@@ -401,7 +402,7 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads four environment variables. Everything else that changes
+TrustSight reads six environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
@@ -410,6 +411,8 @@ behaviour is a config key or a command flag.
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
+| `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache (spec §4) stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
+| `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

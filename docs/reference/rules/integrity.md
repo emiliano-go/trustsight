@@ -34,6 +34,10 @@ severity weights and the reserved identifier ranges.
 | [C010](#c010) | Binary Metadata File | HIGH |
 | [C011](#c011) | Prebuilt Binary From Non-Upstream Host | MEDIUM |
 | [C013](#c013) | Source Fork Diverges From Declared Upstream | MEDIUM |
+| [C014](#c014) | Array Order Manipulation | MEDIUM |
+| [C020](#c020) | Credentials In A Source URL | HIGH |
+| [C022](#c022) | Checksum Strength Downgraded | HIGH |
+| [C023](#c023) | IP-Literal Source Host | MEDIUM |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -97,13 +101,13 @@ a top-level flag-set replacement is [H079](#h079).
 ### C001: Checksum Changed Without Source Change With Stable Version {#c001}
 
 - **Severity:** HIGH (weight 25)
-- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** `pkgver`, `pkgrel` and `epoch` did not change.
-- **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise.
+- **Condition:** `sha256sums` value changed (added or modified) and **no** source URLs were added or removed, and either `pkgver`, `pkgrel` and `epoch` did not change, **or** the same diff adds a new code capability in a critical function: a network fetch, or an execution of a script-like file that is not a declared source or a benign build artifact.
+- **Description:** A checksum changed with no corresponding version or source change is anomalous. It suggests the tarball content changed without an upstream version bump, which is a red flag for supply-chain compromise. A version move alone no longer stands the signal down when the bump is used as cover: a routine bump that also starts downloading or running something keeps the HIGH finding. Gated by `[thresholds] c001.require_capability_signal` (default true); set it false to restore the historical "every bump is C002" rule.
 
 ### C002: Checksum Updated With Version Bump {#c002}
 
 - **Severity:** INFO (weight 0)
-- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, **and** at least one of `pkgver`, `pkgrel` or `epoch` changed.
+- **Condition:** `sha256sums` value changed (added or modified), **no** source URLs were added or removed, at least one of `pkgver`, `pkgrel` or `epoch` changed, and the diff adds no new code capability (see C001).
 - **Description:** Normal during routine version bumps. Recorded for audit trail; contributes no weight.
 
 ### C003: Source URL Changed Without Version Bump {#c003}
@@ -675,3 +679,52 @@ watch replay is the signal that matters: the package that was pinned
 yesterday and tracks a branch today changed who decides what it builds.
 Only same-name entries on both sides of the diff compare, the H099
 keying, so a partially shown array cannot mis-pair an entry.
+
+### C014: Array Order Manipulation {#c014}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `integrity`
+- **Condition:** A checksum array's entries change relative order while the
+  array also gains or loses an entry, or a `SKIP` entry moves position.
+  Ordering facts come from the typed recipe arrays (positions are preserved
+  there), never from a re-read of the diff text.
+
+Set semantics discard position, so a hash shuffled away from the slot a
+reviewer checks was invisible. A pure reformat - reorder with no content
+change and no `SKIP` movement - stands down via
+`[thresholds] c014.require_content_change` (default true). Measured on the
+locked benign corpus: 0/3,739.
+
+### C020: Credentials In A Source URL {#c020}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `source`
+- **Condition:** A gained `source=()` entry carries userinfo before the
+  host (`https://token@host/...`).
+
+The evidence names the host only; the credential value itself is never
+printed. Measured on the locked benign corpus: 0/3,739.
+
+### C022: Checksum Strength Downgraded {#c022}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `integrity`
+- **Condition:** The strongest checksum array a recipe carried has its
+  declaration removed in this diff while a strictly weaker array remains.
+  Strength order is `b2 > sha512 > sha256 > sha1 > md5`; arch-suffixed
+  variants count with their base.
+
+Stands down when every checksum array was removed together - H002 owns
+that shape. Measured on the locked benign corpus: 43/3,739 (1.15%), every
+firing a declared strongest-array removal; the rate is published as the
+calibration floor.
+
+### C023: IP-Literal Source Host {#c023}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `source`
+- **Condition:** A gained source host parses as an IPv4 or IPv6 literal
+  (`https://203.0.113.7/...`, `https://[2001:db8::1]/...`).
+
+Direct-IP fetches are a C2 shape that generic novelty under-weights.
+Measured on the locked benign corpus: 0/3,739.

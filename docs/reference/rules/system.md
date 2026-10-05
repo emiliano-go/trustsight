@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X025, C001-C013, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C025, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -387,6 +387,46 @@ See [C012: Source Domain Resembles Declared Upstream](deception.md#c012).
 ### C013 {#c013}
 
 See [C013: Source Fork Diverges From Declared Upstream](integrity.md#c013).
+
+### C014 {#c014}
+
+See [C014: Array Order Manipulation](integrity.md#c014).
+
+### C015 {#c015}
+
+See [C015: Fetch In package()](fetch-and-execution.md#c015).
+
+### C016 {#c016}
+
+See [C016: Interpreter Invocation In Install Hook](fetch-and-execution.md#c016).
+
+### C017 {#c017}
+
+See [C017: Install Hook Writes To A User-Writable Location](install-and-persist.md#c017).
+
+### C020 {#c020}
+
+See [C020: Credentials In A Source URL](integrity.md#c020).
+
+### C021 {#c021}
+
+See [C021: Dependency Removal During A Build Change](composition.md#c021).
+
+### C022 {#c022}
+
+See [C022: Checksum Strength Downgraded](integrity.md#c022).
+
+### C023 {#c023}
+
+See [C023: IP-Literal Source Host](integrity.md#c023).
+
+### C024 {#c024}
+
+See [C024: Install Script Not Declared](composition.md#c024).
+
+### C025 {#c025}
+
+See [C025: Hardening Option Disabled](staging-and-recon.md#c025).
 
 ### C005 {#c005}
 
@@ -1098,7 +1138,7 @@ See [H074: Adopt-then-Modify](maintainer-and-metadata.md#h074).
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
 H086-H088 are per-package findings, not Class D corpus findings. S001-S008
-and X001-X025 are the sabotage and crossfire families; their category pages
+and X001-X031 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
 ### H086 {#h086}
@@ -1344,6 +1384,30 @@ See [X024: Indirect Sensitive Assignment](crossfire.md#x024).
 ### X025 {#x025}
 
 See [X025: Multi-Line Function Shadow](crossfire.md#x025).
+
+### X026 {#x026}
+
+See [X026: Unresolved Constructs In Executable Positions](crossfire.md#x026).
+
+### X027 {#x027}
+
+See [X027: Refusal Cluster](crossfire.md#x027).
+
+### X028 {#x028}
+
+See [X028: Pattern Completed Across Commits](crossfire.md#x028).
+
+### X029 {#x029}
+
+See [X029: Encoded Material At Rest](crossfire.md#x029).
+
+### X030 {#x030}
+
+See [X030: ANSI-C Quoted Content In Commands](crossfire.md#x030).
+
+### X031 {#x031}
+
+See [X031: Build Reads Non-Code Text](crossfire.md#x031).
 
 
 ---

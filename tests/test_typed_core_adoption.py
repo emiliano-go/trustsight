@@ -25,6 +25,11 @@ PINNED_LOOPS = {
     "analysis/ioc.py": 1,          # whole-file text -> synthetic added lines
     "analysis/ioc_match.py": 1,    # same constructor
     "differ.py": 3,                # local_source_names/urls_from_pkgbuild_text/companions
+    # Function bodies already read from RecipeDoc.functions; the loop is
+    # over a body's lines (payload text), not a diff walk.
+    "analysis/structural.py": 2,
+    # A local file the operator hands in, read whole; not a diff.
+    "cli/lint.py": 2,
 }
 
 

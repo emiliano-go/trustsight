@@ -6,6 +6,7 @@ from typing import NamedTuple
 import pygit2
 from pygit2 import GIT_DELTA_ADDED, GIT_DELTA_DELETED, GIT_DELTA_MODIFIED, GIT_DELTA_RENAMED
 
+from .changes import ChangeDelta, FileDelta, VersionFacts, change_delta  # noqa: F401
 from .coverage import unpinned_source_refs
 from .diffdoc import parse_diff_lines, strip_diff_path_prefix
 from .schema import DiffSummary, SourceChanges

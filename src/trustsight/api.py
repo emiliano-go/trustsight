@@ -319,6 +319,17 @@ class Report:
         root cause the previous recorded analysis already carried.  Still
         gaps; labelled "unchanged since the previous review" rather than
         read as introduced by this diff.
+    :ivar change: the typed change-as-data view (spec §1),
+        ``ChangeDelta.to_dict()``: file statuses, host and source deltas,
+        checksum and dependency array deltas, and the resolved version
+        move.  The prose summary renders the same object.
+    :ivar unresolved_assignments: assignments the tokenizer refused on the
+        analysed surface, each with its variable name, raw line and file.
+        The value is "not seen" to every rule; this names the boundary.
+    :ivar partial_files: install-script files whose diff showed only part
+        of the file; their hook bodies were not read as whole scripts.
+    :ivar resolution_coverage: how much of the diff the tokenizer could
+        read, and which resolution-coupled R-rules matched.
     :ivar cached: this report serves the recorded analysis unchanged: the
         AUR HEAD, both versions, the dependency depth and the ruleset were
         all unchanged, so nothing was re-computed.
@@ -413,6 +424,35 @@ class Report:
     coverage_gaps_carried: tuple[str, ...] = ()
     """The subset of :attr:`coverage_gaps` unchanged since the previous review."""
 
+    change: dict = field(default_factory=dict)
+    """The typed change-as-data view (spec §1): ``ChangeDelta.to_dict()``.
+
+    The same object the prose summary renders, exposed for consumers that
+    want the host/source/checksum/dependency deltas as data.
+    """
+
+    unresolved_assignments: tuple = ()
+    """Assignments the tokenizer refused on the analysed surface (spec §8).
+
+    Each entry names the variable, quotes the raw line, and names its
+    file.  The value is still "not seen" to every rule; this only names
+    the boundary of the analysis.
+    """
+
+    partial_files: tuple = ()
+    """Install-script files whose diff showed only part of the file (§9).
+
+    Their hook bodies are not read as whole scripts; the run carries a
+    ``partial_file_analysis`` coverage gap instead.
+    """
+
+    resolution_coverage: dict = field(default_factory=dict)
+    """How much of the diff the tokenizer could read (Addendum 2, R1).
+
+    ``resolved_lines``, ``unresolved_lines``, the R-rules whose accuracy
+    is coupled to resolution, and the subset that actually matched.
+    """
+
     cached: bool = False
     """The recorded analysis was served unchanged (#20); nothing was re-computed."""
     cached_at: str = ""
@@ -451,7 +491,10 @@ class Report:
         return describe(
             list(self.coverage_gaps),
             carried=self.coverage_gaps_carried,
-            details={"unresolved_source": self.raw.get("unresolved_sources") or ()},
+            details={
+                "unresolved_source": self.raw.get("unresolved_sources") or (),
+                "partial_hunk": self.raw.get("partial_hunks") or (),
+            },
         )
 
     @property
@@ -497,6 +540,18 @@ class Report:
         :returns: the report as JSON text.
         """
         return json.dumps(self.to_dict(**kwargs), indent=indent)
+
+    def to_sarif(self, diff_text: str | None = None) -> dict:
+        """This report as a SARIF 2.1.0 document (spec §3).
+
+        *diff_text*, when given, lets a removed-line finding anchor to the
+        pre-image (``old_lineno``) instead of being dropped; without it,
+        only findings whose line resolves in the post-state get a region.
+        """
+        from .reporting import report_to_sarif
+
+        diffs = {self.package: diff_text} if diff_text else None
+        return report_to_sarif([self.to_dict()], diffs)
 
 
 @dataclass(frozen=True)
@@ -963,6 +1018,13 @@ def _evaluate_fact_dict_fallback(report: "Report") -> dict:
         "changes": list(report.changes),
         "coverage_gaps": list(report.coverage_gaps),
         "coverage_gaps_carried": list(report.coverage_gaps_carried),
+        "change": dict(report._raw.get("change", {}) or {}),
+        "unresolved_assignments": [
+            dict(a) for a in report._raw.get("unresolved_assignments", ()) or ()
+        ],
+        "partial_files": list(report._raw.get("partial_files", ()) or ()),
+        "resolution_coverage": dict(
+            report._raw.get("resolution_coverage", {}) or {}),
         "file_changes": [c.to_dict() for c in report.file_changes],
         "ioc_matches": list(report._raw.get("ioc_matches", ())),
         "first_seen": report.first_seen,
@@ -1021,6 +1083,11 @@ def _report_from_fact(fact) -> Report:
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
         coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
+        change=dict(evaluated.get("change", {}) or {}),
+        unresolved_assignments=tuple(
+            evaluated.get("unresolved_assignments", ())),
+        partial_files=tuple(evaluated.get("partial_files", ())),
+        resolution_coverage=dict(evaluated.get("resolution_coverage", {}) or {}),
         file_changes=_file_changes(evaluated["file_changes"]),
         added_urls=tuple(fact.source_changes.added_urls),
         removed_urls=tuple(fact.source_changes.removed_urls),
@@ -1113,6 +1180,11 @@ def _report_from_result(row: dict) -> Report:
         changes=tuple(evaluated["changes"]),
         coverage_gaps=tuple(evaluated["coverage_gaps"]),
         coverage_gaps_carried=tuple(evaluated.get("coverage_gaps_carried", ())),
+        change=dict(evaluated.get("change", {}) or {}),
+        unresolved_assignments=tuple(
+            evaluated.get("unresolved_assignments", ())),
+        partial_files=tuple(evaluated.get("partial_files", ())),
+        resolution_coverage=dict(evaluated.get("resolution_coverage", {}) or {}),
         file_changes=_file_changes(evaluated["file_changes"]),
         first_seen=evaluated["first_seen"],
         comparison_base=evaluated.get("comparison_base", ""),
@@ -1410,6 +1482,56 @@ class TrustSight:
             srcinfo=srcinfo,
             record=record,
         )
+        return _report_from_fact(fact)
+
+    def analyze_diff(
+        self,
+        diff_text: str,
+        *,
+        package: str = "",
+        post_pkgbuild: Optional[str] = None,
+    ) -> Report:
+        """Analyse a unified diff directly, with no git and no network.
+
+        The analyzer's true input is a unified diff; the AUR/git machinery
+        is a fetch adapter.  This entry point analyses a diff pasted from a
+        bug report, a PR against its base, or a vendored PKGBUILD against
+        upstream.  It runs the same pipeline stage the git path runs after
+        diff production, with ``adapter="diff"`` in the report.
+
+        *post_pkgbuild* is the post-diff PKGBUILD when the caller holds it;
+        it sharpens the unresolved/parse-time analysis the way the git path
+        uses the head recipe.  Without it, the diff's own post projection
+        is the analysed surface.
+
+        ``diff_truncated`` and the other coverage gaps apply with full
+        force: pasted diffs are the most likely to be mangled.
+
+        :returns: the analysis of the supplied diff.
+
+        Example:
+            .. code-block:: python
+
+                from pathlib import Path
+
+                from trustsight import TrustSight
+
+                report = TrustSight().analyze_diff(
+                    Path("change.diff").read_text(),
+                )
+        """
+        from .analysis.pipeline import scan_diff
+
+        _validate_text(diff_text, name="diff_text")
+        if package:
+            _validate_name(package)
+        if post_pkgbuild is not None:
+            _validate_text(post_pkgbuild, name="post_pkgbuild")
+        self._ensure_ready()
+        fact = scan_diff(
+            diff_text, package_name=package, current_text=post_pkgbuild,
+        )
+        fact.adapter = "diff"
         return _report_from_fact(fact)
 
     def review(

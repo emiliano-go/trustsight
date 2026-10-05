@@ -31,10 +31,43 @@ so a state machine migrating here sees exactly the lines its legacy walk
 saw, but no projection feeds it anywhere as content.
 """
 
+import hashlib
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
 from .tokenizer import split_lines
+
+#: Bumped whenever the parse or the dataclass shape changes.  A cached
+#: document written under a different version is a cache miss, never a
+#: partial read (spec §4).
+DIFFDOC_SCHEMA_VERSION = 1
+
+#: The tokenizer's own critical files: a change to any of them changes
+#: what a line means, so a document parsed by one version must not be
+#: replayed by another.  Hashed automatically rather than bumped by hand,
+#: because the failure mode of a forgotten bump is a wrong analysis.
+_TOKENIZER_FILES = (
+    "tokenizer.py",
+    "_tokenizer_engine.py",
+    "sandbox/client.py",
+    "sandbox/expand_worker.py",
+    "sandbox/protocol.py",
+)
+
+
+@lru_cache(maxsize=1)
+def tokenizer_version() -> str:
+    """A digest of the tokenizer's critical files, or ``"unknown"``."""
+    digest = hashlib.sha256()
+    root = Path(__file__).resolve().parent
+    try:
+        for name in _TOKENIZER_FILES:
+            digest.update((root / name).read_bytes())
+    except OSError:
+        return "unknown"
+    return digest.hexdigest()[:16]
 
 #: Matches the legacy ``differ._HUNK_HEADER_RE`` accept set exactly, with
 #: the old-side start captured as well: ``^@@ -\d+(,\d+)? \+(\d+)(,\d+)? @@``.
@@ -95,6 +128,35 @@ class DiffLine:
         """Whether the line is diff content (not structure or junk)."""
         return self.side != "other"
 
+    def to_dict(self) -> dict:
+        return {
+            "index": self.index,
+            "side": self.side,
+            "content": self.content,
+            "raw": self.raw,
+            "file": self.file,
+            "old_lineno": self.old_lineno,
+            "new_lineno": self.new_lineno,
+            "in_hunk": self.in_hunk,
+            "file_boundary": self.file_boundary,
+            "hunk_boundary": self.hunk_boundary,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DiffLine":
+        return cls(
+            index=data["index"],
+            side=data["side"],
+            content=data["content"],
+            raw=data["raw"],
+            file=data["file"],
+            old_lineno=data["old_lineno"],
+            new_lineno=data["new_lineno"],
+            in_hunk=data["in_hunk"],
+            file_boundary=bool(data.get("file_boundary", False)),
+            hunk_boundary=bool(data.get("hunk_boundary", False)),
+        )
+
 
 @dataclass(frozen=True)
 class DiffHunk:
@@ -112,6 +174,25 @@ class DiffHunk:
     expected_lines: int | None = None
     actual_lines: int = 0
 
+    def to_dict(self) -> dict:
+        return {
+            "old_start": self.old_start,
+            "new_start": self.new_start,
+            "lines": [line.to_dict() for line in self.lines],
+            "expected_lines": self.expected_lines,
+            "actual_lines": self.actual_lines,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DiffHunk":
+        return cls(
+            old_start=data["old_start"],
+            new_start=data["new_start"],
+            lines=tuple(DiffLine.from_dict(line) for line in data["lines"]),
+            expected_lines=data.get("expected_lines"),
+            actual_lines=int(data.get("actual_lines", 0)),
+        )
+
 
 @dataclass(frozen=True)
 class DiffFile:
@@ -127,6 +208,23 @@ class DiffFile:
     old_path: str
     status: str
     hunks: tuple[DiffHunk, ...] = field(default_factory=tuple)
+
+    def to_dict(self) -> dict:
+        return {
+            "path": self.path,
+            "old_path": self.old_path,
+            "status": self.status,
+            "hunks": [hunk.to_dict() for hunk in self.hunks],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DiffFile":
+        return cls(
+            path=data["path"],
+            old_path=data["old_path"],
+            status=data["status"],
+            hunks=tuple(DiffHunk.from_dict(hunk) for hunk in data["hunks"]),
+        )
 
 
 @dataclass(frozen=True)
@@ -213,18 +311,57 @@ class DiffDoc:
         """The pre-diff reconstruction as one string."""
         return "\n".join(self.pre_lines())
 
-    def cut_hunks(self) -> list[tuple[str, int]]:
-        """``(file, hunk new-start)`` for hunks carrying fewer lines than
-        the header declares: the stream was cut mid-hunk.
+    def cut_hunks(self) -> list[tuple[str, int, int, int]]:
+        """``(file, hunk new-start, declared, parsed)`` for hunks carrying
+        fewer lines than the header declares: the stream was cut mid-hunk.
 
         The parser reports the arithmetic and does not repair it; this is
-        the coverage layer's read of that fact (the ``partial_hunk`` gap).
+        the coverage layer's read of that fact (the ``partial_hunk`` gap),
+        and the counts are what the gap quotes back to the reader so the
+        missing tail has a size.
         """
         return [
-            (f.path, h.new_start)
+            (f.path, h.new_start, h.expected_lines, h.actual_lines)
             for f in self.files for h in f.hunks
             if h.expected_lines is not None and h.actual_lines < h.expected_lines
         ]
+
+    def to_dict(self) -> dict:
+        """A stable, versioned byte-format view of this document (spec §4).
+
+        JSON only - never pickle: the document is attacker-derived and a
+        deserialiser that executes is the boundary violation the sandbox
+        exists to avoid.  The parser schema and the tokenizer digest ride
+        the payload so a replay can refuse a document it did not parse.
+        """
+        return {
+            "schema_version": DIFFDOC_SCHEMA_VERSION,
+            "tokenizer_version": tokenizer_version(),
+            "files": [file.to_dict() for file in self.files],
+            "lines": [line.to_dict() for line in self.lines],
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> "DiffDoc | None":
+        """Rebuild a document from :meth:`to_dict`, or ``None`` on a miss.
+
+        A version mismatch, a tokenizer change, or a malformed payload is
+        a cache miss rather than an error or a partial document: the cache
+        is an optimization, never an authority (spec §4).
+        """
+        if not isinstance(data, dict):
+            return None
+        if data.get("schema_version") != DIFFDOC_SCHEMA_VERSION:
+            return None
+        current = tokenizer_version()
+        if current == "unknown" or data.get("tokenizer_version") != current:
+            return None
+        try:
+            files = tuple(DiffFile.from_dict(f) for f in data["files"])
+            lines = tuple(DiffLine.from_dict(line) for line in data["lines"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return cls(files=files, lines=lines)
 
 
 #: Git's diff path prefixes.  ``a/`` and ``b/`` are the defaults; with

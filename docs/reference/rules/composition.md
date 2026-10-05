@@ -28,6 +28,8 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [C021](#c021) | Dependency Removal During A Build Change | MEDIUM |
+| [C024](#c024) | Install Script Not Declared | MEDIUM |
 | [H027](#h027) | Capability Density Anomaly | INFO |
 | [H043](#h043) | Attack-Chain Composition | INFO |
 | [H098](#h098) | Naming/Deception Cluster | HIGH |
@@ -72,7 +74,7 @@ obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072),
 staging (H038), recon (H040), persistence (H039, H062, H076), exfil (H041,
 H071), hidden drop (H042), integrity removed (H091) and sabotage (S001-S008).
 Later rules also map onto these stages, including R041, R054, R144, the
-H080-H083/H089-H091 additions and the X001-X025 crossfire rules; the
+H080-H083/H089-H091 additions and the X001-X031 crossfire rules; the
 authoritative rule-to-stage map is `_STAGE_OF` in `analysis/composition.py`.
 
 Each stage counts once however many rules in it fired, and H043's own finding
@@ -136,3 +138,27 @@ Each fact scores on its own (H078, the maintainer tier); the conjunction
 is the attack, so it stacks the way X007 stacks its members. H078's own
 detection stands in for the keyring delta, the same member-rule
 composition H098 uses.
+
+### C021: Dependency Removal During A Build Change {#c021}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `composition`
+- **Condition:** `checkdepends` or `optdepends` loses an entry while
+  `build()`, `prepare()` or `check()` changed in the same diff.
+
+Dropping `checkdepends` eliminates the test-suite execution that would
+catch a payload; the conjunction with a build change is what makes the
+removal suspicious rather than hygienic. Measured on the locked benign
+corpus: 27/3,739 (0.72%), the published calibration floor.
+
+### C024: Install Script Not Declared {#c024}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `composition`
+- **Condition:** A diff adds or modifies a `*.install` file while the
+  recipe has no `install=` scalar naming it. pacman never runs the hook,
+  so the file is recipe drift or a reverted declaration.
+
+The dangling-declaration half (an `install=` naming an absent file) needs
+tree knowledge and is not yet filed. Measured on the locked benign corpus:
+12/3,739 (0.32%).

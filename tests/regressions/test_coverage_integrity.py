@@ -9,10 +9,15 @@
   assignment instead of naming only the category.
 """
 
+import pathlib
+
 from trustsight.analysis.pipeline import scan_diff
 from trustsight.coverage import PARTIAL_HUNK, describe, gaps_from
 from trustsight.diffdoc import parse_diff_lines
 from trustsight.tokenizer import split_lines
+from trustsight.verdict import fallback_verdict
+
+_CORPUS = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "benign-corpus"
 
 
 _CUT = """\
@@ -62,6 +67,62 @@ def test_an_intact_diff_has_no_partial_hunk():
 def test_scan_diff_fails_closed_on_a_silently_cut_diff():
     fact = scan_diff(_CUT, package_name="demo")
     assert PARTIAL_HUNK in fact.coverage_gaps
+
+
+def test_a_cut_hunk_gap_names_the_file_and_the_missing_count():
+    fact = scan_diff(_CUT, package_name="demo")
+    detail = describe(
+        ["partial_hunk"], details={"partial_hunk": fact.partial_hunks}
+    )
+    assert "PKGBUILD" in detail
+    # The header declares 6 new-side lines; 3 parsed before the cut.
+    assert "declares 6" in detail and "3 parsed" in detail
+
+
+def test_a_verdict_with_a_cut_hunk_never_claims_no_structural_changes():
+    # §2: the summary cannot know what it did not see.  A fact with no
+    # visible change facts is exactly the case that used to read "no
+    # structural changes" while the diff had been cut.
+    from trustsight.schema import PackageFact
+
+    fact = PackageFact(package_name="demo", coverage_gaps=[PARTIAL_HUNK])
+    verdict = fallback_verdict(fact)
+    assert "no structural changes in the examined portion" in verdict
+    assert "no structural changes." not in verdict
+
+
+def _corpus_diff_with_a_multi_line_last_hunk():
+    """The first corpus diff whose last hunk declares two or more lines."""
+    for path in sorted(_CORPUS.glob("*.diff")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        doc = parse_diff_lines(split_lines(text))
+        if not doc.files or not doc.files[-1].hunks:
+            continue
+        last = doc.files[-1].hunks[-1]
+        if last.lines and (last.expected_lines or 0) >= 2:
+            return text, last
+    return None
+
+
+def test_a_corpus_cut_loses_no_finding_silently():
+    """A real diff cut mid-hunk: the gap fires and the visible findings
+    are a subset of the intact run's, never a silent replacement."""
+    found = _corpus_diff_with_a_multi_line_last_hunk()
+    assert found is not None, "corpus lost its multi-line diffs"
+    text, last = found
+    lines = split_lines(text)
+    # Keep the last hunk's header plus its first content line only.
+    cut_text = "\n".join(lines[: last.lines[0].index + 1])
+
+    full = scan_diff(text, package_name="corpus-cut")
+    cut = scan_diff(cut_text, package_name="corpus-cut")
+
+    assert PARTIAL_HUNK in cut.coverage_gaps
+    assert cut.partial_hunks
+    assert f"declares {last.expected_lines}" in cut.partial_hunks[0]
+    full_ids = {e.rule_id for e in full.score_breakdown}
+    cut_ids = {e.rule_id for e in cut.score_breakdown}
+    assert cut_ids <= full_ids
 
 
 def test_an_unresolved_source_gap_quotes_the_offending_assignment():

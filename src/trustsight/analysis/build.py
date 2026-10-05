@@ -1,5 +1,6 @@
 import re
 
+from ..buckets import canonical_host
 from ..config import (
     DEFAULT_FOREIGN_PKG_MANAGERS,
     DEFAULT_OBFUSCATION_INDICATORS,
@@ -168,6 +169,42 @@ def _address_in(text: str) -> str | None:
     return None
 
 
+#: Clients whose command line names a remote host with no URL scheme at
+#: all: `sftp -b - u@h`, `ftp -n h`, `nc h 4444`, `ssh u@h cmd`.  The list
+#: is deliberately narrow: `git fetch origin` names a *remote*, not a host,
+#: and `rsync`/`lftp` put the host among positional arguments the naive
+#: scan cannot tell from flags.
+_HOST_FORM_CLIENTS = re.compile(
+    r"\A(?:sftp|ssh|scp|ftp|tftp|nc|ncat|netcat|telnet)\b", re.IGNORECASE)
+
+_HOST_TOKEN_RE = re.compile(
+    r"\A(?:[A-Za-z0-9_.-]+@)?[A-Za-z0-9_.-]+(?::\d{1,5})?\Z")
+
+
+def _host_address_in(client_text: str, tail: str) -> str | None:
+    """The bare host a host-form client on this line names, or ``None``.
+
+    Flags and their digits are skipped; a token that begins a redirect ends
+    the scan (`ftp -n < cmds.txt` names a command file, not a host); a
+    token with no letter (`22`) is an argument, not a host.
+    """
+    if not _HOST_FORM_CLIENTS.match(client_text):
+        return None
+    for token in tail.split():
+        raw = token.strip("\"'(),")
+        if raw.startswith("<") or raw.startswith(">"):
+            break
+        if not raw or raw.startswith("-") or raw in ("-", "|", "&", ";"):
+            continue
+        if raw.isdigit() or not any(ch.isalpha() for ch in raw):
+            continue
+        if any(ch in raw for ch in "/$`{}'\"()<>&;|=,"):
+            continue
+        if _HOST_TOKEN_RE.match(raw):
+            return raw
+    return None
+
+
 def fetch_addresses(body: str):
     """Yield addresses on *body* that a network client on the same line names.
 
@@ -198,6 +235,11 @@ def fetch_addresses(body: str):
         address = _address_in(client.group(0)) or _address_in(tail[:cut])
         if address:
             yield address
+            continue
+        # No scheme anywhere: a host-form client still names a remote.
+        host = _host_address_in(client.group(0), tail[:cut])
+        if host:
+            yield host
 
 
 def _network_fetch_url(body: str) -> str | None:
@@ -624,6 +666,13 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             else extract_source_array_urls(diff_text)
         )
         declared = {normalize_url(u) for u in declared_src}
+        # A host-form address has no scheme to normalise; the comparison is
+        # by canonical host instead, so `ssh u@h` against a declared
+        # `https://h/...` is not a second finding.
+        declared_hosts = {
+            canonical_host(u.split("://", 1)[1].split("/", 1)[0])
+            for u in declared_src if "://" in u
+        }
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
@@ -641,7 +690,11 @@ def _build_findings(diff_text, config, add, current_text=None) -> None:
             # commented-out fetch is not a fetch, and reading the raw line
             # made `# curl ... | bash` an undeclared download.
             for url in fetch_addresses(_strip_comment(line[1:])):
-                if normalize_url(url) not in declared:
+                if "://" in url:
+                    undeclared = normalize_url(url) not in declared
+                else:
+                    undeclared = canonical_host(url) not in declared_hosts
+                if undeclared:
                     add("H016", "Hidden Network Fetch In Build", "HIGH", "network",
                         f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() downloads {url}, which is not in source=()",
                         position=enclosing[i], url=url)

@@ -379,8 +379,12 @@ _HEREDOC_PATH_BEFORE_RE = re.compile(
     re.IGNORECASE,
 )
 
-# A heredoc opener.  ``<<<`` herestrings are single-line and do not match.
-_HEREDOC_OPEN_RE = re.compile(r"<<(-)?\s*['\"]?(\w+)['\"]?")
+# A heredoc opener.  ``<<<`` herestrings are single-line and do not match:
+# the lookarounds are what makes that true.  Without them the engine found
+# a second ``<<`` inside ``<<<`` and opened a body at the here-string's
+# argument, so every following line of the recipe was treated as heredoc
+# data - which silently blanked whole functions for every pairing rule.
+_HEREDOC_OPEN_RE = re.compile(r"(?<!<)<<(?!<)(-)?\s*['\"]?(\w+)['\"]?")
 
 
 # A heredoc whose destination is an interpreter.  `cat > x <<EOF` writes a
@@ -596,8 +600,16 @@ _EXECUTION_RE = re.compile(
     # An absolute path is the same shell: `/usr/bin/bash s.sh` ran and
     # paired with nothing.  A quoted argument may hold spaces, and the
     # bare `\S+` stopped at the first one.
+    #
+    # The interpreter list carries the sinks the harness proved missing:
+    # `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`,
+    # `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest run a
+    # script file exactly as `bash` does, and H082's pairing saw none of
+    # them.  `pwsh -File f` rides the flag run like every other verb.
     r"(?:busybox\s+)?(?:/[\w./-]*/)?(?:bash|sh|zsh|dash|ksh|ash|mksh"
-    r"|node|php|lua(?:jit)?|tclsh|fish)"
+    r"|node|php|lua(?:jit)?|tclsh|fish"
+    r"|escript|fennel|zx|guile|racket|pwsh|julia|Rscript|deno|bun|elixir"
+    r"|ts-node|gjs|csi|bb|babashka|clj|janet)"
     r"(?:\s+-{1,2}[A-Za-z-]*)*\s+(?![<>-])"
     # `[^\s;&|<>]+`, not `\S+`: a command may end at a separator, and
     # `bash s.sh; fi` captured `s.sh;` - a path that matches nothing.
@@ -608,7 +620,15 @@ _EXECUTION_RE = re.compile(
     # No literal `|` for R001 to see and no filename argument for the
     # pattern above, while `curl > p` is already a fetch output H082 tracks.
     # `<(` is process substitution and `<<` a heredoc; neither is this.
-    r"|(?:bash|sh|zsh|dash|ksh)\s*<\s*(?!\(|<)(\S+)"
+    # `-s < f` is the same stdin read with the shell's flag in between; the
+    # flag run sits before the redirect so the capture still lands on the
+    # file, and the interpreter family reads a script from stdin too.
+    r"|(?:bash|sh|zsh|dash|ksh|ash|mksh)"
+    r"(?:\s+-{1,2}[A-Za-z-]*)*\s*<\s*(?!\(|<)(\S+)"
+    r"|(?:python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|fish|julia"
+    r"|Rscript|bun|deno|escript|fennel|zx|guile|racket|pwsh|elixir"
+    r"|ts-node|gjs|csi|bb|babashka|clj|janet)"
+    r"(?:\s+-{1,2}[A-Za-z-]*)*\s*<\s*(?!\(|<)(\S+)"
     r"|source\s+(\S+)"
     r"|\.\s+(\S+)"
     # `./x` only where a command starts. Unanchored, this arm matched the
@@ -646,9 +666,11 @@ _EXECUTION_RE = re.compile(
 # is ordinary; these names are exempt from H072 (not from H069, where a
 # heredoc-generated configure executed in-recipe is exactly the signal).
 _H072_BENIGN_EXEC = frozenset({
-    "configure", "make", "Makefile", "makefile", "config.status",
+    "configure", "make", "Makefile", "makefile", "GNUmakefile",
+    "config.status",
     "config.log", "config.cache", "config.h", "cmake", "cpack", "ctest",
-    "meson", "ninja", "build.ninja", "CMakeCache.txt",
+    "meson", "meson.build", "ninja", "build.ninja", "CMakeCache.txt",
+    "CMakeLists.txt",
     # The standard entry points of an unpacked tree. A recipe running
     # `python setup.py build` or `perl Makefile.PL` is doing the one thing
     # the packaging format is for, and naming those as unaudited execution
@@ -1262,46 +1284,100 @@ _INTERPRETER_OUTPUT_RE = re.compile(
     re.IGNORECASE,
 )
 
-_FETCH_OUTPUT_RE = re.compile(
-    # The output-flag arm is client-specific on purpose: `-o`/`-O` mean
-    # "write here" for curl and wget, and `rsync -O` is `--omit-dir-times`.
-    # Sharing one client list read rsync's source URL as its destination.
-    r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf"
+#: The clients whose `-o`-family flags name an output file.  Kept as one
+#: alternation so every arm below agrees on the set.
+_OUTPUT_FLAG_CLIENTS = (
+    r"curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf"
     # Store clients that take an output flag too.  `ipfs get CID -o x.sh`
     # names its destination the same way curl does; the address it fetched
     # from is a content identifier rather than a URL, which is why nothing
     # else in the chain could attribute it.
-    r"|ipfs|b2|swift|restic|borg)\b"
+    r"|ipfs|b2|swift|restic|borg"
+)
+
+#: A literal URL on a line, for deriving a basename when a directory-only
+#: flag (`--output-dir`, `-P`, `aria2c -d`) named the destination.
+_LINE_URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]{0,20}://[^\s;&|'\"]+",
+                          re.IGNORECASE)
+
+_FETCH_OUTPUT_RE = re.compile(
+    # Lower-case `-o` takes an argument for every client here, glued
+    # (`-o"f"`, `-o$f`) or spaced.  `(?![-\s])` keeps `-o-` (stdout) and a
+    # bare flag from being read as a filename.
+    r"\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
     r"[^;&|]*?"
-    # `-o` is rarely alone.  `curl -Lo f` and `wget -qO f` are the forms
-    # people actually type, and requiring the flag to stand by itself meant
-    # the fetch never paired with the later execution of what it wrote - one
-    # letter moved, and H082 went quiet.  The cluster must *end* in the
-    # output letter, because that is the one whose argument follows.
-    # `-O` (capital, curl) takes no argument: it means "save as the URL's
-    # basename", and reading the URL after it as a destination produced a
-    # path like `https:/e.x/x.sh`.  Lower-case `-o` does take one.
-    r"(?:\s-[A-Za-z]*o\s+|\s-[A-Za-z]*O\s+(?![a-z][a-z0-9+.-]*://)"
-    r"|\s--output(?:\s+|=)"
-    r"|\s--output-document(?:\s+|=)|>\s*)"
-    r"(?P<path>(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
-    # `scp host:/x.sh s.sh` and `rsync -O URL s.sh` name the destination
+    r"\s-[A-Za-z]*o(?:=?\s*)"
+    r"(?P<path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    # wget's capital `-O` is an output document.  curl's capital `-O` takes
+    # no argument (save as the URL basename) and `-OJ` is its cluster, so
+    # curl is deliberately absent from this arm.
+    r"|\bwget2?\b[^;&|]*?"
+    r"\s-[A-Za-z]*O(?:=?\s*)"
+    r"(?P<wget_path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    r"|\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
+    r"[^;&|]*?\s--output(?:\s+|=)"
+    r"(?P<long_path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    r"|\bwget2?\b[^;&|]*?\s--output-document(?:\s+|=)"
+    r"(?P<doc_path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    r"|\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
+    r"[^;&|]*?>\s*"
+    r"(?P<redir_path>(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
+    # A stdout-dash fetch piped to tee names its file there:
+    # `wget -qO- URL | tee stage.sh` and `curl -o- URL | tee f`.
+    r"|\b(?:curl|wget2?|aria2c|axel)\b[^;&|]*?"
+    r"(?:-[A-Za-z]*[oO]-|/dev/stdout)"
+    r"[^;&|]*?\|\s*tee\s+(?:-\S+\s+)*"
+    r"(?P<tee_path>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)"
+    # Directory-only flags.  The file keeps the URL's basename inside the
+    # directory; with an indirect URL the basename is not derivable, and
+    # the unattributed arm (H082) pairs the later execution instead.
+    r"|\bcurl\b[^;&|]*?\s--output-dir(?:\s+|=)"
+    r"(?P<outdir>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)"
+    r"|\bwget2?\b[^;&|]*?(?:\s-P\s+|\s--directory-prefix(?:\s+|=))"
+    r"(?P<wget_dir>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)"
+    r"|\baria2c\b[^;&|]*?\s-d\s+"
+    r"(?P<aria_dir>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)"
+    # `scp host:/x.sh s.sh` and `rsync URL s.sh` name the destination
     # positionally - there is no output flag to key on, and the last
     # argument is the file the next line runs.
     r"|\b(?:scp|rsync|sftp)\b(?:\s+-\S+)*\s+\S+\s+"
     r"(?P<dest>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)\s*$"
-    # Object stores name source and destination positionally, like scp:
-    # `s3cmd get s3://b/x.sh x.sh`, `aws s3 cp s3://b/x.sh x.sh`,
-    # `rclone copy remote:/x.sh .`.
+    # Object stores name source and destination positionally, like scp.
+    # `moveto`/`move`/`bisync`/`copyurl` were the verbs the harness proved
+    # missing: each still lands bytes on the machine.
     r"|\b(?:s3cmd\s+(?:get|cp|sync)|aws\s+s3\s+(?:cp|sync|mv)"
-    r"|gsutil\s+(?:cp|rsync)|rclone\s+(?:copy|copyto|sync))\b"
-    r"(?:\s+-\S+)*\s+\S+\s+"
-    r"(?P<store_dest>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)\s*$",
+    r"|gsutil\s+(?:cp|rsync)"
+    r"|rclone\s+(?:copy|copyto|sync|moveto|move|bisync|copyurl))\b"
+    r"(?:\s+-\S+)*\s+(?P<store_src>\S+)\s+"
+    r"(?P<store_dest>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)\s*$"
+    # `ipfs get CID` writes a directory named for the CID.
+    r"|\bipfs\s+get\b(?:\s+-\S+)*\s+"
+    r"(?P<ipfs_cid>[A-Za-z0-9]+)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
 # Build/package/check/prepare only; install hooks already have H017.
 _BUILD_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS)
+
+#: makepkg phase order, for pairing a fetch in one function with an
+#: execution in a later one.  A fetch in package() cannot pair with a
+#: build() execution: makepkg never runs them in that order.
+_PHASE_RANK = {"pkgver": 0, "prepare": 1, "build": 2, "check": 3, "package": 4}
+
+#: A line whose execution target sits under $pkgdir stages the package's
+#: own output; it is never the execution of a fetched artifact.
+_PKGDIR_LINE_RE = re.compile(r"\$\{?pkgdir\}?")
+
+#: An interpreter whose script arrives on stdin through a process
+#: substitution: `python3 < <(curl URL)`.  The interpreter reads the
+#: fetch's output, so the capture is tested for a fetch client.
+_PROC_SUBST_STDIN_RE = re.compile(
+    r"\b(?:python3?|perl|ruby|node|php|lua(?:jit)?|tclsh|fish|julia"
+    r"|Rscript|bun|deno|escript|fennel|zx|guile|racket|pwsh|elixir"
+    r"|ts-node|gjs|csi|bb|babashka|clj|janet)\b"
+    r"(?:\s+-{1,2}[A-Za-z-]*)*\s*<\s*<\(([^)]*)\)",
+    re.IGNORECASE,
+)
 
 #: Where files are staged rather than built.
 _PACKAGING_FUNCTIONS = frozenset({"package"}) | frozenset(_INSTALL_HOOKS)
@@ -1311,22 +1387,42 @@ _PACKAGING_FUNCTIONS = frozenset({"package"}) | frozenset(_INSTALL_HOOKS)
 #: the remote.  `git clone URL repo` then `bash repo/run.sh` is a fetch and
 #: an execution of what it fetched, and the pair was never made because the
 #: fetch produced no file path to match - only a tree.
+#: The destination is optional: `git clone URL` creates a directory named
+#: for the URL's basename, and requiring an explicit operand let the whole
+#: no-destination form bypass the pairing.
 _CLONE_DEST_RE = re.compile(
     r"\b(?:git\s+clone|hg\s+clone|bzr\s+branch|svn\s+(?:co|checkout|export)"
     r"|fossil\s+clone|darcs\s+get)\b"
     r"(?:\s+--?\S+)*"
-    r"\s+(?:[a-z][a-z0-9+.-]*://\S+|\S+@\S+:\S+|\S+\.git)"
-    r"\s+(?P<dir>(?:\"[^\"]+\"|'[^']+'|[^\s;&|<>-][^\s;&|<>]*))",
+    r"\s+(?P<url>[a-z][a-z0-9+.-]*://\S+|\S+@\S+:\S+|\S+\.git)"
+    r"(?:\s+(?P<dir>\"[^\"]+\"|'[^']+'|[^\s;&|<>-][^\s;&|<>]*))?",
     re.IGNORECASE,
 )
 
 
 def _clone_destinations(body: str) -> list[str]:
-    """Directories a VCS checkout on *body* fills from a remote."""
-    return [
-        _norm_path(m.group("dir")).rstrip("/")
-        for m in _CLONE_DEST_RE.finditer(body)
-    ]
+    """Directories a VCS checkout on *body* fills from a remote.
+
+    Without an explicit operand the directory is the remote's basename, the
+    same one the client itself uses.
+    """
+    destinations: list[str] = []
+    for match in _CLONE_DEST_RE.finditer(body):
+        raw_dir = match.group("dir")
+        if raw_dir:
+            destinations.append(_norm_path(raw_dir).rstrip("/"))
+            continue
+        url = match.group("url").rstrip("/")
+        name = url.rsplit("/", 1)[-1]
+        if "@" in url and "://" not in url:
+            # `git@host:owner/repo.git` - the path follows the colon.
+            name = url.rsplit(":", 1)[-1].rsplit("/", 1)[-1]
+        name = name.split("#", 1)[0].split("?", 1)[0]
+        if name.endswith(".git"):
+            name = name[:-4]
+        if name:
+            destinations.append(_norm_path(name))
+    return destinations
 
 
 #: A fetch that names no destination.  `wget URL` saves the URL's basename
@@ -1347,15 +1443,42 @@ def _collect_fetch_outputs(body: str) -> list[str]:
     paths: list[str] = []
     if not _FETCH_CLIENT_RE.search(body):
         return paths
+    line_url = _LINE_URL_RE.search(body)
     for m in _FETCH_OUTPUT_RE.finditer(body):
-        raw = m.group("path") or m.group("dest") or m.group("store_dest") or ""
+        raw = (m.group("path") or m.group("wget_path")
+               or m.group("long_path") or m.group("doc_path")
+               or m.group("redir_path") or m.group("tee_path")
+               or m.group("dest") or m.group("store_dest") or "")
         # A URL is a source, not a destination.  `curl -O URL` takes no
         # argument, so whatever follows it is the address being fetched.
-        if "://" in raw:
-            continue
-        path = _norm_path(raw)
-        if path:
-            paths.append(path)
+        if raw and "://" not in raw:
+            path = _norm_path(raw)
+            if path:
+                paths.append(path)
+        # A directory-only flag keeps the URL's basename; with an indirect
+        # URL the name is unknown and the unattributed arm pairs instead.
+        outdir = (m.group("outdir") or m.group("wget_dir")
+                  or m.group("aria_dir"))
+        if outdir and line_url:
+            base = (line_url.group(0).rstrip("/").rsplit("/", 1)[-1]
+                    .split("?")[0])
+            if base:
+                paths.append(_norm_path(
+                    outdir.rstrip("/").strip("\"'") + "/" + base))
+        # A store destination that is a directory keeps the source's
+        # basename: `aws s3 cp s3://b/s.sh .` writes ./s.sh, and the old
+        # capture recorded only "." so the later `bash s.sh` never paired.
+        store_src, store_dest = m.group("store_src"), m.group("store_dest")
+        if store_src and store_dest:
+            dest = store_dest.strip("\"'")
+            if dest in (".", "./") or dest.endswith("/"):
+                base = (store_src.rstrip("/").rsplit("/", 1)[-1]
+                        .split("?")[0].split("#")[0])
+                if base:
+                    paths.append(_norm_path(base))
+        cid = m.group("ipfs_cid")
+        if cid:
+            paths.append(cid)
     for m in _INTERPRETER_OUTPUT_RE.finditer(body):
         path = _norm_path(m.group(1))
         if path:
@@ -1368,6 +1491,25 @@ def _collect_fetch_outputs(body: str) -> list[str]:
     return paths
 
 
+def _body_references(body: str, names) -> bool:
+    """True when *body* names one of *names* as a whole token."""
+    for name in names:
+        base = os.path.basename(name)
+        if base and re.search(rf"(?<![\w.-]){re.escape(base)}(?![\w.-])",
+                              body):
+            return True
+    return False
+
+
+def _body_under_dir(body: str, directories) -> bool:
+    """True when *body* names a path under one of *directories*."""
+    for directory in directories:
+        if directory and re.search(
+                rf"(?<![\w.-]){re.escape(directory)}/", body):
+            return True
+    return False
+
+
 def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> None:
     """A downloader writes a file and the same function later executes it (H082).
 
@@ -1375,7 +1517,20 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     Files that arrived via the declared ``source=()`` array are deliberately
     excluded here - they have their own rule (H083) so checksum-bearing
     source files are not double-counted.
+
+    The second half of the pass is the *unattributed* arm: a client whose
+    output grammar names no file (``sftp``, ``ftp``, ``ssh``, ``git fetch``,
+    ``ipfs get``, a glued or server-decided flag) still brings bytes onto
+    the machine, and a later execution of an undeclared, non-benign file in
+    the same reachable scope is the same chain.  Pairing is by order and
+    phase: a fetch in prepare pairs with an execution in build/check/package
+    (makepkg runs them in that order), never the reverse.  ``$pkgdir``
+    executions are the package's own output and are exempt; declared and
+    benign build-artifact basenames are exempt for the same reason the
+    attributed arm exempts them.
     """
+    from .network import claims_pipe_to_shell, claims_upload_line
+
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     source_basenames = _declared_source_basenames(diff_text, current_text)
@@ -1383,6 +1538,10 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
 
     fetched_by_fn: dict[str, list[str]] = {}
     cloned_by_fn: dict[str, list[str]] = {}
+    #: (phase rank, line index, client, fetch scope) for fetches whose
+    #: destination the grammar cannot name.  A scheme-bearing URL is left
+    #: to H016/H082's attributed arm, so one command is not scored twice.
+    pending_fetch: list[tuple[int, int, str, str]] = []
 
     for i, line in enumerate(lines):
         fn = scopes.within(i, _BUILD_FUNCTIONS)
@@ -1398,6 +1557,36 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
         # rather than by name: anything under it came from the remote.
         for directory in _clone_destinations(body):
             cloned_by_fn.setdefault(fn, []).append(directory)
+        # A rename of a fetched artifact is the same payload under a new
+        # name: a transform that reads a path under a clone directory (or a
+        # fetched output) and writes a new file makes that file pairable.
+        for _kind, wpath in _collect_writes(body, fn):
+            if not wpath:
+                continue
+            if (_body_references(body, fetched_by_fn.get(fn, ()))
+                    or _body_under_dir(body, cloned_by_fn.get(fn, ()))):
+                fetched_by_fn.setdefault(fn, []).append(wpath)
+
+        client = _FETCH_CLIENT_RE.search(body)
+        if (client and "://" not in body
+                and not claims_pipe_to_shell(body)
+                and not claims_upload_line(body, config)):
+            pending_fetch.append(
+                (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
+
+        # An interpreter reading a fetch's stdout through a process
+        # substitution is the chain on one line: `python3 < <(curl URL)`.
+        # The stdin redirect guard in `_EXECUTION_RE` keeps `<(` out, so
+        # this is its own read of the same evidence.
+        for subst in _PROC_SUBST_STDIN_RE.finditer(body):
+            if _FETCH_CLIENT_RE.search(subst.group(1)):
+                add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
+                    f"{fn}() executes the output of a fetch through a "
+                    "process substitution",
+                    line=_find_line(diff_text, "python" if "python" in body
+                                    else body.strip()[:40]),
+                    position=fn, path="<process-substitution>")
+                return
 
         for path in _collect_executions(body):
             base = os.path.basename(path)
@@ -1423,6 +1612,38 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                     continue
                 add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
                     f"{fn}() downloads {fpath or path} and then executes it",
+                    line=_find_line(diff_text, path or base),
+                    position=fn, path=path)
+                return
+            # Unattributed arm (see the docstring).  An unknown path (`$f`
+            # from a loop over a directory a fetch just filled) is exactly
+            # the shape being paired, so it is not filtered out here.
+            if base in source_basenames or base in _H072_BENIGN_EXEC:
+                continue
+            if _PKGDIR_LINE_RE.search(body):
+                continue
+            rank = _PHASE_RANK.get(fn, 9)
+            for fetch_rank, fetch_index, fetch_client, fetch_fn in pending_fetch:
+                if fetch_index > i or fetch_rank > rank:
+                    continue
+                # A fetch and an execution on the same line pair only when
+                # the fetch comes first, or when a process substitution
+                # feeds the execution (`escript /dev/stdin < <(wget …)`).
+                if fetch_index == i:
+                    client_pos = body.find(fetch_client.split()[0])
+                    exec_pos = body.find(base)
+                    if (client_pos != -1 and exec_pos != -1
+                            and client_pos > exec_pos
+                            and "<(" not in body and ">(" not in body):
+                        continue
+                if fetch_fn == fn:
+                    match = (f"{fn}() fetches from an unattributed client "
+                             f"({fetch_client}) and then executes {path}")
+                else:
+                    match = (f"{fetch_fn}() fetches from an unattributed client "
+                             f"({fetch_client}); {fn}() later executes {path}")
+                add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
+                    match,
                     line=_find_line(diff_text, path or base),
                     position=fn, path=path)
                 return
@@ -1456,7 +1677,8 @@ _SOURCE_EXEC_RE = re.compile(
     # got a turn - the same trap `_EXECUTION_RE` documents.
     r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby|node|php|lua(?:jit)?"
     r"|tclsh|wish|fish|tcsh|csh|rc|es|elvish|xonsh|nu|osh"
-    r"|julia|Rscript|bun|deno)\s+(?![<>])(\S+)"
+    r"|julia|Rscript|bun|deno|escript|fennel|zx|guile|racket|pwsh|elixir"
+    r"|ts-node|gjs|csi|bb|babashka|clj|janet)\s+(?![<>])(\S+)"
     r"|source\s+(\S+)"
     r"|\.\s+(\S+)"
     r")"
@@ -1466,7 +1688,8 @@ _SOURCE_EXEC_RE = re.compile(
     # different constructs that H075 owns.
     r"|" + _CMD_START + r"(?:bash|sh|zsh|dash|ksh|python3?|perl|ruby"
     r"|node|php|lua(?:jit)?|tclsh|wish|fish|tcsh|csh|rc|es|elvish"
-    r"|xonsh|nu|osh|julia|Rscript|bun|deno)"
+    r"|xonsh|nu|osh|julia|Rscript|bun|deno|escript|fennel|zx|guile"
+    r"|racket|pwsh|elixir|ts-node|gjs|csi|bb|babashka|clj|janet)"
     r"\s*<\s*(?!\(|<)(\S+)"
     # A bare `"$srcdir/x"` in command position: the file is the command.
     r"|(?:\A\s*+|[;&|]\s*+)[\"']?(\$\{?(?:srcdir|startdir)\}?/[^\"'\s;&|]+)"
@@ -1487,6 +1710,11 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     source_basenames = _declared_source_basenames(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
+    #: fn -> {renamed basename: declared source basename}.  A transform that
+    #: reads a declared file and writes a new name (`awk '1' "$srcdir/x" >
+    #: run.me`) makes the new name the same payload; without this the
+    #: execution of `run.me` matched nothing.
+    aliases_by_fn: dict[str, dict[str, str]] = {}
     for i, line in enumerate(lines):
         fn = scopes.within(i, _BUILD_FUNCTIONS)
         if not line.startswith("+") or fn is None:
@@ -1494,6 +1722,16 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
         if i in heredoc_body:
             continue
         body = _strip_comment(line[1:])
+
+        for _kind, wpath in _collect_writes(body, fn):
+            wbase = os.path.basename(wpath)
+            if not wbase:
+                continue
+            for sbase in source_basenames:
+                if sbase and re.search(
+                        rf"(?<![\w.-]){re.escape(sbase)}(?![\w.-])", body):
+                    aliases_by_fn.setdefault(fn, {})[wbase] = sbase
+                    break
 
         for m in _SOURCE_EXEC_RE.finditer(body):
             raw = next((g for g in m.groups() if g), None)
@@ -1505,10 +1743,16 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
             base = os.path.basename(path)
             if not base or base in _H072_BENIGN_EXEC:
                 continue
-            if base not in source_basenames:
+            alias_of = aliases_by_fn.get(fn, {}).get(base)
+            if base in source_basenames:
+                message = f"{fn}() executes declared source file {base}"
+            elif alias_of:
+                message = (f"{fn}() executes {base}, a rename of declared "
+                           f"source file {alias_of}")
+            else:
                 continue
             add("H083", "Downloaded Source File Executed", "HIGH", "execution",
-                f"{fn}() executes declared source file {base}",
+                message,
                 line=_find_line(diff_text, raw.strip().strip('"\'')[:60] or base),
                 position=fn, path=path)
             return

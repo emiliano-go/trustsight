@@ -57,11 +57,13 @@ HISTORY_TRUNCATED = "history_truncated"
 NOEXTRACT_SUPPRESSED = "noextract_suppressed"
 BINARY_METADATA = "binary_metadata"
 PARTIAL_HUNK = "partial_hunk"
+PARTIAL_FILE_ANALYSIS = "partial_file_analysis"
 
 GAPS = (
     DIFF_TRUNCATED,
     SCAN_TRUNCATED,
     PARTIAL_HUNK,
+    PARTIAL_FILE_ANALYSIS,
     LINE_TRUNCATED,
     TREE_NOT_ANALYZED,
     COMPANION_TRUNCATED,
@@ -90,6 +92,10 @@ GAP_REASONS = {
         "a diff hunk carries fewer lines than its header declares without "
         "any truncation bound reporting it, so the change was cut mid-hunk "
         "and its tail was not examined"
+    ),
+    PARTIAL_FILE_ANALYSIS: (
+        "an install script's diff shows only part of the file, so its hook "
+        "bodies were not analysed as whole scripts"
     ),
     LINE_TRUNCATED: (
         "a line was longer than the matching limit, so its tail was not "
@@ -413,6 +419,7 @@ def gaps_from(
     degraded_stages: list[str] | None = None,
     noextract_present: bool = False,
     partial_hunks: int = 0,
+    partial_files: list[str] | None = None,
 ) -> list[str]:
     """Assemble the gap list for one analysis, in a stable order."""
     gaps: list[str] = []
@@ -432,6 +439,10 @@ def gaps_from(
     # fragment as a whole array with no notice.
     if partial_hunks and not (diff_truncated or scan_truncated):
         gaps.append(PARTIAL_HUNK)
+    # Spec §9: an install script shown only in part is not read as a whole
+    # script; the hook rules stand down and the gap names the boundary.
+    if partial_files:
+        gaps.append(PARTIAL_FILE_ANALYSIS)
     if long_lines:
         gaps.append(LINE_TRUNCATED)
     if not tree_analyzed:
@@ -496,6 +507,79 @@ def gaps_from(
     return gaps
 
 
+def resolution_coverage(resolved, unresolved, triggered_rules,
+                        rules) -> dict:
+    """How much of the diff the tokenizer could read (Addendum 2, R1).
+
+    ``resolved_target_rules`` names the R-rules whose accuracy is coupled
+    to resolution; ``resolved_target_rules_fired`` is the subset that
+    actually matched.  A shrinking fire rate beside a non-zero unresolved
+    count is the tokenizer's boundary showing through, not silence.
+    """
+    resolved_ids = {
+        str(rule.get("id")) for rule in rules or ()
+        if rule.get("match_target") == "resolved"
+    }
+    fired = {
+        str(entry.get("rule_id")) for entry in triggered_rules or ()
+        if str(entry.get("rule_id")) in resolved_ids
+    }
+    return {
+        "resolved_lines": len(resolved or ()),
+        "unresolved_lines": len(unresolved or ()),
+        "resolved_target_rules": sorted(resolved_ids),
+        "resolved_target_rules_fired": sorted(fired),
+    }
+
+
+def unresolved_assignment_rows(
+    text: str, file: str = "", origins=None, extra_lines=None
+) -> list[dict]:
+    """The structured unresolved list of *text*, for the report (spec §8).
+
+    Names every assignment the tokenizer refused, with its raw line
+    (capped) and its file.  *extra_lines* adds refusals the coverage layer
+    knows independently of the tokenizer (a ``source=`` computed at build
+    time is kept as a literal line by the tokenizer but is still a value
+    the analysis never sees); duplicates are dropped.  Additive: the value
+    is still "not seen" to every rule, and this only names the boundary.
+    """
+    from .recipedoc import _ASSIGNMENT_SHAPE_RE, parse_recipe
+
+    rows = [
+        a.to_dict()
+        for a in parse_recipe(text, file=file, origins=origins)
+        .unresolved_assignments
+    ] if text else []
+    seen = {row["line"] for row in rows}
+    for line in extra_lines or ():
+        key = str(line).strip()[:200]
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        match = _ASSIGNMENT_SHAPE_RE.match(key)
+        rows.append({
+            "name": match.group(1) if match else "",
+            "line": key,
+            "file": file,
+        })
+    return rows
+
+
+def cut_hunk_details(cut_hunks) -> list[str]:
+    """Human strings for :meth:`DiffDoc.cut_hunks` rows, for gap details.
+
+    The ``partial_hunk`` gap quotes the first of these so the reader sees
+    which file and hunk were cut and by how many declared lines, instead
+    of only that *some* hunk was.
+    """
+    return [
+        f"{path} @@ {start}: header declares {expected} new line(s), "
+        f"{actual} parsed"
+        for path, start, expected, actual in cut_hunks
+    ]
+
+
 def describe(gaps: list[str], carried: Collection[str] = (),
              details: dict[str, list[str]] | None = None) -> str:
     """One sentence naming every gap, for the verdict text.
@@ -546,6 +630,10 @@ GAP_INCONCLUSIVE_REASONS = {
     DIFF_TRUNCATED: "diff truncated: payload may be hidden",
     SCAN_TRUNCATED: "scan truncated: tail of diff not matched by any rule",
     PARTIAL_HUNK: "diff cut mid-hunk without a declared bound: payload may be hidden",
+    PARTIAL_FILE_ANALYSIS: (
+        "an install script was only partly shown: its hooks were not read "
+        "as whole scripts"
+    ),
     LINE_TRUNCATED: "line truncated: payload may be hidden",
     TREE_NOT_ANALYZED: "repository files not examined: payload may be hidden",
     COMPANION_TRUNCATED: (

@@ -104,6 +104,18 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         for entry in fact.changes:
             inside.add_row("", Text("  " + clean(entry)))
 
+    # Spec §8: the boundary of analysis, named.  An assignment the
+    # tokenizer refused is "not seen" to every rule, and the reader must
+    # see where that boundary sits rather than only a generic gap.
+    unresolved = list(getattr(fact, "unresolved_assignments", ()) or ())
+    if unresolved:
+        inside.add_row("", "")
+        inside.add_row("[underline]Unresolved constructs[/]", "")
+        for row in unresolved[:5]:
+            where = f" ({clean(row.get('file', ''))})" if row.get("file") else ""
+            inside.add_row("", Text(
+                f"  {clean(row.get('name', ''))}: {clean(row.get('line', ''))}{where}"))
+
     declared = [e for e in fact.score_breakdown if e.rule_id.startswith("P")
                 and e.rule_id[1:].isdigit()]
     # B10: the default set is the practices a reader would find surprising
@@ -287,6 +299,14 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
         print("  What changed:")
         for entry in fact.changes:
             print(f"    {clean(entry)}")
+    # Spec §8: the boundary of analysis, named (see the Rich render).
+    unresolved = list(getattr(fact, "unresolved_assignments", ()) or ())
+    if unresolved:
+        print("  Unresolved constructs:")
+        for row in unresolved[:5]:
+            where = f" ({clean(row.get('file', ''))})" if row.get("file") else ""
+            print(f"    {clean(row.get('name', ''))}: "
+                  f"{clean(row.get('line', ''))}{where}")
     if fact.diff_summary.file_changes:
         print("  Files changed:")
         for fc in fact.diff_summary.file_changes:
@@ -321,6 +341,17 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
             where = finding_where(e.file, e.line)
             segs.append(f"{where}  {clean(e.reason)}" if where else clean(e.reason))
             print(" ".join(segs))
+    if verbose:
+        coverage = getattr(fact, "resolution_coverage", {}) or {}
+        if coverage:
+            fired = coverage.get("resolved_target_rules_fired") or []
+            print(
+                "  Resolution: "
+                f"{coverage.get('resolved_lines', 0)} resolved, "
+                f"{coverage.get('unresolved_lines', 0)} unresolved line(s); "
+                "resolved-target R rules fired: "
+                + (", ".join(fired) if fired else "(none)")
+            )
     if fact.ioc_matches:
         print("  IOC baseline matches:")
         for m in fact.ioc_matches:
@@ -676,6 +707,49 @@ def register_commands(app: typer.Typer):
                 typer.echo("\n".join(lines))
         if body is not None:
             typer.echo(json.dumps(body, indent=2))
+
+    @app.command()
+    def report(
+        package: str = typer.Argument(..., help="Package name"),
+        output_format: str = typer.Option(
+            "sarif", "--format", help="Report format (sarif)"),
+        diff_path: str = typer.Option(
+            None, "--diff",
+            help="Analysed diff text; lets removed-line findings anchor to "
+                 "the pre-image",
+        ),
+        depth: int = typer.Option(
+            None, "--depth", help="AUR dependency levels to analyse",
+        ),
+    ):
+        """Emit a machine-readable report document (SARIF 2.1.0)."""
+        if output_format != "sarif":
+            _print_colored(
+                f"unknown report format '{output_format}' (supported: sarif)",
+                "red", stderr=True,
+            )
+            raise typer.Exit(code=2)
+        from ..reporting import evaluate_fact, report_to_sarif
+
+        ensure_default_configs()
+        init_db()
+        try:
+            fact = analyze_package(package, depth=depth, record=False)
+        except Exception as exc:
+            _print_colored(
+                f"Analysis of '{package}' failed: {exc}", "red", stderr=True)
+            raise typer.Exit(code=2)
+        diffs = None
+        if diff_path:
+            try:
+                with open(diff_path, encoding="utf-8", errors="replace") as fh:
+                    diffs = {package: fh.read()}
+            except OSError as exc:
+                _print_colored(f"could not read {diff_path}: {exc}",
+                               "red", stderr=True)
+                raise typer.Exit(code=2)
+        typer.echo(json.dumps(
+            report_to_sarif([evaluate_fact(fact)], diffs), indent=2))
 
 
 def _inspect_history(

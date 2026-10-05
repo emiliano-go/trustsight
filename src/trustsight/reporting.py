@@ -67,6 +67,27 @@ def is_trivial(fact, findings: Sequence[dict] | None = None) -> bool:
     return True
 
 
+def _indexed_unresolved(fact) -> list[str]:
+    """Unresolved-source lines with their ``unresolved_assignments`` index.
+
+    Spec §8: a gap that depended on a refused assignment cross-references
+    the structured list entry by index, so the reader can move between the
+    two without re-matching text.
+    """
+    rows = getattr(fact, "unresolved_assignments", ()) or ()
+    index_by_line = {
+        str(row.get("line", "")).strip()[:200]: i
+        for i, row in enumerate(rows)
+    }
+    out: list[str] = []
+    for line in getattr(fact, "unresolved_sources", ()) or ():
+        key = line.strip()[:200]
+        index = index_by_line.get(key)
+        out.append(f"{line} (unresolved_assignments[{index}])"
+                   if index is not None else line)
+    return out
+
+
 def evaluate_fact(fact) -> dict[str, Any]:
     """Build the canonical semantic result for an internal ``PackageFact``.
 
@@ -84,7 +105,11 @@ def evaluate_fact(fact) -> dict[str, Any]:
     coverage_note = describe_coverage(
         fact.coverage_gaps,
         carried=getattr(fact, "carried_coverage_gaps", ()),
-        details={"unresolved_source": getattr(fact, "unresolved_sources", ())},
+        details={
+            "unresolved_source": _indexed_unresolved(fact),
+            "partial_hunk": getattr(fact, "partial_hunks", ()),
+            "partial_file_analysis": getattr(fact, "partial_files", ()),
+        },
     )
     if coverage_note:
         verdict = f"{coverage_note} {verdict}"
@@ -117,6 +142,17 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
         "coverage_gaps_carried": list(getattr(fact, "carried_coverage_gaps", ())),
+        # Spec §1: the typed change-as-data object, additive to the body.
+        "change": dict(getattr(fact, "change", {}) or {}),
+        # Spec §8 v1: the structured boundary of analysis.
+        "unresolved_assignments": [
+            dict(a) for a in getattr(fact, "unresolved_assignments", ()) or ()
+        ],
+        # Spec §9: install scripts read only in part.
+        "partial_files": list(getattr(fact, "partial_files", ()) or ()),
+        # Addendum 2 R1: tokenizer resolution coverage.
+        "resolution_coverage": dict(
+            getattr(fact, "resolution_coverage", {}) or {}),
         "file_changes": list(fact.diff_summary.file_changes),
         "first_seen": fact.first_seen,
         "diff_truncated": fact.diff_truncated,
@@ -158,6 +194,10 @@ REPORT_KEYS = (
     "changes",
     "coverage_gaps",
     "coverage_gaps_carried",
+    "change",
+    "unresolved_assignments",
+    "partial_files",
+    "resolution_coverage",
     "suppressed_rules",
     "acknowledged_urls",
     "ioc_matches",
@@ -259,6 +299,17 @@ def report_body(
         "coverage_gaps": list(evaluated.get("coverage_gaps", ())),
         # #19: the subset of those gaps unchanged since the previous review.
         "coverage_gaps_carried": list(evaluated.get("coverage_gaps_carried", ())),
+        # Spec §1: ChangeDelta.to_dict(), additive.
+        "change": dict(evaluated.get("change", {}) or {}),
+        # Spec §8 v1: the structured unresolved list, additive.
+        "unresolved_assignments": [
+            dict(a) for a in evaluated.get("unresolved_assignments", ()) or ()
+        ],
+        # Spec §9: install scripts the diff showed only in part.
+        "partial_files": [str(p) for p in evaluated.get("partial_files", ())],
+        # Addendum 2 R1: tokenizer resolution coverage, additive.
+        "resolution_coverage": dict(
+            evaluated.get("resolution_coverage", {}) or {}),
         # B5: unconditional.  A suppression behind a verbosity flag looks
         # exactly like a rule that never matched.
         "suppressed_rules": [dict(r) for r in evaluated.get("suppressed_rules", ())],
@@ -311,6 +362,171 @@ def report_body(
     return body
 
 
+#: Severity ladder to SARIF result level (spec §3).
+_SARIF_LEVELS = {
+    "FATAL": "error",
+    "CRITICAL": "error",
+    "HIGH": "warning",
+    "MEDIUM": "warning",
+}
+
+
+def finding_fingerprint(finding: dict, package: str) -> str:
+    """A stable fingerprint for a finding (spec §3).
+
+    Package + rule + file + line + normalized evidence.  Stable across
+    runs of the same diff, so a code-scanning system can deduplicate a
+    finding that did not move without re-reading its text.
+    """
+    import hashlib
+    import json
+
+    evidence = finding.get("evidence") or {}
+    try:
+        normalized = json.dumps(
+            evidence, sort_keys=True, separators=(",", ":"), default=str
+        )
+    except (TypeError, ValueError):
+        normalized = str(sorted(evidence.items())) if isinstance(evidence, dict) else str(evidence)
+    raw = "|".join((
+        package,
+        str(finding.get("rule_id", "")),
+        str(finding.get("file", "") or ""),
+        str(finding.get("line") or ""),
+        normalized,
+    ))
+    return hashlib.sha256(raw.encode("utf-8", "replace")).hexdigest()
+
+
+def _sarif_location(finding: dict, doc) -> dict | None:
+    """The finding's SARIF region, or ``None`` when no line is resolvable.
+
+    Added/context findings anchor to the post-state artifact; a finding on
+    a removed line anchors to the **pre-image** with its ``old_lineno``
+    (never a post-state ``new_lineno`` for a removed line).  A line that
+    does not exist in the artifact it would name yields no region: SARIF
+    consumers must not receive a fabricated line.
+    """
+    path = finding.get("file") or ""
+    line = finding.get("line")
+    if not path or not isinstance(line, int) or line < 1:
+        return None
+    if doc is None:
+        return {"uri": path, "startLine": line}
+
+    def count(side: str) -> int:
+        return sum(
+            1 for entry in doc.lines
+            if entry.file == path and entry.side in side
+        )
+
+    post_count = count(("add", "context"))
+    pre_count = count(("remove", "context"))
+    has_post = any(
+        entry.file == path and entry.in_hunk
+        and entry.side in ("add", "context") and entry.new_lineno == line
+        for entry in doc.lines
+    )
+    if not has_post:
+        for entry in doc.lines:
+            if (entry.file == path and entry.in_hunk and entry.side == "remove"
+                    and entry.new_lineno == line):
+                if entry.old_lineno and entry.old_lineno <= pre_count:
+                    return {
+                        "uri": path,
+                        "startLine": entry.old_lineno,
+                        "properties": {"trustsight/side": "removed"},
+                    }
+                return None
+    if line <= post_count:
+        return {"uri": path, "startLine": line}
+    return None
+
+
+def report_to_sarif(reports, diffs: dict | None = None) -> dict:
+    """Render evaluated reports as one SARIF 2.1.0 document (spec §3).
+
+    *reports* is an iterable of evaluated dicts (the ``report_body``
+    shape) or Report-like objects with ``to_dict``.  *diffs* optionally
+    maps a package name to the analysed diff text so removed-line
+    findings can anchor to the pre-image; without it, locations are
+    emitted only for findings whose line resolves in the post-state.
+
+    Formatting only: every fact here is attribution the typed core
+    already solved, and a finding with no resolvable line gets no region.
+    """
+    from .diffdoc import parse_diff
+
+    entries = []
+    for report in reports:
+        if hasattr(report, "to_dict"):
+            report = report.to_dict()
+        entries.append(report)
+    docs = {}
+    for package, text in (diffs or {}).items():
+        docs[package] = parse_diff(text)
+
+    rules: dict[str, dict] = {}
+    results: list[dict] = []
+    for report in entries:
+        package = str(report.get("package", ""))
+        doc = docs.get(package)
+        for finding in report.get("findings", ()):
+            rule_id = str(finding.get("rule_id", ""))
+            if not rule_id:
+                continue
+            severity = str(finding.get("severity", "")).upper()
+            level = _SARIF_LEVELS.get(severity, "note")
+            rules.setdefault(rule_id, {
+                "id": rule_id,
+                "name": finding.get("template") or rule_id,
+                "shortDescription": {"text": finding.get("template") or rule_id},
+                "defaultConfiguration": {"level": level},
+            })
+            location = _sarif_location(finding, doc)
+            result = {
+                "ruleId": rule_id,
+                "level": level,
+                "message": {"text": str(finding.get("description", ""))},
+                "partialFingerprints": {
+                    "trustsight/v1": finding_fingerprint(finding, package),
+                },
+                "properties": {
+                    "package": package,
+                    "severity": severity,
+                    "file": finding.get("file") or "",
+                    "line": finding.get("line"),
+                },
+            }
+            if location is not None:
+                result["locations"] = [{
+                    "physicalLocation": {
+                        "artifactLocation": {"uri": location["uri"]},
+                        "region": {"startLine": location["startLine"]},
+                    },
+                    **({"properties": location["properties"]}
+                       if "properties" in location else {}),
+                }]
+            results.append(result)
+    return {
+        "$schema": (
+            "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/"
+            "Schemata/sarif-schema-2.1.0.json"
+        ),
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "TrustSight",
+                    "informationUri": "https://docs.trustsight.org/",
+                    "rules": [rules[key] for key in sorted(rules)],
+                },
+            },
+            "results": results,
+        }],
+    }
+
+
 def evaluate_review_row(row: dict) -> dict[str, Any]:
     """Normalize a review-engine row when no underlying fact is attached."""
     findings = [dict(finding) for finding in row.get("findings", ())]
@@ -330,6 +546,12 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "changes": list(row.get("changes", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
         "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
+        "change": dict(row.get("change", {}) or {}),
+        "unresolved_assignments": [
+            dict(a) for a in row.get("unresolved_assignments", ()) or ()
+        ],
+        "partial_files": list(row.get("partial_files", ())),
+        "resolution_coverage": dict(row.get("resolution_coverage", {}) or {}),
         "version_comparison": row.get("version_comparison", ""),
         "file_changes": list(row.get("file_changes", ())),
         "score_breakdown": findings,
@@ -356,6 +578,12 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "required_by": list(row.get("required_by", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
         "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
+        "change": dict(row.get("change", {}) or {}),
+        "unresolved_assignments": [
+            dict(a) for a in row.get("unresolved_assignments", ()) or ()
+        ],
+        "partial_files": list(row.get("partial_files", ())),
+        "resolution_coverage": dict(row.get("resolution_coverage", {}) or {}),
         "file_changes": list(row.get("file_changes", ())),
         "first_seen": row.get("first_seen", False),
         "comparison_base": row.get("comparison_base", ""),

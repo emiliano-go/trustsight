@@ -152,7 +152,7 @@ NETWORK_CLIENT_ALTERNATIVES = (
     r"aws\s+s3\s+(?:cp|sync|mv)",
     r"gsutil\s+(?:cp|rsync)",
     r"az(?:copy)?\s+(?:storage\s+blob\s+download|copy)",
-    r"rclone\s+(?:copy|sync|cat|copyto)",
+    r"rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)",
     r"ipfs\s+(?:get|cat|dag\s+get)",
     r"swift\s+download",
     r"rados\s+get",
@@ -173,6 +173,10 @@ NETWORK_CLIENT_ALTERNATIVES = (
     # in the ecosystem. `lwp-request` is what the alias runs and cannot be
     # confused with an English word.
     r"lwp-request", r"lwp-download",
+    # `npx` runs a package fetched from the registry in one step; the
+    # harness's validator listed it while the engine's client vocabulary
+    # did not, so a chain through it was unmeasurable and unwatched.
+    r"npx",
     # `git push` sends bytes *out*. The inventory had clone/fetch/pull -
     # every way to bring code in and no way to send it - so a recipe
     # exfiltrating through a push looked like nothing at all.
@@ -1325,7 +1329,11 @@ match_target = "resolved"
 [[rules]]
 id = "R057"
 name = "TLS Verification Disabled"
-pattern = '(?:curl\\s+(?:[^;&|]*\\s)?(?:--insecure|-k)\\b|wget\\s+(?:[^;&|]*\\s)?--no-check-certificate\\b)'
+# The client list is deliberate and closed: every entry is a documented
+# flag that turns verification off for that client.  `--no-verify` is
+# deliberately absent - for bun and cargo it skips lifecycle scripts, not
+# TLS, and claiming it would describe the wrong thing.
+pattern = '(?:curl\\s+[^;&|]*?(?:--insecure|-k)\\b|wget\\s+[^;&|]*?--no-check-certificate\\b|git\\s+-c\\s+http\\.sslVerify=false\\b|GIT_SSL_NO_VERIFY\\s*=|pip\\s+[^;&|]*?--trusted-host\\b|npm\\s+[^;&|]*?--strict-ssl=false\\b|deno\\s+[^;&|]*?--unsafely-ignore-certificate-errors\\b)'
 severity = "HIGH"
 category = "network"
 match_target = "resolved"
@@ -1982,6 +1990,13 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     },
     "R003": {r"base64.*(?:\-d|\-\-decode).*\|"},
     "R045": {r"\b(?:xxd|uudecode)\s+[^|]*\|"},
+    # The client list R051 names grew (rclone moveto/move/bisync/copyurl,
+    # npx) and R057 grew the TLS-off flags of the other catalogued
+    # clients.  Both patterns are shipped, not user-authored, so the old
+    # spellings are recorded here and `config sync-rules --update` repairs
+    # an install that still carries one.
+    "R051": {r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b"},
+    "R057": {r"(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)"},
 }
 
 

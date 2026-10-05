@@ -31,6 +31,8 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **When it fires:** On every diff line (or resolved line) that matches the pattern. No diff context needed; no history needed.
 
+**Coupling to the tokenizer.** `match_target = resolved` rules detect only what the tokenizer can read; an assignment it refuses is not matched against, and the refusal routes suspicion to the X-series instead. A shrinking R fire rate beside a non-zero unresolved count is the tokenizer's boundary showing through, not silence from the recipe.
+
 ## H-series: **Heuristic** Behavioral Analysis
 
 **Count:** 103 rules (H001-H103)
@@ -50,11 +52,15 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** H015 fires when `build()` was modified between commits. It needs the old and new commit trees, not just the diff. H022 fires when a package gap exceeds 365 days. It needs the observation database.
 
+**Internal taxonomy.** H carries two kinds that share a series anyway: *shape heuristics* (recipe-form reasoning, single-commit, deterministic) and *observational heuristics* (they need old trees, the observation database, or the seed: H015, H022, H029's floors). Both reason about behavioral suspicion rather than invariants, and both are engine-defined; the doc note exists so the series does not imply every H rule costs the same to replay.
+
+**Known misfile.** H091 (checksum array shorter than the source array) is a two-field consistency invariant - the definition of the C-series - filed in H for ID-history reasons. Rule IDs are immutable citation targets, so the divergence is recorded here rather than migrated.
+
 **When it fires:** When the behavioral condition is met. The finding carries a line number and body extracted from the diff, but the decision required multi-line or cross-commit context.
 
 ## C-series: **Check** Structural Invariants
 
-**Count:** 13 rules (C001-C013)
+**Count:** 23 rules (C001-C025)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
@@ -71,6 +77,8 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Example:** C003 fires when source URLs changed without a version bump. It needs both the URL diff and the version diff to exist (or not exist) in the same change.
 
 **When it fires:** When two or more structural conditions co-occur in a way that violates an invariant.
+
+**Filing rule.** New invariant-shaped detections default to C-series even when the ID sequence has to skip: a C rule with a fresh ID beats another H misfile (Addendum 3's intake freeze). C014-C025 arrived this way.
 
 ## D-series: **Dependency** Graph Analysis
 
@@ -89,6 +97,10 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 - The rule ID
 
 **Example:** D002 fires when a dependency name is an edit-distance neighbor of a popular package (typosquatting). D003 fires when a new `makedepends` entry uses a network client.
+
+**H029 versus D002.** H029 (package-name typosquat) and D002 (dependency typosquat) are the same mechanism on different graph positions: H029 scans the package's own name against observed popularity; D002 walks the dependency closure. The series split is positional, not mechanical, and that is the intended reading of "series = mechanism."
+
+**Cold start.** D is weakest for new, low-observation packages - exactly where novel supply-chain attacks live. A D-rule that declines to fire for insufficient observations reports that abstention as a weight-0 boundary finding naming the rule and the observation count; the absence of a D finding is never read as evidence of safety.
 
 **When it fires:** During the dependency closure walk, when a naming or composition anomaly is detected.
 
@@ -110,11 +122,13 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 **Example:** S001 fires on fork bombs (`:(){ :|:& };:`). S004 fires on outbound data exfiltration patterns (the payload exfiltrates data from the operator's machine).
 
+**The evidence vacuum.** Sabotage patterns are vanishingly rare in benign corpora, so S rules have near-zero measurable fire rates and are the least validated by calibration. The absence of an S finding is weak evidence: the series' value is severity-when-it-fires, not frequency. Every S rule ships with a mandatory fixture pair (one malicious that must fire, one benign lookalike that must not).
+
 **When it fires:** When a sabotage pattern is found in the diff or the committed file tree.
 
 ## X-series: **Crossfire** Evasion Detection
 
-**Count:** 25 rules (X001-X025)
+**Count:** 31 rules (X001-X031)
 
 **Mechanism:** Detects evasion techniques, not the payloads they hide. X-series rules fire on *how* a thing was written rather than *what* it does. The tokenizer could not resolve the command, so the evasion technique itself is the signal.
 
@@ -132,6 +146,8 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 - The rule ID
 
 **Example:** X007 fires when the tokenizer found multiple evasion techniques in one diff. X017 fires when `enable -f` loads an arbitrary ELF into bash as a builtin. X024 fires when a sensitive variable (DLAGENTS, COMPRESS*, PACMAN_AUTH) is assigned an indirect value.
+
+**X is a function of refusal.** Any tokenizer improvement that resolves more constructs shrinks X's detection surface. That is the intended way this family shrinks, and every shrinkage is a measured event: the calibration replay records X-series aggregate fire rates per release, and a tokenizer change that moves any X rule's rate beyond the published epsilon carries a changelog adjudication naming the technique the family can no longer see and the rule that covers it now, if any.
 
 **When it fires:** When the tokenizer reports that it could not resolve a command, and the evasion technique is identifiable.
 
@@ -152,6 +168,8 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 - The rule ID
 
 **Example:** P001 reports "checksums declared for all non-VCS sources." P007 reports "source hosted on a trusted forge over HTTPS." Neither lowers the score; both are information for the reader.
+
+**Absence is signal.** P findings are present-or-absent. No P001 means the recipe declares no checksums. Read P findings as a claims ledger - the recipe's own account of what it declares - and read the gaps between entries as what it does not. Not scored, per B10, forever.
 
 **When it fires:** On every analysis, for every package that declares the practice. P findings are present or absent, not triggered by a diff.
 
@@ -174,6 +192,16 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 **Example:** W001 reports "a script invoked from inside the source tree was not read." W002 reports "npm install resolving dependencies from a registry." Neither changes the score; both tell the reviewer where the analysis stopped.
 
 **When it fires:** When the analysis encounters a boundary it cannot cross. Always shown, never scored.
+
+## Known fuzzy edges
+
+The taxonomy is a reading aid, not a partition, and a divergence found later is documented here rather than migrated (the W-series honesty principle applied to the taxonomy itself):
+
+- **H091 is C-natured** (a two-field consistency invariant) but keeps its H ID: citation stability outranks the taxonomy, the same reason rule IDs are immutable.
+- **H029 and D002 are the same mechanism** on different graph positions (package name versus dependency closure); the series split is positional.
+- **H carries an internal seam** between shape heuristics and observational heuristics; both reason about behavioral suspicion, but their replay costs differ.
+- **R and X are both functions of the tokenizer**: R-on-resolved detects only what resolution can read, and X detects what it refuses. A tokenizer change moves both, so both carry measured-shrinkage/growth gates.
+- **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
 
 ## Summary Table
 

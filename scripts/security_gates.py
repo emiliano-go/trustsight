@@ -3174,6 +3174,31 @@ def gate_critical_paths_are_synchronised() -> Gate:
 # ---------------------------------------------------------------------------
 
 
+#: The live H-series count at the intake freeze (Addendum 3 Phase 0).
+H_SERIES_LIVE_CEILING = 103
+
+
+def gate_h_series_intake_is_frozen() -> Gate:
+    """No new H IDs while the live count is above the reduction target.
+
+    The H series is a junk drawer by exclusion (98+ IDs), and new
+    detections must be instances of an existing family or filed in another
+    series until the reduction target (55-65) is reached.  A PR that adds
+    an H ID fails here with a pointer to the family tables.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+
+    h_ids = sorted(rid for rid in RULE_CATEGORIES if rid.startswith("H"))
+    problems = []
+    if len(h_ids) > H_SERIES_LIVE_CEILING:
+        problems.append(
+            f"a new H ID arrived above the reduction target "
+            f"({len(h_ids)} > {H_SERIES_LIVE_CEILING}, newest {h_ids[-1]}); "
+            "file it as an instance of an existing family or in another "
+            "series (docs/reference/rules/nature.md)"
+        )
+    return Gate("H-series intake is frozen", not problems, problems)
+
 def gate_an_audit_does_not_write_history() -> Gate:
     """A15: an audit is read-only unless ``--record`` is given.
 
@@ -3387,6 +3412,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_ci_installs_from_the_lock())
     gates.append(gate_critical_paths_are_synchronised())
     gates.append(gate_an_audit_does_not_write_history())
+    gates.append(gate_h_series_intake_is_frozen())
     gates.append(gate_the_history_walk_is_bounded())
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())

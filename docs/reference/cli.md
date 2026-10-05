@@ -815,3 +815,101 @@ Only stored corpus material is searched: the AUR metadata snapshot (names, decla
 The output names which stores were searched. An empty corpus reports that nothing was searched, never that nothing references the indicator. **A miss is uninformative:** the indicator list records what has already been reported, so it says nothing about a package it does not name.
 
 ---
+
+## trustsight explain
+
+Explain why one rule fired on one finding: the rule definition, the
+matching lines with both line numbers, the document facts it read, and any
+external input it needed.
+
+```
+trustsight explain <package> <rule_id> [--occurrence N] [--json]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package` | Yes | Package name. |
+| `rule_id` | Yes | The rule to explain, e.g. `C003`. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--occurrence` | Which occurrence of the rule to explain, 1-based (the order `inspect` lists them). Default 1. |
+| `--depth` | AUR dependency levels to analyse. |
+| `--json` | Output JSON. |
+
+### Behaviour
+
+v1 re-runs document-projection rules only. A rule whose firing depends on
+an input outside the document (novelty/seed, the dependency corpus,
+official package names) names that input and shows the cached value it
+used. When the rule did not fire, the command exits 2 and, if unresolved
+assignments bound the analysis, says so.
+
+---
+
+## trustsight report
+
+Emit a machine-readable report document. `--format sarif` writes SARIF
+2.1.0 for CI code-scanning consumers; the document alone goes to stdout.
+
+```
+trustsight report <package> [--format sarif] [--diff PATH] [--depth N]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package` | Yes | Package name. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--format` | Report format; only `sarif` is supported. |
+| `--diff` | Analysed diff text; lets a removed-line finding anchor to the pre-image (`old_lineno`) instead of being dropped. |
+| `--depth` | AUR dependency levels to analyse. |
+
+### Behaviour
+
+Rule IDs map directly to SARIF `ruleId`; levels map from the severity
+ladder (`FATAL`/`CRITICAL` → `error`, `HIGH`/`MEDIUM` → `warning`, else
+`note`). A finding with no resolvable line gets no region but keeps its
+`partialFingerprints` entry. No location is ever fabricated.
+
+---
+
+## trustsight lint
+
+Pre-submission hygiene for a local file: parse status, unresolved
+assignments, the function inventory, the array inventory (duplicates and
+ordering notes), and the rules that can run without a diff. Lint is
+explicitly **not** a verdict: it produces no score.
+
+```
+trustsight lint <path> [--json]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | Yes | A local PKGBUILD or `.install` path. |
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Output JSON. |
+
+### Behaviour
+
+Exit code 0 means the lint ran (whatever it found); 2 means the file could
+not be read or parsed. `--json` obeys the pipe-safe contract: the document
+alone is on stdout.
+
+---

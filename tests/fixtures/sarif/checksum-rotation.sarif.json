@@ -1,0 +1,56 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "TrustSight",
+          "informationUri": "https://docs.trustsight.org/",
+          "rules": [
+            {
+              "id": "C001",
+              "name": "checksum changed without corresponding source change",
+              "shortDescription": {
+                "text": "checksum changed without corresponding source change"
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "C001",
+          "level": "warning",
+          "message": {
+            "text": "checksum changed without corresponding source change [C001]"
+          },
+          "partialFingerprints": {
+            "trustsight/v1": "66e09e23f16c0b2b079a8966f52be7f7de3d9d9c0c85bf2bc2f89abb096584bc"
+          },
+          "properties": {
+            "package": "demo",
+            "severity": "HIGH",
+            "file": "PKGBUILD",
+            "line": 4
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "PKGBUILD"
+                },
+                "region": {
+                  "startLine": 4
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -66,6 +66,40 @@ class Span:
     line: int
     side: str = ""
 
+    def to_dict(self) -> dict:
+        return {"file": self.file, "line": self.line, "side": self.side}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Span":
+        return cls(
+            file=data.get("file", ""),
+            line=int(data.get("line", 0)),
+            side=data.get("side", ""),
+        )
+
+
+#: Bumped whenever the parsed shape changes; the tokenizer digest (in
+#: ``diffdoc``) is the other half of cache invalidation.
+RECIPEDOC_SCHEMA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class UnresolvedAssignment:
+    """One assignment the tokenizer refused, named for the report (spec §8).
+
+    ``name`` is the assigned variable, ``line`` the raw assignment text
+    (capped), ``file`` the file it was read from when known.  A rule must
+    still treat the name as "not seen"; this type exists so the *boundary*
+    can be named to the reader, not so a rule can consume the value.
+    """
+
+    name: str
+    line: str
+    file: str = ""
+
+    def to_dict(self) -> dict:
+        return {"name": self.name, "line": self.line, "file": self.file}
+
 
 @dataclass(frozen=True)
 class RecipeDoc:
@@ -77,7 +111,8 @@ class RecipeDoc:
     to body text, in file order (a name defined twice keeps the last
     body, as bash does).  ``unresolved`` carries the assignment lines the
     tokenizer refused to resolve; their names must read as "not seen" to
-    any rule.
+    any rule.  ``unresolved_assignments`` is the structured view of the
+    same list (name, capped line, file) that the report surfaces.
 
     The ``*_spans`` maps answer "where did this come from": a scalar's
     assignment line, each array entry's first line, and a function's
@@ -89,9 +124,84 @@ class RecipeDoc:
     arrays: dict[str, tuple[str, ...]]
     functions: dict[str, str]
     unresolved: tuple[str, ...] = field(default_factory=tuple)
+    unresolved_assignments: tuple[UnresolvedAssignment, ...] = field(
+        default_factory=tuple)
     scalar_spans: dict[str, Span] = field(default_factory=dict)
     array_spans: dict[str, tuple[Span, ...]] = field(default_factory=dict)
     function_spans: dict[str, Span] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """A stable, versioned byte-format view of this document (spec §4)."""
+        from .diffdoc import tokenizer_version
+
+        return {
+            "schema_version": RECIPEDOC_SCHEMA_VERSION,
+            "tokenizer_version": tokenizer_version(),
+            "scalars": dict(self.scalars),
+            "arrays": {name: list(values)
+                       for name, values in self.arrays.items()},
+            "functions": dict(self.functions),
+            "unresolved": list(self.unresolved),
+            "unresolved_assignments": [
+                a.to_dict() for a in self.unresolved_assignments
+            ],
+            "scalar_spans": {
+                name: span.to_dict() for name, span in self.scalar_spans.items()
+            },
+            "array_spans": {
+                name: [span.to_dict() for span in spans]
+                for name, spans in self.array_spans.items()
+            },
+            "function_spans": {
+                name: span.to_dict()
+                for name, span in self.function_spans.items()
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> "RecipeDoc | None":
+        """Rebuild from :meth:`to_dict`, or ``None`` on a version miss."""
+        from .diffdoc import tokenizer_version
+
+        if not isinstance(data, dict):
+            return None
+        if data.get("schema_version") != RECIPEDOC_SCHEMA_VERSION:
+            return None
+        current = tokenizer_version()
+        if current == "unknown" or data.get("tokenizer_version") != current:
+            return None
+        try:
+            return cls(
+                scalars={k: str(v) for k, v in data["scalars"].items()},
+                arrays={
+                    name: tuple(values)
+                    for name, values in data["arrays"].items()
+                },
+                functions={k: str(v) for k, v in data["functions"].items()},
+                unresolved=tuple(data.get("unresolved", ())),
+                unresolved_assignments=tuple(
+                    UnresolvedAssignment(
+                        name=a.get("name", ""),
+                        line=a.get("line", ""),
+                        file=a.get("file", ""),
+                    )
+                    for a in data.get("unresolved_assignments", ())
+                ),
+                scalar_spans={
+                    name: Span.from_dict(span)
+                    for name, span in data.get("scalar_spans", {}).items()
+                },
+                array_spans={
+                    name: tuple(Span.from_dict(span) for span in spans)
+                    for name, spans in data.get("array_spans", {}).items()
+                },
+                function_spans={
+                    name: Span.from_dict(span)
+                    for name, span in data.get("function_spans", {}).items()
+                },
+            )
+        except (KeyError, TypeError, ValueError):
+            return None
 
 
 @dataclass(frozen=True)
@@ -108,6 +218,22 @@ class ArrayDelta:
     gained: tuple[str, ...]
     lost: tuple[str, ...]
     reordered: bool
+
+    def to_dict(self) -> dict:
+        """Plain data, for the change report and the document cache."""
+        return {
+            "gained": list(self.gained),
+            "lost": list(self.lost),
+            "reordered": self.reordered,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "ArrayDelta":
+        return cls(
+            gained=tuple(data.get("gained", ())),
+            lost=tuple(data.get("lost", ())),
+            reordered=bool(data.get("reordered", False)),
+        )
 
 
 @dataclass(frozen=True)
@@ -330,12 +456,21 @@ def parse_recipe(
     except TokenizerUnavailable:
         raise
 
-    unresolved = tuple(
-        line.strip() for line in lines
-        if _ASSIGNMENT_SHAPE_RE.match(line)
-        and _ASSIGNMENT_SHAPE_RE.match(line).group(1) not in scalars
-        and _ASSIGNMENT_SHAPE_RE.match(line).group(1) not in arrays
-    )
+    unresolved_lines: list[str] = []
+    unresolved_assignments: list[UnresolvedAssignment] = []
+    for index, line in enumerate(lines):
+        match = _ASSIGNMENT_SHAPE_RE.match(line)
+        if match is None:
+            continue
+        name = match.group(1)
+        if name in scalars or name in arrays:
+            continue
+        text = line.strip()
+        unresolved_lines.append(text)
+        unresolved_assignments.append(UnresolvedAssignment(
+            name=name, line=text[:200], file=origin(index).file,
+        ))
+    unresolved = tuple(unresolved_lines)
     functions: dict[str, str] = {}
     function_spans: dict[str, Span] = {}
     for name, body, opener in _function_segments(lines):
@@ -347,6 +482,7 @@ def parse_recipe(
         arrays={name: tuple(values) for name, values in arrays.items()},
         functions=functions,
         unresolved=unresolved,
+        unresolved_assignments=tuple(unresolved_assignments),
         scalar_spans={
             name: origin(index)
             for name, index in provenance["scalars"].items()

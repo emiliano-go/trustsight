@@ -71,6 +71,12 @@ evasion in a recipe is ordinary content there.
 | [X023](#x023) | Command Output Executed As A Script | HIGH |
 | [X024](#x024) | Indirect Sensitive Assignment | HIGH |
 | [X025](#x025) | Multi-Line Function Shadow | HIGH |
+| [X026](#x026) | Unresolved Constructs In Executable Positions | MEDIUM |
+| [X027](#x027) | Refusal Cluster | CRITICAL |
+| [X028](#x028) | Pattern Completed Across Commits | HIGH |
+| [X029](#x029) | Encoded Material At Rest | MEDIUM |
+| [X030](#x030) | ANSI-C Quoted Content In Commands | HIGH |
+| [X031](#x031) | Build Reads Non-Code Text | HIGH |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}
@@ -529,3 +535,70 @@ shadowed set (shell builtins, makepkg helpers, common utilities).
 H097 catches `msg() {` on a single line; X025 catches the multi-line
 variant where the brace is on the next line. Good PKGBUILDs do not split
 function definitions across lines.
+
+### X026: Unresolved Constructs In Executable Positions {#x026}
+
+**MEDIUM** (weight 15; HIGH at three or more distinct names) · category `evasion`
+
+Fires when an assignment the tokenizer refused is *referenced from*
+`build()`, `prepare()`, `check()` or `package()`. Top-level metadata
+(`pkgver=$(date)`, decorative variables) is not an executable position.
+The finding lists the unresolved names and the functions that reference
+them; `[thresholds] x026.min_count` sets the firing floor (default 1).
+The unresolved-is-not-seen contract holds: X026 reports the refusal, it
+never makes another rule treat the value as read.
+
+Measured on the locked benign corpus: 130/3,739 (3.5%, 27 packages) - the
+honest-refusal floor (`CONFIGURE_FLAGS=$(...)`, `VERSION=$(date)`,
+Windows-ISO helper variables).
+
+### X027: Refusal Cluster {#x027}
+
+**CRITICAL** (weight 40) · category `evasion`
+
+Fires when X026's input set holds two or more distinct unresolved names in
+executable positions. X027 implies X026; no orphaned cluster findings.
+Measured on the locked benign corpus: 46/3,739 (1.2%, 9 packages - kernel
+and ISO build machinery); the rate is published as the calibration floor.
+
+### X028: Pattern Completed Across Commits {#x028}
+
+**HIGH** (weight 25) · category `evasion`
+
+Joins the immediately preceding recorded review's added lines with the
+current diff's and runs the crossfire catalog over the joined stream; it
+fires only when the join yields a technique *neither half yields alone*.
+Gaps in history degrade to no-firing. The current catalog already owns
+the completed pipeline in one half for the common split shapes (R001),
+so the rule is quiet on the locked single-diff corpus; the join-with-self
+safety invariant is tested.
+
+### X029: Encoded Material At Rest {#x029}
+
+**MEDIUM** (weight 15) · category `evasion`
+
+Fires on a base64, base32 or hex literal above the length floor (default
+256 encoded characters, `[thresholds] x029.min_length`) when no decoder is
+present in the same diff. A decoder in the diff routes the shape to X001.
+The finding names the literal class, never the literal's content.
+Measured on the locked benign corpus: 1/3,739.
+
+### X030: ANSI-C Quoted Content In Commands {#x030}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires on a command-position `$'...'` literal with two or more hex/octal
+escapes (or a control escape) whose decoded value is not a benign
+single token (a path, a flag, a filename). Formatting-only escapes
+(`
+`, `	`) are ordinary. Measured on the locked benign corpus: 0/3,739.
+
+### X031: Build Reads Non-Code Text {#x031}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when `build()`/`prepare()`/`package()` reads its own PKGBUILD (by
+name, or through `$srcdir`/`$startdir`) and pipes the content through a
+transformation into a shell or `eval`. Reading a different file, or
+reading the recipe for metadata without execution, stands down.
+Measured on the locked benign corpus: 0/3,739.

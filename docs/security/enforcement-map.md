@@ -24,6 +24,7 @@ python scripts/security_gates.py
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size |
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
+| `H-series intake is frozen` | Addendum 3 Phase 0 | `categories.RULE_CATEGORIES` |
 | `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
 | `generated diff is bounded before assembly` | A4b, B2 | `differ.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
 | `companion reads are bounded before data` | A4b | `differ.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |

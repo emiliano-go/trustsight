@@ -23,6 +23,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
+| [C025](#c025) | Hardening Option Disabled | LOW |
 | [H007](#h007) | Symlink Redirect | - |
 | [H010](#h010) | Suspicious file write | - |
 | [H038](#h038) | World-Writable Staging | HIGH |
@@ -112,3 +113,14 @@ A lone `uname -m` is an architecture check and is reported at INFO by design.
 produced a false positive on a `sed` expression, and the other two are H067's.
 
 Fire rate: 0 of 3739.
+
+### C025: Hardening Option Disabled {#c025}
+
+- **Severity:** LOW (weight 5)
+- **Category:** `build`
+- **Condition:** `options=()` gains a hardening-disabling entry
+  (`!strip`, `!debug`, `!lto`, `!fortify`, `!debugsplit`).
+
+Debug packages set these routinely, so the benign fire rate is the
+published number that decides this rule's weight. Measured on the locked
+benign corpus: 20/3,739 (0.53%).

@@ -65,6 +65,16 @@ def test_unresolved_names_what_the_tokenizer_refused():
     assert "_now" not in doc.scalars
 
 
+def test_unresolved_assignments_carry_name_line_and_file():
+    doc = parse_recipe(PKGBUILD, file="PKGBUILD")
+    names = {a.name for a in doc.unresolved_assignments}
+    assert "_now" in names
+    entry = next(a for a in doc.unresolved_assignments if a.name == "_now")
+    assert "_now" in entry.line
+    assert entry.file == "PKGBUILD"
+    assert entry.to_dict()["name"] == "_now"
+
+
 def test_array_diff_sets_and_order():
     delta = array_diff(("a", "b", "c"), ("b", "a", "d"))
     assert delta.gained == ("d",)

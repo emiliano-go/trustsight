@@ -60,14 +60,15 @@ def _opens_a_comment(line: str, index: int) -> bool:
     )
 
 
-def strip_comment(line: str) -> str:
-    """Return *line* up to an unquoted ``#`` comment, quotes preserved.
+def strip_comment_stateful(line: str, quote: str = "") -> tuple[str, str]:
+    """Like :func:`strip_comment`, carrying quote state across lines.
 
-    Unlike :func:`lex_lines`, quoted data is kept: a URL reader needs the
-    URL in ``source=("…")``, which lives inside quotes.  Only the trailing
-    comment is dropped, using the same boundary :func:`_scan` recognises.
+    Returns ``(code, open_quote)``.  A line inside a multi-line quoted
+    string is data even when it begins with ``#``, which a per-line scan
+    cannot see; the URL reader passes the returned state into the next
+    line.  The state is the same one :func:`lex_lines` tracks, so the two
+    readers cannot disagree about what is quoted.
     """
-    quote = ""
     index = 0
     while index < len(line):
         ch = line[index]
@@ -80,9 +81,19 @@ def strip_comment(line: str) -> str:
         elif ch in "'\"":
             quote = ch
         elif _opens_a_comment(line, index):
-            return line[:index]
+            return line[:index], quote
         index += 1
-    return line
+    return line, quote
+
+
+def strip_comment(line: str) -> str:
+    """Return *line* up to an unquoted ``#`` comment, quotes preserved.
+
+    Unlike :func:`lex_lines`, quoted data is kept: a URL reader needs the
+    URL in ``source=("…")``, which lives inside quotes.  Only the trailing
+    comment is dropped, using the same boundary :func:`_scan` recognises.
+    """
+    return strip_comment_stateful(line)[0]
 
 
 def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:

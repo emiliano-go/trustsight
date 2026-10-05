@@ -2,7 +2,6 @@
 
 # Getting Started
 
-<img src="../assets/images/trustsight-banner.png" alt="TrustSight" width="700"/>
 
 The fastest path from zero to your first `trustsight review`. Follow these pages in order.
 

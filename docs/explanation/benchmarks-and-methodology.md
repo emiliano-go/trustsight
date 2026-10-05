@@ -31,8 +31,8 @@ The benign corpus includes package updates that are not perfectly clean: routine
 The fix was to split by class. When CRITICAL-only packages were isolated from the rest, the separation became meaningful:
 
 - **CRITICAL** p5 = 60
-- **Benign** p95 = 30
-- Gap = +30 points
+- **Benign** p95 = 35
+- Gap = +25 points
 
 Pooling was hiding the separation. Advisory-level and low-severity malware dragged the malicious-class average down, while the benign tail dragged the benign average up. Per-class measurement revealed that the tool cleanly separates the threats that matter.
 
@@ -72,12 +72,12 @@ Measured against the locked benign corpus as `tests/fixtures/corpus.lock` record
 
 | Metric | Value | Benchmark target |
 |--------|-------|------------------|
-| Benign zero-rate | 70.7% | no minimum; fire-rate cap controls FPs |
-| Ruleset trigger rate | 29.3% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
-| Benign flag rate | 7.8% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
+| Benign zero-rate | 67.8% | no minimum; fire-rate cap controls FPs |
+| Ruleset trigger rate | 32.2% | benign diffs that fire at least one non-INFO entry (rule or annotation) |
+| Benign flag rate | 10.3% | about **1 in 13** benign corpus diffs exceed the default profile's 20-point threshold |
 | Labelled-fixture detection | 100% | 100% of labelled fixtures; not independent recall |
 | CRITICAL p5 | 60 | > benign p95 |
-| Benign p95 | 30 | < CRITICAL p5 (margin: 30) |
+| Benign p95 | 35 | < CRITICAL p5 (margin: 30) |
 | Tests | Run `uv run --with pytest python -m pytest` for the current checkout | n/a |
 
 The numbers are not aspirational; they are the measured state of the current rule set and scoring model on this corpus and fixture set. CI rejects gate regressions, not changes to an external performance claim.
@@ -96,7 +96,7 @@ The benign corpus is divided into eight strata (`source_patched`, `bin_repack`, 
 
 The corpus-level gate is the `>= 30%` benign fire-rate cap (`scripts/calibration_gates.py`): no scoring rule may fire on 30% or more of the benign diffs, so a rule cannot become a census on ordinary packaging.
 
-Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 70.7% zero-rate means 70.7% of benign diffs score 0, while **7.8% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
+Per-rule fire rates (false-positive rate of each rule on the benign corpus) are tracked separately in [Fire Rates](fire-rates.md). The 67.8% zero-rate means 67.8% of benign diffs score 0, while **10.3% exceed the 20-point threshold**: roughly one reviewer workload item per thirteen benign corpus diffs. A score of 0 and a clean fire record are not the same thing: the largest contributors to the remaining fires are H015 (Build Function Modified, INFO/weight 0, fires on 19.7% of diffs but never moves a score) and R010/R011 (curl/wget in PKGBUILD, LOW, fire on <2%).
 
 ## The methodology habit
 

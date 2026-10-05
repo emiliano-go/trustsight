@@ -82,7 +82,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight's current test suite has a zero-rate of **70.7%** (benign packages scoring 0). After tuning, re-run:
+TrustSight's current test suite has a zero-rate of **67.8%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 uv run --with pytest python -m pytest tests/
@@ -94,7 +94,7 @@ Ensure CRITICAL recall stays at **100%**: every known malicious pattern must sti
 |--------|-------|
 | CRITICAL recall | 100% |
 | CRITICAL p5 | 60 |
-| Benign p95 | 30 |
+| Benign p95 | 35 |
 
 If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Restore the rule and find another approach.
 

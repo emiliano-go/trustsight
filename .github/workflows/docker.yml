@@ -38,6 +38,9 @@ jobs:
         id: meta
         env:
           GH_TOKEN: ${{ github.token }}
+          # This step runs before checkout, so `gh` has no local repository
+          # to infer; without GH_REPO it exits "not a git repository".
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           set -eu

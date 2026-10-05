@@ -93,7 +93,7 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 | **Runtime attacks** | The tool never executes the PKGBUILD, never runs extracted commands, and never modifies your system. |
 | **Zero-day structural attacks** | Rules are pattern-based and calibrated against a known corpus. A novel attack that leaves no matching pattern will not fire. |
 
-The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. The default review profile flags scores above 20; on the locked benign corpus that is about **1 in 13** review workload items. `quiet` and `strict` profiles change the queue without changing scores or bands. A clean score means no known risk signals fired, not that the package is safe. This is a point-in-time corpus measurement, not a universal false-positive rate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/) for details.
+The default review output shows findings and a verdict, not score or risk columns. Add `--score` or `--risk` when you want the numeric band in the terminal. The default review profile flags scores above 20; on the locked benign corpus that is about **1 in 10** review workload items. `quiet` and `strict` profiles change the queue without changing scores or bands. A clean score means no known risk signals fired, not that the package is safe. This is a point-in-time corpus measurement, not a universal false-positive rate. See [what TrustSight cannot see](https://docs.trustsight.org/explanation/what-trustsight-cannot-see/) for details.
 
 ---
 

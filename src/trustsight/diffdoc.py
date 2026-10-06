@@ -9,10 +9,10 @@ dropped a content line, an array state machine that flushed on the wrong
 line.  This module parses the diff once into a :class:`DiffDoc` and every
 reader becomes a projection over it, so the decisions exist exactly once.
 
-Phase-0 contract: the classification here mirrors the legacy text walkers
-*exactly*, so each legacy function is provably a projection of the same
-parse (see ``tests/harness/diffdoc_parity.py``).  Two deliberate legacy
-behaviours are preserved, not endorsed:
+The classification mirrors the walkers the readers replaced, and the
+committed projection baseline (``tests/harness/diffdoc_parity.py``) pins it
+over the locked corpus.  Two deliberate legacy behaviours are preserved,
+not endorsed:
 
 * Header recognition is prefix-based (``+++ ``/``--- ``/``@@``), not
   hunk-count-based.  A content line inside a hunk whose body starts with
@@ -234,8 +234,8 @@ class DiffDoc:
     ``lines`` flattens all hunks plus any lines seen outside a hunk,
     including structure and junk lines (``side="other"``): malformed input
     still yields data, classified, never dropped.  The projections below
-    reproduce the legacy readers byte for byte; the parity harness proves
-    it over the locked corpus.
+    reproduce the readers they replaced byte for byte; the committed
+    projection baseline pins that over the locked corpus.
     """
 
     files: tuple[DiffFile, ...]
@@ -399,7 +399,23 @@ def parse_diff_lines(lines: list[str]) -> DiffDoc:
 
     This is the entry point for callers that already hold the split lines
     (so the text is walked exactly once); :func:`parse_diff` is the
-    convenience wrapper that splits first.
+    convenience wrapper that splits first.  The parse is memoised on the
+    line contents, because the analysis re-reads the same diff dozens of
+    times (69 parses per diff measured on the locked corpus) and the
+    document is immutable.
+    """
+    return _parse_diff_lines_cached(tuple(lines))
+
+
+@lru_cache(maxsize=8)
+def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
+    """The one parse, reused across every reader of the same diff.
+
+    Content keyed rather than identity keyed: the callers rebuild the line
+    list through ``split_lines``, so a fresh list (and fresh tuple) arrives
+    each time while the strings compare equal.  Bounded to the analysis
+    working set - the raw diff and its clamped copies - so a huge document
+    cannot accumulate.
     """
     out_lines: list[DiffLine] = []
     # Files are frozen, so hunks accumulate in a parallel builder list and

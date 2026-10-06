@@ -456,19 +456,24 @@ def parse_recipe(
     except TokenizerUnavailable:
         raise
 
+    # The engine names the assignments that left a field unresolved (a name
+    # that never resolved anywhere).  A reassignment that refuses after a
+    # resolved value is dropped from the tables - so no reader sees a stale
+    # value - but is not reported as a refusal: the X-series rates were
+    # adjudicated on this reporting surface, and a shadowed name would
+    # otherwise turn ordinary build substitutions into new findings.
     unresolved_lines: list[str] = []
     unresolved_assignments: list[UnresolvedAssignment] = []
-    for index, line in enumerate(lines):
-        match = _ASSIGNMENT_SHAPE_RE.match(line)
-        if match is None:
+    for index in provenance.get("refused", ()):
+        if not 0 <= index < len(lines):
             continue
-        name = match.group(1)
-        if name in scalars or name in arrays:
-            continue
-        text = line.strip()
+        match = _ASSIGNMENT_SHAPE_RE.match(lines[index])
+        text = lines[index].strip()
         unresolved_lines.append(text)
         unresolved_assignments.append(UnresolvedAssignment(
-            name=name, line=text[:200], file=origin(index).file,
+            name=match.group(1) if match else "",
+            line=text[:200],
+            file=origin(index).file,
         ))
     unresolved = tuple(unresolved_lines)
     functions: dict[str, str] = {}

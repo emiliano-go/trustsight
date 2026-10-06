@@ -14,6 +14,7 @@ they execute; a heredoc body does not, and neither does a comment.
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 _HEREDOC_SHAPE_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
 
@@ -110,8 +111,18 @@ def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:
     hold an unterminated quote or heredoc whose closer is outside the hunk,
     and letting either span lines blanks the rest of the file; the
     whole-file recipe read (the default) keeps the state, because a quoted
-    string or heredoc there really does continue.
+    string or heredoc there really does continue.  The result is memoised
+    on the contents: several consumers lex the same lines, and a fresh
+    list is returned so callers may treat it as their own.
     """
+    return list(_lex_lines_cached(tuple(lines), fragment))
+
+
+@lru_cache(maxsize=16)
+def _lex_lines_cached(
+    lines: tuple[str, ...], fragment: bool
+) -> tuple[LexedLine, ...]:
+    """The lexical scan, reused across readers of the same lines."""
     out: list[LexedLine] = []
     in_single = in_double = in_backtick = False
     sub_depth = 0
@@ -153,7 +164,7 @@ def lex_lines(lines: list[str], fragment: bool = False) -> list[LexedLine]:
             closes_line=code.rstrip().endswith("}"),
             heredoc_body=False,
         ))
-    return out
+    return tuple(out)
 
 
 def _scan(line, in_single, in_double, in_backtick, sub_depth):

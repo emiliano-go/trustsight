@@ -20,6 +20,8 @@ The function names are unchanged, so call sites did not move; only the
 implementation behind them did.
 """
 
+import threading
+
 from .sandbox.client import TokenizerUnavailable, request
 
 __all__ = [
@@ -38,9 +40,29 @@ __all__ = [
 ]
 
 
+_line_memo = threading.local()
+_LINE_MEMO_ENTRIES = 4
+
+
 def split_lines(text: str) -> list[str]:
-    """Split on shell line terminators only, in the sandbox."""
-    return request("lines", text)
+    """Split on shell line terminators only, in the sandbox.
+
+    Memoised per thread on the text's identity: dozens of readers ask for
+    the same diff's lines, and every call is a child round-trip.  A fresh
+    list is returned, because callers are entitled to treat it as their
+    own; the key is kept alive so its id cannot be reused underneath the
+    memo.
+    """
+    store = getattr(_line_memo, "entries", None)
+    if store is None:
+        store = _line_memo.__dict__.setdefault("entries", [])
+    for key, value in store:
+        if key is text:
+            return list(value)
+    lines = request("lines", text)
+    store.append((text, lines))
+    del store[:-_LINE_MEMO_ENTRIES]
+    return list(lines)
 
 
 def join_line_continuations(lines: list[str]) -> list[str]:

@@ -1072,6 +1072,42 @@ def analyze_package(
     return fact
 
 
+def apply_diff_caps(
+    diff_text: str, config: dict, package_name: str = ""
+) -> tuple[str, bool, bool]:
+    """Apply the byte and line caps every diff reader shares.
+
+    Returns ``(text, diff_truncated, scan_truncated)``.  The corpus
+    harness's parallel prefix pass calls this too, so the source URLs it
+    records are read from exactly the text the analysis reads.
+    """
+    # The same cap the git path applies.  It used to live only there, so a
+    # caller reaching scan_diff directly (the corpus adapter, the fixtures,
+    # the gates) had no ceiling at all and no truncation flag either.
+    max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
+    diff_bytes = diff_text.encode("utf-8", errors="replace")
+    diff_truncated = len(diff_bytes) > max_bytes
+    if diff_truncated:
+        log.warning("diff for %s exceeds %d bytes; truncating", package_name, max_bytes)
+        diff_text = diff_bytes[:max_bytes].decode("utf-8", errors="replace")
+    # The byte cap is not a bound on work: matching costs per *line*, so a
+    # diff of many short lines stays under 5 MiB while taking minutes.
+    diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
+    return diff_text, diff_truncated, scan_truncated
+
+
+def scored_source_urls(
+    diff_text: str, config: dict, package_name: str = ""
+) -> list[str]:
+    """The added source URLs novelty tracks, after caps and acknowledgements."""
+    capped, _diff_truncated, _scan_truncated = apply_diff_caps(
+        diff_text, config, package_name
+    )
+    changes = extract_urls_from_diff(capped)
+    acks = match_url_acks(package_name, changes.added_urls) if package_name else {}
+    return [u for u in changes.added_urls if u not in acks]
+
+
 def scan_diff(
     diff_text: str,
     rules: list[dict] | None = None,
@@ -1088,19 +1124,9 @@ def scan_diff(
     if config is None:
         config = load_config()
 
-    # The same cap the git path applies.  It used to live only there, so a
-    # caller reaching scan_diff directly (the corpus adapter, the fixtures,
-    # the gates) had no ceiling at all and no truncation flag either.
-    max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
-    diff_bytes = diff_text.encode("utf-8", errors="replace")
-    diff_truncated = len(diff_bytes) > max_bytes
-    if diff_truncated:
-        log.warning("diff for %s exceeds %d bytes; truncating", package_name, max_bytes)
-        diff_text = diff_bytes[:max_bytes].decode("utf-8", errors="replace")
-
-    # The byte cap is not a bound on work: matching costs per *line*, so a
-    # diff of many short lines stays under 5 MiB while taking minutes.
-    diff_text, scan_truncated = clamp_diff_lines(diff_text, package_name)
+    diff_text, diff_truncated, scan_truncated = apply_diff_caps(
+        diff_text, config, package_name
+    )
 
     source_changes = extract_urls_from_diff(diff_text)
     url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}

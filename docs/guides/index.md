@@ -2,7 +2,7 @@
 
 # Guides
 
-These pages cover common tasks you'll perform with TrustSight. Each guide is focused on a single workflow and assumes you've completed the [quickstart](../getting-started/quickstart.md).
+These pages cover common tasks you'll perform with TrustSight. Each guide is focused on a single workflow and assumes you've completed the [quickstart](../tutorial/quickstart.md).
 
 ---
 

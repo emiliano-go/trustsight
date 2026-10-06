@@ -1,8 +1,10 @@
-<!-- description: Build and install TrustSight from the PKGBUILD in this repository, the recommended path. The AUR package is maintained by the project. Requirements are Arch Linux, Python 3.11 or later, and git. -->
+<!-- description: Install TrustSight from the PKGBUILD in this repository or from the AUR, verify the installation, and fix the common failures. Requirements are Arch Linux, Python 3.11 or later, and git. -->
 
 # Installation
 
-TrustSight requires **Arch Linux**, **Python 3.11 or later**, and **git** (for cloning AUR repositories during analysis).
+By the end of this page TrustSight is installed and `trustsight --help` runs. It
+requires **Arch Linux**, **Python 3.11 or later**, and **git** (for cloning AUR
+repositories during analysis).
 
 !!! note "The AUR package is maintained by this project"
 
@@ -11,9 +13,7 @@ TrustSight requires **Arch Linux**, **Python 3.11 or later**, and **git** (for c
     an AUR package like any other, so inspect its PKGBUILD before installing.
     Source remains the recommended install, below.
 
----
-
-## Install From This Repository
+## Build the repository PKGBUILD (recommended)
 
 The PKGBUILD pins one released version, so check out the release tag it names
 rather than the moving `master` branch:
@@ -44,10 +44,6 @@ python scripts/build_release_tarball.py --rev v<version> --check <sha256>
 
 The recorded `<sha256>` is in `packaging/aur/PKGBUILD`.
 
-!!! note "Repository PKGBUILD only"
-
-    Build the PKGBUILD in this repository, as above. PyPI distributions are available for isolated virtual environments, but not for installation into Arch's system Python.
-
 The PKGBUILD runs the packaged test suite during build, excluding
 `tests/test_fetcher.py` and `tests/test_rebaseline.py` because they require
 network and corpus fixtures unavailable in a clean package build. `makepkg -si`
@@ -55,17 +51,18 @@ pulls in the dependencies (`pygit2`, `tldextract`, `rich`, `typer`, `cryptograph
 system packages. The result is tracked by `pacman`, so it upgrades and
 uninstalls like anything else on the system.
 
-Do not install into the system interpreter with `pip`: it is blocked by the
-system Python's `externally-managed-environment` protection, and forcing it
-with `--break-system-packages` risks conflicting with `pacman`-managed files.
-For an isolated environment, install the PyPI distribution with
+Build the PKGBUILD in this repository, as above. PyPI distributions are for
+isolated virtual environments, not for installation into Arch's system Python:
+installing with `pip` is blocked by the system Python's
+`externally-managed-environment` protection, and forcing it with
+`--break-system-packages` risks conflicting with `pacman`-managed files. For an
+isolated environment, install the PyPI distribution with
 `python -m venv .venv && .venv/bin/pip install trustsight`.
 
-For a development checkout with the test dependencies, use a virtualenv instead (see [development setup](../contributing/development-setup.md)).
+For a development checkout with the test dependencies, use a virtualenv instead
+(see [development setup](../contributing/development-setup.md)).
 
----
-
-## Install From the AUR
+## Install from the AUR
 
 The `trustsight` package on the AUR is maintained by this project, but it is
 an AUR package like any other: it gets no special trust, so review its
@@ -78,14 +75,6 @@ makepkg -si
 ```
 
 Or with an AUR helper: `yay -S trustsight`.
-
----
-
-## Verdicts
-
-Verdicts are template-based descriptions of each triggered finding. The score is calculated locally and deterministically. No LLM is needed.
-
----
 
 ## Verify the installation
 
@@ -101,11 +90,10 @@ Check your configuration:
 trustsight config show
 ```
 
----
-
 ## Common failures
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `trustsight review` prints "No outdated packages found." | No AUR packages installed, or all are up to date | Install an AUR package or wait for updates |
 | `ModuleNotFoundError: No module named 'pygit2'` | The `python-pygit2` package is missing or the installation is incomplete | `sudo pacman -S python-pygit2`, then reinstall |
+
+**Next:** [Quickstart](quickstart.md#quickstart), run your first review.

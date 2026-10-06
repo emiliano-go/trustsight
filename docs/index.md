@@ -15,7 +15,7 @@ the boundaries behind that promise, and how each one is enforced.
 [![Tests](https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests)](https://github.com/emiliano-go/trustsight/actions/workflows/test.yml)
 [![PyPI](https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge)](https://pypi.org/project/trustsight/)
 
-Ready to get started? Head over to the [Getting Started](getting-started/) guide for installation and your first review.
+Ready to get started? Head over to the [Tutorial](tutorial/installation.md) for installation and your first review.
 
 ---
 
@@ -46,13 +46,13 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 
 ---
 
-## Getting started
+## Tutorial
 
 | Page | What it covers |
 |------|----------------|
-| [Installation](getting-started/installation.md) | Build the repository's PKGBUILD with `makepkg`. |
-| [Quickstart](getting-started/quickstart.md) | Run your first review, read the output table, understand the verdicts. |
-| [Reading a Report](getting-started/reading-a-report.md) | Deep dive into score breakdown, evidence tiers, rule firings, and novelty context. |
+| [Installation](tutorial/installation.md) | Build the repository's PKGBUILD with `makepkg`. |
+| [Quickstart](tutorial/quickstart.md) | Run your first review, read the output table, understand the verdicts. |
+| [Reading a Report](tutorial/reading-a-report.md) | Deep dive into score breakdown, evidence tiers, rule firings, and novelty context. |
 
 ## Explanation
 
@@ -69,7 +69,7 @@ See [How TrustSight Works](explanation/index.md) for the full pipeline explanati
 | [Benchmarks and Methodology](explanation/benchmarks-and-methodology.md) | Per-class separation, CI gates, reproducible evaluation. |
 | [Recipe-Targeted User Rules](explanation/structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap. |
 | [Cross-File Consistency](explanation/cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks. |
-| [The Typed Core](explanation/the-typed-core.md) | `DiffDoc`, `RecipeDoc`, `array_diff`/`array_alignment`, `line_lex`, provenance, and the parity harnesses. |
+| [The Typed Core](explanation/the-typed-core.md) | Why the diff and the PKGBUILD are each read once, so every finding cites the real file, side and line and unreadable structure is reported, never guessed. |
 
 ## Guides
 

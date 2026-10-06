@@ -92,9 +92,8 @@ def map_diff_lines(diff_text: str) -> dict[int, tuple[str, int]]:
 
     A projection of the typed parse (:mod:`trustsight.diffdoc`): the
     file attribution, the hunk gating and the line counter are the
-    parser's decisions now, made once, and the parity harness proves the
-    projection agrees with the walk this replaces over the whole locked
-    corpus.
+    parser's decisions now, made once, and the committed projection
+    baseline pins the shape over the whole locked corpus.
     """
     return parse_diff_lines(split_lines(diff_text)).line_map()
 

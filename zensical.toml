@@ -84,11 +84,10 @@ Security = [
 ]
 
 [[project.nav]]
-"Get Started" = [
-  {Overview = "getting-started/index.md"},
-  {Installation = "getting-started/installation.md"},
-  {Quickstart = "getting-started/quickstart.md"},
-  {"Reading a Report" = "getting-started/reading-a-report.md"},
+Tutorial = [
+  {Installation = "tutorial/installation.md"},
+  {Quickstart = "tutorial/quickstart.md"},
+  {"Reading a Report" = "tutorial/reading-a-report.md"},
 ]
 
 [[project.nav]]

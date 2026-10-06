@@ -30,12 +30,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import calibration_gates as gates  # noqa: E402
 
 
-def replay(sample: int = 1) -> list[dict]:
+def replay(sample: int = 1, jobs: int | None = None) -> list[dict]:
     """Every corpus diff's findings, benign then malicious, in a stable order."""
     results: list[dict] = []
     corpus = gates.FIXTURES / "benign-corpus"
     if corpus.exists():
-        for row in gates.scan_corpus(corpus, sample=sample):
+        for row in gates.scan_corpus(corpus, sample=sample, jobs=jobs):
             results.append({
                 "kind": "benign",
                 "package": row["package"],
@@ -96,9 +96,11 @@ def main(argv: list[str]) -> int:
     group.add_argument("--write", metavar="PATH")
     group.add_argument("--check", metavar="PATH")
     parser.add_argument("--sample", type=int, default=1)
+    parser.add_argument("--jobs", type=int, default=gates.default_jobs(),
+                        help="Analysis worker processes (default: min(8, CPUs))")
     args = parser.parse_args(argv)
 
-    results = replay(sample=args.sample)
+    results = replay(sample=args.sample, jobs=args.jobs)
     if args.write:
         Path(args.write).write_text(json.dumps(results, indent=1))
         print(f"finding parity: wrote {len(results)} replays to {args.write}")

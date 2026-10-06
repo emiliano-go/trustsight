@@ -164,14 +164,16 @@ def test_the_unbounded_sabotage_spans_stay_linear():
         text = ":(){ " + "a" * n
         best = float("inf")
         for _ in range(3):
-            start = time.perf_counter()
+            start = time.process_time()
             _FORK_BOMB_DEF_RE.search(text)
-            best = min(best, time.perf_counter() - start)
+            best = min(best, time.process_time() - start)
         return best
 
     small, large = cost(2000), cost(8000)
-    # Linear is 4x for 4x the input; allow generous headroom for a loaded
-    # machine, but a quadratic pattern lands at 16x and fails.
+    # CPU time, not wall time: the ratio is the signal, and descheduling
+    # under a loaded suite inflated wall-clock readings without touching
+    # the shape (a 9.8x reading on a linear pattern).  Linear is 4x for 4x
+    # the input; a quadratic pattern lands at 16x.
     assert large < small * 9, f"growth {large / small:.1f}x over 4x input"
 
 

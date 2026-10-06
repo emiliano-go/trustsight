@@ -302,7 +302,9 @@ def test_both_analysis_entry_points_clamp_before_they_tokenize():
     They each tokenize and each match, and the byte cap that sits beside
     this one was originally written on the git path alone - which left
     every other caller with no ceiling at all. That is the failure this
-    asserts against: a clamp in one of two equivalent paths.
+    asserts against: a clamp in one of two equivalent paths.  The clamp
+    may be direct (``analyze_package``) or the shared ``apply_diff_caps``
+    helper (``scan_diff``), which routes through ``clamp_diff_lines``.
     """
     import ast
     import pathlib
@@ -319,7 +321,9 @@ def test_both_analysis_entry_points_clamp_before_they_tokenize():
             for n in ast.walk(node)
             if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
         }
-        if "tokenize_and_resolve_indexed" in calls and "clamp_diff_lines" not in calls:
+        if "tokenize_and_resolve_indexed" in calls and not (
+            {"clamp_diff_lines", "apply_diff_caps"} & calls
+        ):
             unclamped.append(node.name)
 
     assert not unclamped, (

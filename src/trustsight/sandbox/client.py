@@ -321,6 +321,24 @@ def _terminate_all() -> None:
 atexit.register(_terminate_all)
 
 
+def reset_after_fork() -> None:
+    """Drop the inherited pool after ``fork``; the child starts its own.
+
+    The parent's workers are *not* stopped here: the pids name the same
+    processes in the child's table, and stopping one would kill the
+    parent's pool.  Only this process's bookkeeping and identity cache are
+    cleared, so the first request in the child spawns a fresh pool.
+    """
+    global _pool
+    with _lock:
+        _pool = queue.Queue()
+        _all.clear()
+        _shutdown.clear()
+        _lock.notify_all()
+    if getattr(_cache, "entries", None) is not None:
+        del _cache.entries
+
+
 # --- identity cache ---------------------------------------------------------
 
 _cache = threading.local()

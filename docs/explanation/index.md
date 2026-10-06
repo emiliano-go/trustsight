@@ -4,7 +4,7 @@
 
 TrustSight is a deterministic AUR PKGBUILD audit tool. It computes a score from 0 to 100 over the **end-state** of a diff: the post-patch PKGBUILD, not the delta. Every decision is reproducible: the same diff, effective configuration, and observation history produce the same score and the same evidence record.
 
-These explanation pages describe *why* the tool makes the decisions it does. If you are looking for how to use it, start with the getting-started guide. If you want the reference, see the reference section.
+These explanation pages describe *why* the tool makes the decisions it does. If you are looking for how to use it, start with the tutorial. If you want the reference, see the reference section.
 
 ## The pipeline
 
@@ -169,4 +169,4 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 | [Why Static Analysis](why-static-analysis.md) | SAST by design, customization surface |
 | [Recipe-Targeted User Rules](structural-user-rules.md) | A second rule kind that matches typed recipe structure, its five primitives, and the HIGH cap |
 | [Cross-File Consistency](cross-file-consistency.md) | How the recipe is compared against `.SRCINFO`, the committed tree and shipped hooks |
-| [The Typed Core](the-typed-core.md) | `DiffDoc`, `RecipeDoc`, `array_diff`/`array_alignment`, `line_lex`, provenance, and the parity harnesses |
+| [The Typed Core](the-typed-core.md) | Why the diff and the PKGBUILD are each read once: every finding is anchored to the real file, side and line, and unreadable structure is reported, never guessed |

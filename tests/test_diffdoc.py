@@ -1,30 +1,15 @@
 """Unit tests for the typed diff core (diffdoc).
 
-Two kinds of assertions live here: structural ones (the parse of a
-hand-written diff is exactly the expected document) and parity ones (each
-projection equals the legacy ``differ`` walker it replaces, on inputs
-chosen to hit the walkers' edge cases).  The corpus-wide parity proof is
-``tests/harness/diffdoc_parity.py`` plus the sampled gate in
+The parse of a hand-written diff is asserted against the expected document,
+edge case by edge case.  The corpus-wide lock on the parse - the projection
+baseline - is ``tests/harness/diffdoc_parity.py`` plus the sampled gate in
 ``tests/test_diffdoc_parity.py``.
 """
 
 import pytest
 
-from trustsight.differ import (
-    MAX_DIFF_PATH_BYTES,
-    _post_diff_lines,
-    _pre_diff_lines,
-    map_diff_lines,
-)
-from trustsight.diffdoc import parse_diff, parse_diff_lines
-
-
-def assert_parity(text: str) -> None:
-    """Every projection equals the legacy walker it replaces."""
-    doc = parse_diff(text)
-    assert doc.line_map() == map_diff_lines(text)
-    assert doc.post_lines() == _post_diff_lines(text)
-    assert doc.pre_lines() == _pre_diff_lines(text)
+from trustsight.differ import MAX_DIFF_PATH_BYTES
+from trustsight.diffdoc import DiffDoc, parse_diff, parse_diff_lines
 
 
 SIMPLE = (
@@ -141,7 +126,6 @@ def test_multi_file_attribution():
     assert [f.path for f in doc.files] == ["PKGBUILD", "foo.install"]
     lines = {line.content: line.file for line in doc.added_lines()}
     assert lines == {"new": "PKGBUILD", "b": "foo.install"}
-    assert_parity(text)
 
 
 def test_added_and_removed_status():
@@ -149,8 +133,6 @@ def test_added_and_removed_status():
     removed = "--- a/foo.install\n+++ /dev/null\n@@ -1 +0,0 @@\n-post_install() { :; }\n"
     assert parse_diff(added).files[0].status == "added"
     assert parse_diff(removed).files[0].status == "removed"
-    assert_parity(added)
-    assert_parity(removed)
 
 
 def test_headerless_diff_defaults_to_pkgbuild():
@@ -158,7 +140,6 @@ def test_headerless_diff_defaults_to_pkgbuild():
     doc = parse_diff(text)
     assert doc.files[0].path == "PKGBUILD"
     assert all(line.file == "PKGBUILD" for line in doc.lines)
-    assert_parity(text)
 
 
 def test_content_before_any_hunk_is_not_mapped_but_is_reconstructed():
@@ -168,17 +149,15 @@ def test_content_before_any_hunk_is_not_mapped_but_is_reconstructed():
     assert stray.side == "add" and not stray.in_hunk
     assert stray.index not in doc.line_map()
     assert "stray added line" in doc.post_lines()
-    assert_parity(text)
 
 
 def test_plus_plus_plus_content_line_is_a_header_legacy_compat():
     # An added line whose body starts with "++ " reads as "+++ " and is a
     # file header, exactly as every legacy walker read it.  The parser
-    # decides once; the parity suite locks the decision.
+    # decides once; the projection baseline locks the decision.
     text = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1,2 @@\n ctx\n+++ looks like a header\n"
     doc = parse_diff(text)
     assert [f.path for f in doc.files] == ["PKGBUILD", "looks like a header"]
-    assert_parity(text)
 
 
 def test_plus_plus_plus_without_space_is_content():
@@ -186,7 +165,6 @@ def test_plus_plus_plus_without_space_is_content():
     doc = parse_diff(text)
     assert [f.path for f in doc.files] == ["PKGBUILD"]
     assert "++not a header" in doc.post_lines()
-    assert_parity(text)
 
 
 def test_dash_dash_dash_content_line_is_not_a_header():
@@ -196,7 +174,6 @@ def test_dash_dash_dash_content_line_is_not_a_header():
     doc = parse_diff(text)
     assert [f.path for f in doc.files] == ["PKGBUILD"]
     assert "---weird" in doc.pre_lines()
-    assert_parity(text)
 
 
 def test_non_matching_at_lines_are_structure():
@@ -208,7 +185,6 @@ def test_non_matching_at_lines_are_structure():
         line.content != "@ not a header"
         for line in doc.lines if line.is_content
     )
-    assert_parity(text)
 
 
 def test_malformed_hunk_header_opens_nothing():
@@ -216,7 +192,6 @@ def test_malformed_hunk_header_opens_nothing():
     doc = parse_diff(text)
     assert doc.line_map() == {}
     assert "not mapped" in doc.post_lines()
-    assert_parity(text)
 
 
 def test_no_newline_marker_is_structure():
@@ -229,7 +204,6 @@ def test_no_newline_marker_is_structure():
     assert [
         line.content for line in doc.lines if line.side == "other"
     ].count("\\ No newline at end of file") == 2
-    assert_parity(text)
 
 
 def test_binary_marker_is_structure():
@@ -241,7 +215,6 @@ def test_binary_marker_is_structure():
     assert not any(line.is_content for line in doc.lines)
     assert all(line.side == "other" for line in doc.lines)
     assert doc.post_lines() == []
-    assert_parity(text)
 
 
 def test_empty_diff():
@@ -249,7 +222,6 @@ def test_empty_diff():
     assert doc.files == ()
     assert doc.lines == ()
     assert doc.post_lines() == []
-    assert_parity("")
 
 
 def test_long_path_is_capped():
@@ -257,7 +229,6 @@ def test_long_path_is_capped():
     text = f"--- /dev/null\n+++ {path}\n@@ -0,0 +1 @@\n+x\n"
     doc = parse_diff(text)
     assert len(doc.files[0].path) == MAX_DIFF_PATH_BYTES
-    assert_parity(text)
 
 
 def test_multiple_hunks_one_file():
@@ -272,7 +243,6 @@ def test_multiple_hunks_one_file():
     assert doc.files[0].hunks[1].new_start == 10
     by_content = {line.content: line for line in doc.lines}
     assert by_content["e"].new_lineno == 11
-    assert_parity(text)
 
 
 def test_hunk_count_mismatch_is_reported_not_repaired():
@@ -283,7 +253,6 @@ def test_hunk_count_mismatch_is_reported_not_repaired():
     hunk = doc.files[0].hunks[0]
     assert hunk.expected_lines == 3
     assert hunk.actual_lines == 1
-    assert_parity(text)
 
 
 def test_hunk_header_without_counts():
@@ -291,7 +260,6 @@ def test_hunk_header_without_counts():
     doc = parse_diff(text)
     hunk = doc.files[0].hunks[0]
     assert hunk.expected_lines == 1
-    assert_parity(text)
 
 
 def test_parse_diff_lines_skips_the_split():
@@ -311,7 +279,6 @@ def test_in_hunk_survives_a_file_header_legacy_compat():
     stray = [line for line in doc.lines if line.content == "stray"][0]
     assert stray.in_hunk
     assert doc.line_map()[stray.index] == ("other.py", stray.new_lineno)
-    assert_parity(text)
 
 
 def test_boundary_flags_mark_what_the_legacy_walk_saw():
@@ -327,7 +294,6 @@ def test_boundary_flags_mark_what_the_legacy_walk_saw():
     assert not by_raw["+b"].file_boundary
     assert by_raw["-c"].file_boundary and by_raw["-c"].hunk_boundary
     assert by_raw["+d"].file_boundary is False
-    assert_parity(text)
 
 
 @pytest.mark.parametrize("text", [
@@ -339,5 +305,6 @@ def test_boundary_flags_mark_what_the_legacy_walk_saw():
     "+sha256sums=(\n+  'SKIP'\n+)\n",
     "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n source=(\n-\t'a.tar.gz'\n+\t'b.tar.gz'\n )\n",
 ])
-def test_projection_parity_on_representative_diffs(text):
-    assert_parity(text)
+def test_representative_diffs_round_trip(text):
+    doc = parse_diff(text)
+    assert DiffDoc.from_dict(doc.to_dict()) == doc

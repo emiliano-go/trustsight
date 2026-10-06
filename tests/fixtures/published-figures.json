@@ -1,7 +1,7 @@
 {
   "tests": {
-    "count": 5199,
-    "files": 120
+    "count": 5211,
+    "files": 121
   },
   "seed": {
     "source_urls": 185902,
@@ -48,7 +48,7 @@
       "The 67.8% zero-rate means 67.8% of benign diffs score 0, while **10.3% exceed the 20-point threshold**",
       "184 self-authored fixtures"
     ],
-    "docs/getting-started/reading-a-report.md": [
+    "docs/tutorial/reading-a-report.md": [
       "**67.8 % of diffs score 0**",
       "benign packages score **35**",
       "5th percentile of **60** and a minimum of **50**",

@@ -1,4 +1,4 @@
-<!-- description: The AUR-derived seed behind URL, maintainer and dependency history, why it is optional context rather than a requirement, and how running cold differs. -->
+<!-- description: The AUR-derived seed behind URL, maintainer and dependency history, why it is optional context rather than a requirement, how to fetch or build it, and how running cold differs. -->
 
 # Corpus and Priors
 
@@ -108,6 +108,30 @@ independent Tier B and Tier C evidence.
 The seed is a point-in-time observation baseline, not a source-bucket list.
 New URLs not present in it remain novel until imported or locally observed;
 their bucket remains the result of the static domain classifier.
+
+## Building the dependency corpus yourself
+
+Part of the seed is a corpus of dependency names. The D-series rules (novel
+dependency, dependency-name typosquat, dependency count) compare a name against
+that corpus, so without it they stay silent, and a quiet report is quiet for a
+reason the report does not show. `trustsight status` prints
+`Dependency corpus: Not loaded` when it is missing.
+
+You do not have to build it. Every other rule works without it; what you lose
+is the D-series signal and the URL-novelty comparison. The published
+`baseline-seed.tar.gz` carries the corpora and `trustsight seed fetch` imports
+them; when the release channel lags, build it from the public AUR mirror
+yourself (about 2.5 GB of clone, plus the time to walk it):
+
+```bash
+git clone --bare https://github.com/archlinux/aur.git ~/.cache/trustsight/aur.git
+python scripts/generate_seed.py --out /tmp/seed.db --provenance-out /tmp/seed-provenance.json
+trustsight seed-db --file /tmp/seed.db --force
+```
+
+Rebuild every month or so, and after a large batch of AUR activity: the corpus
+is a moving picture, not a fixed one. See [Seed Provenance](seed-provenance.md)
+for what each build records.
 
 ## The live corpus: cycles, the adoption feed, and watch mode
 

@@ -2,9 +2,9 @@
 
 # Reading a Report
 
-A misread verdict is worse than no verdict. This page explains exactly what every part of a TrustSight report means : and what it does not.
-
----
+By the end of this page you can read every part of a TrustSight report - the
+score, the band, the breakdown lines, and the gaps - and you will know what
+none of them claim. A misread verdict is worse than no verdict.
 
 ## What a score is and is not
 
@@ -15,7 +15,7 @@ A **score** is a measurement of how many risk signals fired during analysis and 
 
 The scoring is **deterministic**: same diff, same instrument, same database state → same score, every time. Runs are read-only by default, so the database state does not change between two runs; `--record` is the explicit opt-in that persists observations and analysis history.
 
----
+The verdict text is template-based: it describes each triggered finding in plain English and never feeds back into the score. No LLM is involved.
 
 ## The three verdict states
 
@@ -53,8 +53,6 @@ Either the score is in the Medium band (21-50), no HIGH, CRITICAL, or FATAL find
 Inconclusive is **not** Low. It is the tool saying "this might be fine, but I can't be sure yet." Treat it as a manual-review prompt.
 
 The maturity gate scales novelty weights by the database-wide effective observation count divided by 50. At zero observations, novelty contributes zero weight. At 49, it contributes ~98 %. After 50, all novelty signals are at full weight. A signed seed can supply the bootstrap count, and analyses of any packages increase the same global history. See [cold start and maturity](../explanation/cold-start-and-maturity.md).
-
----
 
 ## Evidence tiers
 
@@ -127,8 +125,6 @@ TrustSight never fetches, so it cannot confirm that a declared key signs anythin
 
 Verification evidence is computed from the static post-diff text available to the analysis, not from database history or a fetched artifact. It records a declaration only; it does not establish that an unchanged checksum, key, signature, or pin is valid.
 
----
-
 ## How to read a breakdown line
 
 Example from `trustsight inspect`:
@@ -159,8 +155,6 @@ Declared verification
   TrustSight does not verify these claims. It reports that the recipe makes them.
 ```
 
----
-
 ## What partial coverage looks like
 
 When a `source=` entry is computed at build time, for example `_url="$(curl -sIL -o /dev/null -w '%{url_effective}' "$_redirect")"`, the URL the build will fetch is not in the text being analysed. TrustSight records this as the `unresolved_source` coverage gap and reports **INCONCLUSIVE** rather than an UNFLAGGED score. The same happens when the diff was truncated at the size cap, or when the repository tree was unavailable. This is intentional: the tool would rather tell you "I could not finish analyzing this" than silently give false confidence. See [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete).
@@ -186,8 +180,6 @@ finding is not evidence of wrongdoing: a recipe running a script from inside
 a checksummed archive is following the packaging format. What it tells you is
 where to look if you decide to look. The full series is in the
 [unverifiable rules reference](../reference/rules/unverifiable.md).
-
----
 
 ## Putting it together: a worked example
 
@@ -251,8 +243,6 @@ The weights and severities above appear because this run passed `--score` and
 `--risk`. Without them the same panel shows the findings and the verdict and no
 band at all.
 
----
-
 ## Seeing what the parser believed
 
 A report shows findings, not the parse they came from. `trustsight inspect
@@ -264,10 +254,12 @@ you see the value the rule actually compared, not the text you expected. In
 `--json` the lines ride an `explain` key, so a script can assert on the parse
 without re-parsing the PKGBUILD itself.
 
-## Next steps
+## Recap
 
-- [Guides: real workflows](../guides/index.md): CI integration, batch review, alert thresholds.
-- [Explanation: what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md): analysis blind spots.
-- [Explanation: cold start and maturity](../explanation/cold-start-and-maturity.md): how the novelty gate works.
-- [Reference: rule catalog](../reference/rules/index.md): every rule with patterns and examples.
-- [Reference: report schema](../reference/report-schema.md): score formula and evidence structure.
+- A score counts matched evidence. It is not a probability of malice, and no alert is not a certificate of safety.
+- Low, Medium, High, and Critical are score bands; `Inconclusive` means the analysis could not answer, and is never the same as Low.
+- A breakdown line reads left to right: weight, severity, rule id, rule name, match reason. Nothing lowers a score.
+- Declared verification (`P` findings) and unverifiable findings (`W`) are shown at weight 0; they never move the number.
+- A coverage gap forbids an unflagged verdict, because the tool will not issue one for an analysis that was incomplete.
+
+**Next:** [Guides](../guides/index.md), real workflows: gating CI, investigating a flag, and tuning the rules.

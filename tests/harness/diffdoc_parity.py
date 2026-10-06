@@ -1,34 +1,35 @@
-"""Full projection-parity runner for the typed diff core.
+"""Projection regression lock for the typed diff core.
 
-For every diff in the locked benign corpus and every labelled malicious
-fixture, each :class:`~trustsight.diffdoc.DiffDoc` projection is compared
-against the legacy ``differ`` walker it replaces.  This is the phase-0
-gate for the typed core: the layer exists, nothing consumes it yet, and
-this run proves the parse is lossless with respect to every reader it
-will replace.  A mismatch means the parser drifted from the walkers, and
-migrating a consumer onto it would change findings.
+The parse decisions - file attribution, side, both line numbers, hunk
+arithmetic - are frozen as a per-diff digest over ``DiffDoc.files`` and
+``DiffDoc.lines``.  A change that alters the parse fails until the baseline
+is deliberately regenerated with ``--write``, which also pins the locked
+corpus by its ``corpus_content_sha256``.  (The cross-walker comparison this
+file used to run became self-referential once the legacy readers were
+migrated onto ``DiffDoc``.)
+
+    uv run python tests/harness/diffdoc_parity.py --write tests/fixtures/diffdoc-projections.json.gz
+    uv run python tests/harness/diffdoc_parity.py --check tests/fixtures/diffdoc-projections.json.gz
 
 The default test suite runs a sampled variant
-(``tests/test_diffdoc_parity.py``); the calibration CI job runs this
-whole, next to the §10 gates:
-
-    uv run python tests/harness/diffdoc_parity.py
+(``tests/test_diffdoc_parity.py``); the calibration CI job runs this whole.
 """
 
+import argparse
+import gzip
+import hashlib
+import json
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from trustsight.differ import (  # noqa: E402
-    _post_diff_lines,
-    _pre_diff_lines,
-    map_diff_lines,
-)
 from trustsight.diffdoc import parse_diff  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures"
+BASELINE = FIXTURES / "diffdoc-projections.json.gz"
+SCHEMA = 1
 
 
 def iter_diff_paths(sample: int = 1):
@@ -52,46 +53,99 @@ def iter_diff_paths(sample: int = 1):
         yield path
 
 
-def check_text(text: str) -> list[str]:
-    """The projection mismatches for one diff, empty when parity holds."""
-    doc = parse_diff(text)
-    failures: list[str] = []
-    legacy_map = map_diff_lines(text)
-    if doc.line_map() != legacy_map:
-        only_new = {k: doc.line_map()[k] for k in doc.line_map().keys() - legacy_map.keys()}
-        only_old = {k: legacy_map[k] for k in legacy_map.keys() - doc.line_map().keys()}
-        shared_diff = {
-            k: (doc.line_map()[k], legacy_map[k])
-            for k in doc.line_map().keys() & legacy_map.keys()
-            if doc.line_map()[k] != legacy_map[k]
-        }
-        failures.append(
-            f"line_map: only-typed={only_new} only-legacy={only_old} "
-            f"disagree={shared_diff}"
+def projection_digest(text: str) -> str:
+    """A short digest of the parse, stable across runs and platforms.
+
+    ``tokenizer_version`` and the schema are deliberately excluded: they
+    change with the tokenizer, not with the parse, and a tokenizer edit that
+    does not move the parse must not force a re-baseline.
+    """
+    data = parse_diff(text).to_dict()
+    payload = json.dumps(
+        {"files": data["files"], "lines": data["lines"]},
+        sort_keys=True, separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def corpus_content_sha() -> str:
+    """The locked corpus's content hash, from the committed baseline."""
+    return json.loads(
+        (FIXTURES / "baseline.json").read_text(encoding="utf-8")
+    )["corpus_content_sha256"]
+
+
+def replay(sample: int = 1) -> dict:
+    """The baseline document for the corpus: sha pin plus per-diff digests."""
+    projections = {
+        str(path.relative_to(FIXTURES)): projection_digest(
+            path.read_text(errors="replace")
         )
-    if doc.post_lines() != _post_diff_lines(text):
-        failures.append("post_lines differ from _post_diff_lines")
-    if doc.pre_lines() != _pre_diff_lines(text):
-        failures.append("pre_lines differ from _pre_diff_lines")
+        for path in iter_diff_paths(sample=sample)
+    }
+    return {
+        "schema": SCHEMA,
+        "corpus_content_sha256": corpus_content_sha(),
+        "projections": projections,
+    }
+
+
+def compare(baseline: dict, current: dict) -> list[str]:
+    """Human-readable differences: corpus pin, missing, new, changed."""
+    failures: list[str] = []
+    if baseline.get("schema") != SCHEMA:
+        failures.append(
+            f"baseline schema {baseline.get('schema')!r} != {SCHEMA}"
+        )
+    if baseline.get("corpus_content_sha256") != current["corpus_content_sha256"]:
+        failures.append(
+            "corpus mismatch: baseline built from "
+            f"{baseline.get('corpus_content_sha256')}, current corpus is "
+            f"{current['corpus_content_sha256']}"
+        )
+    old = baseline.get("projections", {})
+    new = current["projections"]
+    for name in sorted(set(old) | set(new)):
+        if name not in new:
+            failures.append(f"{name}: in the baseline, absent from the corpus")
+        elif name not in old:
+            failures.append(f"{name}: new diff not in the baseline")
+        elif old[name] != new[name]:
+            failures.append(
+                f"{name}: projection {old[name]} -> {new[name]}"
+            )
     return failures
 
 
 def main(argv: list[str]) -> int:
-    sample = 1
-    if "--sample" in argv:
-        sample = int(argv[argv.index("--sample") + 1])
-    checked = 0
-    bad = 0
-    for path in iter_diff_paths(sample=sample):
-        checked += 1
-        failures = check_text(path.read_text(errors="replace"))
-        if failures:
-            bad += 1
-            print(f"PARITY FAIL {path}")
-            for failure in failures:
-                print(f"  {failure}")
-    print(f"diffdoc parity: {checked} diffs checked, {bad} mismatched")
-    return 1 if bad else 0
+    parser = argparse.ArgumentParser()
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--write", metavar="PATH")
+    group.add_argument("--check", metavar="PATH")
+    parser.add_argument("--sample", type=int, default=1)
+    args = parser.parse_args(argv)
+
+    current = replay(sample=args.sample)
+    if args.write:
+        Path(args.write).write_bytes(
+            gzip.compress(json.dumps(current, sort_keys=True).encode())
+        )
+        print(
+            f"diffdoc projections: wrote {len(current['projections'])} "
+            f"digests to {args.write}"
+        )
+        return 0
+
+    with gzip.open(args.check, "rt") as handle:
+        baseline = json.load(handle)
+    failures = compare(baseline, current)
+    for failure in failures[:200]:
+        print(f"PARITY FAIL {failure}")
+    print(
+        f"diffdoc projections: {len(current['projections'])} diffs, "
+        f"{len(failures)} mismatched"
+    )
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

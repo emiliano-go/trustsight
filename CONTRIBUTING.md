@@ -2,7 +2,7 @@
 
 TrustSight is a security tool with published limits. Contributions that touch analysis, scoring, fixtures, the tokenizer, or the security gates must preserve those limits and be easy to verify.
 
-If you only want to use the tool, start with the README and the getting started guide. If your change affects analysis behavior or the security model, read `docs/security.md` first.
+If you only want to use the tool, start with the README and the tutorial. If your change affects analysis behavior or the security model, read `docs/security.md` first.
 
 ## Quick Start
 

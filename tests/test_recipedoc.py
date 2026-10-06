@@ -75,6 +75,62 @@ def test_unresolved_assignments_carry_name_line_and_file():
     assert entry.to_dict()["name"] == "_now"
 
 
+def test_a_refused_reassignment_reads_as_not_seen():
+    doc = parse_recipe("pkgver=1\npkgver=$(date +%s)\n")
+    assert "pkgver" not in doc.scalars
+    # The refusal is not reported: the name did resolve earlier, and the
+    # X-series rates are adjudicated on that reporting surface.
+    assert doc.unresolved == ()
+
+
+def test_a_later_resolved_assignment_wins():
+    doc = parse_recipe("_url=$(curl -s https://x)\n_url=https://ok\n")
+    assert doc.scalars["_url"] == "https://ok"
+    assert doc.unresolved == ()
+
+
+def test_a_refused_append_clears_the_previous_value():
+    doc = parse_recipe("_flags=-O2\n_flags+=$(echo x)\n")
+    assert "_flags" not in doc.scalars
+    assert doc.unresolved == ()
+
+
+def test_an_array_assignment_with_a_substitution_reads_as_not_seen():
+    doc = parse_recipe(
+        'source=("https://a/b.tar.gz")\nsource=($(curl -s https://x))\n'
+    )
+    assert "source" not in doc.arrays
+    assert doc.unresolved == ()
+
+
+def test_a_never_resolved_scalar_substitution_is_named():
+    doc = parse_recipe("pkgver=$(date +%s)\n")
+    assert doc.unresolved == ("pkgver=$(date +%s)",)
+    assert [a.name for a in doc.unresolved_assignments] == ["pkgver"]
+
+
+def test_a_substituted_array_reads_as_not_seen_without_a_new_refusal():
+    # The old reader stored the shredded entries, so the name counted as
+    # kept and was never reported; the fix hides the value from readers
+    # without changing that reporting surface (the X-series rates are
+    # adjudicated on it).
+    doc = parse_recipe("source=($(curl -s https://x))\n")
+    assert "source" not in doc.arrays
+    assert doc.unresolved == ()
+
+
+def test_a_single_quoted_substitution_array_is_kept():
+    doc = parse_recipe("source=('$(literal)')\n")
+    assert doc.arrays["source"] == ("$(literal)",)
+    assert doc.unresolved == ()
+
+
+def test_an_array_with_a_parameter_expansion_is_kept():
+    doc = parse_recipe('pkgver=1\nsource=("https://x/$pkgver.tar.gz")\n')
+    assert doc.arrays["source"] == ("https://x/$pkgver.tar.gz",)
+    assert doc.unresolved == ()
+
+
 def test_array_diff_sets_and_order():
     delta = array_diff(("a", "b", "c"), ("b", "a", "d"))
     assert delta.gained == ("d",)

@@ -48,7 +48,7 @@ Requires **Python 3.11+** and **Arch Linux** (the tool discovers packages via `p
 
 The analysis is deterministic and calculated locally. Verdicts are template-based, describing each finding in plain English, for example `"Version bump. modified PKGBUILD, .SRCINFO. Signals: checksum disabled; novel dependency 'pyfoo' added in depends."` Runs are read-only by default; `--record` opts into persisting observations and analysis history.
 
-Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On an eligible first `review` or `inspect`, the CLI downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. Other commands do not fetch it automatically. See [installation](https://docs.trustsight.org/getting-started/installation/) for details.
+Baselines ship as signed GitHub release assets (`baseline-seed.tar.gz`, IOC baselines, the corpus). On an eligible first `review` or `inspect`, the CLI downloads the novelty seed and imports it only after its ed25519 signature verifies against the pinned distribution key; when offline, the attempt is skipped silently and the run starts cold. Other commands do not fetch it automatically. See [installation](https://docs.trustsight.org/tutorial/installation/) for details.
 
 ---
 
@@ -271,7 +271,7 @@ MIT
 
 | Section | Description |
 |---|---|
-| [Getting Started](https://docs.trustsight.org/getting-started/) | One-tutorial path from install to first review |
+| [Tutorial](https://docs.trustsight.org/tutorial/installation/) | One-tutorial path from install to first review |
 | [Full documentation](https://docs.trustsight.org/) | Docs landing page |
 | [Contributing](https://docs.trustsight.org/contributing/) | How to report bugs, contribute code, improve docs |
 | [Security](https://docs.trustsight.org/security/) | Vulnerability disclosure policy |

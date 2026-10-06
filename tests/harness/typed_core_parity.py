@@ -14,7 +14,6 @@ import argparse
 import gzip
 import json
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -59,7 +58,7 @@ def _entries(fact) -> list[dict]:
     ]
 
 
-def replay() -> dict:
+def replay(jobs: int | None = None) -> dict:
     gates.ensure_default_configs()
     config = gates.load_config()
     rules = gates.load_rules()
@@ -68,25 +67,19 @@ def replay() -> dict:
 
     corpus = FIXTURES / "benign-corpus"
     if corpus.exists():
-        by_pkg: dict[str, list[Path]] = defaultdict(list)
-        for path in sorted(corpus.rglob("*.diff")):
-            by_pkg[path.name.split("__")[0]].append(path)
-        seen_urls: dict[str, set[str]] = {}
-        for pkg in sorted(by_pkg):
-            for path in sorted(by_pkg[pkg], key=lambda p: p.stem):
-                text = path.read_text(errors="replace")
-                fact = gates.scan_diff(
-                    text, rules=rules, config=config,
-                    package_name=pkg, seen_urls=seen_urls,
-                )
-                findings.append({
-                    "kind": "benign", "package": pkg, "name": path.name,
-                    "score": fact.final_score, "entries": _entries(fact),
-                })
-                scopes.append({
-                    "kind": "benign", "package": pkg, "name": path.name,
-                    "scope": _scope_for(text),
-                })
+        for row in gates.scan_corpus(
+            corpus, sample=1, jobs=jobs, include_location=True
+        ):
+            findings.append({
+                "kind": "benign", "package": row["package"],
+                "name": row["path"].name, "score": row["score"],
+                "entries": row["entries"],
+            })
+            scopes.append({
+                "kind": "benign", "package": row["package"],
+                "name": row["path"].name,
+                "scope": _scope_for(row["path"].read_text(errors="replace")),
+            })
 
     malicious = FIXTURES / "malicious"
     if malicious.exists():
@@ -147,9 +140,11 @@ def main(argv: list[str]) -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--write", metavar="PATH")
     group.add_argument("--check", metavar="PATH")
+    parser.add_argument("--jobs", type=int, default=gates.default_jobs(),
+                        help="Analysis worker processes (default: min(8, CPUs))")
     args = parser.parse_args(argv)
 
-    current = replay()
+    current = replay(jobs=args.jobs)
     if args.write:
         Path(args.write).write_bytes(
             gzip.compress(json.dumps(current, sort_keys=True).encode())

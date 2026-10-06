@@ -19,10 +19,13 @@ of the default run; the CI job runs it whole.
 import argparse
 import json
 import math
+import multiprocessing
+import os
 import shutil
 import sys
 import tempfile
 from collections import Counter, defaultdict
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -32,8 +35,17 @@ sys.path.insert(0, str(ROOT / "src"))
 import trustsight.config as config_module
 import trustsight.db as db_module
 from trustsight.analysis import scan_diff
+from trustsight.analysis.base import _GLOBAL_URL_KEY
+from trustsight.analysis.pipeline import scored_source_urls
 from trustsight.config import ensure_default_configs, load_config
-from trustsight.rules import load_rules
+from trustsight.novelty import normalize_url
+from trustsight.rules import (
+    load_rules,
+    precompile_patterns,
+    precompile_structural_patterns,
+    resolve_generated_patterns,
+)
+from trustsight.sandbox.client import reset_after_fork
 
 FIXTURES = ROOT / "tests" / "fixtures"
 
@@ -158,22 +170,54 @@ def _diff_line_count(text: str) -> int:
     )
 
 
-def scan_corpus(corpus: Path, sample: int = 1) -> list[dict]:
-    """Scan every (or every *sample*-th) benign diff.
+def default_jobs() -> int:
+    """The worker count a CLI run uses unless told otherwise."""
+    return max(1, min(8, os.cpu_count() or 1))
 
-    Novelty is order-dependent, so the replay shares one ``seen_urls`` map
-    and walks packages in a stable order - the same shape as
-    ``rebaseline.py``.  Sampling keeps that property by thinning whole
-    packages' diffs uniformly rather than reordering them.
+
+def _resolve_jobs(jobs: int | None) -> int:
+    """One worker unless a caller asks for more.
+
+    Direct library callers (the tests) stay serial; the CLIs pass
+    :func:`default_jobs` so a corpus run uses the machine.
     """
-    ensure_default_configs()
-    config = load_config()
-    rules = load_rules()
+    if jobs is None or int(jobs) <= 0:
+        return 1
+    return max(1, int(jobs))
 
+
+def _benign_row(
+    package: str, path: Path, text: str, fact, include_location: bool
+) -> dict:
+    entries = []
+    for e in fact.score_breakdown:
+        entry = {"rule_id": e.rule_id, "severity": e.severity,
+                 "weight": e.weight, "params": e.params or {}}
+        if include_location:
+            entry["file"] = e.file
+            entry["line"] = e.line
+        entries.append(entry)
+    return {
+        "package": package,
+        "path": path,
+        "score": fact.final_score,
+        "lines": _diff_line_count(text),
+        "entries": entries,
+    }
+
+
+def _ordered_benign_packages(corpus: Path) -> dict[str, list[Path]]:
     by_pkg: dict[str, list[Path]] = defaultdict(list)
     for path in sorted(corpus.rglob("*.diff")):
         by_pkg[path.name.split("__")[0]].append(path)
+    return by_pkg
 
+
+def _scan_corpus_serial(
+    corpus: Path, sample: int, config: dict, rules,
+    include_location: bool,
+) -> list[dict]:
+    by_pkg = _ordered_benign_packages(corpus)
     seen_urls: dict[str, set[str]] = {}
     results: list[dict] = []
     index = 0
@@ -185,54 +229,222 @@ def scan_corpus(corpus: Path, sample: int = 1) -> list[dict]:
             text = path.read_text(errors="replace")
             fact = scan_diff(text, rules=rules, config=config,
                              package_name=pkg, seen_urls=seen_urls)
-            results.append({
-                "package": pkg,
-                "path": path,
-                "score": fact.final_score,
-                "lines": _diff_line_count(text),
-                "entries": [
-                    {"rule_id": e.rule_id, "severity": e.severity,
-                     "weight": e.weight, "params": e.params or {}}
-                    for e in fact.score_breakdown
-                ],
-            })
+            results.append(_benign_row(pkg, path, text, fact, include_location))
     return results
 
 
-def scan_malicious(root: Path) -> list[dict]:
+def _benign_plan(
+    corpus: Path, sample: int, config: dict
+) -> list[tuple[str, list[Path], frozenset[str]]]:
+    """Per-package diff lists plus each package's exact global-URL prefix.
+
+    Walks the corpus once in the same order and through the same URL path
+    ``scan_diff`` uses, so a worker starting at a package sees exactly the
+    global novelty a serial run would have by then.  Within a package the
+    diffs stay serial in the worker, so per-package novelty is preserved.
+    """
+    by_pkg = _ordered_benign_packages(corpus)
+    plan: list[tuple[str, list[Path], frozenset[str]]] = []
+    global_seen: set[str] = set()
+    index = 0
+    for pkg in sorted(by_pkg):
+        selected: list[Path] = []
+        additions: list[str] = []
+        for path in sorted(by_pkg[pkg], key=lambda p: p.stem):
+            index += 1
+            if sample > 1 and index % sample:
+                continue
+            selected.append(path)
+            text = path.read_text(errors="replace")
+            additions.extend(
+                normalize_url(url)
+                for url in scored_source_urls(text, config, pkg)
+            )
+        if selected:
+            plan.append((pkg, selected, frozenset(global_seen)))
+        global_seen.update(additions)
+    return plan
+
+
+_WORKER_RULES: list[dict] | None = None
+_WORKER_CONFIG: dict | None = None
+_WORKER_INCLUDE_LOCATION = False
+
+
+def _init_worker(
+    config_dir: str, data_dir: str, rules, config, include_location: bool
+) -> None:
+    """Install the parent's shipped config and drop inherited state.
+
+    The pool forks, so the parent's rule-safety verdicts and config paths
+    are inherited; the database connection and the tokenizer worker pool
+    are not safe to share across a fork and are reset here.  The parent's
+    sandbox workers are left alone: their pids name live processes in the
+    parent's table, and stopping one would kill the parent's pool.
+    """
+    global _WORKER_RULES, _WORKER_CONFIG, _WORKER_INCLUDE_LOCATION
+    config_module.CONFIG_DIR = Path(config_dir)
+    config_module._toml_cache.clear()
+    db_module.DATA_DIR = Path(data_dir)
+    db_module._official_names = frozenset()
+    cached = getattr(db_module._local, "cached", None)
+    if cached is not None:
+        try:
+            cached[1].close()
+        except Exception:
+            pass
+        db_module._local.cached = None
+    db_module.init_db()
+    reset_after_fork()
+    _WORKER_RULES = rules
+    _WORKER_CONFIG = config
+    _WORKER_INCLUDE_LOCATION = include_location
+
+
+def _precompile_patterns(rules) -> None:
+    """Decide pattern safety once, single-threaded, before forking.
+
+    The safety probe is wall-clock; under pool contention a shipped pattern
+    can be refused in one worker and accepted in another (B1).  The parent's
+    verdict is inherited by each forked worker, so every worker agrees.
+    Generated patterns (R013, R047, R048, R152) are filled in first, or the
+    placeholder would be vetted and the real pattern re-timed in every
+    worker - exactly the R013 refusal this fixes.
+    """
+    resolve_generated_patterns(rules)
+    precompile_patterns(r.get("pattern", "") for r in rules)
+    precompile_structural_patterns()
+
+
+def _scan_package_task(task):
+    package, paths, prefix = task
+    pkg_seen: set[str] = set()
+    global_seen = set(prefix)
+    rows = []
+    for path_str in paths:
+        path = Path(path_str)
+        text = path.read_text(errors="replace")
+        fact = scan_diff(
+            text, rules=_WORKER_RULES, config=_WORKER_CONFIG,
+            package_name=package,
+            seen_urls={package: pkg_seen, _GLOBAL_URL_KEY: global_seen},
+        )
+        rows.append(
+            _benign_row(package, path, text, fact, _WORKER_INCLUDE_LOCATION)
+        )
+    return rows
+
+
+def _scan_corpus_parallel(
+    plan, workers: int, rules, config: dict, include_location: bool
+) -> list[dict]:
+    tasks = [
+        (pkg, [str(p) for p in paths], prefix)
+        for pkg, paths, prefix in plan
+    ]
+    context = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(
+        max_workers=workers, mp_context=context,
+        initializer=_init_worker,
+        initargs=(str(config_module.CONFIG_DIR), str(db_module.DATA_DIR),
+                  rules, config, include_location),
+    ) as pool:
+        results: list[dict] = []
+        for package_rows in pool.map(_scan_package_task, tasks, chunksize=1):
+            results.extend(package_rows)
+    return results
+
+
+def scan_corpus(
+    corpus: Path, sample: int = 1, jobs: int | None = None,
+    include_location: bool = False,
+) -> list[dict]:
+    """Scan every (or every *sample*-th) benign diff.
+
+    Novelty is order-dependent, so the replay walks packages in a stable
+    order - the same shape as ``rebaseline.py``.  Sampling keeps that
+    property by thinning whole packages' diffs uniformly rather than
+    reordering them.  ``jobs`` > 1 runs packages in worker processes: each
+    package's diffs stay serial inside its worker and the global URL prefix
+    is precomputed exactly, so the results are the serial results.
+    ``include_location`` adds the finding's file and line to each entry.
+    """
+    ensure_default_configs()
+    config = load_config()
+    rules = load_rules()
+    workers = _resolve_jobs(jobs)
+    if workers <= 1:
+        return _scan_corpus_serial(corpus, sample, config, rules, include_location)
+    # Decide pattern safety on the idle parent; the forked workers inherit
+    # the verdict.  The schema exists before workers open read connections.
+    _precompile_patterns(rules)
+    db_module.init_db()
+    plan = _benign_plan(corpus, sample, config)
+    return _scan_corpus_parallel(plan, workers, rules, config, include_location)
+
+
+def _malicious_row(group: str, path: Path, fact, expected: dict) -> dict:
+    return {
+        "group": group,
+        "name": path.name,
+        "score": fact.final_score,
+        "fired": {e.rule_id for e in fact.score_breakdown},
+        # A weight-0 finding is a reported fact, not a flag: H001 on a
+        # justified SKIP says "this is a -git package's SKIP", which is
+        # exactly what a must_not_fire label means to allow.
+        "scored": {
+            e.rule_id for e in fact.score_breakdown
+            if e.weight != 0 or e.severity == "FATAL"
+        },
+        "expected": expected.get(path.name, {}),
+    }
+
+
+def _scan_malicious_task(task):
+    group, path_str, expected = task
+    path = Path(path_str)
+    text = path.read_text(errors="replace")
+    fact = scan_diff(text, rules=_WORKER_RULES, config=_WORKER_CONFIG,
+                     package_name=path.stem, seen_urls={})
+    return _malicious_row(group, path, fact, expected)
+
+
+def scan_malicious(root: Path, jobs: int | None = None) -> list[dict]:
     """Scan the labelled malicious fixtures, carrying their expectations.
 
     The ``warm`` group is skipped: its rules read the dependency corpus and
     this is the cold scanner.  ``gate_d_series_warm`` scans it under the
-    seeded corpus and asserts the cold half itself.
+    seeded corpus and asserts the cold half itself.  Fixtures are
+    independent (each starts from an empty novelty state), so they run in
+    parallel when ``jobs`` asks for it.
     """
     ensure_default_configs()
     config = load_config()
     rules = load_rules()
 
-    results: list[dict] = []
+    tasks = []
     for group in sorted(
             p for p in root.iterdir() if p.is_dir() and p.name != "warm"):
         expected_path = group / "expected.json"
         expected = json.loads(expected_path.read_text()) if expected_path.exists() else {}
         for path in sorted(group.glob("*.diff")):
-            fact = scan_diff(path.read_text(errors="replace"), rules=rules,
-                             config=config, package_name=path.stem, seen_urls={})
-            results.append({
-                "group": group.name,
-                "name": path.name,
-                "score": fact.final_score,
-                "fired": {e.rule_id for e in fact.score_breakdown},
-                # A weight-0 finding is a reported fact, not a flag: H001 on a
-                # justified SKIP says "this is a -git package's SKIP", which is
-                # exactly what a must_not_fire label means to allow.
-                "scored": {
-                    e.rule_id for e in fact.score_breakdown
-                    if e.weight != 0 or e.severity == "FATAL"
-                },
-                "expected": expected.get(path.name, {}),
-            })
-    return results
+            tasks.append((group.name, str(path), expected))
+
+    workers = _resolve_jobs(jobs)
+    if workers <= 1:
+        return [
+            _scan_malicious_task(task) for task in tasks
+        ]
+    _precompile_patterns(rules)
+    db_module.init_db()
+    context = multiprocessing.get_context("fork")
+    with ProcessPoolExecutor(
+        max_workers=workers, mp_context=context,
+        initializer=_init_worker,
+        initargs=(str(config_module.CONFIG_DIR), str(db_module.DATA_DIR),
+                  rules, config, False),
+    ) as pool:
+        return list(pool.map(_scan_malicious_task, tasks, chunksize=1))
 
 
 # ---------------------------------------------------------------------------
@@ -653,10 +865,11 @@ def gate_d_series_warm(
 
 def run_gates(corpus: Path = FIXTURES / "benign-corpus",
               malicious_root: Path = FIXTURES / "malicious",
-              sample: int = 1) -> list[Gate]:
+              sample: int = 1, jobs: int | None = None) -> list[Gate]:
     with shipped_config():
-        benign = scan_corpus(corpus, sample=sample)
-        malicious = scan_malicious(malicious_root) if malicious_root.exists() else []
+        benign = scan_corpus(corpus, sample=sample, jobs=jobs)
+        malicious = (scan_malicious(malicious_root, jobs=jobs)
+                     if malicious_root.exists() else [])
         gates = _evaluate(benign, malicious)
         warm_root = malicious_root / "warm"
         if warm_root.exists():
@@ -694,6 +907,8 @@ def main() -> int:
     parser.add_argument("--malicious", type=Path, default=FIXTURES / "malicious")
     parser.add_argument("--sample", type=int, default=1,
                         help="Scan every Nth benign diff (default: all)")
+    parser.add_argument("--jobs", type=int, default=default_jobs(),
+                        help="Analysis worker processes (default: min(8, CPUs))")
     parser.add_argument("--json", type=Path, help="Write the gate results here")
     args = parser.parse_args()
 
@@ -703,7 +918,8 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    gates = run_gates(args.corpus, args.malicious, sample=args.sample)
+    gates = run_gates(args.corpus, args.malicious, sample=args.sample,
+                      jobs=args.jobs)
 
     width = max(len(g.name) for g in gates)
     for gate in gates:

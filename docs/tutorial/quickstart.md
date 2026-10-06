@@ -1,22 +1,12 @@
-<!-- description: Install TrustSight, run your first review, and read the output table: what each column means, why the first run reports nothing, and what a verdict claims. -->
+<!-- description: Run your first TrustSight review and read the output: the review pipeline, the package panel and its rows, and what the dependency line means. -->
 
 # Quickstart
 
-This guide walks through the single happy path: install, run a review, and understand the output.
+By the end of this page you will have run `trustsight review` and read its
+output. If TrustSight is not installed yet, start with
+[Installation](installation.md#installation).
 
----
-
-## 1. Install
-
-```bash
-git clone https://github.com/emiliano-go/trustsight.git
-cd trustsight/packaging/aur
-makepkg -si
-```
-
-See [installation](installation.md) for details.
-
-## 2. Run a review
+## Step 1: Run the review
 
 ```bash
 trustsight review
@@ -37,7 +27,11 @@ The second and later commands:
 8. Calculates a deterministic score from 0-100,
 9. Prints one panel per package, and a summary line.
 
-## 3. Read the output
+If nothing installed is behind the snapshot, the run prints
+`No outdated packages found.` instead of panels. That is not an error: no
+installed AUR package needs updating right now.
+
+## Step 2: Read the output
 
 ```
 ╭───────────────────────────── some-app-bin ─────────────────────────────╮
@@ -84,54 +78,14 @@ finding, the file, the line - because a number invites a glance where the
 evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
 `--risk` for the band alone.
 
-### What the scores mean in context
+A quiet report is normal: most AUR updates are routine version bumps with
+checksum updates, and most packages land Low with nothing to read. An
+`Inconclusive` verdict is not Low - it means the tool could not gather enough
+to answer, and the update is worth a manual look. The bands, the evidence
+tiers behind them, and the coverage gaps are explained in
+[Reading a Report](reading-a-report.md#reading-a-report).
 
-- **0-20 (Low)**: No significant risk signals. Routine version bumps with checksum updates land here. **Most packages will score 0**; this is normal and expected.
-- **21-50 (Medium)**: One or more risk signals fired. Possible novelty, unknown domains, or a disabled checksum.
-- **51-80 (High)**: Multiple signals. Investigate with `trustsight inspect <name>`.
-- **81-100 (Critical)**: Strong structural signals, or FATAL rules triggered (R012/R013).
-- **Inconclusive**: Either the score fell in the Medium range (21-50) with nothing strong behind it and a cold database (fewer than 25 effective observations across the database; novelty reaches full weight at 50), or the run could not examine the whole change (a truncated diff, an over-long line, an unavailable repository tree, or a `source=` URL computed at build time). A coverage gap downgrades a Low or Medium result. Both causes mean the tool does not have enough to answer, and neither is the same as Low.
-
-### Key teaching moments
-
-**"Novelty inactive on a cold database"**: The maturity gate scales novelty signals by the database-wide effective observation count divided by 50. At zero observations, novelty weight is 0; at 50, it reaches full weight. A verified seed normally warms an eligible first CLI `review` or `inspect`; without it, the database starts cold. Analyses of any packages contribute to the same global maturity count. Learn more at [cold start and maturity](../explanation/cold-start-and-maturity.md).
-
-**Most packages score 0**: The vast majority of AUR updates are clean version bumps. If every package scores high, check your database state or look for systematic issues.
-
-**A package scoring 35+**: Worth inspecting with `trustsight inspect <name>`. The detailed breakdown shows exactly which rules fired and why.
-
-**No alerts is not a certificate**: A Low result means no published rule matched the evidence that was examined - nothing more. TrustSight is an instrument, not a judge; the update decision stays with you. The [security model](../security.md) is the exact statement of that boundary.
-
-**Inconclusive is not Low**: When verdict reads "Inconclusive", the tool could not gather enough data to give a confident answer. Treat it as "look manually." See [what TrustSight cannot see](../explanation/what-trustsight-cannot-see.md).
-
-### Should I build the dependency corpus?
-
-TrustSight ships a *seed* of prior knowledge, part of which is a corpus of
-every dependency name seen across the AUR. The D-series rules (novel
-dependency, dependency-name typosquat, dependency count) compare a name
-against that corpus, so **without it they stay silent**, and a quiet report is
-quiet for a reason the report does not show. `trustsight status` prints
-`Dependency corpus: Not loaded` when it is missing.
-
-You do not have to build it. Every other rule works without it; what you lose
-is the D-series signal and the URL-novelty comparison. If you want it, the
-published `baseline-seed.tar.gz` carries the corpora and `trustsight seed
-fetch` imports them; when the release channel lags, build it from the public
-AUR mirror yourself (about 2.5 GB of clone, plus the time to walk it):
-
-```bash
-git clone --bare https://github.com/archlinux/aur.git ~/.cache/trustsight/aur.git
-python scripts/generate_seed.py --out /tmp/seed.db --provenance-out /tmp/seed-provenance.json
-trustsight seed-db --file /tmp/seed.db --force
-```
-
-Rebuild every month or so, and after a large batch of AUR activity: the corpus
-is a moving picture, not a fixed one. See [seed
-provenance](../explanation/seed-provenance.md) for what each build records.
-
----
-
-## 4. Dependencies are reviewed too
+## Step 3: Dependencies are reviewed too
 
 An AUR package's `depends` and `makedepends` can name other AUR packages, and
 `makepkg` builds those on your machine in the same run. So by default
@@ -211,10 +165,17 @@ To make a different depth permanent, put it in `config.toml`:
 levels = 2
 ```
 
----
+The D-series dependency rules read the dependency corpus, which a fresh install
+does not have. Without it they stay silent; [Corpus and
+Priors](../explanation/corpus-and-priors.md#building-the-dependency-corpus-yourself)
+covers fetching it with `trustsight seed fetch` or building it yourself.
 
-## Next steps
+## Recap
 
-- Read the [depth reference](../reference/configuration.md#depth) for the ceilings and the gap semantics.
-- Learn to [read a full report](reading-a-report.md): understand every section of the inspect output.
-- See [guides](../guides/index.md) for real workflows: CI integration, alerting, batch review.
+1. The first `trustsight review` bootstraps the AUR metadata snapshot; later runs analyse the packages that need updating.
+2. Each package gets one panel: a verdict, the findings behind it, and what changed. Evidence is shown, and the score only on request with `--score` or `--risk`.
+3. Most updates are quiet - Low or nothing to read is the expected result. `Inconclusive` means the analysis could not answer, not that the update is safe.
+4. Direct AUR dependencies appear as mini-cards; `--deps` reviews each as a package in its own right.
+5. The dependency corpus is optional context: without it, the D-series rules stay silent.
+
+**Next:** [Reading a Report](reading-a-report.md#reading-a-report), every part of the output explained.

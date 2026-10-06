@@ -11,7 +11,7 @@ That distinction, **input not verdict**, rests on four statements the rest of th
 - The tool's output is input to a human decision, never the decision itself.
 - Errors and unknowns travel to the surface; the interface does not hide them.
 
-The page is organised as a thesis (read this first), then the four parts that make it precise and enforceable:
+The page opens with a thesis, then the four parts that make it precise and enforceable:
 
 - **The thesis** (below): adversary, boundaries, assumptions, guarantees, non-guarantees, the evidence taxonomy, detection versus authorization, and how uncertainty reaches the person.
 - **[Part A](security/program-under-attack.md)**: TrustSight as a program consuming hostile input - the invariants that protect the machine.

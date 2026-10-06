@@ -715,14 +715,18 @@ def _split_with_lines(text: str) -> list[tuple[str, int]]:
 
 def _collect_array_entries(
     additions: list[str], start_idx: int
-) -> tuple[int, list[str], list[int]]:
+) -> tuple[int, list[str], list[int], bool]:
     """Collect the entries of a ``name=( ...)`` array starting at *start_idx*.
 
     Returns the index of the line that closed the array, the entries
-    (outer quotes removed by ``shlex``), and each entry's source line
-    index in *additions*.  Nested parentheses inside quotes are ignored;
-    the closing ``)`` that balances the opener is not included in the
-    parsed content.
+    (outer quotes removed by ``shlex``), each entry's source line index in
+    *additions*, and whether the assignment runs a command substitution
+    (``$(`` or a backtick, comments excluded, quotes treated
+    conservatively).  Nested parentheses inside quotes are ignored; the
+    closing ``)`` that balances the opener is not included in the parsed
+    content.  A refused assignment has no statically known contents, so
+    the caller must let the name read as "not seen" rather than keep a
+    partial or stale list.
     """
     first = additions[start_idx]
     m = _ARRAY_ASSIGNMENT_RE.match(first)
@@ -733,6 +737,7 @@ def _collect_array_entries(
     rest = m.group(3)
     depth = 1
     in_single = in_double = False
+    refused = False
     parts: list[str] = []
     offsets: list[int] = []
     i = start_idx
@@ -749,6 +754,16 @@ def _collect_array_entries(
         boundary = True
         while j < len(line):
             ch = line[j]
+            # A substitution that executes - unquoted or in double quotes,
+            # but never inside a comment or single-quoted data - makes the
+            # array's contents statically unknown.  The quote state comes
+            # from the same scan that collects the entries, so the two
+            # cannot disagree about what is code.
+            if not comment and not in_single and not refused and (
+                ch == "`"
+                or (ch == "$" and j + 1 < len(line) and line[j + 1] == "(")
+            ):
+                refused = True
             if in_double:
                 if ch == "\\" and j + 1 < len(line):
                     content.append(ch)
@@ -823,7 +838,7 @@ def _collect_array_entries(
                 entry_lines.append(start_idx + offsets[index])
         except ValueError:
             entries, entry_lines = [], []
-    return i, entries, entry_lines
+    return i, entries, entry_lines, refused
 
 
 def _substitute(
@@ -1067,6 +1082,15 @@ def _variable_table_with_spans(
     array_table: dict[str, list[str]] = {}
     scalar_lines: dict[str, int] = {}
     array_spans: dict[str, dict] = {}
+    # A name is "kept" when a value for it was statically available at some
+    # point: a folded scalar, or an array with collected entries (even when
+    # the array itself is refused now, because the old reader stored it).
+    # Reporting stays on that surface - only names that were never kept are
+    # named as unresolved - because the X-series rates were adjudicated on
+    # it, while a shadowed or substituted name still has to leave the
+    # tables so no reader sees a stale or shredded value (A6).
+    ever_kept: set[str] = set()
+    reportable: dict[str, int] = {}
     i = 0
     while i < len(additions):
         line = additions[i]
@@ -1074,8 +1098,21 @@ def _variable_table_with_spans(
         arr_match = _ARRAY_ASSIGNMENT_RE.match(line)
         if arr_match:
             name, op = arr_match.group(1), arr_match.group(2)
-            close_idx, entries, entry_lines = _collect_array_entries(additions, i)
+            close_idx, entries, entry_lines, refused = _collect_array_entries(
+                additions, i
+            )
             if entries:
+                ever_kept.add(name)
+            if refused or not entries:
+                reportable.setdefault(name, i)
+            if refused:
+                # The assignment executes a substitution, so the array's
+                # contents are statically unknown from this line on.  A
+                # partial or stale list would be a wrong analysis; the name
+                # reads as "not seen" instead (A6).
+                array_table.pop(name, None)
+                array_spans.pop(name, None)
+            elif entries:
                 if op == "+=":
                     array_table.setdefault(name, []).extend(entries)
                     span = array_spans.setdefault(
@@ -1099,13 +1136,21 @@ def _variable_table_with_spans(
             )
             value = _strip_outer_quotes(value)
             # A command substitution has no static value, so it cannot be
-            # folded into the table.
+            # folded into the table.  The name's value is unknown from this
+            # line on, so whatever a previous assignment left is dropped:
+            # a stale value would be a wrong analysis, while an absent one
+            # reads as "not seen" (A6).
             if "$(" not in value and "`" not in value:
                 if op == "+=":
                     var_table[name] = var_table.get(name, "") + value
                 else:
                     var_table[name] = value
                 scalar_lines[name] = i
+                ever_kept.add(name)
+            else:
+                var_table.pop(name, None)
+                scalar_lines.pop(name, None)
+                reportable.setdefault(name, i)
         i += 1
 
     for _ in range(10):
@@ -1130,6 +1175,10 @@ def _variable_table_with_spans(
     return var_table, array_table, {
         "scalars": scalar_lines,
         "arrays": array_spans,
+        "refused": sorted(
+            index for name, index in reportable.items()
+            if name not in ever_kept
+        ),
     }
 
 

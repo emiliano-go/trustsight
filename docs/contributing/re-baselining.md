@@ -65,6 +65,25 @@ from an earlier corpus snapshot rather than a fixed expectation:
 
 Treat a falling `zero` or a rising `p95` as a signal that a rule has become too aggressive. Thresholds are a review judgement, not something the script checks.
 
+## The projection baseline
+
+`baseline.json` records the score distribution; the parse itself is pinned
+by `tests/fixtures/diffdoc-projections.json.gz`. Regenerate it after a
+deliberate change to the diff parse (`diffdoc.py` and what it feeds), or
+after the locked corpus moves:
+
+```bash
+uv run python tests/harness/diffdoc_parity.py \
+  --write tests/fixtures/diffdoc-projections.json.gz
+```
+
+The header pins the corpus by `corpus_content_sha256`, so a baseline that
+does not match the corpus fails before any projection is compared. A parse
+change that moves no finding still needs the baseline regenerated in the
+same commit as the parser change, reviewed on its own. The baseline is
+checked by the sampled suite (`tests/test_diffdoc_parity.py`) and whole by
+the calibration CI job.
+
 ## After re-baselining
 
 1. **Update** `tests/fixtures/baseline.json` with the newly generated file.

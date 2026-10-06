@@ -58,7 +58,7 @@ jobs:
         run: |
           cd ../trustsight-harness
           uv lock
-          uv sync --all-extras
+          uv sync --locked --all-extras
 
       - name: Replay every committed bypass
         run: |

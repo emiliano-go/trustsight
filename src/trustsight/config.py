@@ -135,7 +135,11 @@ NETWORK_CLIENT_ALTERNATIVES = (
     r"nc", r"ncat", r"netcat", r"socat", r"telnet",
     r"openssl\s+s_client",
     r"dig", r"host", r"nslookup", r"drill", r"kdig",
-    r"git\s+(?:clone|fetch|pull|ls-remote|archive)",
+    # `git -C "$srcdir/x" pull` puts the repository path between the verb
+    # and the subcommand, and the straight `git\s+(?:clone|...)` spelling
+    # saw no client at all - exactly the spelling a build helper uses.
+    # Global options may precede the subcommand.
+    r"git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+(?:clone|fetch|pull|ls-remote|archive)",
     r"svn\s+(?:co|checkout|export)",
     r"hg\s+(?:clone|pull|unbundle)",
     r"bzr\s+(?:branch|pull|export)",
@@ -156,7 +160,7 @@ NETWORK_CLIENT_ALTERNATIVES = (
     r"ipfs\s+(?:get|cat|dag\s+get)",
     r"swift\s+download",
     r"rados\s+get",
-    r"git\s+lfs\s+(?:pull|fetch|checkout)",
+    r"git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+lfs\s+(?:pull|fetch|checkout)",
     r"yt-dlp|youtube-dl",
     # A lookahead, for the reason the BSD `fetch` arm needs one: consuming
     # the magnet link as part of the client token leaves no address behind
@@ -180,7 +184,7 @@ NETWORK_CLIENT_ALTERNATIVES = (
     # `git push` sends bytes *out*. The inventory had clone/fetch/pull -
     # every way to bring code in and no way to send it - so a recipe
     # exfiltrating through a push looked like nothing at all.
-    r"git\s+push",
+    r"git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+push",
     # BSD `fetch(1)`. Anchored on a URL argument because `fetch` on its own
     # is a word `git fetch` and a hundred build scripts already use.
     # A lookahead, not a match: consuming the URL as part of the client

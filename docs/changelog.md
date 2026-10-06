@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Security
+
+- **A declared source URL is no longer accepted as a fetch's address when it is a decoy argument.** Appending a declared `source=()` URL to a no-URL fetch (`git fetch`, `rclone copy`, `wget`/`curl`/`axel` basename forms, `lwp-download`, and the host-form clients) put a scheme on the line, which the unattributed pairing arm read as "attributed fetch elsewhere"; the real fetch, and the later execution of the file it brought, paired with nothing. A URL-derived output path that names a declared source is now discarded, and the arm is entered whenever the line names no output of its own. Explicit output flags (`-o stage.sh`) are unaffected, and an attributed fetch followed by an unrelated execution still does not pair (H082 false-positive control in `tests/test_bypass_closure.py`).
+- **A fetch inside `pkgver()` now pairs with an execution.** R051 covers pkgver's network for the classic clients but not `git fetch`/`git pull`, and pkgver was excluded from the fetch-then-execute scope entirely, so `pkgver() { git pull; bash payload; }` scored nothing. The pairing pass now reads pkgver; H016 and the write-then-execute rules are unchanged.
+- **The client vocabulary reads `git -C <dir> <verb>`, and the output-flag arms are case-sensitive.** `git -C "$srcdir/x" pull` matched no network client at all, which silenced the pairing for the most common build-helper spelling; and `re.IGNORECASE` let the lowercase `-o` arm claim curl's argument-less capital `-O`, so the URL was captured as the output filename and the real fetch paired with nothing. `(?-i:o)` / `(?-i:O)` pin the flag letters.
+
 ## [0.17.4] - 2026-10-05
 
 ### Fixed

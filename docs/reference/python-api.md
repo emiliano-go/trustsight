@@ -153,11 +153,11 @@ Database and corpus health. What `trustsight status` reports, plus the config di
 
 ## Analysis
 
-### `inspect(package, *, check_aur=True, depth=None) -> Report`
+### `inspect(package, *, check_aur=True, depth=None, record=False) -> Report`
 
 Analyse one package. Equivalent to `trustsight inspect`.
 
-Fetches the package's AUR git repository, diffs it against the last state this database saw, runs every rule, and records the run as an observation. That last part is what makes the *next* call's novelty signals mean anything.
+Fetches the package's AUR git repository, diffs it against the last state this database saw, and runs every rule. Read-only by default: nothing is written, so the same call against the same state returns the same report. Pass `record=True` to persist the run as an observation, which is what makes the *next* call's novelty signals mean anything.
 
 Raises `PackageNotFound` when the name is in neither the AUR nor the local database. Pass `check_aur=False` to skip the RPC round trip when you already know the package exists.
 

@@ -115,12 +115,18 @@ signal when one is present. The trigger is kept because the same
 the rule exists for. If your package set is mostly kernel splits, the
 tuning is:
 
+Both rules are code-emitted, so `[rules.H064]` / `[rules.D004]` in
+`config.toml` never reach them. D004 is governed by `[code_rules]`; H064 has
+no per-rule weight control and is silenced with an override:
+
 ```toml
 ## config.toml
-[rules.H064]
-weight_override = 0   # reported, worth no points
-[rules.D004]
-enabled = false       # experimental; H064 already covers the ground
+[code_rules]
+D004 = false          # code-emitted; not experimental, disabled here
+```
+
+```bash
+trustsight override add H064 --reason "kernel module provides are ABI aliases, not sibling projects"
 ```
 
 H098 needs two distinct naming signals, so removing D004/H064 can clear

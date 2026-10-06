@@ -4,8 +4,9 @@
 
 How recently the package or this revision appeared. These read git commit
 timestamps on the AUR repository and nothing else, so none of them needs a
-diff, and all three also fire on first-seen packages through
-`_make_fresh_analysis()` in `pipeline.py`.
+diff. H020 and H021 also fire on first-seen packages through
+`_make_fresh_analysis()` in `pipeline.py`; H022 needs a prior commit, so it
+fires only on the incremental path.
 
 None is calibrated against the benign corpus, because each one is a
 function of when the scan runs rather than of what the package contains.

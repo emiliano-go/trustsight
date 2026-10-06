@@ -156,7 +156,7 @@ than the canonical full-mirror seed, and never overwrites an uploaded one.
 The gap is not cosmetic. The lock is a calibration corpus, not a sample of
 the AUR: a seed built from the lock (202 packages) contains about 137
 distinct maintainers, while the canonical seed built from the full AUR
-mirror (about 116,000 package branches) contains about 35,903. Shipping the
+mirror (about 116,000 package branches) contains about 36,912. Shipping the
 lock-derived seed would reduce novelty coverage by 99.6%, flagging
 experienced maintainers as new on every package outside the lock. That is
 why the canonical seed is always the one a fresh install fetches, and why

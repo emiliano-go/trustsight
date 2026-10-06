@@ -40,7 +40,7 @@ severity weights and the reserved identifier ranges.
 | [H069](#h069) | Build-time Generation Then Execution | HIGH |
 | [H071](#h071) | Covert Egress | HIGH |
 | [H072](#h072) | Write Then Execute | HIGH |
-| [H075](#h075) | Indirect Remote Execution | CRITICAL |
+| [H075](#h075) | Remote Script Via Process Substitution | CRITICAL |
 | [H077](#h077) | Parse-time Network Fetch | HIGH |
 | [H081](#h081) | Committed File Executed Without Declaration | HIGH |
 | [H082](#h082) | Fetch Then Execute | CRITICAL |
@@ -62,7 +62,7 @@ severity weights and the reserved identifier ranges.
 | [R055](#r055) | Git Clone With Variable Branch | MEDIUM |
 | [R056](#r056) | Download Then Source | CRITICAL |
 | [R057](#r057) | TLS Verification Disabled | HIGH |
-| [R152](#r145) | Source URL On Free-Hosting Or Dynamic-DNS Host | MEDIUM |
+| [R152](#r152) | Source URL On Free-Hosting Or Dynamic-DNS Host | MEDIUM |
 <!-- /generated: page-index -->
 
 ### R001: Remote Script Execution {#r001}
@@ -191,7 +191,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 - **Pattern:** `https?://[^/\s]*\.(?:tk|ml|ga|cf|gq|pw)(?:[:/]|["\x27\s)]|$)`
 - **Description:** A source URL on a free-registrar TLD (`.tk`, `.ml`, `.ga`, `.cf`, `.gq`, `.pw`). These carry no registration cost and are disproportionately used for throwaway infrastructure. Deliberately excludes `.xyz` and `.top`, which have substantial legitimate use.
 
-### R152: Source URL On Free-Hosting Or Dynamic-DNS Host {#r145}
+### R152: Source URL On Free-Hosting Or Dynamic-DNS Host {#r152}
 
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
@@ -386,11 +386,11 @@ artefacts are exempt.
 
 Fire rate: 0 of 3739.
 
-### H075: Indirect Remote Execution {#h075}
+### H075: Remote Script Via Process Substitution {#h075}
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
-- **Condition:** A fetched script reaches a shell by a path the pipe-to-shell rules do not see: process substitution (`bash <(curl ...)`), `xargs` (`curl ... | xargs bash`), or a here-string fed by command substitution (`bash <<< "$(curl ...)"`).
+- **Condition:** A fetched script reaches a shell by a path the pipe-to-shell rules do not see: process substitution (`bash <(curl ...)`), `xargs` (`curl ... | xargs bash`), or a here-string fed by command substitution (`bash <<< "$(curl ...)"`). The finding is named `Remote Script Via Process Substitution`, `Remote Script Via xargs`, or `Remote Script Via Here-String` according to the path matched.
 
 Each still executes remote code at build time, so it belongs with R001/R002
 rather than at R010/R011's "uses curl" LOW.

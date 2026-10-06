@@ -27,7 +27,7 @@ uv run python scripts/build_corpus.py --from-manifest \
   --out tests/fixtures/benign-corpus
 ```
 
-This regenerates the exact diffs recorded in the lock (~200 packages, ~11 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). It is deterministic: the same lock produces byte-identical diffs on any machine.
+This regenerates the exact diffs recorded in the lock (~200 packages, ~11 minutes cold; the fetched objects are cached under `~/.cache/trustsight/aur.git`). The selection is deterministic: the same lock names the same packages and diffs on any machine. The reconstructed *bytes* are not byte-identical across git versions, though - `git diff -W` output is not byte-stable, which is why the calibration workflows download the packed release asset rather than rebuilding from the lock (see `.github/workflows/corpus-drift.yml`).
 
 Do **not** use plain `build_corpus.py --strata ...` for this. That mode re-selects packages by current AUR popularity and rewrites the lock, producing a different corpus each run.
 

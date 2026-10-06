@@ -65,7 +65,7 @@ domains has a density that is itself a pattern.
 ### H043: Attack-Chain Composition {#h043}
 
 - **Severity:** INFO (weight 0)
-- **Category:** `composition`
+- **Category:** `meta`
 - **Condition:** The findings on one package span at least `[thresholds] h043.attack_chain_stages` (default 3) distinct kill-chain stages.
 
 Stages: takeover (H026, H044, H074), mass adoption (H045, H073), install hook
@@ -128,7 +128,7 @@ two naming/deception signals.
 ### H102: Maintainer Change With Signing Key Change {#h102}
 
 - **Severity:** HIGH (weight 25)
-- **Category:** `composition`
+- **Category:** `meta`
 - **Condition:** The maintainer changed and `validpgpkeys` moved (H078)
   in the same diff.
 

@@ -77,7 +77,7 @@ homograph_attack = 30
 ```
 
 There is no block for verification or pinning. Declared checksums, PGP keys,
-GPG sources and source pins are reported as weight-0 `P001`-`P008` findings and
+GPG sources and source pins are reported as weight-0 `P001`-`P008` (P004 skipped) findings and
 cannot be given a weight: a signal an attacker can assert for free must not be
 able to move a score. See
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited).

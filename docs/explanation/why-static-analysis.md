@@ -50,8 +50,8 @@ The analysis stage extracts four categories of signal from the parsed PKGBUILD:
 
 **Structural signals (Tier A)** come from rule matching. Two match targets exist because PKGBUILDs have two surfaces:
 
-- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
-- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R012, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
+- **Resolved strings** are the post-resolution values of variables and function bodies. Rules matched against resolved strings (R001, R002, R003, R008, R012) catch patterns that survive variable resolution. For example, `curl $url | bash` is detected in the resolved string after `$url` is expanded, not in the raw diff line where the actual URL is hidden behind a variable.
+- **Raw diff lines** are the literal lines changed in the diff, with the `+`/`-` prefix stripped. Rules matched against raw lines (H001, H002, R007, H004, R010, R011, R013) catch patterns in the PKGBUILD text itself: a `sha256sums=('SKIP')` declaration, a `sudo` command, a unicode bidi override character.
 
 Scope constraints further refine matching. R010 (curl) and R011 (wget) are restricted to `function_body` context to avoid firing on top-level variable assignments or informational messages. This was a direct result of corpus analysis: these patterns in comments or messages were high-frequency false positives, while the uses worth reporting occur inside build functions.
 
@@ -128,23 +128,23 @@ For the full list of limitations, see [What TrustSight Cannot See](what-trustsig
 
 ## Customization
 
-TrustSight's configurable detection surface is controlled through files in `~/.config/trustsight/`, without touching source code. The files are written on first run and never rewritten, so an edited file is always kept. A `trustsight config sync-rules` command brings a stale `rules.toml` in line with the shipped defaults.
+TrustSight's configurable detection surface is controlled through files in `~/.config/trustsight/`, without touching source code. The files are written on first run; an edited file is always kept, and `ensure_default_configs()` appends any shipped rules a stale `rules.toml` is missing. A `trustsight config sync-rules` command brings a stale `rules.toml` in line with the shipped defaults.
 
 ### rules.toml
 
-The primary tuning surface. Contains 36 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, or disable any of them. Use `weight_override` in `config.toml` to change an R-series rule's weight.
+The primary tuning surface. Contains 37 R-series regex rules, each with an `id`, `name`, `pattern`, `severity`, `category`, and `match_target`. You can change the pattern, severity, or disable any of them. Use `weight_override` in `config.toml` to change an R-series rule's weight.
 
 ```toml
 [[rules]]
 id = "R001"
 name = "Remote Script Execution"
-pattern = 'curl.*(?<!\\)\\|\\s*(?:bash|sh|zsh|ksh|fish)'
+pattern = 'curl.*(?<!\\\\)\\|\\s*(?:@@EXEC@@)'
 severity = "CRITICAL"
 category = "network_execution"
 match_target = "resolved"
 ```
 
-R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (98 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
+R-series rules are regex-based and match against resolved strings or raw diff lines. H-series heuristics (103 rules) are emitted from code because they need diff context a single-line regex cannot see (for example, "did the build function change between two commits?", or "did the build function gain a network client?"). Their thresholds are tuned in `thresholds.toml`, and their weights come from `[severity_weights]` in `config.toml`.
 
 C-series rules (C001-C025) enforce structural invariants that depend on comparing multiple parsed fields (checksum state, source URL set, pkgver value). They are hard-coded because writing them as TOML patterns would require embedding logic in regex.
 
@@ -258,7 +258,7 @@ Pattern lists for specific rules:
 | `parse_time_fetch` | H077 | Network clients whose invocation outside every function runs when the recipe is sourced. |
 | `upload_flags` | H041 | `curl`/`wget` flags that send a request body (separating an upload from a download). |
 | `network_tools` | D003 | Package names that grant a build network access. |
-| `security_relevant_flags` | H047, H079 | Hardening flags whose appearance or disappearance changes the mitigation set. |
+| `security_relevant_flags` | H047 | Hardening flags whose appearance or disappearance changes the mitigation set. |
 | `security_relevant_libraries` | H048 | Libraries whose vendoring bypasses distribution security updates. |
 
 ### naming.toml
@@ -271,7 +271,7 @@ Domain classification lists for source bucket assignment: `trusted_forges` (gith
 
 ### iocs.toml
 
-A versioned indicator list of known-bad package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. The confidence tier decides severity: `confirmed` is FATAL, `high` is CRITICAL, `medium` is HIGH. Matches are reported on `PackageFact.ioc_matches`, never in `score_breakdown`; they do not change the score or risk band. An expired indicator is reported as expired rather than silently dropped.
+A versioned indicator list of known-bad package names, domains, and artifact hashes, each with provenance and a confidence tier. Ships empty. Matches are emitted as `H056` findings and scored: the confidence tier sets the severity, so `confirmed` is FATAL, `high` is CRITICAL and `medium` is HIGH, and a `confirmed` match alone hard-stops the score at 100. (The separate IOC federation baseline is reported on `PackageFact.ioc_matches` without affecting the score.) An expired indicator is reported as expired rather than silently dropped.
 
 ---
 

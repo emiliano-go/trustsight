@@ -158,7 +158,7 @@ a signal an attacker can assert for free must not lower a score.
 |----------|---------|--------|-----------|
 | `checksum_present` | `P001` | 0 | Post-diff PKGBUILD has a non-empty sha256/sha512/b2/md5 checksum array. |
 | `validpgpkeys_declared` | `P002` | 0 | Post-diff PKGBUILD declares PGP key fingerprints (16+ hex chars). |
-| `gpg_verify_present` | `P003` | 0 | Post-diff PKGBUILD runs `gpg --verify`, `gpgv`, or `openpgp --check-signatures`. |
+| `gpg_verify_present` | `P003` | 0 | Post-diff PKGBUILD runs `gpg`, `gpgv`, or `openpgp` with `--verify`, `--decrypt`, or `--check-signatures`. |
 | source pinning | `P005` / `P006` | 0 | Pinned to a commit hash, or to a tag (the weaker form: tags can be repointed). |
 | `trusted_forge` | `P007` | 0 | Source URL hosted on a trusted forge (github.com, gitlab.com, etc.) over HTTPS. |
 | `no_commit_pin` | `P008` | 0 | Source tracks a branch or unpinned ref; upstream decides at build time what this compiles and runs. |
@@ -167,7 +167,7 @@ a signal an attacker can assert for free must not lower a score.
 
 Verification evidence is computed over the **resolved end-state of the PKGBUILD** (what the file looks like after the diff is applied), not over the diff delta. A checksum that was already present before the diff and unchanged still counts. This reflects the actual protection in place when the package is installed.
 
-Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha256_to_skip"` or `"checksum_array_emptied"`; an intentionally disabled checksum does not count as present even if the array declaration remains.
+Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha256_to_skip"`, `"checksum_array_emptied"`, or `"checksum_array_removed"`; an intentionally disabled checksum does not count as present even if the array declaration remains.
 
 ### Availability
 

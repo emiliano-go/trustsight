@@ -4,7 +4,7 @@
 
 Complete reference documentation for the TrustSight CLI, the Python API, configuration, report schema, evidence tiers, and exit codes. The [rules](../reference/rules/index.md) have a dedicated top-level navigation section.
 
-- **[CLI](cli.md)**: `review`, `inspect`, `history`, `config` commands with flags, arguments, and exit codes.
+- **[CLI](cli.md)**: `review`, `inspect`, `history`, `config`, `full-aur`, `lint-rules` commands with flags, arguments, and exit codes.
 - **[Python API](python-api.md)**: `trustsight.api`, the supported programmatic interface. The same flows the CLI runs, returning dataclasses instead of printing.
 - **[Configuration](configuration.md)**: Every `config.toml`, `rules.toml`, and `trusted_domains.toml` key with type, default, and effect. Environment variable reference.
 - **[IOC Federation](ioc.md)**: signed known-bad indicator baselines (domains, hashes, package names), the baseline format, matching, expiry, and attribution.

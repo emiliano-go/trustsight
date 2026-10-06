@@ -38,7 +38,7 @@ Scope constraints further refine matching. R010 (curl) and R011 (wget) are restr
 
 The top-level position is not ignored, it is a separate claim: [H077](../reference/rules/fetch-and-execution.md#h077) reports a network client invoked outside every function, because that line runs when makepkg merely sources the recipe rather than when it builds.
 
-**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. The classification makes no network calls; a run's only egress is the AUR metadata snapshot and the signed baseline channel.
+**Context signals (Tier B)** classify every new source URL by domain. Classification is deterministic: static configured lists and the homograph check assign each URL to `trusted_forge`, `official`, `declared_upstream`, `raw_hosting`, `unknown`, or `homograph_attack`. There is no `self_hosted` bucket or corpus-frequency classifier. The classification makes no network calls; a run's only egress is the AUR metadata snapshot and the signed baseline channel.
 
 **History signals (Tier C)** compare new URLs and maintainers against the local database. A URL that has never been observed before in any package is globally novel; one never seen for this specific package is locally novel. Novelty is definitionally meaningless on first run, so its contribution is maturity-gated (see step 3).
 
@@ -99,9 +99,10 @@ is mandatory, structurally uncheckable, or covered by declared PGP keys.
 |--------|----------|-----------|
 | `trusted_forge` | 0 | A forge is neutral: reported as `P007`, never credited |
 | `official` | 0 | Known upstream domains are neutral |
+| `declared_upstream` | +5 | An otherwise-unknown domain that is the package's own declared `url=` upstream |
 | `raw_hosting` | +15 | Configured raw-content host requires scrutiny |
 | `unknown` | +20 | Never-before-seen domain requires scrutiny |
-| `homograph` | +30 | Visually confusable domain is high risk |
+| `homograph_attack` | +30 | Visually confusable domain is high risk |
 
 **Novelty weights** add to the score when maturity allows:
 
@@ -148,7 +149,7 @@ The score, evidence breakdown, and verification metadata are rendered into a str
 
 - The current test suite, **67.8% zero-rate** on the 3,739-diff locked corpus, and **100% malicious recall** (all labelled fixtures).
 - **CRITICAL p5 = 60**, **benign p95 = 35**: the gap that matters.
-- Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 14 of 21 fire on zero benign diffs.
+- Enabling the full R039 to R059 set costs **0.5 percentage points** of zero-rate and leaves p95 unchanged; 15 of 21 fire on zero benign diffs.
 - **R013 recall 88%**, **R012 recall 17%** (R012 is a tripwire).
 
 ## Start here

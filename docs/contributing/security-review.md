@@ -38,7 +38,7 @@ None of these were subtle once someone looked. All four passed CI.
 > call from a test.**
 
 "Convenient to call" is the tell. `apply_rules` takes a list of strings;
-`scan_diff` needs a diff. `_render_results_rich` takes a dict; `_inspect_rich`
+`scan_diff` needs a diff. `_render_results_rich` takes a list of result dicts; `_inspect_rich`
 needs a whole `PackageFact`. The easy call is usually the narrow one, and the
 narrow one is usually not the one under attack.
 
@@ -61,7 +61,7 @@ a check that samples.
    catches the sixth producer someone adds next year; calling the four you know
    about does not.
 5. **When only a behavioural gate is possible, loop over the sites** rather
-   than picking one. `terminal output is inert` renders through four paths and
+   than picking one. `terminal output is inert` renders through six paths and
    names them in its output, so the gate's own result says what it covered.
 6. **If a path cannot be called without a CLI invocation, extract it.** A
    renderer that cannot be exercised cannot be gated, and an uncoverable path
@@ -81,7 +81,7 @@ Worth knowing when you are relying on one:
 `doc cross-references resolve`, `critical paths are synchronised`, and
 `docs/security.md matches the gates`.
 
-**Behavioural, loop over every known site:** `terminal output is inert` (four
+**Behavioural, loop over every known site:** `terminal output is inert` (six
 renderers), `reserved names are refused by every writer` (three writers),
 `FATAL rules cannot be switched off` (every shipped FATAL rule).
 

@@ -78,7 +78,7 @@ gaps.
 
 ## What it costs
 
-- **A process per worker.** The pool starts `min(4, cpu_count)` children and
+- **A process per worker.** The pool starts `WORKER_POOL_SIZE` (4) children and
   recycles each after 512 requests. A fresh interpreter per diff was
   measured at 26-48 ms against a 0.5 ms tokenizer on the locked benign
   corpus, so one-shot spawning was rejected; the pool amortises startup to

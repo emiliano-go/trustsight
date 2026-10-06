@@ -1,13 +1,14 @@
-<!-- description: Rules for a change of ownership, or for a property that held across a long run of observations changing. The longitudinal rules read history, not a diff. -->
+<!-- description: Rules for a change of ownership, a long-stable property changing, a maintainer's activity deviating from their baseline, or a new epoch. -->
 
 # Maintainer and Metadata
 
-Who owns the package changed (H026, H044, H074, C006), or a property
-that held for a long run of observations changed (H037, H049, H050,
-H051, H054, H058, H063).
+Who owns the package changed (H026, H044, H074, C006), a property that held
+across a long run of observations changed (H037, H049, H050, H051, H054), a
+maintainer's activity deviated from their baseline (H058), or an epoch was
+introduced (H063).
 
-The longitudinal rules do not read a diff at all. They read `PropertyBreak`
-records from the corpus property layer, gated by `[longitudinal]
+The longitudinal rules on this page do not read a diff at all. They read
+`PropertyBreak` records from the corpus property layer, gated by `[longitudinal]
 stability_floor` (default 10): a value must hold at least that many
 consecutive observations before a change is reported. Every one of them is
 silent on a cold database by construction, because the first observation of
@@ -142,7 +143,7 @@ orphan state rather than as a takeover.
 ### H058: Maintainer Baseline Deviation {#h058}
 
 - **Severity:** MEDIUM (weight 15)
-- **Category:** `maintainer`
+- **Category:** `adoption`
 - **Condition:** A maintainer's activity this cycle deviates from their own recorded baseline by at least `[thresholds] h058.z_score` (default 2.0), once `h058.min_history_cycles` (default 3) cycles of their history exist.
 
 ### H074: Adopt-then-Modify {#h074}

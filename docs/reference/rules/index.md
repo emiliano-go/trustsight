@@ -5,7 +5,7 @@
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X031, integrity-change rules C001-C025, dependency rules
-D001-D004, declared-practice rules P001-P008, and unverifiable rules
+D001-D004, declared-practice rules P001-P008 (P004 skipped), and unverifiable rules
 W001-W006.
 
 Each rule contributes according to its severity weight, match target and
@@ -170,7 +170,7 @@ is deliberately non-contiguous; see
 | [H057](corpus-behavioral.md#h057) | Transitive Exposure | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
 | [H058](maintainer-and-metadata.md#h058) | Maintainer Baseline Deviation | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H059](naming-and-dependency.md#h059) | Name/Repo Divergence | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
-| [H060](corpus-behavioral.md#h060) | Transitive Orphan Exposure | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
+| [H060](corpus-behavioral.md#h060) | Transitive Orphan Risk | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
 | [H061](corpus-behavioral.md#h061) | Dependency Centrality | Heuristic | INFO | [Corpus Behavioral](corpus-behavioral.md) |
 | [H062](install-and-persist.md#h062) | Pacman Hook Installed | Heuristic | MEDIUM | [Install and Persistence](install-and-persist.md) |
 | [H063](maintainer-and-metadata.md#h063) | Epoch Introduced | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
@@ -185,7 +185,7 @@ is deliberately non-contiguous; see
 | [H072](fetch-and-execution.md#h072) | Write Then Execute | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [H073](corpus-behavioral.md#h073) | Introduction Rate Deviation | Heuristic | MEDIUM | [Corpus Behavioral](corpus-behavioral.md) |
 | [H074](maintainer-and-metadata.md#h074) | Adopt-then-Modify | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
-| [H075](fetch-and-execution.md#h075) | Indirect Remote Execution | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
+| [H075](fetch-and-execution.md#h075) | Remote Script Via Process Substitution | Heuristic | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [H076](staging-and-recon.md#h076) | Build Writes Outside Staging Root | Heuristic | HIGH | [Staging and Reconnaissance](staging-and-recon.md) |
 | [H077](fetch-and-execution.md#h077) | Parse-time Network Fetch | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [H078](integrity.md#h078) | Signing Key Set Changed | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
@@ -221,7 +221,7 @@ is deliberately non-contiguous; see
 | [R008](fetch-and-execution.md#r008) | Unexpected File Download | Regex | HIGH | [Fetch and Execution](fetch-and-execution.md) |
 | [R010](fetch-and-execution.md#r010) | Uses curl in PKGBUILD | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
 | [R011](fetch-and-execution.md#r011) | Uses wget in PKGBUILD | Regex | LOW | [Fetch and Execution](fetch-and-execution.md) |
-| [R012](deception.md#r012) | Prompt Injection Detection | Regex | FATAL | [Deception and Anti-Analysis](deception.md) |
+| [R012](deception.md#r012) | LLM Prompt Injection | Regex | FATAL | [Deception and Anti-Analysis](deception.md) |
 | [R013](deception.md#r013) | Unicode Bidi Override | Regex | FATAL | [Deception and Anti-Analysis](deception.md) |
 | [R017](install-and-persist.md#r017) | Setuid/Setgid Permission | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
 | [R039](obfuscation.md#r039) | Eval With Dynamic Content | Regex | CRITICAL | [Obfuscation](obfuscation.md) |
@@ -250,7 +250,7 @@ is deliberately non-contiguous; see
 | [R099](integrity.md#r099) | Trap Statement | Regex | MEDIUM | [Integrity and Verification](integrity.md) |
 | [R104](integrity.md#r104) | Error Handling Suppressed | Regex | HIGH | [Integrity and Verification](integrity.md) |
 | [R144](install-and-persist.md#r144) | Packaged File Points At A World-Writable Path | Regex | HIGH | [Install and Persistence](install-and-persist.md) |
-| [R152](fetch-and-execution.md#r145) | Source URL On Free-Hosting Or Dynamic-DNS Host | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
+| [R152](fetch-and-execution.md#r152) | Source URL On Free-Hosting Or Dynamic-DNS Host | Regex | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
 | [S001](sabotage.md#s001) | Recursive Self-Spawn | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
 | [S002](sabotage.md#s002) | Recursive Deletion Outside The Build Tree | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
 | [S003](sabotage.md#s003) | Raw Block Device Write | Sabotage | CRITICAL | [Sabotage](sabotage.md) |
@@ -298,6 +298,6 @@ is deliberately non-contiguous; see
 | [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
-Weight-0 declared-practice findings (`P001` to `P008`) are not detections
+Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections
 and have no category. They are documented in
 [the system reference](system.md#declared-practice).

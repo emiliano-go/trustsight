@@ -93,7 +93,7 @@ Verdicts are template-based descriptions of each triggered finding. The score is
 trustsight --help
 ```
 
-You should see a list of available commands: `review`, `inspect`, `history`, `list`, `status`, `seed-db`, `baseline`, `full-aur`, `import-baseline`, `config`, `db`, `override`, `lint-rules`, `corpus`, `ioc`, `seed`, `forget`.
+You should see a list of available commands: `review`, `inspect`, `history`, `list`, `status`, `seed-db`, `baseline`, `full-aur`, `import-baseline`, `config`, `db`, `override`, `lint-rules`, `lint`, `corpus`, `ioc`, `seed`, `explain`, `report`, `forget`.
 
 Check your configuration:
 

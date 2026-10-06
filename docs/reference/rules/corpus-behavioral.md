@@ -25,7 +25,7 @@ severity weights and the reserved identifier ranges.
 | [H046](#h046) | Orphan/Adoption Dependency | MEDIUM |
 | [H056](#h056) | Known Indicator of Compromise | FATAL |
 | [H057](#h057) | Transitive Exposure | INFO |
-| [H060](#h060) | Transitive Orphan Exposure | INFO |
+| [H060](#h060) | Transitive Orphan Risk | INFO |
 | [H061](#h061) | Dependency Centrality | INFO |
 | [H073](#h073) | Introduction Rate Deviation | MEDIUM |
 <!-- /generated: page-index -->
@@ -33,9 +33,9 @@ severity weights and the reserved identifier ranges.
 ### H028: Accelerated Release Cadence {#h028}
 
 H028 is **metadata, never a scored finding**. The pipeline records whether the
-HEAD commit has 3+ ancestors within 24 hours as the `recent_commit_burst`
-boolean on `PackageFact`; it is not appended to `triggered_rules` and
-contributes nothing to the score.
+HEAD commit has 3+ commits within 24 hours (counting HEAD itself) as the
+`recent_commit_burst` boolean on `PackageFact`; it is not appended to
+`triggered_rules` and contributes nothing to the score.
 
 ### H046: Orphan/Adoption Dependency {#h046}
 
@@ -49,7 +49,7 @@ contributes nothing to the score.
 - **Category:** `dependency`
 - **Condition:** A package's transitive closure, at least `[thresholds] h057.min_hops` (default 2) hops away, reaches a package adopted out of the orphan state this cycle. Context only, never additive.
 
-### H060: Transitive Orphan Exposure {#h060}
+### H060: Transitive Orphan Risk {#h060}
 
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency`

@@ -722,7 +722,7 @@ The interval floor exists because the AUR regenerates its metadata dump every fe
 
 Interrupting with Ctrl-C ends the loop, during a cycle or during the wait. Nothing is lost by stopping: each cycle writes its metadata snapshot and resume file before it returns, so the next run picks up from there.
 
-`--watch` cannot be combined with `--export` or `--sign`. Those describe a single artifact, and pairing them with a loop would silently overwrite it every cycle; the command exits with status 2 instead.
+`--watch` cannot be combined with `--export`, `--sign`, `--bootstrap` or `--resume`. Those describe a single artifact or a single cycle, and pairing them with a loop would silently overwrite it every cycle; the command exits with status 2 instead.
 
 ---
 

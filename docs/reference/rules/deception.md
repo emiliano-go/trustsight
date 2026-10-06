@@ -27,11 +27,11 @@ severity weights and the reserved identifier ranges.
 | [H012](#h012) | Strace detection attempt (TracerPid check) | - |
 | [H013](#h013) | Strace log truncated (possible flood evasion) | - |
 | [H067](#h067) | Anti-Analysis Check | HIGH |
-| [R012](#r012) | Prompt Injection Detection | FATAL |
+| [R012](#r012) | LLM Prompt Injection | FATAL |
 | [R013](#r013) | Unicode Bidi Override | FATAL |
 <!-- /generated: page-index -->
 
-### R012: Prompt Injection Detection {#r012}
+### R012: LLM Prompt Injection {#r012}
 
 - **Target:** `resolved`
 - **Severity:** FATAL (hard-stop at 100, weight 0)

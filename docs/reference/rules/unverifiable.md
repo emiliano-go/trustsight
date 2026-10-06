@@ -91,7 +91,7 @@ The standard entry points of an unpacked tree are excluded: `configure`,
 A sandbox wrapper establishes a new root, so an absolute path after `chroot`
 or `systemd-nspawn` is tree content rather than a system file.
 
-Fires on 0.09% of the benign corpus.
+Fires on 0.08% of the benign corpus.
 
 ### W002: Build Resolves Dependencies From A Registry {#w002}
 
@@ -108,7 +108,7 @@ them, and the resolved versions are not in the analysed text.
 The run already says this once, as the `unpinned_build_deps` coverage gap.
 What a gap cannot say is *where*.
 
-Fires on 0.31% of the benign corpus.
+Fires on 0.29% of the benign corpus.
 
 ### W003: Applies A Patch This Analysis Did Not Read {#w003}
 
@@ -125,7 +125,7 @@ downloads.
 A tarball is upstream's own code. A patch is a change to it that the packager
 chose, which makes it more interesting to a reader, not less.
 
-Fires on 2.06% of the benign corpus - the highest rate in the series, and the
+Fires on 2.11% of the benign corpus - the highest rate in the series, and the
 correct answer rather than a tuning problem.
 
 ### W004: Build Engine Runs A Manifest This Analysis Did Not Read {#w004}
@@ -165,7 +165,7 @@ arrived inside a tarball this analysis never opened.
 
 Flags and variable assignments are not targets.
 
-Fires on 0.28% of the benign corpus.
+Fires on 0.29% of the benign corpus.
 
 ### W006: Generated File Names A Build-Only Path {#w006}
 

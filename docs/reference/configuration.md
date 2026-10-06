@@ -93,7 +93,7 @@ Everything TrustSight sees is attacker-declared, and TrustSight never fetches,
 so it never confirms that a declared key signs anything or that a pinned commit
 holds what it claims. A signal an attacker can assert for free must not be able
 to lower a score. These facts are now reported as weight-0 declared-practice
-findings in the `P` namespace (`P001`-`P008`); see
+findings in the `P` namespace (`P001`-`P008`, P004 skipped); see
 [the security model](../security.md#b10-positive-evidence-is-reported-never-credited).
 
 Pinning classification via `classify_pinning_level()` in
@@ -348,7 +348,7 @@ directly by their named rules; they do not merge with a generic host setting.
 | `parse_time_fetch` | H077 | Network clients whose invocation outside every function runs when the recipe is sourced. |
 | `upload_flags` | H041 | `curl`/`wget` flags that send a request body, which is what separates an upload from a download. |
 | `network_tools` | D003 | Package names that grant a build network access. |
-| `security_relevant_flags` | H047, H079 | Hardening flags whose appearance or disappearance changes the mitigation set. |
+| `security_relevant_flags` | H047 | Hardening flags whose appearance or disappearance changes the mitigation set. |
 | `security_relevant_libraries` | H048 | Libraries whose vendoring bypasses distribution security updates. |
 
 These lists are consumed directly by their named rules. `network_tools` is the

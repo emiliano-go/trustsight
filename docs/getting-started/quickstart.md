@@ -59,7 +59,8 @@ The second and later commands:
 │  Changed  pkgver 0.9.2-1 -> 1.0.0-2                                    │
 │           source host added: sketchy-cdn.example.com                   │
 │           build() runs npm install                                     │
-│  Declared checksums declared for all non-VCS sources [P001]            │
+│  Declared verification                                                 │
+│           checksums declared for all non-VCS sources [P001]            │
 │           validpgpkeys declared [P002]                                 │
 ╰────────────────────────────────────────────────────────────────────────╯
 2 package(s) needing update and reviewed out of 12 installed
@@ -141,8 +142,8 @@ appears as a mini-card nested inside its parent's card:
 ╭──────────────────── some-trusted-tool ─────────────────────╮
 │  Version       2.4.1-1 → 2.4.2-2                           │
 │  Status        The update is not trivial. Review it.       │
-│                PKGBUILD line 17  Install hook performs a   │
-│                privileged operation [H017]                 │
+│                PKGBUILD line 17  Install Hook Fetches      │
+│                Or Executes [H017]                          │
 │  Changed       pkgver 2.4.1-1 -> 2.4.2-2                   │
 │                                                            │
 │  Dependencies                                              │

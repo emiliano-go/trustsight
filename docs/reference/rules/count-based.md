@@ -24,7 +24,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [H030](#h030-rule) | Dependency-Set Expansion | MEDIUM |
-| [H036](#h036) | Shell Obfuscation Density | MEDIUM |
+| [H036](#h036) | Shell Obfuscation Density | MEDIUM/HIGH |
 | [H045](#h045) | Mass Adoption | HIGH |
 | [H052](#h052) | Shared Source Repository | HIGH |
 | [H055](#h055) | Attribute Burst | MEDIUM |
@@ -33,7 +33,7 @@ severity weights and the reserved identifier ranges.
 ### H030: Dependency-Set Expansion {#h030-rule}
 
 - **Target:** programmatic (delta over dependency arrays × per-dep novelty)
-- **Severity:** MEDIUM (weight 15) - corpus rate 0.34 %
+- **Severity:** MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)
 - **Category:** `dependency`
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 
@@ -46,7 +46,7 @@ severity weights and the reserved identifier ranges.
 ### H036: Shell Obfuscation Density {#h036}
 
 - **Target:** programmatic (resolved build-function lines, position-scoped)
-- **Severity:** MEDIUM (weight 15)
+- **Severity:** MEDIUM (weight 15), or HIGH (weight 25) when the reconstructed line reveals an executable action
 - **Category:** `obfuscation`
 - **Condition:** A single added line inside a critical build function (`build()`, `prepare()`, `check()`, `package()`) contains **3 or more** distinct obfuscation indicators:
 
@@ -60,6 +60,9 @@ severity weights and the reserved identifier ranges.
 | URL shortener | `bit.ly`, `t.co`, `tinyurl`, `shorturl`, `ow.ly`, `is.gd` |
 | Quiet wget pipe | `wget -q -O - \|` |
 | Variable expansion with network/shell | `${var}...curl` / `${var}...bash` |
+| ANSI-C quoting (June-W3) | `$'...'` |
+| Variable indirection (June-W3) | `${!var}` |
+| Empty-quote concatenation (June-W3) | `word''word` |
 
 A single obfuscation indicator is unusual but can be legitimate (e.g. `eval`
 for dynamic configuration). Three or more on the same line is characteristic

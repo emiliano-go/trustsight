@@ -84,6 +84,7 @@ Source bucket classification only ever adds:
 |--------|--------|-----------|
 | `trusted_forge` | 0 | GitHub, GitLab : neutral, reported as `P007` |
 | `official` | 0 | Upstream official domains : neutral |
+| `declared_upstream` | +5 | Unrecognised domain that is the package's own declared `url=` upstream |
 | `raw_hosting` | +15 | Configured raw-content host : requires scrutiny |
 | `unknown` | +20 | Unrecognised domain : requires scrutiny |
 | `homograph_attack` | +30 | Visually confusable domain : high risk |
@@ -116,11 +117,11 @@ Matched against resolved strings because the URL or flags might be in a variable
 
 ### R012 and R013: why FATAL instead of CRITICAL
 
-FATAL rules (R012 prompt injection, R013 unicode bidi) are fundamentally different from CRITICAL rules. A CRITICAL rule like `curl | bash` fires on a specific command pattern that is almost always malicious. A FATAL rule fires on a pattern that, when present, indicates active manipulation of the reviewer's perception.
+FATAL rules (R012 prompt injection, R013 unicode bidi, and a confirmed H056 IOC match) are fundamentally different from CRITICAL rules. A CRITICAL rule like `curl | bash` fires on a specific command pattern that is almost always malicious. A FATAL rule fires on a pattern that, when present, indicates active manipulation of the reviewer's perception.
 
 Prompt injection and unicode bidi overrides are attacks on the reviewer, not on the build process. They attempt to hide what the PKGBUILD does. When these fire, the score hard-stops at 100 because a package that tries to deceive the reviewer cannot be trusted regardless of other signals. The 0 weight means they contribute nothing to the additive score; the hard stop is their entire effect.
 
-Low recall is acceptable for these rules. R012 has 17% recall on the benchmark corpus. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded.
+Low recall is acceptable for these rules. R012 has 17% detection on the labelled injection fixtures. It is a tripwire: when it fires, the package is almost certainly malicious. When it does not, nothing can be concluded.
 
 ### H001 and H002: why checksum rules are hard-coded
 

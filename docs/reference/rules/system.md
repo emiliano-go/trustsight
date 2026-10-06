@@ -156,7 +156,7 @@ No P finding can lower a score - B10.
 
 Two namespaces, distinguished by mechanism rather than by subject. An
 **R-series** rule is a regex defined in `~/.config/trustsight/rules.toml` and
-loaded at runtime by `load_rules()` in `src/trustsight/rules.py`; you can read
+loaded at runtime by `load_rules()` in `src/trustsight/config.py`; you can read
 it, retune it, or switch it off. An **H-series** rule is a heuristic emitted by
 an analysis module because it needs diff context a single-line regex cannot
 see - what changed, what it changed relative to, what the corpus has seen
@@ -170,7 +170,7 @@ Each rule supports these fields:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `id` | `string` | Rule identifier. Every id in `rules.toml` is an `R` id: `R001`-`R003`, `R007`-`R008`, `R010`-`R013`, `R017`, `R039`-`R059`, `R078`, `R091`, `R099`, `R104`, and `R144`. |
+| `id` | `string` | Rule identifier. Every id in `rules.toml` is an `R` id: `R001`-`R003`, `R007`-`R008`, `R010`-`R013`, `R017`, `R039`-`R059`, `R078`, `R091`, `R099`, `R104`, `R144`, and `R152`. |
 | `name` | `string` | Human-readable name. |
 | `pattern` | `string` | Python regex applied to the match target. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
@@ -255,7 +255,7 @@ See [R011: Uses wget in PKGBUILD](fetch-and-execution.md#r011).
 
 ### R012 {#r012}
 
-See [R012: Prompt Injection Detection](deception.md#r012).
+See [R012: LLM Prompt Injection](deception.md#r012).
 
 
 ### R013 {#r013}
@@ -510,9 +510,9 @@ See [R047: Source URL Uses Non-Standard Port](fetch-and-execution.md#r047).
 See [R048: Source URL On Free Registrar TLD](fetch-and-execution.md#r048).
 
 
-### R152 {#r145}
+### R152 {#r152}
 
-See [R152: Source URL On Free-Hosting Or Dynamic-DNS Host](fetch-and-execution.md#r145).
+See [R152: Source URL On Free-Hosting Or Dynamic-DNS Host](fetch-and-execution.md#r152).
 
 
 ### R049 {#r049}
@@ -595,7 +595,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | Rule | Severity | Fires | Rate | Read |
 |------|----------|-------|------|------|
 | D004 | HIGH | 2 | 0.05 % | Across the 2084 corpus diffs that declare `provides`/`replaces`, `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`; both name an established package they are unrelated to, which is the shape the rule describes. |
-| H017 | HIGH | 4 | 0.12 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
+| H017 | HIGH | 4 | 0.11 % | Three are `mullvad-vpn-bin`, which sets a setuid bit and enables a unit from `post_install()`. The fourth is `claude-desktop-bin`, whose `_fix_sandbox()` helper - reached only by following the call graph - sets 4755 on the Electron sandbox binary. Real privileged behaviour in both, which is the point. |
 | H018 | HIGH | 0 | 0.00 % | Zero, because it asks where the patch comes from rather than whether it is declared. The broad "not in `source=()`" form measured 2.13 %. |
 | H019 | MEDIUM | 1 | 0.03 % | `transset-df`, a genuine https to http downgrade. |
 | H020 | INFO | - | - | Not calibrated: fires on any recent update, which is inherently time-of-run dependent. |
@@ -605,7 +605,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H024 | HIGH | 1 | 0.03 % | Near-zero; matches the predicted rate. |
 | H025 | HIGH/MED | 10 | 0.27 % | All HIGH (LD_ vars). No MEDIUM fires in corpus. |
 | H026 | HIGH | - | TBD | Not corpus-measurable; requires live git history. |
-| H027 | INFO | 224 | 5.99 % | INFO weight 0; not a scoring impact. |
+| H027 | INFO | 282 | 7.54 % | INFO weight 0; not a scoring impact. |
 | H029 | HIGH | 0/202 pkgs | 0.00 % | Measured via package-name scan with seeded DB. The confusable/plain observation floors removed the `dosbox-x` and `electron36` false positives. |
 | H030 | MEDIUM | 5 | 0.13 % | Measured with the published seed. Well under the 30% gate. |
 | D001 | HIGH | 10 | 0.27 % | Comfortably low for HIGH. The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
@@ -615,7 +615,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H016 | HIGH | 8 | 0.21 % | The hits are real build-time downloads (`apple-fonts`, `ttf-ms-win-*`, `gamescope-nvidia`), which is the behaviour the rule exists to surface rather than noise. |
 | H031 | MEDIUM | 1 | 0.03 % | Needs both an unsafe literal version and its interpolation into a source URL. |
 | H032 | HIGH | 0 | 0.00 % | No benign write reaches the build/install-function scope in the current corpus. |
-| H033 | HIGH/MED | 4 | 0.12 % | Maintainers tracking a moving patch branch under a fixed version, which is the shape the rule describes. |
+| H033 | HIGH/MED | 4 | 0.11 % | Maintainers tracking a moving patch branch under a fixed version, which is the shape the rule describes. |
 | H034 | MEDIUM | 7 | 0.19 % | Schemes outside the shipped allowlist. |
 | H038 | HIGH | 0 | 0.00 % | `mktemp -d` is excluded wholesale, so private scratch directories never count. |
 | H041 | HIGH | 0 | 0.00 % | The one paste-host reference in the corpus is a gist download, which is H016's. |
@@ -624,7 +624,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H042 | HIGH | 0 | 0.00 % | Deliberately the quietest of the persistence group. |
 | H043 | INFO | 0 | 0.00 % | A benign diff with one or two hits cannot reach three distinct stages. |
 | H056 | tiered | 0 | 0.00 % | With the shipped (empty) list and with a synthetic one. A positive control (`github.com`) fires on 1561 diffs, so the surface extraction is real. |
-| H062 | MEDIUM | 4 | 0.12 % | Packages that legitimately ship pacman hooks. |
+| H062 | MEDIUM | 4 | 0.11 % | Packages that legitimately ship pacman hooks. |
 | H063 | MEDIUM | 14 | 0.37 % | All fourteen are benign `epoch=` introductions; an unchanged epoch never surfaces in a hunk. |
 | H064 | HIGH/MED | 2 | 0.05 % | Related name shapes suppress; both hits name an established package from the official repos. |
 | H065 | INFO | 58 | 1.55 % | Weight 0; benign recipes reconstruct literals routinely, so this is context, not a finding. |
@@ -634,9 +634,9 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H071 | HIGH | 0 | 0.00 % | Command-position anchored; a client in `makedepends` is a declaration. |
 | H072 | HIGH | 0 | 0.00 % | Still zero after the execution match was widened to a path with arguments. |
 | H076 | HIGH | 0 | 0.00 % | A representative backdoor fixture goes from 25 to 50 with it. |
-| H077 | HIGH | 3 | 0.09 % | One package resolving a redirect with `curl` at the top level, which really does fetch on a metadata refresh. |
-| H078 | HIGH/MED/INFO | 6 | 0.18 % | Two introductions and four upstream key rotations. |
-| H079 | HIGH/MED | 3 | 0.09 % | One wine package that genuinely disables FORTIFY_SOURCE. |
+| H077 | HIGH | 3 | 0.08 % | One package resolving a redirect with `curl` at the top level, which really does fetch on a metadata refresh. |
+| H078 | HIGH/MED/INFO | 6 | 0.16 % | Two introductions and four upstream key rotations. |
+| H079 | HIGH/MED | 3 | 0.08 % | One wine package that genuinely disables FORTIFY_SOURCE. |
 
 Getting D001 from 5.95 % to 0.15 % at the time of the fix took two extractor fixes, both found by this measurement rather than by review:
 
@@ -929,7 +929,7 @@ See [H072: Write Then Execute](fetch-and-execution.md#h072).
 
 ### H075 {#h075}
 
-See [H075: Indirect Remote Execution](fetch-and-execution.md#h075).
+See [H075: Remote Script Via Process Substitution](fetch-and-execution.md#h075).
 
 
 ### H081 {#h081}
@@ -1118,7 +1118,7 @@ See [H059: Name/Repo Divergence](naming-and-dependency.md#h059).
 
 ### H060 {#h060}
 
-See [H060: Transitive Orphan Exposure](corpus-behavioral.md#h060).
+See [H060: Transitive Orphan Risk](corpus-behavioral.md#h060).
 
 
 ### H061 {#h061}

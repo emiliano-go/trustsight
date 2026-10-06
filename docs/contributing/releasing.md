@@ -80,7 +80,7 @@ Being in the index is the statement that a new file belongs in the release, so
 add the ones that do before computing the checksum. `--rev` archives a committed
 revision and is unaffected.
 
-`tests/test_pkgbuild.py::test_recorded_checksum_matches_a_freshly_built_tarball`
+`tests/test_pkgbuild.py::test_recorded_checksum_matches_the_recorded_version`
 rebuilds the tarball and compares it against the recorded value, so a stale
 checksum cannot be committed at all. `tests/test_release_workflow.py::test_a_worktree_build_refuses_untracked_files`
 covers the refusal.

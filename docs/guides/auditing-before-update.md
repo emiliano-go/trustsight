@@ -20,7 +20,7 @@ Some packages may score **5-15** from novelty. This includes a source URL first 
 |-------------|---------------|
 | **21-50** | One or more risk signals fired. A checksum was removed, a new source domain appeared, or an [R-series or H-series rule](../reference/rules/index.md) matched. |
 | **51-80** | Multiple signals or a HIGH-severity finding. Do not update without inspecting. |
-| **81-100** | CRITICAL or FATAL signals present. [R012/R013](../reference/rules/system.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
+| **81-100** | CRITICAL or FATAL signals present. [R012/R013 and a confirmed H056](../reference/rules/system.md#fatal-rules) (the FATAL rules) set score to 100 unconditionally. |
 | **INCONCLUSIVE** | Either the score landed in the Medium range with nothing HIGH or worse behind it and the database-wide maturity is below 0.5 (fewer than 25 effective observations), or the analysis had a coverage gap and could not examine the whole change (see [the security model](../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)). |
 
 > **Practical threshold:** score **20+** warrants attention. **40+** means skip the update and inspect first.
@@ -31,7 +31,7 @@ Run `trustsight inspect <package>` whenever:
 
 - The **score exceeds 20** (the verdict is Medium, High, or Critical).
 - The **verdict is INCONCLUSIVE**: even if the numeric score looks moderate.
-- A FATAL rule (R012/R013) fires: score becomes 100 regardless of other signals.
+- A FATAL rule (R012, R013, or a confirmed H056 IOC match) fires: score becomes 100 regardless of other signals.
 
 The inspect command shows the raw diff summary, every rule that fired, and the resolved commands and source URLs. See [acting on a flag](acting-on-a-flag.md) for the full decision framework.
 

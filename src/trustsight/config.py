@@ -800,7 +800,7 @@ H019 = true
 
 # H015 reports that a critical build function was modified.  It is INFO
 # severity, so it carries weight 0 and cannot move a score: it fires on
-# 21.4% of benign diffs and is context for a reviewer, not a signal.  That
+# 19.7% of benign diffs and is context for a reviewer, not a signal.  That
 # is why it is the one rule here safe to leave on.
 H015 = true
 
@@ -1011,7 +1011,7 @@ include_comments = true
 # tests/fixtures/baseline.json and the malicious fixture generators.
 # Reusing those ids would silently change what they mean.
 #
-# Calibrated against a 3322-diff stratified benign corpus.  Fourteen of
+# Calibrated against a 3739-diff stratified benign corpus.  Fourteen of
 # these fire on zero benign diffs; every remaining hit was inspected and
 # all but one were true positives (real setuid bits, real network access
 # in pkgver(), real writes outside $pkgdir).  Enabling them costs 0.5pp

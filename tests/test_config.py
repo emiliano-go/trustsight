@@ -405,6 +405,19 @@ def test_superseded_r051_and_r057_patterns_are_repaired(tmp_path, monkeypatch):
     assert cfg.drifted_shipped_rules() == []
 
 
+def test_r051_registers_the_spelling_0_17_2_to_0_17_4_shipped():
+    """0.18.0 taught the R051 client list git's global options, so an install
+    that synced on 0.17.2-0.17.4 holds that spelling, not the oldest legacy
+    one.  Both have to be registered or `sync-rules --update` leaves it
+    failing closed on `ruleset_drifted` forever."""
+    from trustsight import config as cfg
+
+    assert any(
+        r"git\s+(?:clone|fetch|pull|ls-remote|archive)" in pattern
+        for pattern in cfg.LEGACY_RULE_PATTERNS["R051"]
+    )
+
+
 def test_sync_rules_full_is_honoured_under_json(tmp_path, monkeypatch):
     """`config sync-rules --full --json` silently ignored --full: the JSON
     branch ran only the additive sync, so a customised rule survived a

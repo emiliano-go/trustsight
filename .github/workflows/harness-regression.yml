@@ -1,0 +1,100 @@
+name: Harness regression
+
+# The harness repo gates its own pushes by replaying every committed bypass
+# against the TrustSight commit it pins.  This job closes the other
+# direction: a change on this repo is measured against the harness corpus on
+# the push that makes it.
+#
+# The run reports; it does not judge.  The harness contract is that an exit
+# code says "the run happened", never "the numbers are good" (see its
+# docs/reference/exit-codes), so an open count above the committed baseline
+# lands in the step summary and the artifact, not in a failed check.  A
+# version mismatch is different: the harness clone cannot measure this
+# checkout at all, which is a configuration fault and fails here.
+
+on:
+  push:
+    paths: ["src/**", "pyproject.toml"]
+  pull_request:
+    paths: ["src/**", "pyproject.toml"]
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # actions/checkout refuses a path outside $GITHUB_WORKSPACE, and the
+      # harness resolves its local TrustSight source as `../trustsight`, so
+      # clone it as this checkout's sibling - the same layout the harness's
+      # own CI uses, mirrored.
+      - name: Clone the harness
+        run: git clone --depth 1 https://github.com/emiliano-go/trustsight-harness.git ../trustsight-harness
+
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+
+      - name: The harness declares this core version
+        # `Environment.resolve` refuses a run whose declared version is not
+        # the installed one, and the harness lockfile is version-coupled.  A
+        # mismatch means the harness pin and campaigns have not been moved to
+        # this release yet; that is a config fault, not a measurement.
+        run: |
+          core=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          declared=$(sed -n 's/^trustsight_version:[[:space:]]*"\?\([^"]*\)"\?.*/\1/p' ../trustsight-harness/defaults/environment.yml)
+          echo "core=$core harness=$declared"
+          test "$core" = "$declared" || {
+            echo "the harness declares $declared, this checkout is $core; move the harness pin and campaigns before this job can measure the change" >&2
+            exit 1
+          }
+
+      - name: Baseline before the run
+        run: |
+          python3 -c "import json; print(json.load(open('../trustsight-harness/regression/report.json'))['open'])" > baseline-open.txt
+
+      - name: Sync the harness against this checkout
+        run: |
+          cd ../trustsight-harness
+          uv lock
+          uv sync --all-extras
+
+      - name: Replay every committed bypass
+        run: |
+          cd ../trustsight-harness
+          uv run python -m harness regression --jobs auto | tee regression-summary.txt
+
+      - name: Report
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+
+          report = json.load(open("../trustsight-harness/regression/report.json"))
+          baseline = int(open("baseline-open.txt").read())
+          print("### Harness regression\n")
+          print("| field | value |")
+          print("|---|---|")
+          print(f"| committed baseline open | {baseline} |")
+          for field in ("total", "closed", "open", "degraded", "unreplayable"):
+              print(f"| {field} | {report[field]} |")
+          if report["open"] > baseline:
+              print(f"\n**Regression: {report['open'] - baseline} more open than the "
+                    "committed baseline.** The report is attached.")
+          elif report["open"] < baseline:
+              print(f"\n**Improvement: {baseline - report['open']} fewer open than "
+                    "the committed baseline.**")
+          else:
+              print("\nNo change against the committed baseline.")
+          PY
+
+      - name: Collect the report
+        run: |
+          mkdir -p harness-report
+          cp ../trustsight-harness/regression/report.json harness-report/
+          cp ../trustsight-harness/regression-summary.txt harness-report/
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: harness-regression-report
+          path: harness-report/

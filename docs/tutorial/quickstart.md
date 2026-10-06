@@ -1,0 +1,181 @@
+<!-- description: Run your first TrustSight review and read the output: the review pipeline, the package panel and its rows, and what the dependency line means. -->
+
+# Quickstart
+
+By the end of this page you will have run `trustsight review` and read its
+output. If TrustSight is not installed yet, start with
+[Installation](installation.md#installation).
+
+## Step 1: Run the review
+
+```bash
+trustsight review
+## The first run downloads the AUR metadata snapshot and exits successfully.
+trustsight review
+```
+
+The first command bootstraps the local metadata snapshot and returns no reports.
+The second and later commands:
+
+1. Collects installed package names and versions from your system (foreign via `pacman -Qm`, or from local repos via `--repo`/`--all-repos`),
+2. Compares them against an offline AUR metadata snapshot to find outdated packages (downloads the snapshot on first run, and refetches it once it is more than an hour old),
+3. Clones each outdated package's repository,
+4. Diffs the old and new PKGBUILD and `.install` files,
+5. Applies the published R-series regex, H-series heuristic, C-series structural, D-series dependency, S-series sabotage, and X-series crossfire rules,
+6. Classifies all new source URLs into trust buckets,
+7. Checks novelty against the local database,
+8. Calculates a deterministic score from 0-100,
+9. Prints one panel per package, and a summary line.
+
+If nothing installed is behind the snapshot, the run prints
+`No outdated packages found.` instead of panels. That is not an error: no
+installed AUR package needs updating right now.
+
+## Step 2: Read the output
+
+```
+╭───────────────────────────── some-app-bin ─────────────────────────────╮
+│  Version  3.1.0-1 → 3.1.1-2                                            │
+│  Status   Only pkgver and sha256sums changed. Review the diff before   │
+│           building.                                                    │
+│  Changed  pkgver 3.1.0-1 -> 3.1.1-2                                    │
+│           checksums added or changed                                   │
+╰────────────────────────────────────────────────────────────────────────╯
+╭─────────────────────────── sketchy-package ────────────────────────────╮
+│  Version  0.9.2-1 → 1.0.0-2                                            │
+│  Status   The update is not trivial. Review it.                        │
+│           PKGBUILD line 12  Checksum Disabled: sha256sums=('SKIP')     │
+│           [H001]                                                       │
+│           Source URL classified as unknown                             │
+│           (https://sketchy-cdn.example.com/p.tar.gz) [SOURCE_BUCKET]   │
+│           PKGBUILD line 23  Executes Code This Analysis Did Not Read   │
+│           [W001]                                                       │
+│  Changed  pkgver 0.9.2-1 -> 1.0.0-2                                    │
+│           source host added: sketchy-cdn.example.com                   │
+│           build() runs npm install                                     │
+│  Declared verification                                                 │
+│           checksums declared for all non-VCS sources [P001]            │
+│           validpgpkeys declared [P002]                                 │
+╰────────────────────────────────────────────────────────────────────────╯
+2 package(s) needing update and reviewed out of 12 installed
+```
+
+### What a panel says
+
+| Row | Meaning |
+|--------|---------|
+| **Version** | Installed version against what the AUR advertises. For a VCS package the two are not comparable and the row says so rather than drawing an arrow. |
+| **Status** | The verdict, then one line per finding: the file, the line and the rule that produced it. |
+| **Changed** | What moved in the recipe, whether or not a rule matched it. |
+| **Required by** | Only under [`--deps`](#reviewing-the-dependencies-themselves): the packages that declare this one. |
+
+The summary line counts what needed review separately from what was read, so a
+run cut short by `--limit` says how many it left unread rather than reporting
+the smaller number as the whole.
+
+**There is no score column by default.** The default output is evidence - the
+finding, the file, the line - because a number invites a glance where the
+evidence invites a decision. Add `--score` for `Score  45/100 (Medium)`, or
+`--risk` for the band alone.
+
+A quiet report is normal: most AUR updates are routine version bumps with
+checksum updates, and most packages land Low with nothing to read. An
+`Inconclusive` verdict is not Low - it means the tool could not gather enough
+to answer, and the update is worth a manual look. The bands, the evidence
+tiers behind them, and the coverage gaps are explained in
+[Reading a Report](reading-a-report.md#reading-a-report).
+
+## Step 3: Dependencies are reviewed too
+
+An AUR package's `depends` and `makedepends` can name other AUR packages, and
+`makepkg` builds those on your machine in the same run. So by default
+TrustSight also analyses the package's direct AUR dependencies, and each one
+appears as a mini-card nested inside its parent's card:
+
+```
+╭──────────────────── some-trusted-tool ─────────────────────╮
+│  Version       2.4.1-1 → 2.4.2-2                           │
+│  Status        The update is not trivial. Review it.       │
+│                PKGBUILD line 17  Install Hook Fetches      │
+│                Or Executes [H017]                          │
+│  Changed       pkgver 2.4.1-1 -> 2.4.2-2                   │
+│                                                            │
+│  Dependencies                                              │
+│                ╭──────────── L1  libhelper ─────────────╮  │
+│                │ Findings 2                             │  │
+│                ╰────────────────────────────────────────╯  │
+╰────────────────────────────────────────────────────────────╯
+1 package(s) needing update and reviewed out of 1 installed
+Tip: those dependencies are summarised, not reviewed.
+`trustsight review --deps` reviews each as a package in its
+own right and names what requires it; add `--depth n` for
+deeper levels.
+```
+
+Each dependency is a full analysis in its own right - its own findings, its own
+score, its own band. A dependency's risk is never folded into its parent's
+score, so the card is a pointer, not a component of the parent's number. The
+band is withheld here like everywhere else until you pass `--score` or
+`--risk`; with `--risk` the card gains a `Risk  High` line.
+
+### Reviewing the dependencies themselves
+
+The card is a summary. To make the dependencies the subject - each with its own
+panel, findings and verdict - use `--deps`:
+
+```bash
+trustsight review --deps            # the direct dependencies
+trustsight review --deps --depth 2  # and theirs
+```
+
+Each one then reports **Required by**: the packages in the reviewed set that
+declare it. A dependency three packages need is the one to read first.
+
+```
+╭──────────────────────────── libhelper ─────────────────────────────╮
+│  Version      0.8.1-1 → 0.9.0-2                                    │
+│  Status       The update is not trivial. Review it.                │
+│               PKGBUILD line 8  Install hook performs a privileged  │
+│               operation [H017]                                     │
+│  Changed      pkgver 0.8.1-1 -> 0.9.0-2                            │
+│  Required by  some-trusted-tool                                    │
+│               sketchy-pkg                                          │
+╰────────────────────────────────────────────────────────────────────╯
+2 AUR dependencies reviewed for 3 installed package(s)
+```
+
+Control how far it goes:
+
+```bash
+trustsight inspect some-pkg --depth 0    # this package only
+trustsight inspect some-pkg --depth 2    # two levels down
+trustsight review --depth -1             # the whole closure
+```
+
+`-1` walks every level, bounded at 8 levels and 200 dependencies per run -
+the dependency graph is written by the party under review, so it does not get
+to decide how much work your machine does. If a walk stops early you are told:
+the result carries a `deps_not_scanned` coverage gap and cannot report as
+unflagged. A walk that finished the depth you asked for is not a gap.
+
+To make a different depth permanent, put it in `config.toml`:
+
+```toml
+[depth]
+levels = 2
+```
+
+The D-series dependency rules read the dependency corpus, which a fresh install
+does not have. Without it they stay silent; [Corpus and
+Priors](../explanation/corpus-and-priors.md#building-the-dependency-corpus-yourself)
+covers fetching it with `trustsight seed fetch` or building it yourself.
+
+## Recap
+
+1. The first `trustsight review` bootstraps the AUR metadata snapshot; later runs analyse the packages that need updating.
+2. Each package gets one panel: a verdict, the findings behind it, and what changed. Evidence is shown, and the score only on request with `--score` or `--risk`.
+3. Most updates are quiet - Low or nothing to read is the expected result. `Inconclusive` means the analysis could not answer, not that the update is safe.
+4. Direct AUR dependencies appear as mini-cards; `--deps` reviews each as a package in its own right.
+5. The dependency corpus is optional context: without it, the D-series rules stay silent.
+
+**Next:** [Reading a Report](reading-a-report.md#reading-a-report), every part of the output explained.

@@ -234,7 +234,8 @@ def test_release_commit_gate():
     ('--rev "${{ steps.head.outputs.sha }}"', '--rev "$GITHUB_SHA"'),
     ('TARGET: ${{ needs.preflight.outputs.target }}', 'TARGET: master'),
     ('[ "$tag_sha" != "$TARGET" ]', '[ "$tag_sha" != "master" ]'),
-    ('gh release create "$TAG" --target "$TARGET"', 'gh release create "$TAG" --target master'),
+    ('tag $TAG does not exist', 'tag $TAG may not exist'),
+    ('gh release create "$TAG" --draft', 'gh release create "$TAG" --draft --target "$TARGET"'),
 ])
 def test_release_commit_gate_rejects_drift(old, new, tmp_path, monkeypatch):
     sys.path.insert(0, str(ROOT / "scripts"))

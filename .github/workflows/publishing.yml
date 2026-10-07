@@ -178,17 +178,25 @@ jobs:
             echo "::error::release $TAG already exists"
             exit 1
           fi
-          # `gh release create --target` is a no-op when the tag already
-          # exists, so a pre-created tag whose tree differs from the one the
-          # preflight verified would silently publish a mismatched release.
-          # Resolve the tag to its commit (annotated or lightweight) and
-          # require it to be the target, or create it at the target.
+          # The tag is pushed by the maintainer before dispatch, signed; this
+          # step only creates the release object for it.  `--target` is
+          # deliberately absent: the Releases API materializes a tag named by
+          # `target_commitish` and, when that commit's `.github/workflows/`
+          # tree differs from the default-branch tip, additionally requires a
+          # `workflows: write` scope that `GITHUB_TOKEN` cannot carry - the
+          # failure is a bare "Resource not accessible by integration" (403).
+          # Creating the release from the pre-existing tag is not subject to
+          # that guard, and the SHA check keeps the release pinned.
           tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq '.sha' 2>/dev/null || true)
-          if [ -n "$tag_sha" ] && [ "$tag_sha" != "$TARGET" ]; then
+          if [ -z "$tag_sha" ]; then
+            echo "::error::tag $TAG does not exist; push the signed tag before dispatching"
+            exit 1
+          fi
+          if [ "$tag_sha" != "$TARGET" ]; then
             echo "::error::tag $TAG points at $tag_sha, but this release targets $TARGET"
             exit 1
           fi
-          gh release create "$TAG" --target "$TARGET" --draft --generate-notes --title "$TAG"
+          gh release create "$TAG" --draft --generate-notes --title "$TAG"
           gh release upload "$TAG" artifacts/release/* artifacts/dist/*.whl
           mkdir /tmp/release-assets
           gh release download "$TAG" --dir /tmp/release-assets

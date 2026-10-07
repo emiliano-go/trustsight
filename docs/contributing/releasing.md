@@ -146,7 +146,11 @@ package in
    test-installs the wheel and sdist, builds the Arch package with `check()`,
    creates a private draft, verifies the artifact manifest, then publishes
    GitHub and PyPI, and dispatches `release-pkgbuild.yml` as a
-   post-publication audit.
+   post-publication audit. The tag must already be pushed and must resolve to
+   `<sha>`; the workflow refuses a missing or mismatched tag, and it creates
+   the release from that tag rather than passing `--target`, which would need
+   a `workflows: write` scope `GITHUB_TOKEN` cannot hold once the default
+   branch has moved past the release commit.
 10. **Push the AUR package:** copy the released `packaging/aur/PKGBUILD` and
     `.SRCINFO` into the AUR repository so `trustsight` moves to the new
     version.

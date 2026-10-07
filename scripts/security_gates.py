@@ -3333,7 +3333,15 @@ def gate_release_artifacts_share_commit() -> Gate:
     branch), not the requested target, so an archive built from it can
     describe a different tree than the tag it is released under.  The
     preflight builds from the checked-out target, and the publish job
-    refuses a tag that points anywhere else.
+    requires the pushed tag to resolve to that target before creating the
+    release.
+
+    ``gh release create`` deliberately omits ``--target``: the Releases API
+    materializes a tag named by ``target_commitish`` and, once the default
+    branch has moved past the release commit, additionally requires a
+    ``workflows: write`` scope that ``GITHUB_TOKEN`` cannot carry - the
+    failure is a bare 403.  Creating the release from the pre-existing,
+    verified tag is not subject to that guard.
     """
     workflow = (ROOT / ".github/workflows/publishing.yml").read_text(encoding="utf-8")
     verifier = (ROOT / "scripts/verify_release.py").read_text(encoding="utf-8")
@@ -3344,12 +3352,18 @@ def gate_release_artifacts_share_commit() -> Gate:
         'TARGET: ${{ needs.preflight.outputs.target }}',
         'tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG"',
         '[ "$tag_sha" != "$TARGET" ]',
-        'gh release create "$TAG" --target "$TARGET"',
+        'tag $TAG does not exist',
+        'gh release create "$TAG" --draft',
     )
     problems = [f"missing workflow constraint: {item}" for item in required
                 if item not in workflow]
     if '--rev "$GITHUB_SHA"' in workflow or '--rev "${{ github.sha }}"' in workflow:
         problems.append("release artifacts are built from the event commit, not the target")
+    if any("gh release create" in line and "--target" in line
+           for line in workflow.splitlines()):
+        problems.append(
+            "the release is created with --target, which needs workflows:write "
+            "once the default branch moves past the release commit")
     if '"--rev", "HEAD"' not in verifier or "sys.executable" not in verifier:
         problems.append("release verification does not rebuild the checked-out commit")
     return Gate("release artifacts and tags use the verified commit", not problems,

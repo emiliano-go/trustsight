@@ -472,6 +472,30 @@ def test_load_toml_picks_up_an_edit_on_disk(tmp_path, monkeypatch):
     assert load_toml("config.toml")["limits"]["default_review_limit"] == 99
 
 
+def test_the_legacy_review_limit_is_repaired(tmp_path, monkeypatch):
+    """`default_review_limit` shipped set to 20 and was read by nothing; once
+    the key became effective, that stale shipped value silently narrowed every
+    review to 20.  It is repaired to 0, while a value the user chose is kept.
+    """
+    import trustsight.config as cfg
+
+    monkeypatch.setattr(cfg, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(cfg, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(cfg, "CACHE_DIR", tmp_path)
+    (tmp_path / "config.toml").write_text(
+        "[limits]\ndefault_review_limit = 20\nnetwork_connect_timeout = 10\n"
+    )
+    cfg.ensure_default_configs()
+    text = (tmp_path / "config.toml").read_text()
+    assert "default_review_limit = 0" in text
+    assert "default_review_limit = 20" not in text
+    assert "network_connect_timeout = 10" in text, "other keys must survive"
+
+    (tmp_path / "config.toml").write_text("[limits]\ndefault_review_limit = 7\n")
+    cfg.ensure_default_configs()
+    assert "default_review_limit = 7" in (tmp_path / "config.toml").read_text()
+
+
 def test_load_toml_hands_out_independent_copies(tmp_path, monkeypatch):
     """A caller that edits the result must not corrupt the next caller's.
 

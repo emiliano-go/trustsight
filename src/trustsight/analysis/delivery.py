@@ -1750,7 +1750,10 @@ _SOURCE_EXEC_RE = re.compile(
     r"|source\s+(\S+)"
     r"|\.\s+(\S+)"
     r")"
-    r"|\./(\S+)"
+    # A bare `./script` is a command, so it must be at a command position.
+    # Without the anchor the bare `\./` matched anywhere, capturing `647.patch`
+    # from the argument `../647.patch` (and `./src` from `grep ./src`).
+    r"|" + _CMD_START + r"\./(\S+)"
     # `sh < file` - the interpreter reads the script from its stdin.
     # `(?!\(|<)` keeps process substitution and here-strings out: those are
     # different constructs that H075 owns.
@@ -1795,6 +1798,12 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
             continue
         body = _strip_comment(line[1:])
 
+        # `patch -i x.patch` (and `git apply`) consumes the file as data; it
+        # never executes it, and W003 owns that case.  H083 firing on the same
+        # line contradicted W003 (protonup-qt `patch -Np1 -i ../647.patch`).
+        patch = _PATCH_APPLY_RE.search(body)
+        patch_base = os.path.basename(_norm_path(patch.group(1))) if patch else ""
+
         for _kind, wpath in _collect_writes(body, fn):
             wbase = os.path.basename(wpath)
             if not wbase:
@@ -1814,6 +1823,9 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
             path = _norm_path(raw)
             base = os.path.basename(path)
             if not base or base in _H072_BENIGN_EXEC:
+                continue
+            # A patch application is not an execution of the patch file.
+            if patch_base and base == patch_base:
                 continue
             alias_of = aliases_by_fn.get(fn, {}).get(base)
             if base in source_basenames:

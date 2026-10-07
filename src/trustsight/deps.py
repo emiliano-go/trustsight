@@ -7,6 +7,7 @@ invisible to the rule engine, and why this module reads the diff directly
 instead of going through :func:`~trustsight.rules.apply_rules`.
 """
 
+import os
 import re
 from functools import lru_cache
 
@@ -271,7 +272,26 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     # *marker* is still "+" or "-"; the typed side is derived from it.
     wanted = "add" if marker == "+" else "remove"
     for line in parse_diff_lines(lines).lines:
-        if line.raw.startswith(("+++", "---", "@@")):
+        # Dependency arrays exist only in the PKGBUILD.  A commit diff also
+        # carries a LICENSE, a .patch and a companion CMakeLists, and letting
+        # those be read as the continuation of a `depends=(` a hunk left open
+        # scored a BSD-3-Clause licence and a CMake diff as dependencies
+        # (litehtml0.9).  Headerless diffs are attributed to PKGBUILD by the
+        # parser, so a bare edit keeps working.
+        if os.path.basename(line.file) != "PKGBUILD":
+            continue
+        # A *file* boundary ends any array an earlier file left open: the
+        # lines in another file cannot continue it.  A hunk boundary does not,
+        # because two hunks of one PKGBUILD are the same array and a change
+        # near each end of a long `depends=(...)` must keep both additions
+        # (the pre-existing `_UNTRACKED_ARRAY_START_RE` and `_MAX_ARRAY_SPAN`
+        # still stop a genuinely unterminated array).  `diff --git` is matched
+        # explicitly because the header lines that precede a file's `+++` are
+        # attributed to the *previous* file.
+        if line.raw.startswith("diff --git ") or line.raw.startswith(("+++", "---")):
+            field = None
+            continue
+        if line.raw.startswith("@@"):
             continue
         if line.side in ("add", "remove") and line.side != wanted:
             continue

@@ -181,6 +181,43 @@ def test_rewrapping_into_a_compound_assignment_adds_nothing():
     assert extract_dependency_changes(diff, "mypkg")["depends"] == set()
 
 
+def test_an_open_array_does_not_read_a_second_file():
+    """litehtml0.9: a `depends=(` left open in the PKGBUILD hunk was continued
+    into the LICENSE and the .patch in the same commit diff, so BSD licence
+    words, a git header and CMake tokens were scored as dependencies."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,3 @@\n"
+        "+depends=(glibc\n+         gumbo-parser\n"
+        "diff --git a/LICENSE b/LICENSE\nnew file mode 100644\n"
+        "index 595689f8..ac82b806 100644\n"
+        "--- /dev/null\n+++ b/LICENSE\n@@ -0,0 +1,3 @@\n"
+        "+Redistribution and use in source and binary forms\n"
+        "+permission is hereby granted\n"
+        "+merchantability and fitness\n"
+        "diff --git a/coinstallability.patch b/coinstallability.patch\n"
+        "new file mode 100644\n--- /dev/null\n"
+        "+++ b/coinstallability.patch\n@@ -0,0 +1,1 @@\n"
+        "+target_include_directories(x PUBLIC y)\n"
+    )
+    assert extract_dependency_changes(diff, "litehtml")["depends"] == {
+        "glibc", "gumbo-parser",
+    }
+
+
+def test_an_array_spanning_two_hunks_keeps_both_additions():
+    """A long `depends=(...)` can be changed in two hunks of one file.  The
+    file boundary, not the hunk boundary, is where an array ends, so both
+    additions survive (dropping the lower one hid a real dependency)."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,5 @@\n"
+        " depends=(\n   foo\n   bar\n+  baz\n"
+        "@@ -20,4 +21,5 @@\n   qux\n   zzz\n+  newdep\n )\n"
+    )
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == {
+        "baz", "newdep",
+    }
+
+
 def test_dependency_changes_reports_a_compound_assignment(enabled, rules):
     """B7: the change summary sees what the parser sees."""
     diff = HEADER + "+depends+=('evil-pkg')\n"

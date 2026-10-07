@@ -1529,6 +1529,48 @@ def _refresh_legacy_iocs() -> bool:
     return False
 
 
+# The value ``[limits] default_review_limit`` shipped with before anything read
+# it.  It was a documented no-op for several releases, so an install carrying
+# this value never chose it; once the key became effective, that stale shipped
+# value silently narrowed every review to 20 packages.  Repairing it to the
+# documented 0 (read everything) is the only way an existing install stops
+# losing the tail without the user editing the file by hand.
+LEGACY_DEFAULT_REVIEW_LIMIT = 20
+
+_LEGACY_REVIEW_LIMIT_RE = re.compile(
+    rf"^(\s*default_review_limit\s*=\s*){LEGACY_DEFAULT_REVIEW_LIMIT}(\s*)$"
+)
+
+
+def _refresh_legacy_review_limit() -> bool:
+    """Repair the stale shipped ``default_review_limit``.  True when rewritten."""
+    path = CONFIG_DIR / "config.toml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    out: list[str] = []
+    section = ""
+    changed = False
+    for line in text.splitlines(keepends=True):
+        newline = "\n" if line.endswith("\n") else ""
+        body = line[:-1] if newline else line
+        stripped = body.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped
+        if section == "[limits]" and _LEGACY_REVIEW_LIMIT_RE.match(body):
+            out.append(_LEGACY_REVIEW_LIMIT_RE.sub(r"\g<1>0\g<2>", body) + newline)
+            changed = True
+        else:
+            out.append(line)
+    if not changed:
+        return False
+    path.write_text("".join(out), encoding="utf-8")
+    _toml_cache.pop("config.toml", None)
+    _log.info("repaired the legacy default_review_limit to 0 (read everything)")
+    return True
+
+
 def ensure_default_configs():
     """Write default config files if they do not exist, and add missing shipped rules."""
     ensure_dirs()
@@ -1541,6 +1583,7 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "thresholds.toml", DEFAULT_THRESHOLDS)
     write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
     _refresh_legacy_iocs()
+    _refresh_legacy_review_limit()
     # Append any shipped rules the user's file is missing.  The file is
     # written once at install time, so an older install can lack rules
     # that shipped after it.  Appending is always safe; replacements

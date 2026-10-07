@@ -155,6 +155,25 @@ def test_cloned_file_renamed_then_executed():
         "  awk '1' y/run.sh > run.me\n  escript run.me\n}\n"))
 
 
+def test_a_patch_application_is_not_an_execution():
+    """protonup-qt: `patch -Np1 -i ../647.patch` passes a declared source to
+    patch as data; H083 must not claim it executes the file (W003 owns it)."""
+    fact = _fact(_diff(
+        "source=('647.patch')\n"
+        "prepare() {\n  patch -Np1 -i ../647.patch\n}\n"))
+    ids = {e.rule_id for e in fact.score_breakdown}
+    assert "H083" not in ids, ids
+    assert "W003" in ids, ids
+
+
+def test_a_declared_source_run_as_a_relative_command_still_fires():
+    """Anchoring the `./` arm to a command position must not lose the real
+    `./script.sh` execution it exists for."""
+    assert "H083" in _fired(_diff(
+        "source=('payload.sh')\n"
+        "prepare() {\n  ./payload.sh\n}\n"))
+
+
 # --- H016 host forms (F3) ----------------------------------------------
 
 def test_host_forms_are_extracted_for_ssh_family_clients():

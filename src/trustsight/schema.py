@@ -210,7 +210,7 @@ class PackageFact:
     # Which clock produced the temporal findings.
     temporal_source: str = "unknown"
 
-    # Which fetch/adapter produced the analysis: "git" | "corpus"
+    # Which fetch/adapter produced the analysis: "git" | "corpus" | "diff"
     adapter: str = "git"
 
     score_breakdown: list[ScoreEntry] = field(default_factory=list)

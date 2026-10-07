@@ -486,7 +486,12 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
     for r in results:
         if verbose and not r.get("failed") and r.get("_verbose_fact"):
             from .inspect import _inspect_rich as _render_inspect
-            _render_inspect(r["_verbose_fact"], show_score=show_score, show_risk=show_risk)
+            _render_inspect(
+                r["_verbose_fact"],
+                verbose=verbose,
+                show_score=show_score,
+                show_risk=show_risk,
+            )
             continue
 
         from rich.table import Table

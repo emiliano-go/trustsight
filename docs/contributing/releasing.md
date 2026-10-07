@@ -85,36 +85,74 @@ rebuilds the tarball and compares it against the recorded value, so a stale
 checksum cannot be committed at all. `tests/test_release_workflow.py::test_a_worktree_build_refuses_untracked_files`
 covers the refusal.
 
+## Prerequisites
+
+One-time setup, or changes rarely. The guide below assumes all of it holds.
+
+- **The signing key.** The maintainer holds the private half of
+  `F759D6D49B0A395AB922414A5CC3B4C50D37E793`; its public half is
+  `scripts/commit_signing_key.asc` and is published on keys.openpgp.org. Git
+  signs commits and tags (`user.signingkey = 5CC3B4C50D37E793!`,
+  `commit.gpgsign = true`), and the tarball is signed by hand. The trailing
+  `!` forces the primary key: a signature by the Ed25519 signing subkey does
+  not verify against the committed public key. See
+  [release signing](../security/release-signing.md).
+- **GitHub repository settings.** Secret scanning with push protection,
+  Dependabot alerts and security updates, CodeQL, private vulnerability
+  reporting, actions pinned to a full-length commit SHA, and a branch ruleset
+  on the default branch requiring the `verify`, `gates`, `build`, `lint` and
+  `test` checks plus signed commits.
+- **PyPI trusted publishing.** The `pypi` environment is configured for
+  `publishing.yml`; no token is stored.
+- **AUR access.** `~/.ssh/config` maps `aur.archlinux.org` to `~/.ssh/aur`,
+  and that key is registered on the AUR account.
+
 ## The steps
 
-The full checklist lives beside the package in
+Every step happens **before** the tag. The same checklist lives beside the
+package in
 [`packaging/aur/README.md`](https://github.com/emiliano-go/trustsight/blob/master/packaging/aur/README.md).
-In outline, and note that every step happens **before** the tag:
 
-1. Land all content changes, including `version` in `pyproject.toml`.
-2. `python scripts/build_release_tarball.py` and read the checksum.
-3. Sign the tarball with the pinned commit key
-   (`gpg --detach-sign --local-user F759D6D4…!`; the trailing `!` forces the
-   primary key, since the public key does not carry the signing subkey) and
-   commit the `.sig` beside the PKGBUILD. The private key is the maintainer's;
-   CI never holds it.
-4. Record the tarball and signature checksums in `packaging/aur/PKGBUILD`,
-   keep `validpgpkeys` and the `.sig` source, and regenerate `.SRCINFO`. This
-   commit touches only `packaging/`, so it cannot move the checksums from
-   steps 2-3.
-5. Build locally with `makepkg -si` (makepkg verifies the signature against
-   the pinned key).
-6. Push the final commit, then dispatch `Release software` with the intended
-   `vX.Y.Z` tag and commit. It builds the artifacts from that commit, verifies
-   the signature and metadata, test-installs the wheel and sdist, builds the
-   Arch package, creates a draft release, verifies its checksum manifest, then
-   publishes GitHub and PyPI.
+1. **Land all content changes**, including `version` in `pyproject.toml` and
+   any dependency or `uv.lock` update. Any change outside `packaging/` moves
+   the tarball, so it must be final before the next step.
+2. **Close the release in the changelog:** rename `## [Unreleased]` to
+   `## [X.Y.Z] - YYYY-MM-DD` in `docs/changelog.md`.
+3. **Build the tarball:** `python scripts/build_release_tarball.py`. It
+   archives the working tree and refuses untracked files, so `git add`
+   anything new first.
+4. **Sign the tarball** with the pinned key, forced to the primary:
+   `gpg --detach-sign --local-user F759D6D49B0A395AB922414A5CC3B4C50D37E793! dist/trustsight-<ver>.tar.gz`,
+   then copy the `.sig` into `packaging/aur/`. The private key is the
+   maintainer's; CI never holds it and can only verify.
+5. **Record both checksums** in `packaging/aur/PKGBUILD` (`sha256sums`, real
+   hashes, never `SKIP`; keep `validpgpkeys` and the `.sig` source) and
+   regenerate `.SRCINFO` with `makepkg --printsrcinfo`. This commit touches
+   only `packaging/`, so it cannot move the hashes from steps 3-4.
+6. **Verify locally:** `makepkg -si` (makepkg verifies the signature against
+   the pinned key), the full suite, and `ruff`.
+7. **Commit and push** (signed; the ruleset rejects unsigned commits). The
+   tip's recorded checksum and `.sig` must describe the tip's tree, or
+   `pkgbuild.yml` goes red: a content commit that is not the packaging commit
+   leaves the checksum stale.
+8. **Tag it:** `git tag -s vX.Y.Z -m "vX.Y.Z"` and push the tag. The tag must
+   point at the release commit.
+9. **Dispatch `Release software`:**
+   `gh workflow run publishing.yml -f tag=vX.Y.Z -f target=<sha>`. It rebuilds
+   from the tag and verifies the signature, metadata and checksums,
+   test-installs the wheel and sdist, builds the Arch package with `check()`,
+   creates a private draft, verifies the artifact manifest, then publishes
+   GitHub and PyPI, and dispatches `release-pkgbuild.yml` as a
+   post-publication audit.
+10. **Push the AUR package:** copy the released `packaging/aur/PKGBUILD` and
+    `.SRCINFO` into the AUR repository so `trustsight` moves to the new
+    version.
 
-   Sign the release tag. Either create it yourself first with `git tag -s`
-   and push it (the workflow then requires it to point at the released
-   commit, and refuses a tag that does not), or let the workflow create it
-   from the target and sign it afterwards. An unsigned tag is an unsigned
-   claim about which tree the asset describes.
+After the software release, and only if the seed or corpus changed, publish a
+`baseline-<date>` channel release ([publishing baselines](publishing-baselines.md)).
+When the adversarial harness moves to a new release, bump the commit pinned in
+`harness-regression.yml`; its job fails on a core-version mismatch rather than
+measuring the wrong build.
 
 Nothing is repaired afterwards. There is no post-tag step that can fail and
 leave the branch inconsistent, which was the whole defect.

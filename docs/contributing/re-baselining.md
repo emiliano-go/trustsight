@@ -77,12 +77,32 @@ uv run python tests/harness/diffdoc_parity.py \
   --write tests/fixtures/diffdoc-projections.json.gz
 ```
 
-The header pins the corpus by `corpus_content_sha256`, so a baseline that
-does not match the corpus fails before any projection is compared. A parse
+The header pins the corpus by `corpus_content_sha256`; a baseline that does
+not match the corpus fails the run, and the mismatch is reported alongside the
+projection diffs. A parse
 change that moves no finding still needs the baseline regenerated in the
 same commit as the parser change, reviewed on its own. The baseline is
 checked by the sampled suite (`tests/test_diffdoc_parity.py`) and whole by
 the calibration CI job.
+
+## Parallel analysis
+
+The calibration gate and the two analysis-heavy parity harnesses accept
+`--jobs`, which defaults to `min(8, CPUs)`:
+
+```bash
+uv run python scripts/calibration_gates.py --jobs 8
+uv run python tests/harness/finding_parity.py --check <baseline> --jobs 8
+uv run python tests/harness/typed_core_parity.py --check <baseline> --jobs 8
+```
+
+Packages are analysed in worker processes, with each package's global URL
+prefix precomputed exactly and its diffs kept in order, so a full-corpus run
+drops from roughly fifty minutes to a few. Pattern-safety verdicts (including
+the generated `R013`/`R047`/`R048`/`R152` patterns) are decided once in the
+parent before the workers start, so a rule cannot vanish under pool load.
+Library callers stay serial. `rebaseline.py` and the cheap `diffdoc_parity.py`
+and `change_parity.py` harnesses take no `--jobs`.
 
 ## After re-baselining
 

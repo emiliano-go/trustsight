@@ -14,6 +14,7 @@ module is the check that does not need one.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -144,9 +145,10 @@ def _suite_size() -> tuple[int, int]:
 
 
 @pytest.mark.skipif(
-    not CORPUS.exists(),
-    reason="the collected count depends on the corpus (test_tokenizer_sandbox "
-           "parametrizes over its diffs); run where the corpus is built",
+    os.environ.get("TRUSTSIGHT_PUBLISHED_FIGURES_STRICT") != "1",
+    reason="the published count is measured on the calibration runner: the "
+           "collected set depends on the environment and the corpus; set "
+           "TRUSTSIGHT_PUBLISHED_FIGURES_STRICT=1 there",
 )
 def test_the_published_suite_size_matches_the_suite():
     """The site quotes an exact test count, so it has to be exact.
@@ -155,9 +157,12 @@ def test_the_published_suite_size_matches_the_suite():
     test that is added without refreshing it fails here rather than leaving
     the site quoting a stale number.
 
-    One module parametrizes over the corpus diffs, so the count is only the
-    published one where the corpus exists.  The calibration job rebuilds it
-    and runs this file; the matrix job, which has no corpus, skips it.
+    The count is only the published one on the calibration runner: one module
+    parametrizes over the corpus diffs, and the installed extras move the
+    collected set too, so a checkout that merely has a corpus still collects a
+    different number.  This assertion therefore runs only where the figure is
+    defined, signalled by ``TRUSTSIGHT_PUBLISHED_FIGURES_STRICT``; everywhere
+    else the whole module still runs, this test just skips.
     """
     count, files = _suite_size()
     assert (count, files) == (FIGURES["tests"]["count"], FIGURES["tests"]["files"]), (

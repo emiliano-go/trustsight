@@ -162,12 +162,9 @@ When [rich](https://github.com/Textualize/rich) is available:
 │                                                                            │
 │        Rules Triggered                                                     │
 │                         PKGBUILD line 4  R001 Remote Script Execution      │
-│                                                                            │
-│    Unverifiable findings                                                   │
 │                         W001  Executes Code This Analysis Did Not Read     │
 │                                                                            │
 │       Declared verification                                                │
-│                         P001  checksums declared for all non-VCS sources   │
 │                         P002  validpgpkeys declared                        │
 │                                                                            │
 │           Dependencies                                                     │
@@ -205,7 +202,7 @@ difference in information, which
 
 ### Database
 
-The analysis result (`PackageFact` serialised to JSON, triggered rules, raw diff) is persisted to the local SQLite database before output is printed.
+With `--record`, the analysis result (`PackageFact` serialised to JSON, triggered rules, raw diff) is persisted to the local SQLite database before output is printed. Without `--record`, the run is read-only and nothing is written.
 
 ---
 
@@ -254,19 +251,19 @@ trustsight list [--limit N] [--sort score|risk|name|last-checked]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--limit` | `int` | `0` | Maximum number of packages to show, applied after `--sort`. `0` means unlimited. |
-| `--sort` | `str` | alphabetical | Sort results. `score`: highest (worst) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. `last-checked`: oldest first. Packages that have never been analysed sort last. |
+| `--sort` | `str` | alphabetical | Sort results. `score`: highest (worst) first. `risk`: Critical, High, Medium, Inconclusive, Low. `name`: alphabetical. `last-checked`: oldest first. Packages that have never been analysed sort last under `score` and `risk`; under `last-checked` an empty timestamp sorts first. |
 
 ### Output
 
 Table with columns: **Package**, **Version**, **Maintainer**, **Last Checked**, **Score**, **Risk**.
 
-With `--json`, each row also carries a **verdict** field: the stored risk band (e.g., `Low`, `Medium`, `High`, `Critical`, `Inconclusive`). Packages that have never been analysed show `-` for score and `-` for verdict.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
+With `--json`, each row also carries a **verdict** field: the stored risk band (e.g., `Low`, `Medium`, `High`, `Critical`, `Inconclusive`). Packages that have never been analysed show `null` for score and `-` for verdict.  Version strings that could not be resolved (raw bash expressions, nested parameter expansions) display as `unresolved`.
 
 ---
 
 ## trustsight forget
 
-Remove a tracked package and all associated history (analysis history, triggered rules, snapshots, profiles, alert state).  Package data is removed permanently; source URL and maintainer records are reassigned to the internal sentinel rather than deleted.
+Remove a tracked package and all associated history (analysis history, triggered rules, snapshots, profiles, alert state).  Package data is removed permanently; source URL rows and the legacy maintainer table are reassigned to the internal sentinel rather than deleted, while the per-package hashed maintainer rows are deleted with the package.
 
 ```
 trustsight forget <package>...
@@ -291,11 +288,12 @@ trustsight forget --prune [--dry-run]
 
 When removing named packages:
 
-1. Deletes `alert_state`, `pkgbuild_snapshots`, `package_profiles`, and `package_properties` rows keyed by the package name.
+1. Deletes `alert_state`, `pkgbuild_snapshots`, `package_profiles`, `package_properties`, and `property_transitions` rows keyed by the package name.
 2. Deletes `triggered_rules` rows (via `analysis_history`).
 3. Deletes `analysis_history` rows.
-4. Reassigns `source_urls.first_seen_package_id` and `maintainers.first_seen_package_id` to the internal sentinel (id 0).
-5. Deletes the `packages` row.
+4. Deletes the per-package `package_maintainers_hashed` rows.
+5. Reassigns `source_urls.first_seen_package_id` and the legacy `maintainers.first_seen_package_id` to the internal sentinel (id 0). The per-package hashed maintainer rows are deleted with the package, not reassigned.
+6. Deletes the `packages` row.
 
 Reserved names (`__seed__`, or any name starting with `__`) cannot be forgotten and raise an error.
 
@@ -401,7 +399,7 @@ goes away is worse than no finding at all, because it trains you to skim.
 
 | Subcommand | Description |
 |------------|-------------|
-| `list` | Show configured rule overrides and acknowledged source URLs. This is the default when no subcommand is given. |
+| `list` | Show configured rule overrides and acknowledged source URLs. |
 | `add <rule_id>` | Suppress a rule. `--reason` is required. |
 | `rm <rule_id>` | Stop suppressing a rule. Exits non-zero if no override matched. |
 | `add-url <package> <url>` | Acknowledge one source URL for one package. `--reason` is required. |

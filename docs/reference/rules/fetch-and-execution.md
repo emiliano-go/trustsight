@@ -470,7 +470,10 @@ downloaded script. Detected by `_source_file_execution_findings()` in
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `delivery`
 - **Condition:** A committed `.service`, `.socket`, `.timer`, `.path`,
-  `.desktop`, `.rules`, `.conf`, `.install`, `.hook`, `.patch` or `.diff`
+  `.mount`, `.automount`, `.target`, `.desktop`, `.rules`, `.conf`, `.cfg`,
+  `.ini`, `.install`, `.hook`, `.patch` or `.diff`, or a build manifest
+  (`Makefile`/`GNUmakefile`, `build.ninja`, `CMakeLists.txt`, `meson.build`,
+  `SConstruct`, `BUILD`/`WORKSPACE`, `.mk`/`.ninja`/`.bazel`/`.cmake`),
   whose content pipes a network fetch into an executor - or, for a patch,
   whose *added* lines do.
 

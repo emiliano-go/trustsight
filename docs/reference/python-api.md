@@ -40,7 +40,7 @@ The CLI has two behaviours that exist to stop a report from reading better than 
 
 ### The band is the analysis band
 
-`Report.risk` is the band the analysis actually supports. It is **not** `risk_level(report.score)`. A run that could not read the whole change, or one against a database with no history to compare against, reports `Inconclusive` no matter what the score is.
+`Report.risk` is the band the analysis actually supports. It is **not** `risk_level(report.score)`. A run that could not read the whole change, or one against a database with no history to compare against, reports `Inconclusive` unless a HIGH or worse finding fired, in which case the band is shown qualified.
 
 ```python
 ## Correct
@@ -163,11 +163,11 @@ Raises `PackageNotFound` when the name is in neither the AUR nor the local datab
 
 `depth` controls how far into the package's AUR dependency closure the analysis goes: `0` off, `1` (the default) direct dependencies, `n` levels, `-1` every level. `None` uses `[depth] levels` from the config. See [`[depth]`](configuration.md#depth) for the bounds.
 
-### `analyze_text(package, new_pkgbuild, old_pkgbuild=None, *, maintainer="", srcinfo=None, last_modified=None, first_submitted=None, previous_modified=None) -> Report`
+### `analyze_text(package, new_pkgbuild, old_pkgbuild=None, *, maintainer="", srcinfo=None, last_modified=None, first_submitted=None, previous_modified=None, record=False) -> Report`
 
 Analyse PKGBUILD text directly, with no git and no network. For vetting a PKGBUILD you already hold: a pull request, a generated file, a CI checkout.
 
-Nothing is fetched and nothing is recorded as an observation, so the novelty signals see only what the database already knew. The timestamps are Unix seconds and optional; without them the age-based rules have no clock and stay silent. `Report.adapter` reads `corpus` on this path, which is your signal that it is a narrower look than `inspect` gets.
+Nothing is fetched, and nothing is recorded as an observation unless `record=True`, so by default the novelty signals see only what the database already knew. The timestamps are Unix seconds and optional; without them the age-based rules have no clock and stay silent. `Report.adapter` reads `corpus` on this path, which is your signal that it is a narrower look than `inspect` gets.
 
 ```python
 report = ts.analyze_text(
@@ -175,6 +175,14 @@ report = ts.analyze_text(
     new_pkgbuild=pathlib.Path("PKGBUILD").read_text(),
     old_pkgbuild=previous_text,
 )
+```
+
+### `analyze_diff(diff_text, *, package="", post_pkgbuild=None) -> Report`
+
+Analyse a unified diff directly, with no git and no network. The analyzer's real input is a diff; this runs the same pipeline stage the git path runs after diff production, with `Report.adapter` set to `diff`. Use it for a diff pasted from a bug report or a PR. `post_pkgbuild` is the post-diff PKGBUILD when the caller holds it; without it the diff's own post projection is the analysed surface. Coverage gaps (`diff_truncated`, `partial_hunk`) apply with full force.
+
+```python
+report = ts.analyze_diff(pathlib.Path("change.diff").read_text())
 ```
 
 ### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False, record=False) -> ReviewResult`
@@ -318,7 +326,7 @@ The analysis of one package.
 | `diff_truncated` | `bool` | The diff exceeded the configured cap and only a deterministic UTF-8-safe prefix was read; the report is incomplete and cannot be read as clean. |
 | `tree_analyzed` | `bool` | The repository file manifest was inspected. |
 | `version_comparison` | `str` | How the installed version relates to the AUR `pkgver`, or `""` if nothing compared them. |
-| `adapter` | `str` | `git` or `corpus`. |
+| `adapter` | `str` | `git`, `corpus`, or `diff`. |
 | `config_fingerprint` | `str` | Which instrument produced this. |
 
 Derived properties: `flagged` (score above the 20-point threshold), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).

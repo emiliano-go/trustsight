@@ -54,8 +54,8 @@ The aggregate baseline is current at 3,739 diffs. Detailed rule rows below retai
 | H004 | Privilege Escalation | CRITICAL | <1 % | Function-body scoped |
 | R010 | Uses curl in PKGBUILD | LOW | <2 % | |
 | R011 | Uses wget in PKGBUILD | LOW | <2 % | |
-| R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; 17% detection on labelled injection fixtures, not proof of author intent |
-| R013 | Unicode Bidi Override | FATAL | 0.05 % | 2/3739 benign diffs carry zero-width joiners in localized text; the ASCII-neighbour guard keeps them quiet |
+| R012 | LLM Prompt Injection | FATAL | ~0 % | Reviewer-directed template tripwire; fires on all 22 labelled injection fixtures, not proof of author intent |
+| R013 | Unicode Bidi Override | FATAL | 0 % | 2/3739 benign diffs carry zero-width joiners in localized text, but the ASCII-neighbour guard keeps them from firing |
 
 ## Aggregate distribution
 
@@ -152,7 +152,8 @@ static corpus. Fire rates vary per database and per run.
 ## Install, maintainer, and naming rules (H023-H027, H029, H035-H036)
 
 These rules are defined in `src/trustsight/analysis/build.py`,
-`src/trustsight/analysis/temporal.py`, and `src/trustsight/analysis/pipeline.py`.
+`src/trustsight/analysis/composition.py`, `src/trustsight/analysis/maintainer.py`,
+and `src/trustsight/analysis/pipeline.py`.
 Fire rates marked "TBD" require a live git
 repository and cannot be measured against the static corpus; H026
 falls in this category.

@@ -180,6 +180,7 @@ Each rule supports these fields:
 | `added_only` | `bool` | (Optional, `raw_line` only) Match only added (`+`) lines. Raw diff lines include removals, so without this a maintainer *deleting* a suspicious line raises the score. All `raw_line` `R039`+ rules set it. |
 | `experimental` | `bool` | (Optional) Skip the rule unless `[rules] experimental = true` in `config.toml`. Used for rules whose false-positive rate has not been measured against the benign corpus. |
 | `include_comments` | `bool` | (Optional) Also match comment lines, which are filtered out for every other rule. Only for rules whose target is the *reader* rather than the shell (R012, R013): a commented-out command does not run, but a comment is exactly where an injection or a hidden character lives. |
+| `exclude_if_matches` | `list[string]` | (Optional) Defer to a more precise rule: suppress this rule's finding when any listed rule id also matches the same item, with the same match target and enabled. Keeps one finding per operation without making evaluation order part of the rule contract. |
 
 ### Structural rules {#structural-rules}
 

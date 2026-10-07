@@ -59,6 +59,11 @@ jobs:
       # module parametrizes over its diffs), so it is checked here rather
       # than in the matrix job, which has no corpus to build.
       - name: Verify the published figures
+        # This is the only job that measures the exact suite size: the
+        # collected set depends on the environment and the corpus, so the
+        # test asserts it only when this flag is set.
+        env:
+          TRUSTSIGHT_PUBLISHED_FIGURES_STRICT: "1"
         run: uv run --extra dev pytest tests/test_published_figures.py -q
 
       - name: Upload gate results

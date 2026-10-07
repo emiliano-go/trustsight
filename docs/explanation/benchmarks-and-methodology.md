@@ -42,7 +42,7 @@ Absolute p95 on either class is not useful in isolation. A tool that scores ever
 
 The gap between the bottom 5th percentile of malicious scores and the top 95th percentile of benign scores is the operational separation. It answers the question: how much room is there to set a threshold that catches real threats without false-positive burden?
 
-If the CRITICAL p5 is 60 and the benign p95 is 30, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 30-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
+If the CRITICAL p5 is 60 and the benign p95 is 35, a threshold set inside the gap catches every CRITICAL-class sample in the benchmark set while labeling only 5% of benign packages as FLAGGED. The 25-point gap provides margin for error: moving the threshold within it trades false-positive rate against headroom while still catching all CRITICAL samples.
 
 The gap is measured as p5 of the worst class (CRITICAL) versus p95 of the benign class because these are the tails that matter for threshold setting. The center of the distribution is irrelevant for operational decision-making.
 
@@ -84,7 +84,7 @@ The numbers are not aspirational; they are the measured state of the current rul
 
 ## Reproducible methodology
 
-- **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. Two runs on different machines with the same lock file produce identical results.
+- **Corpus pinned** via `corpus.lock`: the AUR snapshot is versioned and reproducible. The same lock names the same packages and diffs on any machine, but a rebuild is not byte-stable across git versions (`git diff -W` output moves), so reproducible numbers come from the packed corpus release asset, not a local rebuild.
 - **Baseline committed** as `baseline.json`: benchmark results are checked into the repository. Every commit can be compared against the baseline to detect regressions.
 - **Regeneration** is monthly: `corpus-drift.yml` downloads the packed corpus release asset (the same bytes `calibration.yml` uses, not a rebuild whose `git diff -W` output is not byte-stable across git versions), re-derives the baseline and compares it against the committed `baseline.json`, filing an issue on any change. Reproducibility comes from that committed baseline plus git history.
 

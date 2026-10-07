@@ -20,7 +20,7 @@ Audits AUR PKGBUILD updates before you install: detects structural changes, susp
     <img src="https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests" alt="Tests">
   </a>
   <a href="https://pypi.org/project/trustsight/">
-    <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge" alt="PyPI">
+    <img src="https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge&cacheSeconds=300" alt="PyPI">
   </a>
 </p>
 

@@ -66,9 +66,9 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 | benign corpus size | 3,739 diffs |
 | benign median | 0 |
 | benign 95th percentile | 35 |
-| benign diffs scoring 0 | 67.8% |
-| benign diffs above the 20-point threshold | 10.3% |
-| percentile at which 20 sits | 89.7th |
+| benign diffs scoring 0 | 68.4% |
+| benign diffs above the 20-point threshold | 9.5% |
+| percentile at which 20 sits | 90.5th |
 | malicious 5th percentile | 60 |
 | malicious minimum | 50 |
 
@@ -82,7 +82,7 @@ in the same commit. `rebaseline.py` scans under the shipped config, the same
 isolation the gates use, so its distribution figures and the gate's separation
 numbers come from one basis.
 
-The 10.3% threshold rate is the practical workload figure: on this locked
+The 9.5% threshold rate is the practical workload figure: on this locked
 benign corpus, about **1 in 10** updates would be flagged for review. It is more
 useful for capacity planning than the zero-rate, and must not be generalized
 beyond this corpus snapshot and configuration.

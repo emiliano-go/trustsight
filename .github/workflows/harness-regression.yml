@@ -3,20 +3,20 @@ name: Harness regression
 # The harness repo gates its own pushes by replaying every committed bypass
 # against the TrustSight commit it pins.  This job closes the other
 # direction: a change on this repo is measured against the harness corpus on
-# the push that makes it.
+# the push that makes it, and a regression fails the check.
 #
-# The run reports; it does not judge.  The harness contract is that an exit
-# code says "the run happened", never "the numbers are good" (see its
-# docs/reference/exit-codes), so an open count above the committed baseline
-# lands in the step summary and the artifact, not in a failed check.  A
-# version mismatch is different: the harness clone cannot measure this
-# checkout at all, which is a configuration fault and fails here.
+# The harness command's own exit code says "the run happened", never "the
+# numbers are good" (see its docs/reference/exit-codes), so this job reads the
+# report and judges it: open, degraded or unreplayable above the committed
+# baseline fails.  It is a required check, so it runs on every push and pull
+# request rather than only on source changes - a required check that does not
+# report would block every merge it does not apply to.
+#
+# A version mismatch is a hard failure too: the harness clone cannot measure
+# this checkout at all, which is a configuration fault, and a check that
+# passed because it could not measure would read as the guarantee it is not.
 
-on:
-  push:
-    paths: ["src/**", "pyproject.toml"]
-  pull_request:
-    paths: ["src/**", "pyproject.toml"]
+on: [push, pull_request]
 
 permissions:
   contents: read
@@ -60,8 +60,9 @@ jobs:
           }
 
       - name: Baseline before the run
-        run: |
-          python3 -c "import json; print(json.load(open('../trustsight-harness/regression/report.json'))['open'])" > baseline-open.txt
+        # The harness' committed report is the baseline the gate judges
+        # against.
+        run: cp ../trustsight-harness/regression/report.json baseline-report.json
 
       # The harness's committed lock already names this core version as an
       # editable path dependency, so `--locked` is enough and no resolver
@@ -73,6 +74,11 @@ jobs:
           uv sync --locked --all-extras
 
       - name: Replay every committed bypass
+        # `shell: bash` is not cosmetic: GitHub's explicit bash shell enables
+        # `-eo pipefail`, so a harness that exits nonzero fails this step even
+        # through the `| tee`.  The default `bash -e` has no pipefail, which
+        # would mask the failure and let the gate pass without measuring.
+        shell: bash
         run: |
           cd ../trustsight-harness
           uv run python -m harness regression --jobs auto | tee regression-summary.txt
@@ -83,30 +89,49 @@ jobs:
           import json
 
           report = json.load(open("../trustsight-harness/regression/report.json"))
-          baseline = int(open("baseline-open.txt").read())
+          baseline = json.load(open("baseline-report.json"))
           print("### Harness regression\n")
-          print("| field | value |")
-          print("|---|---|")
-          print(f"| committed baseline open | {baseline} |")
+          print("| field | baseline | this run |")
+          print("|---|---|---|")
           for field in ("total", "closed", "open", "degraded", "unreplayable"):
-              print(f"| {field} | {report[field]} |")
-          if report["open"] > baseline:
-              print(f"\n**Regression: {report['open'] - baseline} more open than the "
-                    "committed baseline.** The report is attached.")
-          elif report["open"] < baseline:
-              print(f"\n**Improvement: {baseline - report['open']} fewer open than "
-                    "the committed baseline.**")
+              print(f"| {field} | {baseline[field]} | {report[field]} |")
+          regressed = [f for f in ("open", "degraded", "unreplayable")
+                       if report[f] > baseline[f]]
+          if regressed:
+              print("\n**Regression: " + ", ".join(
+                  f"{f} {baseline[f]} -> {report[f]}" for f in regressed) + ".**")
           else:
-              print("\nNo change against the committed baseline.")
+              print("\nNo regression against the committed baseline.")
           PY
 
       - name: Collect the report
+        if: always()
         run: |
           mkdir -p harness-report
           cp ../trustsight-harness/regression/report.json harness-report/
           cp ../trustsight-harness/regression-summary.txt harness-report/
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
         with:
           name: harness-regression-report
           path: harness-report/
+
+      - name: Fail on regression
+        # The harness exit code only says the replay happened; this is where a
+        # widened regression surface becomes a failed check.
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("../trustsight-harness/regression/report.json"))
+          baseline = json.load(open("baseline-report.json"))
+          regressed = [f for f in ("open", "degraded", "unreplayable")
+                       if report[f] > baseline[f]]
+          if regressed:
+              details = ", ".join(f"{f} {baseline[f]} -> {report[f]}" for f in regressed)
+              print(f"::error::harness regression against the committed baseline: {details}")
+              sys.exit(1)
+          print("no regression against the committed baseline")
+          PY

@@ -27,6 +27,10 @@ CRITICAL_PATHS = frozenset({
     "docs/security/vulnerability-reporting.md",
     ".github/workflows/security.yml",
     ".github/workflows/calibration.yml",
+    # The adversarial replay is a required check now; removing its judging
+    # step or restoring the path filters would neutralise it, so it is signed
+    # like the other gates.
+    ".github/workflows/harness-regression.yml",
     # The signature policy and the release pipeline are critical too.  The
     # signature workflow was outside its own list, so it could be weakened
     # without a signature; the release workflows decide what users receive.

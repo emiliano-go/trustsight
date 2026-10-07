@@ -15,6 +15,7 @@
 /docs/security/vulnerability-reporting.md @emiliano-go
 /.github/workflows/security.yml @emiliano-go
 /.github/workflows/calibration.yml @emiliano-go
+/.github/workflows/harness-regression.yml @emiliano-go
 /.github/workflows/verify-commit-sigs.yml @emiliano-go
 /.github/workflows/publishing.yml @emiliano-go
 /.github/workflows/release-pkgbuild.yml @emiliano-go

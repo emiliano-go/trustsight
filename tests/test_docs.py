@@ -370,7 +370,15 @@ def test_docs_use_standard_punctuation():
     misquote the thing it documents.
     """
     offenders = []
-    for path in sorted((ROOT / "docs").rglob("*.md")):
+    pages = sorted((ROOT / "docs").rglob("*.md"))
+    # The root policy pages are prose too, and SECURITY.md drifted with an em
+    # dash while the check only walked docs/.
+    pages += [
+        ROOT / name
+        for name in ("SECURITY.md", "CONTRIBUTING.md", "README.md")
+        if (ROOT / name).exists()
+    ]
+    for path in pages:
         in_code = False
         for lineno, line in enumerate(path.read_text().splitlines(), start=1):
             if line.lstrip().startswith("```"):

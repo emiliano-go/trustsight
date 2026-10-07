@@ -59,11 +59,15 @@ Tokenizer and regex changes require hostile-input tests. Run the deterministic t
 
 ## Signed Commits
 
-For pull requests to `master` that change one of the exact paths in
-`scripts/critical_paths.py`, every commit in the pull request range must have a
-verified GPG signature. The `verify-commit-sigs` workflow enforces this policy.
+The `master-protection` branch ruleset requires a verified GPG signature on
+every commit that reaches `master`. That is the broad requirement: any key
+GitHub can verify satisfies it.
 
-For changes that do not touch critical paths, such as documentation, tests, fixtures, or cosmetic fixes, signing is encouraged but not required.
+The `verify-commit-sigs` workflow is stricter and narrower. For a pull request
+that changes one of the exact paths in `scripts/critical_paths.py`, every commit
+in the range must carry a signature from the **pinned** commit key, not merely a
+verified one. For changes that touch no critical path, the ruleset still wants a
+signature, but the pinned key is not required.
 
 ## Non-guarantees to respect
 

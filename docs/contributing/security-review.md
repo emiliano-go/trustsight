@@ -127,18 +127,24 @@ is not a rule, and `no interpreter or shell execution` plus
 
 ## The adversarial replay in CI
 
-A change can close one bypass and reopen another, so every push that touches
-`src/` or `pyproject.toml` runs the external harness against this checkout
-(`.github/workflows/harness-regression.yml`). The harness declares the core
-version it measures, and the job fails on a mismatch rather than measuring the
-wrong build. It clones `trustsight-harness` at a **pinned commit** - external
-code runs inside the job that certifies the build, so it is pinned the way a
-third-party action is - and syncs it with `uv sync --locked` against the
-harness's own committed lock, so no resolver runs.
+A change can close one bypass and reopen another, so the external harness runs
+against this checkout on every push and pull request
+(`.github/workflows/harness-regression.yml`), and it is a required check. The
+harness declares the core version it measures, and the job fails on a mismatch
+rather than measuring the wrong build. It clones `trustsight-harness` at a
+**pinned commit** - external code runs inside the job that certifies the
+build, so it is pinned the way a third-party action is - and syncs it with
+`uv sync --locked` against the harness's own committed lock, so no resolver
+runs.
 
-The run **reports, it does not judge**: an open count above the harness's
-committed baseline lands in the step summary and the uploaded artifact, not in
-a failed check, because the harness's contract is that an exit code says "the
-run happened", never "the numbers are good". Only a version mismatch fails the
-job, and that is a configuration fault (the harness pin and campaigns have not
-been moved to this release yet).
+The harness command's own exit code says "the run happened", never "the
+numbers are good" (its contract is a measurement, not a verdict), so the job
+reads the report and judges it: `open`, `degraded` or `unreplayable` above the
+harness's committed baseline fails the check, and the report is attached on
+every run. A version mismatch fails too: a check that passed because it could
+not measure would read as the guarantee it is not, which is the failure mode
+this page exists to catch.
+
+The ruleset that requires the check carries a repository-admin bypass, so the
+maintainer can still push directly. The gate binds pull requests and
+contributors; it does not stop the maintainer from overriding it.

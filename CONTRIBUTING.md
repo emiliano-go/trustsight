@@ -96,6 +96,7 @@ signature workflow:
 | `docs/security.md` | Security claims and invariants |
 | `.github/workflows/security.yml` | CI checks for security invariants |
 | `.github/workflows/calibration.yml` | CI checks for calibration regressions |
+| `.github/workflows/harness-regression.yml` | The adversarial-harness regression gate |
 | `.github/workflows/verify-commit-sigs.yml` | The signature policy itself |
 | `.github/workflows/publishing.yml` | Builds and publishes the release artifacts |
 | `.github/workflows/release-pkgbuild.yml` | Verifies a published release |

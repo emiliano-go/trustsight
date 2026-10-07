@@ -100,8 +100,11 @@ One-time setup, or changes rarely. The guide below assumes all of it holds.
 - **GitHub repository settings.** Secret scanning with push protection,
   Dependabot alerts and security updates, CodeQL, private vulnerability
   reporting, actions pinned to a full-length commit SHA, and a branch ruleset
-  on the default branch requiring the `verify`, `gates`, `build`, `lint` and
-  `test` checks plus signed commits.
+  on the default branch requiring the `verify`, `gates`, `build`, `lint`,
+  `fixture-determinism`, `test (3.11)` to `test (3.14)` and `replay` checks
+  plus signed commits. The ruleset carries a repository-admin bypass so the
+  maintainer's direct signed pushes keep working; it binds pull requests and
+  contributors, and the maintainer can override any rule.
 - **PyPI trusted publishing.** The `pypi` environment is configured for
   `publishing.yml`; no token is stored.
 - **AUR access.** `~/.ssh/config` maps `aur.archlinux.org` to `~/.ssh/aur`,
@@ -150,9 +153,14 @@ package in
 
 After the software release, and only if the seed or corpus changed, publish a
 `baseline-<date>` channel release ([publishing baselines](publishing-baselines.md)).
-When the adversarial harness moves to a new release, bump the commit pinned in
-`harness-regression.yml`; its job fails on a core-version mismatch rather than
-measuring the wrong build.
+
+The harness pin moves in lockstep with the version. `harness-regression.yml` is
+a required check and fails when the harness's declared core version is not the
+checkout's, so a version bump means updating the harness repository first
+(`defaults/environment.yml` and `.github/trustsight-commit`) and bumping the
+pinned commit in `harness-regression.yml` to that harness commit. Until then
+the check fails closed rather than reporting a pass for a version it cannot
+measure.
 
 Nothing is repaired afterwards. There is no post-tag step that can fail and
 leave the branch inconsistent, which was the whole defect.

@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,4 @@
+ build() {
++  for f in a b c; do make "$f"; done
+   make
+ }

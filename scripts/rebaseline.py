@@ -106,7 +106,7 @@ def main():
     # install time and then drifts, so measuring against it makes the numbers
     # unreproducible.  This is the same isolation the calibration gates use,
     # so the rates this records are the rates they enforce.
-    from calibration_gates import shipped_config
+    from calibration_gates import X_RULES, shipped_config
 
     strata_lookup = {}
     chain_index: dict[str, list[str]] = {}
@@ -175,6 +175,13 @@ def main():
 
     baseline["replay_order"] = args.order
     baseline["warm_novelty"] = args.warm
+    total_diffs = sum(data["diffs"] for data in per_stratum.values())
+    baseline["x_rates"] = {
+        rid: (sum(data["rules"].get(rid, 0)
+                  for data in per_stratum.values()) / total_diffs
+              if total_diffs else 0.0)
+        for rid in X_RULES
+    }
     if args.order == "chain" and fallbacks:
         print(f"  note: {fallbacks} package(s) had an unusable commit chain "
               f"and fell back to filename order", file=sys.stderr)

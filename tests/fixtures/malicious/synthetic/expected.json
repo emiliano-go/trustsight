@@ -1133,6 +1133,16 @@
       "S001"
     ]
   },
+  "S001-lookalike.diff": {
+    "must_not_fire": [
+      "S001"
+    ]
+  },
+  "S002-lookalike.diff": {
+    "must_not_fire": [
+      "S002"
+    ]
+  },
   "S002-rm-rf-root.diff": {
     "min_score": 30,
     "must_fire": [
@@ -1145,6 +1155,38 @@
       "S003"
     ]
   },
+  "S003-lookalike.diff": {
+    "must_not_fire": [
+      "S003"
+    ]
+  },
+  "S004-lookalike.diff": {
+    "must_not_fire": [
+      "S004"
+    ]
+  },
+  "S004-shred-home.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "S004"
+    ]
+  },
+  "S005-chmod-system.diff": {
+    "min_score": 25,
+    "must_fire": [
+      "S005"
+    ]
+  },
+  "S005-lookalike.diff": {
+    "must_not_fire": [
+      "S005"
+    ]
+  },
+  "S006-lookalike.diff": {
+    "must_not_fire": [
+      "S006"
+    ]
+  },
   "S006-service-disruption.diff": {
     "min_score": 25,
     "must_fire": [
@@ -1155,6 +1197,22 @@
     "min_score": 25,
     "must_fire": [
       "S007"
+    ]
+  },
+  "S007-lookalike.diff": {
+    "must_not_fire": [
+      "S007"
+    ]
+  },
+  "S008-history-destruction.diff": {
+    "min_score": 15,
+    "must_fire": [
+      "S008"
+    ]
+  },
+  "S008-lookalike.diff": {
+    "must_not_fire": [
+      "S008"
     ]
   },
   "X001-hex-decoded-to-shell.diff": {

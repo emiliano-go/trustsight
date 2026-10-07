@@ -142,8 +142,8 @@ The set is `DECLARED_DEFAULT` in `src/trustsight/scoring.py`.
 one that tracks a branch produced no line at all, and "nothing" reads exactly
 like "pinned" to anyone scanning the group. It is deliberately not a coverage
 gap: the statement is true of every VCS package by design, and raising a gap
-would put about a fifth of the corpus into Inconclusive (653 of 3,246 diffs, as
-measured on the original locked corpus), which buys alert fatigue rather than
+would put about a fifth of the original locked corpus into Inconclusive (653
+of its 3,246 diffs, as measured then), which buys alert fatigue rather than
 information. The band is
 left alone and the reader is told what the recipe declares. The
 rest render under `--verbose`. The P namespace contrasts with H033/H049/H059:

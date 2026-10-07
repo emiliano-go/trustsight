@@ -1,0 +1,6 @@
+--- a/pkg.install
++++ b/pkg.install
+@@ -1,3 +1,4 @@
+ post_install() {
++  systemctl stop input-remapper
+ }

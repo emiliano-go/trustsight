@@ -95,9 +95,30 @@ def test_known_gaps_are_still_gaps(results):
     _assert(gates.gate_known_gaps_unchanged(malicious))
 
 
+def test_s_series_has_a_payload_and_a_lookalike_per_rule(results):
+    """Every sabotage rule fires on its payload and sleeps on its near-miss."""
+    benign, malicious = results
+    if not malicious:
+        pytest.skip("malicious fixtures absent")
+    _assert(gates.gate_s_series_fixture_pairs(benign, malicious))
+
+
+@pytest.mark.skipif(
+    SAMPLE != 1, reason="X-rate stability is only meaningful on the whole corpus"
+)
+def test_x_series_rates_match_the_baseline(results):
+    """A composition rate that shrinks silently fails until adjudicated."""
+    _assert(gates.gate_x_series_rate_stability(results[0]))
+
+
+def test_h098_cluster_stays_below_its_members(results):
+    """The weight-bearing cluster never fires without the members it names."""
+    _assert(gates.gate_cluster_rate_below_members(results[0]))
+
+
 def test_the_runner_reports_a_gate_per_plan_line(results):
     """The script's own contract: every gate is named and exits nonzero."""
     benign, malicious = results
     all_gates = gates._evaluate(benign, malicious)
-    assert len(all_gates) == 10
+    assert len(all_gates) == 12
     assert all(g.name for g in all_gates)

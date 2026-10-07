@@ -163,7 +163,7 @@ why the canonical seed is always the one a fresh install fetches, and why
 the CI fallback exists only to keep a release shippable, never as a
 substitute for the maintainer-built seed.
 `trustsight seed fetch --tag baseline-<date>` pins the exact channel release
-instead of following `latest`.
+instead of the discovered one (the seed is never fetched from a `v*` release).
 
 ## Auditing the shipped seed
 

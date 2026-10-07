@@ -38,7 +38,12 @@ def _the_channel_is_the_subject(monkeypatch):
     # Reset the module-level cache so each test starts fresh.
     release._BASELINE_TAG_RESOLVED = False
     release._BASELINE_TAG_CACHE = None
+    # Nothing here may reach the API, and the configured fallback is pinned to
+    # a fixed tag so the tests never read (or create) the operator's config.
     monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(
+        release, "_configured_baseline_tag", lambda: "baseline-2026-08-10"
+    )
 
 # ---------------------------------------------------------------------------
 # URL building
@@ -48,7 +53,7 @@ def _the_channel_is_the_subject(monkeypatch):
 def test_asset_url_uses_the_declared_release_host():
     url = release.asset_url("baseline-seed.tar.gz")
     assert url.startswith("https://github.com/emiliano-go/trustsight/releases/")
-    assert url.endswith("/latest/download/baseline-seed.tar.gz")
+    assert url.endswith("/baseline-seed.tar.gz")
 
 
 def test_asset_url_pins_a_tag_when_given():
@@ -65,10 +70,28 @@ def test_asset_url_discovers_baseline_tag_for_seed(monkeypatch):
     )
 
 
-def test_asset_url_falls_back_to_latest_when_no_baseline_found(monkeypatch):
+def test_asset_url_falls_back_to_the_configured_tag(monkeypatch):
+    """Discovery failure uses the configured tag, never ``latest``.
+
+    The seed lives only on ``baseline-*`` releases, so ``latest`` (a
+    ``v*`` release) can never serve it; the old fallback built a URL that
+    404s the moment the unauthenticated releases API is rate-limited.
+    """
     monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(
+        release, "_configured_baseline_tag", lambda: "baseline-2026-09-24"
+    )
     url = release.asset_url("baseline-seed.tar.gz")
-    assert url.endswith("/latest/download/baseline-seed.tar.gz")
+    assert url.endswith("/download/baseline-2026-09-24/baseline-seed.tar.gz")
+    assert "/latest/" not in url
+
+
+def test_asset_url_fails_closed_without_any_tag(monkeypatch):
+    """No discovery and no fallback is a refusal, not a ``latest`` guess."""
+    monkeypatch.setattr(release, "_resolve_baseline_tag", lambda: None)
+    monkeypatch.setattr(release, "_configured_baseline_tag", lambda: None)
+    with pytest.raises(release.ReleaseFetchError):
+        release.asset_url("baseline-seed.tar.gz")
 
 
 def test_asset_url_ignores_baseline_discovery_for_non_baseline_assets(monkeypatch):

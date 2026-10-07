@@ -1,6 +1,7 @@
 import tomllib
 
 from trustsight.config import (
+    configured_baseline_tag,
     ensure_default_configs,
     load_config,
     load_domains,
@@ -30,6 +31,7 @@ def test_load_config_creates_default(tmp_path, monkeypatch):
     assert config["novelty_weights"]["maintainer_first_in_package"] == 15
     assert config["review"]["profile"] == "default"
     assert config["review"]["profiles"] == {"default": 20, "quiet": 40, "strict": 10}
+    assert config["seed"]["baseline_tag"].startswith("baseline-")
 
 
 def test_review_profiles_are_validated_and_change_the_fingerprint(monkeypatch):
@@ -82,6 +84,29 @@ def test_rule_suppression_changes_the_fingerprint(monkeypatch):
     first = config_module.config_fingerprint()
     rule["exclude_if_matches"] = ["R059"]
     assert config_module.config_fingerprint() != first
+
+
+def test_configured_baseline_tag_reads_without_creating_a_config(tmp_path, monkeypatch):
+    """The release channel's fallback tag, read-only.
+
+    ``asset_url`` runs during a download and must not create operator
+    state, so an absent file returns the shipped default rather than
+    writing one; an explicit empty value turns the fallback off.
+    """
+    from trustsight.config import DEFAULT_BASELINE_TAG
+
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+
+    assert configured_baseline_tag() == DEFAULT_BASELINE_TAG
+    assert not cfg_dir.exists()  # the lookup created nothing
+
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.toml").write_text('[seed]\nbaseline_tag = "baseline-2026-09-24"\n')
+    assert configured_baseline_tag() == "baseline-2026-09-24"
+
+    (cfg_dir / "config.toml").write_text('[seed]\nbaseline_tag = ""\n')
+    assert configured_baseline_tag() is None
 
 
 def test_load_config_bucket_weights(tmp_path, monkeypatch):

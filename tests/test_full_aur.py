@@ -568,10 +568,23 @@ def test_since_skips_empty_days_inside_the_cycle(monkeypatch):
 def test_since_joins_the_live_stream_when_caught_up(monkeypatch):
     """When the replay reaches today, the snapshot advances and the cursor
     clears, so the next cycle is an ordinary delta again."""
+    from types import SimpleNamespace
+
     import time as _time
     import trustsight.full_aur.pipeline as pipeline
 
     now = int(_time.time())
+    # Freeze the cycle clock.  The caught-up decision compares the drained
+    # day's end against the cycle's start reading; pinning both to ``now``
+    # keeps the exact-equality assertion from flaking when a wall-clock
+    # second boundary falls between the test's read and the pipeline's.
+    monkeypatch.setattr(
+        pipeline,
+        "time",
+        SimpleNamespace(
+            time=lambda: now, strftime=_time.strftime, gmtime=_time.gmtime
+        ),
+    )
     today = now - 100
     saved: list = []
     _stub_since_cycle(monkeypatch, pipeline, {"fresh-pkg": (today, 5)})

@@ -53,8 +53,11 @@ named with the `baseline-` prefix, and **a channel release** (tag
 `baseline-<date>`) ships the whole family. Channel releases are kept apart
 from software releases: a `vX.Y.Z` tag carries the program and its notes,
 never baseline assets, and the tool discovers the newest asset-bearing
-`baseline-*` release through the GitHub API, with `latest` only as a fallback;
-the [publishing guide](../contributing/publishing-baselines.md) documents the
+`baseline-*` release through the GitHub API, falling back to the configured
+[`[seed] baseline_tag`](configuration.md#seed) when the API is unreachable (and
+refusing when that is empty). `latest` is never the fallback: it is a `v*`
+release and carries no baseline assets. The
+[publishing guide](../contributing/publishing-baselines.md) documents the
 cadence and `seed fetch --tag` for pinning.
 
 | Asset | What it is | Consumed by |

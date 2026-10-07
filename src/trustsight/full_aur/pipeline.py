@@ -723,9 +723,11 @@ def _run_baseline_build(
     if result.backfilling:
         # The day is drained.  Advance one day of AUR time; when the next day
         # reaches into the future, the replay has caught up and the snapshot
-        # joins the live delta path.  The resume set belongs to the day just
-        # finished, so it is cleared either way.
-        now = int(time.time())
+        # joins the live delta path.  ``now`` is the reading taken when this
+        # cycle began, not a second reading here: re-reading the clock let a
+        # second boundary falling mid-cycle decide the outcome, so a backfill
+        # that had genuinely caught up could advance one more day.  The resume
+        # set belongs to the day just finished, so it is cleared either way.
         clear_resume_state()
         if backfill_day_end >= now:
             save_metadata(new_meta, _meta_snapshot_path())

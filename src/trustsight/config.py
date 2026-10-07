@@ -726,6 +726,14 @@ watch_min_interval = 60
 # something learned from a real analysis.
 auto_import = true
 
+# Fallback release tag for the seed when the GitHub releases API cannot
+# be reached (offline or rate-limited).  The seed lives only on
+# baseline-* releases, so "latest" - a version tag that carries no
+# baseline assets - can never serve it; without this the fetch 404s the
+# moment the unauthenticated API quota is spent.  Bumped in the same
+# release that publishes a new baseline.
+baseline_tag = "baseline-2026-09-24"
+
 [baselines.ioc]
 # IOC Federation baselines (v0.12.0).  ``enabled`` gates the match stage
 # during analysis; ``sources`` is a list of baseline source names to
@@ -859,6 +867,14 @@ DEFAULT_NOVELTY_WEIGHTS = tomllib.loads(DEFAULT_CONFIG)["novelty_weights"]
 #: the shipped value rather than an empty one.
 DEFAULT_SOURCE_DIVERGENCE_ALLOW = (
     tomllib.loads(DEFAULT_CONFIG).get("source_host_divergence", {}).get("allow", [])
+)
+
+#: The fallback baseline tag that ships, parsed from the config above.  The
+#: release channel reads it (without creating a config file) when the
+#: releases API cannot be reached, so ``latest`` never names the endpoint
+#: for a ``baseline-*`` asset.
+DEFAULT_BASELINE_TAG = (
+    tomllib.loads(DEFAULT_CONFIG).get("seed", {}).get("baseline_tag") or None
 )
 
 DEFAULT_RULES = """\
@@ -2213,6 +2229,29 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
 def load_config() -> dict:
     """Load the user config.toml"""
     return load_toml("config.toml")
+
+
+def configured_baseline_tag() -> str | None:
+    """The fallback baseline tag for the release channel, or ``None``.
+
+    Read without creating a config file: the release channel builds a URL
+    during a download and must not materialise operator state as a side
+    effect of a lookup.  An unreadable or absent file falls back to the
+    shipped default; an explicit empty value disables the fallback.
+    """
+    path = CONFIG_DIR / "config.toml"
+    try:
+        with open(path, "rb") as f:
+            section = tomllib.load(f).get("seed") or {}
+    except (OSError, tomllib.TOMLDecodeError):
+        section = {}
+    # An explicit key wins, including an empty one: setting ``baseline_tag =
+    # ""`` turns the fallback off and makes a discovery failure fail closed.
+    if "baseline_tag" in section:
+        value = str(section["baseline_tag"] or "").strip()
+    else:
+        value = str(DEFAULT_BASELINE_TAG or "").strip()
+    return value or None
 
 
 _shipped_rules_cache: list[dict] | None = None

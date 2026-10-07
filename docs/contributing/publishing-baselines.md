@@ -42,10 +42,14 @@ and carry the program and its release notes, never baseline assets. Channel
 releases are tagged `baseline-<date>` (for example `baseline-2026-08-10`)
 and carry the `baseline-*` assets. A channel release is published **after**
 its software release. The tool discovers the newest asset-bearing
-`baseline-*` release through the GitHub API, with `latest` only as a fallback.
-The intended cadence: publish a software
-release, then publish a fresh `baseline-<date>` right behind it whenever the
-baselines need refreshing.
+`baseline-*` release through the GitHub API, falling back to the configured
+[`[seed] baseline_tag`](../reference/configuration.md#seed) when the API is
+unreachable (and refusing when that is empty); `latest` is never used, because
+a `v*` release carries no baseline assets. **Bump `[seed] baseline_tag` in the
+same commit that publishes a new channel release**, so an offline or
+rate-limited client still reaches the current seed. The intended cadence:
+publish a software release, then publish a fresh `baseline-<date>` right behind
+it whenever the baselines need refreshing.
 
 **Pinning.** The default channel follows the newest asset-bearing
 `baseline-*` release. `trustsight seed fetch --tag baseline-2026-08-10`

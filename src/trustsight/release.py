@@ -60,6 +60,10 @@ _MAX_RELEASE_BYTES = 512 * 1024 * 1024
 #: The pinned distribution key ships inside the package.
 PINNED_PUBKEY_PATH = Path(__file__).parent / "full_aur" / "baseline_pubkey.pem"
 
+#: A descriptive User-Agent for release discovery.  GitHub's API asks for
+#: one, and it keeps the request identifiable in rate-limit accounting.
+_USER_AGENT = "trustsight-release (+https://docs.trustsight.org)"
+
 
 class ReleaseError(Exception):
     """Base class for release-channel failures."""
@@ -116,7 +120,11 @@ def _resolve_baseline_tag() -> str | None:
     try:
         url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
         req = urllib.request.Request(
-            url, headers={"Accept": "application/vnd.github+json"}
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": _USER_AGENT,
+            },
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
@@ -142,14 +150,41 @@ def asset_url(asset_name: str, tag: str | None = None) -> str:
     newest tag.  For ``baseline-*`` assets, the most recent ``baseline-*``
     release is discovered automatically.  With *tag* the download is pinned
     to that exact release.
+
+    A ``baseline-*`` asset never falls back to ``latest``: the seed and the
+    other baselines live only on ``baseline-*`` releases, so a version tag
+    cannot carry them.  When discovery fails, the configured fallback tag
+    (:func:`_configured_baseline_tag`) is used; when there is none, the
+    function fails closed rather than building a URL that cannot resolve.
     """
     if tag:
         return f"{RELEASE_BASE_URL}/download/{tag}/{asset_name}"
     if asset_name.startswith("baseline-"):
-        baseline_tag = _resolve_baseline_tag()
+        baseline_tag = _resolve_baseline_tag() or _configured_baseline_tag()
         if baseline_tag:
             return f"{RELEASE_BASE_URL}/download/{baseline_tag}/{asset_name}"
+        raise ReleaseFetchError(
+            f"no {asset_name} is reachable: the release API is unavailable "
+            "and no fallback baseline tag is configured; pass --tag "
+            "(e.g. --tag baseline-2026-09-24) or set [seed] baseline_tag"
+        )
     return f"{RELEASE_BASE_URL}/latest/download/{asset_name}"
+
+
+def _configured_baseline_tag() -> str | None:
+    """The shipped or operator-configured fallback baseline tag, or None.
+
+    Read without writing any config file, because this runs while a URL is
+    being built.  Returns ``None`` when the operator has turned the
+    fallback off.
+    """
+    from .config import configured_baseline_tag
+
+    try:
+        return configured_baseline_tag()
+    except Exception:
+        log.debug("could not read the configured baseline tag", exc_info=True)
+        return None
 
 
 def download_asset(

@@ -185,6 +185,7 @@ This table was named `[experimental_rules]` before the rename. The old name is s
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `auto_import` | bool | `true` | On an eligible first CLI `review` or `inspect`, optionally import the novelty seed when the database has neither a seed nor analysis history. The seed lives on the release channel as `baseline-seed.tar.gz`; the fetch verifies it and skips silently when offline or verification fails. Set this to `false` to use structural detection without seeded context. Other commands do not fetch it automatically. See [`trustsight seed-db`](cli.md#trustsight-seed-db). |
+| `baseline_tag` | string | `baseline-2026-09-24` | Fallback release tag for the seed when the GitHub releases API cannot be reached (offline or rate-limited). The seed lives only on `baseline-*` releases, so the default is never `latest`. Bumped in the release that publishes a new baseline; set it to `""` to disable the fallback so an unreachable API refuses instead. |
 
 ### `[baselines]`
 

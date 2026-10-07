@@ -525,7 +525,7 @@ trustsight seed fetch [--tag TAG] [--key PATH]
 
 | Flag | Description |
 |------|-------------|
-| `--tag` | Fetch a specific release tag instead of the latest release. |
+| `--tag` | Fetch a specific release tag instead of the latest release. Baseline assets default to the newest `baseline-*` release, or the configured [`[seed] baseline_tag`](configuration.md#seed) when discovery fails. |
 | `--key` | Verify against this ed25519 public key file instead of the pinned key shipped in the package. |
 | `--from-backup` | Migrate from the `maintainers_deprecated_backup` table left behind after the automatic v0.12.0 migration. |
 | `--json` | Output JSON. |

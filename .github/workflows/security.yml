@@ -9,6 +9,9 @@ name: Security Gates
 # describe the same set.
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   gates:
     runs-on: ubuntu-latest

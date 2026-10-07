@@ -70,7 +70,7 @@ git log --show-signature -1
 
 ## Discuss First
 
-Open a GitHub Discussion before spending significant time if your change affects any of the following:
+Open an issue before spending significant time if your change affects any of the following:
 
 - New rules or severity changes
 - Tokenizer or resolver behavior
@@ -130,12 +130,12 @@ without a docstring, an annotation, or its `:ivar:` entry.
 
 ## Getting Help
 
-- Architecture questions: open a GitHub Discussion
+- Architecture questions: open an issue
 - Rule design: read the [writing-a-rule](docs/contributing/writing-a-rule.md) and security-review guides
 - Corpus re-baselining: follow the re-baselining guide under `docs/contributing/`
-- Security disclosures: use `docs/security.md`
+- Security disclosures: follow [SECURITY.md](SECURITY.md)
 
-GitHub Issues and Discussions are preferred for technical work.
+GitHub Issues are preferred for technical work.
 
 ## License
 

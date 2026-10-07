@@ -7,6 +7,9 @@ name: Calibration Gates
 # month later in the drift report.
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 # The tag of the channel release carrying baseline-benign-corpus.tar.gz.
 # It moves in the same commit as corpus.lock: the asset IS the corpus the
 # lock names, packed by scripts/pack_calibration_corpus.py.

@@ -10,7 +10,7 @@ authors = [
 license = "MIT"
 keywords = ["aur", "arch-linux", "security", "vetting", "pkgbuild"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Topic :: Security",
@@ -55,7 +55,11 @@ docs = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/emiliano-go/trustsight"
+Homepage = "https://github.com/emiliano-go/trustsight"
+Documentation = "https://docs.trustsight.org/"
+Repository = "https://github.com/emiliano-go/trustsight"
+Issues = "https://github.com/emiliano-go/trustsight/issues"
+Changelog = "https://docs.trustsight.org/changelog/"
 
 [project.scripts]
 trustsight = "trustsight.cli:main"

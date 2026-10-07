@@ -15,8 +15,17 @@ name: Harness regression
 # A version mismatch is a hard failure too: the harness clone cannot measure
 # this checkout at all, which is a configuration fault, and a check that
 # passed because it could not measure would read as the guarantee it is not.
+#
+# Tag pushes are excluded: a release tag necessarily predates the harness
+# lockstep commit (the workflow file is inside the tarball, so the tag cannot
+# carry the SHA bump without moving the checksum), and the tag-ref run would
+# fail closed on the version pin every release.  Releases are verified by
+# `publishing.yml` and `release-pkgbuild.yml`, not by this job.
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
 
 permissions:
   contents: read

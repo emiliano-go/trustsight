@@ -2,6 +2,7 @@ import importlib.util
 import logging
 import os
 import sys
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from ..coverage import GAP_REASONS
@@ -101,6 +102,51 @@ def use_rich_progress() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
     return _isatty(sys.stderr)
+
+
+@contextmanager
+def download_progress(description: str, *, enabled: bool = True):
+    """Yield an ``on_progress(pos, total)`` callback drawing a download bar.
+
+    The bar is written to stderr and starts on the first callback, so a
+    download that refuses before its first byte draws nothing.  When
+    *enabled* is false the yielded callback is a no-op, keeping ``--json``,
+    pipes and ``NO_COLOR`` terminals exactly as they were.
+    """
+    if not enabled:
+        yield lambda pos, total: None
+        return
+    from rich.progress import (
+        BarColumn,
+        DownloadColumn,
+        Progress,
+        TextColumn,
+        TimeElapsedColumn,
+        TransferSpeedColumn,
+    )
+
+    progress = Progress(
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        DownloadColumn(),
+        TransferSpeedColumn(),
+        TimeElapsedColumn(),
+        console=err_console(),
+        transient=False,
+    )
+    state: dict = {"task": None}
+
+    def on_progress(pos: int, total: int | None) -> None:
+        if state["task"] is None:
+            progress.start()
+            state["task"] = progress.add_task(description, total=None)
+        progress.update(state["task"], total=total, completed=pos, refresh=True)
+
+    try:
+        yield on_progress
+    finally:
+        if state["task"] is not None:
+            progress.stop()
 
 
 def band_colour(label: str) -> str:

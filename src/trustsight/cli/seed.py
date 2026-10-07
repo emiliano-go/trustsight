@@ -22,7 +22,13 @@ from ..db import (
     init_db,
     seed_observation_count,
 )
-from .display import _print_colored, console, use_rich
+from .display import (
+    _print_colored,
+    console,
+    download_progress,
+    use_rich,
+    use_rich_progress,
+)
 
 seed_app = typer.Typer(
     help="Inspect and manage the hashed maintainer seed",
@@ -122,11 +128,16 @@ def seed_fetch(
         raise typer.Exit(code=2)
 
     try:
-        data = release.fetch_verified_asset(
-            "baseline-seed.tar.gz",
-            tag=tag,
-            pubkey_path=Path(key) if key else None,
-        )
+        with download_progress(
+            "Downloading baseline-seed.tar.gz...",
+            enabled=use_rich_progress() and not json_output,
+        ) as on_download:
+            data = release.fetch_verified_asset(
+                "baseline-seed.tar.gz",
+                tag=tag,
+                pubkey_path=Path(key) if key else None,
+                on_progress=on_download,
+            )
     except release.ReleaseError as exc:
         msg = f"Seed fetch refused: {exc}"
         if json_output:

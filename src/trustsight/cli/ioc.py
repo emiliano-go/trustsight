@@ -15,7 +15,13 @@ from ..safe_text import clean
 
 from ..config import ensure_default_configs, load_config
 from ..db import init_db
-from .display import _print_colored, console, use_rich
+from .display import (
+    _print_colored,
+    console,
+    download_progress,
+    use_rich,
+    use_rich_progress,
+)
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +171,7 @@ def ioc_import(
 _ASSET_PREFIX_RE = re.compile(r"^[a-z0-9][a-z0-9.-]*$")
 
 
-def _update_feed(feed: dict) -> dict:
+def _update_feed(feed: dict, show_progress: bool = False) -> dict:
     """Update one configured feed from the release channel, verifiably.
 
     A feed whose ``url`` names the TrustSight release channel is fetched as
@@ -175,6 +181,9 @@ def _update_feed(feed: dict) -> dict:
     signature inside the manifest is checked by ``import_baseline``.  Any
     other URL is refused: there is no scheme in which an unverified remote
     baseline is imported.
+
+    *show_progress* draws one download bar per asset on stderr; the default
+    keeps direct calls (and tests) silent.
     """
     from ..ioc_baseline import (
         InvalidSignatureError,
@@ -207,8 +216,18 @@ def _update_feed(feed: dict) -> dict:
     iocs_asset = f"baseline-ioc-{prefix}-iocs.jsonl"
     tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-ioc-fetch-"))
     try:
-        (tmp_dir / "manifest.json").write_bytes(release.fetch_verified_asset(manifest_asset))
-        (tmp_dir / "iocs.jsonl").write_bytes(release.fetch_verified_asset(iocs_asset))
+        with download_progress(
+            f"Downloading {manifest_asset}...", enabled=show_progress
+        ) as on_download:
+            (tmp_dir / "manifest.json").write_bytes(
+                release.fetch_verified_asset(manifest_asset, on_progress=on_download)
+            )
+        with download_progress(
+            f"Downloading {iocs_asset}...", enabled=show_progress
+        ) as on_download:
+            (tmp_dir / "iocs.jsonl").write_bytes(
+                release.fetch_verified_asset(iocs_asset, on_progress=on_download)
+            )
         # The bytes were already verified against the pinned key by
         # `fetch_verified_asset`; the manifest's own key is accepted here
         # only because that check already happened on the way in.
@@ -261,7 +280,11 @@ def ioc_update(
             else:
                 _print_colored(msg, "yellow")
             raise typer.Exit(code=2)
-        results = [_update_feed(feed) for feed in feeds if feed.get("enabled", True)]
+        results = [
+            _update_feed(feed, show_progress=use_rich_progress() and not json_output)
+            for feed in feeds
+            if feed.get("enabled", True)
+        ]
         if not results:
             msg = "All configured feeds are disabled. Enable one in config.toml or pass --path."
             if json_output:

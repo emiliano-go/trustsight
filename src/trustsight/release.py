@@ -23,6 +23,7 @@ import json
 import logging
 import os
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 from .full_aur.export import _load_trusted_pubkey, verify_artifact
@@ -187,15 +188,61 @@ def _configured_baseline_tag() -> str | None:
         return None
 
 
+class _ProgressReader:
+    """A response wrapper that reports download progress.
+
+    ``read_capped_with_deadline`` is handed this instead of the response
+    when a callback is present.  It forwards ``read`` untouched and calls
+    ``on_progress(bytes_read, total)`` after each chunk; the byte cap and
+    the deadline stay in the bounded reader, so progress reporting cannot
+    loosen either bound.
+    """
+
+    def __init__(self, fh, on_progress: Callable[[int, int | None], None],
+                 total: int | None):
+        self._fh = fh
+        self._on_progress = on_progress
+        self._total = total
+        self._pos = 0
+
+    def read(self, n: int = -1) -> bytes:
+        chunk = self._fh.read(n)
+        if chunk:
+            self._pos += len(chunk)
+            self._on_progress(self._pos, self._total)
+        return chunk
+
+
+def _declared_length(resp, max_bytes: int) -> int | None:
+    """The response's ``Content-Length`` for display, or ``None``.
+
+    The value is remote-declared and drives nothing: it is the denominator
+    of a progress bar, never a bound.  An absent, malformed or implausible
+    length (over the byte cap) reads as unknown rather than drawing a bar
+    that cannot be right.
+    """
+    declared = resp.headers.get("Content-Length")
+    if not declared or not declared.isdigit():
+        return None
+    value = int(declared)
+    return value if 0 < value <= max_bytes else None
+
+
 def download_asset(
     asset_name: str,
     tag: str | None = None,
     max_bytes: int = _MAX_RELEASE_BYTES,
+    on_progress: Callable[[int, int | None], None] | None = None,
 ) -> bytes:
     """Download *asset_name* from the release channel, bounded.
 
     Raises ``ReleaseFetchError`` on any transport failure and
     ``ReleaseTooLargeError`` when the asset exceeds *max_bytes*.
+
+    If *on_progress* is a callable ``(pos, total) -> None`` it is called
+    with the bytes received so far and the declared content length, or
+    ``None`` when that length is absent or implausible.  The declared
+    length is display-only; the byte cap and the deadline are unchanged.
     """
     if offline():
         raise ReleaseFetchError(
@@ -213,9 +260,14 @@ def download_asset(
                 ReadTooLarge,
                 read_capped_with_deadline,
             )
+            source = resp
+            if on_progress is not None:
+                total = _declared_length(resp, max_bytes)
+                on_progress(0, total)
+                source = _ProgressReader(resp, on_progress, total)
             try:
                 return read_capped_with_deadline(
-                    resp, max_bytes, asset_name, _DOWNLOAD_DEADLINE_SECONDS
+                    source, max_bytes, asset_name, _DOWNLOAD_DEADLINE_SECONDS
                 )
             except ReadTooLarge as exc:
                 raise ReleaseTooLargeError(str(exc)) from exc
@@ -232,6 +284,7 @@ def fetch_verified_asset(
     tag: str | None = None,
     pubkey_path: Path | None = None,
     max_bytes: int = _MAX_RELEASE_BYTES,
+    on_progress: Callable[[int, int | None], None] | None = None,
 ) -> bytes:
     """Download *asset_name* and refuse it unless its signature verifies.
 
@@ -239,9 +292,14 @@ def fetch_verified_asset(
     detached signature over the exact asset bytes.  The signature is
     checked against the pinned distribution key before anything else sees
     the payload; a mismatch raises ``ReleaseSignatureError``.
+
+    *on_progress* reports the asset download only; the 64-byte signature
+    download is not worth a second bar.
     """
     pubkey_path = pubkey_path or PINNED_PUBKEY_PATH
-    data = download_asset(asset_name, tag=tag, max_bytes=max_bytes)
+    data = download_asset(
+        asset_name, tag=tag, max_bytes=max_bytes, on_progress=on_progress
+    )
     try:
         signature = download_asset(
             f"{asset_name}.sig", tag=tag, max_bytes=64 * 1024

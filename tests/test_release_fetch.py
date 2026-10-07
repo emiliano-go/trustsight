@@ -115,10 +115,11 @@ def test_is_release_url_accepts_only_the_channel():
 # ---------------------------------------------------------------------------
 
 
-def _fake_response(chunks: list[bytes]):
+def _fake_response(chunks: list[bytes], headers: dict | None = None):
     class FakeResponse:
         def __init__(self, chunks):
             self._chunks = iter(chunks)
+            self.headers = headers or {}
 
         def __enter__(self):
             return self
@@ -163,6 +164,59 @@ def test_download_is_disabled_offline(monkeypatch):
     monkeypatch.setenv("TRUSTSIGHT_OFFLINE", "1")
     with pytest.raises(release.ReleaseFetchError):
         release.download_asset("baseline-seed.tar.gz")
+
+
+def test_download_reports_progress(monkeypatch):
+    monkeypatch.setattr(
+        release.urllib.request,
+        "urlopen",
+        lambda url, timeout=None: _fake_response(
+            [b"abc", b"de", b""], {"Content-Length": "5"}
+        ),
+    )
+    seen = []
+    data = release.download_asset(
+        "baseline-seed.tar.gz",
+        on_progress=lambda pos, total: seen.append((pos, total)),
+    )
+    assert data == b"abcde"
+    assert seen == [(0, 5), (3, 5), (5, 5)]
+
+
+def test_download_progress_total_is_none_without_a_length(monkeypatch):
+    monkeypatch.setattr(
+        release.urllib.request,
+        "urlopen",
+        lambda url, timeout=None: _fake_response([b"abc", b""], {}),
+    )
+    seen = []
+    release.download_asset(
+        "baseline-seed.tar.gz",
+        on_progress=lambda pos, total: seen.append((pos, total)),
+    )
+    assert seen == [(0, None), (3, None)]
+
+
+def test_download_progress_ignores_an_implausible_length(monkeypatch):
+    """A declared length over the byte cap is not a denominator.
+
+    The value is remote-declared; a bar drawn against it would be a lie
+    the cap then refuses.  It reads as unknown instead.
+    """
+    monkeypatch.setattr(
+        release.urllib.request,
+        "urlopen",
+        lambda url, timeout=None: _fake_response(
+            [b"abc", b""], {"Content-Length": "999999999"}
+        ),
+    )
+    seen = []
+    release.download_asset(
+        "baseline-seed.tar.gz",
+        max_bytes=1024,
+        on_progress=lambda pos, total: seen.append((pos, total)),
+    )
+    assert seen == [(0, None), (3, None)]
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +274,27 @@ def test_fetch_verified_asset_refuses_a_tampered_payload(keys, monkeypatch):
     monkeypatch.setattr(release, "download_asset", fake_download)
     with pytest.raises(release.ReleaseSignatureError):
         release.fetch_verified_asset("baseline-x", pubkey_path=pubkey)
+
+
+def test_fetch_verified_asset_reports_only_the_payload(keys, monkeypatch):
+    """The 64-byte signature is not worth a second bar."""
+    private, pubkey = keys
+    payload = b"baseline payload\n"
+    signature = private.sign(payload)
+    calls = []
+
+    def fake_download(asset_name, **kwargs):
+        calls.append((asset_name, kwargs.get("on_progress")))
+        return signature if asset_name.endswith(".sig") else payload
+
+    def progress(pos, total):
+        return None
+
+    monkeypatch.setattr(release, "download_asset", fake_download)
+    assert release.fetch_verified_asset(
+        "baseline-x", pubkey_path=pubkey, on_progress=progress
+    ) == payload
+    assert calls == [("baseline-x", progress), ("baseline-x.sig", None)]
 
 
 def test_fetch_verified_asset_missing_signature_is_a_refusal(keys, monkeypatch):
@@ -405,3 +480,34 @@ def test_update_feed_refuses_a_bad_asset_prefix(tmp_path, monkeypatch):
     feed = {"name": "../evil", "url": release.RELEASE_BASE_URL, "enabled": True}
     result = ioc_mod._update_feed(feed)
     assert result["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# Progress rendering
+# ---------------------------------------------------------------------------
+
+
+def test_download_progress_disabled_is_a_noop():
+    from trustsight.cli import display
+
+    with display.download_progress("Downloading x...", enabled=False) as on_progress:
+        assert on_progress(5, 10) is None
+
+
+def test_download_progress_draws_on_stderr_and_stops(monkeypatch):
+    import io
+
+    from rich.console import Console
+
+    from trustsight.cli import display
+
+    buf = io.StringIO()
+    monkeypatch.setattr(
+        display,
+        "err_console",
+        lambda: Console(file=buf, force_terminal=False, width=100),
+    )
+    with display.download_progress("Downloading x...", enabled=True) as on_progress:
+        on_progress(0, 10)
+        on_progress(10, 10)
+    assert "Downloading x..." in buf.getvalue()

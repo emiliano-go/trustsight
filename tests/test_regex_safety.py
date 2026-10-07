@@ -818,7 +818,14 @@ def test_a_diluted_ratio_escalates_before_allowing(monkeypatch):
     threshold.  The checker must take the longer baseline before it allows
     a quadratic pattern; trusting the diluted ratio is how a `sudo`
     matcher passed on the machine that reported it and then made
-    `makepkg`'s check() fail."""
+    `makepkg`'s check() fail.
+
+    The escalated reading is pinned: the assertion is about the escalation
+    logic (a diluted first ratio must not be trusted), not about this
+    machine's speed under load - a loaded `check()` build once diluted the
+    real sudo matcher below the refusal band and failed here.  The real
+    matcher's timing stays covered by `test_a_quadratic_pattern_is_refused`.
+    """
     import trustsight.regex_safety as rs
 
     compiled = re.compile(QUADRATIC[1][0])  # the sudo matcher
@@ -831,5 +838,10 @@ def test_a_diluted_ratio_escalates_before_allowing(monkeypatch):
             return 5.0  # inside the suspicious band, below refusal
         return real(pattern, *args, **kwargs)
 
+    def escalated_quadratic(pattern, long_len=rs.LONG_PROBE_LEN, *args, **kwargs):
+        # 4x the input costs ~16x the time for the quadratic shape.
+        return (16.0, 0.0)
+
     monkeypatch.setattr(rs, "growth_ratio", first_call_diluted)
+    monkeypatch.setattr(rs, "_growth", escalated_quadratic)
     assert rs.is_superlinear(compiled), "the diluted ratio was trusted"

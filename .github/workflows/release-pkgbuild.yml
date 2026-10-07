@@ -84,7 +84,7 @@ jobs:
       # the container's fallback downloads the source archive, which honours
       # .gitattributes export-ignore and therefore omits packaging/.
       - name: Install tooling
-        run: pacman -Syu --noconfirm --needed base-devel git python
+        run: pacman -Syu --noconfirm --needed base-devel git python gnupg
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -107,7 +107,7 @@ jobs:
       - name: The PKGBUILD must already record that checksum
         run: |
           set -eu
-          recorded=$(sed -n "s/^sha256sums=('\(.*\)')$/\1/p" packaging/aur/PKGBUILD)
+          recorded=$(python -c "import re,pathlib; print(re.search(r\"sha256sums=\(\s*'([0-9a-f]{64})'\", pathlib.Path('packaging/aur/PKGBUILD').read_text()).group(1))")
           rebuilt='${{ steps.rebuild.outputs.sha256 }}'
           if [ "$recorded" != "$rebuilt" ]; then
             echo "::error::PKGBUILD records ${recorded} but the tag rebuilds to ${rebuilt}"
@@ -137,6 +137,16 @@ jobs:
           fi
           echo "Published asset matches: ${actual}"
 
+      - name: Verify the published detached signature
+        run: |
+          set -eu
+          version='${{ needs.classify.outputs.version }}'
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${{ needs.classify.outputs.tag }}"
+          curl -fsSL "${base}/trustsight-${version}.tar.gz.sig" -o /tmp/asset.tar.gz.sig
+          gpg --batch --import scripts/commit_signing_key.asc
+          gpg --batch --verify /tmp/asset.tar.gz.sig /tmp/asset.tar.gz
+          echo "Published signature verifies against the pinned key"
+
       - name: Build and install from the published tarball
         run: |
           set -eu
@@ -144,6 +154,9 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
           cd "$GITHUB_WORKSPACE/packaging/aur"
+          # The `.sig` source is verified by makepkg against the pinned key;
+          # the import is the public half, which is all CI ever has.
+          su builder -c "gpg --batch --import '$GITHUB_WORKSPACE/scripts/commit_signing_key.asc'"
           # No --nocheck: check() runs the shipped test suite from the
           # release archive, which is the build every user will do.
           su builder -c "cd '$PWD' && makepkg -si --noconfirm"

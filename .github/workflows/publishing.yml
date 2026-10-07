@@ -93,6 +93,11 @@ jobs:
           uv build --wheel --out-dir rebuilt dist/*.tar.gz
           uv run --isolated --with rebuilt/*.whl trustsight --version
 
+      - name: Stage the detached signature for publication
+        # verify_release.py already verified it against the pinned key; this
+        # puts the exact bytes where the release and `SHA256SUMS` expect them.
+        run: cp packaging/aur/trustsight-*.tar.gz.sig release/
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-assets
@@ -100,6 +105,7 @@ jobs:
             dist/
             release/
             packaging/aur/
+            scripts/commit_signing_key.asc
           include-hidden-files: true
 
   aur:
@@ -110,7 +116,7 @@ jobs:
     container: archlinux:latest@sha256:f3691b4dde62ba4c4b6f0ae2c1fbf28e8c0c8c4b9a35c7e06dc1f70e21aa29f6
     steps:
       - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel python python-build python-installer python-wheel python-hatchling python-pytest python-pygit2 python-tldextract python-rich python-typer python-cryptography
+        run: pacman -Syu --noconfirm --needed base-devel python python-build python-installer python-wheel python-hatchling python-pytest python-pygit2 python-tldextract python-rich python-typer python-cryptography gnupg
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -123,9 +129,13 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
           useradd -m builder
           mkdir -p /tmp/srcdest /tmp/pkgbuild
-          cp artifacts/release/*.tar.gz /tmp/srcdest/
+          cp artifacts/release/*.tar.gz artifacts/release/*.sig /tmp/srcdest/
           cp artifacts/packaging/aur/PKGBUILD artifacts/packaging/aur/.SRCINFO /tmp/pkgbuild/
-          chown -R builder:builder /tmp/srcdest /tmp/pkgbuild
+          cp artifacts/scripts/commit_signing_key.asc /tmp/commit_signing_key.asc
+          chown -R builder:builder /tmp/srcdest /tmp/pkgbuild /tmp/commit_signing_key.asc
+          # The `.sig` source is verified by makepkg against this key; CI has
+          # only the public half, so it can verify the maintainer's signature.
+          su builder -c 'gpg --batch --import /tmp/commit_signing_key.asc'
           su builder -c 'cd /tmp/pkgbuild && SRCDEST=/tmp/srcdest makepkg -si --noconfirm'
           trustsight --version
 

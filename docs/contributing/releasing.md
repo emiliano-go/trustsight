@@ -93,14 +93,22 @@ In outline, and note that every step happens **before** the tag:
 
 1. Land all content changes, including `version` in `pyproject.toml`.
 2. `python scripts/build_release_tarball.py` and read the checksum.
-3. Record it in `packaging/aur/PKGBUILD`, regenerate `.SRCINFO`. This commit
-   touches only `packaging/`, so it cannot move the checksum from step 2.
-4. Build locally with `makepkg -si`.
-5. Push the final commit, then dispatch `Release software` with the intended
+3. Sign the tarball with the pinned commit key
+   (`gpg --detach-sign --local-user F759D6D4…!`; the trailing `!` forces the
+   primary key, since the public key does not carry the signing subkey) and
+   commit the `.sig` beside the PKGBUILD. The private key is the maintainer's;
+   CI never holds it.
+4. Record the tarball and signature checksums in `packaging/aur/PKGBUILD`,
+   keep `validpgpkeys` and the `.sig` source, and regenerate `.SRCINFO`. This
+   commit touches only `packaging/`, so it cannot move the checksums from
+   steps 2-3.
+5. Build locally with `makepkg -si` (makepkg verifies the signature against
+   the pinned key).
+6. Push the final commit, then dispatch `Release software` with the intended
    `vX.Y.Z` tag and commit. It builds the artifacts from that commit, verifies
-   their metadata, test-installs the wheel and sdist, builds the Arch package,
-   creates a draft release, verifies its checksum manifest, then publishes
-   GitHub and PyPI.
+   the signature and metadata, test-installs the wheel and sdist, builds the
+   Arch package, creates a draft release, verifies its checksum manifest, then
+   publishes GitHub and PyPI.
 
    Sign the release tag. Either create it yourself first with `git tag -s`
    and push it (the workflow then requires it to point at the released
@@ -119,7 +127,8 @@ wheel metadata, and sdist metadata; runs the complete test suite, `twine
 check`, isolated wheel/sdist smoke installs, and the Arch package `check()`.
 Only then does it create a private draft, upload the source archive and
 SHA-256 manifest, verify the uploaded bytes, and publish GitHub followed by
-PyPI. `release-pkgbuild.yml` remains a manual, post-publication audit.
+PyPI. `release-pkgbuild.yml` remains a post-publication audit; it is also
+dispatched automatically by `publishing.yml` after the release is published.
 
 `pkgbuild.yml` runs on every push and pull request. It builds the deterministic
 tarball from the checked-out tree, verifies the PKGBUILD checksum against it,

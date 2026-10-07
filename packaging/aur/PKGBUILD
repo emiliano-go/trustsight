@@ -28,9 +28,17 @@ makedepends=(
 optdepends=(
   'pyalpm: native version comparison (faster discovery)'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+# The release tarball carries a detached signature made with the pinned
+# commit-signing key, whose private half is not available to CI.  makepkg
+# verifies the signature because the key is pinned here and the `.sig` is a
+# declared source; the checksum below is the *real* hash of that signature,
+# never `SKIP`.
+validpgpkeys=('F759D6D49B0A395AB922414A5CC3B4C50D37E793')
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz"
+        "$pkgname-$pkgver.tar.gz.sig::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz.sig")
 
-sha256sums=('6975291c39f9d7b0cb27df1c0f8d2eb0a1ac4c87766d00605be6a120754af0c6')
+sha256sums=('5916f1306956bf1881ad1fcb41df80e3ccbb0c4cbc832a006ba6f0feb15aa257'
+            'b6cf3a6e108f1b616dd6077052e01b58c9345f04f11c4446789a7370c240ac51')
 
 build() {
   cd "$pkgname-$pkgver"

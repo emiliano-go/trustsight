@@ -8,15 +8,18 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import tomllib
 import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+COMMIT_KEY = ROOT / "scripts" / "commit_signing_key.asc"
 
 
 def _version_from(pattern: str, path: Path) -> str:
@@ -24,6 +27,42 @@ def _version_from(pattern: str, path: Path) -> str:
     if match is None:
         raise SystemExit(f"could not read version from {path.relative_to(ROOT)}")
     return match.group(1)
+
+
+def _verify_signature(signature: Path, artifact: Path, fingerprint: str) -> None:
+    """Verify *signature* over *artifact* against the pinned key.
+
+    Imported into a throwaway keyring so the machine's own keyring cannot
+    make a signature look valid; the fingerprint is checked explicitly, the
+    way the commit-signature workflow checks it.
+    """
+    if not signature.exists():
+        raise SystemExit(f"missing detached signature {signature.relative_to(ROOT)}")
+    with tempfile.TemporaryDirectory(prefix="trustsight-release-gnupg-") as home:
+        os.chmod(home, 0o700)
+        env = {**os.environ, "GNUPGHOME": home}
+        imported = subprocess.run(
+            ["gpg", "--batch", "--import", str(COMMIT_KEY)],
+            env=env, capture_output=True, text=True,
+        )
+        if imported.returncode != 0:
+            raise SystemExit(f"could not import {COMMIT_KEY.name}: {imported.stderr.strip()}")
+        result = subprocess.run(
+            ["gpg", "--batch", "--verify", "--status-fd", "1",
+             str(signature), str(artifact)],
+            env=env, capture_output=True, text=True,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("[GNUPG:] VALIDSIG "):
+                fields = line.split()
+                signing = fields[2].upper()
+                primary = fields[10].upper() if len(fields) > 10 else signing
+                if fingerprint.upper() in (signing, primary):
+                    return
+        raise SystemExit(
+            f"{signature.name} is not a valid signature by {fingerprint} "
+            f"over {artifact.name}"
+        )
 
 
 def _metadata_version(path: Path) -> str:
@@ -78,8 +117,9 @@ def main() -> int:
     expected_tarball = f"trustsight-{version}.tar.gz"
     if args.release_tarball.name != expected_tarball:
         raise SystemExit(f"release tarball must be named {expected_tarball}")
+    pkgbuild = ROOT / "packaging/aur/PKGBUILD"
     expected_sha = _version_from(
-        r"^sha256sums=\('([0-9a-f]{64})'\)$", ROOT / "packaging/aur/PKGBUILD"
+        r"^sha256sums=\(\s*'([0-9a-f]{64})'", pkgbuild
     )
     if _sha256(args.release_tarball) != expected_sha:
         raise SystemExit("release tarball checksum does not match PKGBUILD")
@@ -89,6 +129,13 @@ def main() -> int:
         cwd=ROOT,
         check=True,
     )
+
+    # The tarball is signed offline; the key is pinned and never available to
+    # CI, so an account, token or workflow compromise is not enough to forge
+    # an artifact.
+    fingerprint = _version_from(r"^validpgpkeys=\('([0-9A-Fa-f]{40})'", pkgbuild)
+    signature = ROOT / "packaging/aur" / f"{expected_tarball}.sig"
+    _verify_signature(signature, args.release_tarball, fingerprint)
 
     artifacts = sorted(args.dist.glob("trustsight-*"))
     wheels = [path for path in artifacts if path.suffix == ".whl"]
@@ -104,7 +151,7 @@ def main() -> int:
         # the same filename. GitHub cannot attach both, so its manifest covers
         # the public AUR archive and wheel; the sdist is validated above and
         # published only to PyPI.
-        paths = [args.release_tarball, *wheels]
+        paths = [args.release_tarball, signature, *wheels]
         args.write_checksums.parent.mkdir(parents=True, exist_ok=True)
         args.write_checksums.write_text(
             "".join(f"{_sha256(path)}  {path.name}\n" for path in paths), encoding="ascii"

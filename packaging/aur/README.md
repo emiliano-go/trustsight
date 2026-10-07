@@ -28,7 +28,16 @@ describes. That is what makes a pre-tag checksum possible at all.
 
 `sha256sums` is never `SKIP`. TrustSight reports a disabled checksum as H001
 at HIGH severity, and shipping a package that trips its own rule would be
-indefensible.
+indefensible. The signature entry carries its real hash too; a `SKIP` there
+would only save bookkeeping while handing the rule its one exemption.
+
+The tarball is also **signed**. The detached signature
+`trustsight-<ver>.tar.gz.sig` is made locally with the pinned commit-signing
+key (`validpgpkeys` in the PKGBUILD), whose private half is never available to
+CI and is not in this repository. With the signature, compromising the GitHub
+account, a token or the release workflow is not enough to publish a forged
+artifact: the attacker also needs the offline key. `validpgpkeys` plus the
+`.sig` source make makepkg and yay verify it on every user's machine.
 
 ## Release checklist
 
@@ -45,16 +54,29 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
    # sha256 <hash>
    ```
 
-3. Record that hash here and regenerate the metadata. This commit touches
-   only `packaging/`, so it cannot change the hash from step 2:
+3. Sign the tarball with the pinned key and read both hashes. The signature
+   is made here, on the maintainer's machine, never in CI:
+
+   ```bash
+   # The trailing `!` forces the primary key; without it GPG picks the
+   # Ed25519 signing subkey, which the committed public key does not carry.
+   gpg --detach-sign --local-user F759D6D49B0A395AB922414A5CC3B4C50D37E793! \
+     dist/trustsight-<ver>.tar.gz
+   cp dist/trustsight-<ver>.tar.gz.sig packaging/aur/
+   sha256sum dist/trustsight-<ver>.tar.gz packaging/aur/trustsight-<ver>.tar.gz.sig
+   ```
+
+4. Record both hashes here, keep `validpgpkeys` and the `.sig` source, and
+   regenerate the metadata. This commit touches only `packaging/`, so it
+   cannot change the hashes from steps 2-3:
 
    ```bash
    cd packaging/aur
-   sed -i "s/^sha256sums=.*/sha256sums=('<hash>')/" PKGBUILD
+   # set sha256sums=('<tarball-hash>' '<signature-hash>')
    makepkg --printsrcinfo > .SRCINFO
    ```
 
-4. Verify locally before publishing anything:
+5. Verify locally before publishing anything:
 
    ```bash
    makepkg -si
@@ -64,22 +86,22 @@ Every step happens **before** the tag. Nothing is repaired afterwards.
    `check()` runs the shipped suite but excludes `tests/test_fetcher.py` and
    `tests/test_rebaseline.py`.
 
-5. Tag, push, and publish the release **with the tarball attached**. The tag
-   must point at the commit that carries the checksum recorded in step 3, and
-   must be signed:
+6. Tag, push, and publish the release **with the tarball and its `.sig`
+   attached**. The tag must point at the commit that carries the checksum
+   recorded in step 4, and must be signed:
 
    ```bash
    git tag -s v<ver> -m "v<ver>"
    git push origin master && git push origin v<ver>
-   gh release create v<ver> --title v<ver> \
-     --notes-file <notes> dist/trustsight-<ver>.tar.gz
+   gh release create v<ver> --title v<ver> --notes-file <notes> \
+     dist/trustsight-<ver>.tar.gz dist/trustsight-<ver>.tar.gz.sig
    ```
 
-   The asset must be the file from step 2. `release-pkgbuild.yml` rebuilds
-   the tarball from the tag and fails the release if it does not match both
-   the recorded checksum and the published asset.
+   The assets must be the files from steps 2 and 3. `release-pkgbuild.yml`
+   rebuilds the tarball from the tag, verifies the published `.sig` against
+   the pinned key, and fails the release if either does not match.
 
-6. Push to the AUR repository.
+7. Push to the AUR repository.
 
 ## Building a checkout instead
 

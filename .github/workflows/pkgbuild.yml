@@ -2,6 +2,9 @@ name: PKGBUILD
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,7 +15,7 @@ jobs:
       # export-ignore and therefore omits packaging/.  Install git first
       # to get a real checkout.
       - name: Install tooling
-        run: pacman -Syu --noconfirm base-devel sudo git python
+        run: pacman -Syu --noconfirm base-devel sudo git python gnupg
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -48,7 +51,7 @@ jobs:
           set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          expected=$(sed -n "s/^sha256sums=('\(.*\)')$/\1/p" PKGBUILD)
+          expected=$(python -c "import re,pathlib; print(re.search(r\"sha256sums=\(\s*'([0-9a-f]{64})'\", pathlib.Path('PKGBUILD').read_text()).group(1))")
           actual=$(sha256sum "trustsight-${pkgver}.tar.gz" | cut -d' ' -f1)
           if [ "$expected" != "$actual" ]; then
             echo "::error::PKGBUILD sha256sums ${expected} does not match deterministic tarball ${actual}"
@@ -58,10 +61,24 @@ jobs:
 
       - name: Build and install from the release tarball
         run: |
+          set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
+          pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
           # No --nocheck: check() runs the shipped test suite from the
           # release archive, which is the build every user will do.
-          su builder -c "cd '$PWD' && makepkg -si --noconfirm"
+          if git -C "$GITHUB_WORKSPACE" rev-parse -q --verify "v${pkgver}" >/dev/null; then
+            # A tagged version ships the signed tarball whose exact bytes the
+            # committed `.sig` covers, so verify the signature the way a user
+            # does.  The key is the public half only; CI can verify, not sign.
+            su builder -c "gpg --batch --import '$GITHUB_WORKSPACE/scripts/commit_signing_key.asc'"
+            su builder -c "cd '$PWD' && makepkg -si --noconfirm"
+          else
+            # Pre-release tree: the deterministic tarball moved since the
+            # committed `.sig` was made, so the signature cannot verify here.
+            # Checksums still do; the tagged path above verifies the
+            # signature in full.
+            su builder -c "cd '$PWD' && makepkg -si --skippgpcheck --noconfirm"
+          fi
 
       - name: Verify installation
         run: trustsight --version

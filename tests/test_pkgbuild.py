@@ -116,10 +116,10 @@ def test_pkgbuild_parses():
 
 @_PKGBUILD_NEEDS_MAKEPKG
 def test_pkgbuild_source_has_no_skipped_checksums():
-    """sha256sums must not contain SKIP."""
-    for line in _pkgbuild_text().splitlines():
-        if line.startswith("sha256sums"):
-            assert "SKIP" not in line, "sha256sums must not contain SKIP"
+    """sha256sums must not contain SKIP, including the signature entry."""
+    match = re.search(r"^sha256sums=\((.*?)\)\s*$", _pkgbuild_text(), re.M | re.S)
+    assert match, "PKGBUILD records no sha256sums"
+    assert "SKIP" not in match.group(1).upper(), "sha256sums must not contain SKIP"
 
 
 @_PKGBUILD_NEEDS_MAKEPKG
@@ -146,9 +146,14 @@ def test_pkgbuild_version_matches_pyproject():
 
 
 def _srcinfo_field(name: str) -> str | None:
-    """Read a top-level `key = value` field from .SRCINFO."""
-    m = re.search(rf"^\s*{re.escape(name)} = (\S+)\s*$", SRCINFO.read_text(), re.M)
-    return m.group(1) if m else None
+    """Read the first top-level `key = value` field from .SRCINFO."""
+    values = _srcinfo_fields(name)
+    return values[0] if values else None
+
+
+def _srcinfo_fields(name: str) -> list[str]:
+    """Read every top-level `key = value` field from .SRCINFO, in order."""
+    return re.findall(rf"^\s*{re.escape(name)} = (\S+)\s*$", SRCINFO.read_text(), re.M)
 
 
 @pytest.mark.skipif(not SRCINFO.exists(), reason=".SRCINFO not present")
@@ -180,18 +185,29 @@ def test_srcinfo_source_and_checksum_match_pkgbuild():
     workflow that regenerates this file never ran.
     """
     version = _pkgver_from_pkgbuild()
-    source = _srcinfo_field("source")
-    assert source is not None, ".SRCINFO declares no source"
-    assert f"trustsight-{version}.tar.gz" in source, (
-        f".SRCINFO source line does not name {version}: {source}"
+    sources = _srcinfo_fields("source")
+    assert sources, ".SRCINFO declares no source"
+    assert f"trustsight-{version}.tar.gz" in sources[0], (
+        f".SRCINFO source line does not name {version}: {sources[0]}"
     )
-    assert f"/v{version}/" in source, (
-        f".SRCINFO source line does not point at the v{version} release: {source}"
+    assert f"/v{version}/" in sources[0], (
+        f".SRCINFO source line does not point at the v{version} release: {sources[0]}"
+    )
+    assert any(f"trustsight-{version}.tar.gz.sig" in source for source in sources), (
+        ".SRCINFO does not declare the detached signature source"
     )
 
-    recorded = re.search(r"^sha256sums=\('(.*)'\)$", _pkgbuild_text(), re.M)
+    recorded = re.search(r"^sha256sums=\(\s*'([0-9a-f]{64})'", _pkgbuild_text(), re.M)
     assert recorded, "PKGBUILD records no sha256sums"
-    assert _srcinfo_field("sha256sums") == recorded.group(1)
+    sums = _srcinfo_fields("sha256sums")
+    assert sums, ".SRCINFO records no sha256sums"
+    assert sums[0] == recorded.group(1)
+    assert len(sums) == len(sources), (
+        ".SRCINFO must carry one sha256sums entry per source"
+    )
+    assert _srcinfo_field("validpgpkeys") == (
+        "F759D6D49B0A395AB922414A5CC3B4C50D37E793"
+    ), ".SRCINFO does not pin the release-signing key"
 
 
 def test_source_is_a_release_asset_not_a_generated_archive():
@@ -203,7 +219,7 @@ def test_source_is_a_release_asset_not_a_generated_archive():
     would reintroduce that exposure silently, since it looks identical right
     up until the day the bytes move.
     """
-    source = re.search(r"^source=\((.*)\)$", _pkgbuild_text(), re.M)
+    source = re.search(r"^source=\((.*?)\)\s*$", _pkgbuild_text(), re.M | re.S)
     assert source, "PKGBUILD declares no source"
     assert "/releases/download/" in source.group(1), (
         f"source must be a release asset, got: {source.group(1)}"
@@ -212,6 +228,42 @@ def test_source_is_a_release_asset_not_a_generated_archive():
         "source points at GitHub's generated archive, whose bytes are not "
         "guaranteed stable"
     )
+    assert ".tar.gz.sig::" in source.group(1), (
+        "source does not declare the detached release signature"
+    )
+
+
+def test_the_release_signature_is_pinned():
+    """The release asset is signed by a key CI does not hold."""
+    text = _pkgbuild_text()
+    assert "validpgpkeys=('F759D6D49B0A395AB922414A5CC3B4C50D37E793')" in text
+
+
+def test_the_release_signature_verifies_when_the_tarball_is_present():
+    """When the signed tarball is in the checkout, the signature must verify.
+
+    The maintainer signs locally before the tag; CI then has only the public
+    half.  This runs where the maintainer just built and signed, and skips on
+    a plain checkout where the tarball is absent or describes another tree.
+    """
+    import hashlib
+    import sys as _sys
+
+    version = _pkgver_from_pkgbuild()
+    tarball = PKGBUILD_DIR / f"trustsight-{version}.tar.gz"
+    signature = PKGBUILD_DIR / f"trustsight-{version}.tar.gz.sig"
+    recorded = re.search(r"^sha256sums=\(\s*'([0-9a-f]{64})'", _pkgbuild_text(), re.M)
+    if not tarball.exists() or not signature.exists() or not recorded:
+        pytest.skip("no signed tarball in the checkout")
+    if hashlib.sha256(tarball.read_bytes()).hexdigest() != recorded.group(1):
+        pytest.skip("the committed signature describes a different tree")
+    if not shutil.which("gpg"):
+        pytest.skip("gpg not available")
+
+    _sys.path.insert(0, str(ROOT / "scripts"))
+    from verify_release import _verify_signature
+
+    _verify_signature(signature, tarball, "F759D6D49B0A395AB922414A5CC3B4C50D37E793")
 
 
 def _latest_version_tag() -> str | None:
@@ -265,7 +317,7 @@ def test_recorded_checksum_matches_the_recorded_version():
     from build_release_tarball import build
 
     pkgver = _pkgver_from_pkgbuild()
-    recorded = re.search(r"^sha256sums=\('(.*)'\)$", _pkgbuild_text(), re.M)
+    recorded = re.search(r"^sha256sums=\(\s*'([0-9a-f]{64})'", _pkgbuild_text(), re.M)
     assert recorded, "PKGBUILD records no sha256sums"
 
     latest = _latest_version_tag()

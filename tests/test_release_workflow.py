@@ -204,6 +204,24 @@ def test_a_worktree_build_refuses_untracked_files(tmp_path):
         brt.ROOT = monkey
 
 
+def test_release_workflows_verify_the_detached_signature():
+    """The release path must verify the signature, not only the checksum.
+
+    The signature is the one binding a GitHub account, token or workflow
+    cannot forge; a release workflow that stopped importing the pinned key
+    would silently drop it.
+    """
+    for name in ("publishing.yml", "release-pkgbuild.yml"):
+        text = (WORKFLOWS / name).read_text(encoding="utf-8")
+        assert "commit_signing_key.asc" in text, name
+        assert "gpg" in text, name
+        assert ".sig" in text, name
+    # The pre-release push build cannot verify the maintainer's signature
+    # (the deterministic tarball moved), so it checks checksums only and says
+    # so; the tagged path above verifies in full.
+    assert "--skippgpcheck" in PKGBUILD_WORKFLOW.read_text(encoding="utf-8")
+
+
 def test_release_commit_gate():
     sys.path.insert(0, str(ROOT / "scripts"))
     from security_gates import gate_release_artifacts_share_commit
@@ -245,7 +263,8 @@ def test_release_verifier_rebuilds_head_with_the_current_interpreter(tmp_path, m
     packaging = tmp_path / "packaging" / "aur"
     packaging.mkdir(parents=True)
     (packaging / "PKGBUILD").write_text(
-        f"pkgver=1.2.3\nsha256sums=('{digest}')\n", encoding="utf-8"
+        f"pkgver=1.2.3\nvalidpgpkeys=('{'F' * 40}')\nsha256sums=('{digest}')\n",
+        encoding="utf-8",
     )
     (packaging / ".SRCINFO").write_text("pkgver = 1.2.3\n", encoding="utf-8")
     dist = tmp_path / "dist"
@@ -256,6 +275,7 @@ def test_release_verifier_rebuilds_head_with_the_current_interpreter(tmp_path, m
     monkeypatch.setattr(verify_release, "ROOT", tmp_path)
     monkeypatch.setattr(verify_release, "_sha256", lambda path: digest)
     monkeypatch.setattr(verify_release, "_metadata_version", lambda path: "1.2.3")
+    monkeypatch.setattr(verify_release, "_verify_signature", lambda *a, **k: None)
     monkeypatch.setattr(verify_release.subprocess, "run", run)
     monkeypatch.setattr(sys, "argv", [
         "verify_release.py", "--tag", "v1.2.3", "--dist", str(dist),

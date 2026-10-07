@@ -81,6 +81,7 @@ Security = [
   {"What a Result Claims" = "security/what-a-result-claims.md"},
   {"Enforcement Map" = "security/enforcement-map.md"},
   {"Vulnerability Reporting" = "security/vulnerability-reporting.md"},
+  {"Release Signing" = "security/release-signing.md"},
 ]
 
 [[project.nav]]

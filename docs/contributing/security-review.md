@@ -27,7 +27,7 @@ and the absence of a failure reads as a guarantee.
 | A5, matching is bounded | 8 KiB per-line clamp | applied in `apply_rules` (36 patterns from `rules.toml`), not to the 97 patterns emitted from `analysis/`, which match the diff text directly. The gate measured `apply_rules`: 0.17s for a 5 MiB line. The real path took 15.06s. |
 | A10, output is inert | `clean()` and `safe_markup()` | applied in `review`'s renderer, and the gate exercised that renderer. `_inspect_rich` interpolated a rule id raw and leaked escape sequences. |
 | A12/A13, seed and baseline containment | reserved-name guard | enforced in `upsert_package`; `save_package_profile` and `save_pkgbuild_snapshot` are keyed by `package_name` directly and had no guard, and both are on the baseline import path. |
-| B2, coverage accounting | `coverage_gaps` on the result | set by four of the five `PackageFact` producers. The first-analysis path declared `tree_analyzed=True` having read no tree at all. |
+| B2, coverage accounting | `coverage_gaps` on the result | set by most, but not all, `PackageFact` producers. The first-analysis path declared `tree_analyzed=True` having read no tree at all. |
 
 None of these were subtle once someone looked. All four passed CI.
 
@@ -124,3 +124,21 @@ against text that has been through `rules.clamp_text`, which every current
 call site does. A rule that reads a file, opens a socket, or spawns a process
 is not a rule, and `no interpreter or shell execution` plus
 `network confined to the fetch modules` will say so.
+
+## The adversarial replay in CI
+
+A change can close one bypass and reopen another, so every push that touches
+`src/` or `pyproject.toml` runs the external harness against this checkout
+(`.github/workflows/harness-regression.yml`). The harness declares the core
+version it measures, and the job fails on a mismatch rather than measuring the
+wrong build. It clones `trustsight-harness` at a **pinned commit** - external
+code runs inside the job that certifies the build, so it is pinned the way a
+third-party action is - and syncs it with `uv sync --locked` against the
+harness's own committed lock, so no resolver runs.
+
+The run **reports, it does not judge**: an open count above the harness's
+committed baseline lands in the step summary and the uploaded artifact, not in
+a failed check, because the harness's contract is that an exit code says "the
+run happened", never "the numbers are good". Only a version mismatch fails the
+job, and that is a configuration fault (the harness pin and campaigns have not
+been moved to this release yet).

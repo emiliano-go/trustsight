@@ -7,6 +7,12 @@ updates:
   # The `archlinux:latest` digest in the release workflows is deliberately
   # not here: Dependabot cannot update a `container:` image (dependabot-core
   # #5819), so .github/workflows/update-arch-container.yml opens that PR.
+  #
+  # A bump that touches a critical-path workflow cannot land as a Dependabot
+  # commit: changes to CRITICAL_PATHS must carry the pinned-key signature
+  # (verify-commit-sigs, CONTRIBUTING.md), which the bot cannot provide. Those
+  # bumps are taken over as maintainer-signed commits; Dependabot closes its
+  # PR once master already carries the new pin.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

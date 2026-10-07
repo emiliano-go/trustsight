@@ -31,8 +31,17 @@ jobs:
       # harness resolves its local TrustSight source as `../trustsight`, so
       # clone it as this checkout's sibling - the same layout the harness's
       # own CI uses, mirrored.
+      #
+      # Pinned to a commit, not a branch: the job runs external code inside
+      # the run that certifies this build, so it measures a fixed harness
+      # rather than whatever the default branch holds at push time.  Bump the
+      # SHA in the same commit that moves the harness pin to a new release.
       - name: Clone the harness
-        run: git clone --depth 1 https://github.com/emiliano-go/trustsight-harness.git ../trustsight-harness
+        run: |
+          git init ../trustsight-harness
+          git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
+          git -C ../trustsight-harness fetch --depth 1 origin 07809f1afca5e5880ae50c8f29dc1dba062b2805
+          git -C ../trustsight-harness checkout --detach FETCH_HEAD
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 
@@ -54,10 +63,13 @@ jobs:
         run: |
           python3 -c "import json; print(json.load(open('../trustsight-harness/regression/report.json'))['open'])" > baseline-open.txt
 
+      # The harness's committed lock already names this core version as an
+      # editable path dependency, so `--locked` is enough and no resolver
+      # runs here: an unpinned `uv lock` would add a live PyPI resolve to the
+      # job that certifies the security model (see docs/security.md).
       - name: Sync the harness against this checkout
         run: |
           cd ../trustsight-harness
-          uv lock
           uv sync --locked --all-extras
 
       - name: Replay every committed bypass

@@ -1603,11 +1603,10 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
     """Every construction of a PackageFact declares what it examined.
 
     Enumerated from the source rather than from the paths a test happens
-    to call.  Four of the five producers set ``coverage_gaps``; the fifth,
-    the first-analysis path, declared ``tree_analyzed=True`` having read
-    no tree at all and reported a bare "Low".  A producer added later
-    fails here rather than shipping a result that silently claims full
-    coverage.
+    to call.  Most producers set ``coverage_gaps``; one, the first-analysis
+    path, declared ``tree_analyzed=True`` having read no tree at all and
+    reported a bare "Low".  A producer added later fails here rather than
+    shipping a result that silently claims full coverage.
     """
     hits: list[str] = []
     found = 0
@@ -3101,6 +3100,11 @@ def gate_ci_installs_from_the_lock() -> Gate:
     appearing to honour the manifest.  ``--locked`` fails instead, which is
     the property that makes the lock meaningful rather than merely present.
 
+    A live resolve can also arrive as ``uv lock``, which re-resolves rather
+    than honouring the committed ``uv.lock``; only ``uv lock --check`` (a
+    staleness check that resolves nothing) is allowed.  The install check
+    alone missed it, so a workflow could resolve from PyPI and still pass.
+
     Checked structurally over every workflow, because the failure mode is a
     new workflow that installs the old way rather than an existing one
     changing back.
@@ -3113,8 +3117,17 @@ def gate_ci_installs_from_the_lock() -> Gate:
     for path in workflows:
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             stripped = line.strip()
+            # Comments run nothing; prose that names `uv lock` must not read
+            # as the command.
+            if stripped.startswith("#"):
+                continue
             if "pip install" in stripped:
                 problems.append(f"{path.name}:{lineno} pip install")
+            if "uv lock" in stripped and "--check" not in stripped:
+                problems.append(
+                    f"{path.name}:{lineno} runs a live resolve "
+                    "(use `uv lock --check`, or `uv sync --locked`)"
+                )
             if "uv sync" in stripped or "uv export" in stripped:
                 installers.append(f"{path.name}:{lineno}")
                 if "--locked" not in stripped:

@@ -88,3 +88,29 @@ def test_m_series_findings_are_a_flat_list():
     )
     assert isinstance(found, list)
     assert any(f["rule_id"] == "M001" for f in found)
+
+
+def test_m001_requires_the_claim_when_a_ledger_is_supplied():
+    triggered = [{"rule_id": "H091"}]
+    assert claim_contradictions(triggered, claims=set()) == []
+    assert len(claim_contradictions(triggered, claims={"P001"})) == 1
+
+
+def test_declared_claims_from_evidence_and_pinning():
+    from trustsight.scoring import declared_claims
+
+    claims = declared_claims(
+        verification_evidence=["checksum_present", "validpgpkeys_declared"],
+        pinning_level="commit_pinned",
+        source_buckets={"https://github.com/a/b": "trusted_forge"},
+    )
+    assert claims == {"P001", "P002", "P005", "P007"}
+
+
+def test_m004_cofire_absence_is_a_health_note_not_a_finding():
+    from trustsight.analysis.meta import cofire_absence
+
+    notes = cofire_absence([{"rule_id": "H091"}], [("H091", "H024")])
+    assert notes == ["H091 fired without expected co-fire H024"]
+    assert cofire_absence(
+        [{"rule_id": "H091"}, {"rule_id": "H024"}], [("H091", "H024")]) == []

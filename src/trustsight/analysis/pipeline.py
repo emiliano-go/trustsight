@@ -1013,8 +1013,12 @@ def analyze_package(
     # Addendum 5 §6.5: M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings
+    from ..scoring import declared_claims
 
-    triggered_rules.extend(m_series_findings(triggered_rules, config))
+    triggered_rules.extend(m_series_findings(
+        triggered_rules, config,
+        claims=declared_claims(
+            verification_evidence, aggregate_pinning, source_buckets)))
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},
@@ -1350,8 +1354,12 @@ def scan_diff(
     # Addendum 5 §6.5: M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings
+    from ..scoring import declared_claims
 
-    triggered_rules.extend(m_series_findings(triggered_rules, config))
+    triggered_rules.extend(m_series_findings(
+        triggered_rules, config,
+        claims=declared_claims(
+            verification_evidence, aggregate_pinning, source_buckets)))
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},

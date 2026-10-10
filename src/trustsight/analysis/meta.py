@@ -28,38 +28,81 @@ M never changes a finding's evidence; it names the inputs that composed.
 
 from __future__ import annotations
 
-__all__ = ["m_series_findings", "claim_contradictions", "weak_layer_span"]
+__all__ = [
+    "m_series_findings",
+    "claim_contradictions",
+    "cofire_absence",
+    "weak_layer_span",
+]
+
+#: (claim id, contradicting finding, message) for M001.  The claim is a P
+#: finding the run's declared facts imply; the finding is a structural fact
+#: that contradicts it.  The pairing is data, not another conditional.
+_CONTRADICTIONS: tuple[tuple[str, str, str], ...] = (
+    ("P001", "H091",
+     "the recipe declares checksums (P001) while H091 reports the checksum "
+     "arrays do not cover every source"),
+    ("P002", "H024",
+     "the recipe declares GPG verification (P002) while H024 reports the "
+     "verification removed"),
+    ("P005", "H101",
+     "a source is pinned to a commit (P005) while H101 reports the pinning "
+     "lost"),
+    ("P007", "H099",
+     "a source is hosted on a trusted forge (P007) while H099 reports the "
+     "host swapped under a kept local name"),
+)
 
 
 def _thresholds(config) -> dict:
     return (config or {}).get("thresholds", {})
 
 
-def claim_contradictions(triggered: list[dict]) -> list[dict]:
-    """M001: a declared practice contradicted by a structural finding."""
+def claim_contradictions(triggered: list[dict], claims=None) -> list[dict]:
+    """M001: a declared practice contradicted by a structural finding.
+
+    *claims* is the set of P-series ids the run's declared facts imply
+    (:func:`trustsight.scoring.declared_claims`).  ``None`` means "assume
+    every claim is present", which keeps the pre-ledger callers working; a
+    supplied set means the contradiction must actually be declared.
+    """
     from ..findings import stamp
 
     ids = {r.get("rule_id") for r in triggered}
     out: list[dict] = []
-    if "H091" in ids:
+    for claim, finding, message in _CONTRADICTIONS:
+        if finding not in ids:
+            continue
+        if claims is not None and claim not in claims:
+            continue
         out.append(stamp({
             "rule_id": "M001",
             "name": "Claim Contradicted By Structure",
             "severity": "HIGH", "category": "meta",
-            "match": ("the recipe declares checksums (P001) while H091 reports "
-                      "the checksum arrays do not cover every source"),
-            "params": {"claim": "P001", "contradicted_by": "H091"},
-        }))
-    if "H024" in ids:
-        out.append(stamp({
-            "rule_id": "M001",
-            "name": "Claim Contradicted By Structure",
-            "severity": "HIGH", "category": "meta",
-            "match": ("the recipe declares GPG verification (P002) while H024 "
-                      "reports the verification removed"),
-            "params": {"claim": "P002", "contradicted_by": "H024"},
+            "match": message,
+            "params": {"claim": claim, "contradicted_by": finding},
         }))
     return out
+
+
+def cofire_absence(triggered: list[dict], pairs) -> list[str]:
+    """M004: a tool-health check, never a package finding (§6.5 family 4).
+
+    *pairs* is an iterable of ``(precursor_rule, expected_rule)``.  When the
+    precursor fired but the expected rule did not, the construct that
+    historically co-fires appeared without its rule - a sign the rule broke
+    or was evaded in a known shape.  The result is a list of human-readable
+    health notes for the harness/calibration, deliberately **not** added to
+    the package finding set (a hit means the tool, not the package, needs
+    attention).
+    """
+    ids = {r.get("rule_id") for r in triggered}
+    notes: list[str] = []
+    for precursor, expected in pairs or ():
+        if precursor in ids and expected not in ids:
+            notes.append(
+                f"{precursor} fired without expected co-fire {expected}")
+    return notes
 
 
 def weak_layer_span(triggered: list[dict], config) -> list[dict]:
@@ -122,10 +165,14 @@ def composition_not_owned(triggered: list[dict], config) -> list[dict]:
     })]
 
 
-def m_series_findings(triggered: list[dict], config=None) -> list[dict]:
-    """All M-series findings for a completed rule set (post-resolution)."""
+def m_series_findings(triggered: list[dict], config=None, claims=None) -> list[dict]:
+    """All M-series findings for a completed rule set (post-resolution).
+
+    *claims* is the P-series claim set the run declared, so M001 joins the
+    real ledger rather than firing on rule presence alone.
+    """
     out: list[dict] = []
-    out.extend(claim_contradictions(triggered))
+    out.extend(claim_contradictions(triggered, claims))
     out.extend(weak_layer_span(triggered, config))
     out.extend(composition_not_owned(triggered, config))
     return out

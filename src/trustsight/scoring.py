@@ -59,6 +59,28 @@ _EVIDENCE_IDS = {
     "gpg_verify_present": P_SIGNATURE_SOURCE,
 }
 
+def declared_claims(verification_evidence=None, pinning_level: str = "",
+                    source_buckets=None) -> set[str]:
+    """The P-series claim ids a run's declared facts imply (Addendum 5 §6.5).
+
+    The same inputs :func:`calculate_score` turns into P findings, exposed as
+    a set so the M-series can join a *claim* against a structural finding
+    before scoring runs.  Without this the M-CLAIM predicate could only see
+    findings, not the declaration they contradict.
+    """
+    claims: set[str] = set()
+    for evidence in verification_evidence or ():
+        claim = _EVIDENCE_IDS.get(evidence)
+        if claim is not None:
+            claims.add(claim)
+    pin = _PINNED_LEVELS.get(pinning_level)
+    if pin is not None:
+        claims.add(pin)
+    if any(bucket in DECLARED_BUCKETS for bucket in (source_buckets or {}).values()):
+        claims.add(P_TRUSTED_FORGE)
+    return claims
+
+
 DECLARED_REASONS = {
     P_CHECKSUMS: "checksums declared for all non-VCS sources",
     P_VALIDPGPKEYS: "validpgpkeys declared",

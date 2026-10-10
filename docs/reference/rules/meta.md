@@ -39,14 +39,23 @@ This is a reference page. For how weight and scope work, see
 **HIGH** (weight 25) · category `meta`
 
 Fires when the recipe's declared practice contradicts a structural finding
-in the same run. Two shapes today: the recipe declares checksums (P001)
-while H091 reports the arrays do not cover every source, and the recipe
-declares GPG verification (P002) while H024 reports it removed.
+in the same run. It joins the *real* claims ledger - the P-series ids the
+run's declared facts imply (`trustsight.scoring.declared_claims`) - against
+the structural findings: checksums declared (P001) while H091 reports the
+arrays do not cover every source, GPG verification declared (P002) while H024
+reports it removed, a source pinned (P005) while H101 reports the pinning
+lost, a trusted forge declared (P007) while H099 reports the host swapped.
 
 Only M can see this. The declared-practice ledger is weight 0 and the
 structural finding is its own claim; "the recipe says one thing and
 structurally does another" is a relationship between two findings that no
 single rule reads.
+
+A fourth M family is a **tool-health check, never a package finding**:
+`cofire_absence` reports when a construct that historically co-fires with a
+rule appears without that rule - a sign the rule broke or was evaded in a
+known shape. It is consumed by the harness/calibration, not the report,
+because a hit is about the tool, not the package.
 
 ### M002: Weak Signal Across Layers {#m002}
 

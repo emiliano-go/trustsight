@@ -48,6 +48,7 @@ SERIES_NAMES = {
     "P": "Declared-practice",
     "M": "Meta",
     "E": "Entropy",
+    "T": "Temporal",
 }
 
 

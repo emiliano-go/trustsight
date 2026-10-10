@@ -378,6 +378,20 @@ def init_db():
                 ON ioc_entries(value);
             CREATE INDEX IF NOT EXISTS idx_ioc_entries_expires
                 ON ioc_entries(expires_at);
+
+            /* Addendum 5 §6.1 (T-series): the ecosystem index the temporal
+               rules read.  One row per signing key and per maintainer
+               domain the corpus has ever observed, with its first-seen
+               stamp, so "is this key/domain new to the ecosystem" is set
+               membership rather than a guess.  Bounded by row count. */
+            CREATE TABLE IF NOT EXISTS observed_signing_keys (
+                key TEXT PRIMARY KEY,
+                first_seen TEXT
+            );
+            CREATE TABLE IF NOT EXISTS observed_maintainer_domains (
+                domain TEXT PRIMARY KEY,
+                first_seen TEXT
+            );
         """)
         _migrate(conn)
         conn.commit()
@@ -1985,6 +1999,88 @@ def tuple_observation_count(package_name: str, array_name: str,
             (package_name, array_name, _array_entries_hash(entries)),
         ).fetchone()
     return int(row[0] or 0)
+
+
+#: Largest key/domain ledger, so a hostile corpus cannot grow it without
+#: bound.  Pruned oldest-first like every other corpus table.
+MAX_OBSERVED_KEYS = 50_000
+MAX_OBSERVED_DOMAINS = 20_000
+
+
+def record_observed_key(key: str, observed_at: Optional[str] = None) -> None:
+    """Record a signing key as observed in the ecosystem (Addendum 5 §6.1)."""
+    key = (key or "").strip()[:512]
+    if not key:
+        return
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO observed_signing_keys(key, first_seen)
+               VALUES (?, COALESCE(?, datetime('now')))""",
+            (key, observed_at),
+        )
+        # ponytail: the prune is O(n) per insert (a corpus-bootstrap path,
+        # not per-diff); switch to a periodic-trigger prune if a ledger at
+        # the cap makes bootstrap slow.
+        conn.execute(
+            """DELETE FROM observed_signing_keys WHERE key IN (
+                   SELECT key FROM observed_signing_keys
+                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+            (MAX_OBSERVED_KEYS,),
+        )
+        conn.commit()
+
+
+def key_observed_before(key: str) -> bool:
+    """True when *key* has been observed in the ecosystem index."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM observed_signing_keys WHERE key = ? LIMIT 1",
+            ((key or "").strip()[:512],),
+        ).fetchone()
+    return row is not None
+
+
+def observed_key_count() -> int:
+    with get_connection() as conn:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM observed_signing_keys").fetchone()[0] or 0)
+
+
+def record_observed_domain(domain: str, observed_at: Optional[str] = None) -> None:
+    """Record a maintainer email domain as observed in the ecosystem."""
+    domain = (domain or "").strip().lower()[:253]
+    if not domain:
+        return
+    with get_connection() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO observed_maintainer_domains(
+                   domain, first_seen)
+               VALUES (?, COALESCE(?, datetime('now')))""",
+            (domain, observed_at),
+        )
+        conn.execute(
+            """DELETE FROM observed_maintainer_domains WHERE domain IN (
+                   SELECT domain FROM observed_maintainer_domains
+                   ORDER BY first_seen DESC LIMIT -1 OFFSET ?)""",
+            (MAX_OBSERVED_DOMAINS,),
+        )
+        conn.commit()
+
+
+def domain_first_seen(domain: str) -> Optional[str]:
+    """The first-seen stamp for *domain*, or None if never observed."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT first_seen FROM observed_maintainer_domains WHERE domain = ?",
+            ((domain or "").strip().lower()[:253],),
+        ).fetchone()
+    return row[0] if row else None
+
+
+def observed_domain_count() -> int:
+    with get_connection() as conn:
+        return int(conn.execute(
+            "SELECT COUNT(*) FROM observed_maintainer_domains").fetchone()[0] or 0)
 
 
 def get_package_profile(package_name: str) -> Optional[dict]:

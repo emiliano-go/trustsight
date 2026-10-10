@@ -1202,6 +1202,14 @@ See [E002: Encoded-Alphabet Fraction](entropy.md#e002).
 
 See [E003: Identifier Entropy](entropy.md#e003).
 
+### T001 {#t001}
+
+See [T001: Signing-Key Novelty](temporal.md#t001).
+
+### T002 {#t002}
+
+See [T002: Maintainer Domain Novelty](temporal.md#t002).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).

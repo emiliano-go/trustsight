@@ -985,6 +985,21 @@ def analyze_package(
         partial_files=partial_files,
     )
 
+    # Addendum 5 §6.1: T-series temporal novelty.  Cold index declines
+    # (the rule is silent until the ecosystem ledger has observations).
+    from .temporal import t_domain_findings, t_key_findings
+
+    triggered_rules.extend(t_key_findings(change, config))
+    triggered_rules.extend(t_domain_findings(new_maintainer, config))
+    if record:
+        from ..db import record_observed_domain, record_observed_key
+
+        pgp = (change or {}).get("pgp_keys", {}) or {}
+        for key in (*pgp.get("gained", ()), *pgp.get("lost", ())):
+            record_observed_key(key)
+        if new_maintainer and "@" in new_maintainer:
+            record_observed_domain(new_maintainer.rsplit("@", 1)[1])
+
     # Addendum 5 §6.5: M-series predicates over the completed finding set
     # (after the ownership resolver), before scoring.
     from .meta import m_series_findings

@@ -8,6 +8,69 @@ from ..fetcher import walk_bounded
 from ..findings import stamp
 
 
+def _t_thresholds(config, name: str, key: str, default: int) -> int:
+    return int(((config or {}).get("thresholds", {}).get(name, {}) or {})
+               .get(key, default))
+
+
+def t_key_findings(change: dict, config) -> list[dict]:
+    """T001 - signing-key novelty (Addendum 5 §6.1).
+
+    A ``validpgpkeys`` entry added in this diff whose fingerprint has never
+    been observed in the ecosystem index.  Distinct from package novelty:
+    the xz lesson is a *key* story.  Cold index (fewer than
+    ``[thresholds] t_key.min_observations`` keys, default 1) declines to
+    avoid firing on every key a fresh install sees.
+    """
+    from ..db import key_observed_before, observed_key_count
+
+    gained = list((change or {}).get("pgp_keys", {}).get("gained", ()) or ())
+    if not gained:
+        return []
+    if observed_key_count() < _t_thresholds(config, "t_key", "min_observations", 1):
+        return []
+    out = []
+    for key in gained:
+        if key and not key_observed_before(key):
+            out.append(stamp({
+                "rule_id": "T001",
+                "name": "Signing-Key Novelty",
+                "severity": "HIGH", "category": "temporal",
+                "match": ("validpgpkeys adds a signing key never observed in "
+                          f"the ecosystem: {key[:20]}..."),
+                "params": {"key": key[:64]},
+            }))
+    return out
+
+
+def t_domain_findings(maintainer: str, config) -> list[dict]:
+    """T002 - maintainer domain novelty (Addendum 5 §6.1).
+
+    A maintainer email whose domain has never been observed in the
+    ecosystem index.  Cold index declines (see T001).
+    """
+    from ..db import domain_first_seen, observed_domain_count
+
+    if not maintainer or "@" not in maintainer:
+        return []
+    domain = maintainer.rsplit("@", 1)[1].strip().lower()
+    if not domain:
+        return []
+    if observed_domain_count() < _t_thresholds(
+            config, "t_dom", "min_observations", 1):
+        return []
+    if domain_first_seen(domain) is None:
+        return [stamp({
+            "rule_id": "T002",
+            "name": "Maintainer Domain Novelty",
+            "severity": "MEDIUM", "category": "temporal",
+            "match": (f"maintainer domain '{domain}' has never been observed "
+                      "in the ecosystem"),
+            "params": {"domain": domain},
+        })]
+    return []
+
+
 def _recent_update(repo, head_commit):
     if not head_commit:
         return None

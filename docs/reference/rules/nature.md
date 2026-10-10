@@ -201,6 +201,9 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 - **H029 and D002 are the same mechanism** on different graph positions (package name versus dependency closure); the series split is positional.
 - **H carries an internal seam** between shape heuristics and observational heuristics; both reason about behavioral suspicion, but their replay costs differ. The observation-database H rules (H020, H021, H022, H026, H028, H037, H044, H045, H046, H058, H060, H073, H074, H086, H088) are **T-natured**: they read stored history, so their fire rates depend on history length and their cold-start semantics are special. IDs stay H for citation stability; the T-series (T001 signing-key novelty, T002 maintainer-domain novelty) is the destination for new history-backed rules.
 - **R and X are both functions of the tokenizer**: R-on-resolved detects only what resolution can read, and X detects what it refuses. A tokenizer change moves both, so both carry measured-shrinkage/growth gates.
+- **X and E share L4 by design**: X catches what the tokenizer refuses to fold; E catches what folds cleanly but is statistically weird. Two mechanisms at one layer is the diversity the layer model exists to keep.
+- **I is a transport, not a mechanism of its own**: H056 and the signed IOC baselines are the same idea (membership in signed external data). H056 keeps its ID; new federation matches take I IDs. L7 is the indicator layer.
+- **M fires at the layer of its inputs and owns none**: a claims contradiction (M001) or a weak-signal span (M002) has no layer of its own; it records which inputs composed. P (claims) and W (boundaries) are render surfaces, not trajectory layers either.
 - **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
 
 ## Summary Table
@@ -215,6 +218,8 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | X | **Crossfire** | Evasion detection | Severity only | Severity-based | When tokenizer reports evasion |
 | E | **Entropy** | Distribution of added content | Thresholds (ship empty) | Severity-based | When a configured distribution threshold is crossed |
 | T | **Temporal** | Ecosystem history and ledgers | Severity, thresholds | Severity-based | When history makes the change anomalous |
+| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based | At cycle end, never per package |
+| I | **Indicator** | Membership in signed external data | Curator keys, cadence | Outside the score | On an indicator match |
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | P | **Practice** | Declared practice | Visibility only | 0 (always) | On every analysis |
 | W | **Warning** | Analysis boundary | Visibility only | 0 (always) | When boundary encountered |

@@ -22,11 +22,13 @@ __all__ = [
     "added_text",
     "compression_ratio",
     "encoded_fraction",
+    "identifier_bigram_entropy",
     "identifier_entropy",
     "entropy_findings",
 ]
 
 _BASE64_RE = re.compile(r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{16,}={0,2}(?![A-Za-z0-9+/=])")
+_BASE32_RE = re.compile(r"(?<![A-Z2-7])[A-Z2-7]{16,}={0,6}(?![A-Z2-7=])")
 _HEX_RE = re.compile(r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{16,}(?![0-9A-Fa-f])")
 _IDENT_RE = re.compile(r"(?:^|[\s;&|(){}])([A-Za-z_][A-Za-z0-9_]{2,})\s*=")
 
@@ -57,8 +59,10 @@ def compression_ratio(text: str) -> float:
 def encoded_fraction(text: str, min_length: int = 64) -> float:
     """Fraction of non-whitespace tokens that look encoded above *min_length*.
 
-    Counts base64/hex runs at least *min_length* characters long against the
-    total whitespace-separated token count.
+    Counts base64/base32/hex runs at least *min_length* characters long
+    against the total whitespace-separated token count.  The alphabet sets
+    match X029's, so the statistical and staging views agree on what
+    "encoded" means.
     """
     tokens = text.split()
     if not tokens:
@@ -67,7 +71,8 @@ def encoded_fraction(text: str, min_length: int = 64) -> float:
     for token in tokens:
         if len(token) < min_length:
             continue
-        if _BASE64_RE.search(token) or _HEX_RE.search(token):
+        if (_BASE64_RE.search(token) or _BASE32_RE.search(token)
+                or _HEX_RE.search(token)):
             encoded += 1
     return encoded / len(tokens)
 
@@ -83,6 +88,29 @@ def identifier_entropy(text: str) -> float:
         counts[char] = counts.get(char, 0) + 1
     length = len(joined)
     return -sum((n / length) * math.log2(n / length) for n in counts.values())
+
+
+def identifier_bigram_entropy(text: str) -> float:
+    """Second-order entropy (bits/bigram) of the new identifiers.
+
+    A unigram distribution flattens structure; the bigram distribution keeps
+    it.  Generated names (`a`, `b`, `x1`) collapse to a handful of bigrams,
+    and packed names spread across many - which is why the second-order
+    statistic separates them more reliably than the first (the same argument
+    that makes conditional entropy outperform raw entropy in the literature).
+    """
+    names = _IDENT_RE.findall(text)
+    if not names:
+        return 0.0
+    joined = "".join(names)
+    if len(joined) < 2:
+        return 0.0
+    counts: dict[str, int] = {}
+    for i in range(len(joined) - 1):
+        bigram = joined[i:i + 2]
+        counts[bigram] = counts.get(bigram, 0) + 1
+    total = len(joined) - 1
+    return -sum((n / total) * math.log2(n / total) for n in counts.values())
 
 
 def entropy_findings(diff_text: str, config, add) -> None:
@@ -121,12 +149,19 @@ def entropy_findings(diff_text: str, config, add) -> None:
     e003 = thresholds.get("e003", {})
     lo = e003.get("min_entropy")
     hi = e003.get("max_entropy")
-    if lo is not None or hi is not None:
+    blo = e003.get("min_bigram")
+    bhi = e003.get("max_bigram")
+    if any(v is not None for v in (lo, hi, blo, bhi)):
         entropy = identifier_entropy(text)
+        bigram = identifier_bigram_entropy(text)
         below = lo is not None and entropy < float(lo)
         above = hi is not None and entropy > float(hi)
-        if below or above:
+        b_below = blo is not None and bigram < float(blo)
+        b_above = bhi is not None and bigram > float(bhi)
+        if below or above or b_below or b_above:
             add("E003", "Identifier Entropy", "MEDIUM", "entropy",
-                f"new identifier names have entropy {entropy:.2f} bits/char "
-                f"(expected {lo}..{hi})",
-                line=None, entropy=round(entropy, 4))
+                f"new identifier names: entropy {entropy:.2f} bits/char "
+                f"(expected {lo}..{hi}), bigram entropy {bigram:.2f} "
+                f"bits/bigram (expected {blo}..{bhi})",
+                line=None, entropy=round(entropy, 4),
+                bigram=round(bigram, 4))

@@ -44,15 +44,23 @@ padded payload. Silent unless the threshold is set.
 **MEDIUM** (weight 15) · category `entropy`
 
 Fires when at least `[thresholds] e002.min_fraction` of the added tokens
-are base64/hex runs of at least `e002.min_length` (default 64) characters.
-The alphabet sets are X029's, applied as a statistic rather than a staging
-predicate.
+are base64/base32/hex runs of at least `e002.min_length` (default 64)
+characters. The alphabet sets are X029's, applied as a statistic rather than
+a staging predicate.
 
 ### E003: Identifier Entropy {#e003}
 
 **MEDIUM** (weight 15) · category `entropy`
 
-Fires when the Shannon entropy of newly assigned variable/function names
-falls outside `e003.min_entropy`..`e003.max_entropy`. Generated names
-(`a`, `b`, `x1` - low entropy) and packed names (high entropy) are both
-outliers against the corpus.
+Fires when the entropy of newly assigned variable/function names falls
+outside the configured band. Two statistics are checked: the unigram Shannon
+entropy (`e003.min_entropy`..`e003.max_entropy`) and the **bigram** entropy
+(`e003.min_bigram`..`e003.max_bigram`). The second-order statistic keeps the
+structure a unigram distribution flattens, so it separates generated names
+(`a`, `b`, `x1` - few bigrams) from packed names more reliably.
+
+**Calibration.** Every E threshold ships empty. `scripts/entropy_calibrate.py`
+measures the E001/E002/E003 distributions on the locked benign corpus in the
+calibration CI job and prints conservative percentile floors; copying one
+into `config.toml` is the deliberate calibration decision, and the tool never
+rewrites the shipped defaults.

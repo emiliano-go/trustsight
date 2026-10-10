@@ -75,3 +75,33 @@ def test_e003_fires_outside_the_band():
     body = "_aa=1\n_bb=2\n_cc=3\n_d=4\n"
     emitted = _collect(_diff(body), {"thresholds": {"e003": {"min_entropy": 6.0}}})
     assert [e["rule_id"] for e in emitted] == ["E003"]
+
+
+def test_bigram_entropy_separates_repetitive_from_varied_names():
+    from trustsight.analysis.entropy import identifier_bigram_entropy
+
+    repetitive = identifier_bigram_entropy("_aa=1\n_aa=2\n_aa=3\n")
+    varied = identifier_bigram_entropy("_abc=1\n_xyz=2\n_qrs=3\n")
+    assert varied > repetitive >= 0.0
+
+
+def test_e003_fires_on_a_bigram_threshold():
+    body = "_aa=1\n_aa=2\n_aa=3\n"
+    emitted = _collect(_diff(body), {"thresholds": {"e003": {"min_entropy": 6.0}}})
+    assert [e["rule_id"] for e in emitted] == ["E003"]
+    assert any("bigram" in e for e in emitted)
+
+
+def test_entropy_calibrate_measures_a_corpus(tmp_path):
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    from entropy_calibrate import measure
+
+    (tmp_path / "pkg__a..b.diff").write_text(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,2 @@\n x\n+" + "A" * 100 + "\n")
+    result = measure(tmp_path)
+    assert result["n"] == 1
+    assert "e001" in result["suggested"]
+    assert "min_bigram" in result["suggested"]["e003"]

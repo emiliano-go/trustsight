@@ -55,6 +55,13 @@ jobs:
       # attribution, a side, a line number or hunk arithmetic fails until
       # the baseline is deliberately regenerated.  The default suite runs a
       # sample; here it runs whole.
+      # The E-series ships its thresholds empty; this measures the corpus
+      # distributions and prints the suggested floors (Q3 auto-calibration),
+      # as an artifact for the next deliberate calibration commit.  Reporting
+      # only: it never rewrites the shipped defaults.
+      - name: Measure the entropy thresholds (reporting)
+        run: uv run python scripts/entropy_calibrate.py --json entropy-thresholds.json
+
       - name: Check the diffdoc projection baseline over the whole corpus
         run: uv run python tests/harness/diffdoc_parity.py --check tests/fixtures/diffdoc-projections.json.gz
 

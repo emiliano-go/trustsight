@@ -359,6 +359,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "X029": _C.CROSSFIRE,
     "X030": _C.CROSSFIRE,
     "X031": _C.CROSSFIRE,
+    "X032": _C.CROSSFIRE,
     "S001": _C.SABOTAGE,
     "S002": _C.SABOTAGE,
     "S003": _C.SABOTAGE,
@@ -412,6 +413,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "C023": _C.INTEGRITY,
     "C017": _C.INSTALL_AND_PERSIST,
     "C025": _C.STAGING_AND_RECON,
+    "C028": _C.STAGING_AND_RECON,
     "C026": _C.INTEGRITY,
     "C027": _C.INTEGRITY,
     # --- naming and dependencies ---------------------------------------

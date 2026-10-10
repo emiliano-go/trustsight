@@ -60,7 +60,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## C-series: **Check** Structural Invariants
 
-**Count:** 26 rules (C001-C027)
+**Count:** 26 rules (C001-C028)
 
 **Mechanism:** Deterministic structural checks across the PKGBUILD. C-series rules enforce invariants that cannot be expressed as a single regex match: two conditions must hold simultaneously, or a relationship between fields must be consistent. Unlike H-series (which reasons about behavioral suspicion), C-series checks are purely mechanical: if condition A and condition B co-occur, the invariant is violated.
 
@@ -128,7 +128,7 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## X-series: **Crossfire** Evasion Detection
 
-**Count:** 31 rules (X001-X031)
+**Count:** 31 rules (X001-X032)
 
 **Mechanism:** Detects evasion techniques, not the payloads they hide. X-series rules fire on *how* a thing was written rather than *what* it does. The tokenizer could not resolve the command, so the evasion technique itself is the signal.
 

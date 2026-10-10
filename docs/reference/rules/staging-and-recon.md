@@ -24,6 +24,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [C025](#c025) | Hardening Option Disabled | LOW |
+| [C028](#c028) | Build Cache Outside The Build Trees | INFO |
 | [H007](#h007) | Symlink Redirect | - |
 | [H010](#h010) | Suspicious file write | - |
 | [H038](#h038) | World-Writable Staging | HIGH |
@@ -124,3 +125,13 @@ Fire rate: 0 of 3739.
 Debug packages set these routinely, so the benign fire rate is the
 published number that decides this rule's weight. Measured on the locked
 benign corpus: 20/3,739 (0.53%).
+
+### C028: Build Cache Outside The Build Trees {#c028}
+
+**INFO** (weight 0) · category `staging`
+
+Fires when the diff adds a build step (`go build`, `cargo fetch`,
+`npm ci`, ...) that will cache outside `$srcdir`/`$pkgdir` (Go module cache,
+Cargo registry, npm cache) and the recipe does not override the cache
+directory. This is a failure by omission, not malice, so it is INFO and
+weight 0; it reports that the build will write outside the build trees.

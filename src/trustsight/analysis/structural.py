@@ -605,6 +605,10 @@ def _structural_findings(
 
     entropy_findings(diff_text, config or {}, add)
 
+    # Cross-cutting (T8): command splicing (X) and build-hygiene (C) signals.
+    _splicing_findings(diff_text, add)
+    _build_hygiene_findings(diff_text, add, current_text)
+
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
         # F8: a version move only stands the tamper signal down when the
         # diff adds no new code capability.  A bump that also starts
@@ -1227,6 +1231,120 @@ def install_script_findings(doc) -> list[dict]:
                         }))
                         break
     return out
+
+
+#: A command name assembled by splicing quotes or ANSI-C escapes - `cu""rl`,
+#: `su"d"o`, `su$'\x64'o`, `${IFS}sudo`.  A PKGBUILD has no honest reason to
+#: disguise a command name, so the splicing itself is the signal (X032),
+#: whether or not the hidden command is harmless.
+_SPLICE_RE = re.compile(
+    r"(?:^|[;&|(\s])("
+    r"[A-Za-z_][\w.+-]*(?:\"[A-Za-z0-9_]\"|'[A-Za-z0-9_]'|\"\"|'')+[\w.+-]*"
+    r"|[A-Za-z_][\w.+-]*\$'(?:\\x[0-9A-Fa-f]{2}|\\[0-7]{1,3})+'[\w.+-]*"
+    r"|\w*\$\{[^}\n]*\bIFS\b[^}\n]*\}\w*"
+    r")"
+)
+
+#: A build tool that caches outside the build trees unless redirected.  The
+#: research finding is a *failure by omission*, not malice, so C028 is INFO
+#: and fires only when the diff itself adds such a build step.
+_BUILD_CACHE_RE = re.compile(
+    r"(?:^|[;&|(\s])(?:go\s+(?:build|get|install|test)|cargo\s+(?:build|fetch|test)"
+    r"|npm\s+(?:install|ci)|yarn\s+install|pnpm\s+install|bun\s+install)\b"
+)
+_CACHE_ENV_RE = re.compile(
+    r"\b(?:GOFLAGS|GOMODCACHE|GOPATH|CARGO_HOME|npm_config_cache"
+    r"|YARN_CACHE_FOLDER|PNPM_HOME)\s*="
+)
+
+
+#: Commands a PKGBUILD has no honest reason to disguise.  The splice is only
+#: reported when the disguised word resolves to one of these, which keeps the
+#: rule off ordinary quoted text (Python docstrings, `scan.""`, and so on).
+_DISGUISABLE_COMMANDS = frozenset({
+    "sudo", "su", "doas", "curl", "wget", "aria2c", "sh", "bash", "zsh",
+    "dash", "fish", "python", "python3", "perl", "ruby", "node", "php",
+    "base64", "xxd", "eval", "exec", "source", "nc", "ncat", "netcat",
+    "socat", "ssh", "scp", "git", "npm", "npx", "bun", "deno", "cargo",
+    "pip", "pip3", "dd", "rm", "chmod", "chown", "install", "systemctl",
+    "busybox", "ld", "gcc", "make", "tar",
+})
+
+_ANSI_ESCAPE_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
+
+
+def _ansi_decode(body: str) -> str:
+    out, i = [], 0
+    while i < len(body):
+        if body[i] == "\\" and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt == "x" and i + 3 < len(body) + 1:
+                try:
+                    out.append(chr(int(body[i + 2:i + 4], 16)))
+                    i += 4
+                    continue
+                except ValueError:
+                    pass
+            if nxt in "01234567":
+                out.append(chr(int(body[i + 1:i + 4], 8) & 0xFF))
+                i += 4
+                continue
+            out.append(nxt)
+            i += 2
+            continue
+        out.append(body[i])
+        i += 1
+    return "".join(out)
+
+
+def _desplice(text: str) -> str:
+    """The bare word a spliced token resolves to, lowercased."""
+    text = re.sub(r"\$\{[^}\n]*\bIFS\b[^}\n]*\}", "", text)
+    text = _ANSI_ESCAPE_RE.sub(lambda m: _ansi_decode(m.group(1)), text)
+    return text.replace('"', "").replace("'", "").lower()
+
+
+def _added_raw_lines(diff_text) -> list[str]:
+    from ..diffdoc import parse_diff_lines
+    from ..tokenizer import split_lines
+
+    return [line.raw for line in
+            parse_diff_lines(split_lines(diff_text)).added_lines()]
+
+
+def _splicing_findings(diff_text, add) -> None:
+    """X032: a command name built from spliced quotes or ANSI-C escapes."""
+    seen: set[str] = set()
+    for line in _added_raw_lines(diff_text):
+        match = _SPLICE_RE.search(line)
+        if not match:
+            continue
+        shape = match.group(1)[:40]
+        # Only fire when the disguised word resolves to a command worth
+        # disguising: an ordinary quoted word (`scan.""` in a docstring) is
+        # not the signal this rule exists for.
+        if _desplice(shape) not in _DISGUISABLE_COMMANDS:
+            continue
+        if shape in seen:
+            continue
+        seen.add(shape)
+        add("X032", "Command Name Assembled By Splicing", "HIGH", "evasion",
+            f"a command name is built from spliced quotes/escapes: {shape}",
+            line=None, shape=shape)
+
+
+def _build_hygiene_findings(diff_text, add, current_text=None) -> None:
+    """C028: a build tool caches outside the build trees (INFO, hygiene)."""
+    lines = _added_raw_lines(diff_text)
+    if not any(_BUILD_CACHE_RE.search(line) for line in lines):
+        return
+    haystack = current_text or diff_text
+    if _CACHE_ENV_RE.search(haystack):
+        return  # the cache was redirected; not a finding
+    add("C028", "Build Cache Outside The Build Trees", "INFO", "staging",
+        "a build tool caches outside $srcdir without an overridden cache "
+        "directory",
+        line=None)
 
 
 #: Git's executable file mode.  A committed file carrying it can be run

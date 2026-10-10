@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C027, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X032, C001-C028, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1151,7 +1151,7 @@ See [H074: Adopt-then-Modify](maintainer-and-metadata.md#h074).
 ## Additional Per-Package Rules {#additional-per-package-rules}
 
 H086-H088 are per-package findings, not Class D corpus findings. S001-S008
-and X001-X031 are the sabotage and crossfire families; their category pages
+and X001-X032 are the sabotage and crossfire families; their category pages
 are authoritative for their conditions and severities.
 
 ### H086 {#h086}
@@ -1261,6 +1261,10 @@ See [A008: eBPF Artifact In Package](artifact.md#a008).
 ### C027 {#c027}
 
 See [C027: Declared Install Script Is Absent](integrity.md#c027).
+
+### C028 {#c028}
+
+See [C028: Build Cache Outside The Build Trees](staging-and-recon.md#c028).
 
 ### W005 {#w005}
 
@@ -1505,6 +1509,10 @@ See [X029: Encoded Material At Rest](crossfire.md#x029).
 ### X030 {#x030}
 
 See [X030: ANSI-C Quoted Content In Commands](crossfire.md#x030).
+
+### X032 {#x032}
+
+See [X032: Command Name Assembled By Splicing](crossfire.md#x032).
 
 ### X031 {#x031}
 

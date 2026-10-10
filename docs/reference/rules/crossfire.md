@@ -77,6 +77,7 @@ evasion in a recipe is ordinary content there.
 | [X029](#x029) | Encoded Material At Rest | MEDIUM |
 | [X030](#x030) | ANSI-C Quoted Content In Commands | HIGH |
 | [X031](#x031) | Build Reads Non-Code Text | HIGH |
+| [X032](#x032) | Command Name Assembled By Splicing | HIGH |
 <!-- /generated: page-index -->
 
 ### X001: Encoded Payload Decoded And Executed {#x001}
@@ -609,3 +610,14 @@ name, or through `$srcdir`/`$startdir`) and pipes the content through a
 transformation into a shell or `eval`. Reading a different file, or
 reading the recipe for metadata without execution, stands down.
 Measured on the locked benign corpus: 0/3,739.
+
+### X032: Command Name Assembled By Splicing {#x032}
+
+**HIGH** (weight 25) · category `evasion`
+
+Fires when a command name is built by splicing quotes or ANSI-C escapes:
+`cu""rl`, `su"d"o`, `su$'\x64'o`, `${IFS}sudo`. A PKGBUILD has no honest
+reason to disguise a command name, so the splicing itself is the finding,
+whether or not the hidden command is harmless. It closes the refusal
+family's residual: a splice a shell executes but the tokenizer folds can
+still be reported as the *attempt* it is.

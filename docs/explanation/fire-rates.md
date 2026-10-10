@@ -70,7 +70,7 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 | benign diffs above the 20-point threshold | 9.5% |
 | percentile at which 20 sits | 90.5th |
 | malicious 5th percentile | 60 |
-| malicious minimum | 60 |
+| malicious minimum | 50 |
 
 These are a **point-in-time measurement**, taken after
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited) removed
@@ -190,7 +190,7 @@ be measured against the static corpus.
 |------|------|------|-----------|------|-------|
 | H028 | Accelerated Release Cadence | metadata | - | - | 3+ ancestors in 24 h; never a scored finding. Not corpus-measurable. |
 
-## Structural rules (C001-C027)
+## Structural rules (C001-C028)
 
 These depend on the shape of a diff rather than a single-line pattern, so their fire rates are corpus-dependent and not reported as a single number. They appear per-stratum in `baseline.json`.
 

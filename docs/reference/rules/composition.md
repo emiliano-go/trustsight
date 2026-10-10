@@ -74,7 +74,7 @@ obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072),
 staging (H038), recon (H040), persistence (H039, H062, H076), exfil (H041,
 H071), hidden drop (H042), integrity removed (H091) and sabotage (S001-S008).
 Later rules also map onto these stages, including R041, R054, R144, the
-H080-H083/H089-H091 additions and the X001-X031 crossfire rules; the
+H080-H083/H089-H091 additions and the X001-X032 crossfire rules; the
 authoritative rule-to-stage map is `_STAGE_OF` in `analysis/composition.py`.
 
 Each stage counts once however many rules in it fired, and H043's own finding

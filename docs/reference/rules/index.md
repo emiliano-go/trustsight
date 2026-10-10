@@ -4,7 +4,7 @@
 
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
-rules X001-X031, integrity-change rules C001-C027, dependency rules
+rules X001-X032, integrity-change rules C001-C028, dependency rules
 D001-D004, declared-practice rules P001-P008 (P004 skipped), and unverifiable rules
 W001-W007.
 
@@ -39,7 +39,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
 | [Install and Persistence](install-and-persist.md) | `install-and-persist` | 19 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
-| [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 9 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
+| [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 46 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
@@ -47,7 +47,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
-| [Crossfire](crossfire.md) | `crossfire` | 31 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
+| [Crossfire](crossfire.md) | `crossfire` | 32 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 7 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
@@ -122,6 +122,7 @@ is deliberately non-contiguous; see
 | [C025](staging-and-recon.md#c025) | Hardening Option Disabled | Integrity-change | LOW | [Staging and Reconnaissance](staging-and-recon.md) |
 | [C026](integrity.md#c026) | Empty File Added | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C027](integrity.md#c027) | Declared Install Script Is Absent | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
+| [C028](staging-and-recon.md#c028) | Build Cache Outside The Build Trees | Integrity-change | INFO | [Staging and Reconnaissance](staging-and-recon.md) |
 | [D001](naming-and-dependency.md#d001) | Novel Dependency Added | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
@@ -325,6 +326,7 @@ is deliberately non-contiguous; see
 | [X029](crossfire.md#x029) | Encoded Material At Rest | Crossfire | MEDIUM | [Crossfire](crossfire.md) |
 | [X030](crossfire.md#x030) | ANSI-C Quoted Content In Commands | Crossfire | HIGH | [Crossfire](crossfire.md) |
 | [X031](crossfire.md#x031) | Build Reads Non-Code Text | Crossfire | HIGH | [Crossfire](crossfire.md) |
+| [X032](crossfire.md#x032) | Command Name Assembled By Splicing | Crossfire | HIGH | [Crossfire](crossfire.md) |
 <!-- /generated: catalog -->
 
 Weight-0 declared-practice findings (`P001`-`P008`, P004 skipped) are not detections

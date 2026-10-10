@@ -168,6 +168,9 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "version_comparison": fact.version_comparison,
         "is_trivial": is_trivial(fact, findings),
         "ioc_matches": list(fact.ioc_matches),
+        # Addendum 5 §6.4: the indicator tier, promoted.  Same facts as
+        # `ioc_matches`, exposed as the first-class I-series surface.
+        "indicators": list(fact.ioc_matches),
         "dependencies": list(getattr(fact, "dependencies", ())),
         "depth_truncated": bool(getattr(fact, "depth_truncated", False)),
         # Served from the recorded analysis rather than freshly computed
@@ -211,6 +214,7 @@ REPORT_KEYS = (
     "suppressed_rules",
     "acknowledged_urls",
     "ioc_matches",
+    "indicators",
     "first_seen",
     "comparison_base",
     "is_trivial",
@@ -335,6 +339,9 @@ def report_body(
             dict(r) for r in evaluated.get("acknowledged_urls", ())
         ],
         "ioc_matches": [_ioc_row(m) for m in evaluated.get("ioc_matches", ())],
+        # Addendum 5 §6.4: the indicator tier, promoted (same rows as
+        # `ioc_matches`, additive for one release).
+        "indicators": [_ioc_row(m) for m in evaluated.get("ioc_matches", ())],
         "first_seen": bool(evaluated.get("first_seen", False)),
         "comparison_base": evaluated.get("comparison_base", ""),
         "is_trivial": bool(evaluated.get("is_trivial", False)),
@@ -654,6 +661,7 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "version_comparison": row.get("version_comparison", ""),
         "is_trivial": row.get("is_trivial", False),
         "ioc_matches": list(row.get("ioc_matches", ())),
+        "indicators": list(row.get("ioc_matches", ())),
         "dependencies": list(row.get("dependencies", ())),
         "depth_truncated": bool(row.get("depth_truncated", False)),
         "cached": bool(row.get("cached", False)),

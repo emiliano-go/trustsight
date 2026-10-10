@@ -178,6 +178,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `suppressed_rules` | `list[dict]` | Rules suppressed by user override. Each entry has `rule_id`, `severity`, `override_reason`, and `override_package`. These did not contribute to the score. |
 | `acknowledged_urls` | `list[dict]` | Source URLs explicitly acknowledged for this package (`trustsight override add-url`). Each entry has `url` and `reason`. They did not score SOURCE_BUCKET or NOVELTY; a different URL, or the same URL in another package, is judged as before. Reported rather than dropped: an acknowledgement the report does not show is indistinguishable from a URL that never existed. |
 | `ioc_matches` | `list[dict]` | IOC federation baseline hits. Attribution, not score: each entry names the curator (`source`) that flagged the artifact, its `type`/`value`, `confidence`, `provenance`, `campaign`, the `surface` it was found on and its `line`, and whether the indicator is `expired`. IOC matches never appear in `score_breakdown` and never change `final_score`. See [the IOC reference](ioc.md). |
+| `indicators` | `list[dict]` | The indicator tier (Addendum 5 §6.4), promoted from `ioc_matches`: the same rows, exposed as the first-class I-series surface. Additive for one release. Outside the heuristic score, at maximum alert priority. |
 | `final_score` | `int` | Deterministic risk score, 0-100. Computed by `calculate_score()` in `src/trustsight/scoring.py`. |
 
 ### `diff_summary`
@@ -284,7 +285,7 @@ There are two JSON shapes, and they are not the same object.
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `coverage_gaps_carried`,
   `change`, `unresolved_assignments`, `partial_files`, `resolution_coverage`,
   `suppressed_rules`, `acknowledged_urls`,
-  `ioc_matches`, `first_seen`, `comparison_base`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
+  `ioc_matches`, `indicators`, `first_seen`, `comparison_base`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,
   `review_threshold`, `flagged`, `config_fingerprint`, `cached`, `cached_at`.
 

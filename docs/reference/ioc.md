@@ -172,3 +172,20 @@ entries, human curators review and sign, and TrustSight only ever consumes the
 signed output. Keeping the harvester out of the tool is what keeps the IOC gate
 non-evadable by construction: a hash either matches or it does not, and no code
 in TrustSight decides what belongs on the list.
+
+## Federation (sketch)
+
+The indicator tier (Addendum 5 §6.4, I-series) formalizes what this page
+describes: signed external data as a first-class tier, matched outside the
+heuristic score and reported at maximum alert priority. `ioc update`
+refreshes the signed baseline on the operator's cadence; a stale or
+unsigned baseline is refused, never merged.
+
+A **federated** source is deferred until the G-series proves the consumer.
+The fixed shape when it lands: an `ioc update --federation <url>` source
+serving signed indicator sets through the same signature-verification path
+as the release channel, with publisher trust pinned per key in the existing
+keyring and revocable; hashed indicators only (domains, hashes, names - no
+raw maintainer data). The report already exposes the promoted `indicators`
+array (see the [report schema](report-schema.md)), so a consumer written
+against it needs no change when federation ships.

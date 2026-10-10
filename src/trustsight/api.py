@@ -414,6 +414,11 @@ class Report:
     scan_truncated: bool = False
     """The diff was clamped by line count before the rules read it."""
 
+    indicators: tuple = ()
+    """The indicator tier (Addendum 5 §6.4): signed-baseline matches,
+    promoted from ``ioc_matches`` to a first-class surface.  Outside the
+    heuristic score, at maximum alert priority."""
+
     required_by: tuple = ()
     """Packages in the reviewed set that declare this one as a dependency.
 
@@ -1124,6 +1129,7 @@ def _report_from_fact(fact) -> Report:
         depth_truncated=bool(getattr(fact, "depth_truncated", False)),
         required_by=tuple(raw.get("required_by", ()) if raw else ()),
         ioc_matches=tuple(getattr(fact, "ioc_matches", ()) or ()),
+        indicators=tuple(getattr(fact, "ioc_matches", ()) or ()),
         scan_truncated=bool(getattr(fact, "scan_truncated", False)),
         first_seen=fact.first_seen,
         comparison_base=getattr(fact, "comparison_base", ""),

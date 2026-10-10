@@ -158,9 +158,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
         ],
         # Spec §9: install scripts read only in part.
         "partial_files": list(getattr(fact, "partial_files", ()) or ()),
-        # Addendum 2 R1: tokenizer resolution coverage.
-        "resolution_coverage": dict(
-            getattr(fact, "resolution_coverage", {}) or {}),
+        # Addendum 2 R1: tokenizer resolution coverage, with the rule-level
+        # pointer: a resolved-target R-rule that fired zero times beside
+        # unresolved lines points at X026 (the refusal family).
+        "resolution_coverage": _resolution_coverage_rows(fact),
         "file_changes": list(fact.diff_summary.file_changes),
         "first_seen": fact.first_seen,
         "diff_truncated": fact.diff_truncated,
@@ -555,6 +556,27 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
             "results": results,
         }],
     }
+
+
+def _resolution_coverage_rows(fact) -> dict:
+    """R1's resolution coverage plus the rule-level X026 pointer.
+
+    Addendum 2 R1 (v2): when a ``match_target=resolved`` R-rule fired zero
+    times while unresolved lines exist, the report points at X026 rather
+    than leaving the rule's silence unqualified.
+    """
+    coverage = dict(getattr(fact, "resolution_coverage", {}) or {})
+    not_fired = sorted(
+        set(coverage.get("resolved_target_rules", ()))
+        - set(coverage.get("resolved_target_rules_fired", ()))
+    )
+    if coverage.get("unresolved_lines", 0) and not_fired:
+        coverage["x026_pointer"] = (
+            f"{len(not_fired)} resolution-coupled R-rule(s) did not fire "
+            f"beside {coverage['unresolved_lines']} unresolved line(s); "
+            "X026 reports the refusals"
+        )
+    return coverage
 
 
 def _boundaries_for_row(row: dict, findings: list[dict]) -> list[dict]:

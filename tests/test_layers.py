@@ -80,7 +80,8 @@ def test_profile_marks_fired_passed_unreadable():
 
 def test_profile_ignores_non_rule_findings():
     profile = layer_profile(_Fact(), [{"rule_id": "P001"}])
-    assert all(entry["status"] == "passed" for entry in profile.values())
+    assert all(profile[f"L{i}"]["status"] == "passed" for i in range(1, 8))
+    assert profile["L8"]["status"] == "not_exercised"
 
 
 def test_unreadable_is_gap_precise():
@@ -93,12 +94,14 @@ def test_unreadable_is_gap_precise():
 
 def test_content_truncation_blinds_every_layer():
     profile = layer_profile(_Fact(gaps=["diff_truncated"]), [])
-    assert all(entry["status"] == "unreadable" for entry in profile.values())
+    # L1-L7 are blinded; L8 is not exercised by a single-package run.
+    assert all(profile[f"L{i}"]["status"] == "unreadable" for i in range(1, 8))
+    assert profile["L8"]["status"] == "not_exercised"
 
 
 def test_an_unknown_gap_fails_safe():
     profile = layer_profile(_Fact(gaps=["some_new_bound"]), [])
-    assert all(entry["status"] == "unreadable" for entry in profile.values())
+    assert all(profile[f"L{i}"]["status"] == "unreadable" for i in range(1, 8))
 
 
 def test_verdict_names_the_deepest_layer():

@@ -77,6 +77,13 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 
 **Origin:** npm/PyPI/crates typosquat detection - the most exploited supply-chain vector in every other ecosystem. The AUR is defenseless against it.
 
+!!! note "H029 vs D002 - same mechanism, different graph position"
+    H029 and [D002](#d002) are the same typosquat mechanism on different
+    graph positions: H029 scans the package's **own name** against observed
+    popularity, D002 walks the **dependency closure**. The series split is
+    positional, not mechanical - that is the intended reading of "series =
+    mechanism" (see [Rule Nature](nature.md)).
+
 ### D001: Novel Dependency Added {#d001}
 
 - **Severity:** HIGH (weight 25)
@@ -104,6 +111,12 @@ Three classes of name are never considered novel, each an observed false positiv
 D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet.
 
 Popularity is taken from `observation_count`, so no separate package list is shipped. The distance threshold scales with length: short names sit close to many unrelated real packages, with `yay` one edit from `yak`, `yam`, `jay`, and `may`.
+
+!!! note "D002 vs H029 - same mechanism, different graph position"
+    D002 is the dependency-closure twin of [H029](#h029-rule): H029 scans
+    the package's own name, D002 walks the dependency closure. Same
+    mechanism, different graph position; the series split is positional,
+    not mechanical (see [Rule Nature](nature.md)).
 
 ### D004: Dependency Hijack Via Provides {#d004}
 

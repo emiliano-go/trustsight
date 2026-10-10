@@ -70,9 +70,21 @@ def alert_payload(cycle) -> dict:
         for package, indicator in getattr(cycle, "ioc_hits", [])
     ]
     n_alerts = len(cycle.new_alerts)
+    # Addendum 5 §6.2/§9: the G-series campaign clusters, as member triples.
+    # The same document shape as over_threshold, so notify plumbing is reused.
+    campaign_cluster = [
+        {
+            "rule_id": finding.get("rule_id", ""),
+            "members": list(finding.get("params", {}).get("members", ())),
+            "count": len(finding.get("params", {}).get("members", ())),
+        }
+        for finding in (getattr(cycle, "cluster_findings", None) or ())
+    ]
     parts = []
     if iocs:
         parts.append(f"{len(iocs)} IOC match(es)")
+    if campaign_cluster:
+        parts.append(f"{len(campaign_cluster)} campaign cluster(s)")
     if cycle.over_threshold:
         parts.append(f"{len(cycle.over_threshold)} package(s) over threshold")
     if n_alerts:
@@ -97,6 +109,7 @@ def alert_payload(cycle) -> dict:
         ],
         "over_threshold": over,
         "ioc_matches": iocs,
+        "campaign_cluster": campaign_cluster,
     }
     if day:
         payload["day"] = day

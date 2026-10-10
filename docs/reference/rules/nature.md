@@ -204,6 +204,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 - **X and E share L4 by design**: X catches what the tokenizer refuses to fold; E catches what folds cleanly but is statistically weird. Two mechanisms at one layer is the diversity the layer model exists to keep.
 - **I is a transport, not a mechanism of its own**: H056 and the signed IOC baselines are the same idea (membership in signed external data). H056 keeps its ID; new federation matches take I IDs. L7 is the indicator layer.
 - **M fires at the layer of its inputs and owns none**: a claims contradiction (M001) or a weak-signal span (M002) has no layer of its own; it records which inputs composed. P (claims) and W (boundaries) are render surfaces, not trajectory layers either.
+- **A is the reserved L9 layer, not an L1-L8 rule layer**: it inspects the built artifact, only in the optional build lane, and its findings are never blended into the static score. The series is an artifact of execution, not of text analysis - the one mechanism that cannot be a static rule.
 - **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
 - **The H-series is under an intake freeze** (Addendum 3): no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`.
 
@@ -222,6 +223,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based | At cycle end, never per package |
 | I | **Indicator** | Membership in signed external data | Curator keys, cadence | Outside the score | On an indicator match |
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
+| A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |
 | P | **Practice** | Declared practice | Visibility only | 0 (always) | On every analysis |
 | W | **Warning** | Analysis boundary | Visibility only | 0 (always) | When boundary encountered |
 

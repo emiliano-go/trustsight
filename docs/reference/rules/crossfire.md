@@ -548,6 +548,10 @@ them; `[thresholds] x026.min_count` sets the firing floor (default 1).
 The unresolved-is-not-seen contract holds: X026 reports the refusal, it
 never makes another rule treat the value as read.
 
+An unresolved construct is *also* an analysis boundary: the [W series](unverifiable.md)
+names what the analysis could not read (weight 0), while X026 scores the
+suspicion. Both may fire; they are different claims about the same line.
+
 Measured on the locked benign corpus: 130/3,739 (3.5%, 27 packages) - the
 honest-refusal floor (`CONFIGURE_FLAGS=$(...)`, `VERSION=$(date)`,
 Windows-ISO helper variables).
@@ -557,7 +561,10 @@ Windows-ISO helper variables).
 **CRITICAL** (weight 40) · category `evasion`
 
 Fires when X026's input set holds two or more distinct unresolved names in
-executable positions. X027 implies X026; no orphaned cluster findings.
+executable positions. X027 implies X026; no orphaned cluster findings. As
+with X026, the refusals are also an analysis boundary the [W series](unverifiable.md)
+reports at weight 0.
+
 Measured on the locked benign corpus: 46/3,739 (1.2%, 9 packages - kernel
 and ISO build machinery); the rate is published as the calibration floor.
 

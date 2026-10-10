@@ -248,7 +248,7 @@ def blinded_layers(gaps) -> frozenset[Layer]:
     return frozenset(blinded)
 
 
-def layer_profile(fact, findings) -> dict[str, dict]:
+def layer_profile(fact, findings, *, correlation_ran: bool = False) -> dict[str, dict]:
     """The report's ``layers`` object (Addendum 5 §3).
 
     Per layer, ``{"status", "name", "findings"}``.  ``fired`` when a
@@ -276,10 +276,25 @@ def layer_profile(fact, findings) -> dict[str, dict]:
     return {
         layer.value: {
             "name": layer.name_text,
-            "status": ("fired" if by_layer[layer]
-                       else "unreadable" if layer in blinded
-                       else "passed"),
+            "status": _layer_status(layer, by_layer[layer], blinded,
+                                    correlation_ran),
             "findings": by_layer[layer],
         }
         for layer in LAYER_ORDER
     }
+
+
+def _layer_status(layer, findings, blinded, correlation_ran: bool) -> str:
+    """One layer's status.  A finding carries the layer where it caught.
+
+    L8 is the cross-package correlation layer: it cannot be exercised by a
+    single-package run, so it reports ``not_exercised`` rather than a
+    misleading ``passed`` outside ``full-aur`` (Addendum 5 §6.2).
+    """
+    if findings:
+        return "fired"
+    if layer is Layer.L8 and not correlation_ran:
+        return "not_exercised"
+    if layer in blinded:
+        return "unreadable"
+    return "passed"

@@ -275,3 +275,13 @@ def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
     assert result.exit_code == 0, result.output
     assert len(receiver.requests) == 1
     assert receiver.requests[0][1]["priority"] == "default"
+
+
+def test_payload_carries_campaign_clusters():
+    cycle = _cycle(cluster_findings=[
+        {"rule_id": "G001", "params": {"members": ["a", "b", "c"]}},
+    ])
+    payload = alert_payload(cycle)
+    assert payload["campaign_cluster"] == [
+        {"rule_id": "G001", "members": ["a", "b", "c"], "count": 3},
+    ]

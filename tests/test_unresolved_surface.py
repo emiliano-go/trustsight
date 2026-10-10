@@ -49,3 +49,31 @@ def test_a_refused_source_is_never_read_as_a_declared_value():
     assert UNRESOLVED_SOURCE in fact.coverage_gaps
     assert any(row["name"] == "source"
                for row in fact.unresolved_assignments)
+
+
+def test_r1_resolution_pointer_points_at_x026():
+    """Addendum 2 R1 (v2): a silent resolved-target R-rule beside unresolved
+    lines points at the refusal family rather than reading as clean."""
+    from trustsight.reporting import evaluate_fact
+    from trustsight.schema import PackageFact
+
+    fact = PackageFact(package_name="demo", resolution_coverage={
+        "resolved_target_rules": ["R001", "R002"],
+        "resolved_target_rules_fired": ["R002"],
+        "unresolved_lines": 3,
+    })
+    rc = evaluate_fact(fact)["resolution_coverage"]
+    assert rc.get("x026_pointer")
+    assert "X026" in rc["x026_pointer"]
+
+
+def test_r1_no_pointer_when_nothing_is_unresolved():
+    from trustsight.reporting import evaluate_fact
+    from trustsight.schema import PackageFact
+
+    fact = PackageFact(package_name="demo", resolution_coverage={
+        "resolved_target_rules": ["R001"],
+        "resolved_target_rules_fired": [],
+        "unresolved_lines": 0,
+    })
+    assert "x026_pointer" not in evaluate_fact(fact)["resolution_coverage"]

@@ -68,3 +68,7 @@ def test_unknown_gap_is_ignored_not_misreported():
     boundaries = boundaries_from_fact(_fact(gaps=["totally_new_gap"]))
     assert boundaries == []
     assert AnalysisBoundary(kind=BoundaryKind.TRUNCATED).to_dict()["gap"] == ""
+
+
+def test_w007_is_a_no_history_boundary():
+    assert boundary_kind_for_w_rule("W007") == BoundaryKind.NO_HISTORY

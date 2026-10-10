@@ -954,3 +954,14 @@ def test_the_body_only_exemptions_are_still_body_keys():
     keys = set(REPORT_KEYS) | set(SCORE_KEYS) | set(VERBOSE_KEYS)
     stale = sorted(_BODY_ONLY - keys)
     assert stale == [], f"exemptions for keys that are no longer emitted: {stale}"
+
+
+def test_the_fact_report_body_carries_comparison_base():
+    """B11: the fact path and the review-row path must carry the same key.
+    `comparison_base` was set on the review-row body but dropped from the
+    fact body, so `inspect --json` and the API reported ""."""
+    from trustsight.reporting import evaluate_fact, report_body
+    from trustsight.schema import PackageFact
+
+    fact = PackageFact(package_name="demo", comparison_base="parent")
+    assert report_body(evaluate_fact(fact))["comparison_base"] == "parent"

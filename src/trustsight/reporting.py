@@ -131,6 +131,10 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "new_version": fact.new_version,
         "old_commit": fact.old_commit,
         "new_commit": fact.new_commit,
+        # The fact path must carry what report_body reads: the review-row
+        # path already set this, so omitting it here made the surfaces
+        # disagree (B11).  raw is fact_to_dict(fact), which has the value.
+        "comparison_base": raw.get("comparison_base", ""),
         "score": fact.final_score,
         "risk": verdict_level(fact),
         "risk_label": verdict_label(fact),

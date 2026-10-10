@@ -49,6 +49,7 @@ SERIES_NAMES = {
     "M": "Meta",
     "E": "Entropy",
     "T": "Temporal",
+    "G": "Correlation",
 }
 
 

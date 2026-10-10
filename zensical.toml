@@ -124,6 +124,7 @@ Rules = [
   {Unverifiable = "reference/rules/unverifiable.md"},
   {"Meta and Confluence" = "reference/rules/meta.md"},
   {Entropy = "reference/rules/entropy.md"},
+  {Correlation = "reference/rules/correlation.md"},
 ]
 
 [[project.nav]]

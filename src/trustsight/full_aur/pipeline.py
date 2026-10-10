@@ -1,5 +1,6 @@
 """Bootstrap and incremental corpus pipeline."""
 
+import json
 import logging
 import sys
 import time
@@ -185,6 +186,42 @@ def _profile_score(name: str, scores: dict[str, int]) -> int:
     return row[0] if row and row[0] is not None else 0
 
 
+def _correlation_records(
+    new_meta: dict, old_meta: Optional[dict], processed: set[str]
+) -> list[dict]:
+    """Per-package records the G-series correlates (Addendum 5 §6.2).
+
+    Gained hosts come from the ``source_hosts`` property timeline (the
+    corpus already stores every change as JSON old/new values); adoption is
+    a maintainer change between the two snapshots.  Added-literals have no
+    corpus feed yet, so they are empty here (the G002 engine ships and is
+    unit-tested; the literal hash view is the pending corpus work).
+    """
+    from ..db import get_property_transitions
+
+    records: list[dict] = []
+    for name in processed:
+        hosts_gained: set[str] = set()
+        for transition in get_property_transitions(
+                name, property_key="source_hosts", limit=20):
+            try:
+                old = set(json.loads(transition["old_value"]) or [])
+                new = set(json.loads(transition["new_value"]) or [])
+            except (TypeError, ValueError):
+                continue
+            hosts_gained |= new - old
+        current = (new_meta.get(name) or {}).get("Maintainer") or ""
+        previous = (old_meta or {}).get(name, {}).get("Maintainer") or ""
+        records.append({
+            "package": name,
+            "hosts_gained": sorted(hosts_gained),
+            "added_literals": [],
+            "maintainer": current,
+            "adoption": bool(current and previous and current != previous),
+        })
+    return records
+
+
 def _run_corpus_sweep(
     new_meta: dict,
     old_meta: Optional[dict],
@@ -218,6 +255,13 @@ def _run_corpus_sweep(
         maintainer_history=maintainer_activity_history(),
         now=int(time.time()),
     )
+
+    # Addendum 5 §6.2: the G-series cross-package correlation, over the
+    # cycle's records (collective input, so it runs here and not per package).
+    from ..analysis.correlation import correlate
+
+    findings.extend(correlate(
+        _correlation_records(new_meta, old_meta, processed), load_config()))
 
     weights = load_config().get("severity_weights", {})
     for finding in findings:

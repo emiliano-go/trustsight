@@ -52,6 +52,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Unverifiable](unverifiable.md) | `unverifiable` | 7 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
+| [Correlation](correlation.md) | `correlation` | 3 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -118,6 +119,9 @@ is deliberately non-contiguous; see
 | [E001](entropy.md#e001) | Added-Text Compression Ratio | Entropy | MEDIUM | [Entropy](entropy.md) |
 | [E002](entropy.md#e002) | Encoded-Alphabet Fraction | Entropy | MEDIUM | [Entropy](entropy.md) |
 | [E003](entropy.md#e003) | Identifier Entropy | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [G001](correlation.md#g001) | Shared Gained Host | Correlation | HIGH | [Correlation](correlation.md) |
+| [G002](correlation.md#g002) | Shared Added Literal | Correlation | HIGH | [Correlation](correlation.md) |
+| [G003](correlation.md#g003) | Coordinated Adoption | Correlation | MEDIUM | [Correlation](correlation.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |

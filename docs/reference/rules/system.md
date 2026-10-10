@@ -1210,6 +1210,18 @@ See [T001: Signing-Key Novelty](temporal.md#t001).
 
 See [T002: Maintainer Domain Novelty](temporal.md#t002).
 
+### G001 {#g001}
+
+See [G001: Shared Gained Host](correlation.md#g001).
+
+### G002 {#g002}
+
+See [G002: Shared Added Literal](correlation.md#g002).
+
+### G003 {#g003}
+
+See [G003: Coordinated Adoption](correlation.md#g003).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).

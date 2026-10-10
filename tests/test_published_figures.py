@@ -81,6 +81,7 @@ def test_the_rule_counts_in_the_readme_match_the_catalog():
         "M": "meta rules",
         "E": "entropy rules",
         "T": "temporal rules",
+        "G": "correlation rules",
     }
     missing = [
         f"{by_letter[letter]} {label}"
@@ -90,7 +91,7 @@ def test_the_rule_counts_in_the_readme_match_the_catalog():
     assert not missing, "README family counts drifted: " + ", ".join(missing)
 
     scoring = len(RULE_CATEGORIES) - by_letter.get("W", 0)
-    assert f"{scoring} documented rules across nine scoring namespaces" in readme
+    assert f"{scoring} documented rules across ten scoring namespaces" in readme
 
 
 def test_the_rules_index_legend_matches_the_catalog():

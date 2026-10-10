@@ -66,6 +66,9 @@ class RuleCategory(StrEnum):
     #: §6.3): the statistical twin of the X-series. Suspicion, never a
     #: verdict; thresholds ship empty and are corpus-calibrated.
     ENTROPY = "entropy"
+    #: The G series. Cross-package correlation (Addendum 5 §6.2): joins
+    #: over the set of recent analyses, run at cycle end, never per package.
+    CORRELATION = "correlation"
 
     @property
     def doc_page(self) -> str:
@@ -106,6 +109,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.UNVERIFIABLE: "Unverifiable",
     RuleCategory.META: "Meta and Confluence",
     RuleCategory.ENTROPY: "Entropy",
+    RuleCategory.CORRELATION: "Correlation",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -178,6 +182,10 @@ _SUMMARIES: dict[RuleCategory, str] = {
     RuleCategory.ENTROPY: (
         "The added content is statistically abnormal - a distribution "
         "outlier, not a known pattern. Suspicion, never a verdict."
+    ),
+    RuleCategory.CORRELATION: (
+        "The pattern is across packages, not inside one: a host, literal "
+        "or adopter shared by several packages in a window."
     ),
 }
 
@@ -299,6 +307,9 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "E003": _C.ENTROPY,
     "T001": _C.TEMPORAL,
     "T002": _C.TEMPORAL,
+    "G001": _C.CORRELATION,
+    "G002": _C.CORRELATION,
+    "G003": _C.CORRELATION,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,

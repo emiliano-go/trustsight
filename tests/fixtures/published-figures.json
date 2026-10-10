@@ -57,11 +57,11 @@
     "docs/guides/using-in-ci.md": [
       "| Benign | p95 (95th percentile) | **35** |",
       "| Zero-rate (benign scored 0) | percentage | **68.4%** |",
-      "no benign package exceeds its p95 (35)"
+      "the published figures separate the two tails by 25 points: benign p95 = 35, CRITICAL p5 = 60, measured on the locked 3,739-diff corpus"
     ],
     "docs/explanation/index.md": [
       "The benign p95 (95th percentile of benign package scores) is 35",
-      "The 25-point gap between these two distributions",
+      "The 25-point gap between these two measured percentiles",
       "**68.4% zero-rate** on the 3,739-diff locked corpus",
       "**benign p95 = 35**"
     ],

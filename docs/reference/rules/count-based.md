@@ -24,7 +24,7 @@ severity weights and the reserved identifier ranges.
 | Rule | Name | Severity |
 |---|---|---|
 | [H030](#h030-rule) | Dependency-Set Expansion | MEDIUM |
-| [H036](#h036) | Shell Obfuscation Density | MEDIUM/HIGH |
+| [H036](#h036) | Shell Obfuscation Density | MEDIUM |
 | [H045](#h045) | Mass Adoption | HIGH |
 | [H052](#h052) | Shared Source Repository | HIGH |
 | [H055](#h055) | Attribute Burst | MEDIUM |

@@ -460,6 +460,8 @@ def _structural_findings(
     tree_manifest: list[tuple[str, bytes]] | None = None,
     whole_recipe: bool = False,
     previous_diff: str = "",
+    previous_commit: str = "",
+    current_commit: str = "",
 ) -> list[dict]:
     source_buckets = source_buckets or {}
     findings: list[dict] = []
@@ -588,6 +590,9 @@ def _structural_findings(
     # complete .install script's hook bodies, read as functions.
     if scope_doc is not None:
         findings.extend(install_script_findings(scope_doc))
+        # Addendum 5 §7: the L1 structural rules over the typed DiffFile
+        # metadata (mode, rename) and empty-file shape.
+        diff_structure_findings(scope_doc, add)
 
     # Addendum 4: G1/G3/G4/G5/G6/G7 predicates over the same parse.
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
@@ -777,7 +782,9 @@ def _structural_findings(
             line=find_line_in_diff(diff_text, r"\$\(|`"))
 
     _crossfire_findings(diff_text, config or {}, add,
-                        previous_diff=previous_diff)
+                        previous_diff=previous_diff,
+                        previous_commit=previous_commit,
+                        current_commit=current_commit)
     _sabotage_findings(diff_text, config or {}, add)
     _dependency_findings(
         diff_text, package_name, config or {}, add, current_text=current_text,
@@ -1199,6 +1206,37 @@ def install_script_findings(doc) -> list[dict]:
                         }))
                         break
     return out
+
+
+#: Git's executable file mode.  A committed file carrying it can be run
+#: directly from the source tree; the structural twin of the artifact-side
+#: mode check (Addendum 5 §12, A-MODE).
+_EXECUTABLE_MODE = "100755"
+
+
+def diff_structure_findings(doc, add) -> None:
+    """C-MODE / C-RENAME / C-EMPTY over typed ``DiffFile`` metadata (§7).
+
+    Three L1 projections of the parse, with no new walker: an added file
+    with the executable bit, any declared rename, and an added file with no
+    hunks (a marker or placeholder drop).  A finding carries the file it
+    concerns; none of these three has a single line to attribute.
+    """
+    for file in doc.files:
+        if file.status == "added" and file.new_mode == _EXECUTABLE_MODE:
+            add("C018", "Executable File Committed", "MEDIUM", "integrity",
+                f"{file.path} is added with the executable bit set",
+                file=file.path)
+        if file.renamed:
+            add("C019", "File Renamed", "INFO", "integrity",
+                f"{file.rename_from or '?'} renamed to "
+                f"{file.rename_to or file.path}",
+                file=file.path,
+                old_path=file.rename_from, new_path=file.rename_to or file.path)
+        if file.status == "added" and not file.hunks:
+            add("C026", "Empty File Added", "INFO", "integrity",
+                f"{file.path} is added with no content",
+                file=file.path)
 
 
 def capability_in_diff(diff_text: str, current_text: str | None = None) -> str | None:

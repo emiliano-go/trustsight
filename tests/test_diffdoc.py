@@ -308,3 +308,19 @@ def test_boundary_flags_mark_what_the_legacy_walk_saw():
 def test_representative_diffs_round_trip(text):
     doc = parse_diff(text)
     assert DiffDoc.from_dict(doc.to_dict()) == doc
+
+
+def test_cut_hunks_flags_both_directions():
+    """§2 uses ``!=``: a hunk parsing more lines than it declares is a
+    malformed header too, not only a truncated one."""
+    under = parse_diff("@@ -1,1 +1,5 @@\n+a\n+b\n")
+    assert len(under.cut_hunks()) == 1
+    assert under.cut_hunks()[0][2:4] == (5, 2)
+
+    over = parse_diff(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,1 @@\n a\n+b\n+c\n")
+    assert len(over.cut_hunks()) == 1
+    assert over.cut_hunks()[0][2:4] == (1, 3)
+
+    honest = parse_diff("@@ -1,2 +1,2 @@\n a\n+b\n")
+    assert honest.cut_hunks() == []

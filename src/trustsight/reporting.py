@@ -94,10 +94,12 @@ def evaluate_fact(fact) -> dict[str, Any]:
     The returned values are plain data for adapters.  In particular, risk is
     taken from the analysis band and never derived from the numeric score.
     """
+    from .boundaries import boundaries_from_fact
     from .coverage import describe as describe_coverage
+    from .layers import layer_profile
+    from .review_policy import review_policy
     from .schema import fact_to_dict
     from .scoring import verdict_label, verdict_level
-    from .review_policy import review_policy
     from .verdict import fallback_verdict
 
     findings = finding_rows(fact)
@@ -137,11 +139,17 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "flagged": policy.flagged(fact.final_score),
         "verdict": verdict,
         "findings": findings,
+        # Addendum 5 §3: the layer profile, additive.  A finding carries
+        # the layer where it caught, so this is a projection of `findings`.
+        "layers": layer_profile(fact, findings),
         "suppressed_rules": suppressed_rows(fact),
         "acknowledged_urls": [dict(row) for row in (fact.acknowledged_urls or ())],
         "changes": list(fact.changes),
         "coverage_gaps": list(fact.coverage_gaps),
         "coverage_gaps_carried": list(getattr(fact, "carried_coverage_gaps", ())),
+        # Addendum 2 W1: the unified boundary model, additive.  The same
+        # facts as coverage_gaps + the W renderings, one object.
+        "boundaries": [b.to_dict() for b in boundaries_from_fact(fact)],
         # Spec §1: the typed change-as-data object, additive to the body.
         "change": dict(getattr(fact, "change", {}) or {}),
         # Spec §8 v1: the structured boundary of analysis.
@@ -190,10 +198,12 @@ REPORT_KEYS = (
     "version_comparison",
     "verdict",
     "findings",
+    "layers",
     "file_changes",
     "changes",
     "coverage_gaps",
     "coverage_gaps_carried",
+    "boundaries",
     "change",
     "unresolved_assignments",
     "partial_files",
@@ -292,6 +302,8 @@ def report_body(
         "version_comparison": evaluated.get("version_comparison", ""),
         "verdict": evaluated.get("verdict", ""),
         "findings": findings,
+        # Addendum 5 §3: the layer profile, additive.
+        "layers": dict(evaluated.get("layers", {}) or {}),
         "file_changes": list(evaluated.get("file_changes", ())),
         # B7: what moved, whether or not a rule matched.
         "changes": list(evaluated.get("changes", ())),
@@ -299,6 +311,10 @@ def report_body(
         "coverage_gaps": list(evaluated.get("coverage_gaps", ())),
         # #19: the subset of those gaps unchanged since the previous review.
         "coverage_gaps_carried": list(evaluated.get("coverage_gaps_carried", ())),
+        # Addendum 2 W1: the unified boundary list, additive.
+        "boundaries": [
+            dict(b) for b in evaluated.get("boundaries", ()) or ()
+        ],
         # Spec §1: ChangeDelta.to_dict(), additive.
         "change": dict(evaluated.get("change", {}) or {}),
         # Spec §8 v1: the structured unresolved list, additive.
@@ -335,7 +351,14 @@ def report_body(
         # `coverage_gaps`, which was already here - but a consumer should
         # not have to know that an empty list is the only safe reading of
         # a verdict.
-        "fully_vetted": not evaluated.get("coverage_gaps", ()),
+        # Spec §8: a run with a non-empty unresolved list is not complete
+        # even when it recorded no coverage gap - the list names assignments
+        # the analysis refused to read, which is a boundary, not a quiet
+        # "nothing there".
+        "fully_vetted": (
+            not evaluated.get("coverage_gaps", ())
+            and not evaluated.get("unresolved_assignments", ())
+        ),
         # Each dependency is its own analysis with its own score, so these
         # are results and not a component of this package's number.
         "dependencies": [
@@ -527,6 +550,41 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
     }
 
 
+def _boundaries_for_row(row: dict, findings: list[dict]) -> list[dict]:
+    """The unified boundary list for a review row with no PackageFact."""
+    from .boundaries import (
+        AnalysisBoundary,
+        BoundaryKind,
+        boundary_kind_for_gap,
+        boundary_kind_for_w_rule,
+    )
+
+    out: list[dict] = []
+    for gap in row.get("coverage_gaps", ()) or ():
+        kind = boundary_kind_for_gap(gap)
+        if kind:
+            out.append(AnalysisBoundary(kind=kind, gap=str(gap)).to_dict())
+    for finding in findings:
+        rule_id = str(finding.get("rule_id", ""))
+        if not rule_id.startswith("W"):
+            continue
+        kind = boundary_kind_for_w_rule(rule_id) or BoundaryKind.UNREADABLE_FILE
+        out.append(AnalysisBoundary(kind=kind, w_rule=rule_id).to_dict())
+    return out
+
+
+def _layer_profile_row(row: dict, findings: list[dict]) -> dict[str, dict]:
+    """The layer profile for a review row that carries no PackageFact."""
+    from .layers import layer_profile
+
+    class _Boundary:
+        coverage_gaps = row.get("coverage_gaps", ())
+        diff_truncated = row.get("diff_truncated", False)
+        scan_truncated = row.get("scan_truncated", False)
+
+    return layer_profile(_Boundary(), findings)
+
+
 def evaluate_review_row(row: dict) -> dict[str, Any]:
     """Normalize a review-engine row when no underlying fact is attached."""
     findings = [dict(finding) for finding in row.get("findings", ())]
@@ -573,11 +631,15 @@ def evaluate_review_row(row: dict) -> dict[str, Any]:
         "risk_label": row.get("risk_label") or row.get("risk", ""),
         "verdict": row.get("verdict", ""),
         "findings": findings,
+        # Addendum 5 §3: the layer profile, additive.
+        "layers": _layer_profile_row(row, findings),
         "suppressed_rules": list(row.get("suppressed_rules", ())),
         "changes": list(row.get("changes", ())),
         "required_by": list(row.get("required_by", ())),
         "coverage_gaps": list(row.get("coverage_gaps", ())),
         "coverage_gaps_carried": list(row.get("coverage_gaps_carried", ())),
+        # Addendum 2 W1: the unified boundary list, additive.
+        "boundaries": _boundaries_for_row(row, findings),
         "change": dict(row.get("change", {}) or {}),
         "unresolved_assignments": [
             dict(a) for a in row.get("unresolved_assignments", ()) or ()

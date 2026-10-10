@@ -650,6 +650,15 @@ def get_last_analysis(package_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def get_analysis(history_id: int) -> Optional[dict]:
+    """Return one recorded analysis row by its history id, or None."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM analysis_history WHERE id = ?", (history_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def get_triggered_rules(history_id: int) -> list[dict]:
     """Return all triggered rules for *history_id*."""
     with get_connection() as conn:

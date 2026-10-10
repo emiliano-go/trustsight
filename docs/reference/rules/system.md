@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C025, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C026, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -405,6 +405,14 @@ See [C016: Interpreter Invocation In Install Hook](fetch-and-execution.md#c016).
 
 See [C017: Install Hook Writes To A User-Writable Location](install-and-persist.md#c017).
 
+### C018 {#c018}
+
+See [C018: Executable File Committed](integrity.md#c018).
+
+### C019 {#c019}
+
+See [C019: File Renamed](integrity.md#c019).
+
 ### C020 {#c020}
 
 See [C020: Credentials In A Source URL](integrity.md#c020).
@@ -428,6 +436,10 @@ See [C024: Install Script Not Declared](composition.md#c024).
 ### C025 {#c025}
 
 See [C025: Hardening Option Disabled](staging-and-recon.md#c025).
+
+### C026 {#c026}
+
+See [C026: Empty File Added](integrity.md#c026).
 
 ### C005 {#c005}
 

@@ -11,12 +11,13 @@ names) names that input and shows the cached value it used.
 from __future__ import annotations
 
 import json
+import types
 
 import typer
 
 from .inspect import analyze_package
 from ..config import ensure_default_configs, load_rules
-from ..db import init_db
+from ..db import get_analysis, init_db
 
 #: Rules whose firing depends on an input outside the document.  The
 #: explanation names the input and the cached value instead of pretending
@@ -118,11 +119,82 @@ def build_explanation(fact, finding: dict, definition: dict | None,
     }
 
 
+def _explanation_from_history(row: dict, rule_id: str, occurrence: int) -> dict:
+    """Reconstruct the ORIGINAL recorded analysis for one history row.
+
+    Nothing is re-run with today's rules: the stored ``fact_json`` carries
+    the score breakdown (rule, file, line, evidence), coverage gaps,
+    suppressions and the config fingerprint the analysis was recorded
+    with, and ``raw_diff_blob`` carries the exact diff the rules matched
+    against.
+    """
+    try:
+        stored = json.loads(row.get("fact_json") or "{}")
+    except (ValueError, TypeError):
+        stored = {}
+    if not isinstance(stored, dict):
+        stored = {}
+
+    entries = [
+        e for e in (stored.get("score_breakdown") or [])
+        if isinstance(e, dict) and e.get("rule_id") == rule_id
+    ]
+    if not entries:
+        return {}
+    entry = entries[min(occurrence - 1, len(entries) - 1)]
+    # Rows written before file/line/evidence were stored have neither;
+    # the explanation says so rather than guessing from today's diff.
+    finding = {
+        "rule_id": rule_id,
+        "file": entry.get("file") or None,
+        "line": entry.get("line"),
+        "description": entry.get("reason") or "",
+        "template": entry.get("template") or "",
+        "params": entry.get("params") or {},
+        "evidence": entry.get("evidence") or {},
+        "severity": entry.get("severity") or "",
+        "weight": entry.get("weight", 0),
+    }
+    if finding["file"] is None and finding["line"] is None:
+        finding["note"] = "file/line not recorded for this analysis"
+
+    diff_text = row.get("raw_diff_blob") or ""
+    if isinstance(diff_text, bytes):
+        diff_text = diff_text.decode("utf-8", errors="replace")
+
+    fact = types.SimpleNamespace(
+        package_name=stored.get("package_name") or "",
+        novelty_context=types.SimpleNamespace(observation_count=0),
+        change=stored.get("change") or {},
+    )
+    definition = next(
+        (rule for rule in load_rules() if rule.get("id") == rule_id),
+        None,
+    )
+    explanation = build_explanation(fact, finding, definition, diff_text)
+    explanation["analysis"] = {
+        "id": row.get("id"),
+        "timestamp": row.get("timestamp") or "",
+        "package": stored.get("package_name") or "",
+        "old_version": row.get("old_version") or "",
+        "new_version": row.get("new_version") or "",
+        "old_commit": row.get("old_commit") or "",
+        "new_commit": row.get("new_commit") or "",
+        "score": row.get("final_score", 0),
+        "risk": stored.get("risk") or "",
+        "coverage_gaps": stored.get("coverage_gaps") or [],
+        "config_fingerprint": stored.get("config_fingerprint") or "",
+        "suppressed_rules": stored.get("suppressed_rules") or [],
+        "acknowledged_urls": stored.get("acknowledged_urls") or [],
+    }
+    return explanation
+
+
 def register_commands(app: typer.Typer):
     """Register the ``explain`` subcommand on *app*."""
     @app.command()
     def explain(
-        package: str = typer.Argument(..., help="Package name"),
+        package: str = typer.Argument(None, help="Package name (positionally required by the CLI; ignored when --history-id is given)"),
         rule_id: str = typer.Argument(..., help="Rule id, e.g. C003"),
         occurrence: int = typer.Option(
             1, "--occurrence",
@@ -131,6 +203,13 @@ def register_commands(app: typer.Typer):
         json_output: bool = typer.Option(False, "--json", help="Output JSON"),
         depth: int = typer.Option(
             None, "--depth", help="AUR dependency levels to analyse",
+        ),
+        history_id: int = typer.Option(
+            None, "--history-id",
+            help="Explain a recorded analysis by its history id: reproduces "
+                 "the ORIGINAL run (stored findings, diff, config) instead "
+                 "of re-analysing with today's rules. Ids are listed by "
+                 "'trustsight history <package>'.",
         ),
     ):
         """Explain why one rule fired on one finding."""
@@ -145,6 +224,66 @@ def register_commands(app: typer.Typer):
             _fail("--occurrence must be >= 1")
         ensure_default_configs()
         init_db()
+
+        if history_id is not None:
+            row = get_analysis(history_id)
+            if row is None:
+                _fail(f"No recorded analysis with id {history_id}")
+            stored = {}
+            try:
+                stored = json.loads(row.get("fact_json") or "{}")
+            except (ValueError, TypeError):
+                stored = {}
+            pkg_name = (stored or {}).get("package_name") or ""
+            explanation = _explanation_from_history(row, rule_id.upper(), occurrence)
+            if not explanation:
+                _fail(
+                    f"{rule_id.upper()} did not fire in recorded analysis "
+                    f"#{history_id} ({pkg_name})"
+                )
+            analysis = explanation["analysis"]
+            if json_output:
+                typer.echo(json.dumps(explanation, indent=2))
+                return
+            typer.echo(
+                f"Analysis #{analysis['id']} ({analysis['timestamp']}): "
+                f"{analysis['package']} "
+                f"{analysis['old_version']} -> {analysis['new_version']} "
+                f"[{analysis['old_commit'][:8]}..{analysis['new_commit'][:8]}]"
+            )
+            typer.echo(
+                f"{rule_id.upper()} on {analysis['package']}: "
+                f"{explanation['finding'].get('description', '')}"
+            )
+            if explanation["finding"].get("note"):
+                typer.echo(f"  {explanation['finding']['note']}")
+            else:
+                where = explanation["finding"].get("file") or "?"
+                typer.echo(
+                    f"  cited: {where} line {explanation['finding'].get('line')}"
+                )
+            if explanation["analysis"].get("config_fingerprint"):
+                typer.echo(
+                    f"  config: {explanation['analysis']['config_fingerprint']}"
+                )
+            for match in explanation["lines"]:
+                typer.echo(
+                    f"  line: {match['raw']} "
+                    f"(old {match['old_lineno']}, new {match['new_lineno']})"
+                )
+            for gap in analysis.get("coverage_gaps") or []:
+                from ..coverage import GAP_REASONS
+                typer.echo(f"  not fully vetted: {GAP_REASONS.get(gap, gap)}")
+            for r in analysis.get("suppressed_rules") or []:
+                scope = r.get("override_package") or "ALL packages"
+                typer.echo(
+                    f"  suppressed: {r.get('rule_id', '')} ({scope}) "
+                    f"{r.get('override_reason', '')}"
+                )
+            return
+
+        if not package:
+            _fail("Package name is required unless --history-id is given")
         try:
             fact = analyze_package(package, depth=depth, record=False)
         except Exception as exc:

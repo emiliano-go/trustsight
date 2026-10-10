@@ -41,8 +41,9 @@ from .tokenizer import split_lines
 
 #: Bumped whenever the parse or the dataclass shape changes.  A cached
 #: document written under a different version is a cache miss, never a
-#: partial read (spec §4).
-DIFFDOC_SCHEMA_VERSION = 1
+#: partial read (spec §4).  v2 adds the typed file metadata (mode and
+#: rename headers) for Addendum 5 §7.
+DIFFDOC_SCHEMA_VERSION = 2
 
 #: The tokenizer's own critical files: a change to any of them changes
 #: what a line means, so a document parsed by one version must not be
@@ -76,6 +77,26 @@ def tokenizer_version() -> str:
 _HUNK_HEADER_RE = re.compile(
     r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@"
 )
+
+#: Git's per-file metadata headers, captured into ``DiffFile`` (Addendum 5
+#: §7).  A mode change is ``old mode 100644`` / ``new mode 100755``; a
+#: rename is ``rename from <path>`` / ``rename to <path>``.  These lines are
+#: still classed ``side="other"`` (the parse contract keeps every line), but
+#: their values are typed onto the file they precede.
+_OLD_MODE_RE = re.compile(r"^old mode (\d{6})$")
+_NEW_MODE_RE = re.compile(r"^new mode (\d{6})$")
+_RENAME_FROM_RE = re.compile(r"^rename from (.+)$")
+_RENAME_TO_RE = re.compile(r"^rename to (.+)$")
+#: ``new file mode`` implies the status even when the file carries no hunk
+#: (an added empty file has neither ``---``/``+++`` nor a hunk), so the file
+#: is materialised from this metadata alone.  ``deleted file mode`` is
+#: deliberately not interpreted: a hunk-less deletion is a binary or empty
+#: removal no rule needs, and materialising it would add entries to
+#: ``change.files`` for every binary deletion in the corpus.
+_NEW_FILE_MODE_RE = re.compile(r"^new file mode (\d{6})$")
+#: The b-side path from a ``diff --git a/x b/y`` header, used to name a
+#: file section that has no ``+++`` header of its own.
+_DIFF_GIT_PATH_RE = re.compile(r"^diff --git .+ b/(.+)$")
 
 #: Same cap ``differ.map_diff_lines`` applies to a ``+++`` path, so file
 #: attribution agrees byte for byte.
@@ -196,18 +217,33 @@ class DiffHunk:
 
 @dataclass(frozen=True)
 class DiffFile:
-    """One file's patch: path, status, and hunks.
+    """One file's patch: path, status, hunks, and file-level metadata.
 
     ``status`` is ``"added"`` when the old side is ``/dev/null``,
-    ``"removed"`` when the new side is, else ``"modified"``.  Rename
-    headers (``rename from``/``rename to``) are not interpreted yet; the
-    diff body still parses, and the paths name the post-diff file.
+    ``"removed"`` when the new side is, else ``"modified"``.
+
+    ``old_mode``/``new_mode`` are git's octal file modes (``"100644"``,
+    ``"100755"``, ``"120000"`` ...) when the diff carried ``old mode``/``new
+    mode`` lines; empty otherwise.  ``rename_from``/``rename_to`` are the
+    paths from ``rename from``/``rename to`` (git rename headers), empty for
+    an ordinary edit.  A pure rename carries no hunks and no ``+++`` header,
+    so a file section is materialised here from its rename/mode metadata
+    alone (Addendum 5 §7), with ``path`` naming the post-rename file.
     """
 
     path: str
     old_path: str
     status: str
     hunks: tuple[DiffHunk, ...] = field(default_factory=tuple)
+    old_mode: str = ""
+    new_mode: str = ""
+    rename_from: str = ""
+    rename_to: str = ""
+
+    @property
+    def renamed(self) -> bool:
+        """Whether the diff declared this a rename."""
+        return bool(self.rename_from or self.rename_to)
 
     def to_dict(self) -> dict:
         return {
@@ -215,6 +251,10 @@ class DiffFile:
             "old_path": self.old_path,
             "status": self.status,
             "hunks": [hunk.to_dict() for hunk in self.hunks],
+            "old_mode": self.old_mode,
+            "new_mode": self.new_mode,
+            "rename_from": self.rename_from,
+            "rename_to": self.rename_to,
         }
 
     @classmethod
@@ -224,6 +264,10 @@ class DiffFile:
             old_path=data["old_path"],
             status=data["status"],
             hunks=tuple(DiffHunk.from_dict(hunk) for hunk in data["hunks"]),
+            old_mode=data.get("old_mode", ""),
+            new_mode=data.get("new_mode", ""),
+            rename_from=data.get("rename_from", ""),
+            rename_to=data.get("rename_to", ""),
         )
 
 
@@ -312,18 +356,21 @@ class DiffDoc:
         return "\n".join(self.pre_lines())
 
     def cut_hunks(self) -> list[tuple[str, int, int, int]]:
-        """``(file, hunk new-start, declared, parsed)`` for hunks carrying
-        fewer lines than the header declares: the stream was cut mid-hunk.
+        """``(file, hunk new-start, declared, parsed)`` for hunks whose
+        parsed post-side count disagrees with the header's declaration.
 
         The parser reports the arithmetic and does not repair it; this is
         the coverage layer's read of that fact (the ``partial_hunk`` gap),
         and the counts are what the gap quotes back to the reader so the
-        missing tail has a size.
+        missing tail has a size.  The predicate is ``!=``, not ``<``: a hunk
+        that parses *more* lines than it declares is a malformed/lying
+        header too (spec §2), and a count mismatch in either direction means
+        the reader cannot trust the stream's arithmetic.
         """
         return [
             (f.path, h.new_start, h.expected_lines, h.actual_lines)
             for f in self.files for h in f.hunks
-            if h.expected_lines is not None and h.actual_lines < h.expected_lines
+            if h.expected_lines is not None and h.actual_lines != h.expected_lines
         ]
 
     def to_dict(self) -> dict:
@@ -420,7 +467,7 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
     out_lines: list[DiffLine] = []
     # Files are frozen, so hunks accumulate in a parallel builder list and
     # the DiffFile objects are assembled at the end.
-    file_meta: list[tuple[str, str, str]] = []
+    file_meta: list[tuple[str, str, str, str, str, str, str]] = []
     file_hunks: list[list[DiffHunk]] = []
     current_file = _DEFAULT_FILE
     pending_old_path = ""
@@ -433,9 +480,65 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
     hunk_expected: int | None = None
     pending_file_boundary = False
     pending_hunk_boundary = False
+    # File-level metadata (Addendum 5 §7): mode changes and rename headers,
+    # attached to the file they precede.  A pure rename has no ``+++``/hunk,
+    # so it is materialised as a file from this metadata alone.
+    pending_old_mode = ""
+    pending_new_mode = ""
+    pending_rename_from = ""
+    pending_rename_to = ""
+    pending_section_path = ""
+    pending_new_file = False
+    pending_binary = False
+    section_has_file = False
+
+    def reset_pending_metadata() -> None:
+        nonlocal pending_old_mode, pending_new_mode
+        nonlocal pending_rename_from, pending_rename_to
+        nonlocal pending_section_path, pending_new_file, pending_binary
+        pending_old_mode = pending_new_mode = ""
+        pending_rename_from = pending_rename_to = ""
+        pending_section_path = ""
+        pending_new_file = pending_binary = False
+
+    def flush_rename_section() -> None:
+        """Materialise a file for a section with metadata but no ``+++``.
+
+        Git emits no ``---``/``+++``/hunk for a pure rename, so without this
+        the rename would be invisible to every reader.  Only fires when the
+        section carried no header, so it never competes with a real file.
+        """
+        nonlocal section_has_file
+        if pending_binary:
+            return
+        if section_has_file or not (
+            pending_old_mode or pending_new_mode
+            or pending_rename_from or pending_rename_to
+            or pending_new_file
+        ):
+            return
+        # Close any hunk the previous section left open *before* adding a
+        # new file slot.  The legacy walk let an open hunk ride across a
+        # ``diff --git`` and closed it at the next ``---``/``+++``/``@@``,
+        # appending it to whatever file was last; appending here first
+        # keeps that hunk on its own file and off the rename file.
+        close_hunk()
+        if section_has_file:
+            return
+        path = (pending_rename_to or pending_section_path
+                or pending_rename_from or current_file)
+        old_path = pending_rename_from or path
+        status = "added" if pending_new_file else _status(old_path, path)
+        file_meta.append((
+            path, old_path, status,
+            pending_old_mode, pending_new_mode,
+            pending_rename_from, pending_rename_to,
+        ))
+        file_hunks.append([])
+        section_has_file = True
 
     def close_hunk() -> None:
-        nonlocal hunk_lines, hunk_expected
+        nonlocal hunk_lines, hunk_expected, section_has_file
         if hunk_lines or hunk_expected is not None:
             actual = sum(1 for line in hunk_lines if line.side != "remove")
             hunk = DiffHunk(
@@ -449,8 +552,10 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
                 # A hunk before any ``+++`` header: a headerless diff is a
                 # PKGBUILD edit, as the legacy map assumed.
                 file_meta.append((current_file, pending_old_path,
-                                  _status(pending_old_path, current_file)))
+                                  _status(pending_old_path, current_file),
+                                  "", "", "", ""))
                 file_hunks.append([])
+                section_has_file = True
             file_hunks[-1].append(hunk)
         hunk_lines = []
         hunk_expected = None
@@ -460,13 +565,29 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
         # means keeping that (malformed-input) behaviour, not fixing it.
 
     for i, line in enumerate(lines):
+        if line.startswith("diff --git "):
+            # A new file section begins: materialise a rename-only previous
+            # section, then clear its metadata.  ``close_hunk`` is
+            # deliberately *not* called here - the legacy walk left a hunk
+            # open across a ``diff --git`` line, and parity keeps that.
+            flush_rename_section()
+            reset_pending_metadata()
+            section_has_file = False
+            git_path = _DIFF_GIT_PATH_RE.match(line)
+            if git_path:
+                pending_section_path = strip_diff_path_prefix(
+                    git_path.group(1).strip())[:MAX_DIFF_PATH_BYTES]
         if line.startswith("+++ "):
             close_hunk()
             current_file = _header_path(line[4:])
             file_meta.append(
                 (current_file, pending_old_path,
-                 _status(pending_old_path, current_file)))
+                 _status(pending_old_path, current_file),
+                 pending_old_mode, pending_new_mode,
+                 pending_rename_from, pending_rename_to))
             file_hunks.append([])
+            section_has_file = True
+            reset_pending_metadata()
             out_lines.append(DiffLine(
                 index=i, side="other", content=line, raw=line,
                 file=current_file, old_lineno=None, new_lineno=None,
@@ -510,7 +631,26 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
             # ``diff --git``, ``index``, ``Binary files``, ``\ No newline``,
             # empty lines, and bare ``@@``-junk: kept, classified as
             # structure, so a migrated state machine sees the same lines
-            # its legacy walk saw.
+            # its legacy walk saw.  Mode and rename headers are read for
+            # the typed file metadata while still emitted here.
+            old_mode_m = _OLD_MODE_RE.match(line)
+            if old_mode_m:
+                pending_old_mode = old_mode_m.group(1)
+            new_mode_m = _NEW_MODE_RE.match(line)
+            if new_mode_m:
+                pending_new_mode = new_mode_m.group(1)
+            new_file_m = _NEW_FILE_MODE_RE.match(line)
+            if new_file_m:
+                pending_new_file = True
+                pending_new_mode = new_file_m.group(1)
+            if line.startswith("Binary files "):
+                pending_binary = True
+            rename_from_m = _RENAME_FROM_RE.match(line)
+            if rename_from_m:
+                pending_rename_from = rename_from_m.group(1).strip()
+            rename_to_m = _RENAME_TO_RE.match(line)
+            if rename_to_m:
+                pending_rename_to = rename_to_m.group(1).strip()
             entry = DiffLine(
                 index=i, side="other", content=line, raw=line,
                 file=current_file, old_lineno=None, new_lineno=None,
@@ -546,10 +686,13 @@ def _parse_diff_lines_cached(lines: tuple[str, ...]) -> DiffDoc:
         if in_hunk:
             hunk_lines.append(entry)
     close_hunk()
+    flush_rename_section()
     files = tuple(
         DiffFile(path=path, old_path=old_path, status=status,
-                 hunks=tuple(hunks))
-        for (path, old_path, status), hunks in zip(file_meta, file_hunks)
+                 hunks=tuple(hunks), old_mode=old_mode, new_mode=new_mode,
+                 rename_from=rename_from, rename_to=rename_to)
+        for (path, old_path, status, old_mode, new_mode,
+             rename_from, rename_to), hunks in zip(file_meta, file_hunks)
     )
     return DiffDoc(files=files, lines=tuple(out_lines))
 

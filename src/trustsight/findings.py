@@ -43,6 +43,9 @@ TEMPLATES: dict[str, str] = {
     "C011": "prebuilt binary sources from {source_host}, not declared upstream {upstream_host}",
     "C012": "source host {source_host} resembles declared upstream {upstream_host}",
     "C013": "source is {forge}/{source_owner}/{repo}, upstream declares {forge}/{upstream_owner}/{repo}",
+    "C018": "executable file committed to the repository: {match}",
+    "C019": "file renamed: {match}",
+    "C026": "empty file added: {match}",
 
     # --- Checksum rules ---
     "H001": "checksum set to SKIP{skip_suffix}",

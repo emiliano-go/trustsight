@@ -2479,7 +2479,9 @@ _NAMES = {
 X007_MIN_TECHNIQUES = 2
 
 
-def _crossfire_findings(diff_text, config, add, previous_diff: str = "") -> None:
+def _crossfire_findings(diff_text, config, add, previous_diff: str = "",
+                        previous_commit: str = "",
+                        current_commit: str = "") -> None:
     """Emit X001-X006 and the X007 cluster.
 
     Each rule reports once per diff: a second `${A[0]}` tells the reader
@@ -2511,4 +2513,6 @@ def _crossfire_findings(diff_text, config, add, previous_diff: str = "") -> None
     # dict above, so X007 keeps counting known techniques only (spec X027).
     from .refusals import refusal_findings
 
-    refusal_findings(diff_text, config, add, previous_diff=previous_diff)
+    refusal_findings(diff_text, config, add, previous_diff=previous_diff,
+                     previous_commit=previous_commit,
+                     current_commit=current_commit)

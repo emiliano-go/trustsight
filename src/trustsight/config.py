@@ -106,6 +106,29 @@ EXEC_WRAPPER = (
     r")"
 )
 
+#: Global options between a store client and its download subcommand.
+#:
+#: The object-store clients below take their verb after a run of global
+#: flags - `rclone --limit-rate=1M copy ...`, `s3cmd -q get ...`, `gsutil -m
+#: cp ...` - and a "verb must follow the client immediately" spelling saw no
+#: client at all, so the whole fetch-and-execute chain was invisible.  The
+#: harness's wave-3/5/evasion-matrix D family enumerates the flags.
+#:
+#: The run is split into a flags phase and a short-option-argument phase.
+#: A token that starts with `-` can only be a flag and any other token can
+#: only be an argument, so the two phases are disjoint.  Within the flag
+#: phase the double- and single-dash arms are written so a token cannot
+#: match both (`--zz` is not also `-` + `-zz`): a flag that can be split two
+#: ways makes the match exponential and a crafted line hangs the scan.
+#: Possessive quantifiers would also stop the blowup but the rule-safety
+#: filter rejects them, so the disambiguation is done in the pattern.
+#: The argument phase stays backtrackable so it can give a bare token back
+#: when that token was the verb (`s3cmd -c x get`); that backtrack is linear.
+_SUBCOMMAND_OPTS = (
+    r"(?:\s+(?:--[^\s;&|]+|-[^-\s;&|][^\s;&|]*))*"
+    r"(?:\s+[^-\s;&|][^\s;&|]*)*"
+)
+
 #: Programs that bring bytes onto the machine from somewhere else.
 #:
 #: R001/R002 claim `curl` and `wget`; H016 and H082 knew a slightly longer
@@ -152,14 +175,18 @@ NETWORK_CLIENT_ALTERNATIVES = (
     # identifier, a magnet link, an LFS pointer.  A client whose transport
     # is not HTTP is not a client the recipe can be trusted to have
     # declared.
-    r"s3cmd\s+(?:get|sync|cp)",
-    r"aws\s+s3\s+(?:cp|sync|mv)",
-    r"gsutil\s+(?:cp|rsync)",
-    r"az(?:copy)?\s+(?:storage\s+blob\s+download|copy)",
-    r"rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)",
-    r"ipfs\s+(?:get|cat|dag\s+get)",
-    r"swift\s+download",
-    r"rados\s+get",
+    r"s3cmd" + _SUBCOMMAND_OPTS + r"\s+(?:get|sync|cp)",
+    r"aws\s+s3" + _SUBCOMMAND_OPTS + r"\s+(?:cp|sync|mv)",
+    # `aws s3api get-object` is the API-level spelling of the same transfer
+    # and was never in the inventory at all; the wave-3/5 probes fetched
+    # through it and scored nothing.
+    r"aws\s+s3api" + _SUBCOMMAND_OPTS + r"\s+get-object",
+    r"gsutil" + _SUBCOMMAND_OPTS + r"\s+(?:cp|rsync)",
+    r"az(?:copy)?" + _SUBCOMMAND_OPTS + r"\s+(?:storage\s+blob\s+download|copy)",
+    r"rclone" + _SUBCOMMAND_OPTS + r"\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)",
+    r"ipfs" + _SUBCOMMAND_OPTS + r"\s+(?:get|cat|dag\s+get)",
+    r"swift" + _SUBCOMMAND_OPTS + r"\s+download",
+    r"rados" + _SUBCOMMAND_OPTS + r"\s+get",
     r"git(?:\s+(?:-C\s*\S+|-c\s*\S+|--\S+))*\s+lfs\s+(?:pull|fetch|checkout)",
     r"yt-dlp|youtube-dl",
     # A lookahead, for the reason the BSD `fetch` arm needs one: consuming
@@ -168,6 +195,14 @@ NETWORK_CLIENT_ALTERNATIVES = (
     # nothing.
     r"transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)",
     r"b2\s+download-file",
+    # The Backblaze CLI v1 spelling `b2 download` (v2 is `download-file`).
+    # The validator kept the v1 alias while core listed only v2, and a
+    # payload fetching through `b2 download` scored 0 in core while the
+    # validator certified the chain intact - each half consistent against
+    # its own list, wrong together.  The v2 alternative above stays pinned
+    # verbatim (the harness drift test whitelists it by exact spelling);
+    # `\b` keeps this arm from claiming `download-file` by prefix.
+    r"b2\s+download\b",
     r"restic\s+restore|borg\s+extract",
     # libwww-perl ships a CLI, and it is the one a Perl recipe reaches for
     # when it wants a download without a shell-out to curl.

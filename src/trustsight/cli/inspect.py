@@ -218,7 +218,10 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
         inside.add_row("", "")
         inside.add_row("[yellow]Suppressed by override[/]", "")
         for r in fact.suppressed_rules:
-            inside.add_row("", Text(f"  {clean(r['rule_id'])}  {clean(r.get('override_reason', ''))}"))
+            scope = r.get("override_package") or "ALL packages"
+            inside.add_row("", Text(
+                f"  {clean(r['rule_id'])}  ({clean(scope)})  "
+                f"{clean(r.get('override_reason', ''))}"))
 
     if getattr(fact, "acknowledged_urls", None):
         inside.add_row("", "")
@@ -253,6 +256,12 @@ def _status_text(fact) -> str:
     note = no_aur_change_note(fact)
     if note:
         return note
+    # A run that did not read the whole change is not entitled to a
+    # clean-looking status, whatever the score says (fail_closed only
+    # downgrades the *band*; the status line spoke for itself).
+    if getattr(fact, "coverage_gaps", None):
+        return ("Inconclusive: part of the change was not analysed. "
+                "Do not treat this package as clean.")
     if fact.first_seen:
         return "First analysis. No prior history for this package."
     # The triviality call must be the shared one: weight-0 findings that
@@ -368,7 +377,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
     if fact.suppressed_rules:
         print("  Suppressed by override (did not affect the score):")
         for r in fact.suppressed_rules:
-            print(f"    {clean(r['rule_id'])} {clean(r.get('override_reason', ''))}")
+            scope = r.get("override_package") or "ALL packages"
+            print(f"    {clean(r['rule_id'])} ({clean(scope)}) "
+                  f"{clean(r.get('override_reason', ''))}")
     if getattr(fact, "acknowledged_urls", None):
         print("  Acknowledged source URLs (did not affect the score):")
         for r in fact.acknowledged_urls:
@@ -407,6 +418,13 @@ def _render_history_panel_rich(row: dict, show_score: bool, show_risk: bool, ver
     elif findings:
         for f in findings:
             table.add_row("", Text(clean(_finding_line(f))))
+    elif row.get("coverage_gaps"):
+        # An empty finding list on an incomplete run is "nothing was found
+        # in the part that was read", not "nothing is there".
+        table.add_row("Status", Text(
+            "No findings (incomplete: part of the change was not analysed)",
+            style="yellow",
+        ))
     else:
         table.add_row("Status", "No findings")
 
@@ -441,6 +459,8 @@ def _render_history_panel_plain(row: dict, show_score: bool, show_risk: bool):
     elif findings:
         for f in findings:
             print(f"  {clean(_finding_line(f))}")
+    elif row.get("coverage_gaps"):
+        print("  No findings (incomplete: part of the change was not analysed)")
     else:
         print("  No findings")
 

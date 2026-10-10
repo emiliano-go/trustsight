@@ -447,9 +447,10 @@ def _render_results_plain(results, total_installed, all_packages, show_score, sh
         # B5, same omission as the Rich render above: visible on screen, not
         # only in the JSON body.
         for entry in r.get("suppressed_rules", []):
+            scope = entry.get("override_package") or "ALL packages"
             typer.echo(
                 f"  [Suppressed: {clean(entry.get('rule_id', ''))} "
-                f"{clean(entry.get('override_reason', ''))}]"
+                f"({clean(scope)}) {clean(entry.get('override_reason', ''))}]"
             )
         for m in r.get("ioc_matches", []):
             expired = " [EXPIRED]" if m.expired else ""
@@ -580,8 +581,10 @@ def _render_results_rich(results, total_installed, all_packages, show_score, sho
             table.add_row("Suppressed", "")
             for entry in suppressed:
                 rule_id = entry.get("rule_id", "")
+                scope = entry.get("override_package") or "ALL packages"
                 reason = entry.get("override_reason", "")
-                table.add_row("", Text(f"  {clean(rule_id)}  {clean(reason)}"))
+                table.add_row("", Text(
+                    f"  {clean(rule_id)}  ({clean(scope)})  {clean(reason)}"))
 
         ioc_matches = r.get("ioc_matches", [])
         if ioc_matches:

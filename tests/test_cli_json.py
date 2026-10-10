@@ -60,6 +60,7 @@ CASES = [
     ("baseline build", ["baseline", "build"]),
     ("baseline import", ["baseline", "import", "/nonexistent"]),
     ("corpus pivot", ["corpus", "pivot", "example.com"]),
+    ("corpus fetch", ["corpus", "fetch", "--yes"]),
     ("ioc sources", ["ioc", "sources"]),
     ("ioc import", ["ioc", "import", "/nonexistent"]),
     ("ioc update", ["ioc", "update"]),

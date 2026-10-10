@@ -70,3 +70,36 @@ def test_unresolved_values_are_not_compared():
 def test_absent_metadata_is_silent():
     assert metadata_recipe_divergence(PKGBUILD, None) == []
     assert metadata_recipe_divergence(PKGBUILD, "") == []
+
+
+def test_a_source_the_recipe_fetches_but_metadata_never_names_fires():
+    """Addendum 4 G8: the executable/metadata split - a clean .SRCINFO for
+    review tooling, a dirty PKGBUILD for makepkg."""
+    pkgbuild = PKGBUILD.replace(
+        "source=('https://example.invalid/demo-1.0.tar.gz')",
+        "source=('https://example.invalid/demo-1.0.tar.gz' 'evil.sh')",
+    )
+    assert metadata_recipe_divergence(pkgbuild, SRCINFO) == ["source"]
+
+
+def test_a_stale_metadata_only_source_also_diverges():
+    stale = SRCINFO.replace(
+        "\tsource = https://example.invalid/demo-1.0.tar.gz",
+        "\tsource = https://example.invalid/demo-1.0.tar.gz\n\t"
+        "source = https://old.invalid/gone.tar.gz",
+    )
+    assert metadata_recipe_divergence(PKGBUILD, stale) == ["source"]
+
+
+def test_arch_suffixed_sources_are_compared():
+    pkgbuild = PKGBUILD + "source_x86_64=('https://example.invalid/extra.tar.gz')\n"
+    srcinfo = SRCINFO + "\tsource_x86_64 = https://example.invalid/other.tar.gz\n"
+    assert metadata_recipe_divergence(pkgbuild, srcinfo) == ["source_x86_64"]
+
+
+def test_variable_sources_are_not_compared():
+    pkgbuild = PKGBUILD.replace(
+        "source=('https://example.invalid/demo-1.0.tar.gz')",
+        "source=(\"${_base}.tar.gz\")",
+    )
+    assert metadata_recipe_divergence(pkgbuild, SRCINFO) == []

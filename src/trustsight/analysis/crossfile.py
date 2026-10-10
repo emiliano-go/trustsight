@@ -28,6 +28,11 @@ def _is_checksum(field: str) -> bool:
     )
 
 
+def _is_source(field: str) -> bool:
+    """True for ``source`` and its arch-suffixed variants (``source_x86_64``)."""
+    return field == "source" or field.startswith("source_")
+
+
 def _has_variable(values) -> bool:
     return any("$" in value for value in values)
 
@@ -51,7 +56,12 @@ def metadata_recipe_divergence(pkgbuild: str, srcinfo: str | None) -> list[str]:
         divergent.append("install")
 
     for field in sorted(set(recipe.arrays) | set(metadata)):
-        if not _is_checksum(field):
+        # Addendum 4 G8: the committed ``.SRCINFO`` and the ``PKGBUILD``
+        # must declare the same sources.  A source the recipe fetches but
+        # the metadata never names is the executable/metadata split: clean
+        # metadata for review tooling, a dirty recipe for makepkg.  Also
+        # checksums; both compare only when neither side hides a variable.
+        if not (_is_checksum(field) or _is_source(field)):
             continue
         meta_values = metadata.get(field)
         recipe_values = recipe.arrays.get(field)

@@ -28,6 +28,14 @@ Two AUR-derived artifacts are built from the same mirror: the benchmark **corpus
 2. **Hashing**: maintainer identities are hashed with a per-seed salt before they leave the build machine.
 3. **Seed packaging**: the observations are packaged as a signed `baseline-seed.tar.gz`. See [Seed Provenance](seed-provenance.md).
 
+The corpus baseline (artifact version 2) carries the same three observation
+tables alongside the package profiles and PKGBUILD snapshots, so importing
+it with `trustsight corpus fetch` or `trustsight baseline import` warms the
+URL, maintainer and dependency priors exactly as a seed import does, with
+the same additive merge rules. Version 1 corpus artifacts, without the
+observation section, still verify and import; they just leave the priors
+cold.
+
 The corpus is pinned via `corpus.lock` for reproducible benchmarking. A given version of the corpus produces identical diffs regardless of when or where it is run. When regeneration produces a new corpus, the lock file is updated; the committed `baseline.json` and git history preserve past benchmark results rather than an archived snapshot.
 
 ## Static source buckets

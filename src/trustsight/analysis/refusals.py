@@ -31,12 +31,31 @@ _CONTROL_ESCAPE_RE = re.compile(r"\\(?:e|a|v|f|b)")
 _COMMAND_POSITION_LITERAL_RE = re.compile(
     r"(?:^|[;&|(]|\$\()\s*\$'((?:\\.|[^'\\])*)'", re.MULTILINE)
 
-_BASE64_LITERAL_RE = re.compile(
-    r"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9+/=])")
-_BASE32_LITERAL_RE = re.compile(
-    r"(?<![A-Z2-7])[A-Z2-7]{256,}={0,6}(?![A-Z2-7=])")
-_HEX_LITERAL_RE = re.compile(
-    r"(?<![0-9A-Fa-f])[0-9A-Fa-f]{256,}(?![0-9A-Fa-f])")
+def _encoded_literal_classes(haystack: str, floor: int) -> list[str]:
+    """The encoded-alphabet classes present above *floor* characters.
+
+    The floor is ``[thresholds] x029.min_length`` (default 256).  The
+    patterns are compiled here rather than fixed at import: the previous
+    constants hardcoded ``{256,}`` while the configured floor was read and
+    then ignored, so lowering the floor changed the finding text but not
+    what fired.
+    """
+    floor = max(1, int(floor))
+    classes: list[str] = []
+    if re.search(
+        rf"(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{{{floor},}}={{0,2}}"
+        r"(?![A-Za-z0-9+/=])",
+        haystack,
+    ):
+        classes.append("base64")
+    if re.search(
+        rf"(?<![A-Z2-7])[A-Z2-7]{{{floor},}}={{0,6}}(?![A-Z2-7=])", haystack
+    ):
+        classes.append("base32")
+    if re.search(rf"(?<![0-9A-Fa-f])[0-9A-Fa-f]{{{floor},}}(?![0-9A-Fa-f])",
+                 haystack):
+        classes.append("hex")
+    return classes
 
 _DECODER_RE = re.compile(
     r"\b(?:base64|base32|basenc)\b[^|;&\n]*\s(?:-d|--decode)\b"
@@ -125,7 +144,9 @@ def _added_stream(diff_text: str) -> str:
     return "\n".join(line.raw for line in doc.added_lines())
 
 
-def pattern_across_commits(previous_diff: str, diff_text: str, add) -> None:
+def pattern_across_commits(previous_diff: str, diff_text: str, add,
+                           previous_commit: str = "",
+                           current_commit: str = "") -> None:
     """X028: a technique completed by joining two consecutive diffs.
 
     Runs ``crossfire_techniques`` over the joined added-line stream and
@@ -133,7 +154,8 @@ def pattern_across_commits(previous_diff: str, diff_text: str, add) -> None:
     split array, the split literal, the pipeline whose source was added
     last push and whose sink is added now.  Gaps in history degrade to
     no-firing rather than guessing; the caller only passes the immediately
-    preceding recorded review.
+    preceding recorded review.  The two commit ids are cited in the
+    finding (spec X028) when the caller supplies them.
     """
     if not previous_diff:
         return
@@ -146,14 +168,20 @@ def pattern_across_commits(previous_diff: str, diff_text: str, add) -> None:
     new_ids = joined_ids - previous_ids - current_ids
     if new_ids:
         listed = ", ".join(sorted(new_ids))
+        where = ""
+        if previous_commit or current_commit:
+            where = (f" (commits {previous_commit[:12] or '?'} -> "
+                     f"{current_commit[:12] or '?'})")
         add("X028", "Pattern Completed Across Commits", "HIGH", "evasion",
             f"joining the previous recorded diff completes technique(s) "
-            f"neither diff shows alone: {listed}",
-            line=None, techniques=listed)
+            f"neither diff shows alone: {listed}{where}",
+            line=None, techniques=listed,
+            previous_commit=previous_commit, current_commit=current_commit)
 
 
 def refusal_findings(diff_text: str, config, add, current_text=None,
-                     previous_diff: str = "") -> None:
+                     previous_diff: str = "", previous_commit: str = "",
+                     current_commit: str = "") -> None:
     """Emit X026/X027/X029/X030/X031 for one diff.
 
     ``add`` is the structural finding builder (same callable the crossfire
@@ -188,8 +216,12 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
         if functions:
             referenced.append((name, functions))
     min_count = int(_thresholds(config).get("x026", {}).get("min_count", 1))
-    if len(referenced) >= max(1, min_count):
-        count = len(referenced)
+    count = len(referenced)
+    # X027 fires at two distinct names; X026's configurable floor can be
+    # higher, but X027 must never orphan: the cluster invariant is "X027
+    # implies X026 fired", so the cluster threshold also forces X026.
+    cluster = count >= 2
+    if count >= max(1, min_count) or cluster:
         severity = "HIGH" if count >= 3 else "MEDIUM"
         listed = ", ".join(name for name, _fns in referenced)
         where = "; ".join(
@@ -199,7 +231,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             f"{count} unresolved assignment(s) referenced from executable "
             f"functions: {where}",
             line=None, count=count, names=listed)
-    if len(referenced) >= 2:
+    if cluster:
         listed = ", ".join(name for name, _fns in referenced)
         add("X027", "Refusal Cluster", "CRITICAL", "evasion",
             f"{len(referenced)} distinct unresolved assignments in "
@@ -240,14 +272,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             if line.side in ("add", "context") and not line.in_hunk
         )
         haystack = f"{scanned}\n{top_level}"
-        classes = []
-        if _BASE64_LITERAL_RE.search(haystack):
-            classes.append("base64")
-        if _BASE32_LITERAL_RE.search(haystack):
-            classes.append("base32")
-        if _HEX_LITERAL_RE.search(haystack):
-            classes.append("hex")
-        for literal_class in classes:
+        for literal_class in _encoded_literal_classes(haystack, floor):
             add("X029", "Encoded Material At Rest", "MEDIUM", "evasion",
                 f"{literal_class} literal of at least {floor} encoded "
                 "characters with no decoder in this diff",
@@ -266,4 +291,6 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             break
 
     # --- X028: pattern completed across consecutive commits --------------
-    pattern_across_commits(previous_diff, diff_text, add)
+    pattern_across_commits(previous_diff, diff_text, add,
+                           previous_commit=previous_commit,
+                           current_commit=current_commit)

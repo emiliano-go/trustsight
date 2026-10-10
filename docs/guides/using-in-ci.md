@@ -115,11 +115,11 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 | Zero-rate (benign scored 0) | percentage | **68.4%** |
 | Test count | total | Run `uv run --with pytest python -m pytest` for the current checkout |
 
-**The gate:** if a CRITICAL-class package consistently scores at or above its p5 (60) and no benign package exceeds its p95 (35), the classifier achieves clean separation with no overlap.
+**The gate:** the published figures separate the two tails by 25 points: benign p95 = 35, CRITICAL p5 = 60, measured on the locked 3,739-diff corpus. The calibration gates re-measure both percentiles on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the separation gate). This is a claim about two percentiles, not about the distributions as a whole: 9.5% of benign diffs score above the 20-point threshold and some score above 35, which is why the operational threshold is 20 and not 35.
 
 To set up your own gate:
 
-1. **Run a baseline** against your package set after initial configuration. See the [re-baselining guide](../contributing/re-baselining.md).
+1. **Run a baseline** against your package set after initial configuration: `trustsight review --record`, because runs are read-only by default and only `--record` writes the history later runs compare against. See the [re-baselining guide](../contributing/re-baselining.md).
 2. **Choose a threshold**: typically 30-40, depending on your tolerance for benign novelty signals.
 3. **Add a CI check** that compares regression scores against the baseline. Any package whose score moves from Low to Medium or higher without a corresponding PKGBUILD change is a regression.
 

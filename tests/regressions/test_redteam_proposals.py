@@ -717,7 +717,8 @@ def test_a_machine_consumer_can_tell_clean_from_unread():
 
     assert "fully_vetted" in REPORT_KEYS
     body = TrustSight().analyze_text("p", "pkgname=p\npkgver=1\n").to_dict()
-    assert body["fully_vetted"] is (not body["coverage_gaps"])
+    assert body["fully_vetted"] is (
+        not body["coverage_gaps"] and not body["unresolved_assignments"])
 
 
 @pytest.mark.parametrize("field", ["depends", "makedepends"])

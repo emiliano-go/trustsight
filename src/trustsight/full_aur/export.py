@@ -4,8 +4,14 @@ The baseline artifact is a gzipped JSON file containing:
   - manifest:  builder metadata (version, corpus cutoff, tool versions)
   - profiles:  all package_profiles rows
   - snapshots: all pkgbuild_snapshots rows
+  - observations: novelty observation tables (source URLs, dependency
+    names, salted maintainer hashes) plus the salt they were hashed
+    under; present since artifact version 2
   - metadata:  the full AUR metadata snapshot (as list)
   - signature: optional ed25519 detached signature (hex)
+
+Version 1 artifacts carry no ``observations`` section; they still
+verify and import, just without warming the novelty priors.
 
 Reproducibility
   ``canonical_artifact_bytes()`` produces byte-identical output from
@@ -31,7 +37,7 @@ from ..db import (
 
 log = logging.getLogger(__name__)
 
-_ARTIFACT_VERSION = 1
+_ARTIFACT_VERSION = 2
 
 # Public key shipped with the repo.  Rotations announced in release notes.
 # Loaded lazily so verification works without signing infrastructure.
@@ -53,12 +59,12 @@ class InvalidSignatureError(Exception):
 class NoTrustedKeyError(Exception):
     """Raised when this build pins no distribution key to verify against.
 
-    Distinct from InvalidSignatureError on purpose.  The shipped
-    ``baseline_pubkey.pem`` is still a placeholder carrying no key bytes, so
-    every signed import failed as "signature verification failed" - which
-    accuses the artifact of being forged when the truth is that this build
-    cannot check it either way.  Telling an operator their good artifact is
-    tampered with is worse than telling them nothing.
+    Distinct from InvalidSignatureError on purpose: this one means the build
+    cannot check an artifact either way, and accusing a good artifact of
+    being forged is worse than saying nothing.  The shipped
+    ``baseline_pubkey.pem`` carries the project's pinned ed25519 distribution
+    key (32 raw bytes), so a healthy build raises this only if the file is
+    missing or corrupt.
     """
 
 
@@ -78,6 +84,7 @@ def canonical_artifact_bytes(
     snapshots: list[dict],
     metadata_snapshot_hash: str,
     manifest: dict,
+    observations: Optional[dict] = None,
 ) -> bytes:
     """Canonical JSON bytes for the signed payload.
 
@@ -86,6 +93,11 @@ def canonical_artifact_bytes(
     ``corpus_cutoff`` (the metadata snapshot etag used during build);
     it may contain ``created_at`` for display but this field is NOT
     covered by the reproducible contract.
+
+    *observations* (artifact version 2+) is the novelty observation
+    section built by :func:`_canonical_observations`.  When None the
+    key is omitted entirely, so a version 1 payload re-canonicalises
+    to the exact bytes it was signed over.
     """
     payload = {
         "manifest": {
@@ -102,8 +114,83 @@ def canonical_artifact_bytes(
         "snapshots": sorted(snapshots, key=_row_sort_key),
         "metadata_snapshot_hash": metadata_snapshot_hash,
     }
+    if observations is not None:
+        payload["observations"] = observations
     return json.dumps(payload, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Novelty observation rows (artifact version 2)
+#
+# These mirror the seed importer's tables and merge semantics exactly
+# (``_import_v2_source_urls`` / ``_import_v2_dependency_names`` /
+# ``_import_v2_maintainers`` in ``db.py``): source URLs ignore duplicates,
+# dependency names add their observation counts onto any existing row, and
+# maintainer rows are inserted only when the (name_hash, email_hash) pair
+# is absent, under whichever salt the local database already uses.
+# ---------------------------------------------------------------------------
+
+def _canonical_observations(
+    source_urls: list[dict],
+    dependency_names: list[dict],
+    maintainers: list[dict],
+    salt: Optional[str],
+) -> Optional[dict]:
+    """Normalise observation rows into a deterministic, signable section.
+
+    Returns None when there is nothing to carry (a builder that never
+    saw the observation tables produces a version 1-shaped payload).
+    Rows read back from an untrusted artifact may be ragged; each
+    normaliser tolerates that so a bad row is skipped at import time,
+    not a TypeError raised inside the hasher.
+    """
+    urls = sorted(
+        (
+            {
+                "url": str(row.get("url", "")),
+                "first_seen_package_id": row.get("first_seen_package_id") or 0,
+                "first_seen_globally_timestamp": row.get("first_seen_globally_timestamp"),
+                "total_uses": row.get("total_uses", 1),
+                "last_seen_timestamp": row.get("last_seen_timestamp"),
+            }
+            for row in source_urls if isinstance(row, dict)
+        ),
+        key=lambda r: r["url"],
+    )
+    deps = sorted(
+        (
+            {
+                "name": str(row.get("name", "")),
+                "first_seen_globally_timestamp": row.get("first_seen_globally_timestamp"),
+                "observation_count": int(row.get("observation_count") or 0),
+            }
+            for row in dependency_names if isinstance(row, dict)
+        ),
+        key=lambda r: r["name"],
+    )
+    maints = sorted(
+        (
+            {
+                "name_hash": str(row.get("name_hash", "")),
+                "email_hash": row.get("email_hash"),
+                "first_seen": row.get("first_seen"),
+                "package_count": int(row.get("package_count") or 0),
+                "packages": row.get("packages"),
+                "source": row.get("source", "seed"),
+            }
+            for row in maintainers if isinstance(row, dict)
+        ),
+        key=lambda r: (r["name_hash"], r["email_hash"] or ""),
+    )
+    if not (urls or deps or maints):
+        return None
+    return {
+        "salt": salt,
+        "source_urls": urls,
+        "dependency_names": deps,
+        "maintainers": maints,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +337,31 @@ def build_artifact(
             dict(r) for r in
             conn.execute("SELECT * FROM pkgbuild_snapshots ORDER BY package_name").fetchall()
         ]
+        from ..db import _get_salt
+        obs_salt = _get_salt(conn)
+        obs_source_urls = [
+            dict(r) for r in conn.execute(
+                "SELECT url, first_seen_package_id, first_seen_globally_timestamp, "
+                "total_uses, last_seen_timestamp FROM source_urls ORDER BY url"
+            ).fetchall()
+        ]
+        obs_dependency_names = [
+            dict(r) for r in conn.execute(
+                "SELECT name, first_seen_globally_timestamp, observation_count "
+                "FROM dependency_names ORDER BY name"
+            ).fetchall()
+        ]
+        obs_maintainers = [
+            dict(r) for r in conn.execute(
+                "SELECT name_hash, email_hash, first_seen, package_count, "
+                "packages, source FROM maintainers_hashed "
+                "ORDER BY name_hash, email_hash"
+            ).fetchall()
+        ]
+
+    observations = _canonical_observations(
+        obs_source_urls, obs_dependency_names, obs_maintainers, obs_salt,
+    )
 
     from .metadata import default_metadata_path
     meta_path = default_metadata_path()
@@ -271,7 +383,9 @@ def build_artifact(
     }
 
     m_hash = _metadata_snapshot_hash(metadata_list)
-    canonical = canonical_artifact_bytes(profiles, snapshots, m_hash, manifest)
+    canonical = canonical_artifact_bytes(
+        profiles, snapshots, m_hash, manifest, observations=observations,
+    )
 
     artifact = {
         "signature": None,
@@ -315,7 +429,8 @@ def import_baseline(
 ) -> None:
     """Verify and import a signed baseline artifact.
 
-    Merges profiles, snapshots, and metadata into the local database.
+    Merges profiles, snapshots, the metadata snapshot, and (version 2
+    artifacts) the novelty observation tables into the local database.
     Raises ``UnsignedBaselineError``, ``NoTrustedKeyError`` or
     ``InvalidSignatureError``.
     """
@@ -328,16 +443,22 @@ def import_baseline(
     data, sig = _read_artifact(path_obj)
 
     version = data.get("manifest", {}).get("version", 0)
-    if version != _ARTIFACT_VERSION:
+    if version not in (1, _ARTIFACT_VERSION):
         log.warning("Baseline artifact version %d != current %d; may be incompatible",
                      version, _ARTIFACT_VERSION)
 
-    # Re-construct canonical bytes for verification
+    # Re-construct canonical bytes for verification.  A version 1
+    # artifact has no ``observations`` section; passing None keeps the
+    # key out so the re-canonicalised bytes match what was signed.
     m_hash = data.get("metadata_snapshot_hash", "")
     manifest = data.get("manifest", {})
     profiles_in = data.get("profiles", [])
     snapshots_in = data.get("snapshots", [])
-    canonical = canonical_artifact_bytes(profiles_in, snapshots_in, m_hash, manifest)
+    observations_in = data.get("observations")
+    canonical = canonical_artifact_bytes(
+        profiles_in, snapshots_in, m_hash, manifest,
+        observations=observations_in if isinstance(observations_in, dict) else None,
+    )
 
     if sig is None:
         if not allow_unsigned:
@@ -368,7 +489,8 @@ def import_baseline(
         log.info("signature verified")
 
     imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0,
-                "packages_warmed": 0}
+                "packages_warmed": 0, "source_urls": 0, "dependency_names": 0,
+                "maintainers": 0}
 
     # A13 reports the shape of what a baseline did rather than warning on
     # it.  A threshold on "novelty dropped across many packages" would fire
@@ -448,13 +570,18 @@ def import_baseline(
         save_metadata(meta_dict, default_metadata_path())
         imported["metadata_items"] = len(meta_dict)
 
+    if isinstance(observations_in, dict):
+        imported.update(_import_observations(observations_in))
+
     imported["packages_warmed"] = imported["profiles"] - len(had_history)
 
     if json_output:
         print(json.dumps(imported))
     else:
         log.info("Imported %(profiles)d profiles, %(snapshots)d snapshots, "
-                 "%(metadata_items)d metadata items", imported)
+                 "%(metadata_items)d metadata items, %(source_urls)d new source "
+                 "URLs, %(dependency_names)d dependency names and "
+                 "%(maintainers)d maintainer hashes", imported)
         # The number that matters to a reader: how much of the corpus this
         # artifact just moved from no-history to warm.
         log.info(
@@ -462,3 +589,139 @@ def import_baseline(
             "those will be quieter from now on",
             imported["packages_warmed"],
         )
+
+
+def _import_observations(observations_in: dict) -> dict:
+    """Merge a version 2 observation section into the local database.
+
+    The merge semantics are the seed importer's: source URLs ignore rows
+    already present, dependency names add their counts onto the existing
+    row, and maintainer rows are inserted only when their
+    (name_hash, email_hash) pair is new, in the local salt's namespace.
+    Like the seed importer, a stored salt wins over a foreign artifact
+    salt and the incoming maintainer rows are skipped rather than
+    orphaned (the stored salt is the namespace every existing row lives
+    in; replacing it would re-read everything as first-seen).
+    """
+    from ..db import (
+        SEED_META_HASH_ALGORITHM_KEY,
+        SEED_META_SALT_KEY,
+        _get_salt,
+        get_connection,
+    )
+
+    counts = {"source_urls": 0, "dependency_names": 0, "maintainers": 0}
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO packages (id, name) VALUES (0, '__seed__')"
+        )
+        before = conn.execute(
+            "SELECT COUNT(*) AS n FROM source_urls"
+        ).fetchone()["n"]
+
+        url_rows = [
+            (
+                row.get("url"),
+                row.get("first_seen_package_id") or 0,
+                row.get("first_seen_globally_timestamp"),
+                row.get("total_uses", 1),
+                row.get("last_seen_timestamp"),
+            )
+            for row in observations_in.get("source_urls", [])
+            if isinstance(row, dict) and isinstance(row.get("url"), str)
+        ]
+        if url_rows:
+            # INSERT OR IGNORE, exactly as the seed importer: an existing
+            # URL keeps its local first-seen and use history.
+            conn.executemany(
+                """INSERT OR IGNORE INTO source_urls
+                   (url, first_seen_package_id, first_seen_globally_timestamp,
+                    total_uses, last_seen_timestamp)
+                   VALUES (?, ?, ?, ?, ?)""",
+                url_rows,
+            )
+        counts["source_urls"] = (
+            conn.execute("SELECT COUNT(*) AS n FROM source_urls").fetchone()["n"]
+            - before
+        )
+
+        dep_rows = [
+            (
+                row.get("name"),
+                row.get("first_seen_globally_timestamp"),
+                int(row.get("observation_count") or 0),
+            )
+            for row in observations_in.get("dependency_names", [])
+            if isinstance(row, dict) and isinstance(row.get("name"), str)
+        ]
+        if dep_rows:
+            # Counts accumulate onto the existing row, as the seed importer
+            # does; a baseline assert observations, it never rewrites them.
+            conn.executemany(
+                """INSERT INTO dependency_names
+                   (name, first_seen_globally_timestamp, observation_count)
+                   VALUES (?, ?, ?)
+                   ON CONFLICT(name) DO UPDATE SET
+                       observation_count = observation_count + excluded.observation_count""",
+                dep_rows,
+            )
+            counts["dependency_names"] = len(dep_rows)
+
+        maint_rows = [
+            (
+                row.get("name_hash"),
+                row.get("email_hash"),
+                row.get("first_seen"),
+                int(row.get("package_count") or 0),
+                row.get("packages"),
+                row.get("source", "seed"),
+            )
+            for row in observations_in.get("maintainers", [])
+            if isinstance(row, dict) and isinstance(row.get("name_hash"), str)
+        ]
+        if maint_rows:
+            stored_salt = _get_salt(conn)
+            artifact_salt = observations_in.get("salt")
+            skip_maintainers = (
+                stored_salt is not None
+                and artifact_salt is not None
+                and stored_salt != artifact_salt
+            )
+            if skip_maintainers:
+                log.warning(
+                    "Baseline was hashed under a different salt; keeping the "
+                    "stored salt and skipping its maintainer rows to preserve "
+                    "local maintainer history."
+                )
+            else:
+                if stored_salt is None and isinstance(artifact_salt, str) and artifact_salt:
+                    # No local namespace yet: adopt the artifact's salt so
+                    # the rows it carries are reachable, same as a first
+                    # seed import.
+                    conn.execute(
+                        """INSERT OR REPLACE INTO seed_meta (key, value)
+                           VALUES (?, ?)""",
+                        (SEED_META_SALT_KEY, artifact_salt),
+                    )
+                    conn.execute(
+                        """INSERT OR REPLACE INTO seed_meta (key, value)
+                           VALUES (?, ?)""",
+                        (SEED_META_HASH_ALGORITHM_KEY, "sha256"),
+                    )
+                # Not INSERT OR IGNORE: rows carry a NULL email_hash and
+                # SQLite treats NULLs as distinct in a primary key, so the
+                # ignore never fires and a re-import duplicates every row.
+                conn.executemany(
+                    """INSERT INTO maintainers_hashed
+                       (name_hash, email_hash, first_seen, package_count,
+                        packages, source)
+                       SELECT ?, ?, ?, ?, ?, ?
+                       WHERE NOT EXISTS (
+                           SELECT 1 FROM maintainers_hashed
+                           WHERE name_hash = ? AND email_hash IS ?
+                       )""",
+                    [row + (row[0], row[1]) for row in maint_rows],
+                )
+                counts["maintainers"] = len(maint_rows)
+        conn.commit()
+    return counts

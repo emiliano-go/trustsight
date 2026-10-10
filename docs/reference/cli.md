@@ -234,6 +234,8 @@ trustsight history <package> [--limit N] [--score-breakdown] [--json] [--from-da
 
 Table with columns: **Date**, **Old**, **→ New**, **Score**, **Risk**. Stored risk preserves an incomplete or cold-start qualification rather than being recomputed from the numeric score.
 
+If the package has never been analysed, the command exits 2 and says so. Analysis history exists only where a `--record` run wrote it: `review` and `inspect` are read-only by default, so to populate history run `trustsight review --record` or `trustsight inspect --record <package>`. A plain `trustsight inspect <package>` alone records nothing.
+
 If `--score-breakdown` is set, the triggered rules for the latest entry are printed below the table.
 
 ---
@@ -411,7 +413,9 @@ goes away is worse than no finding at all, because it trains you to skim.
 | Flag | Description |
 |------|-------------|
 | `--reason TEXT` | Why the rule is suppressed. Required on `add`; an override with no stated reason is indistinguishable later from a mistake. |
-| `--package NAME` | Limit the override to one package. Without it, the override applies to every package. |
+| `--package NAME` | Limit the override to one package (recommended). Without it, the override applies to every package. |
+| `--global` | Explicitly request the all-packages scope. Omitting `--package` implies this scope, which always asks for confirmation before it is written. |
+| `--yes` | Skip the global-scope confirmation prompt (non-interactive use). |
 
 ### What an override does not do
 
@@ -653,7 +657,7 @@ trustsight baseline import FILE [--allow-unsigned] [--json]
 
 ## trustsight full-aur
 
-Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs from the AUR cgit snapshot endpoint (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact.
+Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snapshot, downloads PKGBUILDs from the AUR cgit snapshot endpoint (no git repos), analyses stateless rules, and optionally emits a signed baseline artifact. `full-aur` is a writer by design: unlike `review` and `inspect`, which are read-only unless you pass `--record`, every `full-aur` cycle records its observations, PKGBUILD snapshots and property transitions unconditionally.
 
 ```
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
@@ -814,6 +818,40 @@ The output names which stores were searched. An empty corpus reports that nothin
 
 ---
 
+## trustsight corpus fetch
+
+Download, verify and import the signed corpus baseline from the release channel.
+
+```
+trustsight corpus fetch [--tag TAG] [--yes] [--json]
+```
+
+The corpus baseline ships as `baseline-corpus.tar.zst` on the newest
+`baseline-*` release (or the release `--tag` pins), with a detached ed25519
+signature. The signature is verified against the pinned distribution key
+before the artifact bytes are parsed; a mismatch, a missing signature, or an
+oversized download is refused with exit 2, and there is no path that imports
+unverified bytes. The download is bounded (the corpus baseline is the
+largest release asset) and carries an explicit timeout.
+
+The import merges the artifact into the local database: package profiles,
+PKGBUILD snapshots, the AUR metadata snapshot, and (for version 2 artifacts)
+the novelty observation tables (source URLs, dependency names, salted
+maintainer hashes), warming the same priors a `trustsight seed fetch` warms.
+Existing rows keep their local history: known source URLs are not
+overwritten, dependency observation counts accumulate, and maintainer rows
+under a different salt are skipped rather than re-namespaced.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--tag` | Fetch from a specific release tag instead of the newest `baseline-*` release. |
+| `--yes` | Import without asking, even into an existing non-empty corpus. Without it, importing into a non-empty corpus prompts first; declining exits 2. |
+| `--json` | Print the plan and the import counts as JSON, without prompting. |
+
+---
+
 ## trustsight explain
 
 Explain why one rule fired on one finding: the rule definition, the
@@ -837,6 +875,7 @@ trustsight explain <package> <rule_id> [--occurrence N] [--json]
 |------|-------------|
 | `--occurrence` | Which occurrence of the rule to explain, 1-based (the order `inspect` lists them). Default 1. |
 | `--depth` | AUR dependency levels to analyse. |
+| `--history-id N` | Explain a recorded analysis by its history id (ids are shown by `trustsight history <package>`) instead of re-analysing: the original stored findings, diff, coverage and config fingerprint are used, so the answer reflects the rules as they were when the analysis ran, not as they are today. Rows recorded before per-finding file/line were stored say so. |
 | `--json` | Output JSON. |
 
 ### Behaviour

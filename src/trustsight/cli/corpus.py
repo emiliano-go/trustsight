@@ -3,6 +3,11 @@
 ``corpus pivot <ioc>`` inverts H056: instead of asking what one package
 carries, it asks which packages reference one indicator.  That is the shape
 of the question an advisory creates.
+
+``corpus fetch`` is the opt-in pull channel for the signed corpus
+baseline: it downloads ``baseline-corpus.tar.zst`` through the release
+channel, verifies the detached ed25519 signature against the pinned
+distribution key before the bytes are parsed, and imports the artifact.
 """
 
 import json
@@ -12,7 +17,12 @@ import typer
 from ..config import ensure_default_configs
 from ..db import init_db
 from ..safe_text import clean
-from .display import _print_colored, console, use_rich
+from .display import _print_colored, console, download_progress, use_rich, use_rich_progress
+
+#: The corpus baseline release asset.  Matches the name the release
+#: workflow builds (``scripts/build_release_baselines.py --corpus``);
+#: the ``.sig`` sibling carries the detached signature.
+CORPUS_ASSET_NAME = "baseline-corpus.tar.zst"
 
 corpus_app = typer.Typer(
     name="corpus",
@@ -65,6 +75,118 @@ def pivot_cmd(
         return
 
     _render_pivot(result)
+
+
+def _corpus_row_counts() -> dict:
+    """How much corpus the local database already holds."""
+    from ..db import get_connection
+    counts = {"profiles": 0, "snapshots": 0}
+    with get_connection() as conn:
+        counts["profiles"] = conn.execute(
+            "SELECT COUNT(*) AS n FROM package_profiles"
+        ).fetchone()["n"]
+        counts["snapshots"] = conn.execute(
+            "SELECT COUNT(*) AS n FROM pkgbuild_snapshots"
+        ).fetchone()["n"]
+    return counts
+
+
+@corpus_app.command("fetch")
+def corpus_fetch(
+    tag: str | None = typer.Option(
+        None, "--tag", help="Fetch a specific release tag instead of the latest"
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", help="Import without asking, even into a non-empty corpus"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+):
+    """Download, verify and import the signed corpus baseline.
+
+    The corpus baseline ships as ``baseline-corpus.tar.zst`` in the
+    TrustSight release channel with a detached ed25519 signature.  The
+    signature is verified against the pinned distribution key before the
+    artifact bytes are parsed; a mismatch is a refusal, not a warning,
+    and there is no path that imports unverified bytes.  A version 2
+    artifact also warms the novelty priors (source URLs, dependency
+    names, salted maintainer hashes) as part of the import.
+
+    Unless ``--yes`` is given, importing into an existing non-empty
+    corpus asks first; declining exits 2.  With ``--json`` the plan is
+    printed without prompting, like every other ``--json`` mode.
+    """
+    from .. import release
+
+    ensure_default_configs()
+    init_db()
+
+    if release.offline():
+        msg = "The release channel is disabled (TRUSTSIGHT_OFFLINE is set)."
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
+    existing = _corpus_row_counts()
+    plan = {"asset": CORPUS_ASSET_NAME, "tag": tag or "latest", **existing}
+    if json_output:
+        typer.echo(json.dumps({"plan": plan}))
+    elif (existing["profiles"] or existing["snapshots"]) and not yes:
+        if not typer.confirm(
+            f"The local corpus already holds {existing['profiles']:,} profile(s) "
+            f"and {existing['snapshots']:,} snapshot(s). Merge the fetched "
+            "baseline into it?"
+        ):
+            _print_colored("Corpus fetch cancelled; the local corpus is unchanged.", "yellow")
+            raise typer.Exit(code=2)
+
+    try:
+        with download_progress(
+            f"Downloading {CORPUS_ASSET_NAME}...",
+            enabled=use_rich_progress() and not json_output,
+        ) as on_download:
+            data = release.fetch_verified_asset(
+                CORPUS_ASSET_NAME, tag=tag, on_progress=on_download,
+            )
+    except release.ReleaseError as exc:
+        msg = f"Corpus fetch refused: {exc}"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from ..full_aur.export import import_baseline
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-corpus-fetch-"))
+    try:
+        artifact_path = tmp_dir / CORPUS_ASSET_NAME
+        artifact_path.write_bytes(data)
+        try:
+            import_baseline(str(artifact_path), json_output=json_output)
+        except Exception as exc:
+            # fetch_verified_asset already pinned the signature, so a
+            # failure here is a malformed artifact, not an unverified one;
+            # still report it like every other refusal.
+            msg = str(exc) or exc.__class__.__name__
+            if json_output:
+                typer.echo(json.dumps({"error": msg}))
+            else:
+                _print_colored(msg, "red", stderr=True)
+            raise typer.Exit(code=2)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    if not json_output:
+        _print_colored(
+            "Verified and imported the corpus baseline from the release channel.",
+            "green",
+        )
 
 
 def _render_pivot(result: dict) -> None:

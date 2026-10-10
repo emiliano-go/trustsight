@@ -312,6 +312,8 @@ class Report:
         heuristic score.
     :ivar scan_truncated: the diff was clamped by line count before the
         rules read it.
+    :ivar layers: the layer profile: per layer ``status`` and the rule ids
+        that fired there.  A projection of :attr:`findings`.
     :ivar required_by: packages in the reviewed set that declare this one a
         dependency.  The reverse of :attr:`dependencies`, populated by
         ``review --deps``; empty on an ordinary review.
@@ -451,6 +453,18 @@ class Report:
 
     ``resolved_lines``, ``unresolved_lines``, the R-rules whose accuracy
     is coupled to resolution, and the subset that actually matched.
+    """
+
+    layers: dict = field(default_factory=dict)
+    """The layer profile (Addendum 5 §3): per layer ``status`` and the rule
+    ids that fired there.  A finding carries the layer where it caught, so
+    this is a projection of :attr:`findings`.
+    """
+
+    boundaries: tuple = ()
+    """The unified analysis boundaries (Addendum 2 W1): one object per
+    coverage gap and per W-series rendering, each naming whether it forbids
+    a clean verdict.  Additive to :attr:`coverage_gaps` for one release.
     """
 
     cached: bool = False
@@ -1088,6 +1102,8 @@ def _report_from_fact(fact) -> Report:
             evaluated.get("unresolved_assignments", ())),
         partial_files=tuple(evaluated.get("partial_files", ())),
         resolution_coverage=dict(evaluated.get("resolution_coverage", {}) or {}),
+        layers=dict(evaluated.get("layers", {}) or {}),
+        boundaries=tuple(evaluated.get("boundaries", ()) or ()),
         file_changes=_file_changes(evaluated["file_changes"]),
         added_urls=tuple(fact.source_changes.added_urls),
         removed_urls=tuple(fact.source_changes.removed_urls),
@@ -1185,6 +1201,8 @@ def _report_from_result(row: dict) -> Report:
             evaluated.get("unresolved_assignments", ())),
         partial_files=tuple(evaluated.get("partial_files", ())),
         resolution_coverage=dict(evaluated.get("resolution_coverage", {}) or {}),
+        layers=dict(evaluated.get("layers", {}) or {}),
+        boundaries=tuple(evaluated.get("boundaries", ()) or ()),
         file_changes=_file_changes(evaluated["file_changes"]),
         first_seen=evaluated["first_seen"],
         comparison_base=evaluated.get("comparison_base", ""),

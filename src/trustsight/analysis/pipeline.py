@@ -785,6 +785,8 @@ def analyze_package(
             tree_manifest=tree_manifest,
             whole_recipe=full_recipe,
             previous_diff=previous_diff,
+            previous_commit=old_commit,
+            current_commit=head_commit,
         )
     )
     triggered_rules.extend(

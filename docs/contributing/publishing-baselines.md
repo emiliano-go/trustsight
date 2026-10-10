@@ -111,7 +111,10 @@ a temporary PEM file and fails before publishing if the secret is unset.
 ### Grow it incrementally (recommended)
 
 A corpus baseline is built from your local database's package profiles and
-PKGBUILD snapshots, which `trustsight full-aur` accumulates. **The intended
+PKGBUILD snapshots, which `trustsight full-aur` accumulates. `full-aur` is a
+writer by design: every cycle records its observations, snapshots and
+property transitions unconditionally, so unlike `trustsight review` or
+`trustsight inspect` it needs no `--record` flag. **The intended
 cadence is incremental**, not one big bootstrap: with a metadata snapshot
 present (any `trustsight review` run creates one), each cycle fetches only the
 changed packages, which is gentle on the AUR and captures exactly the churn the

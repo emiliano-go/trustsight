@@ -45,7 +45,7 @@ def override_list(
     if not overrides and not url_acks:
         msg = (
             f"No overrides configured. File: {OVERRIDES_PATH}\n"
-            f"Add one with: trustsight override add R010 --reason \"...\"\n"
+            f"Add one with: trustsight override add H001 --package mypkg --reason \"...\"\n"
             f"Acknowledge a URL with: trustsight override add-url PACKAGE URL --reason \"...\""
         )
         if json_output:
@@ -116,15 +116,58 @@ def override_list(
 
 @override_app.command("add")
 def override_add(
-    rule_id: str = typer.Argument(..., help="Rule to suppress, e.g. R010"),
+    rule_id: str = typer.Argument(..., help="Rule to suppress, e.g. H001"),
     reason: str = typer.Option(..., "--reason", help="Why this rule is being suppressed (required)"),
     package: str | None = typer.Option(
-        None, "--package", help="Limit to one package", autocompletion=installed_packages,
+        None, "--package", help="Limit to one package (recommended; omit only together with --global)",
+        autocompletion=installed_packages,
+    ),
+    global_scope: bool = typer.Option(
+        False, "--global",
+        help="Suppress this rule for ALL packages. Persistent: it also hides "
+             "the rule on packages you have not reviewed yet, so this asks "
+             "for confirmation (or --yes).",
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", help="Skip the global-scope confirmation prompt",
     ),
     json_output: bool = typer.Option(False, "--json", help="Output JSON"),
 ):
-    """Add a rule override to suppress a finding."""
+    """Disable a detection rule for future changes (a persistent override).
+
+    A package-scoped override (--package) is the recommended path: it hides
+    the rule on one package you have reviewed. To acknowledge one specific
+    change instead of disabling a rule, use ``override add-url`` (for source
+    URLs) or review the finding without an override.
+    """
     ensure_default_configs()
+    if package and global_scope:
+        msg = "--package and --global cannot be combined"
+        if json_output:
+            typer.echo(json.dumps({"error": msg}))
+        else:
+            _print_colored(msg, "red", stderr=True)
+        raise typer.Exit(code=2)
+    if package is None and not json_output and not yes:
+        # Global scope hides the rule on every package, including ones the
+        # operator has never reviewed. Show exactly what is about to happen
+        # and ask; --yes and --json are the non-interactive escape hatches,
+        # matching the forget command's conventions.
+        _print_colored(
+            f"Rule: {rule_id.upper()}", "yellow", stderr=True)
+        _print_colored(
+            "Scope: ALL packages — global (use --package to limit this to "
+            "one package)", "yellow", stderr=True)
+        _print_colored(f"Reason: {reason}", "yellow", stderr=True)
+        try:
+            confirm = input(
+                "This override disables the rule everywhere. Are you sure? [y/N] ")
+        except EOFError:
+            _print_colored("Aborted.", "yellow", stderr=True)
+            raise typer.Exit(code=2)
+        if confirm.lower() not in ("y", "yes"):
+            _print_colored("Aborted.", "yellow", stderr=True)
+            raise typer.Exit(code=2)
     try:
         ov = add_override(rule_id, reason, package)
     except ValueError as exc:
@@ -156,11 +199,23 @@ def override_add_url(
 ):
     """Acknowledge one source URL for one package.
 
-    The URL no longer scores SOURCE_BUCKET or NOVELTY for this package.
-    A different URL, or the same URL in another package, is judged as
-    before; that is the difference from a rule override.
+    This is the "I reviewed this particular change" flow: the URL no longer
+    scores SOURCE_BUCKET or NOVELTY for this package, while a rule override
+    (``override add``) is the "disable this detection for future changes"
+    flow. A different URL, or the same URL in another package, is judged as
+    before.
+
+    Note: the URL is normalised before it is stored - version, hash and
+    date components are stripped - so this acknowledgement can carry
+    across version bumps of the same source.
     """
     ensure_default_configs()
+    if not json_output:
+        _print_colored(
+            "Note: URL acknowledgement strips version/hash/date components, "
+            "so it can carry across version bumps of the same source.",
+            "yellow", stderr=True,
+        )
     try:
         ack = add_url_ack(package, url, reason)
     except ValueError as exc:
@@ -214,7 +269,13 @@ def override_wizard(
         ..., help="Package to configure overrides for", autocompletion=installed_packages,
     ),
 ):
-    """Interactive wizard to suppress rules that misfire on a package."""
+    """Interactive wizard to suppress rules that misfire on a package.
+
+    Every override added here is scoped to this package only - the
+    recommended path. Overrides are persistent: they disable the rule for
+    future changes of the package. Acknowledging a specific source URL
+    (``override add-url``) is the one-off "I reviewed this change" flow.
+    """
     ensure_default_configs()
     init_db()
 

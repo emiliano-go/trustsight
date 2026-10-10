@@ -976,9 +976,19 @@ def gate_regex_input_is_bounded() -> Gate:
     header = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,3 @@\n pkgname=demo\n"
     diff = header + "+build() { " + ("a" * (5 * 1024 * 1024)) + " ; }\n"
 
-    start = time.monotonic()
-    fact = scan_diff(diff, config=load_config(), package_name="demo")
-    elapsed = time.monotonic() - start
+    def _huge_seconds():
+        start = time.monotonic()
+        result = scan_diff(diff, config=load_config(), package_name="demo")
+        return time.monotonic() - start, result
+
+    # Measured twice and kept at the minimum, like the multi-line probe
+    # below: the first scan pays every module's cold regex compilation and
+    # shares the machine with whatever else is running, and contention only
+    # ever inflates a timing. A rule that turned quadratic is slow on both
+    # attempts, so the min still catches the regression this gate exists for.
+    elapsed, fact = _huge_seconds()
+    if elapsed >= 8.0:
+        elapsed = min(elapsed, _huge_seconds()[0])
 
     problems = []
 

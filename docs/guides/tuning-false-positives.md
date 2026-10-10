@@ -75,8 +75,10 @@ scope = ["function_body"]  # already the default
 After any change, re-run against your corpus:
 
 ```bash
-trustsight review
+trustsight review --record
 ```
+
+`--record` persists the observations and analysis history the re-baseline compares against; without it the run is read-only and nothing is stored.
 
 Score changes: the demoted/disabled rule contributes less. Verify that the packages that were false positives now score where you expect them. See [configuring rules and weights](configuring-rules-and-weights.md) and the [re-baselining guide](../contributing/re-baselining.md).
 
@@ -136,7 +138,7 @@ the other member before assuming the cluster is the same false positive.
 ## When not to tune
 
 - **First-seen novelty scores** (5-15) are not false positives. They are honest uncertainty that resolves as the database-wide maturity gate accumulates observations.
-- **C-series rules** (C001-C025) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
+- **C-series rules** (C001-C026) are structural invariants. They cannot be disabled through config. If they fire, they are detecting a real property of the PKGBUILD: investigate before suppressing.
 - **INCONCLUSIVE** verdicts from a cold database are not rule false positives. Let the maturity gate accumulate 50 observations before judging.
 
 ## See also

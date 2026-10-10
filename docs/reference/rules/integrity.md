@@ -35,9 +35,12 @@ severity weights and the reserved identifier ranges.
 | [C011](#c011) | Prebuilt Binary From Non-Upstream Host | MEDIUM |
 | [C013](#c013) | Source Fork Diverges From Declared Upstream | MEDIUM |
 | [C014](#c014) | Array Order Manipulation | MEDIUM |
+| [C018](#c018) | Executable File Committed | MEDIUM |
+| [C019](#c019) | File Renamed | INFO |
 | [C020](#c020) | Credentials In A Source URL | HIGH |
 | [C022](#c022) | Checksum Strength Downgraded | HIGH |
 | [C023](#c023) | IP-Literal Source Host | MEDIUM |
+| [C026](#c026) | Empty File Added | INFO |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -695,6 +698,29 @@ change and no `SKIP` movement - stands down via
 `[thresholds] c014.require_content_change` (default true). Measured on the
 locked benign corpus: 0/3,739.
 
+### C018: Executable File Committed {#c018}
+
+- **Severity:** MEDIUM (weight 15)
+- **Category:** `integrity`
+- **Condition:** An added file carries git's executable mode
+  (`100755`). The structural twin of the artifact-side mode check: a file
+  that arrives runnable is caught even when its content is never read.
+
+A projection of the typed `DiffFile.new_mode`; no new walker. Measured on
+the locked benign corpus: 0/3,739.
+
+### C019: File Renamed {#c019}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `integrity`
+- **Condition:** The diff declares a `rename from`/`rename to` pair.
+  Rename-to-hide-history is a known shape, but reorganization is common, so
+  the finding is informational and attributes to the post-rename path.
+
+A projection of the typed `DiffFile.rename_from`/`rename_to`. A pure rename
+carries no hunk, so the parser materialises the file from its rename
+metadata alone. Measured on the locked benign corpus: 0/3,739.
+
 ### C020: Credentials In A Source URL {#c020}
 
 - **Severity:** HIGH (weight 25)
@@ -728,3 +754,14 @@ calibration floor.
 
 Direct-IP fetches are a C2 shape that generic novelty under-weights.
 Measured on the locked benign corpus: 0/3,739.
+
+### C026: Empty File Added {#c026}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `integrity`
+- **Condition:** An added file has no hunks. Marker files and placeholder
+  drops are the shape; ordinary empty files are common, so this is
+  informational.
+
+A projection of the typed `DiffFile` status and hunk count. Measured on the
+locked benign corpus: 0/3,739.

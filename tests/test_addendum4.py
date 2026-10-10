@@ -117,3 +117,42 @@ def test_g2_tls_disable_is_caught_for_other_clients():
     ):
         triggered = apply_rules([line], [line], None)
         assert any(rule["rule_id"] == "R057" for rule in triggered), line
+
+
+def _addendum4_ids(diff_text, tree_manifest):
+    from trustsight.analysis.structural import addendum4_findings
+    from trustsight.diffdoc import parse_diff
+    from trustsight.recipedoc import recipe_states
+
+    doc = parse_diff(diff_text)
+    pre, post = recipe_states(doc)
+    out = []
+
+    def add(rule_id, name, severity, category, match,
+            file="PKGBUILD", line=None, **extra):
+        out.append(rule_id)
+
+    class _SC:
+        added_urls = ()
+
+    addendum4_findings(diff_text, doc, pre, post, _SC(), {}, add,
+                       tree_manifest=tree_manifest)
+    return out
+
+
+_DANGLING = (
+    "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+    " pkgname=demo\n pkgver=1.0\n+install=demo.install\n"
+)
+
+
+def test_g6a_dangling_install_declaration_fires_with_tree_knowledge():
+    assert "C027" in _addendum4_ids(_DANGLING, [("PKGBUILD", b"")])
+
+
+def test_g6a_a_present_install_file_does_not_fire():
+    assert "C027" not in _addendum4_ids(_DANGLING, [("demo.install", b"")])
+
+
+def test_g6a_never_guesses_without_tree_knowledge():
+    assert "C027" not in _addendum4_ids(_DANGLING, None)

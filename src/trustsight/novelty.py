@@ -404,6 +404,8 @@ def build_novelty_context(
     package_id: int,
     maintainer: str = "",
     record: bool = False,
+    package_name: str = "",
+    source_array=None,
 ) -> NoveltyContext:
     """Build a NoveltyContext by checking URL and maintainer novelty.
 
@@ -435,5 +437,15 @@ def build_novelty_context(
             ctx.url_first_seen_globally = True
             if not ctx.url_first_seen_globally_url:
                 ctx.url_first_seen_globally_url = url
+
+    # Spec §11: the exact source-array query.  "Has this source-array tuple
+    # appeared for this package before" becomes set membership over the
+    # recipe index - exact where the per-URL estimate is statistical.
+    if package_name and source_array is not None:
+        from .db import array_seen_before
+
+        entries = tuple(source_array)
+        ctx.source_array_seen_before = bool(entries) and array_seen_before(
+            package_name, "source", entries)
 
     return ctx

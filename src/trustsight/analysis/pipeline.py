@@ -687,11 +687,19 @@ def analyze_package(
     url_acks = match_url_acks(pkg_name, source_changes.added_urls)
     scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
 
+    from ..recipedoc import parse_recipe as _parse_recipe
+
+    _post_source = (
+        _parse_recipe(head_pkgbuild, file="PKGBUILD").arrays.get("source", ())
+        if head_pkgbuild else ()
+    )
     novelty = build_novelty_context(
         scored_urls,
         package_id,
         maintainer=new_maintainer,
         record=record,
+        package_name=pkg_name,
+        source_array=_post_source,
     )
 
     source_buckets = classify_urls(

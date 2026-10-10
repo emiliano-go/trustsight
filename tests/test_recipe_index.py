@@ -97,3 +97,28 @@ def test_the_index_answers_from_real_corpus_recipes(db):
         assert not array_seen_before(
             package, "source", ("https://never.example/absent",))
     assert checked
+
+
+def test_the_index_answers_the_source_array_novelty_consumer(db):
+    """Spec §11: the one v1 consumer is the source-array novelty check."""
+    from trustsight.novelty import build_novelty_context
+
+    entries = ("https://a.example/x",)
+    record_recipe_document(
+        "demo", {}, {"source": entries}, observed_at="2026-01-01 00:00:00")
+
+    seen = build_novelty_context(
+        [], 1, package_name="demo", source_array=entries, record=False)
+    assert seen.source_array_seen_before is True
+
+    novel = build_novelty_context(
+        [], 1, package_name="demo",
+        source_array=("https://b.example/y",), record=False)
+    assert novel.source_array_seen_before is False
+
+
+def test_source_array_novelty_is_false_without_a_package(db):
+    from trustsight.novelty import build_novelty_context
+
+    ctx = build_novelty_context([], 1, record=False)
+    assert ctx.source_array_seen_before is False

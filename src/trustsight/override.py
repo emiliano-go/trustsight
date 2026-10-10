@@ -336,7 +336,15 @@ def filter_triggered_rules(
         o for o in overrides
         if o.package is None or (package is not None and o.package == package)
     ]
-    by_id = {o.rule_id: o for o in active}
+    # Addendum 3: an override keyed to a retired id still applies, through
+    # its survivor, so a merge never silently un-suppresses a rule the
+    # operator had turned off.  The survivor's own id wins if both exist.
+    from .rule_id_history import survivor_id
+
+    by_id: dict[str, RuleOverride] = {}
+    for override in active:
+        by_id.setdefault(override.rule_id, override)
+        by_id.setdefault(survivor_id(override.rule_id), override)
 
     kept: list[dict] = []
     suppressed: list[dict] = []

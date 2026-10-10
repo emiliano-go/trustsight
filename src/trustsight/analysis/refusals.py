@@ -263,7 +263,21 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             break
 
     # --- X029: encoded material at rest ----------------------------------
+    # A literal is "at rest" only when neither a decoder nor an executor
+    # references it in the same diff (spec X029).  The decoder arm is the
+    # regex below; the executor arm is the crossfire ownership table's
+    # decode-and-execute / output-executed families - when one of those
+    # fired, that rule owns the line and X029 stands down.
     decoder_present = bool(_DECODER_RE.search(diff_text))
+    if not decoder_present:
+        try:
+            from .crossfire import crossfire_techniques
+
+            techniques = crossfire_techniques(diff_text)
+            decoder_present = any(
+                rid in techniques for rid in ("X001", "X023"))
+        except Exception:
+            pass
     floor = int(_thresholds(config).get("x029", {}).get("min_length", 256))
     if not decoder_present:
         scanned = "\n".join(post.functions.values())

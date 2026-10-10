@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C026, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X031, C001-C027, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1241,6 +1241,10 @@ See [A004: Install Hook Diverges From Declaration](artifact.md#a004).
 ### A005 {#a005}
 
 See [A005: Unusual Artifact Mode](artifact.md#a005).
+
+### C027 {#c027}
+
+See [C027: Declared Install Script Is Absent](integrity.md#c027).
 
 ### W005 {#w005}
 

@@ -46,6 +46,7 @@ TEMPLATES: dict[str, str] = {
     "C018": "executable file committed to the repository: {match}",
     "C019": "file renamed: {match}",
     "C026": "empty file added: {match}",
+    "C027": "install= names an absent file: {match}",
 
     # --- Checksum rules ---
     "H001": "checksum set to SKIP{skip_suffix}",

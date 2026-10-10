@@ -19,13 +19,27 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
-from trustsight.diffdoc import parse_diff  # noqa: E402
+from trustsight.doc_cache import parse_diff_cached  # noqa: E402
+
+#: Spec §4: the replay reads documents from the cache when present and
+#: parses on miss.  A temp dir keeps the run from polluting the operator's
+#: XDG cache; the cache is an optimization, never an authority, so a miss
+#: (or a version/integrity mismatch) falls back to a fresh parse and the
+#: parity result is identical either way.
+_CACHE = Path(os.environ.get("TRUSTSIGHT_DOC_CACHE")
+              or (Path(tempfile.gettempdir()) / "trustsight-harness-doc-cache"))
+
+
+def _parse(text: str):
+    return parse_diff_cached(text, directory=_CACHE)
 
 FIXTURES = ROOT / "tests" / "fixtures"
 BASELINE = FIXTURES / "diffdoc-projections.json.gz"
@@ -60,7 +74,7 @@ def projection_digest(text: str) -> str:
     change with the tokenizer, not with the parse, and a tokenizer edit that
     does not move the parse must not force a re-baseline.
     """
-    data = parse_diff(text).to_dict()
+    data = _parse(text).to_dict()
     payload = json.dumps(
         {"files": data["files"], "lines": data["lines"]},
         sort_keys=True, separators=(",", ":"),

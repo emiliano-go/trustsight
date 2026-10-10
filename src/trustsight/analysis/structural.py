@@ -596,7 +596,8 @@ def _structural_findings(
 
     # Addendum 4: G1/G3/G4/G5/G6/G7 predicates over the same parse.
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
-                       source_changes, config or {}, add)
+                       source_changes, config or {}, add,
+                       tree_manifest=tree_manifest)
 
     # Addendum 5 §6.3: the E-series entropy predicates.  Silent until their
     # thresholds are configured (they ship empty).
@@ -993,7 +994,7 @@ def _ip_literal_hosts(hosts) -> list[str]:
 
 
 def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
-                       config, add) -> None:
+                       config, add, tree_manifest=None) -> None:
     """G1/G3/G4/G5/G6/G7 predicates over the typed core (Addendum 4)."""
     from ..recipedoc import array_diff
 
@@ -1023,6 +1024,20 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
                         "it; pacman never runs the hook",
                         file=file.path, line=None)
                     break
+        # G6(a) (C027): install= names a file the diff/tree does not carry -
+        # a dangling declaration, almost always benign but worth an INFO.
+        # Tree knowledge is required (never guess): without the manifest the
+        # absence could just be an unchanged file outside the hunk.
+        if declared and tree_manifest is not None:
+            wanted = declared.rsplit("/", 1)[-1]
+            seen = {f.path.rsplit("/", 1)[-1] for f in scope_doc.files}
+            seen |= {str(p).rsplit("/", 1)[-1] for p, _body in tree_manifest}
+            if wanted not in seen:
+                add("C027", "Declared Install Script Is Absent", "INFO",
+                    "integrity",
+                    f"install= names {declared}, which the diff and the tree "
+                    "do not carry",
+                    file="PKGBUILD", line=None)
 
     if pre is None or post is None:
         return

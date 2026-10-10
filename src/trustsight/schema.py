@@ -61,6 +61,11 @@ class NoveltyContext:
     url_first_seen_globally_url: str = ""
     maintainer_first_seen_for_this_package: bool = False
     observation_count: int = 0
+    #: Spec §11: whether this exact ``source=()`` tuple has been observed
+    #: before for the package (exact set membership over the recipe index,
+    #: not the statistical per-URL estimate).  The one v1 consumer of
+    #: ``array_seen_before``.
+    source_array_seen_before: bool = False
 
 
 @dataclass

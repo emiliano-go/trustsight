@@ -518,11 +518,15 @@ def analyze_package_text(
         old_maintainer and maintainer and old_maintainer != maintainer
     )
 
+    from ..recipedoc import parse_recipe as _parse_recipe
+
     novelty = build_novelty_context(
         scored_urls,
         package_id,
         maintainer=maintainer,
         record=record,
+        package_name=pkg_name,
+        source_array=_parse_recipe(new_pkgbuild, file="PKGBUILD").arrays.get("source", ()),
     )
 
     resolved_strings, unresolved_strings, resolved_indices = (

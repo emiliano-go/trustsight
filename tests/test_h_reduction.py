@@ -41,5 +41,25 @@ def test_survivor_id_follows_a_retirement_and_a_rename():
     assert survivor_id("R004") == "H001"
     # An id that is neither retired nor renamed is returned unchanged.
     assert survivor_id("H001") == "H001"
-    # A synthetic retirement resolves to its survivor.
-    assert RENAMED_RULE_IDS or RETIRED_RULE_IDS or True
+
+
+def test_a_synthetic_retirement_resolves_to_its_survivor(monkeypatch):
+    import trustsight.rule_id_history as history
+
+    monkeypatch.setitem(history.RETIRED_RULE_IDS, "H999", "H001")
+    assert survivor_id("H999") == "H001"
+
+
+def test_an_override_on_a_retired_id_still_suppresses_the_survivor(monkeypatch):
+    import trustsight.rule_id_history as history
+    from trustsight import override
+
+    monkeypatch.setitem(history.RETIRED_RULE_IDS, "H999", "H001")
+    monkeypatch.setattr(
+        override, "load_overrides",
+        lambda: [override.RuleOverride(rule_id="H999", reason="retired")],
+    )
+    kept, suppressed = override.filter_triggered_rules(
+        [{"rule_id": "H001", "severity": "HIGH"}])
+    assert kept == []
+    assert suppressed[0]["rule_id"] == "H001"

@@ -41,6 +41,7 @@ severity weights and the reserved identifier ranges.
 | [C022](#c022) | Checksum Strength Downgraded | HIGH |
 | [C023](#c023) | IP-Literal Source Host | MEDIUM |
 | [C026](#c026) | Empty File Added | INFO |
+| [C027](#c027) | Declared Install Script Is Absent | INFO |
 | [H001](#h001) | Checksum Disabled | HIGH |
 | [H002](#h002) | Checksum Emptied | HIGH |
 | [H005](#h005) | validpgpkeys Added | - |
@@ -771,3 +772,16 @@ Measured on the locked benign corpus: 0/3,739.
 
 A projection of the typed `DiffFile` status and hunk count. Measured on the
 locked benign corpus: 0/3,739.
+
+### C027: Declared Install Script Is Absent {#c027}
+
+- **Severity:** INFO (weight 0)
+- **Category:** `integrity`
+- **Condition:** The `install=` scalar names a file the diff and the tree do
+  not carry - a dangling declaration.
+
+Almost always benign (recipe drift, a reverted declaration), so it is INFO.
+Requires tree knowledge: without the manifest, the file's absence could just
+be an unchanged file outside the hunk, so the rule never fires on a bare
+diff (never guess). The inverse of C024, which owns an `.install` shipped
+without a declaration.

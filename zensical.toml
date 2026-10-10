@@ -122,6 +122,7 @@ Rules = [
   {Crossfire = "reference/rules/crossfire.md"},
   {Sabotage = "reference/rules/sabotage.md"},
   {Unverifiable = "reference/rules/unverifiable.md"},
+  {"Meta and Confluence" = "reference/rules/meta.md"},
 ]
 
 [[project.nav]]

@@ -11,8 +11,15 @@ from trustsight.layers import (
 
 
 def test_every_rule_has_exactly_one_layer():
-    unassigned = [rid for rid in RULE_CATEGORIES if layer_of(rid) is None]
+    # The M series has no static layer by design: it fires at the layer of
+    # its inputs (Addendum 5 §2), so layer_of returns None for it.
+    unassigned = [
+        rid for rid in RULE_CATEGORIES
+        if not rid.startswith("M") and layer_of(rid) is None
+    ]
     assert not unassigned, f"rules without a layer: {sorted(unassigned)}"
+    assert all(layer_of(rid) is None
+               for rid in RULE_CATEGORIES if rid.startswith("M"))
 
 
 def test_non_rule_ids_have_no_layer():

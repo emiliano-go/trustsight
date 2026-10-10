@@ -1178,6 +1178,18 @@ See [W006: Generated File Names A Build-Only Path](unverifiable.md#w006).
 
 See [W007: Dependency Novelty Declined For Insufficient Observations](unverifiable.md#w007).
 
+### M001 {#m001}
+
+See [M001: Claim Contradicted By Structure](meta.md#m001).
+
+### M002 {#m002}
+
+See [M002: Weak Signal Across Layers](meta.md#m002).
+
+### M003 {#m003}
+
+See [M003: Composition Not Owned Elsewhere](meta.md#m003).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).

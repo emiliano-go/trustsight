@@ -78,6 +78,7 @@ def test_the_rule_counts_in_the_readme_match_the_catalog():
         "D": "dependency-graph rules",
         "S": "sabotage rules",
         "X": "crossfire anti-evasion rules",
+        "M": "meta rules",
     }
     missing = [
         f"{by_letter[letter]} {label}"
@@ -87,7 +88,7 @@ def test_the_rule_counts_in_the_readme_match_the_catalog():
     assert not missing, "README family counts drifted: " + ", ".join(missing)
 
     scoring = len(RULE_CATEGORIES) - by_letter.get("W", 0)
-    assert f"{scoring} documented rules across six scoring namespaces" in readme
+    assert f"{scoring} documented rules across seven scoring namespaces" in readme
 
 
 def test_the_rules_index_legend_matches_the_catalog():

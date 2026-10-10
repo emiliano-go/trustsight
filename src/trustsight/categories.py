@@ -58,6 +58,10 @@ class RuleCategory(StrEnum):
     #: could not verify, on a surface too common to price. See
     #: `unverifiable.md` for why these carry no weight.
     UNVERIFIABLE = "unverifiable"
+    #: The M series. Predicates over the finding set itself (Addendum 5 §6.5):
+    #: a declared practice contradicted by structure, or a composition of
+    #: weak signals. Fires at the layer of its inputs.
+    META = "meta"
 
     @property
     def doc_page(self) -> str:
@@ -96,6 +100,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.CROSSFIRE: "Crossfire",
     RuleCategory.SABOTAGE: "Sabotage",
     RuleCategory.UNVERIFIABLE: "Unverifiable",
+    RuleCategory.META: "Meta and Confluence",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -160,6 +165,10 @@ _SUMMARIES: dict[RuleCategory, str] = {
         "Not a claim about the recipe but about the analysis: something the "
         "package will run that this run could not read. Weight 0 always, "
         "and always shown."
+    ),
+    RuleCategory.META: (
+        "A claim about other findings: a declared practice contradicted by "
+        "structure, or a composition only visible from the whole profile."
     ),
 }
 
@@ -273,6 +282,9 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "W005": _C.UNVERIFIABLE,
     "W006": _C.UNVERIFIABLE,
     "W007": _C.UNVERIFIABLE,
+    "M001": _C.META,
+    "M002": _C.META,
+    "M003": _C.META,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,

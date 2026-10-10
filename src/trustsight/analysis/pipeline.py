@@ -985,6 +985,11 @@ def analyze_package(
         partial_files=partial_files,
     )
 
+    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # (after the ownership resolver), before scoring.
+    from .meta import m_series_findings
+
+    triggered_rules.extend(m_series_findings(triggered_rules, config))
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},
@@ -1317,6 +1322,11 @@ def scan_diff(
         partial_files=partial_files,
     )
 
+    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # (after the ownership resolver), before scoring.
+    from .meta import m_series_findings
+
+    triggered_rules.extend(m_series_findings(triggered_rules, config))
     score, breakdown, risk = calculate_score(
         triggered_rules,
         {u: b for u, b in source_buckets.items() if u not in url_acks},
@@ -1476,6 +1486,11 @@ def _make_fresh_analysis(
     # the novelty tier has nothing to say, not that the rules did not fire -
     # and the band downgrade for a coverage gap is decided inside
     # `calculate_score`, so it is not applied a second time here.
+    # Addendum 5 §6.5: M-series predicates over the completed finding set
+    # (after the ownership resolver), before scoring.
+    from .meta import m_series_findings
+
+    triggered_rules.extend(m_series_findings(triggered_rules, config))
     score, breakdown, risk = calculate_score(
         triggered_rules, {}, novelty, config, coverage_gaps=gaps,
     )

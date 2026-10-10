@@ -34,7 +34,7 @@ LEGEND_END = "<!-- /generated: legend -->"
 TABLE_START = "<!-- generated: catalog -->"
 TABLE_END = "<!-- /generated: catalog -->"
 
-HEADING = re.compile(r"^### ([RCDSXWH]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
+HEADING = re.compile(r"^### ([A-Z]\d{3}):\s*(.*?)\s*(?:\{#([^}]+)\})?\s*$")
 SEVERITY = re.compile(r"\b(FATAL|CRITICAL|HIGH|MEDIUM|LOW|INFO)\b")
 
 SERIES_NAMES = {
@@ -46,6 +46,7 @@ SERIES_NAMES = {
     "X": "Crossfire",
     "W": "Unverifiable",
     "P": "Declared-practice",
+    "M": "Meta",
 }
 
 

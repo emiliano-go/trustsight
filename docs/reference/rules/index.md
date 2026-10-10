@@ -50,6 +50,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Crossfire](crossfire.md) | `crossfire` | 31 | The evasion technique itself, not the payload it hides: a rule here fires on how a thing was written rather than on what it does. |
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 7 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
+| [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -217,6 +218,9 @@ is deliberately non-contiguous; see
 | [H101](integrity.md#h101) | Source Pinning Lost | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
 | [H102](composition.md#h102) | Maintainer Change With Signing Key Change | Heuristic | HIGH | [Composition](composition.md) |
 | [H103](integrity.md#h103) | Metadata And Recipe Disagree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
+| [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
+| [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
+| [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [R001](fetch-and-execution.md#r001) | Remote Script Execution | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R002](fetch-and-execution.md#r002) | Wget Pipe to Shell | Regex | CRITICAL | [Fetch and Execution](fetch-and-execution.md) |
 | [R003](obfuscation.md#r003) | Base64 Decode and Execute | Regex | CRITICAL | [Obfuscation](obfuscation.md) |

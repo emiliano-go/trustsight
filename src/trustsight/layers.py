@@ -27,6 +27,7 @@ from enum import StrEnum
 __all__ = [
     "GAP_BLINDED_LAYERS",
     "LAYER_ORDER",
+    "LAYER_VALUES",
     "RULE_LAYER_OVERRIDES",
     "SERIES_LAYER",
     "Layer",
@@ -35,6 +36,7 @@ __all__ = [
     "layer_profile",
     "layers_traversed",
     "minimum_layer_cut",
+    "parse_overrides",
     "rules_in_layer",
 ]
 
@@ -98,9 +100,18 @@ SERIES_LAYER: dict[str, Layer] = {
 #: * the observational H rules read stored history, so they belong to the
 #:   ecosystem-memory layer even though they are filed in H;
 #: * H056 is an indicator match, so it belongs with the I mechanism.
+#:
+#: The spec's own H099-H103 layer rows (Addendum 5 §2) referred to the
+#: *proposed* rules, which Addendum 3 Phase 0 re-filed as C014-C017 and which
+#: are L1 by the C-series default.  The live H099/H101/H103 are different,
+#: unrelated rules; they are structural-coherence violations and are pinned to
+#: L1 here so the profile does not read them as generic L5 suspicion.
 RULE_LAYER_OVERRIDES: dict[str, Layer] = {
     "X026": Layer.L2,
     "X027": Layer.L2,
+    "H099": Layer.L1,   # source host swapped under a kept local name
+    "H101": Layer.L1,   # source pinning lost
+    "H103": Layer.L1,   # metadata and recipe disagree
     "H020": Layer.L6,
     "H021": Layer.L6,
     "H022": Layer.L6,
@@ -124,32 +135,63 @@ def _series_of(rule_id: str) -> str:
     return rule_id[:1].upper() if rule_id else ""
 
 
-def layer_of(rule_id: str) -> Layer | None:
+#: The closed set of layer values a config override may name.
+LAYER_VALUES: frozenset[str] = frozenset(layer.value for layer in LAYER_ORDER)
+
+
+def parse_overrides(config) -> dict[str, Layer]:
+    """The validated ``[layers]`` overrides from *config*, ``{}`` by default.
+
+    A layer override is a ``[layers]`` table mapping a rule id to ``L1``..``L8``.
+    An entry naming an unknown rule or an out-of-range layer is dropped rather
+    than guessed: the set is closed, and a bad override must not move a rule
+    off it.  The security gate ``layer overrides stay within the closed set``
+    pins that dropping behaviour.
+    """
+    from .categories import RULE_CATEGORIES
+
+    raw = (config or {}).get("layers") or {}
+    overrides: dict[str, Layer] = {}
+    if not isinstance(raw, dict):
+        return overrides
+    for rule_id, value in raw.items():
+        key = str(rule_id).upper()
+        text = str(value).upper()
+        if text not in LAYER_VALUES or key not in RULE_CATEGORIES:
+            continue
+        overrides[key] = Layer(text)
+    return overrides
+
+
+def layer_of(rule_id: str, overrides: dict[str, Layer] | None = None) -> Layer | None:
     """The one layer owning *rule_id*, or ``None`` for a non-rule id.
 
-    An override wins over the series default; an id whose series has no
-    default (M) returns ``None`` rather than guessing.  Reserved and
-    unknown ids return ``None`` for the same reason
-    :func:`trustsight.categories.category_of` does: a caller reads ids out
-    of stored findings, and an id that is no longer a rule is a fact about
-    the data.
+    Precedence: a config override (``[layers]``), then the shipped per-rule
+    override, then the series default.  An id whose series has no default (M)
+    returns ``None`` rather than guessing; reserved and unknown ids return
+    ``None`` for the same reason :func:`trustsight.categories.category_of`
+    does - a caller reads ids out of stored findings, and an id that is no
+    longer a rule is a fact about the data.
     """
     from .categories import RULE_CATEGORIES
 
     rule_id = rule_id.upper()
     if rule_id not in RULE_CATEGORIES:
         return None
+    if overrides and rule_id in overrides:
+        return overrides[rule_id]
     override = RULE_LAYER_OVERRIDES.get(rule_id)
     if override is not None:
         return override
     return SERIES_LAYER.get(_series_of(rule_id))
 
 
-def rules_in_layer(layer: Layer) -> list[str]:
+def rules_in_layer(layer: Layer, overrides: dict[str, Layer] | None = None) -> list[str]:
     """Sorted rule ids assigned to *layer*."""
     from .categories import RULE_CATEGORIES
 
-    return sorted(rid for rid in RULE_CATEGORIES if layer_of(rid) is layer)
+    return sorted(
+        rid for rid in RULE_CATEGORIES if layer_of(rid, overrides) is layer)
 
 
 #: Which layers a coverage gap can blind (Addendum 5 §3).
@@ -248,7 +290,8 @@ def blinded_layers(gaps) -> frozenset[Layer]:
     return frozenset(blinded)
 
 
-def layer_profile(fact, findings, *, correlation_ran: bool = False) -> dict[str, dict]:
+def layer_profile(fact, findings, *, correlation_ran: bool = False,
+                  overrides: dict[str, Layer] | None = None) -> dict[str, dict]:
     """The report's ``layers`` object (Addendum 5 §3).
 
     Per layer, ``{"status", "name", "findings"}``.  ``fired`` when a
@@ -260,7 +303,7 @@ def layer_profile(fact, findings, *, correlation_ran: bool = False) -> dict[str,
     """
     by_layer: dict[Layer, list[str]] = {layer: [] for layer in LAYER_ORDER}
     for finding in findings:
-        layer = layer_of(str(finding.get("rule_id", "")))
+        layer = layer_of(str(finding.get("rule_id", "")), overrides)
         if layer is not None:
             by_layer[layer].append(str(finding.get("rule_id", "")))
 

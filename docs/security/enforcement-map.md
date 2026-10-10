@@ -25,6 +25,7 @@ python scripts/security_gates.py
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
 | `H-series intake is frozen` | Addendum 3 Phase 0 | `categories.RULE_CATEGORIES` |
+| `layer overrides stay within the closed set` | Addendum 5 §2 | `trustsight.layers.parse_overrides`, `LAYER_VALUES` |
 | `boundaries are the coverage view` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage.GAPS` |
 | `every report body key is documented` | B11, report schema | `reporting.REPORT_KEYS`, `docs/reference/report-schema.md` |
 | `every rule carries exactly one layer` | Addendum 5 §2 | `trustsight.layers.layer_of`, `categories.RULE_CATEGORIES` |

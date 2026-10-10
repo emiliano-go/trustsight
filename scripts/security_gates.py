@@ -3380,6 +3380,28 @@ def gate_release_artifacts_share_commit() -> Gate:
                 problems or "checkout SHA, committed rebuild, verified tag target")
 
 
+def gate_layer_overrides_stay_within_the_closed_set() -> Gate:
+    """Addendum 5 §2: a ``[layers]`` override cannot leave the closed L1-L8 set.
+
+    ``parse_overrides`` applies a valid override and drops an out-of-range
+    value or an unknown rule; the set of layer values is exactly L1..L8.
+    """
+    from trustsight.layers import LAYER_VALUES, Layer, layer_of, parse_overrides
+
+    problems: list[str] = []
+    if LAYER_VALUES != frozenset(f"L{i}" for i in range(1, 9)):
+        problems.append(f"layer value set is not L1-L8: {sorted(LAYER_VALUES)}")
+    good = parse_overrides({"layers": {"R001": "l1"}})
+    if good.get("R001") is not Layer.L1:
+        problems.append("a valid override was not applied")
+    bad = parse_overrides({"layers": {"R001": "L9", "R002": "nonsense"}})
+    if bad:
+        problems.append(f"out-of-range overrides were accepted: {bad}")
+    if layer_of("R001", {"R001": Layer.L1}) is not Layer.L1:
+        problems.append("layer_of ignored a valid override")
+    return Gate("layer overrides stay within the closed set", not problems, problems)
+
+
 def gate_boundaries_are_the_coverage_view() -> Gate:
     """``boundaries`` is the one representation of the coverage gaps (W1).
 
@@ -3618,6 +3640,7 @@ def run_gates() -> list[Gate]:
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
     gates.append(gate_every_history_diff_is_scored_independently())
+    gates.append(gate_layer_overrides_stay_within_the_closed_set())
     gates.append(gate_boundaries_are_the_coverage_view())
     gates.append(gate_every_report_key_is_documented())
     gates.append(gate_every_rule_carries_exactly_one_layer())

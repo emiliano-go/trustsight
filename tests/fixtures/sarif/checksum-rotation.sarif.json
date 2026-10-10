@@ -16,6 +16,9 @@
               },
               "defaultConfiguration": {
                 "level": "warning"
+              },
+              "properties": {
+                "layer": "L1"
               }
             }
           ]
@@ -35,7 +38,8 @@
             "package": "demo",
             "severity": "HIGH",
             "file": "PKGBUILD",
-            "line": 4
+            "line": 4,
+            "layer": "L1"
           },
           "locations": [
             {

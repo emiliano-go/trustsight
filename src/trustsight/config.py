@@ -751,6 +751,14 @@ watch_min_interval = 60
 # - a weight-0 boundary, never a clean or malicious verdict.
 enabled = false
 
+[layers]
+# Override a rule's assurance layer (Addendum 5 §2).  The layer says where on
+# the attacker's trajectory the rule's evidence sits, L1 (structural
+# coherence) to L8 (campaign correlation).  The shipped per-series default and
+# per-rule overrides apply unless a rule id is named here.  A value outside
+# L1-L8 is ignored, never applied.  Example:
+#   H099 = "L1"
+
 [notify]
 # With `full-aur --watch`, a cycle that produced new alerts POSTs one JSON
 # document (cycle counts plus the package/rule_id pairs) to this URL.  Any

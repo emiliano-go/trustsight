@@ -16,6 +16,9 @@
               },
               "defaultConfiguration": {
                 "level": "warning"
+              },
+              "properties": {
+                "layer": "L1"
               }
             },
             {
@@ -45,7 +48,8 @@
             "package": "C011-prebuilt-non-upstream-bin",
             "severity": "MEDIUM",
             "file": "PKGBUILD",
-            "line": 5
+            "line": 5,
+            "layer": "L1"
           },
           "locations": [
             {

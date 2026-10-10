@@ -171,3 +171,32 @@ def test_verbose_layer_line_reports_active_layers_and_boundaries():
     line = _layers_and_boundaries_line(fact)
     assert line and "Layers:" in line and "L3 fired" in line
     assert "boundary" in line
+
+
+def test_config_layer_override_applies_in_the_profile():
+    from trustsight.layers import layer_profile, parse_overrides
+    from trustsight.schema import PackageFact
+
+    overrides = parse_overrides({"layers": {"R001": "L1"}})
+    profile = layer_profile(
+        PackageFact(package_name="demo"), [{"rule_id": "R001"}],
+        overrides=overrides)
+    assert profile["L1"]["status"] == "fired"
+    assert profile["L3"]["status"] == "passed"
+
+
+def test_parse_overrides_drops_out_of_range_and_unknown_rules():
+    from trustsight.layers import LAYER_VALUES, parse_overrides
+
+    parsed = parse_overrides({"layers": {"R001": "l1", "R002": "L9",
+                                         "nope": "L1"}})
+    assert parsed == {"R001": __import__(
+        "trustsight.layers", fromlist=["Layer"]).Layer.L1}
+    assert "L9" not in LAYER_VALUES
+
+
+def test_shipped_l1_overrides_for_structural_rules():
+    from trustsight.layers import Layer, layer_of
+
+    for rule_id in ("H099", "H101", "H103"):
+        assert layer_of(rule_id) is Layer.L1

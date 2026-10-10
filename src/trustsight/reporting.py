@@ -95,8 +95,9 @@ def evaluate_fact(fact) -> dict[str, Any]:
     taken from the analysis band and never derived from the numeric score.
     """
     from .boundaries import boundaries_from_fact
+    from .config import load_config
     from .coverage import describe as describe_coverage
-    from .layers import layer_profile
+    from .layers import layer_profile, parse_overrides
     from .review_policy import review_policy
     from .schema import fact_to_dict
     from .scoring import verdict_label, verdict_level
@@ -145,7 +146,9 @@ def evaluate_fact(fact) -> dict[str, Any]:
         "findings": findings,
         # Addendum 5 §3: the layer profile, additive.  A finding carries
         # the layer where it caught, so this is a projection of `findings`.
-        "layers": layer_profile(fact, findings),
+        # A `[layers]` config override wins over the shipped table.
+        "layers": layer_profile(
+            fact, findings, overrides=parse_overrides(load_config())),
         "suppressed_rules": suppressed_rows(fact),
         "acknowledged_urls": [dict(row) for row in (fact.acknowledged_urls or ())],
         "changes": list(fact.changes),
@@ -501,6 +504,8 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
     for package, text in (diffs or {}).items():
         docs[package] = parse_diff(text)
 
+    from .layers import layer_of
+
     rules: dict[str, dict] = {}
     results: list[dict] = []
     for report in entries:
@@ -512,12 +517,18 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
                 continue
             severity = str(finding.get("severity", "")).upper()
             level = _SARIF_LEVELS.get(severity, "note")
-            rules.setdefault(rule_id, {
+            layer = layer_of(rule_id)
+            rule = {
                 "id": rule_id,
                 "name": finding.get("template") or rule_id,
                 "shortDescription": {"text": finding.get("template") or rule_id},
                 "defaultConfiguration": {"level": level},
-            })
+            }
+            if layer is not None:
+                # Addendum 5 §2: the layer is on the rule so a code-scanning
+                # consumer can group by the trajectory step it caught at.
+                rule["properties"] = {"layer": layer.value}
+            rules.setdefault(rule_id, rule)
             location = _sarif_location(finding, doc)
             result = {
                 "ruleId": rule_id,
@@ -533,6 +544,8 @@ def report_to_sarif(reports, diffs: dict | None = None) -> dict:
                     "line": finding.get("line"),
                 },
             }
+            if layer is not None:
+                result["properties"]["layer"] = layer.value
             if location is not None:
                 result["locations"] = [{
                     "physicalLocation": {
@@ -608,14 +621,16 @@ def _boundaries_for_row(row: dict, findings: list[dict]) -> list[dict]:
 
 def _layer_profile_row(row: dict, findings: list[dict]) -> dict[str, dict]:
     """The layer profile for a review row that carries no PackageFact."""
-    from .layers import layer_profile
+    from .config import load_config
+    from .layers import layer_profile, parse_overrides
 
     class _Boundary:
         coverage_gaps = row.get("coverage_gaps", ())
         diff_truncated = row.get("diff_truncated", False)
         scan_truncated = row.get("scan_truncated", False)
 
-    return layer_profile(_Boundary(), findings)
+    return layer_profile(
+        _Boundary(), findings, overrides=parse_overrides(load_config()))
 
 
 def evaluate_review_row(row: dict) -> dict[str, Any]:

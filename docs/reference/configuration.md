@@ -304,6 +304,22 @@ If none of these settings are explicitly configured, the tool scans foreign pack
 |-----|------|---------|-------------|
 | `enabled` | bool | `false` | Enable the optional L9 build lane (Addendum 5 §12). When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane may build the package inside the project's rootless, networkless container and inspect the artifact; L9 findings are never blended into the static score. |
 
+### `[layers]`
+
+Override a rule's assurance layer (Addendum 5 §2). The layer says where on
+the attacker's trajectory the rule's evidence sits, `L1` (structural
+coherence) to `L8` (campaign correlation). The shipped per-series default and
+per-rule overrides apply unless a rule id is named here.
+
+```toml
+[layers]
+H099 = "L1"
+```
+
+Each entry maps a rule id to `L1`-`L8`. A value outside that range is
+ignored (the set is closed), as is a rule id this build does not ship. The
+security gate `layer overrides stay within the closed set` pins that.
+
 ### `[limits]`
 
 | Key | Type | Default | Description |

@@ -56,10 +56,13 @@ def _layers_and_boundaries_line(fact) -> str | None:
     terminal is the same surface as the JSON (B11).
     """
     from ..boundaries import boundaries_from_fact
-    from ..layers import layer_profile
+    from ..config import load_config
+    from ..layers import layer_profile, parse_overrides
     from ..reporting import finding_rows
 
-    profile = layer_profile(fact, finding_rows(fact))
+    profile = layer_profile(
+        fact, finding_rows(fact),
+        overrides=parse_overrides(load_config()))
     active = [
         f"{layer} {entry['status']}"
         for layer, entry in profile.items() if entry["status"] != "passed"

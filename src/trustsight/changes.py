@@ -457,11 +457,15 @@ def summarise(fact, diff_text: str = "") -> list[str]:
         elif status == "renamed":
             entries.append(f"file renamed: {path}")
 
-    # extract_dependency_changes returns {field: {newly added names}}, so
-    # every name here is an addition.  This block read a {op: names} shape
-    # that nothing produced, and the field it read was never populated, so
-    # dependency changes were silently absent from every summary.
-    for field_name, names in sorted((getattr(fact, "dependency_changes", None) or {}).items()):
+    # The summary's dependency fact is ``extract_dependency_changes``, a
+    # *normalised* view (it drops version constraints and already-known
+    # names) - not the ChangeDelta's raw array delta.  Rendering the raw
+    # delta here changed the prose on 119 corpus diffs, so the summary keeps
+    # its established source and the delta remains a raw view beside it
+    # (spec §1 records the divergence).  Both are documented on the report
+    # schema; neither is claimed to be the other.
+    for field_name, names in sorted(
+            (getattr(fact, "dependency_changes", None) or {}).items()):
         if names:
             added = " ".join("+" + n for n in sorted(names))
             entries.append(f"{field_name}: {added}")

@@ -156,3 +156,23 @@ def test_a_corpus_delta_has_typed_files(path):
     for file in delta.files:
         assert file.path
         assert file.status in ("added", "removed", "modified")
+
+
+def test_dependency_facts_are_a_normalised_view_beside_the_raw_delta():
+    """Spec §1 divergence (recorded): the summary's dependency entry is the
+    *normalised* `extract_dependency_changes` view; the delta's dependency
+    arrays are the raw `source=`-style diff.  Rendering the raw delta changed
+    119 corpus summaries, so the two are documented as distinct views rather
+    than forced to agree."""
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        " pkgname=demo\n pkgver=1.0\n"
+        "+depends=('glibc')\n"
+    )
+    delta = change_delta(text)
+    assert delta.dependencies.gained == ("glibc",)  # raw array view
+    fact = PackageFact(
+        package_name="demo", change=delta.to_dict(),
+        dependency_changes={"depends": {"glibc"}},
+    )
+    assert any("depends: +glibc" in e for e in summarise(fact, text))

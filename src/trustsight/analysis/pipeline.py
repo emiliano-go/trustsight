@@ -779,7 +779,7 @@ def analyze_package(
     # committed .SRCINFO never names is the executable/metadata split
     # (HIGH); the reverse is stale metadata (INFO).  Both cite the two
     # documents so the reader can compare them directly.
-    from .crossfile import source_divergence
+    from .crossfile import line_of, source_divergence
 
     pkgbuild_only, srcinfo_only = source_divergence(head_pkgbuild, srcinfo_text)
     if pkgbuild_only:
@@ -790,6 +790,7 @@ def analyze_package(
             "match": ("PKGBUILD fetches source(s) .SRCINFO does not declare: "
                       + ", ".join(pkgbuild_only)),
             "file": "PKGBUILD",
+            "line": line_of(head_pkgbuild or "", pkgbuild_only[0]),
             "params": {"fields": "source", "direction": "pkgbuild_only",
                        "sources": ", ".join(pkgbuild_only),
                        "metadata_file": ".SRCINFO"},
@@ -802,6 +803,7 @@ def analyze_package(
             "match": (".SRCINFO declares source(s) the PKGBUILD does not: "
                       + ", ".join(srcinfo_only)),
             "file": ".SRCINFO",
+            "line": line_of(srcinfo_text or "", srcinfo_only[0]),
             "params": {"fields": "source", "direction": "srcinfo_only",
                        "sources": ", ".join(srcinfo_only),
                        "recipe_file": "PKGBUILD"},

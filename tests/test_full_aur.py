@@ -728,6 +728,7 @@ def test_g8_source_divergence_is_directional():
     high = [e for e in fact.score_breakdown
             if e.rule_id == "H103" and e.severity == "HIGH"]
     assert high and "evil.sh" in high[0].evidence.get("sources", "")
+    assert high[0].file == "PKGBUILD" and high[0].line  # cites file + line
 
     # .SRCINFO names a source the PKGBUILD does not: stale metadata, INFO.
     clean_pkgbuild = (

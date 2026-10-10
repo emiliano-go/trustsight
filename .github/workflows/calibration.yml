@@ -58,6 +58,14 @@ jobs:
       - name: Check the diffdoc projection baseline over the whole corpus
         run: uv run python tests/harness/diffdoc_parity.py --check tests/fixtures/diffdoc-projections.json.gz
 
+      # The ChangeDelta parity lock (spec §1): every diff's ChangeDelta is
+      # checked to reproduce the host/checksum/local-source facts the change
+      # summary reads, so a migration cannot make one surface re-derive a
+      # fact differently.  The default suite runs a sample; here it runs
+      # whole.
+      - name: Check ChangeDelta parity over the whole corpus
+        run: uv run python tests/harness/change_parity.py
+
       # The published suite size is measured with the corpus present (one
       # module parametrizes over its diffs), so it is checked here rather
       # than in the matrix job, which has no corpus to build.

@@ -156,3 +156,42 @@ def test_g6a_a_present_install_file_does_not_fire():
 
 def test_g6a_never_guesses_without_tree_knowledge():
     assert "C027" not in _addendum4_ids(_DANGLING, None)
+
+
+def test_g1_url_without_userinfo_does_not_fire():
+    assert "C020" not in _ids(_diff(
+        "source=('https://example.invalid/x.tar.gz')\n"))
+
+
+def test_g2_benign_tls_enabled_clients_do_not_fire():
+    from trustsight.rules import apply_rules
+
+    for line in (
+        "git clone https://example.invalid/x",
+        "pip install somepkg",
+        "npm install somepkg",
+    ):
+        triggered = apply_rules([line], [line], None)
+        assert not any(r["rule_id"] == "R057" for r in triggered), line
+
+
+def test_g4_rotation_with_a_stronger_array_kept_does_not_fire():
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,4 +1,4 @@\n"
+        " pkgname=demo\n pkgver=1.1\n"
+        "-sha256sums=('aaaa')\n"
+        "+sha256sums=('bbbb')\n"
+        " md5sums=('cccc')\n"
+    )
+    assert "C022" not in _ids(text)
+
+
+def test_g5_context_line_ip_source_does_not_fire():
+    # The IP source is a context line, not a gained one.
+    text = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,3 @@\n"
+        " pkgname=demo\n"
+        " source=('https://203.0.113.7/payload')\n"
+        "-pkgver=1.0\n+pkgver=1.1\n"
+    )
+    assert "C023" not in _ids(text)

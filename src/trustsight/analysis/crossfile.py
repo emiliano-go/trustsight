@@ -33,6 +33,20 @@ def _is_source(field: str) -> bool:
     return field == "source" or field.startswith("source_")
 
 
+def line_of(text: str, needle: str) -> int | None:
+    """The 1-based line in *text* containing *needle*, or None.
+
+    Used to cite the line of a divergent source entry in the document that
+    declares it (G8: findings cite both files and their lines).
+    """
+    if not text or not needle:
+        return None
+    for index, line in enumerate(text.splitlines(), start=1):
+        if needle in line:
+            return index
+    return None
+
+
 def source_divergence(pkgbuild: str, srcinfo: str | None) -> tuple[list[str], list[str]]:
     """Directional source divergence between metadata and recipe (G8).
 

@@ -375,7 +375,7 @@ def analyze_package_text(
             "params": {"fields": ", ".join(divergent)},
         }))
     # Addendum 4 G8, directional (see the per-package path in pipeline.py).
-    from ..analysis.crossfile import source_divergence
+    from ..analysis.crossfile import line_of, source_divergence
 
     pkgbuild_only, srcinfo_only = source_divergence(new_pkgbuild, srcinfo)
     if pkgbuild_only:
@@ -386,6 +386,7 @@ def analyze_package_text(
             "match": ("PKGBUILD fetches source(s) .SRCINFO does not declare: "
                       + ", ".join(pkgbuild_only)),
             "file": "PKGBUILD",
+            "line": line_of(new_pkgbuild or "", pkgbuild_only[0]),
             "params": {"fields": "source", "direction": "pkgbuild_only",
                        "sources": ", ".join(pkgbuild_only),
                        "metadata_file": ".SRCINFO"},
@@ -398,6 +399,7 @@ def analyze_package_text(
             "match": (".SRCINFO declares source(s) the PKGBUILD does not: "
                       + ", ".join(srcinfo_only)),
             "file": ".SRCINFO",
+            "line": line_of(srcinfo or "", srcinfo_only[0]),
             "params": {"fields": "source", "direction": "srcinfo_only",
                        "sources": ", ".join(srcinfo_only),
                        "recipe_file": "PKGBUILD"},

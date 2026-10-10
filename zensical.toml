@@ -142,9 +142,17 @@ Reference = [
 ]
 
 [[project.nav]]
+"Assurance Layers" = [
+  {Overview = "assurance-layers.md"},
+  {"Part 1: The Trajectory" = "assurance-layers/trajectory.md"},
+  {"Part 2: Diversity and Intake" = "assurance-layers/diversity.md"},
+  {"Part 3: Reporting" = "assurance-layers/reporting.md"},
+  {"Part 4: Enforcement" = "assurance-layers/enforcement.md"},
+]
+
+[[project.nav]]
 Explanation = [
   {Overview = "explanation/index.md"},
-  {"The Assurance Layers" = "explanation/assurance-layers.md"},
   {"Scoring Philosophy" = "explanation/scoring-philosophy.md"},
   {"Cold Start and Maturity" = "explanation/cold-start-and-maturity.md"},
   {"Corpus and Priors" = "explanation/corpus-and-priors.md"},

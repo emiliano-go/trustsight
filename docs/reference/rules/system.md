@@ -1246,6 +1246,18 @@ See [A004: Install Hook Diverges From Declaration](artifact.md#a004).
 
 See [A005: Unusual Artifact Mode](artifact.md#a005).
 
+### A006 {#a006}
+
+See [A006: File Capabilities In Artifact](artifact.md#a006).
+
+### A007 {#a007}
+
+See [A007: Privileged Surface In Artifact](artifact.md#a007).
+
+### A008 {#a008}
+
+See [A008: eBPF Artifact In Package](artifact.md#a008).
+
 ### C027 {#c027}
 
 See [C027: Declared Install Script Is Absent](integrity.md#c027).

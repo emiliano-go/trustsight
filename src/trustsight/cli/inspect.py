@@ -833,7 +833,17 @@ def register_commands(app: typer.Typer):
 
         ensure_default_configs()
         init_db()
-        result = TrustSight().verify_build(package)
+        # §12.2: review L1-L8 first, then offer the L9 lane.  The static
+        # result is passed only so a divergence between the two can be named;
+        # it never changes the static verdict.
+        try:
+            fact = analyze_package(package)
+            static_clean = not any(
+                e.severity in ("FATAL", "CRITICAL", "HIGH")
+                for e in fact.score_breakdown)
+        except Exception:
+            static_clean = None
+        result = TrustSight().verify_build(package, static_clean=static_clean)
         if json_output:
             typer.echo(json.dumps(result, indent=2))
             return
@@ -843,6 +853,9 @@ def register_commands(app: typer.Typer):
             return
         for finding in result["findings"]:
             typer.echo(f"{finding['rule_id']}: {finding['match']}")
+        if result.get("l9_divergence"):
+            typer.echo("L9 divergence: the artifact and the static analysis "
+                       "disagree; both profiles stand.")
 
 
 def _inspect_history(

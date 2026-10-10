@@ -1567,15 +1567,20 @@ class TrustSight:
 
     def verify_build(self, package: str, *, diff_text: str = "",
                      manifest: Optional[list] = None,
-                     declared: Optional[dict] = None) -> dict:
+                     declared: Optional[dict] = None,
+                     static_clean: Optional[bool] = None) -> dict:
         """The optional L9 build lane (Addendum 5 §12), off by default.
 
         When ``[verify] enabled`` is false, or the rootless container is
         unavailable, this returns ``l9_unavailable`` - a weight-0 boundary,
         never a clean or malicious verdict.  When enabled and given a
-        manifest it inspects the artifact (A001-A005) without executing
+        manifest it inspects the artifact (A001-A008) without executing
         anything; the build that produces the manifest runs outside the
         static core.
+
+        *static_clean* is the caller's L1-L8 outcome; when it and the L9
+        findings disagree, the result carries ``l9_divergence`` - both
+        profiles render, and L9 never edits the static verdict.
         """
         _validate_name(package)
         from .config import load_config
@@ -1595,10 +1600,16 @@ class TrustSight:
                 "reason": "no artifact manifest was supplied and no sandbox ran",
                 "findings": [],
             }
-        return {
-            "package": package, "status": "l9_analyzed",
-            "findings": inspect_manifest(manifest, declared),
+        findings = inspect_manifest(manifest, declared)
+        strong = any(f.get("severity") in ("HIGH", "CRITICAL") for f in findings)
+        result = {
+            "package": package, "status": "l9_analyzed", "findings": findings,
         }
+        if static_clean is not None and static_clean != (not strong):
+            # Disagreement, either way: L1-L8 clean / L9 anomalous, or the
+            # reverse.  Both profiles are the truth; L9 does not reweight.
+            result["l9_divergence"] = True
+        return result
 
     def review(
         self,

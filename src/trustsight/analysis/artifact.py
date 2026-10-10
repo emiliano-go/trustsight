@@ -26,6 +26,22 @@ _UNIT_SUFFIXES = (".service", ".timer", ".socket", ".mount", ".target", ".tmpfil
 _SETUID_JUSTIFICATIONS = ("setuid", "setgid", "A_SETUID_OK")
 
 
+#: Paths that extend privilege or persistence beyond the package's files.
+_PRIVILEGED_PREFIXES = (
+    "/etc/polkit-1/", "/etc/sudoers.d/", "/etc/pam.d/", "/etc/modprobe.d/",
+    "/etc/modules-load.d/", "/usr/lib/modules/", "/lib/modules/",
+)
+
+
+def _is_privileged_surface(path: str) -> bool:
+    lower = path.lower()
+    return (
+        lower.startswith(_PRIVILEGED_PREFIXES)
+        or lower.endswith(".ko")
+        or "/kernel/" in lower
+    )
+
+
 def _is_unit(path: str) -> bool:
     lower = path.lower()
     if lower.endswith(_UNIT_SUFFIXES):
@@ -86,6 +102,28 @@ def inspect_manifest(manifest, declared=None) -> list[dict]:
                     "file": path,
                 })
                 break
+        if entry.get("caps"):
+            out.append({
+                "rule_id": "A006", "name": "File Capabilities In Artifact",
+                "severity": "HIGH", "category": "artifact",
+                "match": f"{path} carries Linux file capabilities: {entry['caps']}",
+                "file": path,
+            })
+        if _is_privileged_surface(path):
+            out.append({
+                "rule_id": "A007", "name": "Privileged Surface In Artifact",
+                "severity": "MEDIUM", "category": "artifact",
+                "match": (f"{path} is a polkit/sudoers/PAM/kernel-module surface "
+                          "the declared recipe does not explain"),
+                "file": path,
+            })
+        if entry.get("bpf") or path.lower().endswith((".bpf.o", ".bpf.c")):
+            out.append({
+                "rule_id": "A008", "name": "eBPF Artifact In Package",
+                "severity": "HIGH", "category": "artifact",
+                "match": f"{path} is an eBPF object/loader (rootkit-capable)",
+                "file": path,
+            })
         if entry.get("world_writable"):
             out.append({
                 "rule_id": "A005", "name": "Unusual Artifact Mode",

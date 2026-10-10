@@ -33,6 +33,9 @@ This is a reference page. For how weight and scope work, see
 | [A003](#a003) | Library Outside Depends | MEDIUM |
 | [A004](#a004) | Install Hook Diverges From Declaration | HIGH |
 | [A005](#a005) | Unusual Artifact Mode | INFO |
+| [A006](#a006) | File Capabilities In Artifact | HIGH |
+| [A007](#a007) | Privileged Surface In Artifact | MEDIUM |
+| [A008](#a008) | eBPF Artifact In Package | HIGH |
 <!-- /generated: page-index -->
 
 ### A001: Setuid File In Artifact {#a001}
@@ -70,3 +73,25 @@ recipe's `install=` file - a tampered or regenerated hook.
 
 Fires for world-writable files or executables in unusual paths. The L1
 C018 rule's artifact twin.
+
+### A006: File Capabilities In Artifact {#a006}
+
+**HIGH** - category `artifact`
+
+Fires for a file carrying Linux file capabilities (e.g. `cap_setuid`,
+`cap_sys_admin`), which grant privilege without the setuid bit.
+
+### A007: Privileged Surface In Artifact {#a007}
+
+**MEDIUM** - category `artifact`
+
+Fires for a file in a privilege/persistence surface the recipe does not
+declare: polkit rules, sudoers, PAM config, modprobe/modules-load, or a
+kernel module (`.ko`).
+
+### A008: eBPF Artifact In Package {#a008}
+
+**HIGH** - category `artifact`
+
+Fires for an eBPF object or loader shipped in the package - the Atomic Arch
+rootkit's artifact shape. Inspection only; nothing is loaded or executed.

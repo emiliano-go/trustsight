@@ -936,9 +936,14 @@ trustsight verify-build <package> [--json]
 | `package` | Yes | Package name. |
 | `--json` | No | Emit the result as JSON. |
 
-When enabled (and the container supplies a manifest), it inspects the
-artifact with the A-series rules (`A001`-`A005`); those findings are L9
-evidence and are never blended into the static score.
+It reviews the diff (L1-L8) first, then offers the L9 lane. When enabled
+(and the container supplies a manifest) it inspects the artifact with the
+A-series rules (`A001`-`A008`); those findings are L9 evidence and are never
+blended into the static score. When the artifact and the static analysis
+disagree, the result carries `l9_divergence` and both profiles stand.
+
+The static core never executes package code: there is no batch build lane,
+and the L9 lane inspects only a manifest a caller supplies.
 
 ---
 

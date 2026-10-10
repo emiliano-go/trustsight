@@ -68,3 +68,33 @@ def test_verify_build_inspects_when_enabled(monkeypatch):
         "demo", manifest=[{"path": "/usr/bin/x", "setuid": True}])
     assert result["status"] == "l9_analyzed"
     assert any(f["rule_id"] == "A001" for f in result["findings"])
+
+
+def test_a006_a007_a008_fire_on_privileged_and_bpf_artifacts():
+    from trustsight.analysis.artifact import inspect_manifest
+
+    ids = {f["rule_id"] for f in inspect_manifest([
+        {"path": "/usr/bin/helper", "caps": "cap_setuid+ep"},
+        {"path": "/etc/sudoers.d/pkg", "mode": 0o440},
+        {"path": "/usr/lib/modules/6.1/evil.ko"},
+        {"path": "/usr/lib/app/tracker.bpf.o"},
+    ])}
+    assert {"A006", "A007", "A008"} <= ids
+
+
+def test_l9_divergence_when_static_and_artifact_disagree(monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.config.load_config", lambda: {"verify": {"enabled": True}})
+    from trustsight.api import TrustSight
+
+    client = TrustSight(auto_import_seed=False)
+    # Static clean, artifact has a HIGH finding -> divergence.
+    diverging = client.verify_build(
+        "demo", manifest=[{"path": "/usr/bin/x", "setuid": True}],
+        static_clean=True)
+    assert diverging.get("l9_divergence") is True
+    # Static also flagged -> no divergence.
+    agreeing = client.verify_build(
+        "demo", manifest=[{"path": "/usr/bin/x", "setuid": True}],
+        static_clean=False)
+    assert "l9_divergence" not in agreeing

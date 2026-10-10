@@ -53,7 +53,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 | [Correlation](correlation.md) | `correlation` | 3 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
-| [Artifact](artifact.md) | `artifact` | 5 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
+| [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -92,6 +92,9 @@ is deliberately non-contiguous; see
 | [A003](artifact.md#a003) | Library Outside Depends | Artifact | MEDIUM | [Artifact](artifact.md) |
 | [A004](artifact.md#a004) | Install Hook Diverges From Declaration | Artifact | HIGH | [Artifact](artifact.md) |
 | [A005](artifact.md#a005) | Unusual Artifact Mode | Artifact | INFO | [Artifact](artifact.md) |
+| [A006](artifact.md#a006) | File Capabilities In Artifact | Artifact | HIGH | [Artifact](artifact.md) |
+| [A007](artifact.md#a007) | Privileged Surface In Artifact | Artifact | MEDIUM | [Artifact](artifact.md) |
+| [A008](artifact.md#a008) | eBPF Artifact In Package | Artifact | HIGH | [Artifact](artifact.md) |
 | [C001](integrity.md#c001) | Checksum Changed Without Source Change With Stable Version | Integrity-change | HIGH | [Integrity and Verification](integrity.md) |
 | [C002](integrity.md#c002) | Checksum Updated With Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |
 | [C003](integrity.md#c003) | Source URL Changed Without Version Bump | Integrity-change | INFO | [Integrity and Verification](integrity.md) |

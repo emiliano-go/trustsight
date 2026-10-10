@@ -119,3 +119,33 @@ def test_a_clean_package_has_no_layer_sentence():
     from trustsight.verdict import layer_sentence
 
     assert layer_sentence(PackageFact(package_name="demo")) == ""
+
+
+def test_layers_traversed_for_a_caught_attempt():
+    from trustsight.layers import layers_traversed
+
+    # X001 (L4 evasion) catches it: passed L1-L3, stopped at L4.
+    info = layers_traversed([{"rule_id": "X001"}])
+    assert info["stopped"] == "L4"
+    assert info["traversed"] == ["L1", "L2", "L3"]
+
+
+def test_layers_traversed_for_a_bypass_is_every_layer():
+    from trustsight.layers import layers_traversed
+
+    info = layers_traversed([])
+    assert info["stopped"] is None
+    assert info["traversed"] == [f"L{i}" for i in range(1, 9)]
+
+
+def test_minimum_layer_cut():
+    from trustsight.layers import minimum_layer_cut
+
+    attempts = [
+        {"stopped": "L1", "traversed": []},
+        {"stopped": None, "traversed": ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"]},
+        {"stopped": "L4", "traversed": ["L1", "L2", "L3"]},
+    ]
+    # L1 covers every attempt (all pass through L1 or stop at it).
+    assert minimum_layer_cut(attempts) == 1
+    assert minimum_layer_cut([]) is None

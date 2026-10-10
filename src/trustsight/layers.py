@@ -33,6 +33,8 @@ __all__ = [
     "blinded_layers",
     "layer_of",
     "layer_profile",
+    "layers_traversed",
+    "minimum_layer_cut",
     "rules_in_layer",
 ]
 
@@ -178,6 +180,64 @@ GAP_BLINDED_LAYERS: dict[str, frozenset[Layer]] = {
     "partial_file_analysis": frozenset({Layer.L1, Layer.L3}),
     "noextract_suppressed": frozenset({Layer.L1, Layer.L3}),
 }
+
+
+def layers_traversed(triggered) -> dict:
+    """The harness telemetry for one attempt (Addendum 5 §4).
+
+    Returns ``{"traversed": [...], "stopped": layer | None}``: the ordered
+    layers the attempt passed, and the layer that stopped it (the
+    outermost - lowest-index - layer whose rules fired).  A bypass caught
+    no rule, so it traversed every layer and stopped at none.
+    """
+    fired = {
+        layer for layer in (
+            layer_of(str(entry.get("rule_id", ""))) for entry in triggered or ()
+        ) if layer is not None
+    }
+    if not fired:
+        return {"traversed": [layer.value for layer in LAYER_ORDER],
+                "stopped": None}
+    stopped = min(fired, key=LAYER_ORDER.index)
+    return {
+        "traversed": [layer.value for layer in LAYER_ORDER[:LAYER_ORDER.index(stopped)]],
+        "stopped": stopped.value,
+    }
+
+
+def minimum_layer_cut(attempts) -> int | None:
+    """The smallest layer-set intersection that stops every recorded attempt.
+
+    *attempts* is an iterable of ``{"stopped": layer|None, "traversed": [...]}``.
+    A minimum cut is a set of layers that intersects every attempt's
+    traverse-or-stop path.  Computed by greedy set cover over each layer:
+    for each candidate layer, how many attempts it would stop (its ``stopped``
+    equals the layer, or the layer is in the attempt's traversed set).  The
+    reported number is the smallest covering set size, or ``None`` when there
+    are no attempts.  v1 is the reported metric; the gate is a follow-on.
+    """
+    attempts = list(attempts)
+    if not attempts:
+        return None
+    uncovered = set(range(len(attempts)))
+    chosen = 0
+    # Each layer covers attempts whose path passes through it.
+    coverage: dict[str, set[int]] = {}
+    for layer in LAYER_ORDER:
+        cover = {
+            i for i, a in enumerate(attempts)
+            if a.get("stopped") == layer.value
+            or layer.value in (a.get("traversed") or ())
+        }
+        coverage[layer.value] = cover
+    while uncovered:
+        best = max(coverage.values(), key=lambda c: len(c & uncovered), default=set())
+        if not (best & uncovered):
+            # An attempt with no covered layer (malformed) cannot be cut.
+            break
+        uncovered -= best
+        chosen += 1
+    return chosen
 
 
 def blinded_layers(gaps) -> frozenset[Layer]:

@@ -205,6 +205,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 - **I is a transport, not a mechanism of its own**: H056 and the signed IOC baselines are the same idea (membership in signed external data). H056 keeps its ID; new federation matches take I IDs. L7 is the indicator layer.
 - **M fires at the layer of its inputs and owns none**: a claims contradiction (M001) or a weak-signal span (M002) has no layer of its own; it records which inputs composed. P (claims) and W (boundaries) are render surfaces, not trajectory layers either.
 - **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
+- **The H-series is under an intake freeze** (Addendum 3): no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`.
 
 ## Summary Table
 

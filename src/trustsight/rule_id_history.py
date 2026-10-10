@@ -17,7 +17,41 @@ silently renumber rules that existing artifacts already refer to.
 
 from __future__ import annotations
 
-__all__ = ["RENAMED_RULE_IDS", "current_id"]
+__all__ = [
+    "FROZEN_H_IDS",
+    "RENAMED_RULE_IDS",
+    "RETIRED_RULE_IDS",
+    "current_id",
+    "survivor_id",
+]
+
+#: Addendum 3's intake freeze: the H ids that exist as of the reduction plan.
+#: A PR that adds a new ``H`` id while the live count is above the target
+#: fails CI (``tests/test_h_reduction.py``).  The set only ever shrinks: a
+#: retired id moves to :data:`RETIRED_RULE_IDS` and stays out of the freeze
+#: so its former id is never reused for a new rule.
+FROZEN_H_IDS = frozenset(f"H{n:03d}" for n in range(1, 104))
+
+#: Retired H ids, mapped to the survivor that now carries their detection
+#: (Addendum 3, Phase 5).  Empty today: the overlap audit (co-fire matrix on
+#: the locked corpus + malicious fixtures) has not been measured, so no id is
+#: retired by fiat.  The mechanism ships now so the mergers are a data change.
+#:
+#: A retired id stays readable as an alias of its survivor: ``config.toml``
+#: overrides keyed to the old id keep working, the reference page becomes a
+#: one-paragraph stub, and ``sync-rules`` never resurrects it.
+RETIRED_RULE_IDS: dict[str, str] = {}
+
+
+def survivor_id(rule_id: str) -> str:
+    """Follow a retired id to its survivor (and a rename), or return it.
+
+    Applied to a retired id first, then to the rename table, so an old id
+    that was both renamed and retired resolves to the live survivor in one
+    call.  Reading path only.
+    """
+    resolved = RETIRED_RULE_IDS.get(rule_id, rule_id)
+    return RENAMED_RULE_IDS.get(resolved, resolved)
 
 #: Old id -> new id, for the 95 heuristic rules renamed in this release.
 RENAMED_RULE_IDS: dict[str, str] = {

@@ -47,6 +47,7 @@ SERIES_NAMES = {
     "W": "Unverifiable",
     "P": "Declared-practice",
     "M": "Meta",
+    "E": "Entropy",
 }
 
 

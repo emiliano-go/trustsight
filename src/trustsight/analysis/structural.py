@@ -598,6 +598,12 @@ def _structural_findings(
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
                        source_changes, config or {}, add)
 
+    # Addendum 5 §6.3: the E-series entropy predicates.  Silent until their
+    # thresholds are configured (they ship empty).
+    from .entropy import entropy_findings
+
+    entropy_findings(diff_text, config or {}, add)
+
     if cs_behavior == "checksum_added_or_changed" and not added and not removed:
         # F8: a version move only stands the tamper signal down when the
         # diff adds no new code capability.  A bump that also starts

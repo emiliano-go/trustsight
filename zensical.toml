@@ -123,6 +123,7 @@ Rules = [
   {Sabotage = "reference/rules/sabotage.md"},
   {Unverifiable = "reference/rules/unverifiable.md"},
   {"Meta and Confluence" = "reference/rules/meta.md"},
+  {Entropy = "reference/rules/entropy.md"},
 ]
 
 [[project.nav]]

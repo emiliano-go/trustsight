@@ -62,6 +62,10 @@ class RuleCategory(StrEnum):
     #: a declared practice contradicted by structure, or a composition of
     #: weak signals. Fires at the layer of its inputs.
     META = "meta"
+    #: The E series. Distribution/entropy of the added content (Addendum 5
+    #: §6.3): the statistical twin of the X-series. Suspicion, never a
+    #: verdict; thresholds ship empty and are corpus-calibrated.
+    ENTROPY = "entropy"
 
     @property
     def doc_page(self) -> str:
@@ -101,6 +105,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.SABOTAGE: "Sabotage",
     RuleCategory.UNVERIFIABLE: "Unverifiable",
     RuleCategory.META: "Meta and Confluence",
+    RuleCategory.ENTROPY: "Entropy",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -169,6 +174,10 @@ _SUMMARIES: dict[RuleCategory, str] = {
     RuleCategory.META: (
         "A claim about other findings: a declared practice contradicted by "
         "structure, or a composition only visible from the whole profile."
+    ),
+    RuleCategory.ENTROPY: (
+        "The added content is statistically abnormal - a distribution "
+        "outlier, not a known pattern. Suspicion, never a verdict."
     ),
 }
 
@@ -285,6 +294,9 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "M001": _C.META,
     "M002": _C.META,
     "M003": _C.META,
+    "E001": _C.ENTROPY,
+    "E002": _C.ENTROPY,
+    "E003": _C.ENTROPY,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,

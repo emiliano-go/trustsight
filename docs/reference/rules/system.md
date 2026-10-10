@@ -1190,6 +1190,18 @@ See [M002: Weak Signal Across Layers](meta.md#m002).
 
 See [M003: Composition Not Owned Elsewhere](meta.md#m003).
 
+### E001 {#e001}
+
+See [E001: Added-Text Compression Ratio](entropy.md#e001).
+
+### E002 {#e002}
+
+See [E002: Encoded-Alphabet Fraction](entropy.md#e002).
+
+### E003 {#e003}
+
+See [E003: Identifier Entropy](entropy.md#e003).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).

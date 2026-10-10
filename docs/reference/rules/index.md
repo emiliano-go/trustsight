@@ -51,6 +51,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Sabotage](sabotage.md) | `sabotage` | 8 | A payload aimed at the operator's machine rather than at getting something out of it: resource exhaustion, deletion, permission sabotage, service disruption, resource theft. |
 | [Unverifiable](unverifiable.md) | `unverifiable` | 7 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 3 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
+| [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
 <!-- /generated: legend -->
 
 Crossfire is the anti-evasion family introduced in the current ruleset. Its
@@ -114,6 +115,9 @@ is deliberately non-contiguous; see
 | [D002](naming-and-dependency.md#d002) | Typosquatted Dependency | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [D003](naming-and-dependency.md#d003) | New Network-Using Makedepends | Dependency | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
 | [D004](naming-and-dependency.md#d004) | Dependency Hijack Via Provides | Dependency | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
+| [E001](entropy.md#e001) | Added-Text Compression Ratio | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [E002](entropy.md#e002) | Encoded-Alphabet Fraction | Entropy | MEDIUM | [Entropy](entropy.md) |
+| [E003](entropy.md#e003) | Identifier Entropy | Entropy | MEDIUM | [Entropy](entropy.md) |
 | [H001](integrity.md#h001) | Checksum Disabled | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H002](integrity.md#h002) | Checksum Emptied | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H003](fetch-and-execution.md#h003) | Insecure Download Protocol | Heuristic | LOW | [Fetch and Execution](fetch-and-execution.md) |

@@ -1558,6 +1558,40 @@ class TrustSight:
         fact.adapter = "diff"
         return _report_from_fact(fact)
 
+    def verify_build(self, package: str, *, diff_text: str = "",
+                     manifest=None, declared=None) -> dict:
+        """The optional L9 build lane (Addendum 5 §12), off by default.
+
+        When ``[verify] enabled`` is false, or the rootless container is
+        unavailable, this returns ``l9_unavailable`` - a weight-0 boundary,
+        never a clean or malicious verdict.  When enabled and given a
+        manifest it inspects the artifact (A001-A005) without executing
+        anything; the build that produces the manifest runs outside the
+        static core.
+        """
+        _validate_name(package)
+        from .config import load_config
+
+        verify = (load_config().get("verify") or {})
+        if not verify.get("enabled", False):
+            return {
+                "package": package, "status": "l9_unavailable",
+                "reason": "the L9 build lane is disabled ([verify] enabled = false)",
+                "findings": [],
+            }
+        from .analysis.artifact import inspect_manifest
+
+        if manifest is None:
+            return {
+                "package": package, "status": "l9_unavailable",
+                "reason": "no artifact manifest was supplied and no sandbox ran",
+                "findings": [],
+            }
+        return {
+            "package": package, "status": "l9_analyzed",
+            "findings": inspect_manifest(manifest, declared),
+        }
+
     def review(
         self,
         *,

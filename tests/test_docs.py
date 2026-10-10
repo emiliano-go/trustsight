@@ -517,7 +517,8 @@ def test_the_landing_page_rule_count_matches_the_catalog():
     """`docs/index.md` advertises a total; it drifted to 145 against 171."""
     scoring = sum(
         1 for rule_id in RULE_CATEGORIES
-        if category_of(rule_id) is not RuleCategory.UNVERIFIABLE
+        if category_of(rule_id) not in (
+            RuleCategory.UNVERIFIABLE, RuleCategory.ARTIFACT)
     )
     text = (ROOT / "docs" / "index.md").read_text()
     match = re.search(r"TrustSight ships ([\d,]+) documented scoring rules", text)
@@ -728,7 +729,8 @@ def test_the_readme_rule_count_matches_the_catalog():
     """The README advertises a total; it drifted to 145 against 171."""
     scoring = sum(
         1 for rule_id in RULE_CATEGORIES
-        if category_of(rule_id) is not RuleCategory.UNVERIFIABLE
+        if category_of(rule_id) not in (
+            RuleCategory.UNVERIFIABLE, RuleCategory.ARTIFACT)
     )
     text = (ROOT / "README.md").read_text()
     match = re.search(r"Signals come from ([\d,]+) documented rules", text)

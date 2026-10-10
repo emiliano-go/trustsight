@@ -298,6 +298,12 @@ Controls which packages are scanned when no `--repo`/`--foreign`/`--all-repos` f
 
 If none of these settings are explicitly configured, the tool scans foreign packages only (backward-compatible default).
 
+### `[verify]`
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | bool | `false` | Enable the optional L9 build lane (Addendum 5 §12). When false, `trustsight verify-build` reports `l9_unavailable`. When true, the lane may build the package inside the project's rootless, networkless container and inspect the artifact; L9 findings are never blended into the static score. |
+
 ### `[limits]`
 
 | Key | Type | Default | Description |

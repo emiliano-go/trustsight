@@ -777,6 +777,35 @@ def register_commands(app: typer.Typer):
         typer.echo(json.dumps(
             report_to_sarif([evaluate_fact(fact)], diffs), indent=2))
 
+    @app.command("verify-build")
+    def verify_build_cmd(
+        package: str = typer.Argument(..., help="Package name"),
+        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    ):
+        """Run the optional L9 build lane (Addendum 5 §12).
+
+        Off by default.  With ``[verify] enabled = false`` or no sandbox
+        container, this reports ``l9_unavailable`` - a weight-0 boundary,
+        never a clean or malicious verdict.  The lane never runs package
+        code in the static core.
+        """
+        from ..api import TrustSight
+        from ..config import ensure_default_configs
+        from ..db import init_db
+
+        ensure_default_configs()
+        init_db()
+        result = TrustSight().verify_build(package)
+        if json_output:
+            typer.echo(json.dumps(result, indent=2))
+            return
+        if result["status"] == "l9_unavailable":
+            typer.echo(f"L9 build lane unavailable for {package}: "
+                       f"{result['reason']}")
+            return
+        for finding in result["findings"]:
+            typer.echo(f"{finding['rule_id']}: {finding['match']}")
+
 
 def _inspect_history(
     *,

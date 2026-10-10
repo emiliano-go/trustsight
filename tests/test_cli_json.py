@@ -33,6 +33,7 @@ CASES = [
     ("inspect", ["inspect", "pkg"]),
     ("explain", ["explain", "pkg", "C003"]),
     ("lint", ["lint", "/nonexistent"]),
+    ("verify-build", ["verify-build", "pkg"]),
     ("history", ["history", "pkg"]),
     ("list", ["list"]),
     ("forget", ["forget", "pkg", "--yes"]),

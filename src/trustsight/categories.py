@@ -69,6 +69,10 @@ class RuleCategory(StrEnum):
     #: The G series. Cross-package correlation (Addendum 5 §6.2): joins
     #: over the set of recent analyses, run at cycle end, never per package.
     CORRELATION = "correlation"
+    #: The A series. Artifact inspection (Addendum 5 §12): the optional L9
+    #: build lane.  Reads the built package manifest, never the diff, and
+    #: is never blended into the static score.
+    ARTIFACT = "artifact"
 
     @property
     def doc_page(self) -> str:
@@ -110,6 +114,7 @@ _TITLES: dict[RuleCategory, str] = {
     RuleCategory.META: "Meta and Confluence",
     RuleCategory.ENTROPY: "Entropy",
     RuleCategory.CORRELATION: "Correlation",
+    RuleCategory.ARTIFACT: "Artifact",
 }
 
 _SUMMARIES: dict[RuleCategory, str] = {
@@ -186,6 +191,10 @@ _SUMMARIES: dict[RuleCategory, str] = {
     RuleCategory.CORRELATION: (
         "The pattern is across packages, not inside one: a host, literal "
         "or adopter shared by several packages in a window."
+    ),
+    RuleCategory.ARTIFACT: (
+        "The built package does not match the recipe: the L9 artifact "
+        "layer, off by default, never blended into the static score."
     ),
 }
 
@@ -310,6 +319,11 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "G001": _C.CORRELATION,
     "G002": _C.CORRELATION,
     "G003": _C.CORRELATION,
+    "A001": _C.ARTIFACT,
+    "A002": _C.ARTIFACT,
+    "A003": _C.ARTIFACT,
+    "A004": _C.ARTIFACT,
+    "A005": _C.ARTIFACT,
     "X001": _C.CROSSFIRE,
     "X002": _C.CROSSFIRE,
     "X003": _C.CROSSFIRE,

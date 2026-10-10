@@ -1222,6 +1222,26 @@ See [G002: Shared Added Literal](correlation.md#g002).
 
 See [G003: Coordinated Adoption](correlation.md#g003).
 
+### A001 {#a001}
+
+See [A001: Setuid File In Artifact](artifact.md#a001).
+
+### A002 {#a002}
+
+See [A002: Undeclared Unit In Artifact](artifact.md#a002).
+
+### A003 {#a003}
+
+See [A003: Library Outside Depends](artifact.md#a003).
+
+### A004 {#a004}
+
+See [A004: Install Hook Diverges From Declaration](artifact.md#a004).
+
+### A005 {#a005}
+
+See [A005: Unusual Artifact Mode](artifact.md#a005).
+
 ### W005 {#w005}
 
 See [W005: Build Runs A Target Whose Recipe Was Not Read](unverifiable.md#w005).

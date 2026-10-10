@@ -90,7 +90,8 @@ def test_the_rule_counts_in_the_readme_match_the_catalog():
     ]
     assert not missing, "README family counts drifted: " + ", ".join(missing)
 
-    scoring = len(RULE_CATEGORIES) - by_letter.get("W", 0)
+    scoring = (len(RULE_CATEGORIES) - by_letter.get("W", 0)
+               - by_letter.get("A", 0))
     assert f"{scoring} documented rules across ten scoring namespaces" in readme
 
 

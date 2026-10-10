@@ -920,6 +920,28 @@ ladder (`FATAL`/`CRITICAL` → `error`, `HIGH`/`MEDIUM` → `warning`, else
 
 ---
 
+## trustsight verify-build
+
+Run the optional L9 build lane (Addendum 5 §12). Off by default; with
+`[verify] enabled = false` or no sandbox container it reports
+`l9_unavailable` - a weight-0 boundary, never a clean or malicious verdict.
+The static core never executes package code.
+
+```
+trustsight verify-build <package> [--json]
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `package` | Yes | Package name. |
+| `--json` | No | Emit the result as JSON. |
+
+When enabled (and the container supplies a manifest), it inspects the
+artifact with the A-series rules (`A001`-`A005`); those findings are L9
+evidence and are never blended into the static score.
+
+---
+
 ## trustsight lint
 
 Pre-submission hygiene for a local file: parse status, unresolved

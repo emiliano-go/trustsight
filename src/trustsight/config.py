@@ -742,6 +742,15 @@ prefetch_timeout = 120
 watch_interval = 3600
 watch_min_interval = 60
 
+[verify]
+# The optional L9 build lane (Addendum 5 §12).  When enabled, `trustsight
+# verify-build` may build the package inside the project's rootless,
+# networkless container and inspect the artifact (A001-A005).  Off by
+# default, explicit, and never blended into the static score.  When it is
+# disabled or the container is unavailable, the run reports `l9_unavailable`
+# - a weight-0 boundary, never a clean or malicious verdict.
+enabled = false
+
 [notify]
 # With `full-aur --watch`, a cycle that produced new alerts POSTs one JSON
 # document (cycle counts plus the package/rule_id pairs) to this URL.  Any

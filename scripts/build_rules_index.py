@@ -50,6 +50,7 @@ SERIES_NAMES = {
     "E": "Entropy",
     "T": "Temporal",
     "G": "Correlation",
+    "A": "Artifact",
 }
 
 

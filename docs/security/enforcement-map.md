@@ -25,6 +25,10 @@ python scripts/security_gates.py
 | `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
 | `H-series intake is frozen` | Addendum 3 Phase 0 | `categories.RULE_CATEGORIES` |
+| `every rule carries exactly one layer` | Addendum 5 §2 | `trustsight.layers.layer_of`, `categories.RULE_CATEGORIES` |
+| `boundaries forbid clean exactly when coverage gaps exist` | Addendum 2 W1, B2 | `trustsight.boundaries`, `coverage_gaps` |
+| `the indicator tier mirrors ioc_matches` | Addendum 5 §6.4, B1 | `reporting.report_body`, `PackageFact.ioc_matches` |
+| `the layer profile is gap-precise and additive` | Addendum 5 §3 | `trustsight.layers.layer_profile` |
 | `differ hostile input is bounded` | A4b | `differ` parser limits and hostile extraction gate |
 | `generated diff is bounded before assembly` | A4b, B2 | `differ.generate_diff_bounded`, `MAX_DIFF_PATCHES`, `MAX_PATCH_BYTES` |
 | `companion reads are bounded before data` | A4b | `differ.companion_source_hunks`, `MAX_PKG_BUILD_BYTES`, `MAX_COMPANION_TREE_ENTRIES` |

@@ -3380,6 +3380,125 @@ def gate_release_artifacts_share_commit() -> Gate:
                 problems or "checkout SHA, committed rebuild, verified tag target")
 
 
+def gate_every_rule_carries_exactly_one_layer() -> Gate:
+    """Addendum 5 §2: every rule has exactly one layer.
+
+    layer_of returns one layer or none; M (fires at its inputs' layer) and
+    A (the reserved L9 build lane) have no static layer by design. Every
+    other categorised rule has exactly one, and L1-L7 are non-empty.
+    """
+    from trustsight.categories import RULE_CATEGORIES
+    from trustsight.layers import LAYER_ORDER, layer_of
+
+    problems: list[str] = []
+    for rule_id in RULE_CATEGORIES:
+        if rule_id[:1] in ("M", "A"):
+            if layer_of(rule_id) is not None:
+                problems.append(f"{rule_id} has a static layer (M/A must not)")
+            continue
+        layer = layer_of(rule_id)
+        if layer is None or layer not in LAYER_ORDER:
+            problems.append(f"{rule_id} has no single layer")
+    for layer in LAYER_ORDER[:7]:
+        if not any(layer_of(rid) is layer for rid in RULE_CATEGORIES):
+            problems.append(f"{layer} has no rules")
+    return Gate("every rule carries exactly one layer", not problems, problems)
+
+
+def gate_boundaries_forbid_clean_exactly_when_gaps() -> Gate:
+    """Addendum 2 W1: the boundary view equals the coverage-gap view.
+
+    ``forbids_clean(boundaries_from_fact(fact))`` is the verdict's view and
+    equals ``bool(coverage_gaps)`` by construction; a W-only boundary (a
+    rendering with no gap) does not forbid a clean verdict.
+    """
+    from trustsight.boundaries import boundaries_from_fact, forbids_clean
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    problems: list[str] = []
+    for gaps in ([], ["diff_truncated"], ["parent_baseline", "ruleset_drifted"]):
+        fact = PackageFact(package_name="demo", coverage_gaps=list(gaps))
+        if forbids_clean(boundaries_from_fact(fact)) != bool(gaps):
+            problems.append(f"forbids_clean != bool(coverage_gaps) for {gaps}")
+    w_only = PackageFact(
+        package_name="demo",
+        score_breakdown=[ScoreEntry(rule_id="W001", severity="INFO", weight=0)],
+    )
+    if forbids_clean(boundaries_from_fact(w_only)):
+        problems.append("a W-only boundary forbade a clean verdict")
+    return Gate("boundaries forbid clean exactly when coverage gaps exist",
+                not problems, problems)
+
+
+def gate_indicator_tier_mirrors_ioc_matches() -> Gate:
+    """Addendum 5 §6.4 / B1: the promoted indicator tier mirrors IOC matches
+    and never touches the score."""
+    from trustsight.ioc_baseline import IocMatch
+    from trustsight.reporting import REPORT_KEYS, evaluate_fact, report_body
+    from trustsight.schema import PackageFact
+
+    problems: list[str] = []
+    if "indicators" not in REPORT_KEYS:
+        problems.append("indicators is not in REPORT_KEYS")
+    fact = PackageFact(
+        package_name="demo",
+        ioc_matches=[IocMatch(type="domain", value="evil.example",
+                              source="curator", surface="source", line=3)],
+    )
+    body = report_body(evaluate_fact(fact))
+    if body["indicators"] != body["ioc_matches"]:
+        problems.append("indicators does not mirror ioc_matches")
+    if fact.final_score != 0:
+        problems.append("an IOC match moved the score")
+    if any(str(e.rule_id).startswith("I") for e in fact.score_breakdown):
+        problems.append("an indicator appeared in score_breakdown")
+    return Gate("the indicator tier mirrors ioc_matches", not problems, problems)
+
+
+def gate_layer_profile_is_gap_precise_and_additive() -> Gate:
+    """Addendum 5 §3: the layer profile is gap-precise and changes nothing.
+
+    A history gap blinds only L6; a tokenizer refusal blinds L1-L4; content
+    truncation blinds L1-L7; L8 is ``not_exercised`` on a single-package
+    run; a finding marks its own layer fired.
+    """
+    from trustsight.layers import layer_profile
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    problems: list[str] = []
+    history = layer_profile(
+        PackageFact(package_name="demo", coverage_gaps=["parent_baseline"]), [])
+    if history["L6"]["status"] != "unreadable":
+        problems.append("a history gap did not blind L6")
+    if history["L1"]["status"] != "passed":
+        problems.append("a history gap blinded L1")
+
+    refusal = layer_profile(
+        PackageFact(package_name="demo",
+                    coverage_gaps=["unresolved_source"]), [])
+    for layer in ("L1", "L2", "L3", "L4"):
+        if refusal[layer]["status"] != "unreadable":
+            problems.append(f"a refusal gap did not blind {layer}")
+
+    truncated = layer_profile(
+        PackageFact(package_name="demo",
+                    coverage_gaps=["diff_truncated"]), [])
+    for i in range(1, 8):
+        if truncated[f"L{i}"]["status"] != "unreadable":
+            problems.append(f"truncation did not blind L{i}")
+    if truncated["L8"]["status"] != "not_exercised":
+        problems.append("L8 was not not_exercised on a single-package run")
+
+    fired = layer_profile(
+        PackageFact(package_name="demo", score_breakdown=[
+            ScoreEntry(rule_id="X001", severity="CRITICAL", weight=40)]),
+        [{"rule_id": "X001"}])
+    if fired["L4"]["status"] != "fired":
+        problems.append("an L4 finding did not mark L4 fired")
+    return Gate("the layer profile is gap-precise and additive",
+                not problems, problems)
+
+
 def run_gates() -> list[Gate]:
     gates = [
         gate_no_interpreter_calls(),
@@ -3459,6 +3578,10 @@ def run_gates() -> list[Gate]:
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
     gates.append(gate_every_history_diff_is_scored_independently())
+    gates.append(gate_every_rule_carries_exactly_one_layer())
+    gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
+    gates.append(gate_indicator_tier_mirrors_ioc_matches())
+    gates.append(gate_layer_profile_is_gap_precise_and_additive())
     gates.append(gate_doc_lists_every_gate(gates))
     return gates
 

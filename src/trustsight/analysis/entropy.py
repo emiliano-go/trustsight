@@ -19,6 +19,7 @@ import math
 import re
 
 __all__ = [
+    "added_literals",
     "added_text",
     "compression_ratio",
     "encoded_fraction",
@@ -54,6 +55,21 @@ def compression_ratio(text: str) -> float:
     if not raw:
         return 0.0
     return len(gzip.compress(raw, mtime=0)) / len(raw)
+
+
+def added_literals(text: str, min_length: int = 64) -> list[str]:
+    """The encoded-alphabet runs of at least *min_length* chars (G002 feed).
+
+    Returns the literal strings themselves (bounded by the caller) so the
+    corpus builder can record them for cross-package joining.
+    """
+    out: list[str] = []
+    for pattern in (_BASE64_RE, _BASE32_RE, _HEX_RE):
+        for match in pattern.finditer(text):
+            value = match.group(0)
+            if len(value) >= min_length:
+                out.append(value)
+    return out
 
 
 def encoded_fraction(text: str, min_length: int = 64) -> float:

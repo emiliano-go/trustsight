@@ -392,6 +392,20 @@ def init_db():
                 domain TEXT PRIMARY KEY,
                 first_seen TEXT
             );
+
+            /* Addendum 5 §9: added literals per package, so G002 (Shared
+               Added Literal) can join across packages instead of scanning
+               every package's diff in memory each cycle.  The literal is
+               stored bounded; the join is over its content, so two packages
+               that added the same blob meet here. */
+            CREATE TABLE IF NOT EXISTS observed_added_literals (
+                package_name TEXT NOT NULL,
+                literal TEXT NOT NULL,
+                literal_len INTEGER NOT NULL,
+                observed_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_added_literals_package
+                ON observed_added_literals(package_name);
         """)
         _migrate(conn)
         conn.commit()
@@ -2081,6 +2095,46 @@ def observed_domain_count() -> int:
     with get_connection() as conn:
         return int(conn.execute(
             "SELECT COUNT(*) FROM observed_maintainer_domains").fetchone()[0] or 0)
+
+
+#: Largest added-literal table, pruned oldest-first like every corpus table.
+MAX_OBSERVED_LITERALS = 50_000
+
+
+def record_added_literals(package_name: str, literals, observed_at=None) -> None:
+    """Record a package's added encoded literals (Addendum 5 §9 / G002)."""
+    package_name = (package_name or "").strip()
+    if not package_name or not literals:
+        return
+    with get_connection() as conn:
+        for literal in literals:
+            text = str(literal)[:4096]
+            if not text:
+                continue
+            conn.execute(
+                """INSERT INTO observed_added_literals(
+                       package_name, literal, literal_len, observed_at)
+                   VALUES (?, ?, ?, COALESCE(?, datetime('now')))""",
+                (package_name, text, len(text), observed_at),
+            )
+        conn.execute(
+            """DELETE FROM observed_added_literals WHERE rowid IN (
+                   SELECT rowid FROM observed_added_literals
+                   ORDER BY observed_at DESC LIMIT -1 OFFSET ?)""",
+            (MAX_OBSERVED_LITERALS,),
+        )
+        conn.commit()
+
+
+def package_added_literals(package_name: str) -> list[tuple[str, int]]:
+    """``(literal, length)`` for one package's recorded added literals."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT literal, literal_len FROM observed_added_literals
+               WHERE package_name = ? ORDER BY observed_at DESC LIMIT 200""",
+            ((package_name or "").strip(),),
+        ).fetchall()
+    return [(r[0], int(r[1])) for r in rows]
 
 
 def get_package_profile(package_name: str) -> Optional[dict]:

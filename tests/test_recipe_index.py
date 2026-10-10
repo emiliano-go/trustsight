@@ -122,3 +122,22 @@ def test_source_array_novelty_is_false_without_a_package(db):
 
     ctx = build_novelty_context([], 1, record=False)
     assert ctx.source_array_seen_before is False
+
+
+def test_added_literals_feed_g002(db):
+    """Addendum 5 §9: the literal index lets G002 join across packages."""
+    from trustsight.analysis.correlation import shared_added_literal
+    from trustsight.db import package_added_literals, record_added_literals
+
+    blob = "B" * 300
+    record_added_literals("pkg-a", [blob])
+    record_added_literals("pkg-b", [blob])
+    records = [
+        {"package": "pkg-a",
+         "added_literals": [lit for lit, _ in package_added_literals("pkg-a")]},
+        {"package": "pkg-b",
+         "added_literals": [lit for lit, _ in package_added_literals("pkg-b")]},
+    ]
+    found = shared_added_literal(records, min_packages=2, min_length=256)
+    assert [f["rule_id"] for f in found] == ["G002"]
+    assert found[0]["params"]["members"] == ["pkg-a", "pkg-b"]

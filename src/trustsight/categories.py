@@ -316,6 +316,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "E003": _C.ENTROPY,
     "T001": _C.TEMPORAL,
     "T002": _C.TEMPORAL,
+    "T003": _C.TEMPORAL,
     "G001": _C.CORRELATION,
     "G002": _C.CORRELATION,
     "G003": _C.CORRELATION,

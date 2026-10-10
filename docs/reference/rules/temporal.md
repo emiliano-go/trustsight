@@ -31,6 +31,7 @@ severity weights and the reserved identifier ranges.
 | [H022](#h022) | Stale Package Revived | MEDIUM |
 | [T001](#t001) | Signing-Key Novelty | HIGH |
 | [T002](#t002) | Maintainer Domain Novelty | MEDIUM |
+| [T003](#t003) | Signing Key Rotated | HIGH |
 <!-- /generated: page-index -->
 
 ### H020: Very Recent Update {#h020}
@@ -93,3 +94,15 @@ on every key a new install sees.
 
 A first-seen domain is a weak but real signal about a maintainer with no
 prior footprint. Cold index declines, like T001.
+
+### T003: Signing Key Rotated {#t003}
+
+- **Target:** programmatic (`validpgpkeys` pre/post)
+- **Severity:** HIGH (weight 25)
+- **Category:** `temporal`
+- **Condition:** A `validpgpkeys` key is removed *and* a different one is
+  added in the same diff.
+
+The xz backdoor's shape: the trusted signer is swapped, not merely widened
+(H078) or narrowed (H024). Unlike T001 it needs no ecosystem history - the
+rotation of trust inside one commit is its own fact - so it fires cold.

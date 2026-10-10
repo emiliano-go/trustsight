@@ -197,7 +197,7 @@ def _correlation_records(
     corpus feed yet, so they are empty here (the G002 engine ships and is
     unit-tested; the literal hash view is the pending corpus work).
     """
-    from ..db import get_property_transitions
+    from ..db import get_property_transitions, package_added_literals
 
     records: list[dict] = []
     for name in processed:
@@ -215,7 +215,8 @@ def _correlation_records(
         records.append({
             "package": name,
             "hosts_gained": sorted(hosts_gained),
-            "added_literals": [],
+            # Addendum 5 §9: the literal feed G002 joins across packages.
+            "added_literals": [lit for lit, _length in package_added_literals(name)],
             "maintainer": current,
             "adoption": bool(current and previous and current != previous),
         })

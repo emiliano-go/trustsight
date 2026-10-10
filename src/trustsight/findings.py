@@ -151,6 +151,7 @@ TEMPLATES: dict[str, str] = {
 
     # --- W-series boundary renderings ---
     "W007": "dependency novelty declined: {rule} abstained because the corpus holds {observed} observation(s), so {count} added dependency name(s) were not judged",
+    "T003": "signing key rotated: {match}",
     # --- Class E indicator ---
     "H056": "{surface} matches known indicator {ioc_value} ({confidence}, {provenance})",
     # --- Build environment overrides ---

@@ -43,7 +43,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Integrity and Verification](integrity.md) | `integrity` | 46 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
 | [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 10 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
 | [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 13 | Who owns the package, or a long-stable declared property, changed. |
-| [Temporal Context](temporal.md) | `temporal` | 5 | How recently the package or this revision appeared, independent of any diff content. |
+| [Temporal Context](temporal.md) | `temporal` | 6 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
 | [Corpus Behavioral](corpus-behavioral.md) | `corpus-behavioral` | 7 | The package's position in, or deviation from, the corpus baseline - silent without prior observations. |
@@ -283,6 +283,7 @@ is deliberately non-contiguous; see
 | [S008](sabotage.md#s008) | Shell History Or Log Destruction | Sabotage | MEDIUM | [Sabotage](sabotage.md) |
 | [T001](temporal.md#t001) | Signing-Key Novelty | Temporal | HIGH | [Temporal Context](temporal.md) |
 | [T002](temporal.md#t002) | Maintainer Domain Novelty | Temporal | MEDIUM | [Temporal Context](temporal.md) |
+| [T003](temporal.md#t003) | Signing Key Rotated | Temporal | HIGH | [Temporal Context](temporal.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | INFO | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | INFO | [Unverifiable](unverifiable.md) |

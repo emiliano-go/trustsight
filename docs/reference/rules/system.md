@@ -1210,6 +1210,10 @@ See [T001: Signing-Key Novelty](temporal.md#t001).
 
 See [T002: Maintainer Domain Novelty](temporal.md#t002).
 
+### T003 {#t003}
+
+See [T003: Signing Key Rotated](temporal.md#t003).
+
 ### G001 {#g001}
 
 See [G001: Shared Gained Host](correlation.md#g001).

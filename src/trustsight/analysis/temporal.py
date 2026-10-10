@@ -43,6 +43,30 @@ def t_key_findings(change: dict, config) -> list[dict]:
     return out
 
 
+def t_key_rotation(change: dict) -> list[dict]:
+    """T003 - signing-key rotation (Addendum 5 §6.1).
+
+    A ``validpgpkeys`` key removed *and* a different one added in the same
+    diff.  The xz backdoor's shape: the trusted signer is swapped, not merely
+    widened or narrowed.  Distinct from H078 (which reports the change) and
+    from T001 (a brand-new key): the rotation of trust in one commit is its
+    own fact and does not need ecosystem history.
+    """
+    gained = list((change or {}).get("pgp_keys", {}).get("gained", ()) or ())
+    lost = list((change or {}).get("pgp_keys", {}).get("lost", ()) or ())
+    if not (gained and lost):
+        return []
+    return [stamp({
+        "rule_id": "T003",
+        "name": "Signing Key Rotated",
+        "severity": "HIGH", "category": "temporal",
+        "match": ("validpgpkeys removed "
+                  f"{len(lost)} key(s) and added {len(gained)} in one diff; "
+                  "the trusted signer changed"),
+        "params": {"removed": len(lost), "added": len(gained)},
+    })]
+
+
 def t_domain_findings(maintainer: str, config) -> list[dict]:
     """T002 - maintainer domain novelty (Addendum 5 §6.1).
 

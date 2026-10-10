@@ -337,6 +337,13 @@ class Report:
         all unchanged, so nothing was re-computed.
     :ivar cached_at: when the reused analysis was recorded; empty unless
         :attr:`cached`.
+    :ivar layers: the assurance-layer profile (Addendum 5 §3): per layer,
+        ``status`` (``fired``/``passed``/``unreadable``) and the rule ids
+        that fired there.
+    :ivar boundaries: the unified analysis boundaries (Addendum 2 W1): one
+        object per coverage gap and per W-series rendering.
+    :ivar indicators: the indicator tier (Addendum 5 §6.4), promoted from
+        ``ioc_matches``.  Outside the heuristic score.
     """
 
     package: str
@@ -1559,7 +1566,8 @@ class TrustSight:
         return _report_from_fact(fact)
 
     def verify_build(self, package: str, *, diff_text: str = "",
-                     manifest=None, declared=None) -> dict:
+                     manifest: Optional[list] = None,
+                     declared: Optional[dict] = None) -> dict:
         """The optional L9 build lane (Addendum 5 §12), off by default.
 
         When ``[verify] enabled`` is false, or the rootless container is

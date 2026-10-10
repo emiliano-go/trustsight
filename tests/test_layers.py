@@ -89,3 +89,26 @@ def test_content_truncation_blinds_every_layer():
 def test_an_unknown_gap_fails_safe():
     profile = layer_profile(_Fact(gaps=["some_new_bound"]), [])
     assert all(entry["status"] == "unreadable" for entry in profile.values())
+
+
+def test_verdict_names_the_deepest_layer():
+    from trustsight.schema import PackageFact, ScoreEntry
+    from trustsight.verdict import fallback_verdict, layer_sentence
+
+    fact = PackageFact(
+        package_name="demo",
+        score_breakdown=[
+            ScoreEntry(rule_id="R001", severity="CRITICAL", weight=100, reason="r"),
+            ScoreEntry(rule_id="X001", severity="CRITICAL", weight=100, reason="x"),
+        ],
+    )
+    sentence = layer_sentence(fact)
+    assert "L4" in sentence and "evasion" in sentence.lower()
+    assert "L4" in fallback_verdict(fact)
+
+
+def test_a_clean_package_has_no_layer_sentence():
+    from trustsight.schema import PackageFact
+    from trustsight.verdict import layer_sentence
+
+    assert layer_sentence(PackageFact(package_name="demo")) == ""

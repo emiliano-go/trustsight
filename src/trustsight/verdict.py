@@ -154,6 +154,29 @@ def _version_prefix(fact: PackageFact) -> str:
     return "Version unchanged. "
 
 
+def layer_sentence(fact: PackageFact) -> str:
+    """Name the deepest assurance layer the fired findings caught at
+    (Addendum 5 §3).
+
+    The profile shows every layer; the sentence names the deepest one, so
+    the primary summary answers "how far did the attacker get" rather than
+    listing findings.  Empty when nothing scored, so a clean package's
+    verdict is unchanged.
+    """
+    from .layers import LAYER_ORDER, layer_of
+
+    fired = {
+        layer_of(str(entry.rule_id))
+        for entry in fact.score_breakdown
+        if entry.weight > 0 or entry.severity == "FATAL"
+    }
+    fired.discard(None)
+    if not fired:
+        return ""
+    deepest = max(fired, key=LAYER_ORDER.index)
+    return f"Fired at {deepest.value} ({deepest.name_text}). "
+
+
 def fallback_verdict(fact: PackageFact) -> str:
     """Build a human-readable verdict when scoring does not produce one."""
     if fact.first_seen:
@@ -204,6 +227,7 @@ def fallback_verdict(fact: PackageFact) -> str:
             f"{_version_prefix(fact)}{change_summary}. {detail}. "
             f"The package is attempting to deceive the reviewer, so the score "
             f"is capped at maximum regardless of other evidence. "
+            f"{layer_sentence(fact)}"
             f"{FATAL_DIRECTION}"
         )
 
@@ -213,5 +237,6 @@ def fallback_verdict(fact: PackageFact) -> str:
     signals = "; ".join(details)
     return (
         f"{_version_prefix(fact)}{change_summary}. Signals: {signals}. "
+        f"{layer_sentence(fact)}"
         f"{REVIEW_DIRECTION}"
     )

@@ -155,26 +155,30 @@ def _version_prefix(fact: PackageFact) -> str:
 
 
 def layer_sentence(fact: PackageFact) -> str:
-    """Name the deepest assurance layer the fired findings caught at
-    (Addendum 5 §3).
+    """Name the evidence categories the fired findings represent (Addendum 5 §3).
 
-    The profile shows every layer; the sentence names the deepest one, so
-    the primary summary answers "how far did the attacker get" rather than
-    listing findings.  Empty when nothing scored, so a clean package's
+    A layer is the kind of evidence a finding represents, not a stage an
+    attacker passed.  The sentence lists the fired categories, so the summary
+    answers "which kinds of evidence produced findings" rather than implying a
+    sequential attacker progression.  A ``[layers]`` override is honoured so
+    every surface agrees.  Empty when nothing scored, so a clean package's
     verdict is unchanged.
     """
-    from .layers import LAYER_ORDER, layer_of
+    from .config import load_config
+    from .layers import LAYER_ORDER, layer_of, parse_overrides
 
+    overrides = parse_overrides(load_config())
     fired = {
-        layer_of(str(entry.rule_id))
+        layer_of(str(entry.rule_id), overrides)
         for entry in fact.score_breakdown
         if entry.weight > 0 or entry.severity == "FATAL"
     }
     fired.discard(None)
     if not fired:
         return ""
-    deepest = max(fired, key=LAYER_ORDER.index)
-    return f"Fired at {deepest.value} ({deepest.name_text}). "
+    ordered = sorted(fired, key=LAYER_ORDER.index)
+    named = ", ".join(f"{layer.value} ({layer.name_text})" for layer in ordered)
+    return f"Evidence categories fired: {named}. "
 
 
 def fallback_verdict(fact: PackageFact) -> str:

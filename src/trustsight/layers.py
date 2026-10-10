@@ -22,6 +22,7 @@ lane, which is not part of the static core.
 
 from __future__ import annotations
 
+import itertools
 from enum import StrEnum
 
 __all__ = [
@@ -32,17 +33,25 @@ __all__ = [
     "SERIES_LAYER",
     "Layer",
     "blinded_layers",
+    "bypass_count",
     "layer_of",
     "layer_profile",
-    "layers_traversed",
     "minimum_layer_cut",
+    "observed_layers",
     "parse_overrides",
     "rules_in_layer",
+    "single_layer_failure",
 ]
 
 
 class Layer(StrEnum):
-    """The attacker's trajectory through the onion (Addendum 5 §1)."""
+    """The kind of evidence a finding represents (Addendum 5 §1).
+
+    A layer groups findings by the evidence category they belong to - the
+    name answers "what kind of check produced this", not "how far an attacker
+    got".  The L1-L8 identifiers are stable labels for those categories; they
+    are not, by themselves, a claim about sequential attacker progress.
+    """
 
     L1 = "L1"
     L2 = "L2"
@@ -224,62 +233,70 @@ GAP_BLINDED_LAYERS: dict[str, frozenset[Layer]] = {
 }
 
 
-def layers_traversed(triggered) -> dict:
-    """The harness telemetry for one attempt (Addendum 5 §4).
+def observed_layers(triggered) -> dict:
+    """Which evidence categories fired on one harness attempt (Addendum 5 §4).
 
-    Returns ``{"traversed": [...], "stopped": layer | None}``: the ordered
-    layers the attempt passed, and the layer that stopped it (the
-    outermost - lowest-index - layer whose rules fired).  A bypass caught
-    no rule, so it traversed every layer and stopped at none.
+    Returns ``{"fired": [...], "fully_bypassed": bool}``: the layer ids whose
+    rules actually fired, in evidence-category order.  This is a projection
+    of the fired rule layers, **not** an observed traversal - the earlier
+    ``traversed``/``stopped`` shape inferred a prefix, which made every path
+    contain L1 and the minimum cut structurally one.
     """
-    fired = {
-        layer for layer in (
+    fired = sorted(
+        {layer for layer in (
             layer_of(str(entry.get("rule_id", ""))) for entry in triggered or ()
-        ) if layer is not None
-    }
-    if not fired:
-        return {"traversed": [layer.value for layer in LAYER_ORDER],
-                "stopped": None}
-    stopped = min(fired, key=LAYER_ORDER.index)
-    return {
-        "traversed": [layer.value for layer in LAYER_ORDER[:LAYER_ORDER.index(stopped)]],
-        "stopped": stopped.value,
-    }
+        ) if layer is not None},
+        key=LAYER_ORDER.index,
+    )
+    return {"fired": [layer.value for layer in fired],
+            "fully_bypassed": not fired}
 
 
 def minimum_layer_cut(attempts) -> int | None:
-    """The smallest layer-set intersection that stops every recorded attempt.
+    """Exact smallest set of layers that covers every caught attempt.
 
-    *attempts* is an iterable of ``{"stopped": layer|None, "traversed": [...]}``.
-    A minimum cut is a set of layers that intersects every attempt's
-    traverse-or-stop path.  Computed by greedy set cover over each layer:
-    for each candidate layer, how many attempts it would stop (its ``stopped``
-    equals the layer, or the layer is in the attempt's traversed set).  The
-    reported number is the smallest covering set size, or ``None`` when there
-    are no attempts.  v1 is the reported metric; the gate is a follow-on.
+    *attempts* is an iterable of ``{"fired": [...], "fully_bypassed": bool}``.
+    A layer covers an attempt when it is one of the layers that fired for it.
+    The minimum cut is the smallest set of layers covering every caught
+    attempt; a fully-bypassed attempt (nothing fired) is uncuttable, so any
+    bypass makes the cut undefined - reported separately by
+    :func:`bypass_count`.  Enumerated exactly over the 2**8 layer subsets,
+    not greedily.  ``None`` when there are no attempts.
     """
-    attempts = list(attempts)
-    if not attempts:
+    paths = [p for p in (attempts or ()) if p]
+    if not paths:
         return None
-    uncovered = set(range(len(attempts)))
-    chosen = 0
-    # Each layer covers attempts whose path passes through it.
-    coverage: dict[str, set[int]] = {}
-    for layer in LAYER_ORDER:
-        cover = {
-            i for i, a in enumerate(attempts)
-            if a.get("stopped") == layer.value
-            or layer.value in (a.get("traversed") or ())
-        }
-        coverage[layer.value] = cover
-    while uncovered:
-        best = max(coverage.values(), key=lambda c: len(c & uncovered), default=set())
-        if not (best & uncovered):
-            # An attempt with no covered layer (malformed) cannot be cut.
-            break
-        uncovered -= best
-        chosen += 1
-    return chosen
+    caught = [set(p.get("fired") or ()) for p in paths]
+    if any(not fired for fired in caught):
+        return None  # an attempt fired nothing; no layer set can cover it
+    layers = [layer.value for layer in LAYER_ORDER]
+    for size in range(1, len(layers) + 1):
+        for combo in itertools.combinations(layers, size):
+            chosen = set(combo)
+            if all(chosen & fired for fired in caught):
+                return size
+    return len(layers)
+
+
+def single_layer_failure(paths) -> dict[str, int]:
+    """Attempts that bypass if one layer's detector family is disabled.
+
+    For each layer, the count of caught attempts whose *only* fired layer is
+    that layer - disable it and they pass.  This is the empirical "does one
+    layer's failure reopen a path" question the path-intersection metric
+    could not answer.
+    """
+    out: dict[str, int] = {}
+    for path in paths or ():
+        fired = [lit for lit in (path.get("fired") or ()) if lit]
+        if len(fired) == 1:
+            out[fired[0]] = out.get(fired[0], 0) + 1
+    return dict(sorted(out.items()))
+
+
+def bypass_count(paths) -> int:
+    """Attempts that fired no rule at all."""
+    return sum(1 for p in (paths or ()) if p and p.get("fully_bypassed"))
 
 
 def blinded_layers(gaps) -> frozenset[Layer]:

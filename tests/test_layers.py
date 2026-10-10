@@ -104,7 +104,7 @@ def test_an_unknown_gap_fails_safe():
     assert all(profile[f"L{i}"]["status"] == "unreadable" for i in range(1, 8))
 
 
-def test_verdict_names_the_deepest_layer():
+def test_verdict_names_the_fired_evidence_categories():
     from trustsight.schema import PackageFact, ScoreEntry
     from trustsight.verdict import fallback_verdict, layer_sentence
 
@@ -116,7 +116,10 @@ def test_verdict_names_the_deepest_layer():
         ],
     )
     sentence = layer_sentence(fact)
-    assert "L4" in sentence and "evasion" in sentence.lower()
+    # Both fired categories are named; no "deepest"/progression claim.
+    assert "L3 (Payload signature)" in sentence
+    assert "L4 (Evasion shape)" in sentence
+    assert "deepest" not in sentence.lower()
     assert "L4" in fallback_verdict(fact)
 
 
@@ -127,34 +130,55 @@ def test_a_clean_package_has_no_layer_sentence():
     assert layer_sentence(PackageFact(package_name="demo")) == ""
 
 
-def test_layers_traversed_for_a_caught_attempt():
-    from trustsight.layers import layers_traversed
+def test_observed_layers_records_fired_categories_only():
+    from trustsight.layers import observed_layers
 
-    # X001 (L4 evasion) catches it: passed L1-L3, stopped at L4.
-    info = layers_traversed([{"rule_id": "X001"}])
-    assert info["stopped"] == "L4"
-    assert info["traversed"] == ["L1", "L2", "L3"]
-
-
-def test_layers_traversed_for_a_bypass_is_every_layer():
-    from trustsight.layers import layers_traversed
-
-    info = layers_traversed([])
-    assert info["stopped"] is None
-    assert info["traversed"] == [f"L{i}" for i in range(1, 9)]
+    # X001 (L4 evasion) fired; no inferred prefix of "traversed" layers.
+    info = observed_layers([{"rule_id": "X001"}])
+    assert info["fired"] == ["L4"]
+    assert info["fully_bypassed"] is False
 
 
-def test_minimum_layer_cut():
+def test_observed_layers_marks_a_full_bypass():
+    from trustsight.layers import observed_layers
+
+    info = observed_layers([])
+    assert info["fired"] == []
+    assert info["fully_bypassed"] is True
+
+
+def test_minimum_layer_cut_is_exact_and_bypass_aware():
     from trustsight.layers import minimum_layer_cut
 
-    attempts = [
-        {"stopped": "L1", "traversed": []},
-        {"stopped": None, "traversed": ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"]},
-        {"stopped": "L4", "traversed": ["L1", "L2", "L3"]},
-    ]
-    # L1 covers every attempt (all pass through L1 or stop at it).
-    assert minimum_layer_cut(attempts) == 1
+    # Two attempts: one caught only at L4, one only at L7 -> cut needs two.
+    assert minimum_layer_cut([
+        {"fired": ["L4"], "fully_bypassed": False},
+        {"fired": ["L7"], "fully_bypassed": False},
+    ]) == 2
+    # One shared category covers both.
+    assert minimum_layer_cut([
+        {"fired": ["L4", "L7"], "fully_bypassed": False},
+        {"fired": ["L7"], "fully_bypassed": False},
+    ]) == 1
+    # A bypass fires nothing, so no layer set can cover it.
+    assert minimum_layer_cut([
+        {"fired": ["L4"], "fully_bypassed": False},
+        {"fired": [], "fully_bypassed": True},
+    ]) is None
     assert minimum_layer_cut([]) is None
+
+
+def test_single_layer_failure_counts_singleton_attempts():
+    from trustsight.layers import bypass_count, single_layer_failure
+
+    paths = [
+        {"fired": ["L4"], "fully_bypassed": False},
+        {"fired": ["L4"], "fully_bypassed": False},
+        {"fired": ["L3", "L4"], "fully_bypassed": False},
+        {"fired": [], "fully_bypassed": True},
+    ]
+    assert single_layer_failure(paths) == {"L4": 2}
+    assert bypass_count(paths) == 1
 
 
 def test_verbose_layer_line_reports_active_layers_and_boundaries():

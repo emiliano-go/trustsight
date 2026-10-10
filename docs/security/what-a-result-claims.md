@@ -90,11 +90,11 @@ Twenty was originally the 95th percentile of the benign corpus. It is not any mo
 |---------|-------|
 | benign median | 0 |
 | benign 95th percentile | 35 |
-| benign diffs scoring 0 | 68.4% |
+| benign diffs scoring 0 | 68.2% |
 | benign diffs above 20 | 9.5% |
 | percentile that 20 now sits at | 90.5th |
 | malicious 5th percentile | 60 |
-| malicious minimum | 50 |
+| malicious minimum | 60 |
 
 So about one benign diff in ten lands above the threshold: in practice a reviewer running `trustsight review` should expect roughly one in ten benign updates to flag, and the tool is built to make that look cheap (evidence first, the score on request) rather than to drive the number to zero. That rate is a direct and intended consequence of [B10](#b10-positive-evidence-is-reported-never-credited): declared checksums, PGP keys and trusted-forge hosting subtract nothing, so no package can declare its way under 20.
 

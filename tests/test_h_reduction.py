@@ -10,7 +10,6 @@ from trustsight.categories import RULE_CATEGORIES
 from trustsight.rule_id_history import (
     FROZEN_H_IDS,
     RETIRED_RULE_IDS,
-    RENAMED_RULE_IDS,
     survivor_id,
 )
 

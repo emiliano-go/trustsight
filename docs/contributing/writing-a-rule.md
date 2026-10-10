@@ -159,6 +159,26 @@ the shipped one, or if the id is absent from the quick-reference table.
 | Logic spans multiple fields / conditions       | C-series |
 | Needs a structural or multi-condition invariant | C-series |
 
+## The three axes: mechanism, subject, layer (Addendum 5 §5)
+
+A proposed rule names three things, and the intake review checks all three:
+
+1. **Mechanism (series).** What kind of thing detects it - regex (R),
+   heuristic (H), invariant (C), refusal (X), statistics (E), history (T),
+   correlation (G), indicator (I), or meta (M). This is the *series* axis.
+2. **Subject (category).** The single closed category it belongs to, which
+   owns its reference page (`trustsight.categories`).
+3. **Trajectory hole (layer).** Which assurance layer the attack it targets
+   would otherwise pass: L1 structure, L2 readability, L3 payload, L4
+   evasion, L5 behaviour, L6 ecosystem, L7 indicators, L8 campaign. The
+   series-to-layer defaults live in `trustsight.layers`.
+
+If a mechanism on a **different** layer already covers the same attack, the
+PR must argue why this one adds *diversity* rather than *redundancy* - or
+file it as an instance of that existing mechanism instead (Addendum 5 §5,
+"the onion's integrity": each layer's mechanism must be independent of its
+neighbours', so holes fail to align).
+
 ## Fixtures
 
 Every new scored rule needs a benign case and a malicious case. Fixtures are

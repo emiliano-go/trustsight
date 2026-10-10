@@ -3380,6 +3380,46 @@ def gate_release_artifacts_share_commit() -> Gate:
                 problems or "checkout SHA, committed rebuild, verified tag target")
 
 
+def gate_boundaries_are_the_coverage_view() -> Gate:
+    """``boundaries`` is the one representation of the coverage gaps (W1).
+
+    Every coverage gap maps to a boundary whose ``gap`` is that id, for every
+    id in ``coverage.GAPS``, so ``coverage_gaps`` and the boundary list cannot
+    drift: one is a view of the other.
+    """
+    from trustsight.boundaries import boundaries_from_fact
+    from trustsight.coverage import GAPS
+    from trustsight.schema import PackageFact
+
+    problems: list[str] = []
+    for gap in GAPS:
+        fact = PackageFact(package_name="demo", coverage_gaps=[gap])
+        got = {b.gap for b in boundaries_from_fact(fact) if b.gap}
+        if got != {gap}:
+            problems.append(f"{gap} -> {sorted(got)}")
+    empty = boundaries_from_fact(PackageFact(package_name="demo"))
+    if any(b.forbids_clean for b in empty):
+        problems.append("an empty run produced a forbidding boundary")
+    return Gate("boundaries are the coverage view", not problems, problems)
+
+
+def gate_every_report_key_is_documented() -> Gate:
+    """Every report-body key has a row in ``docs/reference/report-schema.md``.
+
+    A new body key that ships without a schema row is a field a consumer
+    cannot discover - the ``layers``/``boundaries``/``comparison_base`` shape.
+    """
+    from trustsight.reporting import REPORT_KEYS, SCORE_KEYS, VERBOSE_KEYS
+
+    text = (ROOT / "docs" / "reference" / "report-schema.md").read_text(
+        encoding="utf-8")
+    missing = sorted(
+        key for key in (set(REPORT_KEYS) | set(SCORE_KEYS) | set(VERBOSE_KEYS))
+        if f"`{key}`" not in text
+    )
+    return Gate("every report body key is documented", not missing, missing)
+
+
 def gate_every_rule_carries_exactly_one_layer() -> Gate:
     """Addendum 5 §2: every rule has exactly one layer.
 
@@ -3578,6 +3618,8 @@ def run_gates() -> list[Gate]:
     gates.append(gate_run_diff_assembly_is_bounded())
     gates.append(gate_a_truncated_history_walk_is_a_declared_gap())
     gates.append(gate_every_history_diff_is_scored_independently())
+    gates.append(gate_boundaries_are_the_coverage_view())
+    gates.append(gate_every_report_key_is_documented())
     gates.append(gate_every_rule_carries_exactly_one_layer())
     gates.append(gate_boundaries_forbid_clean_exactly_when_gaps())
     gates.append(gate_indicator_tier_mirrors_ioc_matches())

@@ -41,11 +41,11 @@ every recorded attack class. A minimum cut of one means a single regression
 reopens every trajectory in the class; the target is **at least two**, so no
 single failure reopens a path.
 
-The campaign rollup carries the **aligned-hole depth** beside it: for each
-bypass, the minimum set of layers whose holes had to align for it to succeed.
-This is the layer model as an instrument - not a claim that the layers are
+The campaign record carries the minimum layer-cut as a single scalar. This is
+the layer model as an instrument - not a claim that the layers are
 independent, but a measurement of how independent they proved against the
-attacks recorded.
+attacks recorded. The per-bypass aligned-hole depth and the cut distribution
+are the next measurement added to this rollup.
 
 ## What this part does not claim
 

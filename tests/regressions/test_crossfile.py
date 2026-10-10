@@ -5,7 +5,10 @@ alone stays silent; a divergent install hook, checksum array or dependency
 list fires.
 """
 
-from trustsight.analysis.crossfile import metadata_recipe_divergence
+from trustsight.analysis.crossfile import (
+    metadata_recipe_divergence,
+    source_divergence,
+)
 
 PKGBUILD = """\
 pkgname=demo
@@ -79,7 +82,7 @@ def test_a_source_the_recipe_fetches_but_metadata_never_names_fires():
         "source=('https://example.invalid/demo-1.0.tar.gz')",
         "source=('https://example.invalid/demo-1.0.tar.gz' 'evil.sh')",
     )
-    assert metadata_recipe_divergence(pkgbuild, SRCINFO) == ["source"]
+    assert source_divergence(pkgbuild, SRCINFO) == (["evil.sh"], [])
 
 
 def test_a_stale_metadata_only_source_also_diverges():
@@ -88,13 +91,16 @@ def test_a_stale_metadata_only_source_also_diverges():
         "\tsource = https://example.invalid/demo-1.0.tar.gz\n\t"
         "source = https://old.invalid/gone.tar.gz",
     )
-    assert metadata_recipe_divergence(PKGBUILD, stale) == ["source"]
+    assert source_divergence(PKGBUILD, stale) == ([], ["https://old.invalid/gone.tar.gz"])
 
 
 def test_arch_suffixed_sources_are_compared():
     pkgbuild = PKGBUILD + "source_x86_64=('https://example.invalid/extra.tar.gz')\n"
     srcinfo = SRCINFO + "\tsource_x86_64 = https://example.invalid/other.tar.gz\n"
-    assert metadata_recipe_divergence(pkgbuild, srcinfo) == ["source_x86_64"]
+    assert source_divergence(pkgbuild, srcinfo) == (
+        ["https://example.invalid/extra.tar.gz"],
+        ["https://example.invalid/other.tar.gz"],
+    )
 
 
 def test_variable_sources_are_not_compared():
@@ -102,4 +108,8 @@ def test_variable_sources_are_not_compared():
         "source=('https://example.invalid/demo-1.0.tar.gz')",
         "source=(\"${_base}.tar.gz\")",
     )
-    assert metadata_recipe_divergence(pkgbuild, SRCINFO) == []
+    assert source_divergence(pkgbuild, SRCINFO) == ([], [])
+
+
+def test_matching_sources_are_silent():
+    assert source_divergence(PKGBUILD, SRCINFO) == ([], [])

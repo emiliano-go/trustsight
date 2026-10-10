@@ -519,11 +519,17 @@ Zero occurrences in the 3,739-diff benign corpus.
 
 ### H103: Metadata And Recipe Disagree {#h103}
 
-- **Severity:** HIGH (weight 25)
+- **Severity:** HIGH (weight 25) for a field divergence or a source the
+  PKGBUILD fetches but `.SRCINFO` never names; INFO (weight 0) for a source
+  `.SRCINFO` names but the PKGBUILD does not (stale metadata).
 - **Category:** `integrity`
 - **Condition:** `.SRCINFO` and the PKGBUILD disagree on the `install=` hook,
   a checksum array, or `depends`, with both documents stating the field and
-  neither carrying an unresolved variable.
+  neither carrying an unresolved variable; or their `source` arrays differ
+  (Addendum 4, G8). The source comparison is directional: the PKGBUILD-only
+  direction is the executable/metadata split and scores HIGH, the
+  `.SRCINFO`-only direction is stale metadata and is INFO. Both directions
+  cite the two documents in the evidence.
 
 H092 compares the hosts the two documents name. This rule compares the
 fields that decide what the build installs, fetches and verifies: a

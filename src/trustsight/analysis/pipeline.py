@@ -767,6 +767,37 @@ def analyze_package(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
+    # Addendum 4 G8, directional: a source the PKGBUILD fetches that the
+    # committed .SRCINFO never names is the executable/metadata split
+    # (HIGH); the reverse is stale metadata (INFO).  Both cite the two
+    # documents so the reader can compare them directly.
+    from .crossfile import source_divergence
+
+    pkgbuild_only, srcinfo_only = source_divergence(head_pkgbuild, srcinfo_text)
+    if pkgbuild_only:
+        triggered_rules.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "HIGH", "category": "integrity",
+            "match": ("PKGBUILD fetches source(s) .SRCINFO does not declare: "
+                      + ", ".join(pkgbuild_only)),
+            "file": "PKGBUILD",
+            "params": {"fields": "source", "direction": "pkgbuild_only",
+                       "sources": ", ".join(pkgbuild_only),
+                       "metadata_file": ".SRCINFO"},
+        }))
+    elif srcinfo_only:
+        triggered_rules.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "INFO", "category": "integrity",
+            "match": (".SRCINFO declares source(s) the PKGBUILD does not: "
+                      + ", ".join(srcinfo_only)),
+            "file": ".SRCINFO",
+            "params": {"fields": "source", "direction": "srcinfo_only",
+                       "sources": ", ".join(srcinfo_only),
+                       "recipe_file": "PKGBUILD"},
+        }))
     # Spec X028: only the immediately preceding recorded review of this
     # package composes; a gap in history degrades to no-firing.
     previous_diff = ""

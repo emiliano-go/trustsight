@@ -701,3 +701,48 @@ def test_h103_reaches_the_corpus_first_seen_path():
         maintainer="tester", temporal=TemporalContext(), srcinfo=srcinfo,
     )
     assert any(e.rule_id == "H103" for e in fact.score_breakdown)
+
+
+def test_g8_source_divergence_is_directional():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+
+    # PKGBUILD fetches a source .SRCINFO never names: the executable/
+    # metadata split, HIGH.
+    pkgbuild = (
+        "pkgname=demo\npkgver=1.0\n"
+        "source=('https://example.invalid/demo-1.0.tar.gz' 'evil.sh')\n"
+    )
+    srcinfo = (
+        "pkgbase = demo\n\tpkgver = 1.0\n"
+        "\tsource = https://example.invalid/demo-1.0.tar.gz\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(), srcinfo=srcinfo,
+    )
+    high = [e for e in fact.score_breakdown
+            if e.rule_id == "H103" and e.severity == "HIGH"]
+    assert high and "evil.sh" in high[0].evidence.get("sources", "")
+
+    # .SRCINFO names a source the PKGBUILD does not: stale metadata, INFO.
+    clean_pkgbuild = (
+        "pkgname=demo\npkgver=1.0\n"
+        "source=('https://example.invalid/demo-1.0.tar.gz')\n"
+    )
+    stale = (
+        "pkgbase = demo\n\tpkgver = 1.0\n"
+        "\tsource = https://example.invalid/demo-1.0.tar.gz\n"
+        "\tsource = https://old.invalid/gone.tar.gz\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="demo", old_pkgbuild=None, new_pkgbuild=clean_pkgbuild,
+        maintainer="tester", temporal=TemporalContext(), srcinfo=stale,
+    )
+    info = [e for e in fact.score_breakdown
+            if e.rule_id == "H103" and e.severity == "INFO"]
+    assert info and "gone.tar.gz" in info[0].evidence.get("sources", "")

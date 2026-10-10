@@ -33,6 +33,39 @@ def _is_source(field: str) -> bool:
     return field == "source" or field.startswith("source_")
 
 
+def source_divergence(pkgbuild: str, srcinfo: str | None) -> tuple[list[str], list[str]]:
+    """Directional source divergence between metadata and recipe (G8).
+
+    Returns ``(only_in_pkgbuild, only_in_srcinfo)``: source entries each
+    document declares that the other does not.  ``only_in_pkgbuild`` is the
+    executable/metadata split - clean metadata for review tooling, a dirty
+    recipe for makepkg - and is the security-relevant direction; the other
+    is stale metadata, usually an honest mistake.  Variables on either side
+    are skipped (never guess).  Arch-suffixed arrays compare with their
+    base so a per-arch source is not lost.
+    """
+    if not srcinfo:
+        return [], []
+    metadata = parse_srcinfo(srcinfo)
+    recipe = parse_recipe(pkgbuild)
+    pkgbuild_only: set[str] = set()
+    srcinfo_only: set[str] = set()
+    for field in sorted(set(recipe.arrays) | set(metadata)):
+        if not _is_source(field):
+            continue
+        meta_values = metadata.get(field)
+        recipe_values = recipe.arrays.get(field)
+        if meta_values is None or recipe_values is None:
+            continue
+        if _has_variable(meta_values) or _has_variable(recipe_values):
+            continue
+        meta_set = set(meta_values)
+        recipe_set = set(recipe_values)
+        pkgbuild_only |= recipe_set - meta_set
+        srcinfo_only |= meta_set - recipe_set
+    return sorted(pkgbuild_only), sorted(srcinfo_only)
+
+
 def _has_variable(values) -> bool:
     return any("$" in value for value in values)
 
@@ -56,12 +89,7 @@ def metadata_recipe_divergence(pkgbuild: str, srcinfo: str | None) -> list[str]:
         divergent.append("install")
 
     for field in sorted(set(recipe.arrays) | set(metadata)):
-        # Addendum 4 G8: the committed ``.SRCINFO`` and the ``PKGBUILD``
-        # must declare the same sources.  A source the recipe fetches but
-        # the metadata never names is the executable/metadata split: clean
-        # metadata for review tooling, a dirty recipe for makepkg.  Also
-        # checksums; both compare only when neither side hides a variable.
-        if not (_is_checksum(field) or _is_source(field)):
+        if not _is_checksum(field):
             continue
         meta_values = metadata.get(field)
         recipe_values = recipe.arrays.get(field)

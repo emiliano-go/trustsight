@@ -374,6 +374,34 @@ def analyze_package_text(
                       + ", ".join(divergent)),
             "params": {"fields": ", ".join(divergent)},
         }))
+    # Addendum 4 G8, directional (see the per-package path in pipeline.py).
+    from ..analysis.crossfile import source_divergence
+
+    pkgbuild_only, srcinfo_only = source_divergence(new_pkgbuild, srcinfo)
+    if pkgbuild_only:
+        metadata_findings.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "HIGH", "category": "integrity",
+            "match": ("PKGBUILD fetches source(s) .SRCINFO does not declare: "
+                      + ", ".join(pkgbuild_only)),
+            "file": "PKGBUILD",
+            "params": {"fields": "source", "direction": "pkgbuild_only",
+                       "sources": ", ".join(pkgbuild_only),
+                       "metadata_file": ".SRCINFO"},
+        }))
+    elif srcinfo_only:
+        metadata_findings.append(stamp({
+            "rule_id": "H103",
+            "name": "Metadata And Recipe Disagree",
+            "severity": "INFO", "category": "integrity",
+            "match": (".SRCINFO declares source(s) the PKGBUILD does not: "
+                      + ", ".join(srcinfo_only)),
+            "file": ".SRCINFO",
+            "params": {"fields": "source", "direction": "srcinfo_only",
+                       "sources": ", ".join(srcinfo_only),
+                       "recipe_file": "PKGBUILD"},
+        }))
 
     if old_pkgbuild is None:
         novelty = build_novelty_context([], package_id, record=record)

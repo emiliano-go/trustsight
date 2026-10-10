@@ -912,7 +912,36 @@ DEFAULT_BASELINE_TAG = (
     tomllib.loads(DEFAULT_CONFIG).get("seed", {}).get("baseline_tag") or None
 )
 
+#: The shipped ruleset generation.  Bumped in a release that changes the
+#: shipped rules in a way an existing install should pick up.  ``rules.toml``
+#: carries the matching ``ruleset-version`` marker; the gap between the two
+#: is what the age-drift prompt reads (Addendum 2, R2).
+SHIPPED_RULESET_VERSION = 18
+
+_RULESET_VERSION_RE = re.compile(r"^#\s*ruleset-version:\s*(\d+)", re.MULTILINE)
+
+
+def local_ruleset_version() -> int:
+    """The generation stamped into the user's ``rules.toml`` (0 if absent).
+
+    A missing file reads as current - there is nothing to sync.  A file with
+    no marker is a pre-marker install, so it reads as generation 0 and the
+    age prompt can fire once.
+    """
+    path = CONFIG_DIR / "rules.toml"
+    if not path.exists():
+        return SHIPPED_RULESET_VERSION
+    match = _RULESET_VERSION_RE.search(path.read_text(errors="replace"))
+    return int(match.group(1)) if match else 0
+
+
+def ruleset_age_drift(releases: int = 1) -> bool:
+    """True when the local ruleset is more than *releases* generations old."""
+    return SHIPPED_RULESET_VERSION - local_ruleset_version() > releases
+
+
 DEFAULT_RULES = """\
+# ruleset-version: 18
 [[rules]]
 id = "R001"
 name = "Remote Script Execution"
@@ -2256,7 +2285,18 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
     for rid in added:
         text += "\n" + blocks[rid]
 
-    if added or updated:
+    # Stamp the current generation (Addendum 2, R2): a file with no marker is
+    # a pre-marker install and would keep reading as age-drifting after a
+    # sync; an old marker is replaced in place.
+    before = text
+    if _RULESET_VERSION_RE.search(text) is None:
+        text = f"# ruleset-version: {SHIPPED_RULESET_VERSION}\n" + text
+    else:
+        text = _RULESET_VERSION_RE.sub(
+            f"# ruleset-version: {SHIPPED_RULESET_VERSION}", text, count=1)
+    marker_changed = text != before
+
+    if added or updated or marker_changed:
         path.write_text(text)
     return added, updated
 

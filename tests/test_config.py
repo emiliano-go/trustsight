@@ -737,3 +737,49 @@ def test_structural_rules_are_part_of_the_fingerprint(tmp_path, monkeypatch):
     )
     cfg._toml_cache.clear()
     assert cfg.config_fingerprint() != first
+
+
+def test_local_ruleset_version_reads_the_marker(tmp_path, monkeypatch):
+    from trustsight import config
+
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    cfg_dir.mkdir(parents=True)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+
+    # Missing file reads as current: nothing to sync.
+    assert config.local_ruleset_version() == config.SHIPPED_RULESET_VERSION
+    assert config.ruleset_age_drift() is False
+
+    # A pre-marker install reads as generation 0, which is age-drifting.
+    (cfg_dir / "rules.toml").write_text("[[rules]]\nid = 'R001'\n")
+    assert config.local_ruleset_version() == 0
+    assert config.ruleset_age_drift() is True
+
+    # Exactly one generation behind does not prompt; more than one does.
+    one_behind = config.SHIPPED_RULESET_VERSION - 1
+    (cfg_dir / "rules.toml").write_text(f"# ruleset-version: {one_behind}\n")
+    assert config.ruleset_age_drift() is False
+    (cfg_dir / "rules.toml").write_text(
+        f"# ruleset-version: {config.SHIPPED_RULESET_VERSION - 2}\n")
+    assert config.ruleset_age_drift() is True
+
+
+def test_shipped_rules_toml_carries_the_version_marker():
+    from trustsight import config
+
+    assert f"# ruleset-version: {config.SHIPPED_RULESET_VERSION}" in config.DEFAULT_RULES
+
+
+def test_sync_rules_stamps_the_current_generation(tmp_path, monkeypatch):
+    from trustsight import config
+
+    cfg_dir = tmp_path / ".config" / "trustsight"
+    cfg_dir.mkdir(parents=True)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path / "data")
+    # A pre-marker file with a rule that is present, so nothing is "added".
+    (cfg_dir / "rules.toml").write_text(
+        config._rule_blocks(config.DEFAULT_RULES)["R001"])
+
+    config.sync_rules()
+    assert config.local_ruleset_version() == config.SHIPPED_RULESET_VERSION

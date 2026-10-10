@@ -7,23 +7,27 @@ import typer
 
 from ..config import (
     CONFIG_DIR,
+    SHIPPED_RULESET_VERSION,
     drifted_shipped_rules,
     ensure_default_configs,
     load_rules,
     load_structural_rules,
     missing_shipped_rules,
     outdated_shipped_rules,
+    ruleset_age_drift,
 )
 from ..db import (
     count_observations,
     dependency_table_populated,
     effective_observation_count,
     get_all_packages,
+    get_metadata,
     get_package_id,
     get_property_transitions,
     init_db,
     seed_observation_count,
     import_seed,
+    set_metadata,
 )
 from ..lint import SEVERITY_ERROR, lint_rules, lint_structural_rules
 from ..safe_text import clean
@@ -374,6 +378,17 @@ def register_commands(app: typer.Typer):
         drift = drifted_shipped_rules()
         stale_patterns = sorted({r for r, field, _a, _s in drift if field == "pattern"})
         missing = missing_shipped_rules()
+        # Addendum 2 R2: a ruleset more than one generation old gets a
+        # one-time sync suggestion.  Suppressed when drift or missing rules
+        # already prompt (that note is the action), and shown at most once
+        # per shipped generation (the anti-noise contract).
+        age_prompted = get_metadata("ruleset_age_prompted") or ""
+        age_drift = (
+            ruleset_age_drift()
+            and not stale_patterns
+            and not missing
+            and age_prompted != str(SHIPPED_RULESET_VERSION)
+        )
 
         if json_output:
             typer.echo(json.dumps({
@@ -384,6 +399,7 @@ def register_commands(app: typer.Typer):
                 "dependency_corpus_loaded": deps_loaded,
                 "stale_rule_patterns": stale_patterns,
                 "missing_shipped_rules": missing,
+                "ruleset_age_drift": age_drift,
             }, indent=2))
             return
 
@@ -413,6 +429,13 @@ def register_commands(app: typer.Typer):
                 con.print(_dependency_corpus_note())
             if stale_patterns or missing:
                 con.print(_stale_rules_note(stale_patterns, missing))
+            if age_drift:
+                con.print(
+                    "[yellow]Your rules.toml is more than one release behind "
+                    "the shipped rule set. Run 'trustsight config sync-rules' "
+                    "to reconcile it.[/]"
+                )
+                set_metadata("ruleset_age_prompted", str(SHIPPED_RULESET_VERSION))
         else:
             print(f"Packages tracked      : {len(all_pkgs)}")
             print(f"Total analyses        : {total_analyses}")
@@ -426,6 +449,13 @@ def register_commands(app: typer.Typer):
                 print(_dependency_corpus_note(plain=True))
             if stale_patterns or missing:
                 print(_stale_rules_note(stale_patterns, missing, plain=True))
+            if age_drift:
+                print(
+                    "Your rules.toml is more than one release behind the "
+                    "shipped rule set. Run 'trustsight config sync-rules' to "
+                    "reconcile it."
+                )
+                set_metadata("ruleset_age_prompted", str(SHIPPED_RULESET_VERSION))
 
     @app.command("full-aur")
     def full_aur_cmd(

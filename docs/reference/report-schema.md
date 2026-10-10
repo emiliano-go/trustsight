@@ -172,7 +172,9 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `partial_hunks` | `list[string]` | The hunks behind a `partial_hunk` gap, each as `"FILE @@ NEWSTART: header declares N new line(s), M parsed"`. The gap's generic reason names the category; these name the cut. |
 | `partial_files` | `list[string]` | Install-script files whose diff showed only part of the file, behind a `partial_file_analysis` gap. |
 | `change` | `dict` | The typed change-as-data view (`ChangeDelta.to_dict()`). The prose summary and the JSON `change` object both render this, so they cannot disagree. Empty on facts stored before the field existed. |
-| `resolution_coverage` | `dict` | How much of the diff the tokenizer could read, and which resolution-coupled R-rules matched. Additive. |
+| `resolution_coverage` | `dict` | How much of the diff the tokenizer could read, and which resolution-coupled R-rules matched. Additive. Carries an `x026_pointer` when a resolution-coupled R-rule fired zero times beside unresolved lines (Addendum 2 R1). |
+| `layers` | `dict` | The assurance-layer profile (Addendum 5 §3): keyed `L1`..`L8`, each `{name, status, findings}`. `status` is `fired` when a finding caught at that layer, `passed` when the layer was fully exercised and silent, `unreadable` when a coverage gap left it unexercised (a history gap blinds only `L6`, a tokenizer refusal `L1`-`L4`, content truncation every layer), and `not_exercised` for `L8`, which a single-package run cannot exercise. A finding carries the layer where it *caught*, not the layer it guards. Additive: it is a projection of `findings` and changes no number. |
+| `boundaries` | `list[dict]` | The unified analysis boundaries (Addendum 2 W1): one object per coverage gap and per W-series rendering, each `{kind, gap, w_rule, detail, forbids_clean}`. `forbids_clean` is true for a coverage gap; `boundaries` with `forbids_clean` is the view the verdict reads, equal to `bool(coverage_gaps)` by construction. Additive alongside `coverage_gaps` for one release. |
 | `risk` | `string` | The verdict band: `"Low"`, `"Medium"`, `"High"`, `"Critical"` or `"Inconclusive"`. **Not** always derivable from `final_score`: a cold database or a coverage gap downgrades it. Read this field; do not recompute it from the score. Read it **with** `coverage_gaps`: a band alone does not say whether the whole change was examined. |
 | `adapter` | `string` | Which fetch path produced the analysis: `"git"`, `"corpus"`, or `"diff"`. |
 | `suppressed_rules` | `list[dict]` | Rules suppressed by user override. Each entry has `rule_id`, `severity`, `override_reason`, and `override_package`. These did not contribute to the score. |
@@ -238,7 +240,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published R/H/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W007` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M003`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`/`T002`), the G-series correlation rules (`G001`-`G003`), and the A-series artifact rules (`A001`-`A005`, L9 only), plus `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W007` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
@@ -284,6 +286,7 @@ There are two JSON shapes, and they are not the same object.
   `new_version`, `old_commit`, `new_commit`, `version_comparison`, `verdict`,
   `findings`, `file_changes`, `changes`, `coverage_gaps`, `coverage_gaps_carried`,
   `change`, `unresolved_assignments`, `partial_files`, `resolution_coverage`,
+  `layers`, `boundaries`,
   `suppressed_rules`, `acknowledged_urls`,
   `ioc_matches`, `indicators`, `first_seen`, `comparison_base`, `is_trivial`, `diff_truncated`, `scan_truncated`, `failed`,
   `fully_vetted`, `dependencies`, `depth_truncated`, `required_by`, `review_profile`,

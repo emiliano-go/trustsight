@@ -155,3 +155,19 @@ def test_minimum_layer_cut():
     # L1 covers every attempt (all pass through L1 or stop at it).
     assert minimum_layer_cut(attempts) == 1
     assert minimum_layer_cut([]) is None
+
+
+def test_verbose_layer_line_reports_active_layers_and_boundaries():
+    from trustsight.cli.inspect import _layers_and_boundaries_line
+    from trustsight.schema import PackageFact, ScoreEntry
+
+    fact = PackageFact(
+        package_name="demo",
+        coverage_gaps=["diff_truncated"],
+        score_breakdown=[
+            ScoreEntry(rule_id="R001", severity="MEDIUM", weight=15),
+        ],
+    )
+    line = _layers_and_boundaries_line(fact)
+    assert line and "Layers:" in line and "L3 fired" in line
+    assert "boundary" in line

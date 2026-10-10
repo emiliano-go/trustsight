@@ -48,6 +48,31 @@ def analyze_package(*args, **kwargs):
 
 
 
+def _layers_and_boundaries_line(fact) -> str | None:
+    """The assurance-layer profile and boundary count, for ``--verbose``.
+
+    Addendum 5 §3 / Addendum 2 W1: the same projection the JSON ``layers``
+    and ``boundaries`` fields carry, rendered as one terminal line so the
+    terminal is the same surface as the JSON (B11).
+    """
+    from ..boundaries import boundaries_from_fact
+    from ..layers import layer_profile
+    from ..reporting import finding_rows
+
+    profile = layer_profile(fact, finding_rows(fact))
+    active = [
+        f"{layer} {entry['status']}"
+        for layer, entry in profile.items() if entry["status"] != "passed"
+    ]
+    forbidding = sum(1 for b in boundaries_from_fact(fact) if b.forbids_clean)
+    parts = []
+    if active:
+        parts.append("Layers: " + ", ".join(active))
+    if forbidding:
+        parts.append(f"{forbidding} boundary(ies) forbid a clean verdict")
+    return "; ".join(parts) or None
+
+
 def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
     from rich.panel import Panel
     from rich.table import Table
@@ -250,6 +275,13 @@ def _inspect_rich(fact, verbose=False, show_score=False, show_risk=False):
 
     con.print()
     con.print(Panel(inside, title=Text(f"TrustSight Inspect: {clean(fact.package_name)}"), border_style=border))
+    # Printed after the panel rather than as a table row: a long row would
+    # widen the grid's value column past the terminal and push every other
+    # cell off-width.
+    if verbose:
+        layer_line = _layers_and_boundaries_line(fact)
+        if layer_line:
+            con.print("  " + layer_line, style="dim")
 
 
 def _status_text(fact) -> str:
@@ -361,6 +393,9 @@ def _inspect_plain(fact, verbose=False, show_score=False, show_risk=False):
                 "resolved-target R rules fired: "
                 + (", ".join(fired) if fired else "(none)")
             )
+        layer_line = _layers_and_boundaries_line(fact)
+        if layer_line:
+            print("  " + layer_line)
     if fact.ioc_matches:
         print("  IOC baseline matches:")
         for m in fact.ioc_matches:

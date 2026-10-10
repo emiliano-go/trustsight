@@ -41,7 +41,9 @@ def line_of(text: str, needle: str) -> int | None:
     """
     if not text or not needle:
         return None
-    for index, line in enumerate(text.splitlines(), start=1):
+    from ..tokenizer import split_lines
+
+    for index, line in enumerate(split_lines(text), start=1):
         if needle in line:
             return index
     return None

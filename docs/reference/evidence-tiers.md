@@ -189,7 +189,7 @@ Checksum evidence is suppressed when `checksum_behavior` is `"changed_from_sha25
 ## Outside the tiers: the W series
 
 The four tiers classify **evidence about the recipe**. The W series
-(`W001`-`W006`) makes a different kind of statement: not that the recipe did
+(`W001`-`W007`) makes a different kind of statement: not that the recipe did
 something, but that this analysis could not read something the recipe will
 run. A tier answers "how strong is this signal"; a W finding answers "what
 was not looked at".

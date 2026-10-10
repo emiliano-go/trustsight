@@ -58,6 +58,7 @@ rules, because a W is weight-0 by construction:
 | [W004](#w004) | Build Engine Runs A Manifest This Analysis Did Not Read | INFO |
 | [W005](#w005) | Build Runs A Target Whose Recipe Was Not Read | INFO |
 | [W006](#w006) | Generated File Names A Build-Only Path | INFO |
+| [W007](#w007) | Dependency Novelty Declined For Insufficient Observations | INFO |
 <!-- /generated: page-index -->
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
@@ -187,3 +188,17 @@ The descriptive test reads the **written text**, not the shell line, because
 `printf "Comment=built in $srcdir" > f` starts with `printf`.
 
 Zero occurrences in the benign corpus.
+
+### W007: Dependency Novelty Declined For Insufficient Observations {#w007}
+
+**INFO** (weight 0) · category `unverifiable`
+
+Fires when D001/D002 would have judged an added dependency but abstained
+because the dependency corpus holds no observations. Without the corpus
+guard every name looks novel and D001 fires on every package a fresh
+install sees, so the rules stand down - and the stand-down is reported
+rather than left as silence (Addendum 2, D2).
+
+Names the abstaining rules and the observation count. It never changes the
+score; it is the same honesty contract as a coverage gap, moved to the
+rules that declined.

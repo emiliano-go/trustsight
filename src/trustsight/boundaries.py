@@ -77,6 +77,9 @@ _W_RULE_KIND: dict[str, str] = {
     "W004": BoundaryKind.UNREADABLE_FILE,
     "W005": BoundaryKind.UNREADABLE_FILE,
     "W006": BoundaryKind.BUILD_ONLY_PATH,
+    # Addendum 2 D2: the D-series statistical abstention, rendered as a
+    # boundary so it reads as the same class of fact as the other W rules.
+    "W007": BoundaryKind.REGISTRY_RESOLUTION,
 }
 
 

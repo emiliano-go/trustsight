@@ -3,7 +3,12 @@ from ..config import (
     load_patterns,
     load_thresholds,
 )
-from ..db import dependency_observation_count, is_established_package, top_dependency_names
+from ..db import (
+    dependency_observation_count,
+    dependency_table_populated,
+    is_established_package,
+    top_dependency_names,
+)
 from ..deps import (
     declared_package_names,
     extract_dependency_changes,
@@ -119,6 +124,19 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
               if _code_rule_enabled(config, r)}
     if not wanted:
         return
+
+    # Addendum 2 D2: a D-rule that declines for insufficient observations
+    # is a first-class, weight-0 boundary, not silence.  D001/D002 abstain
+    # when the dependency corpus is unseeded (every name would look novel,
+    # which is the cold-start guard); naming that abstention is the same
+    # honesty contract the W series applies to unread content.
+    if wanted & {"D001", "D002"} and all_new and not dependency_table_populated():
+        add("W007", "Dependency Novelty Declined For Insufficient Observations",
+            "INFO", "unverifiable",
+            "D001/D002 abstained: the dependency corpus holds no "
+            f"observations, so {len(all_new)} added dependency name(s) were "
+            "not judged novel or known",
+            line=None, rule="D001/D002", observed=0, count=len(all_new))
 
     if wanted & {"D001", "D002"}:
         candidates: list[str] | None = None

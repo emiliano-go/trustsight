@@ -15,7 +15,7 @@ The AUR is an unmoderated, user-submitted repository. Anyone can publish, and wh
 3. **It scales.** Analysing 50 packages in a review takes seconds, not minutes. No chroot, no root, no sandbox setup.
 4. **It does not modify your system.** TrustSight never runs `makepkg`, never fetches a URL a package declares, and never extracts an archive to disk. Every finding is traceable to a specific diff line, URL, or novelty record. There is no SSRF primitive to turn a reviewer into a probe. The tool does use the network for two things that are not the package: it downloads the AUR metadata snapshot to discover updates, and (when a baseline is available) the signed seed from the release channel. It never contacts a source the recipe names.
 
-The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W006) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
+The tradeoff is honest: static analysis cannot observe runtime behaviour. TrustSight's [W-series rules](../reference/rules/unverifiable.md) (W001-W007) flag cases where code runs and the analysis could not read it, as weight-0 unverifiable findings rather than pretending the surface was covered. See [What TrustSight Cannot See](what-trustsight-cannot-see.md) for the full ceiling.
 
 ## What SAST means here
 
@@ -152,7 +152,7 @@ S-series sabotage rules (S001-S008) use command-position matching to distinguish
 
 X-series crossfire rules (X001-X031) are anti-evasion rules that detect patterns designed to exploit the analysis itself.
 
-Two families report at weight 0 and never score: declared-practice findings (P001-P008) and [unverifiable findings (W001-W006)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
+Two families report at weight 0 and never score: declared-practice findings (P001-P008) and [unverifiable findings (W001-W007)](../reference/rules/unverifiable.md), the latter naming what an analysis could not read.
 
 For the full rule catalog, see [Rules Reference](../reference/rules/index.md).
 

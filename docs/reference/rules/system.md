@@ -102,7 +102,7 @@ be a script the recipe executes.
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
-| Reported, not scored | W001-W006 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
+| Reported, not scored | W001-W007 | Analysis boundaries: bytes the package will run that this run could not read. Weight 0, always shown. |
 
 Rules only contribute to Tier A. Tiers B and C are computed independently and added to the score alongside the rule contributions.
 
@@ -1173,6 +1173,10 @@ See [W003: Applies A Patch This Analysis Did Not Read](unverifiable.md#w003).
 ### W006 {#w006}
 
 See [W006: Generated File Names A Build-Only Path](unverifiable.md#w006).
+
+### W007 {#w007}
+
+See [W007: Dependency Novelty Declined For Insufficient Observations](unverifiable.md#w007).
 
 ### W005 {#w005}
 

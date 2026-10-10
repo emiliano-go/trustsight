@@ -237,7 +237,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published R/H/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W006` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published R/H/C/D/S/X catalog, `P001`-`P008` (declared practice, always weight 0; P004 is skipped), `W001`-`W007` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps and every `P` and `W` finding. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |

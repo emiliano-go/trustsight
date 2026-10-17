@@ -98,7 +98,7 @@ be a script the recipe executes.
 
 | Tier | Rule sources | What they measure |
 |------|-------------|-------------------|
-| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X033, C001-C031, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
+| A (Structural) | R001-R059, R078, R091, R099, R104, R144, R152, H001-H103, S001-S008, X001-X033, C001-C032, D001-D004 | Direct pattern matching against PKGBUILD commands and structure |
 | B (Priors/Context) | Source bucket classification | Domain reputation of new URLs (not a rule, but a scoring input) |
 | C (History/Novelty) | URL and maintainer novelty | First-seen signals from the local database |
 | D (Verification) | Checksum, PGP, GPG presence | Declared integrity metadata, reported at weight 0 |
@@ -1339,6 +1339,10 @@ See [C030: Epoch Removed With Version Unchanged](maintainer-and-metadata.md#c030
 ### C031 {#c031}
 
 See [C031: Boot Or System Image Tool Run During Build](install-and-persist.md#c031).
+
+### C032 {#c032}
+
+See [C032: Scriptlet Executes Commands At Top Level](install-and-persist.md#c032).
 
 ### W005 {#w005}
 

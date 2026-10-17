@@ -14,10 +14,12 @@ and the regression suites are the byte-identical gate.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Callable
 
 from ..buckets import canonical_host
+from ..deps import _strip_comment
 from ..differ import extract_source_array_urls, urls_from_pkgbuild_text
 from ..diffdoc import parse_diff_lines
 from ..findings import stamp
@@ -45,6 +47,7 @@ from .persistence import edge_hidden_drop
 from .delivery import (
     _COMMITTED_CARRIER_RE,
     _COMMITTED_PAYLOAD_RE,
+    _SOURCE_EXEC_RE,
     _declared_source_basenames,
     _declared_extraction_dirs,
     _declared_source_urls,
@@ -325,6 +328,14 @@ EDGE_INSTANCES: tuple[EdgeInstance, ...] = (
                  "docs/reference/rules/fetch-and-execution.md",
                  ("tests/regressions/test_w_series.py",),
                  None),
+    # C032 is manifest-scope like H090: its emitter runs over the committed
+    # tree, so the row documents the predicate and the emitter is
+    # `edge_scriptlet_top_level_execution` (called by `scan_tree_manifest`).
+    EdgeInstance("C032", "Scriptlet Executes Commands At Top Level",
+                 "committed", "exec", True, (), "HIGH",
+                 "docs/reference/rules/install-and-persist.md",
+                 ("tests/regressions/test_install_scriptlet_rules.py",),
+                 None),
 )
 
 
@@ -332,8 +343,10 @@ def edge_committed_payload(name: str, head: bytes) -> dict | None:
     """H090 predicate over one committed manifest entry.
 
     A committed unit, rule, hook or patch whose content fetches and runs
-    code.  A patch is read by its *added* lines: a hunk that removes a
-    ``curl … | sh`` is the opposite of this rule's subject.
+    code: a pipe into an executor, process substitution
+    (``bash <(curl -L URL)``), a ``>(...)`` fan-out, or an interpreter -c
+    wrapping a fetch.  A patch is read by its *added* lines: a hunk that
+    removes a ``curl … | sh`` is the opposite of this rule's subject.
     """
     if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
         return None
@@ -357,6 +370,116 @@ def edge_committed_payload(name: str, head: bytes) -> dict | None:
         "file": name,
         "params": {"path": name, "body": m.group(0).strip()[:120]},
     })
+
+
+#: Carriers pacman sources as scriptlets.  Unlike `_COMMITTED_CARRIER_RE`,
+#: unit files and patches are absent on purpose: systemd units are *read*
+#: by an engine, but a `.install` or alpm `.hook` is *executed* as shell,
+#: so a command outside every function is live code, not configuration.
+_SCRIPTLET_CARRIER_RE = re.compile(r"\.(?:install|hook)\Z", re.IGNORECASE)
+
+#: `eval` at a command position.  `_SOURCE_EXEC_RE` covers interpreters,
+#: `source`, `.` and `make -f`, but eval takes a string, not a filename,
+#: so it owns no arm there.
+_SCRIPTLET_EVAL_RE = re.compile(
+    r"(?:\A\s*+|[;&|]\s*+)eval\s",
+    re.IGNORECASE,
+)
+
+#: An interpreter reading a script from process substitution at a command
+#: position (`bash <(curl -L URL)`).  `_SOURCE_EXEC_RE`'s filename arm
+#: refuses a `<` argument as a redirect, so this shape owns no arm there.
+#: Possessive throughout: the adversarial audit times every live pattern
+#: on a full-length line.
+_SCRIPTLET_PROC_SUBST_EXEC_RE = re.compile(
+    r"(?:\A[ \t]*+|[;&|{(][ \t]*+)(?:/(?:usr/)?bin/)?"
+    r"(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox[ \t]++(?:ash|sh))"
+    r"\b[ \t]*+<[ \t]*+\(",
+    re.IGNORECASE,
+)
+
+
+#: A function definition at top level, one line or opened.  Masking it
+#: before the execution scan keeps a one-liner such as
+#: `post_install() { bash x.sh; }` from reading as top-level execution:
+#: the body really runs inside the function, and the brace-depth walk
+#: alone cannot see that on a single line.  The lookbehind admits only
+#: the first character of a name run: without it, a run of name
+#: characters is consumed possessively and then fails at every start
+#: position in the run, which the adversarial audit times as quadratic.
+_FUNC_DEF_MASK_RE = re.compile(
+    r"(?<![\w.+-])[\w.+-]++[ \t]*+\([ \t]*+\)[ \t]*+(?:\{[^}\n]*+\})?"
+)
+
+
+def _top_level_lines(text: str) -> list[tuple[int, str]]:
+    """``(line_number, comment-stripped body)`` outside every function body.
+
+    Brace depth is tracked on comment-stripped lines so a `# }` cannot
+    close a function early.  A line at depth zero has any function
+    definition masked out before it is kept; what remains is code that
+    runs when the scriptlet is sourced, plus assignments and headers,
+    which match no execution arm.
+    """
+    kept: list[tuple[int, str]] = []
+    depth = 0
+    for number, line in enumerate(split_lines(text), start=1):
+        body = _strip_comment(line)
+        depth += body.count("{") - body.count("}")
+        if depth < 0:
+            depth = 0
+        if depth == 0:
+            masked = _FUNC_DEF_MASK_RE.sub(" ", body).strip()
+            if masked:
+                kept.append((number, masked))
+    return kept
+
+
+def edge_scriptlet_top_level_execution(name: str, head: bytes) -> dict | None:
+    """C032 predicate over one committed manifest entry.
+
+    An install scriptlet (``.install`` or alpm ``.hook``) whose content
+    executes a command outside every hook function.  pacman sources the
+    scriptlet for each operation, so a top-level line runs as root on
+    every invocation, including ones the install-time audit of
+    `post_install()` never sees.  The yay typosquat campaign (yyay, yaay,
+    yayy) shipped its payload this way: a bare `bash <(curl -L URL)` after
+    the functions, where the functions themselves are inert.
+
+    The file must parse as a whole scriptlet: a head cut short by the
+    manifest byte budget yields unbalanced input, the parse fails, and
+    the rule stands down rather than reporting a partial read as a full
+    examination.  Top-level assignments, comments and function headers
+    match no execution arm.
+    """
+    if not _SCRIPTLET_CARRIER_RE.search(name.rstrip("/")):
+        return None
+    try:
+        text = head.decode("utf-8", errors="replace")
+    except Exception:
+        return None
+    from ..recipedoc import parse_recipe
+
+    try:
+        parse_recipe(text)
+    except Exception:
+        return None
+    for number, body in _top_level_lines(text):
+        match = (_SOURCE_EXEC_RE.search(body)
+                 or _SCRIPTLET_EVAL_RE.search(body)
+                 or _SCRIPTLET_PROC_SUBST_EXEC_RE.search(body))
+        if match:
+            return stamp({
+                "rule_id": "C032",
+                "name": "Scriptlet Executes Commands At Top Level",
+                "severity": "HIGH", "category": "execution",
+                "match": f"{name} runs a command outside every hook "
+                         f"function: {body[:80]}",
+                "file": name,
+                "line": number,
+                "params": {"path": name, "body": body[:120]},
+            })
+    return None
 
 
 def run_edge_instances(

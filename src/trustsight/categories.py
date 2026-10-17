@@ -456,6 +456,7 @@ RULE_CATEGORIES: dict[str, RuleCategory] = {
     "C029": _C.INSTALL_AND_PERSIST,
     "C030": _C.MAINTAINER_AND_METADATA,
     "C031": _C.INSTALL_AND_PERSIST,
+    "C032": _C.INSTALL_AND_PERSIST,
     # --- naming and dependencies ---------------------------------------
     "H006": _C.NAMING_AND_DEPENDENCY,
     "H029": _C.NAMING_AND_DEPENDENCY,

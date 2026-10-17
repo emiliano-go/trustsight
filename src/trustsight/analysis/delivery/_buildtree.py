@@ -19,6 +19,8 @@ from ...rules import (
 )
 from ...tokenizer import resolve_added_lines
 from ..build import (
+    _REMOTE_PROC_SUBST_OUT_RE,
+    _REMOTE_PROC_SUBST_RE,
     _recipe_lines,
 )
 from ._common import _BUILD_FUNCTIONS, _ELF_MAGIC, _EXECUTION_RE, _H072_BENIGN_EXEC, _IMPLICIT_BUILD_INPUTS, _SCOPE_FUNCTIONS, _collect_writes, _declared_source_basenames, _find_line, _heredoc_body_indices, _norm_path, _source_basename
@@ -319,7 +321,13 @@ _COMMITTED_PAYLOAD_RE = re.compile(
     r"(?:" + _NETWORK_CLIENT + r")[^\n]{0,400}?\|\s*"
     r"(?:" + _EXEC_WRAPPER + r")?(?:/(?:usr/)?bin/)?(?:" + _SCRIPT_EXECUTOR + r")\b"
     r"|(?:" + _SCRIPT_EXECUTOR + r")\s+-c\s+[\"']?\$\([^\n]{0,200}?"
-    r"(?:" + _NETWORK_CLIENT + r")",
+    r"(?:" + _NETWORK_CLIENT + r")"
+    # The same indirect shapes H075 owns diff-scope, for the campaign that
+    # put them in a committed scriptlet instead: `bash <(curl -L URL)` has
+    # no pipe, so the arms above read it as nothing.  Both patterns are
+    # group-free, so appending them does not move any capture numbering.
+    r"|" + _REMOTE_PROC_SUBST_RE.pattern
+    + "|" + _REMOTE_PROC_SUBST_OUT_RE.pattern,
     re.IGNORECASE,
 )
 
@@ -342,15 +350,17 @@ _COMMITTED_CARRIER_RE = re.compile(
 )
 
 def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]:
-    """H066 and H090 findings for a repository file manifest.
+    """H066, H090 and C032 findings for a repository file manifest.
 
     *files* is ``[(path, head_bytes)]`` from a git tree or a snapshot
     tarball.  A committed ELF file that is not a declared ``source=``
     filename and not a test fixture fires H066; a committed unit, rule,
-    hook or patch whose content fetches and runs code fires H090.
+    hook or patch whose content fetches and runs code fires H090; a
+    committed install scriptlet that executes commands outside every hook
+    function fires C032.
     """
     source_basenames = {_source_basename(u) for u in source_urls if _source_basename(u)}
-    from ..edges import edge_committed_payload
+    from ..edges import edge_committed_payload, edge_scriptlet_top_level_execution
     from ..persistence_engine import emit_committed_build_path
 
     findings: list[dict] = []
@@ -358,6 +368,7 @@ def scan_tree_manifest(files, source_urls, package_name: str = "") -> list[dict]
         if _is_test_fixture(name, os.path.basename(name.rstrip("/"))):
             continue
         payload = (edge_committed_payload(name, head)
+                   or edge_scriptlet_top_level_execution(name, head)
                    or emit_committed_build_path(name, head))
         if payload is not None:
             # Every carrier, not just the first.  The early `break` let a

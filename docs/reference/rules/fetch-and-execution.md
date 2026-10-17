@@ -475,8 +475,9 @@ same reason. Detected by `edge_source_file_execution()` in
   `.ini`, `.install`, `.hook`, `.patch` or `.diff`, or a build manifest
   (`Makefile`/`GNUmakefile`, `build.ninja`, `CMakeLists.txt`, `meson.build`,
   `SConstruct`, `BUILD`/`WORKSPACE`, `.mk`/`.ninja`/`.bazel`/`.cmake`),
-  whose content pipes a network fetch into an executor - or, for a patch,
-  whose *added* lines do.
+  whose content pipes a network fetch into an executor, feeds one to a
+  shell through process substitution (`bash <(curl -L URL)`) or a
+  `>(...)` fan-out, or - for a patch - whose *added* lines do.
 
 A `.service` whose `ExecStart=` pipes a download into a shell is the
 payload, and until now nothing read it. The diff shows the recipe staging
@@ -494,6 +495,12 @@ an executor - because that is not something a unit file, a desktop entry or
 a udev rule in a package repository does for a legitimate reason. A patch is
 read by its added lines only: a hunk that *removes* a `curl … | sh` is the
 opposite of this rule's subject.
+
+The process-substitution arms were added after the yay typosquat campaign
+(yyay, yaay, yayy): its committed `.install` ran `bash <(curl -L URL)` with
+no pipe, which the pipe-keyed arm read as nothing. The same shapes H075 owns
+diff-scope now fire here manifest-scope, so the campaign's committed form
+is caught in every watch cycle, not only the one that introduced the file.
 
 Reading the content at all required a change underneath it. The tree
 manifest kept 64 bytes per file, which answers "is this an ELF" - all H066

@@ -34,7 +34,7 @@ _PYPI_TO_ARCH = {
     "rich": "python-rich",
     "typer": "python-typer",
     "cryptography": "python-cryptography",
-    "pyyaml": "python-pyyaml",
+    "pyyaml": "python-yaml",
 }
 
 
@@ -49,6 +49,12 @@ def _depends_from_pkgbuild() -> set[str]:
     if not m:
         return set()
     return set(re.findall(r"'(.*?)'", m.group(1)))
+
+
+def _depends_names() -> set[str]:
+    """PKGBUILD depends names, without version constraints."""
+    return {d.split(">=")[0].split("<")[0].split("=")[0].strip()
+            for d in _depends_from_pkgbuild()}
 
 
 def _optdepends_from_pkgbuild() -> set[str]:
@@ -347,25 +353,38 @@ def test_recorded_checksum_matches_the_recorded_version():
 
 
 def test_pkgbuild_covers_all_pyproject_deps():
-    """Every pyproject dependency must have a matching PKGBUILD depends."""
-    pyproject_deps = set()
+    """Every pyproject dependency must have a matching PKGBUILD depends.
+
+    And every version **floor** in pyproject must be carried into the Arch
+    metadata: a security floor declared only in `pyproject.toml` is not
+    enforced when a user installs the AUR package, so the two must agree.
+    """
     with open(PYPROJECT, "rb") as f:
-        for dep in tomllib.load(f)["project"]["dependencies"]:
-            pkg = dep.split(">=")[0].split("<")[0].split("!=")[0].strip()
-            pyproject_deps.add(pkg)
+        pyproject_deps = list(tomllib.load(f)["project"]["dependencies"])
 
     pkgbuild_deps = _depends_from_pkgbuild()
-    for pypi_name in pyproject_deps:
+    arch_by_name = {
+        d.split(">=")[0].split("<")[0].split("=")[0].strip(): d
+        for d in pkgbuild_deps
+    }
+    for dep in pyproject_deps:
+        pypi_name = dep.split(">=")[0].split("<")[0].split("!=")[0].strip()
         arch_name = _PYPI_TO_ARCH.get(pypi_name)
         assert arch_name is not None, f"unknown mapping for {pypi_name!r}"
-        assert arch_name in pkgbuild_deps, (
+        assert arch_name in arch_by_name, (
             f"{arch_name} (from {pypi_name}) missing from PKGBUILD depends"
         )
+        if ">=" in dep:
+            floor = dep.split(">=", 1)[1].split(",")[0].split("<")[0].strip()
+            assert f">={floor}" in arch_by_name[arch_name], (
+                f"{arch_name} must carry the pyproject floor >= {floor} "
+                f"(got {arch_by_name[arch_name]!r})"
+            )
 
 
 def test_cryptography_is_not_in_optdepends():
     """python-cryptography must be in depends, not optdepends."""
-    deps = _depends_from_pkgbuild()
+    deps = _depends_names()
     opts = _optdepends_from_pkgbuild()
     assert "python-cryptography" in deps, (
         "python-cryptography must be a hard dependency"

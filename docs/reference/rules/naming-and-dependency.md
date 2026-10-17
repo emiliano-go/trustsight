@@ -37,7 +37,7 @@ severity weights and the reserved identifier ranges.
 
 | Rule | Name | Severity |
 |---|---|---|
-| [D001](#d001) | Novel Dependency Added | HIGH |
+| [D001](#d001) | Novel Dependency Added | MEDIUM |
 | [D002](#d002) | Typosquatted Dependency | HIGH |
 | [D003](#d003) | New Network-Using Makedepends | MEDIUM |
 | [D004](#d004) | Dependency Hijack Via Provides | HIGH |
@@ -86,9 +86,11 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 
 ### D001: Novel Dependency Added {#d001}
 
-- **Severity:** HIGH (weight 25)
+- **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
 - **Description:** A dependency name appears that has never been observed anywhere in the AUR. Either a typo or a package created specifically to be pulled in.
+
+MEDIUM rather than HIGH: "never observed in the AUR" reads accumulated instrument history, so it is a prior - a quiet or cold corpus can make an ordinary new dependency look novel - and it is evidence to weigh, not a high-severity finding on its own. It stays scored, so poisoning the corpus can quiet it but never silence the structural rules.
 
 The corpus of known names is seeded from every `depends`/`makedepends`/`optdepends`/`checkdepends` entry in the AUR, **plus every package name and `provides` alias**. Without the latter, a real package that simply nothing else depends on would read as novel.
 
@@ -187,6 +189,17 @@ is what raises the severity.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
 - **Condition:** An ecosystem-prefixed package (`python-`, `ruby-`, `nodejs-`, ...) is sourced from neither its ecosystem's canonical hosts nor a known forge.
+
+H053 reads the name as a claim about where a package should come from, and checks
+the source against it. A `python-`, `ruby-` or `nodejs-` package is normally
+published on that ecosystem's own index (PyPI, RubyGems, npm) or built straight
+from a forge such as GitHub or GitLab. This rule fires on a new package whose name
+claims an ecosystem but whose source comes from a host that is neither: a name
+pointing one way while the source points another is the shape of a typosquat, or
+of a dependency silently redirected to somebody else's server. It compares the
+name to the source, not the code, so a project that legitimately mirrors its
+release elsewhere, or publishes only from a personal server, can trip it. The
+finding names the prefix and the host so the reader can judge that call.
 
 ### H059: Name/Repo Divergence {#h059}
 

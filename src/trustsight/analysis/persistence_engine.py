@@ -23,6 +23,7 @@ from ..findings import stamp
 from ..rules import MAX_RULE_LINE_BYTES
 from ..tokenizer import split_lines
 from .build import (
+    _HOOK_ADMIN_RE,
     _HOOK_EXEC_RE,
     _INSTALL_HOOKS,
     _added_line_number,
@@ -217,8 +218,16 @@ def emit_outside_staging(ctx: GraphContext, add: Callable) -> None:
 
 def emit_sudo(ctx: GraphContext, add: Callable) -> None:
     """H004: a build/install function escalates privilege."""
+    context = ctx.line_context
+    printed_heredoc = ctx.printed_heredoc
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _SCOPE_FUNCTIONS):
+            continue
+        # A message prints, it does not run: an install hook that *tells* the
+        # user to run `echo uinput | sudo tee ...` was read as the escalation
+        # itself (keymux), a CRITICAL on informational text.  Same carve-out
+        # H017 and R052 already make.
+        if context.get(i) == "message" or i in printed_heredoc:
             continue
         body = _strip_comment(line[1:])
         if _sudo_escalates(body):
@@ -240,9 +249,20 @@ def emit_install_hook(ctx: GraphContext, add: Callable) -> None:
         if context.get(i) == "message" or i in printed_heredoc:
             continue
         body = _strip_comment(line)
+        label = ctx.scopes.label(i, _INSTALL_HOOKS)
         if _network_fetch_url(body) or _HOOK_EXEC_RE.search(body):
+            # Fetch or dynamic execution: the high arm the rule names.
             add("H017", "Install Hook Fetches Or Executes", "HIGH", "installer",
-                f"{ctx.scopes.label(i, _INSTALL_HOOKS)}() runs as root and contains: {body.strip()[:80]}",
+                f"{label}() runs as root and contains: {body.strip()[:80]}",
+                position=ctx.scopes.direct(i), body=body.strip()[:80])
+            break
+        if _HOOK_ADMIN_RE.search(body):
+            # Privileged setup (service enable, account change, sudoers, setuid
+            # bit): reported, but MEDIUM - it is the ordinary shape of a
+            # legitimate hook, not fetch-or-execute.
+            add("H017", "Install Hook Fetches Or Executes", "MEDIUM", "installer",
+                f"{label}() runs as root and performs privileged setup: "
+                f"{body.strip()[:80]}",
                 position=ctx.scopes.direct(i), body=body.strip()[:80])
             break
 

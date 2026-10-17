@@ -158,6 +158,17 @@ orphan state rather than as a takeover.
 - **Category:** `adoption`
 - **Condition:** A maintainer's activity this cycle deviates from their own recorded baseline by at least `[thresholds] h058.z_score` (default 2.0), once `h058.min_history_cycles` (default 3) cycles of their history exist.
 
+H058 watches how much a maintainer does, not what a package contains. TrustSight
+counts how many packages each maintainer updates in a cycle, and after a few
+cycles it knows that maintainer's own normal pace. A cycle far above that pace is
+flagged, because a burst of updates is what a hijacked account, or an account
+that has just changed hands, tends to produce: the attacker publishes everything
+at once, under a name the reviewers already trust. This is a prompt to look, not
+proof. A maintainer with a genuinely busy day, or one who legitimately adopted
+several packages at once, can trip it; adoption is reported on its own by
+[H074](#h074) and [H086](#h086) from the maintainer field, without needing a
+burst.
+
 ### H074: Adopt-then-Modify {#h074}
 
 - **Severity:** MEDIUM (weight 15)

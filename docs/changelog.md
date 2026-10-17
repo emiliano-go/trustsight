@@ -2,12 +2,80 @@
 
 # Changelog
 
+## [0.20.2] - 2026-10-15
+
+### Added
+
+- **The watcher posts every alert to the TrustSight feed, independently of ntfy.** A second sink (`TRUSTSIGHT_FEED_URL`, or `[notify] feed`) carries the same document the human channel gets, signed with Ed25519 over `webhook-id.webhook-timestamp.raw_body` (`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it). The feed holds only the public key and ingests the document directly on `POST /api/ingest`, so it no longer polls ntfy. ntfy and the feed fail independently; with no key the feed sink is skipped. The contract artifact carries the ingest request shape.
+
+### Fixed
+
+- **The watch banner names the effective webhook.** It read only `[notify] webhook`, so a watcher started with `--notify` printed "alert webhook: none" while it was delivering every alert.
+- **The alive beat is sent on every cycle that raised no alert**, not once a day, so silence on the channel unambiguously means the watcher is dead rather than quiet.
+
+## [0.20.1] - 2026-10-15
+
+### Added
+
+- **The watcher syncs its ruleset at startup.** `full-aur --watch` runs `config sync-rules --update` once at startup: it adds missing rules, repairs a drifted `match_target`/`severity`/`category`/`scope` and a superseded shipped pattern, never touches a pattern the user edited, logs what it changed, and fails open. `TRUSTSIGHT_NO_SYNC_RULES` opts out. An unattended watcher no longer analyses with a stale `rules.toml`; the watcher container had drifted on `R152.scope`, so every analysis carried a `COVERAGE` gap.
+
+### Fixed
+
+- **`sync-rules` keeps a custom pattern even when another field drifted.** It replaced the whole `[[rules]]` block to fix a `match_target` drift, which discarded a pattern the user had edited; a rule whose pattern is no longer the shipped one is now skipped entirely.
+- **X002 no longer fires on a non-ASCII message.** The confusable-character shape required only a confusable character, so a CJK install-hook message (`首次使用需扫码登录`) fired CRITICAL; it now also requires an ASCII name character, so only a word that impersonates a command name matches.
+- **C017 no longer fires on a redirect inside a hook message.** A redirect spelled inside a quoted string (`echo "append 'export X >> ~/.bashrc'"`) is text, not a write; the raw-target scan now skips quoted spans.
+- **C004 no longer fires on an arch-scoped checksum split.** A generic `sha256sums` replaced by `sha256sums_<arch>` arrays is a layout refactor; when the per-arch hashes differ the exemption did not apply, so the rule now recognises the split rather than only a hash moved verbatim.
+
+## [0.20.0] - 2026-10-15
+
+### Added
+
+- **Campaign alert mode, and the three rules that arm it.** The G-series gains **G005 Impersonation Campaign** (one maintainer publishing many name-clones of popular packages), **G006 Neighborhood Under Campaign Alert** (weight 0) and **G007 Campaign Corroboration** (weight 0). A corroborated cluster primes a bounded **campaign state** (`db/_campaigns.py`) that expires on an *observation* clock, not wall-clock time, so expiry is structural and reproducible rather than a cleanup job. Campaign scope is **typed** (`package_names`, `hosts`, `targets`, `dependencies`), so a package name is never compared against a host. See [Campaign Alert Mode](explanation/campaign-alert-mode.md).
+- **Licensed severity escalation.** A rule may declare `escalates_when`; a fired licensor raises its severity **one notch** - never to FATAL, never chained - and the finding records which rules licensed it. A rule that expects a licensor and gets none is reported as a tool-health note, weight 0. See [Escalation Licensing](explanation/escalation-licensing.md).
+- **An isolated git worker.** Every libgit2 operation moves into a bounded child process (`sandbox/git_worker.py`, `sandbox/git_client.py`), launched `-I` with a minimal environment and fixed `RLIMIT_*` plus `PR_SET_NO_NEW_PRIVS`. The parent never calls libgit2, so a memory-safety defect in libgit2 (or its bundled pack/delta code) exhausts the bounded child instead of the analysis. A limit that fails to apply is reported to the parent (`degraded`) rather than swallowed. This is a **resource-bounded subprocess boundary, not an OS sandbox** (no separate UID, network namespace or seccomp).
+- **Dependency manifests committed beside a recipe.** The U-series reads committed `Cargo.toml`, `package.json`, `go.mod`, `pyproject.toml` and companions for new dependency sources and registry redirects, without fetching or extracting the referenced archives. Byte caps, safe YAML loading and constrained XML handling bound the parse.
+- **The watcher's alert document carries located findings.** Each `over_threshold` entry now names the rule, file, line, severity and rendered reason of every finding that fired, weight-bearing or not, so a notification says *where* a rule matched instead of only that it did.
+- **A cross-surface contract artifact.** `python -m trustsight.contract --emit` writes `contract/contract.json` - the rule ids, pseudo-rule ids, severity and coverage-gap vocabularies, a representative alert payload and report body - so the feed and the harness can test against a real core output without importing core. `--check` and a test keep it regenerating byte-for-byte.
+- **Expected co-fire pairs reach the tool-health channel**, so a rule that usually travels with a partner and fired alone is visible as an instrument observation.
+- **A named, logging watcher container.** `docker-compose.watcher.yml` runs the watcher as `trustsight-watch` with `restart: unless-stopped` and rotated logs, and the image is unbuffered (`PYTHONUNBUFFERED=1`, `PYTHONFAULTHANDLER=1`) so `docker logs` shows output as it is written. A watch opens with a banner naming the build, the database path, the interval and whether an alert webhook is configured; `TRUSTSIGHT_LOG_LEVEL` and `TRUSTSIGHT_LOG_TIMESTAMPS` tune the log.
+- **A once-a-command newer-release notice.** Before every command runs, TrustSight checks the latest published release tag against the running version and warns - with an abort option that prints the update command - so an install a version behind does not silently miss a detection. The lookup is a read-only release tag from the declared release host, cached for a few hours (so the notice shows every command without a request every command), skipped under `TRUSTSIGHT_OFFLINE` or `TRUSTSIGHT_NO_UPDATE_CHECK`, and never runs for `--help`/`--version`. In a pipeline it warns on stderr without prompting, so JSON output stays clean and nothing blocks on a keypress.
+
+### Security
+
+- **libgit2 stays behind the sandbox**, and the dependency floor is raised: `pygit2>=1.20.0` pins a libgit2 with the delta result-size allocation fix (CVE-2026-53585). The AUR `PKGBUILD` carries the same floor, and a test asserts the project and package metadata agree on every floor.
+- **Every child process gets a minimal environment**, so no inherited loader-injection variable (`PYTHONPATH`, `LD_PRELOAD`, ...) reaches a worker.
+
+### Changed
+
+- **The internal module split.** `pipeline`, `structural`, `delivery`, `crossfire`, `config`, `db`, `api`, `differ`, `rules`, `cli.inspect` and `manifests` are split into packages, and `security_gates`/`calibration_gates` into gate packages. Behaviour-preserving: no rule id, severity, weight or finding text changes.
+- **The watcher's alerting bar is the measured benign p95 (35)**, not 30. The comparison is `score > bar`, so a package alerts on 36+. The code comment, the CLI help and the reference docs no longer call 30 the p95.
+- **False-positive reduction, re-baselined.** Four rules were tuned against the watcher's false positives and the score distribution was re-measured across the locked corpus in the same change. `H058` raises its thresholds (`z_score` 2.0 → 3.0, `min_history_cycles` 3 → 4) so a bulk packager's ordinary cadence is not read as a deviation; `H017` splits its high and low arms (fetch or dynamic execution stays HIGH; service enable, account change, sudoers and setuid bit become MEDIUM, still reported); `D001` drops HIGH → MEDIUM (a "never observed in the AUR" name is a history-derived prior, not a high-severity finding); and `G003` joins a maintainer's adopted packages only when they are **unrelated** (the records now carry each package's source repositories; a shared-repo family is H052's shape). The benign flag rate moves 9.7% → 9.6% and the 20-point percentile 90.3 → 90.4; the separation gate is unchanged (benign p95 35 < malicious p5 60), and the labelled attacks are unchanged. `tests/fixtures/baseline.json` is regenerated to the 0.19.0 measurement.
+
+### Fixed
+
+- **G006 never fired.** `_campaign_identity` stored package members as the campaign scope while the neighbourhood check compared it against gained hosts - a host never equals a package name - so G006 was dead for *every* campaign kind, not only G005. The scope is typed now and each rule matches the kind of value it names.
+- **G005 no longer invents a campaign.** Packages with no maintainer were pooled into one "one submitter" group; an empty maintainer is not evidence that unrelated ownerless clones share an operator, so they stay individual `H029` findings.
+- **G007 no longer adds score.** Its bonus measured scope *breadth* (`len(scope)`), not corroboration, and the calibration corpus carries no active campaign, so the added points were never measured against the benign false-positive rate. It is an attributed `INFO` finding at weight 0 until campaign-window calibration exists.
+- **A concurrent `seed fetch` and a corpus cycle no longer collide on `database is locked`.** The connection's busy timeout rises from 5 s to 30 s, and read-only connections get one too, so a scheduled seed refresh overlapping the watcher waits for the write instead of failing; `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` overrides the value.
+- **A campaign cap refusal is reported**, not silent: `_activate_campaigns` returns the refused ids and the cycle logs them.
+- **Malformed campaign, clock, override, lint and finding input is refused** rather than raising through the analysis.
+- **Parser refusals no longer inflate a score.** `X026`/`X027` are capped at `MEDIUM` (30 combined, below the 35 alert bar): a legitimate complex recipe the tokenizer cannot resolve no longer scores like a compromise. To keep a refusal alert-worthy and avoid a parser-evasion blind spot, the watcher gained a **refusal tier** - packages with `X026`/`X027` notify regardless of score, reported outside the arithmetic like IOC hits.
+- **C005/C011 stop firing on a project's own host.** A source on the declared `url=`'s registered domain is trusted (`declared_upstream`), and a project's distribution CDN on a different domain is exempted through `[source_host_divergence] allow`.
+- **C004 tolerates an arch-split checksum layout.** A hash moved from `sha256sums` to `sha256sums_<arch>` is a refactor, not a removal; C004 fires only when the hash is gone from the whole recipe.
+- **D002 no longer calls an established package a typosquat.** A dependency name that is itself a real package (`tlottie` beside `rlottie`) is a naming coincidence, not impersonation.
+- **H001 recognises a VCS source outside the hunk.** A `-git` package bumping only its `pkgver` no longer reports an unjustified `SKIP`; the justification is read from the head recipe, not the diff alone.
+- **G001 ignores ubiquitous hosts.** A shared `github.com` (a trusted forge) is not a shared-CDN campaign; G001 joins only on a host the set did not already reach through ordinary sources.
+- **G-series clusters no longer inflate member scores.** `G001`-`G004` keep their alert and campaign state, but membership is not, by itself, evidence against each member; `G005` (impersonation) still scores.
+- **`full-aur --watch` keeps the replay origin**, so a caught-up backfill stays on the live delta path.
+- **A one-member "cluster" is not a campaign.** `campaign_cluster` keeps only G-series clusters of two or more members and drops `G006` (bounded neighbourhood context), so a bulk sweep of `H061` dependency hubs - one member each, naming the ecosystem's most depended-on packages - can no longer read as hundreds of "campaign cluster(s)".
+- **Weight-0 context cluster findings** (`H057`/`H060`/`H061`/`G006`) no longer manufacture "new alert(s)". A lapsed campaign is reported once, and campaign state read from an uninitialised database is treated as empty.
+
 ## [0.19.0] - 2026-10-12
 
 ### Added
 
 - **`ChangeDelta` carries the whole change.** The delta now records the raw `provides`/`replaces`/`conflicts` changes, a normalised view of added dependencies (version constraints, `optdepends` descriptions and unresolved entries removed), and the checksum-parity facts `H091` reads. `H030`, `H063`, `H064`, `H091` and the D-series read this one object instead of each re-extracting, so the change summary and the rules cannot disagree. No finding on the locked corpus moved.
-- **The H-series intake is frozen.** New heuristic ids are rejected against a fixed id set by `test_h_reduction.py`. A gate reports how many H rules are live and fails only above the frozen ceiling; a count that is merely high does not fail. The merge audit found no pair worth merging, so nothing was retired and the retirement map stays empty.
+- **The H-series intake is frozen, and the merger audit is measured.** H is the catch-all series - any behavioural heuristic that is not a regex, structural or graph rule lands here - so the id space had grown to overlapping, partly corpus-dependent detections. The reduction plan is to merge rules that co-fire and shrink the live surface to a 55-65 band, so while that is pending **no new H id is accepted**: a new detection must be an instance of an existing H family, or filed in the series that fits its mechanism (`T` for history-backed rules). `tests/test_h_reduction.py` and two security gates enforce it. The residue gate **reports** the live count against the ceiling but fails **only when an id slips past the freeze**, never merely for being above the target band: retiring an id deletes a detection, so a high count is a prompt, not a verdict. `scripts/h_reduction_audit.py` measured every candidate pair's co-fire over the corpus, the fixtures and the history cycles; the strongest pairs are strict subsets (`H026` in `H044`) or describe different mismatches (`H053` host vs `H059` repo path), so nothing merged and the retirement map stays empty. The mechanism ships ready; the map is a data change no evidence yet supports. See [Reducing the H-Series](explanation/reducing-the-h-series.md).
 - **A replayable history corpus.** `tests/fixtures/history_corpus.py` and the history replay are a committed set of metadata cycles that exercise the observation-history rules the stateless corpus never fires (H026/H044, H045/H073, H052/H053/H055/H059/H073/H074), run whole in the calibration job. `scripts/h_reduction_audit.py` measures the candidate merges across the corpus, the fixtures and these cycles: the pairs that co-fire most are either strict subsets or describe different mismatches, so none merged.
 - **Eleven H ids stay as documentation anchors.** H005-H014 and H028 emit nothing and exist only so their reference links resolve. They are excluded from the live count, which the gate reports as 92 of 103 catalogued rules.
 - **Temporal and edge engines.** The 16 history-backed temporal rules and the 14 traversal rules are consolidated in `full_aur/temporal_engine.py` and `analysis/edges.py`, with each rule's id, severity and finding text unchanged and a byte-identical corpus replay.
@@ -5199,6 +5267,7 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.19.0...HEAD
 [0.1.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.1.0
 [0.2.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.0
 [0.2.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.2
@@ -5237,4 +5306,9 @@ separate reconciliation.
 [0.16.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.16.1
 [0.17.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.0
 [0.17.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.1
+[0.17.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.2
+[0.17.3]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.3
+[0.17.4]: https://github.com/emiliano-go/trustsight/releases/tag/v0.17.4
+[0.18.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.18.0
+[0.18.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.18.1
 [0.19.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.19.0

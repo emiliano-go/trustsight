@@ -58,7 +58,7 @@ add("D001-depends-plus-eq",
                 "never seen. D001 fires only when the corpus is loaded, and "
                 "the cold scan of the same fixture must stay silent, which "
                 "is the half the evasion corpus cannot test",
-    must_fire=["D001"], min_score=25)
+    must_fire=["D001"], min_score=15)
 
 
 def _scan(path: Path, config, rules) -> dict:

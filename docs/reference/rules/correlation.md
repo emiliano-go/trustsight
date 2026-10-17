@@ -16,6 +16,15 @@ input is collective and a single package cannot supply it.
 This is a reference page. For how weight and scope work, see
 [Rule System](system.md).
 
+!!! warning "Not yet live: G002 and G004"
+
+    The G002 (added-literal) and G004 (upstream-dependency) engines ship and
+    are unit-tested, but the corpus views that would supply them
+    (`added_literals`, `upstream_dep_additions`) are not yet connected to the
+    live `full-aur` sweep. On a real cycle today only **G001, G003 and G005**
+    can fire. Treat G002/G004 in any rule list as planned coverage, not active
+    watcher coverage.
+
 ## Reading a G finding
 
 - The evidence names the members (package names), never the shared
@@ -57,6 +66,10 @@ atomic-arch's signature: a new CDN added by many unrelated packages at once.
 - **Condition:** An identical added literal above `[thresholds] g_blob.min_length` (default 256) characters appears in `g_blob.min_packages` (default 2) unrelated packages in the window.
 
 The literal's content is never printed - only its length and the members.
+
+**Feed pending.** The engine ships and is unit-tested, but the corpus
+literal-hash view that would supply `added_literals` in the live sweep is not
+yet connected, so G002 does not fire on a `full-aur` cycle today.
 
 ### G003: Coordinated Adoption {#g003}
 

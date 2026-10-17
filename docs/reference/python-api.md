@@ -248,7 +248,7 @@ Run one full-AUR corpus cycle. Equivalent to `trustsight full-aur`.
 
 Refreshes the AUR metadata snapshot, analyses what changed since the stored copy, runs the corpus-wide sweep and records the adoption feed. With no prior snapshot, `bootstrap=False` refuses the whole-AUR scrape; pass `bootstrap=True` to permit the initial bootstrap, which takes hours. `resume=True` continues an interrupted build.
 
-`over_threshold` is the alerting bar for `CycleReport.over_threshold`; `None` uses the benign corpus's p95 (30). `since` is a unix timestamp to replay change history from, one AUR day per cycle, or `None` for the normal delta.
+`over_threshold` is the alerting bar for `CycleReport.over_threshold`; `None` uses the benign corpus's measured p95 (35). `since` is a unix timestamp to replay change history from, one AUR day per cycle, or `None` for the normal delta.
 
 ### `watch(*, interval=None, cycles=0, over_threshold=None, since=None, sleep=time.sleep) -> Iterator[CycleReport]`
 

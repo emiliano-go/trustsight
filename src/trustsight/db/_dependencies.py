@@ -117,6 +117,12 @@ def is_established_package(name: str) -> bool:
     """
     if not name:
         return False
+    # Resolve through the package namespace, not this module's global: the
+    # public ``trustsight.db.official_package_names`` is the seam a test or an
+    # embedder patches.  The module split moved this function into a submodule,
+    # and its private global no longer saw the patch - a regression test that
+    # stubbed the official set then passed only on a host that had pacman.
+    from . import official_package_names
     official = official_package_names()
     if official:
         return name in official

@@ -120,6 +120,39 @@ def test_the_payload_carries_what_fired_and_when():
     }]
 
 
+def test_the_payload_carries_the_line_that_triggered_each_rule():
+    """A reader should be able to point at the exact line: each over-threshold
+    entry carries the located findings, and the rule-only list is derived from
+    them so the two cannot disagree."""
+    cycle = CycleResult(
+        over_threshold=[("hot-pkg", 45)],
+        detail={
+            "hot-pkg": {
+                "score": 45,
+                "rules": ["R001"],
+                "findings": [
+                    {"rule_id": "R001", "severity": "HIGH", "weight": 30,
+                     "file": "PKGBUILD", "line": 12,
+                     "reason": "Remote Script Execution: curl | bash"},
+                    {"rule_id": "NOVELTY", "severity": "MEDIUM", "weight": 15,
+                     "file": "", "line": None,
+                     "reason": "Source URL first seen globally: https://evil.sh"},
+                ],
+            }
+        },
+    )
+    payload = alert_payload(cycle)
+    entry = payload["over_threshold"][0]
+    assert entry["rules"] == ["R001"]
+    assert entry["findings"][0] == {
+        "rule_id": "R001", "severity": "HIGH", "weight": 30,
+        "file": "PKGBUILD", "line": 12,
+        "reason": "Remote Script Execution: curl | bash",
+    }
+    assert entry["findings"][1]["rule_id"] == "NOVELTY"
+    assert entry["findings"][1]["line"] is None
+
+
 def test_the_title_and_tags_reach_the_headers(receiver):
     cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
                         backfill_day="2026-05-01")
@@ -129,11 +162,10 @@ def test_the_title_and_tags_reach_the_headers(receiver):
     assert headers.get("Tags") == "eye"
 
 
-def test_the_heartbeat_beats_low_and_daily():
-    from trustsight.notify import HEARTBEAT_SECONDS, maybe_heartbeat
+def test_the_heartbeat_beats_low_and_every_quiet_cycle(tmp_path, monkeypatch):
+    from trustsight.notify import maybe_heartbeat
     from trustsight.full_aur.pipeline import run_watch
 
-    assert HEARTBEAT_SECONDS == 86400
     receiver = _Receiver()
     try:
         assert maybe_heartbeat(
@@ -146,6 +178,13 @@ def test_the_heartbeat_beats_low_and_daily():
     finally:
         receiver.stop()
 
+    # Every cycle that raises no alert beats, so silence on the channel means
+    # the watcher is dead rather than quiet.
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
     receiver = _Receiver()
     try:
         outcomes = iter([CycleResult(), CycleResult()])
@@ -155,10 +194,9 @@ def test_the_heartbeat_beats_low_and_daily():
                                lambda **kwargs: next(outcomes)):
             run_watch(interval=60, cycles=2, sleep=lambda s: None,
                       notify_url=receiver.url)
-        # One beat for the first cycle; the second is inside the same day.
         beats = [b for _p, b in receiver.requests
                  if b.get("event") == "trustsight.heartbeat"]
-        assert len(beats) == 1
+        assert len(beats) == 2
     finally:
         receiver.stop()
 
@@ -277,6 +315,88 @@ def test_a_single_shot_cycle_notifies_too(receiver, monkeypatch):
     assert receiver.requests[0][1]["priority"] == "default"
 
 
+def test_a_modest_payload_keeps_located_findings_with_reasons():
+    from trustsight.notify import _payload_size, _PAYLOAD_BUDGET_BYTES
+
+    cycle = CycleResult(
+        over_threshold=[("hot-pkg", 45)],
+        detail={"hot-pkg": {"score": 45, "rules": ["R001"], "findings": [
+            {"rule_id": "R001", "severity": "HIGH", "weight": 30,
+             "file": "PKGBUILD", "line": 12, "reason": "curl | bash"}]}},
+    )
+    payload = alert_payload(cycle)
+    assert _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES
+    assert payload["over_threshold"][0]["findings"][0]["reason"] == "curl | bash"
+
+
+def _wide_cycle(packages: int, findings_each: int, reason_len: int) -> CycleResult:
+    names = [f"pkg-{i:04d}" for i in range(packages)]
+    detail = {
+        name: {
+            "score": 50, "old_version": "1.0.0", "new_version": "1.0.1",
+            "last_modified": 1777593600,
+            "rules": [f"H{i:03d}" for i in range(findings_each)],
+            "findings": [
+                {"rule_id": f"H{n:03d}", "severity": "HIGH", "weight": 25,
+                 "file": "PKGBUILD", "line": n, "reason": "x" * reason_len}
+                for n in range(findings_each)
+            ],
+        }
+        for name in names
+    }
+    return CycleResult(
+        over_threshold=[(name, 50) for name in names], detail=detail,
+        refusals=["refused-pkg"],
+    )
+
+
+def test_a_large_cycle_keeps_full_detail():
+    """The feed reads the attachment a >4096-byte document arrives as, so a
+    large cycle keeps every finding, reason and rule instead of being trimmed
+    to an inline limit it no longer has to fit."""
+    from trustsight.notify import _payload_size, _MAX_MESSAGE_BYTES
+
+    payload = alert_payload(_wide_cycle(40, 30, 120))
+    assert _payload_size(payload) > _MAX_MESSAGE_BYTES  # it is an attachment now
+    assert payload["over_threshold"][0]["findings"][0]["reason"] == "x" * 120
+    assert payload["refusals"]
+
+
+def test_a_pathological_payload_is_bounded():
+    """A cycle far past any real one is still bounded below the feed's own
+    attachment cap, so the watcher never emits a document the feed would drop;
+    the headline, top signal and refusal tier survive the trim."""
+    from trustsight.notify import _payload_size, _PAYLOAD_BUDGET_BYTES
+
+    payload = alert_payload(_wide_cycle(300, 40, 200))
+    assert _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES
+    assert payload["event"] == "trustsight.alerts"
+    assert payload["title"].startswith("TrustSight:")
+    assert payload["over_threshold"]  # the top signal survives
+    assert payload["refusals"]  # the refusal tier survives
+
+
+def test_a_refusal_carries_what_could_not_be_read():
+    """A feed must be able to say *what* was incomplete, not only that a
+    package could not be fully read; the refusing X026/X027 findings ride
+    along with the package."""
+    cycle = CycleResult(
+        refusals=["pilinara"],
+        detail={"pilinara": {"findings": [
+            {"rule_id": "X026", "severity": "MEDIUM", "file": "PKGBUILD",
+             "line": None, "reason": "Unresolved Constructs: _v <- package()"},
+            {"rule_id": "W008", "severity": "INFO", "file": "PKGBUILD",
+             "line": None, "reason": "unresolved assignment"},
+        ]}},
+    )
+    payload = alert_payload(cycle)
+    [entry] = payload["refusals"]
+    assert entry["package"] == "pilinara"
+    assert entry["aur"].endswith("/pilinara")
+    assert entry["reason"].startswith("Unresolved Constructs")
+    assert [f["rule_id"] for f in entry["findings"]] == ["X026"]
+
+
 def test_payload_carries_campaign_clusters():
     cycle = _cycle(cluster_findings=[
         {"rule_id": "G001", "params": {"members": ["a", "b", "c"]}},
@@ -289,10 +409,14 @@ def test_payload_carries_campaign_clusters():
 
 def test_context_cluster_findings_are_not_campaigns():
     """H057/H060/H061 are weight-0 corpus context, not G-series campaigns:
-    counting them made a centrality pass read as hundreds of campaigns."""
+    counting them made a centrality pass read as hundreds of campaigns.  G006
+    is bounded neighbourhood context, and a one-member "cluster" is a
+    single-package signal, so neither is a campaign either."""
     cycle = _cycle(cluster_findings=[
         {"rule_id": "H061", "params": {"members": ["sdl2"]}},
         {"rule_id": "H060", "params": {"members": ["x"]}},
+        {"rule_id": "G006", "params": {"members": ["a", "b"]}},
+        {"rule_id": "G001", "params": {"members": ["solo"]}},
         {"rule_id": "G002", "params": {"members": ["a", "b"]}},
     ])
     payload = alert_payload(cycle)
@@ -300,6 +424,24 @@ def test_context_cluster_findings_are_not_campaigns():
         {"rule_id": "G002", "members": ["a", "b"], "count": 2},
     ]
     assert "campaign across 2 packages (G002)" in payload["title"]
+
+
+def test_burst_clusters_are_not_campaigns():
+    """H055 (attribute burst) and H052 (shared source repo) fire on a
+    maintainer's own variant family.  Even with several members they are not
+    campaigns: a past build listed 226 H061 hubs and a burst family in the
+    feed's campaign_cluster, which is what this pins shut."""
+    cycle = _cycle(cluster_findings=[
+        {"rule_id": "H055",
+         "params": {"members": ["bnb-shell", "bnb-extra"], "impersonated": False}},
+        {"rule_id": "H052",
+         "params": {"members": ["fam-a", "fam-b"], "impersonated": True}},
+        {"rule_id": "G002", "params": {"members": ["a", "b"]}},
+    ])
+    payload = alert_payload(cycle)
+    assert [c["rule_id"] for c in payload["campaign_cluster"]] == ["G002"]
+    assert "H055" not in payload["title"]
+    assert "H052" not in payload["title"]
 
 
 def test_payload_leads_with_an_impersonation_campaign():
@@ -319,3 +461,82 @@ def test_payload_leads_with_an_impersonation_campaign():
     }]
     assert payload["title"].startswith(
         "TrustSight: impersonation campaign by marchos1as")
+
+
+# --- the signed feed sink ---------------------------------------------------
+
+
+def _ed25519_keypair() -> tuple[str, object]:
+    """A fresh Ed25519 key: (base64 PKCS#8 private, private key object)."""
+    import base64
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding, NoEncryption, PrivateFormat,
+    )
+
+    priv = Ed25519PrivateKey.generate()
+    der = priv.private_bytes(Encoding.DER, PrivateFormat.PKCS8, NoEncryption())
+    return base64.b64encode(der).decode(), priv
+
+
+def test_the_feed_signature_verifies_against_the_public_key(monkeypatch):
+    import base64
+
+    from trustsight.notify import _sign_feed
+
+    key_b64, priv = _ed25519_keypair()
+    body = json.dumps({"event": "trustsight.alerts", "tool": "trustsight"}).encode()
+    headers = _sign_feed(key_b64, "k1", body)
+
+    material = (f"{headers['webhook-id']}.{headers['webhook-timestamp']}."
+                .encode() + body)
+    signature = base64.b64decode(headers["webhook-signature"].removeprefix("v1="))
+    # raises InvalidSignature if the material or key is wrong
+    priv.public_key().verify(signature, material)
+    assert headers["webhook-key-id"] == "k1"
+
+
+def test_the_feed_sink_posts_the_same_document_signed(monkeypatch):
+    key_b64, _priv = _ed25519_keypair()
+    monkeypatch.setenv("TRUSTSIGHT_FEED_KEY", key_b64)
+    monkeypatch.setenv("TRUSTSIGHT_FEED_KEY_ID", "k1")
+
+    ntfy = _Receiver()
+    feed = _Receiver()
+    try:
+        monkeypatch.setattr("trustsight.notify.feed_url", lambda *a, **k: feed.url)
+        cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
+                            new_alerts=[("hot-pkg", "H001")])
+        assert maybe_notify(cycle, ntfy.url) is True
+
+        assert len(ntfy.requests) == 1
+        assert len(feed.requests) == 1
+        # The feed gets the same document the human channel gets.
+        assert feed.requests[0][1] == ntfy.requests[0][1]
+        headers = feed.headers_seen[0]
+        assert headers["webhook-id"]
+        assert headers["webhook-timestamp"].isdigit()
+        assert headers["webhook-key-id"] == "k1"
+        assert headers["webhook-signature"].startswith("v1=")
+    finally:
+        ntfy.stop()
+        feed.stop()
+
+
+def test_the_feed_sink_is_skipped_without_a_key(monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_FEED_KEY", raising=False)
+    monkeypatch.delenv("TRUSTSIGHT_FEED_KEY_ID", raising=False)
+
+    ntfy = _Receiver()
+    feed = _Receiver()
+    try:
+        monkeypatch.setattr("trustsight.notify.feed_url", lambda *a, **k: feed.url)
+        cycle = CycleResult(over_threshold=[("hot-pkg", 45)],
+                            new_alerts=[("hot-pkg", "H001")])
+        assert maybe_notify(cycle, ntfy.url) is True
+        assert len(ntfy.requests) == 1
+        assert feed.requests == []
+    finally:
+        ntfy.stop()
+        feed.stop()

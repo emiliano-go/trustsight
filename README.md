@@ -64,13 +64,13 @@ TrustSight is **evidence-producing**, not proof-of-safety. Read the [full securi
 
 | Attack / Risk | How TrustSight catches it |
 |---|---|
-| **Piped shell scripts** (`curl \| bash`, `base64 \| sh`) | Scans every new or changed line for command-subprocess pipelines (R001, ~100% recall on known cases) |
-| **Obfuscated commands** (encoded strings, environment subversion like `LD_PRELOAD`) | Resolves variables and decodes known obfuscation patterns; flags build-environment tampering (H025, H036) |
-| **Checksum disabled or removed** | Compares old vs new `sha256sums` / `md5sums` arrays (H001, H002) |
+| **Piped shell scripts** (`curl \| bash`, `base64 \| sh`) | Scans every new or changed line for command-subprocess pipelines (R001 / R002 / R003; 100% on the labelled fixtures) |
+| **Obfuscated commands** (encoded strings, environment subversion like `LD_PRELOAD`) | Resolves variables and decodes known obfuscation patterns; flags build-environment tampering (H025, H036; decode-and-execute: X001/R003) |
+| **Checksum disabled or removed** | Compares old vs new `sha256sums` / `md5sums` arrays (H001, H002, C004) |
 | **Source URL typosquatting** (`githab.com` instead of `github.com`) | Character-level edit distance against known forge domains (confusable-domain pipeline) |
 | **Package-name typosquatting** (e.g. `libuvc` resembling `libuv`) | Edit-distance comparison against more popular packages in the seed database (H029) |
 | **URL swapped without a version bump** | Tracks source URL changes that are not accompanied by a new version (C003) |
-| **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (about 186,000 known source URLs, 36,912 hashed maintainer identities and 215,504 dependency names, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
+| **Novel / never-before-seen URLs or maintainers** | Compares against the release-channel seed (185,902 known source URLs, 36,912 hashed maintainer identities and 215,504 dependency names, verified against the pinned key on import); flags first-seen domains and maintainers (novelty tier) |
 | **Known-bad indicators** | Matches package URLs and strings against signed, federated IOC baselines from the release channel; reported in the IOC tier, outside the heuristic score |
 | **Unicode bidi override attacks** (invisible characters that change how text displays) | Detects directionality overrides and homoglyph codepoints in PKGBUILD content (R013) |
 | **Reviewer-directed instruction templates** in package metadata | Flags common reviewer-manipulation templates as a high-severity tripwire (R012); a match requires review, not an inference about author intent |

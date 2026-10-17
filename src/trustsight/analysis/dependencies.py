@@ -159,7 +159,11 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 if name in self_outputs or not is_dependency_novel(name):
                     continue
                 impersonated = None
-                if "D002" in wanted:
+                # An added name that is itself an established package is not a
+                # typosquat: `tlottie` resembles `rlottie` but is a real extra
+                # package, and a name-similarity hit on a package that exists
+                # is a naming heuristic, not impersonation.
+                if "D002" in wanted and not is_established_package(name):
                     if candidates is None:
                         candidates = top_dependency_names()
                     impersonated = typosquat_target(name, candidates)
@@ -168,7 +172,12 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                         f"{field} '{name}' resembles '{impersonated}'",
                         field=field, dep_name=name, impersonated=impersonated)
                 elif "D001" in wanted:
-                    add("D001", "Novel Dependency Added", "HIGH", "dependency",
+                    # MEDIUM, not HIGH: "never seen in the AUR" is a
+                    # history-derived prior (an unseeded or quiet corpus can
+                    # make an ordinary new dependency look novel), so it is
+                    # evidence to weigh, not a high-severity finding on its
+                    # own.  It stays scored and quietable-by-poisoning.
+                    add("D001", "Novel Dependency Added", "MEDIUM", "dependency",
                         f"{field} '{name}' has never been seen in the AUR",
                         field=field, dep_name=name)
 

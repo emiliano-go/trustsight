@@ -1,0 +1,85 @@
+name: contract
+
+# The seams between core and its consumers: the notifications feed (which
+# parses the ntfy alert document and explains the rule ids) and the measurement
+# harness (which reads the report body and the gap/severity vocabularies).
+# Each consumer has its own CI; this job checks that a change *here* has not
+# silently broken one of them, by running their conformance tests against this
+# checkout.
+#
+# Start advisory (not a required status check) until it is green across a few
+# core commits, then add it to branch protection.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The pin check below asks whether the harness's pinned core commit
+          # is an ancestor of this one, so the full history must be present.
+          fetch-depth: 0
+
+      # actions/checkout refuses a path outside $GITHUB_WORKSPACE, and both
+      # consumers expect core at `../trustsight`; clone them as true siblings.
+      - name: Clone the consumers
+        run: |
+          git clone --depth 1 https://github.com/emiliano-go/trustsight-feed.git ../trustsight-feed
+          git clone --depth 1 https://github.com/emiliano-go/trustsight-harness.git ../trustsight-harness
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+
+      - name: Sync core
+        run: uv sync --locked --extra dev
+
+      # 1. The committed contract artifact still regenerates byte-for-byte.
+      - name: Contract artifact is current
+        run: uv run python -m trustsight.contract --check
+
+      # 2. Feed conformance: the real alert payload through the real parser,
+      # and every rule id core emits resolved in the generated catalog.
+      # The feed finds core at `../trustsight` (its sibling), so no env needed.
+      - name: Feed conformance
+        working-directory: ../trustsight-feed
+        run: |
+          npm ci
+          npx vitest run test/contract.test.js
+
+      # 3. Harness conformance against this checkout (its uv source points at
+      # `../trustsight`, resolved as editable).
+      - name: Harness conformance
+        working-directory: ../trustsight-harness
+        run: |
+          # pytest is an optional `dev` extra in the harness, not a default
+          # group, so it must be asked for or `uv run pytest` cannot spawn.
+          uv sync --locked --extra dev
+          uv run pytest tests/test_core_contract.py -q
+
+      # 4. The harness pin is meant to lag a release, but it must stay an
+      # ancestor of this commit: a pin that has fallen out of history, or onto
+      # a commit that never shipped the API the harness reads, is the drift
+      # this whole job exists to surface.
+      - name: Harness pin is an ancestor of this commit
+        run: |
+          pinned=$(cat ../trustsight-harness/.github/trustsight-commit)
+          git cat-file -e "${pinned}^{commit}" 2>/dev/null || {
+            echo "the pinned commit $pinned is not in this repository's history" >&2
+            exit 1
+          }
+          git merge-base --is-ancestor "$pinned" HEAD || {
+            echo "the harness pin $pinned is not an ancestor of $GITHUB_SHA" >&2
+            exit 1
+          }

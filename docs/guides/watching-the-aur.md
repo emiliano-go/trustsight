@@ -33,6 +33,12 @@ metadata GET plus actual churn either way. Below about 15 minutes you are
 mostly re-downloading a snapshot the AUR has not regenerated; the floor is 60
 seconds (`limits.watch_min_interval`), because a shorter interval only spins.
 
+At startup the watch syncs `rules.toml` to the shipped ruleset the safe way
+(adds missing rules, repairs a `match_target`/`severity`/`category`/`scope`
+that moved, adopts a superseded shipped pattern, never touches a pattern you
+edited) and logs what it changed, so an unattended watcher never analyses with
+a stale ruleset. Set `TRUSTSIGHT_NO_SYNC_RULES` to skip it.
+
 ## Replaying the past with `--since`
 
 A fresh watcher only sees what changes from now on. To scan for a campaign
@@ -73,19 +79,34 @@ or permanently in `config.toml`:
 webhook = "https://example.invalid/hooks/aur"
 ```
 
+A second, independent sink posts the same document to the TrustSight feed,
+which ingests it directly instead of polling ntfy:
+
+```toml
+[notify]
+feed = "https://watcher.trustsight.org/api/ingest"
+```
+
+Every feed POST is signed with an Ed25519 key
+(`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it), and
+the feed holds only the public half, so a leaked feed secret cannot forge a
+document. ntfy and the feed are independent: one failing never stops the
+other, and with no key the feed sink is skipped.
+
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the
 version transition, the AUR change date and the rules that fired. While a
 `--since` replay runs, `day` names the AUR day being analysed. The
 alerting bar is `--over-threshold N` (the `over_threshold` argument on
-`refresh_corpus`/`watch`); the default is 30, the benign corpus's 95th
-percentile.
+`refresh_corpus`/`watch`); the default is 35, the benign corpus's measured
+95th percentile (`calibration.benign_p95`), and a package alerts when its
+score is **strictly above** it.
 
 ```json
 {
   "event": "trustsight.alerts",
   "tool": "trustsight",
-  "title": "TrustSight: 1 package(s) over threshold (2026-05-01)",
+  "title": "TrustSight: hot-pkg scored 45 (H001) (2026-05-01)",
   "priority": "default",
   "day": "2026-05-01",
   "cycle": {"added": 3, "changed": 41, "removed": 2, "processed": 44},
@@ -172,6 +193,29 @@ Mount a config directory carrying your `config.toml` (and `[notify] webhook`)
 to keep settings out of the image. The tokenizer's network-namespace
 isolation is not available in a default container; the process resource
 limits still apply, and the analysis itself needs no privileges.
+
+A compose file with the same settings - a fixed container name, log
+rotation, and the timestamped log format - ships as
+`docker-compose.watcher.yml`:
+
+```bash
+mkdir -p trustsight-config
+docker compose -f docker-compose.watcher.yml up -d
+docker compose -f docker-compose.watcher.yml logs -f trustsight-watch
+```
+
+### Reading the logs
+
+The watcher logs every cycle to stderr, so `docker logs -f trustsight-watch`
+(or the compose command above) is the watcher's whole history. A watch opens
+with a banner naming the build, the database path, the interval and whether an
+alert webhook is configured; each cycle then reports what moved, the packages
+over the alerting bar, and any new cluster alert. The output is unbuffered
+(`PYTHONUNBUFFERED=1` in the image), so lines appear as they are written.
+
+`TRUSTSIGHT_LOG_TIMESTAMPS=1` prefixes each line with a timestamp and level -
+useful when the container is the only record. `TRUSTSIGHT_LOG_LEVEL` raises or
+lowers verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`).
 
 The image runs rootless and ships no pacman, which makes it the
 cold-environment reference: every measurement inside it is the reproducible

@@ -479,7 +479,7 @@ def register_commands(app: typer.Typer):
         interval: int | None = typer.Option(None, "--interval", help="Seconds between --watch cycles (default 3600, floor 60)"),
         cycles: int = typer.Option(0, "--cycles", help="Stop --watch after this many cycles (0 = until interrupted)"),
         notify: str | None = typer.Option(None, "--notify", help="POST new alerts as JSON to this webhook URL each cycle (overrides [notify] webhook in config.toml)"),
-        over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring above this land in the cycle's over_threshold list (default 30, the benign corpus p95)"),
+        over_threshold: int | None = typer.Option(None, "--over-threshold", help="Alert bar: packages scoring strictly above this land in the cycle's over_threshold list (default 35, the benign corpus p95)"),
         since: str | None = typer.Option(None, "--since", help="Replay change history from this date (YYYY-MM-DD, UTC), one AUR day per cycle, then join the live stream"),
         transitions: str | None = typer.Option(None, "--transitions", help="Show this package's recorded property timeline and exit (read-only; works offline)"),
         limit: int = typer.Option(500, "--limit", help="With --transitions, the newest rows to show (0 = all)"),

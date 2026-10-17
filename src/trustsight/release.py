@@ -12,9 +12,11 @@ download.
 Security model note: the release channel (``api.github.com`` for release
 discovery, ``github.com`` for asset downloads) is the second declared
 endpoint of the program, beside the AUR.  It is confined to this module by
-``scripts/security_gates.py``, it is reached only by explicit commands
-(``seed fetch``, ``corpus fetch``, ``ioc update``, first-run auto-import) and never during
-analysis, and its payloads are signature-checked before they are read.
+``scripts/security_gates.py``, it is reached by explicit commands
+(``seed fetch``, ``corpus fetch``, ``ioc update``, first-run auto-import) and
+by the throttled, read-only version check described below, and never during
+analysis.  Its payloads are signature-checked before they are read; the
+version check reads only a release tag and sends nothing of the operator's.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -142,6 +145,91 @@ def _resolve_baseline_tag() -> str | None:
     except Exception:
         log.debug("failed to resolve baseline tag via GitHub API", exc_info=True)
     return None
+
+
+_VERSION_RE = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
+
+
+def _parse_version(value: str) -> tuple[int, int, int] | None:
+    """``X.Y.Z`` (with an optional leading ``v``) as a comparable tuple."""
+    match = _VERSION_RE.match(str(value or "").strip())
+    if not match:
+        return None
+    return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+
+
+def is_newer(latest_tag: str, current_version: str) -> bool:
+    """True when *latest_tag* names a strictly newer release than *current*.
+
+    A tag that is not ``X.Y.Z`` (a ``baseline-*`` tag, a malformed string)
+    compares as not newer, so an unexpected value can never nag.
+    """
+    latest = _parse_version(latest_tag)
+    current = _parse_version(current_version)
+    if latest is None or current is None:
+        return False
+    return latest > current
+
+
+def _newest_semver_tag(releases) -> str | None:
+    """The highest ``vX.Y.Z`` tag among non-draft, non-prerelease releases.
+
+    A ``baseline-*`` release, a draft or a prerelease is skipped: the version
+    check compares semver, and GitHub's own ``/releases/latest`` can name a
+    baseline release published after the newest version.
+    """
+    best: tuple[int, int, int] | None = None
+    best_tag: str | None = None
+    for release in releases or ():
+        if not isinstance(release, dict):
+            continue
+        if release.get("draft") or release.get("prerelease"):
+            continue
+        tag = str(release.get("tag_name", ""))
+        parsed = _parse_version(tag)
+        if parsed is None:
+            continue
+        if best is None or parsed > best:
+            best, best_tag = parsed, tag
+    return best_tag
+
+
+_LATEST_TAG_CACHE: str | None = None
+_LATEST_TAG_RESOLVED = False
+
+
+def latest_release_tag() -> str | None:
+    """The newest published ``vX.Y.Z`` release tag, or ``None``.
+
+    Lists the most recent releases through the GitHub API and takes the
+    highest semver tag once per process.  Returns ``None`` when offline, on
+    any network or parse failure, or when no versioned release exists - the
+    caller treats that as "cannot tell", never as "up to date".
+    """
+    global _LATEST_TAG_CACHE, _LATEST_TAG_RESOLVED
+    if _LATEST_TAG_RESOLVED:
+        return _LATEST_TAG_CACHE
+    _LATEST_TAG_RESOLVED = True
+    if offline():
+        return None
+    try:
+        url = f"{GITHUB_API_URL}/repos/emiliano-go/trustsight/releases?per_page=30"
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/vnd.github+json",
+                "User-Agent": _USER_AGENT,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
+        # A truncated body must not be parsed as if complete.
+        if len(body) > _MAX_RELEASES_JSON_BYTES:
+            return None
+        _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
+    except Exception:
+        log.debug("failed to resolve the latest release tag", exc_info=True)
+    return _LATEST_TAG_CACHE
 
 
 def asset_url(asset_name: str, tag: str | None = None) -> str:

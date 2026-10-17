@@ -148,7 +148,14 @@ X002_SHAPES = (
     # Unbounded: a command word with the confusable past character 60 used
     # to read as clean. Anchored, so there is one start position and the
     # scan is linear in the word.
-    ("homoglyph", re.compile(r"^[^\s]*[" + _CONFUSABLE_CHARS + r"]")),
+    # Every character must be a name character or a confusable: a confusable
+    # impersonates an ASCII letter *inside a command name*, so a word that is
+    # pure non-Latin (a CJK install-hook message, `首次使用需扫码登录`) names no
+    # command and must not match.  A whole fullwidth-Latin word (`ｃｕｒｌ`) is
+    # all confusables and still matches.
+    ("homoglyph", re.compile(
+        r"^(?=[^\s]*[" + _CONFUSABLE_CHARS + r"])"
+        r"[A-Za-z0-9_./\-" + _CONFUSABLE_CHARS + r"]+$")),
     # `/usr/bin/c?rl` and `/usr/bin/cur[l]` are the shell's own spelling
     # game: the word in the diff is not the name of any program, and the
     # name that runs is whatever the glob finds on disk at build time.

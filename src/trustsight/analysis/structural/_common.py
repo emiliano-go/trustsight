@@ -10,4 +10,8 @@ _BINARY_ARTIFACT_RE = re.compile(
     re.IGNORECASE,
 )
 
-_TRUSTED_BUCKETS = frozenset({"trusted_forge", "official"})
+#: Buckets a source may sit in without C005 firing.  ``declared_upstream`` is
+#: trusted: a source on the registered domain of the package's own declared
+#: ``url=`` is the project's own host, which is what C005 (binary artifact from
+#: an untrusted source) exists to distinguish from a third party's.
+_TRUSTED_BUCKETS = frozenset({"trusted_forge", "official", "declared_upstream"})

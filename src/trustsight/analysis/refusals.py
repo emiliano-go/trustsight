@@ -192,7 +192,13 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
     # implies X026 fired", so the cluster threshold also forces X026.
     cluster = count >= 2
     if count >= max(1, min_count) or cluster:
-        severity = "HIGH" if count >= 3 else "MEDIUM"
+        # Capped at MEDIUM: a refusal is a boundary the analysis could not
+        # read, which must stay visible but must not, by weight alone, lift an
+        # otherwise-clean package over the alert bar.  `X026 + X027` = 30 < the
+        # 35 bar, so a refusal-only package is reported and (via the watcher's
+        # refusal tier) alerted, but a legitimate complex recipe the tokenizer
+        # could not resolve no longer scores like a compromise.
+        severity = "MEDIUM"
         listed = ", ".join(name for name, _fns in referenced)
         where = "; ".join(
             f"{name} <- {', '.join(fns)}" for name, fns in referenced)
@@ -203,7 +209,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             line=None, count=count, names=listed)
     if cluster:
         listed = ", ".join(name for name, _fns in referenced)
-        add("X027", "Refusal Cluster", "CRITICAL", "evasion",
+        add("X027", "Refusal Cluster", "MEDIUM", "evasion",
             f"{len(referenced)} distinct unresolved assignments in "
             f"executable positions: {listed}",
             line=None, count=len(referenced), names=listed)

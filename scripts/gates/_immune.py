@@ -75,8 +75,8 @@ def gate_campaign_expiry_is_structural() -> Gate:
     problems: list[str] = []
     with _temp_db() as db:
         now = db.observation_seq()
-        db.activate_campaign("g005:m", ["yay", "yau"], "g005",
-                             ttl_obs=3, now_obs=now)
+        db.activate_campaign("g005:m", {"package_names": ["yay", "yau"]},
+                             "G005", ttl_obs=3, now_obs=now)
         if [c["campaign_id"] for c in db.active_campaigns(now_obs=now + 2)] != [
                 "g005:m"]:
             problems.append("a live campaign was not active before its TTL")
@@ -91,29 +91,42 @@ def gate_campaign_expiry_is_structural() -> Gate:
 
 
 def gate_campaign_points_are_attributed() -> Gate:
-    """Every campaign-influenced point names the campaign it came from (B1)."""
+    """Campaign corroboration is attributed and unscored (B1).
+
+    G007 is weight 0 in v1: the bonus it replaced measured scope *breadth*,
+    not corroboration, and the corpus carries no active campaign, so the
+    points were never measured against the benign false-positive rate.  The
+    finding must still name the campaign it came from.
+    """
     problems: list[str] = []
     with _temp_db() as db:
-        db.activate_campaign("g005:m", ["yyay", "yau"], "g005",
+        db.activate_campaign("g005:m", {"package_names": ["yyay", "yau"],
+                                        "targets": ["yay"]}, "G005",
                              ttl_obs=50, now_obs=db.observation_seq())
         from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
         score, breakdown = _campaign_corroboration(10, [], "yyay", [])
-        if score != 12:
-            problems.append(f"bonus was not +min(5, 2): score={score}")
+        if score != 10:
+            problems.append(f"campaign corroboration moved the score: {score}")
         if not breakdown or getattr(breakdown[-1], "rule_id", "") != "G007":
             problems.append("no G007 attribution entry")
+        elif getattr(breakdown[-1], "weight", None) != 0:
+            problems.append("the G007 entry was not weight 0")
         elif not breakdown[-1].evidence.get("campaign_id"):
-            problems.append("the bonus entry carried no campaign_id")
+            problems.append("the entry carried no campaign_id")
+        # The impersonated target is not corroboration: reviewing yay itself
+        # does not stand in the campaign.
+        if _campaign_corroboration(10, [], "yay", []) != (10, []):
+            problems.append("the impersonated target was scored as corroborated")
     return Gate("campaign points are attributed", not problems,
-                problems or "G007 names its campaign")
+                problems or "G007 is weight-0 and names its campaign")
 
 
 def gate_elevation_is_attributed() -> Gate:
     """G006 is weight 0 and names the campaign whose scope it touched."""
     problems: list[str] = []
     with _temp_db() as db:
-        db.activate_campaign("g001:new.cdn", ["new.cdn"], "G001",
+        db.activate_campaign("g001:new.cdn", {"hosts": ["new.cdn"]}, "G001",
                              ttl_obs=50, now_obs=db.observation_seq())
         from trustsight.full_aur.pipeline import _neighborhood_elevation
 
@@ -164,8 +177,8 @@ def gate_escalation_never_reaches_fatal() -> Gate:
             fatal_ok = False
     # And a FATAL finding is never added to by a campaign bonus.
     with _temp_db() as db:
-        db.activate_campaign("g005:m", ["fatal-pkg"], "g005",
-                             ttl_obs=50, now_obs=db.observation_seq())
+        db.activate_campaign("g005:m", {"package_names": ["fatal-pkg"]},
+                             "G005", ttl_obs=50, now_obs=db.observation_seq())
         from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
         score, _ = _campaign_corroboration(100, [], "fatal-pkg", [])

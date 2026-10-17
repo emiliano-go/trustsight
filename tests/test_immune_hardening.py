@@ -61,7 +61,7 @@ def test_alert_volume_finding_tolerates_a_bad_cap_and_bad_rules():
 def test_neighborhood_elevation_tolerates_bad_records(db):
     from trustsight.full_aur.pipeline import _neighborhood_elevation
 
-    activate_campaign("g001:new.cdn", ["new.cdn"], "G001", ttl_obs=50)
+    activate_campaign("g001:new.cdn", {"hosts": ["new.cdn"]}, "G001", ttl_obs=50)
     assert _neighborhood_elevation(None) == []
     assert _neighborhood_elevation("x") == []
     assert _neighborhood_elevation([None, "y", {"package": "a"}]) == []
@@ -77,10 +77,12 @@ def test_campaign_identity_tolerates_bad_findings():
     assert _campaign_identity("x") is None
     assert _campaign_identity({}) is None
     assert _campaign_identity(
-        {"rule_id": "G005", "params": "x"}) == ("g005:unknown", [])
+        {"rule_id": "G005", "params": "x"}) == (
+            "g005:unknown", {"package_names": [], "targets": []})
     assert _campaign_identity(
         {"rule_id": "G005", "params": {"members": [None, 1], "targets": "y"}}
-    ) == ("g005:unknown", ["1", "None", "y"])
+    ) == ("g005:unknown",
+          {"package_names": ["1", "None"], "targets": ["y"]})
 
 
 def test_activate_campaigns_tolerates_bad_findings(db):

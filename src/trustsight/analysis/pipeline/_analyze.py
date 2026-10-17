@@ -159,14 +159,22 @@ def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
 def _campaign_corroboration(
     score: int, breakdown, pkg_name: str, added_urls
 ) -> tuple[int, list]:
-    """Add a bounded, attributed bonus for a run inside an active campaign.
+    """Attach a weight-0, attributed G007 entry when a run stands in a
+    campaign's scope.
 
-    Trained immunity: a corroborated campaign leaves its scope briefly
-    primed, so a run whose package - or a host it newly gained - stands in
-    that scope earns ``+min(5, corroboration_count)`` points, **once**, as a
-    single ``G007`` breakdown entry carrying ``campaign_id`` (B1: every
-    point attributable).  Bounded so a wide campaign cannot inflate, and
-    inert when no campaign is active (the corpus calibration carries none).
+    Trained immunity, **unscored**: while a campaign is primed, a run whose
+    package is a campaign member, or that newly gained a host in the
+    campaign's scope, is *reported* as corroborated - one ``G007`` ``INFO``
+    finding carrying ``campaign_id``, weight 0.
+
+    It stays weight 0 because the points this used to add measured scope
+    *breadth* (``len(scope)``), not corroboration, and the calibration corpus
+    carries no active campaign state, so the added points were never measured
+    against the benign false-positive rate.  The attributed report keeps the
+    context visible without turning association into a score.
+
+    Impersonated targets are deliberately **not** matched: a campaign targets
+    ``yay``, and reviewing ``yay`` is not corroboration of anything.
     """
     from ...db import active_campaigns
 
@@ -186,24 +194,23 @@ def _campaign_corroboration(
             hosts.add(host)
 
     for campaign in campaigns:
-        scope = set(campaign.get("scope", ()) or ())
-        if not scope:
+        scope = campaign.get("scope", {}) or {}
+        if not isinstance(scope, dict):
             continue
-        if pkg_name not in scope and not (hosts & scope):
-            continue
-        bonus = max(0, min(5, len(scope)))
-        if bonus == 0:
+        names = {str(n) for n in scope.get("package_names", ()) or ()}
+        scoped_hosts = {str(h) for h in scope.get("hosts", ()) or ()}
+        if pkg_name not in names and not (hosts & scoped_hosts):
             continue
         from ...schema import ScoreEntry
 
         enriched = list(breakdown)
         enriched.append(ScoreEntry(
-            rule_id="G007", severity="INFO", weight=bonus,
-            reason=("corroborated against active campaign "
-                    f"{campaign['campaign_id']}"),
+            rule_id="G007", severity="INFO", weight=0,
+            reason=("stands in active campaign "
+                    f"{campaign['campaign_id']} (corroboration, weight 0)"),
             evidence={"campaign_id": campaign["campaign_id"]},
         ))
-        return min(100, score + bonus), enriched
+        return score, enriched
     return score, breakdown
 
 

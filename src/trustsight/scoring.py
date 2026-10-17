@@ -446,6 +446,12 @@ def calculate_score(
             )
         )
 
+    # Novelty is a *prior* (B-series): it reads accumulated instrument
+    # history, and the security model treats poisoned history as something
+    # that can only quiet the novelty tier, never silence a rule.  Gating it
+    # on corroboration (zeroing a novel-only signal) would open exactly the
+    # blind window that model forbids, so it stays scored; the alerting bar
+    # (the benign p95) is what keeps a prior from alone crossing it.
     novelty_weights = config.get("novelty_weights", {})
     m = maturity(novelty.observation_count)
     if novelty.url_first_seen_globally:

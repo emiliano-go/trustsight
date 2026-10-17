@@ -684,7 +684,7 @@ trustsight full-aur --transitions PACKAGE [--limit N] [--json]
 | `--interval SECONDS` | Seconds between `--watch` cycles. Defaults to `[limits] watch_interval` (3600) and is clamped to `[limits] watch_min_interval` (60). |
 | `--cycles N` | Stop `--watch` after N cycles. `0`, the default, means run until interrupted. |
 | `--notify URL` | POST each cycle's new alerts as a JSON document to this webhook, on single-shot cycles and `--watch` alike. Overrides `[notify] webhook` in `config.toml`. A dead receiver is logged and swallowed; a quiet cycle sends nothing. |
-| `--over-threshold N` | Alerting bar: packages scoring above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 30, the benign corpus's p95. |
+| `--over-threshold N` | Alerting bar: packages scoring strictly above N land in the cycle's `over_threshold` list, which the webhook document carries. Default 35, the benign corpus's measured p95. |
 | `--since YYYY-MM-DD` | Replay change history from this date: each cycle analyses the packages whose AUR `LastModified` falls in one day of AUR time, skipping empty days, and joins the live delta stream when caught up. The cursor persists in the database, so a replay resumes across restarts. Sweep and adoption-feed machinery stay out of replay cycles. |
 | `--transitions PACKAGE` | Print the recorded property timeline for PACKAGE and exit. Read-only and works offline; cannot be combined with `--watch`, `--bootstrap`, `--export`, `--sign` or `--since`. |
 | `--limit N` | With `--transitions`: show only the newest N rows (default 500; `0` shows all). The write path already caps rows per property key. |

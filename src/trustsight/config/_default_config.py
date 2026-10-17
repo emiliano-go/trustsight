@@ -132,6 +132,14 @@ enabled = false
 # message text.  Empty means no notifications.  A dead receiver is logged
 # and swallowed, so a webhook outage cannot kill the watch loop.
 # webhook = "https://ntfy.sh/your-topic"
+#
+# A second, independent sink: the TrustSight watcher feed, which ingests the
+# same document directly instead of polling ntfy.  Every POST is signed with
+# an Ed25519 key the receiver holds only the public half of, so a leaked feed
+# secret cannot forge a document.  The private key is the base64 PKCS#8 value
+# of TRUSTSIGHT_FEED_KEY (TRUSTSIGHT_FEED_KEY_ID names it); with no key the
+# feed sink is skipped.  Empty means no feed.
+# feed = "https://watcher.trustsight.org/api/ingest"
 
 [seed]
 # Import the novelty seed the first time TrustSight runs against
@@ -271,6 +279,10 @@ allow = [
     "freedesktop.org",
     "archlinux.org",
     "winehq.org",
+    # Vendors that publish a prebuilt binary from their own CDN on a
+    # different registered domain than the `url=` they declare
+    # (code.visualstudio.com declares, *.prss.microsoft.com serves).
+    "microsoft.com",
 ]
 """
 
@@ -519,9 +531,14 @@ DEFAULT_THRESHOLDS = (
     "\n"
     "[h058]\n"
     "# H058 (maintainer baseline deviation) is maturity- and z-gated like H073,\n"
-    "# but per maintainer against that maintainer's own prior activity.\n"
-    "min_history_cycles = 3\n"
-    "z_score = 2.0\n"
+    "# but per maintainer against that maintainer's own prior activity.  The\n"
+    "# thresholds are raised over H073's: a bulk packager whose ordinary\n"
+    "# cadence is high already sits far above a short baseline, so a low z on a\n"
+    "# short history reads a normal batch as a deviation.  A longer minimum\n"
+    "# history and a wider z keep the rule for a quiet account that suddenly\n"
+    "# surges (the xz-utils shape).\n"
+    "min_history_cycles = 4\n"
+    "z_score = 3.0\n"
     "min_activity = 3\n"
     "\n"
     "[longitudinal]\n"

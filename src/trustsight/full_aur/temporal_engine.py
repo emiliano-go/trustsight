@@ -58,9 +58,9 @@ _FORGE_HOSTS = frozenset({
 })
 
 _ECOSYSTEM_HOSTS = {
-    "python": {"pypi.org", "pypi.io", "files.pythonhosted.org"},
-    "python2": {"pypi.org", "pypi.io", "files.pythonhosted.org"},
-    "python3": {"pypi.org", "pypi.io", "files.pythonhosted.org"},
+    "python": {"pypi.org", "pypi.io", "files.pythonhosted.org", "pypi.python.org"},
+    "python2": {"pypi.org", "pypi.io", "files.pythonhosted.org", "pypi.python.org"},
+    "python3": {"pypi.org", "pypi.io", "files.pythonhosted.org", "pypi.python.org"},
     "perl": {"cpan.org", "metacpan.org"},
     "ruby": {"rubygems.org"},
     "nodejs": {"npmjs.com", "registry.npmjs.org"},

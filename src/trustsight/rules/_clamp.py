@@ -26,6 +26,39 @@ _MESSAGE_LINE_RE = re.compile(
 
 _COMMAND_CHAIN_RE = re.compile(r"[;&|]|\$\(|`")
 
+def _has_unquoted_command_chain(line: str) -> bool:
+    """True when a chain or substitution operator runs, not just printed.
+
+    A control operator inside quotes is literal text.  ``echo "run: echo x |
+    sudo tee y"`` is an instruction addressed to the reader, not a pipeline.
+    The previous whole-line search saw the quoted bar, so the line stopped
+    counting as a message and H004 read the printed ``sudo`` as the
+    escalation itself (keymux, a CRITICAL on a hint).
+
+    Command substitution is the one operator that still runs inside double
+    quotes (``echo "$(id)"`` executes ``id``), so it stands down only inside
+    single quotes; ``|``, ``;`` and ``&`` are literal inside either.
+    """
+    quote = ""
+    i = 0
+    n = len(line)
+    while i < n:
+        char = line[i]
+        if quote == "'":
+            if char == "'":
+                quote = ""
+        elif quote == '"':
+            if char == '"':
+                quote = ""
+            elif char == "`" or (char == "$" and i + 1 < n and line[i + 1] == "("):
+                return True
+        elif char in "\"'":
+            quote = char
+        elif char in ";&|`" or (char == "$" and i + 1 < n and line[i + 1] == "("):
+            return True
+        i += 1
+    return False
+
 def _has_unquoted_redirect(line: str) -> bool:
     """True when *line* redirects outside any quoted text.
 
@@ -147,7 +180,7 @@ def _is_message_line(line: str) -> bool:
     """True when *line* is a message and nothing else."""
     return (
         bool(_MESSAGE_LINE_RE.match(line))
-        and not _COMMAND_CHAIN_RE.search(line)
+        and not _has_unquoted_command_chain(line)
         and not _has_unquoted_redirect(line)
     )
 

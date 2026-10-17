@@ -17,6 +17,11 @@ supplies them), so the join logic is testable without a live corpus:
   at least M packages in the window.
 
 Members are named in the finding; the roundup is one alert, not N.
+
+Live coverage caveat: only G001, G003 and G005 have a connected corpus feed
+today.  G002 (added literals) and G004 (upstream dependencies) ship and are
+unit-tested, but the views that would supply them are pending, so they cannot
+fire on a real ``full-aur`` cycle yet.  See the correlation rule reference.
 """
 
 from __future__ import annotations
@@ -31,8 +36,21 @@ def _thresholds(config) -> dict:
     return (config or {}).get("thresholds", {})
 
 
+#: Buckets whose hosts are ubiquitous and carry no campaign signal: five
+#: unrelated packages gaining `github.com` is not a shared-CDN campaign, it is
+#: how the AUR works.
+_UBIQUITOUS_BUCKETS = frozenset({"trusted_forge", "official"})
+
+
 def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
-    """G001: a gained host shared by *min_packages* distinct packages."""
+    """G001: a gained host shared by *min_packages* distinct packages.
+
+    A host that is itself a trusted forge or official channel is skipped: the
+    join only means something for a *new* host a set of packages did not all
+    already reach through the ordinary sources.
+    """
+    from ..buckets import classify_url
+
     by_host: dict[str, set[str]] = defaultdict(set)
     for record in records:
         for host in record.get("hosts_gained", ()) or ():
@@ -40,15 +58,19 @@ def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
                 by_host[host].add(str(record.get("package", "")))
     out = []
     for host, members in sorted(by_host.items()):
-        if len(members) >= min_packages:
-            out.append({
-                "rule_id": "G001",
-                "name": "Shared Gained Host",
-                "severity": "HIGH", "category": "correlation",
-                "match": (f"gained host {host} appears in {len(members)} "
-                          "packages in the window"),
-                "params": {"members": sorted(members), "host": host},
-            })
+        if len(members) < min_packages:
+            continue
+        bucket, _domain = classify_url(f"https://{host}")
+        if bucket in _UBIQUITOUS_BUCKETS:
+            continue
+        out.append({
+            "rule_id": "G001",
+            "name": "Shared Gained Host",
+            "severity": "HIGH", "category": "correlation",
+            "match": (f"gained host {host} appears in {len(members)} "
+                      "packages in the window"),
+            "params": {"members": sorted(members), "host": host},
+        })
     return out
 
 
@@ -78,33 +100,51 @@ def shared_added_literal(records, min_packages: int = 2,
 
 
 def coordinated_adoption(records, min_members: int = 3) -> list[dict]:
-    """G003: one maintainer key adopting *min_members* packages.
+    """G003: one maintainer key adopting *min_members* unrelated packages.
 
     Joins on the temporal adoption predicates (H044 ownership transition,
     H086 orphan-to-maintained) recorded per package, so the group is an
     adoption event the temporal engine would also fire - not a bare
     maintainer-change.
+
+    The members must be **unrelated**: a maintainer adopting several packages
+    that all source from one repository is a variant family (H052's shape),
+    not a coordinated takeover.  When every member has repo data and they
+    share a common repo, G003 stands down; any member without repo data keeps
+    the group firing, because an unproven relationship is not evidence of one.
     """
     by_maintainer: dict[str, set[str]] = defaultdict(set)
     predicates: dict[str, set[str]] = defaultdict(set)
+    repos: dict[str, list[set[str]]] = defaultdict(list)
     for record in records:
         maintainer = str(record.get("maintainer", "") or "").strip().lower()
         if maintainer and record.get("adoption"):
             by_maintainer[maintainer].add(str(record.get("package", "")))
             predicates[maintainer] |= set(
                 record.get("adoption_predicates") or ())
+            repos[maintainer].append(set(record.get("source_repos") or ()))
     out = []
     for maintainer, members in sorted(by_maintainer.items()):
-        if len(members) >= min_members:
-            which = sorted(predicates[maintainer])
-            out.append({
-                "rule_id": "G003",
-                "name": "Coordinated Adoption",
-                "severity": "MEDIUM", "category": "correlation",
-                "match": (f"maintainer adopted {len(members)} packages in the "
-                          "window"),
-                "params": {"members": sorted(members), "predicates": which},
-            })
+        if len(members) < min_members:
+            continue
+        member_repos = repos[maintainer]
+        if all(member_repos):
+            common = set.intersection(*member_repos)
+            if common:
+                # Every member sources from the same repo: H052's family, not
+                # a coordinated adoption.
+                continue
+        which = sorted(predicates[maintainer])
+        all_repos = sorted({r for rs in member_repos for r in rs})
+        out.append({
+            "rule_id": "G003",
+            "name": "Coordinated Adoption",
+            "severity": "MEDIUM", "category": "correlation",
+            "match": (f"maintainer adopted {len(members)} unrelated packages "
+                      "in the window"),
+            "params": {"members": sorted(members), "predicates": which,
+                       "repos": all_repos},
+        })
     return out
 
 
@@ -151,9 +191,14 @@ def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
     H029 only whispers about - 242 near-identical typosquats read as one
     campaign, not 242 findings.  This is the alert that names the campaign,
     its maintainer and its targets.
+
+    Grouping is by maintainer key only.  Packages with **no** maintainer are
+    not pooled into a synthetic "one submitter": an empty maintainer field is
+    not evidence that unrelated ownerless packages share an operator.  Those
+    clones stay individual H029 findings until something independently links
+    them.
     """
     by_maintainer: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    unowned: list[tuple[str, str]] = []
     for record in records:
         target = str(record.get("impersonated_target", "") or "")
         if not target:
@@ -162,24 +207,19 @@ def impersonation_campaign(records, min_members: int = 3) -> list[dict]:
         maintainer = str(record.get("maintainer", "") or "")
         if maintainer:
             by_maintainer[maintainer].append((member, target))
-        else:
-            unowned.append((member, target))
-    groups = list(by_maintainer.items())
-    if unowned:
-        groups.append(("", unowned))
     out: list[dict] = []
-    for maintainer, pairs in sorted(groups):
+    for maintainer, pairs in sorted(by_maintainer.items()):
         members = sorted({member for member, _ in pairs})
         if len(members) < min_members:
             continue
         targets = sorted({target for _, target in pairs})
-        who = f"maintainer {maintainer}" if maintainer else "one submitter"
         out.append({
             "rule_id": "G005",
             "name": "Impersonation Campaign",
             "severity": "HIGH", "category": "correlation",
-            "match": (f"{who} published {len(members)} name-clones of popular "
-                      f"packages ({', '.join(targets[:5])})"),
+            "match": (f"maintainer {maintainer} published {len(members)} "
+                      f"name-clones of popular packages "
+                      f"({', '.join(targets[:5])})"),
             "params": {"members": members, "maintainer": maintainer,
                        "targets": targets, "count": len(members)},
         })

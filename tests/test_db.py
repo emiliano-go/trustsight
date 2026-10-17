@@ -917,6 +917,51 @@ def test_an_unknown_synchronous_mode_falls_back_to_normal(tmp_path, monkeypatch)
         conn.close()
 
 
+def test_busy_timeout_default_is_generous(tmp_path, monkeypatch):
+    """A seed fetch and a corpus cycle can overlap; the default must be long
+    enough to ride out a write, not the old 5 s that failed instantly."""
+    monkeypatch.delenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", raising=False)
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+    finally:
+        conn.close()
+
+
+def test_busy_timeout_can_be_overridden(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", "60000")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy-override.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 60_000
+    finally:
+        conn.close()
+
+
+def test_an_unknown_busy_timeout_falls_back_to_default(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", "not-a-number")
+    from trustsight.db import _new_connection
+
+    conn = _new_connection(tmp_path / "busy-bogus.db")
+    try:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+    finally:
+        conn.close()
+
+
+def test_read_only_connection_has_a_busy_timeout(tmp_path, monkeypatch):
+    monkeypatch.delenv("TRUSTSIGHT_SQLITE_BUSY_TIMEOUT", raising=False)
+    from trustsight import db
+
+    monkeypatch.setattr(db, "DATA_DIR", tmp_path)
+    db.init_db()
+    with db.get_read_only_connection() as conn:
+        assert conn.execute("PRAGMA busy_timeout").fetchone()[0] == 30_000
+
+
 def test_the_observation_clock_advances_once_per_recorded_analysis(db):
     """Campaign/override TTLs count observations, so the clock must move with
     each recorded analysis and not at any other time."""
@@ -957,23 +1002,33 @@ def test_campaign_mode_activates_expires_and_caps(db):
                              max_active=3, now_obs=now + 2) is True
 
 
-def test_campaign_corroboration_adds_a_bounded_attributed_bonus(db):
+def test_campaign_corroboration_is_attributed_and_unscored(db):
     from trustsight.db import activate_campaign, observation_seq
     from trustsight.analysis.pipeline._analyze import _campaign_corroboration
 
-    activate_campaign("g005:m", ["yyay", "yau"], "g005", ttl_obs=50,
+    activate_campaign("g005:m", {"package_names": ["yyay", "yau"],
+                                 "targets": ["yay"]}, "G005", ttl_obs=50,
                       now_obs=observation_seq())
+    # A campaign member is corroborated: one attributed INFO entry, weight 0,
+    # and the score does not move.
     score, breakdown = _campaign_corroboration(10, [], "yyay", [])
-    assert score == 12  # +min(5, 2)
+    assert score == 10
     assert breakdown[-1].rule_id == "G007"
-    assert breakdown[-1].weight == 2
+    assert breakdown[-1].weight == 0
     assert breakdown[-1].evidence["campaign_id"] == "g005:m"
 
-    # Not in scope: untouched.
+    # The impersonated target is not corroboration: reviewing `yay` does not
+    # stand in the campaign, it is what the campaign imitates.
+    assert _campaign_corroboration(10, [], "yay", []) == (10, [])
+    # An unrelated package is untouched.
     assert _campaign_corroboration(10, [], "other", []) == (10, [])
-    # A gained host in scope corroborates instead of the name.
-    score2, breakdown2 = _campaign_corroboration(10, [], "other", ["https://yau/x"])
-    assert score2 == 12 and breakdown2[-1].rule_id == "G007"
+
+    # A gained host in a host campaign corroborates instead of the name.
+    activate_campaign("g001:new.cdn", {"hosts": ["new.cdn"]}, "G001",
+                      ttl_obs=50, now_obs=observation_seq())
+    score2, breakdown2 = _campaign_corroboration(10, [], "other",
+                                                 ["https://new.cdn/x"])
+    assert score2 == 10 and breakdown2[-1].rule_id == "G007"
 
 
 def test_bump_observation_seq_advances_the_clock(db):

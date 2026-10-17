@@ -204,6 +204,40 @@ def test_sync_rules_preserves_custom_patterns(tmp_path, monkeypatch):
     assert r01_rules[0]["pattern"] == "MY-CUSTOM-PATTERN", "Custom pattern was overwritten"
 
 
+def test_sync_rules_keeps_a_custom_pattern_even_when_another_field_drifted(
+    tmp_path, monkeypatch
+):
+    """The docstring promises a user-edited pattern is never overwritten, even
+    when another field drifted.  Replacing the whole block to fix the other
+    field used to discard the pattern; the rule is now skipped entirely."""
+    from trustsight.config import (
+        drifted_shipped_rules,
+        ensure_default_configs,
+        load_rules,
+        sync_rules,
+    )
+
+    monkeypatch.setattr("trustsight.config.DATA_DIR", tmp_path)
+    monkeypatch.setattr("trustsight.config.CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr("trustsight.config.CACHE_DIR", tmp_path / ".cache")
+    ensure_default_configs()
+
+    rules_path = tmp_path / ".config" / "rules.toml"
+    text = rules_path.read_text()
+    # R001 is the first rule: a custom pattern AND a drifted match_target.
+    text = text.replace("pattern = 'curl", "pattern = 'MY-CUSTOM-curl", 1)
+    text = text.replace('match_target = "resolved"', 'match_target = "raw_line"', 1)
+    rules_path.write_text(text)
+
+    _, updated = sync_rules(update_outdated=True)
+
+    assert "R001" not in updated, "a custom pattern must not be rewritten"
+    r001 = [r for r in load_rules() if r.get("id") == "R001"][0]
+    assert r001["pattern"].startswith("MY-CUSTOM"), "custom pattern discarded"
+    # The drift stays reported, because the user's rule genuinely differs.
+    assert any(d[0] == "R001" for d in drifted_shipped_rules())
+
+
 # ---------------------------------------------------------------------------
 # Ctrl+C handling: KeyboardInterrupt doesn't produce traceback
 # ---------------------------------------------------------------------------

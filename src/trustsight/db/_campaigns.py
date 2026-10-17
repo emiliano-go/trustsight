@@ -50,33 +50,81 @@ def _safe_int(value, default: int) -> int:
         return default
 
 
-def _scope_values(scope) -> list[str]:
-    """A campaign scope as a bounded, sorted list of strings.
+#: The typed scope keys.  ``untyped_legacy`` is read-only: it holds a
+#: pre-typed G005 list that conflated member names and impersonated targets,
+#: which cannot be reconstructed, so it matches nothing (see _read_scope).
+_SCOPE_KEYS = ("package_names", "hosts", "targets", "dependencies",
+               "untyped_legacy")
 
-    A non-iterable scope (a hand-edited value) is empty rather than a crash;
-    a bare string is one value, not the character set it would otherwise
-    iterate into.
+
+def _string_list(values) -> list[str]:
+    """*values* as a bounded, sorted list of strings.
+
+    A non-iterable (a hand-edited value) is empty rather than a crash; a bare
+    string is one value, not the character set it would otherwise iterate
+    into.
     """
-    if scope is None:
+    if values is None:
         return []
-    if isinstance(scope, str):
-        values = [scope]
+    if isinstance(values, str):
+        items = [values]
     else:
         try:
-            values = list(scope)
+            items = list(values)
         except TypeError:
             return []
-    return sorted({str(v) for v in values})[:MAX_CAMPAIGN_SCOPE]
+    return sorted({str(v) for v in items})[:MAX_CAMPAIGN_SCOPE]
+
+
+def _scope_object(scope) -> dict[str, list[str]]:
+    """A campaign scope as a typed, bounded object.
+
+    A typed scope keeps package names, hosts, dependencies and impersonated
+    targets apart, so a reader never compares a package name against a host.
+    A bare list is the pre-typed shape, which named package members, and is
+    kept for a caller that still passes one.
+    """
+    if scope is None:
+        return {}
+    if isinstance(scope, dict):
+        out: dict[str, list[str]] = {}
+        for key in _SCOPE_KEYS:
+            values = _string_list(scope.get(key))
+            if values:
+                out[key] = values
+        return out
+    values = _string_list(scope)
+    return {"package_names": values} if values else {}
+
+
+def _read_scope(raw, source: str) -> dict[str, list[str]]:
+    """Read a stored scope, normalising the pre-typed list shape.
+
+    A legacy list on a non-G005 campaign named that campaign's package
+    members, so ``package_names`` is faithful.  A legacy **G005** list mixed
+    clone names and impersonated targets and cannot be told apart, so it is
+    kept as ``untyped_legacy`` - which matches nothing - until a new typed
+    activation refreshes the campaign.  That is the safe failure: it costs
+    some contextual state, and cannot flag a legitimate target.
+    """
+    try:
+        value = json.loads(raw or "[]")
+    except (TypeError, ValueError):
+        return {}
+    if isinstance(value, dict):
+        return _scope_object(value)
+    values = _string_list(value)
+    if not values:
+        return {}
+    if str(source or "").upper().startswith("G005"):
+        return {"untyped_legacy": values}
+    return {"package_names": values}
 
 
 def _row_to_dict(row) -> dict:
-    try:
-        scope = json.loads(row["scope_json"] or "[]")
-    except (TypeError, ValueError):
-        scope = []
     return {
         "campaign_id": row["campaign_id"],
-        "scope": [str(s) for s in scope],
+        "scope": _read_scope(row["scope_json"], row["source"] or ""),
         "source": row["source"] or "",
         "activated_at_obs": int(row["activated_at_obs"]),
         "ttl_obs": int(row["ttl_obs"]),
@@ -164,7 +212,7 @@ def activate_campaign(
     now = observation_seq() if now_obs is None else _safe_int(now_obs, observation_seq())
     ttl = max(1, _safe_int(ttl_obs, DEFAULT_TTL_OBSERVATIONS))
     max_active = _safe_int(max_active, 0)
-    payload = json.dumps(_scope_values(scope), separators=(",", ":"))
+    payload = json.dumps(_scope_object(scope), separators=(",", ":"))
     with get_connection() as conn:
         existing = conn.execute(
             "SELECT * FROM campaign_alerts WHERE campaign_id = ?", (campaign_id,)

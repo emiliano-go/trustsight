@@ -25,7 +25,7 @@ depends=(
   'python-rich'
   'python-typer'
   'python-cryptography'
-  'python-pyyaml'
+  'python-yaml'
 )
 makedepends=(
   'git'

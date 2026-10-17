@@ -190,6 +190,17 @@ is what raises the severity.
 - **Category:** `source`
 - **Condition:** An ecosystem-prefixed package (`python-`, `ruby-`, `nodejs-`, ...) is sourced from neither its ecosystem's canonical hosts nor a known forge.
 
+H053 reads the name as a claim about where a package should come from, and checks
+the source against it. A `python-`, `ruby-` or `nodejs-` package is normally
+published on that ecosystem's own index (PyPI, RubyGems, npm) or built straight
+from a forge such as GitHub or GitLab. This rule fires on a new package whose name
+claims an ecosystem but whose source comes from a host that is neither: a name
+pointing one way while the source points another is the shape of a typosquat, or
+of a dependency silently redirected to somebody else's server. It compares the
+name to the source, not the code, so a project that legitimately mirrors its
+release elsewhere, or publishes only from a personal server, can trip it. The
+finding names the prefix and the host so the reader can judge that call.
+
 ### H059: Name/Repo Divergence {#h059}
 
 - **Severity:** MEDIUM (weight 15)

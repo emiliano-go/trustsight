@@ -11,9 +11,12 @@ The watcher must never die because a notification did: every failure here
 is logged and swallowed by :func:`maybe_notify`.
 """
 
+import base64
 import copy
+import hashlib
 import json
 import logging
+import os
 import time
 import urllib.request
 
@@ -45,9 +48,17 @@ _MAX_FINDINGS_PER_PACKAGE = 12
 #: plausible webhook acknowledgement.
 _MAX_RESPONSE_BYTES = 64 * 1024
 
-#: Reads `[notify] webhook` from config.toml.
+#: Reads `[notify] webhook` and `[notify] feed` from config.toml.
 _CONFIG_SECTION = "notify"
 _CONFIG_KEY = "webhook"
+_CONFIG_FEED_KEY = "feed"
+
+#: The signed feed sink.  ``TRUSTSIGHT_FEED_KEY`` is the Ed25519 private key
+#: (base64 PKCS#8); ``TRUSTSIGHT_FEED_KEY_ID`` names it so the receiver can
+#: rotate.  Absent either, the feed sink is skipped and only ntfy is notified.
+_FEED_URL_ENV = "TRUSTSIGHT_FEED_URL"
+_FEED_KEY_ENV = "TRUSTSIGHT_FEED_KEY"
+_FEED_KEY_ID_ENV = "TRUSTSIGHT_FEED_KEY_ID"
 
 
 def _cycle_alert_cap() -> int:
@@ -153,6 +164,28 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
         return f"{rule} on {packages[0]}{tail}"
 
     return "watcher cycle"
+
+
+def _refusal_entry(detail: dict | None, package: str) -> dict:
+    """One ``refusals`` entry: the package, and the parser findings that made
+    the analysis incomplete (X026/X027), so a reader is told what was not read
+    rather than only that something was not.
+    """
+    entry = {"package": package,
+             "aur": f"https://aur.archlinux.org/packages/{package}"}
+    findings = [
+        f for f in ((detail or {}).get("findings") or [])
+        if f.get("rule_id") in ("X026", "X027")
+    ]
+    if findings:
+        entry["findings"] = [
+            {"rule_id": f.get("rule_id"), "severity": f.get("severity", ""),
+             "file": f.get("file", ""), "line": f.get("line"),
+             "reason": f.get("reason", "")}
+            for f in findings
+        ]
+        entry["reason"] = findings[0].get("reason") or findings[0].get("rule_id", "")
+    return entry
 
 
 def alert_payload(cycle) -> dict:
@@ -269,9 +302,12 @@ def alert_payload(cycle) -> dict:
         "ioc_matches": iocs,
         "campaign_cluster": campaign_cluster,
         "impersonation": impersonation,
+        # A refusal names a package the analysis could not fully read.  The
+        # name alone does not explain *what* was incomplete, so the refusing
+        # X026/X027 findings (rule, file, line, reason) ride along; without
+        # them a feed can say "could not fully read X" but not why.
         "refusals": [
-            {"package": package,
-             "aur": f"https://aur.archlinux.org/packages/{package}"}
+            _refusal_entry(detail.get(package), package)
             for package in sorted(getattr(cycle, "refusals", None) or [])
         ],
     }
@@ -401,47 +437,106 @@ def notify_url(config: dict | None = None) -> str:
     return str(section.get(_CONFIG_KEY) or "").strip()
 
 
-def maybe_notify(cycle, url: str | None = None) -> bool:
-    """POST the cycle's alerts to the webhook, if there is anything to say.
+def feed_url(config: dict | None = None) -> str:
+    """The feed ingest URL: ``TRUSTSIGHT_FEED_URL``, else ``[notify] feed``.
 
-    *url* overrides the configured webhook.  Returns True when a
-    notification was delivered.  Every failure (no URL, no alerts, a dead
-    receiver) is quiet by design: the watcher's job is the next cycle.
+    The environment wins so a container configures the whole sink from its
+    compose environment, without editing ``config.toml``.
+    """
+    env = os.environ.get(_FEED_URL_ENV, "").strip()
+    if env:
+        return env
+    if config is None:
+        from .config import load_config
+
+        config = load_config()
+    section = config.get(_CONFIG_SECTION) or {}
+    return str(section.get(_CONFIG_FEED_KEY) or "").strip()
+
+
+def _feed_key() -> tuple[str, str]:
+    """``(key_id, base64_pkcs8)`` from the environment, or ``("", "")``."""
+    return (os.environ.get(_FEED_KEY_ID_ENV, "").strip(),
+            os.environ.get(_FEED_KEY_ENV, "").strip())
+
+
+def _sign_feed(key_b64: str, key_id: str, body: bytes) -> dict:
+    """The signature headers for *body* (material ``id.timestamp.body``).
+
+    The id is deterministic from the body and the timestamp, so a retried POST
+    carries the same id and the feed dedupes it rather than double-storing.
+    """
+    from cryptography.hazmat.primitives.serialization import load_der_private_key
+
+    timestamp = int(time.time())
+    webhook_id = hashlib.sha256(f"{timestamp}.".encode() + body).hexdigest()
+    key = load_der_private_key(base64.b64decode(key_b64), password=None)
+    signature = key.sign(f"{webhook_id}.{timestamp}.".encode() + body)
+    return {
+        "webhook-id": webhook_id,
+        "webhook-timestamp": str(timestamp),
+        "webhook-key-id": key_id,
+        "webhook-signature": "v1=" + base64.b64encode(signature).decode(),
+    }
+
+
+def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
+              timeout: float = _TIMEOUT_S) -> None:
+    """POST a signed document to the feed ingest endpoint.  Raises on failure."""
+    body = json.dumps(payload).encode("utf-8")
+    headers = {"Content-Type": "application/json", "User-Agent": "trustsight/1.0"}
+    headers.update(_sign_feed(key_b64, key_id, body))
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
+
+
+def _deliver(payload: dict, ntfy_url: str | None) -> bool:
+    """POST *payload* to every configured sink; True when any took it.
+
+    ntfy and the signed feed are independent: one failing never stops the
+    other, and a missing feed URL or key simply skips the feed sink.
+    """
+    delivered = False
+    if ntfy_url:
+        try:
+            post_webhook(ntfy_url, payload)
+            delivered = True
+        except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
+            log.warning("alert webhook failed: %s", exc)
+    feed = feed_url()
+    key_id, key = _feed_key()
+    if feed and key:
+        try:
+            post_feed(feed, payload, key, key_id)
+            delivered = True
+        except Exception as exc:  # noqa: BLE001
+            log.warning("feed webhook failed: %s", exc)
+    return delivered
+
+
+def maybe_notify(cycle, url: str | None = None) -> bool:
+    """POST the cycle's alerts to every sink, if there is anything to say.
+
+    *url* overrides the configured ntfy webhook.  Returns True when any sink
+    delivered.  Every failure (no URL, no alerts, a dead receiver) is quiet by
+    design: the watcher's job is the next cycle.
     """
     if not cycle.new_alerts and not cycle.over_threshold \
             and not getattr(cycle, "ioc_hits", []) \
             and not getattr(cycle, "refusals", []):
         return False
-    url = url if url is not None else notify_url()
-    if not url:
-        return False
-    try:
-        post_webhook(url, alert_payload(cycle))
-    except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
-        log.warning("alert webhook failed: %s", exc)
-        return False
-    return True
-
-
-#: One heartbeat a day.  Silence on the alert channel is ambiguous between
-#: "nothing found" and "the watcher is dead"; this makes the two
-#: distinguishable without spamming the panel.
-HEARTBEAT_SECONDS = 86400
+    return _deliver(alert_payload(cycle),
+                    url if url is not None else notify_url())
 
 
 def maybe_heartbeat(cycle, url: str | None = None) -> bool:
-    """POST the low-priority alive beat to the webhook.
+    """POST the low-priority alive beat to every sink.
 
-    The cadence decision belongs to the caller (run_watch), so a day with
-    no cycles simply beats on the next one.  Same failure policy as the
-    alerts: logged, swallowed, never fatal to the loop.
+    ``full-aur --watch`` sends one for every cycle that raised no alert, so the
+    cadence decision belongs to the caller and silence on the channel means the
+    watcher is dead rather than quiet.  Same failure policy as the alerts:
+    logged, swallowed, never fatal to the loop.
     """
-    url = url if url is not None else notify_url()
-    if not url:
-        return False
-    try:
-        post_webhook(url, heartbeat_payload(cycle))
-    except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
-        log.warning("heartbeat webhook failed: %s", exc)
-        return False
-    return True
+    return _deliver(heartbeat_payload(cycle),
+                    url if url is not None else notify_url())

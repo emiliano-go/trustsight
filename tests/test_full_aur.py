@@ -929,3 +929,29 @@ def test_the_watch_logs_a_startup_banner(monkeypatch, caplog):
     assert "watching the AUR" in text
     assert "database:" in text
     assert "alert webhook:" in text
+
+
+def test_the_banner_names_the_effective_webhook(tmp_path, monkeypatch, caplog):
+    """A `--notify` URL is the effective webhook: the banner must not print
+    "none" on a watcher that is delivering every alert because the config has
+    no webhook but the command passes one."""
+    import logging
+
+    import trustsight.config as config_module
+    import trustsight.full_aur.metadata as metadata
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.notify.notify_url", lambda *a, **k: "")
+    monkeypatch.setattr(pipeline, "run_baseline_build",
+                        lambda **kwargs: CycleResult(refused=True))
+    monkeypatch.setattr(metadata, "load_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_since_cursor", lambda: None)
+    with caplog.at_level(logging.INFO, logger="trustsight.full_aur.pipeline"):
+        pipeline.run_watch(interval=60, cycles=1, sleep=lambda _s: None,
+                           notify_url="https://ntfy.sh/example-topic")
+
+    assert "alert webhook: configured" in caplog.text

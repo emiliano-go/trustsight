@@ -132,6 +132,14 @@ enabled = false
 # message text.  Empty means no notifications.  A dead receiver is logged
 # and swallowed, so a webhook outage cannot kill the watch loop.
 # webhook = "https://ntfy.sh/your-topic"
+#
+# A second, independent sink: the TrustSight watcher feed, which ingests the
+# same document directly instead of polling ntfy.  Every POST is signed with
+# an Ed25519 key the receiver holds only the public half of, so a leaked feed
+# secret cannot forge a document.  The private key is the base64 PKCS#8 value
+# of TRUSTSIGHT_FEED_KEY (TRUSTSIGHT_FEED_KEY_ID names it); with no key the
+# feed sink is skipped.  Empty means no feed.
+# feed = "https://watcher.trustsight.org/api/ingest"
 
 [seed]
 # Import the novelty seed the first time TrustSight runs against

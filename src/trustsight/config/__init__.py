@@ -484,16 +484,26 @@ def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
             text = _replace_rule_block(text, rid, blocks[rid])
             updated.append(rid)
         # Also update rules whose non-pattern semantic fields drifted from
-        # shipped defaults (match_target, severity, category).  Pattern
-        # drift is excluded: a pattern the user broadened would lose that
-        # work if overwritten.
+        # shipped defaults (match_target, severity, category, scope).  A rule
+        # whose on-disk pattern is no longer the shipped one is skipped
+        # entirely: the user edited it, and replacing the block to fix a
+        # *different* field would discard that pattern (the docstring's
+        # promise).  Patterns are compared parsed-on-both-sides so a raw-text
+        # quirk cannot read as an edit.
         _NON_PATTERN_FIELDS = ("match_target", "severity", "category", "scope")
-        for rid, field, on_disk, shipped_val in drifted_shipped_rules():
-            if rid in updated:
+        on_disk_pattern = {
+            r.get("id"): str(r.get("pattern", "")) for r in load_rules()
+        }
+        shipped_pattern = {
+            r.get("id"): str(r.get("pattern", "")) for r in shipped_rules()
+        }
+        for rid, field, _seen, _shipped in drifted_shipped_rules():
+            if rid in updated or field not in _NON_PATTERN_FIELDS:
                 continue
-            if field in _NON_PATTERN_FIELDS:
-                text = _replace_rule_block(text, rid, blocks[rid])
-                updated.append(rid)
+            if on_disk_pattern.get(rid, "") != shipped_pattern.get(rid, ""):
+                continue
+            text = _replace_rule_block(text, rid, blocks[rid])
+            updated.append(rid)
 
     added = missing_shipped_rules()
     for rid in added:

@@ -26,6 +26,13 @@ services:
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       # TRUSTSIGHT_LOG_LEVEL: "INFO"
       # TRUSTSIGHT_OFFLINE: "1"
+      # The signed feed sink: the watcher POSTs every alert here as well as to
+      # ntfy, so the feed ingests directly instead of polling.  The key is the
+      # Ed25519 private key (base64 PKCS#8); the feed holds only the public
+      # half.  With no key the feed sink is skipped.
+      # TRUSTSIGHT_FEED_URL: "https://watcher.trustsight.org/api/ingest"
+      # TRUSTSIGHT_FEED_KEY_ID: "k1"
+      # TRUSTSIGHT_FEED_KEY: "<base64 pkcs8 ed25519>"
     logging:
       driver: json-file
       options:

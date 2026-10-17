@@ -31,7 +31,7 @@ def test_the_artifact_carries_every_projection():
     data = json.loads(contract.render())
     assert set(data) == {
         "version", "rule_ids", "pseudo_rule_ids", "severities",
-        "coverage_gaps", "alert_payload", "report_body",
+        "coverage_gaps", "alert_payload", "ingest", "report_body",
     }
 
 

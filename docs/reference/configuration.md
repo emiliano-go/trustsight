@@ -467,6 +467,10 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |
 | `TRUSTSIGHT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive); an unknown value falls back to `INFO` | The level of the watcher's log on stderr. |
 | `TRUSTSIGHT_LOG_TIMESTAMPS` | Any non-empty value | Prefix each log line with a timestamp and level, for an unattended watcher whose `docker logs` is the only record. |
+| `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyzes with a stale ruleset. |
+| `TRUSTSIGHT_FEED_URL` | A URL | The signed feed ingest endpoint. The watcher POSTs every alert there as well as to ntfy, so the feed ingests directly instead of polling ntfy. Overrides `[notify] feed`; empty and no `[notify] feed` skips the feed sink. |
+| `TRUSTSIGHT_FEED_KEY` | A base64 PKCS#8 Ed25519 private key | Signs each feed POST (`webhook-id`, `webhook-timestamp`, `webhook-signature`). The feed holds only the public half, so a leaked feed secret cannot forge a document. With no key the feed sink is skipped and only ntfy is notified. |
+| `TRUSTSIGHT_FEED_KEY_ID` | A short identifier | Names the signing key so the feed can rotate (it accepts a current and a previous key). |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

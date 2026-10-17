@@ -33,6 +33,12 @@ metadata GET plus actual churn either way. Below about 15 minutes you are
 mostly re-downloading a snapshot the AUR has not regenerated; the floor is 60
 seconds (`limits.watch_min_interval`), because a shorter interval only spins.
 
+At startup the watch syncs `rules.toml` to the shipped ruleset the safe way
+(adds missing rules, repairs a `match_target`/`severity`/`category`/`scope`
+that moved, adopts a superseded shipped pattern, never touches a pattern you
+edited) and logs what it changed, so an unattended watcher never analyses with
+a stale ruleset. Set `TRUSTSIGHT_NO_SYNC_RULES` to skip it.
+
 ## Replaying the past with `--since`
 
 A fresh watcher only sees what changes from now on. To scan for a campaign
@@ -72,6 +78,20 @@ or permanently in `config.toml`:
 [notify]
 webhook = "https://example.invalid/hooks/aur"
 ```
+
+A second, independent sink posts the same document to the TrustSight feed,
+which ingests it directly instead of polling ntfy:
+
+```toml
+[notify]
+feed = "https://watcher.trustsight.org/api/ingest"
+```
+
+Every feed POST is signed with an Ed25519 key
+(`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it), and
+the feed holds only the public half, so a leaked feed secret cannot forge a
+document. ntfy and the feed are independent: one failing never stops the
+other, and with no key the feed sink is skipped.
 
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the

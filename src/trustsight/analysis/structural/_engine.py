@@ -48,6 +48,19 @@ from ._signing import _signing_key_findings, _unread_carrier_findings
 
 __all__ = ['_structural_findings']
 
+#: An arch-scoped checksum array name, ``sha256sums_x86_64`` or ``md5sums_i686``.
+#: ``_touched_checksum_arrays`` tracks only the generic names, so this is how
+#: the C004 refactor check sees an arch split.  ``_ARCH_SCOPED_ADDED_SUMS``
+#: finds one on an added diff line without walking the diff line by line.
+_ARCH_SCOPED_SUMS = re.compile(
+    r"(?:md5|sha1|sha224|sha256|sha384|sha512|b2)sums?_[A-Za-z0-9_]+",
+    re.IGNORECASE,
+)
+_ARCH_SCOPED_ADDED_SUMS = re.compile(
+    r"^\+.*(?:md5|sha1|sha224|sha256|sha384|sha512|b2)sums?_[A-Za-z0-9_]+",
+    re.IGNORECASE | re.MULTILINE,
+)
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -363,7 +376,16 @@ def _structural_findings(
         still_present = bool(current_text and removed_hashes) and all(
             digest in current_text for digest in removed_hashes
         )
-        if not still_present:
+        # A generic array whose entries move to arch-scoped arrays
+        # (`sha256sums` -> `sha256sums_x86_64`/`_aarch64`) is a layout
+        # refactor: the hashes differ per arch, so the removed generic hash is
+        # genuinely gone yet every source is still checksummed.  The
+        # `still_present` test above only catches the same hash reused; this
+        # catches the split where the arch hashes differ.
+        arch_split = bool(_ARCH_SCOPED_SUMS.search(current_text or "")) or bool(
+            _ARCH_SCOPED_ADDED_SUMS.search(diff_text)
+        )
+        if not still_present and not arch_split:
             add("C004", "Checksum Removed For Unchanged Source", "CRITICAL",
                 "integrity",
                 "checksum array deleted while source URLs stayed the same"

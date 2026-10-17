@@ -34,6 +34,7 @@ __all__ = [
     "pseudo_rule_ids",
     "rule_ids",
     "sample_alert_payload",
+    "sample_ingest",
     "sample_report_body",
     "severities",
 ]
@@ -170,6 +171,24 @@ def sample_report_body() -> dict:
     return report.to_dict(include_score=True, verbose=True)
 
 
+def sample_ingest() -> dict:
+    """The signed direct-ingest request the feed accepts.
+
+    The body is the alert payload, unchanged; the request carries four headers
+    and an Ed25519 signature over ``webhook-id.webhook-timestamp.raw_body``.
+    The feed holds only the public half of the key.
+    """
+    return {
+        "method": "POST",
+        "headers": ["webhook-id", "webhook-timestamp", "webhook-key-id",
+                    "webhook-signature"],
+        "signature_algorithm": "ed25519",
+        "signed_material": "webhook-id.webhook-timestamp.raw_body",
+        "signature_format": "v1=<base64>",
+        "body": sample_alert_payload(),
+    }
+
+
 def contract() -> dict:
     """The whole contract document."""
     return {
@@ -179,6 +198,7 @@ def contract() -> dict:
         "severities": severities(),
         "coverage_gaps": coverage_gaps(),
         "alert_payload": sample_alert_payload(),
+        "ingest": sample_ingest(),
         "report_body": sample_report_body(),
     }
 

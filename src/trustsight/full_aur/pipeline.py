@@ -1,6 +1,7 @@
 """Bootstrap and incremental corpus pipeline."""
 
 import logging
+import os
 import sys
 import time
 from collections import deque
@@ -1267,12 +1268,35 @@ def run_watch(
     try:
         from ..notify import notify_url as _configured_notify_url
 
-        _log("  alert webhook: "
-             f"{'configured' if _configured_notify_url() else 'none'}")
+        # The banner must name the webhook that will actually be used: a
+        # `--notify` URL passed on the command line is the effective one, and
+        # reading only the config printed "none" on a watcher that was in fact
+        # delivering every alert.
+        _effective = notify_url or _configured_notify_url()
+        _log(f"  alert webhook: {'configured' if _effective else 'none'}")
     except Exception:  # noqa: BLE001
         pass
+    # rules.toml is written once, at install, and only ever gains rules, so a
+    # rule whose fields moved in a later build keeps its old behaviour until it
+    # is synced.  An unattended watcher must not analyze with a stale ruleset,
+    # so sync the safe way once at startup: add missing rules, fix non-pattern
+    # drift and superseded patterns, and never touch a pattern the user edited.
+    # Logged, not silent (the design refuses silent adoption);
+    # TRUSTSIGHT_NO_SYNC_RULES opts out; a config write must never kill the
+    # watch, so it fails open.
+    if not os.environ.get("TRUSTSIGHT_NO_SYNC_RULES", "").strip():
+        try:
+            from ..config import drifted_shipped_rules, sync_rules
+
+            added, updated = sync_rules(update_outdated=True)
+            if added or updated:
+                _log(f"  ruleset synced: {len(added)} added, {len(updated)} updated")
+            remaining = drifted_shipped_rules()
+            if remaining:
+                _log(f"  ruleset still drifted (user edits kept): {remaining}")
+        except Exception as exc:  # noqa: BLE001 - never fail the watch over this
+            _log(f"  ruleset sync skipped: {exc}")
     attempts = 0
-    last_heartbeat = 0.0
     try:
         while True:
             # A transient failure (network blip, rate limit) must not kill an
@@ -1324,15 +1348,15 @@ def run_watch(
             # announced once here and never again, and an over-threshold
             # package is what the watcher exists for - so the webhook is how
             # either reaches anyone not reading the log.
-            from ..notify import HEARTBEAT_SECONDS, maybe_heartbeat, maybe_notify
+            from ..notify import maybe_heartbeat, maybe_notify
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
-            # Silence is otherwise ambiguous between "nothing found" and
-            # "the watcher is dead": one low-priority beat a day.
-            if time.time() - last_heartbeat > HEARTBEAT_SECONDS:
-                if maybe_heartbeat(result, notify_url):
-                    last_heartbeat = time.time()
+            elif maybe_heartbeat(result, notify_url):
+                # Every analysis that raised no alert still beats, so silence
+                # on the channel unambiguously means the watcher is dead
+                # rather than merely quiet.
+                _log("  heartbeat delivered")
             if cycles and len(results) >= cycles:
                 break
             # A backfill is a queue, not a schedule: the interval governs the

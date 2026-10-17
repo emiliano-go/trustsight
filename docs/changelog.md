@@ -2,6 +2,30 @@
 
 # Changelog
 
+## [0.20.2] - 2026-10-15
+
+### Added
+
+- **The watcher posts every alert to the TrustSight feed, independently of ntfy.** A second sink (`TRUSTSIGHT_FEED_URL`, or `[notify] feed`) carries the same document the human channel gets, signed with Ed25519 over `webhook-id.webhook-timestamp.raw_body` (`TRUSTSIGHT_FEED_KEY`, base64 PKCS#8; `TRUSTSIGHT_FEED_KEY_ID` names it). The feed holds only the public key and ingests the document directly on `POST /api/ingest`, so it no longer polls ntfy. ntfy and the feed fail independently; with no key the feed sink is skipped. The contract artifact carries the ingest request shape.
+
+### Fixed
+
+- **The watch banner names the effective webhook.** It read only `[notify] webhook`, so a watcher started with `--notify` printed "alert webhook: none" while it was delivering every alert.
+- **The alive beat is sent on every cycle that raised no alert**, not once a day, so silence on the channel unambiguously means the watcher is dead rather than quiet.
+
+## [0.20.1] - 2026-10-15
+
+### Added
+
+- **The watcher syncs its ruleset at startup.** `full-aur --watch` runs `config sync-rules --update` once at startup: it adds missing rules, repairs a drifted `match_target`/`severity`/`category`/`scope` and a superseded shipped pattern, never touches a pattern the user edited, logs what it changed, and fails open. `TRUSTSIGHT_NO_SYNC_RULES` opts out. An unattended watcher no longer analyses with a stale `rules.toml`; the watcher container had drifted on `R152.scope`, so every analysis carried a `COVERAGE` gap.
+
+### Fixed
+
+- **`sync-rules` keeps a custom pattern even when another field drifted.** It replaced the whole `[[rules]]` block to fix a `match_target` drift, which discarded a pattern the user had edited; a rule whose pattern is no longer the shipped one is now skipped entirely.
+- **X002 no longer fires on a non-ASCII message.** The confusable-character shape required only a confusable character, so a CJK install-hook message (`首次使用需扫码登录`) fired CRITICAL; it now also requires an ASCII name character, so only a word that impersonates a command name matches.
+- **C017 no longer fires on a redirect inside a hook message.** A redirect spelled inside a quoted string (`echo "append 'export X >> ~/.bashrc'"`) is text, not a write; the raw-target scan now skips quoted spans.
+- **C004 no longer fires on an arch-scoped checksum split.** A generic `sha256sums` replaced by `sha256sums_<arch>` arrays is a layout refactor; when the per-arch hashes differ the exemption did not apply, so the rule now recognises the split rather than only a hash moved verbatim.
+
 ## [0.20.0] - 2026-10-15
 
 ### Added

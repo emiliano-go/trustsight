@@ -33,9 +33,22 @@ _INSTALL_HOOKS = (
     "pre_upgrade", "pre_remove", "post_remove",
 )
 
+# H017's high-severity arm: a hook that *executes* dynamic code.  A fetch
+# (``_network_fetch_url``) is the other high arm.  These two are what the rule
+# name ("Install Hook Fetches Or Executes") actually claims.
 _HOOK_EXEC_RE = re.compile(
-    r"\b(?:eval|bash\s+-c|sh\s+-c|source\s+/|systemctl\s+enable|"
-    r"chmod\s+[0-7]*[2467][0-7]{3}|chmod\s+[ugoa]*\+s|useradd|usermod|visudo)\b",
+    r"\b(?:eval|bash\s+-c|sh\s+-c|source\s+/)\b",
+    re.IGNORECASE,
+)
+
+# Privileged setup an install hook does that is *not* fetch-or-execute:
+# enabling a service, creating or altering an account, editing sudoers, or
+# setting a setuid/setgid bit.  Still reported (no gap), but at MEDIUM: it is
+# the ordinary shape of a legitimate hook, and treating every
+# `systemctl enable` as "runs as root" overscored the common case.
+_HOOK_ADMIN_RE = re.compile(
+    r"\b(?:systemctl\s+enable|useradd|usermod|visudo|"
+    r"chmod\s+[0-7]*[2467][0-7]{3}|chmod\s+[ugoa]*\+s)\b",
     re.IGNORECASE,
 )
 

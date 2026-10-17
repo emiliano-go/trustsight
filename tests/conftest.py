@@ -24,6 +24,10 @@ os.environ["XDG_DATA_HOME"] = os.path.join(_TEST_HOME, ".local", "share")
 os.environ["XDG_CACHE_HOME"] = os.path.join(_TEST_HOME, ".cache")
 os.environ["GIT_CONFIG_GLOBAL"] = os.devnull
 os.environ["GIT_CONFIG_SYSTEM"] = os.devnull
+# The once-a-command newer-release check must never reach the network in a
+# test: the suite forbids it.  A test that exercises the check sets
+# `TRUSTSIGHT_NO_UPDATE_CHECK` back itself.
+os.environ["TRUSTSIGHT_NO_UPDATE_CHECK"] = "1"
 # A deterministic locale: git (and everything else) localises its messages,
 # so a test that matches a message must not depend on the builder's locale.
 # `packaging/*/check()` failed under LANG=de_DE.UTF-8 for exactly this.

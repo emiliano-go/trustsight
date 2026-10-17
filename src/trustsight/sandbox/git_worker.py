@@ -70,7 +70,30 @@ class _OpError(Exception):
     """A worker operation could not complete."""
 
 
-def _apply_limits() -> None:
+#: Readable names for the limits, so a failure names *which* protection was
+#: lost rather than a bare errno.
+_LIMIT_NAMES = {
+    resource.RLIMIT_AS: "RLIMIT_AS (address space)",
+    resource.RLIMIT_CPU: "RLIMIT_CPU (cpu seconds)",
+    resource.RLIMIT_FSIZE: "RLIMIT_FSIZE (file size)",
+    resource.RLIMIT_NOFILE: "RLIMIT_NOFILE (open files)",
+}
+
+#: Limit/protection failures from startup.  Set once in :func:`main` and
+#: attached to every response, so the parent can surface the weaker
+#: isolation instead of it vanishing into a swallowed exception.
+_DEGRADED: list[str] = []
+
+
+def _apply_limits() -> list[str]:
+    """Apply the worker's fixed resource limits; return what could not be set.
+
+    A limit that fails to apply is **reported, not swallowed**: the isolation
+    is weaker than the design intends (this is a resource-bounded subprocess,
+    not an OS sandbox), and an operator must be able to see that rather than
+    infer it from the absence of a crash.
+    """
+    failures: list[str] = []
     for which, value in (
         (resource.RLIMIT_AS, GIT_WORKER_MEMORY_BYTES),
         (resource.RLIMIT_CPU, GIT_WORKER_CPU_SECONDS),
@@ -79,13 +102,18 @@ def _apply_limits() -> None:
     ):
         try:
             resource.setrlimit(which, (value, value))
-        except (ValueError, OSError):
-            pass
+        except (ValueError, OSError) as exc:
+            failures.append(
+                f"{_LIMIT_NAMES.get(which, str(which))} not applied: "
+                f"{type(exc).__name__}")
     try:
         libc = ctypes.CDLL(None, use_errno=True)
-        libc.prctl(_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)
-    except (OSError, AttributeError):
-        pass
+        if libc.prctl(_PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
+            failures.append("PR_SET_NO_NEW_PRIVS not applied: prctl failed")
+    except (OSError, AttributeError) as exc:
+        failures.append(
+            f"PR_SET_NO_NEW_PRIVS not applied: {type(exc).__name__}")
+    return failures
 
 
 def _harden_libgit2() -> str:
@@ -566,8 +594,21 @@ def _encode_response(response: dict) -> bytes:
     return payload
 
 
+def _attach_degraded(response: dict) -> dict:
+    """Attach the startup limit failures to a response, when there are any.
+
+    The parent reads it once and reports the degraded protection; leaving it
+    only in the worker's stderr would let a swallowed ``setrlimit`` read as
+    full isolation.
+    """
+    if _DEGRADED:
+        response["degraded"] = list(_DEGRADED)
+    return response
+
+
 def main() -> int:
-    _apply_limits()
+    global _DEGRADED
+    _DEGRADED = _apply_limits()
     _harden_libgit2()
     try:
         os.chdir("/")
@@ -580,7 +621,8 @@ def main() -> int:
             body = protocol.read_frame(stdin)
         except protocol.FrameError:
             return 0
-        stdout.write(protocol.frame(_encode_response(_handle(body))))
+        response = _attach_degraded(_handle(body))
+        stdout.write(protocol.frame(_encode_response(response)))
         stdout.flush()
 
 

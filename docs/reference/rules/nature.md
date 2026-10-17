@@ -358,7 +358,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 - **M fires at the category of its inputs and owns none**: a claims contradiction (M001) or a weak-signal span (M002) has no evidence category of its own; it records which inputs composed. P (claims) and W (boundaries) are render surfaces, not evidence-category layers either.
 - **A is the reserved L9 layer, not an L1-L8 rule layer**: it inspects the built artifact, only in the optional build lane, and its findings are never blended into the static score. The series is an artifact of execution, not of text analysis - the one mechanism that cannot be a static rule.
 - **A rule whose mechanism later proves to belong to another series is documented here**, not renumbered.
-- **The H-series is under an intake freeze**: no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`.
+- **The H-series is under an intake freeze**: no new H id is added while the live count is above the reduction target. Overlapping ids are merged in the survivor's favour once the co-fire audit is measured, and a retired id stays readable as an alias of its survivor forever (`trustsight.rule_id_history`). The freeze is enforced in `tests/test_h_reduction.py`; the audit, the freeze-versus-residue split, and why the retirement map is still empty are explained in [Reducing the H-Series](../../explanation/reducing-the-h-series.md).
 
 ## Summary Table
 

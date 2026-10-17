@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-10-17T14:17:32.580540Z",
+  "created_at_obs": 0,
+  "package": "pulsesync-bin",
+  "reason": "Git history for AUR package pulsesync-bin shows the 3.0.0-1 to 3.0.1-1 commit (3a1e8b5) only changes pkgver, the asset filename/URL, and sha256sums_x86_64. The pulsesync-bin.install file is unchanged since 2.14.0-1 and was introduced in 2.13.0; package() body is unchanged. R007/R053/H015/H017 fire against a root-commit full-history baseline that re-includes the long-standing chrome-sandbox setuid helper, which is the standard Chromium SUID sandbox pattern and was not introduced by this update.",
+  "requires_clear_indicators": true,
+  "rule_id": "R007",
+  "ttl_observations": null
+}

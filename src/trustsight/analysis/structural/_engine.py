@@ -2,6 +2,7 @@
 
 import re
 from ...differ import (
+    _touched_checksum_arrays,
     checksum_array_parity_in_text,
     is_skip_justified,
     map_diff_lines,
@@ -42,10 +43,23 @@ from ._checksums import _is_checksum_array, _package_fetch_client, addendum4_fin
 from ._common import _BINARY_ARTIFACT_RE, _TRUSTED_BUCKETS
 from ._hooks import install_script_findings
 from ._hygiene import _build_hygiene_findings, _splicing_findings, capability_in_diff, diff_structure_findings
-from ._provenance import _PREBUILT_SUFFIX, _declared_upstream_url, _fork_source_divergence, _head_upstream_host, _head_upstream_text, _prebuilt_host_divergence, _source_divergence_allow, _upstream_domain_typosquat
+from ._provenance import _PREBUILT_SUFFIX, _declared_upstream_url, _fork_source_divergence, _head_upstream_host, _head_upstream_text, _prebuilt_host_divergence, _registered_domain, _source_divergence_allow, _upstream_domain_typosquat
 from ._signing import _signing_key_findings, _unread_carrier_findings
 
 __all__ = ['_structural_findings']
+
+#: An arch-scoped checksum array name, ``sha256sums_x86_64`` or ``md5sums_i686``.
+#: ``_touched_checksum_arrays`` tracks only the generic names, so this is how
+#: the C004 refactor check sees an arch split.  ``_ARCH_SCOPED_ADDED_SUMS``
+#: finds one on an added diff line without walking the diff line by line.
+_ARCH_SCOPED_SUMS = re.compile(
+    r"(?:md5|sha1|sha224|sha256|sha384|sha512|b2)sums?_[A-Za-z0-9_]+",
+    re.IGNORECASE,
+)
+_ARCH_SCOPED_ADDED_SUMS = re.compile(
+    r"^\+.*(?:md5|sha1|sha224|sha256|sha384|sha512|b2)sums?_[A-Za-z0-9_]+",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 def _structural_findings(
     diff_text: str,
@@ -130,7 +144,7 @@ def _structural_findings(
     run_url_instances(urlctx, add, only=frozenset({"H003"}))
 
     if cs_behavior == "changed_from_sha256_to_skip":
-        skip_reason = is_skip_justified(diff_text)
+        skip_reason = is_skip_justified(diff_text, current_text)
         suffix = f" ({skip_reason})" if skip_reason else ""
         add("H001", "Checksum Disabled", "INFO" if skip_reason else "HIGH", "integrity",
             f"sha256sums=SKIP ({skip_reason})" if skip_reason else "sha256sums=SKIP",
@@ -243,7 +257,7 @@ def _structural_findings(
     # G1/G3/G4/G5/G6/G7 predicates over the same parse.
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,
                        source_changes, config or {}, add,
-                       tree_manifest=tree_manifest)
+                       tree_manifest=tree_manifest, post_text=current_text)
 
     # the E-series entropy predicates. Silent until their
     # thresholds are configured (they ship empty).
@@ -347,27 +361,69 @@ def _structural_findings(
     if set(removed) == set(added) and cs_behavior in (
         "checksum_array_removed", "checksum_entry_removed",
     ):
-        add("C004", "Checksum Removed For Unchanged Source", "CRITICAL", "integrity",
-            "checksum array deleted while source URLs stayed the same"
-            if cs_behavior == "checksum_array_removed" else
-            "checksum entry removed while source URLs stayed the same",
-            line=find_line_in_diff(diff_text, r"sha256sums", prefix=r"\-"))
+        # A hash "removed" from one array but moved to an arch-scoped one
+        # (`sha256sums` -> `sha256sums_x86_64`/`_aarch64`) is a layout
+        # refactor, not weakened verification: the hash is still in the
+        # recipe.  Fire only when a removed hash is genuinely gone from the
+        # whole recipe (the full head text); without it, keep the old
+        # behaviour rather than guess.
+        removed_hashes = {
+            item.strip("'\"")
+            for array in _touched_checksum_arrays(diff_text)
+            for item in array.removed_items
+            if any(c.isalnum() for c in item)
+        }
+        still_present = bool(current_text and removed_hashes) and all(
+            digest in current_text for digest in removed_hashes
+        )
+        # A generic array whose entries move to arch-scoped arrays
+        # (`sha256sums` -> `sha256sums_x86_64`/`_aarch64`) is a layout
+        # refactor: the hashes differ per arch, so the removed generic hash is
+        # genuinely gone yet every source is still checksummed.  The
+        # `still_present` test above only catches the same hash reused; this
+        # catches the split where the arch hashes differ.
+        arch_split = bool(_ARCH_SCOPED_SUMS.search(current_text or "")) or bool(
+            _ARCH_SCOPED_ADDED_SUMS.search(diff_text)
+        )
+        if not still_present and not arch_split:
+            add("C004", "Checksum Removed For Unchanged Source", "CRITICAL",
+                "integrity",
+                "checksum array deleted while source URLs stayed the same"
+                if cs_behavior == "checksum_array_removed" else
+                "checksum entry removed while source URLs stayed the same",
+                line=find_line_in_diff(diff_text, r"sha256sums", prefix=r"\-"))
+
+    # The declared upstream host serves C005 and C011 alike: a binary
+    # artifact, or a prebuilt package's source, on the project's own host (or
+    # a host the operator allow-listed as its distribution CDN) is not a
+    # third-party fetch.  Computed once here so the two rules cannot disagree
+    # about what "the upstream" is.
+    upstream_host = _head_upstream_host(diff_text, current_text) if added else ""
+    upstream_reg = _registered_domain(upstream_host) if upstream_host else ""
+    divergence_allow = _source_divergence_allow(config)
 
     for url in added:
-        if _BINARY_ARTIFACT_RE.search(url) and source_buckets.get(url) not in _TRUSTED_BUCKETS:
-            bucket = source_buckets.get(url, "unknown")
-            # Sliced *before* escaping, not after. Cutting an escaped
-            # string can land between a backslash and the character it
-            # escapes, which is not a legal pattern - the compile then
-            # fails, the fallback escapes the already-escaped text, and
-            # the line number is silently lost on exactly the long URLs
-            # this rule exists to report.
-            escaped = re.escape(url[:80])
-            add("C005", "Binary Artifact From Untrusted Source", "MEDIUM", "source",
-                f"binary artifact from {bucket} bucket: {url}",
-                line=find_line_in_diff(diff_text, escaped),
-                url=url, bucket=bucket)
-            break
+        if not _BINARY_ARTIFACT_RE.search(url):
+            continue
+        bucket = source_buckets.get(url, "unknown")
+        if bucket in _TRUSTED_BUCKETS:
+            continue
+        source_reg = _registered_domain(_url_domain(url))
+        if source_reg and (source_reg == upstream_reg
+                           or source_reg in divergence_allow):
+            continue
+        # Sliced *before* escaping, not after. Cutting an escaped
+        # string can land between a backslash and the character it
+        # escapes, which is not a legal pattern - the compile then
+        # fails, the fallback escapes the already-escaped text, and
+        # the line number is silently lost on exactly the long URLs
+        # this rule exists to report.
+        escaped = re.escape(url[:80])
+        add("C005", "Binary Artifact From Untrusted Source", "MEDIUM", "source",
+            f"binary artifact from {bucket} bucket: {url}",
+            line=find_line_in_diff(diff_text, escaped),
+            url=url, bucket=bucket)
+        break
 
     if maintainer_changed and added:
         old_domains = {_url_domain(u) for u in removed}
@@ -384,21 +440,19 @@ def _structural_findings(
     # party under review, so this is a heuristic, not proof; it names the
     # divergence a reviewer has to judge.  The upstream-payload gap itself
     # (the bytes behind the URL) stays outside static analysis.
-    if package_name.endswith(_PREBUILT_SUFFIX) and added:
-        upstream_host = _head_upstream_host(diff_text, current_text)
-        if upstream_host:
-            divergence = _prebuilt_host_divergence(
-                added, source_buckets, package_name, upstream_host,
-                _source_divergence_allow(config),
-            )
-            if divergence is not None:
-                url, source_reg, upstream_reg = divergence
-                add("C011", "Prebuilt Binary From Non-Upstream Host", "MEDIUM",
-                    "source",
-                    f"prebuilt package sources from {source_reg}, "
-                    f"not declared upstream {upstream_reg}",
-                    line=find_line_in_diff(diff_text, re.escape(url[:80])),
-                    url=url, source_host=source_reg, upstream_host=upstream_reg)
+    if package_name.endswith(_PREBUILT_SUFFIX) and upstream_host:
+        divergence = _prebuilt_host_divergence(
+            added, source_buckets, package_name, upstream_host,
+            divergence_allow,
+        )
+        if divergence is not None:
+            url, source_reg, upstream_reg = divergence
+            add("C011", "Prebuilt Binary From Non-Upstream Host", "MEDIUM",
+                "source",
+                f"prebuilt package sources from {source_reg}, "
+                f"not declared upstream {upstream_reg}",
+                line=find_line_in_diff(diff_text, re.escape(url[:80])),
+                url=url, source_host=source_reg, upstream_host=upstream_reg)
 
     # C012 - a source domain one or two edits from the declared upstream's own
     # domain.  R013b only sees mixed-script homoglyphs and the package/dep

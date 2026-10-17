@@ -283,6 +283,10 @@ pattern = 'https?://[^/\\s]*\\.(?:duckdns\\.org|no\\-ip\\.org|noip\\.com|no\\-ip
 severity = "MEDIUM"
 category = "network"
 match_target = "raw_line"
+# Everything except "message": a `docs: https://x.github.io/...` line in an
+# install banner is a link the reader clicks, not a source the recipe fetches
+# (sysc-shell).  The URL is what the user is told to visit, not a build input.
+scope = ["function_body", "other"]
 added_only = true
 
 # --- Build-time weakening ---
@@ -637,4 +641,4 @@ INT_WEIGHT_GROUPS = ("severity_weights", "source_bucket_weights", "novelty_weigh
 
 KNOWN_BOOL_KEYS = ("seed.auto_import", "rules.experimental")
 
-_SEMANTIC_FIELDS = ("match_target", "severity", "category", "pattern")
+_SEMANTIC_FIELDS = ("match_target", "severity", "category", "pattern", "scope")

@@ -69,6 +69,31 @@ _NAMED_TARGET_RES = (
 )
 
 
+def _inside_quotes(line: str, pos: int) -> bool:
+    """True when *pos* falls inside a single- or double-quoted span.
+
+    A redirect spelled inside a quoted string is message text, not a write:
+    ``echo "append 'export X >> ~/.bashrc'"`` prints the string and writes
+    nothing, but the naive redirect scan read ``>> ~/.bashrc`` out of it and
+    C017 fired.
+    """
+    quote = ""
+    i = 0
+    while i < pos:
+        ch = line[i]
+        if quote:
+            if ch == quote:
+                quote = ""
+            elif ch == "\\" and quote == '"':
+                i += 1
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "\\":
+            i += 1
+        i += 1
+    return bool(quote)
+
+
 def _raw_targets(body: str) -> list[str]:
     """Raw write destinations on *body* (quote characters preserved)."""
     targets: list[str] = []
@@ -88,6 +113,10 @@ def _raw_targets(body: str) -> list[str]:
             if m.group(1) and not m.group(1).startswith("-"):
                 targets.append(m.group(1))
     for m in _REDIRECT_TARGET_RE.finditer(body):
+        # The command-position verbs above cannot fire inside a quoted string;
+        # a redirect can, so it is the one that needs the quote test.
+        if _inside_quotes(body, m.start()):
+            continue
         t = m.group(1).strip().strip("\"'")
         if t and not t.startswith("("):
             targets.append(t)

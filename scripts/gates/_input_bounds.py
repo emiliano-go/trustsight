@@ -7,7 +7,7 @@ import re
 import time
 from scripts.gates._core import Gate, HOSTILE, SRC, _ARTIFACT_MODULES, _ARTIFACT_READ_EXEMPT, _BOUNDED_IO_MODULE, _ENDPOINT_HOST, _FORBIDDEN_CALLS, _NETWORK_CALLS, _NETWORK_MODULES, _RELEASE_HOSTS, _RELEASE_MODULES, _URL_LITERAL_RE, _call_name, _enclosing_functions, _hostile_fact, _hostile_result, _python_files, _rel, _render_forget_list, _render_list_rows
 
-__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
+__all__ = ['gate_artifact_reads_are_bounded', 'gate_dead_tokenizer_child_fails_the_package', 'gate_every_child_process_gets_an_explicit_environment', 'gate_every_live_regex_is_audited', 'gate_every_stream_read_is_bounded', 'gate_expansion_is_bounded', 'gate_freshness_uses_local_marker', 'gate_git_worker_limit_failures_are_reported', 'gate_git_worker_startup_is_isolated', 'gate_network_is_confined', 'gate_network_reads_are_bounded', 'gate_no_interpreter_calls', 'gate_no_path_based_archive_extraction', 'gate_regex_patterns_pass_adversarial_audit', 'gate_single_network_host', 'gate_sql_is_parameterised', 'gate_terminal_output_is_inert', 'gate_tokenizer_module_is_isolated', 'gate_tokenizer_pool_wait_is_bounded', 'gate_tokenizer_smoke_is_deterministic', 'gate_tokenizer_worker_startup_is_isolated', 'gate_untrusted_text_is_sanitised_where_it_is_rendered']
 
 def gate_no_interpreter_calls() -> Gate:
     """No path turns text into code, and nothing is unpickled."""
@@ -650,6 +650,33 @@ def gate_git_worker_startup_is_isolated() -> Gate:
         problems.append("the git worker does not get a minimal environment")
     return Gate("git worker startup is isolated", not problems,
                 problems or "isolated (-I), minimal env")
+
+def gate_git_worker_limit_failures_are_reported() -> Gate:
+    """A16: a resource limit that fails to apply is reported, not swallowed.
+
+    The git worker is a resource-bounded subprocess, not an OS sandbox, so a
+    ``setrlimit`` or ``PR_SET_NO_NEW_PRIVS`` that fails leaves the isolation
+    weaker than the design intends.  That must surface to the parent (the
+    ``degraded`` field) rather than vanish into a bare ``except: pass``.
+    """
+    from unittest.mock import patch
+
+    from trustsight.sandbox import git_worker
+
+    problems: list[str] = []
+    with patch.object(git_worker.resource, "setrlimit",
+                      side_effect=OSError("denied")), \
+            patch.object(git_worker.ctypes, "CDLL",
+                         side_effect=AttributeError("no libc")):
+        failures = git_worker._apply_limits()
+    if len(failures) != 5:
+        problems.append(f"expected five reported failures, got {len(failures)}")
+    if not any("RLIMIT_AS" in f for f in failures):
+        problems.append("an rlimit failure was not named")
+    if not any("PR_SET_NO_NEW_PRIVS" in f for f in failures):
+        problems.append("a NO_NEW_PRIVS failure was not named")
+    return Gate("git worker limit failures are reported", not problems,
+                problems or "failures are returned, not swallowed")
 
 def gate_tokenizer_pool_wait_is_bounded() -> Gate:
     """A6/A14: a saturated pool refuses at a deadline, never blocks forever.

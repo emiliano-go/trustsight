@@ -28,7 +28,7 @@ A Low verdict does not mean "safe." It means "no detectable risk signals in this
 
 **67.9 % of diffs score 0** (zero-rate) across the 3,739-diff benign corpus. At the 95th percentile benign packages score **35**; the CRITICAL-class corpus has a 5th percentile of **60** and a minimum of **50**. The calibration gates re-measure both figures against the shipped configuration on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the strict separation gate; see [using TrustSight in CI](../guides/using-in-ci.md) and [benchmarks and methodology](../explanation/benchmarks-and-methodology.md)). These numbers are the tails measured on the locked 3,739-diff corpus, not a claim that the two distributions as a whole do not overlap. Run `uv run --with pytest python -m pytest` for the current test count.
 
-The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 90.3th, so about **9.7 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
+The 20-point threshold is therefore **not** the benign 95th percentile: it sits at the 90.4th, so about **9.6 %** of benign diffs land above it. That is a deliberate consequence of [B10](../security.md#b10-positive-evidence-is-reported-never-credited), which stopped crediting declared verification; the separation that matters, benign p95 below malicious p5, is what the gate enforces.
 
 ### Medium / High / Critical (score > 20)
 

@@ -350,3 +350,109 @@ def test_a_refused_cycle_during_a_backfill_retries(monkeypatch):
     results = run_watch(interval=60, cycles=1, sleep=lambda s: None)
     assert len(results) == 1
     assert not results[0].refused
+
+
+# --- the ruleset is synced once at startup ---
+
+
+def _drifted_rules(tmp_path, monkeypatch):
+    """A CONFIG_DIR whose rules.toml holds the classic R001 drift (shipped
+    pattern intact, non-pattern field stale)."""
+    import trustsight.config as config_module
+    from trustsight.config import ensure_default_configs, shipped_rules
+
+    cfg = tmp_path / ".config"
+    monkeypatch.setattr(config_module, "CONFIG_DIR", cfg)
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
+    ensure_default_configs()
+    path = cfg / "rules.toml"
+    r001 = {r["id"]: r for r in shipped_rules()}["R001"]
+    old = r001.get("match_target", "raw_line")
+    # R001's shipped match_target is "resolved"; a file still holding
+    # "raw_line" is drift the safe sync repairs (pattern untouched).
+    path.write_text(
+        path.read_text().replace(
+            f'match_target = "{old}"', 'match_target = "raw_line"', 1))
+    return cfg
+
+
+def test_watch_syncs_the_shipped_ruleset_at_startup(tmp_path, monkeypatch):
+    """A watcher must not analyze with a stale rules.toml.  rules.toml is
+    written once and only gains rules, so a rule whose fields moved in a later
+    build keeps its old behaviour until synced; the watch syncs the safe way
+    at startup."""
+    from trustsight.config import drifted_shipped_rules, missing_shipped_rules
+
+    _drifted_rules(tmp_path, monkeypatch)
+    monkeypatch.delenv("TRUSTSIGHT_NO_SYNC_RULES", raising=False)
+    assert any(r[0] == "R001" for r in drifted_shipped_rules())
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert drifted_shipped_rules() == []
+    assert missing_shipped_rules() == []
+
+
+def test_watch_sync_can_be_disabled(tmp_path, monkeypatch):
+    from trustsight.config import drifted_shipped_rules
+
+    _drifted_rules(tmp_path, monkeypatch)
+    monkeypatch.setenv("TRUSTSIGHT_NO_SYNC_RULES", "1")
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert any(r[0] == "R001" for r in drifted_shipped_rules())
+
+
+# --- the alive beat ---
+
+
+def _isolated_config(tmp_path, monkeypatch):
+    import trustsight.config as config_module
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
+
+
+def test_a_cycle_that_raises_no_alert_beats(tmp_path, monkeypatch):
+    """Silence between alerts must mean the watcher is dead, not quiet, so a
+    no-alert analysis still sends the low-priority alive beat."""
+    _isolated_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+    beats: list[int] = []
+    monkeypatch.setattr("trustsight.notify.maybe_notify", lambda *a, **k: False)
+    monkeypatch.setattr("trustsight.notify.maybe_heartbeat",
+                        lambda c, u=None: beats.append(1) or True)
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert beats == [1]
+
+
+def test_a_cycle_that_alerts_does_not_beat(tmp_path, monkeypatch):
+    _isolated_config(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "trustsight.full_aur.pipeline.run_baseline_build",
+        lambda **kw: CycleResult(added=1),
+    )
+    beats: list[int] = []
+    monkeypatch.setattr("trustsight.notify.maybe_notify", lambda *a, **k: True)
+    monkeypatch.setattr("trustsight.notify.maybe_heartbeat",
+                        lambda c, u=None: beats.append(1) or True)
+
+    run_watch(interval=60, cycles=1, sleep=lambda _: None)
+
+    assert beats == []

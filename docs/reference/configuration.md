@@ -66,7 +66,7 @@ the selected policy too.
 
 | Profile | Default threshold | Intended use |
 |---------|-------------------|--------------|
-| `default` | `20` | Historical behavior; about 9.7% of locked benign-corpus diffs enter the review queue. |
+| `default` | `20` | Historical behavior; about 9.6% of locked benign-corpus diffs enter the review queue. |
 | `quiet` | `40` | Smaller queue; it does not claim the same labelled-fixture coverage as `default`. |
 | `strict` | `10` | Broader queue for operators who prefer sensitivity over review volume. |
 
@@ -451,18 +451,26 @@ HIGH. The shipped file is empty, and a miss is uninformative.
 
 ## Environment variables
 
-TrustSight reads seven environment variables. Everything else that changes
+TrustSight reads ten environment variables. Everything else that changes
 behaviour is a config key or a command flag.
 
 | Variable | Values | Effect |
 |----------|--------|--------|
 | `TRUSTSIGHT_OFFLINE` | `1`, `true`, `yes` (case-insensitive, surrounding whitespace ignored); anything else is off | Forbids outbound requests to the release channel. |
+| `TRUSTSIGHT_NO_UPDATE_CHECK` | `1`, `true`, `yes` (case-insensitive); anything else is off | Disables the once-a-command "a newer release exists" notice. |
 | `NO_COLOR` | Any non-empty value | Disables Rich output; terminal and pipe both get the plain renderer. |
 | `FORCE_COLOR` | Any non-empty value | Forces Rich output even when stdout is not a terminal. |
 | `TRUSTSIGHT_FORCE_RICH` | Any non-empty value | The same as `FORCE_COLOR`, for callers that already use `FORCE_COLOR` for something else. |
 | `TRUSTSIGHT_DOC_CACHE` | A directory path | Overrides where the parsed-document cache stores its JSON entries. Default: `$XDG_CACHE_HOME/trustsight/documents`. |
 | `XDG_CACHE_HOME` | A directory path | Base for the document cache when `TRUSTSIGHT_DOC_CACHE` is unset. |
 | `TRUSTSIGHT_SQLITE_SYNCHRONOUS` | `OFF`, `NORMAL`, `FULL`, `EXTRA` (case-insensitive); an unknown value falls back to `NORMAL` | SQLite commit durability. `NORMAL` (the default) keeps WAL's crash-safety without an fsync per commit; `FULL` is the old behaviour. |
+| `TRUSTSIGHT_SQLITE_BUSY_TIMEOUT` | A non-negative integer of milliseconds; an invalid value falls back to `30000` | How long a connection waits for a locked database before erroring. `30000` (the default) lets a `seed fetch` and a corpus cycle overlap without a spurious "database is locked"; raise it if a single cycle writes for longer. |
+| `TRUSTSIGHT_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, `ERROR` (case-insensitive); an unknown value falls back to `INFO` | The level of the watcher's log on stderr. |
+| `TRUSTSIGHT_LOG_TIMESTAMPS` | Any non-empty value | Prefix each log line with a timestamp and level, for an unattended watcher whose `docker logs` is the only record. |
+| `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyzes with a stale ruleset. |
+| `TRUSTSIGHT_FEED_URL` | A URL | The signed feed ingest endpoint. The watcher POSTs every alert there as well as to ntfy, so the feed ingests directly instead of polling ntfy. Overrides `[notify] feed`; empty and no `[notify] feed` skips the feed sink. |
+| `TRUSTSIGHT_FEED_KEY` | A base64 PKCS#8 Ed25519 private key | Signs each feed POST (`webhook-id`, `webhook-timestamp`, `webhook-signature`). The feed holds only the public half, so a leaked feed secret cannot forge a document. With no key the feed sink is skipped and only ntfy is notified. |
+| `TRUSTSIGHT_FEED_KEY_ID` | A short identifier | Names the signing key so the feed can rotate (it accepts a current and a previous key). |
 
 Rich output is the default only when the target stream is a terminal:
 renderers look at stdout, and progress bars look at stderr. A pipe, a

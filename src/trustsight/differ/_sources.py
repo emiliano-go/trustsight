@@ -29,13 +29,55 @@ _SKIP_JUSTIFICATION_CHECKS = [
     ("validpgpkeys present", lambda t: bool(_VALIDPGPKEYS_RE.search(t))),
 ]
 
-def is_skip_justified(diff_text: str) -> str:
+#: A VCS scheme inside a resolved ``source`` array entry.  The diff-side check
+#: is line-anchored; this one reads the value the tokenizer produced.
+_VCS_ENTRY_RE = re.compile(
+    r"git\+https?://|git\+ssh://|git://|svn\+https?://|svn://|hg://|bzr://",
+    re.IGNORECASE,
+)
+
+
+def _recipe_skip_justification(recipe_text: str) -> str:
+    """The justification for a SKIP that the *head recipe* carries.
+
+    Read through the typed recipe (``recipedoc``), not a raw line walk: a
+    ``source`` entry is a resolved value, so a VCS source or a
+    ``validpgpkeys`` declaration that sits outside the diff hunk is still
+    seen.  A parse the tokenizer refuses justifies nothing (it is not a
+    licence to assume the SKIP is fine).
+    """
+    from ..recipedoc import parse_recipe
+
+    try:
+        recipe = parse_recipe(recipe_text)
+    except Exception:  # noqa: BLE001 - a refusal justifies nothing
+        return ""
+    sources = recipe.arrays.get("source", ())
+    if any(_VCS_ENTRY_RE.search(str(s)) or str(s).rstrip("'\"").endswith(".git")
+           for s in sources):
+        return "vcs source"
+    if "validpgpkeys" in recipe.arrays or "validpgpkeys" in recipe.scalars:
+        return "validpgpkeys present"
+    keys = list(recipe.arrays) + list(recipe.scalars)
+    if any(str(k).upper().startswith("DKMS") for k in keys):
+        return "vcs source"
+    return ""
+
+
+def is_skip_justified(diff_text: str, current_text: str | None = None) -> str:
     """Check whether a ``SKIP`` checksum has a valid justification.
 
     Returns a short reason string (truthy) or ``""`` (falsy).
 
     The signature check reads the post-diff text, so a `.sig` entry the diff
     removes cannot justify a new `SKIP`.
+
+    *current_text* is the full head recipe when the caller has it.  A SKIP
+    is justified by the ``source=()`` entry it belongs to (a VCS source, a
+    ``validpgpkeys`` declaration), and that entry is frequently unchanged and
+    outside the hunk - a ``-git`` package bumping its ``pkgver`` shows only
+    the ``sha256sums=('SKIP')`` line, so reading the diff alone reports an
+    unjustified SKIP on every such update.
     """
     post = "\n".join(_post_diff_lines(diff_text))
     if _SIG_SRC_RE.search(post):
@@ -44,6 +86,10 @@ def is_skip_justified(diff_text: str) -> str:
         if any(check(line.raw)
                for line in parse_diff_lines(split_lines(diff_text)).lines):
             return reason
+    if current_text:
+        recipe_reason = _recipe_skip_justification(current_text)
+        if recipe_reason:
+            return recipe_reason
     return ""
 
 _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")

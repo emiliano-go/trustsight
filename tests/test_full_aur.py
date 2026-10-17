@@ -499,6 +499,48 @@ def test_context_cluster_rules_do_not_alert(monkeypatch):
     assert ("sdl2", "H061") not in seen
 
 
+def test_impersonation_gated_bursts_do_not_alert(monkeypatch):
+    """H052/H055 fire on a maintainer's own variant family as readily as on a
+    typosquat campaign: six of one maintainer's packages modified together is
+    a burst, not an attack.  They reach record_alerts only when a member
+    impersonates a far-more-popular package; otherwise they are context, and
+    the gate is two-sided so an impersonating burst still alerts."""
+    import trustsight.full_aur.pipeline as pipeline
+
+    _stub_cycle(monkeypatch, pipeline, {"demo": 5})
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(pipeline, "record_alerts",
+                        lambda pairs: seen.extend(pairs) or [])
+
+    def burst(impersonated):
+        return [
+            {"rule_id": "H055", "severity": "MEDIUM", "name": "Attribute Burst",
+             "match": "6 packages by maintainer m modified within 24h",
+             "params": {"members": ["bnb-shell", "bnb-extra"],
+                        "impersonated": impersonated}},
+            {"rule_id": "H052", "severity": "HIGH",
+             "name": "Shared Source Repo Cluster", "match": "share source",
+             "params": {"members": ["fam-a", "fam-b"],
+                        "impersonated": impersonated}},
+            {"rule_id": "H046", "severity": "MEDIUM",
+             "name": "Orphan/Adoption Dependency", "match": "x",
+             "params": {"members": ["dep-pkg"]}},
+        ]
+
+    # A benign burst: the control reaches record_alerts, the gated rules do not.
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: burst(False))
+    pipeline.run_baseline_build()
+    assert ("dep-pkg", "H046") in seen
+    assert ("bnb-shell", "H055") not in seen
+    assert ("fam-a", "H052") not in seen
+
+    # An impersonating burst is not suppressed.
+    monkeypatch.setattr(pipeline, "_run_corpus_sweep", lambda *a, **k: burst(True))
+    pipeline.run_baseline_build()
+    assert ("bnb-shell", "H055") in seen
+    assert ("fam-a", "H052") in seen
+
+
 # --- --since backfill ---
 
 _DAY = 86400
@@ -844,3 +886,72 @@ def test_popular_candidates_drive_the_corpus_typosquat_check():
     assert ("tiny", 3) not in candidates  # below the popularity floor
     assert _impersonates("yyay", meta["yyay"], candidates) == "yay"
     assert _impersonates("tiny", meta["tiny"], candidates) == ""
+
+
+def test_the_alerting_bar_is_the_measured_benign_p95():
+    """The watcher alert bar must be the published benign p95, not a name
+    that merely claims to be.
+
+    The constant was 30 while the comment and guide called it the p95; the
+    measured p95 is 35.  Tying the value to the published figure means a
+    future recalibration moves both or fails here.
+    """
+    import json
+    from pathlib import Path
+
+    from trustsight.full_aur.pipeline import _OVER_BENIGN_P95
+
+    figures = json.loads(
+        (Path(__file__).parent / "fixtures" / "published-figures.json").read_text()
+    )
+    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 35
+
+
+def test_the_watch_logs_a_startup_banner(monkeypatch, caplog):
+    """An unattended watcher's log must open with what build is running and
+    where its state lives, not only the cycle interval."""
+    import logging
+
+    import trustsight.full_aur.metadata as metadata
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.setattr(pipeline, "run_baseline_build",
+                        lambda **kwargs: CycleResult(refused=True))
+    # No snapshot on disk: the refused cycle breaks the loop instead of the
+    # transient-refusal retry path.
+    monkeypatch.setattr(metadata, "load_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_since_cursor", lambda: None)
+    with caplog.at_level(logging.INFO, logger="trustsight.full_aur.pipeline"):
+        pipeline.run_watch(interval=60, cycles=1, sleep=lambda _s: None)
+
+    text = caplog.text
+    assert "watching the AUR" in text
+    assert "database:" in text
+    assert "alert webhook:" in text
+
+
+def test_the_banner_names_the_effective_webhook(tmp_path, monkeypatch, caplog):
+    """A `--notify` URL is the effective webhook: the banner must not print
+    "none" on a watcher that is delivering every alert because the config has
+    no webhook but the command passes one."""
+    import logging
+
+    import trustsight.config as config_module
+    import trustsight.full_aur.metadata as metadata
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.full_aur.pipeline import CycleResult
+
+    monkeypatch.setattr(config_module, "CONFIG_DIR", tmp_path / ".config")
+    monkeypatch.setattr(config_module, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(config_module, "CACHE_DIR", tmp_path / ".cache")
+    monkeypatch.setattr("trustsight.notify.notify_url", lambda *a, **k: "")
+    monkeypatch.setattr(pipeline, "run_baseline_build",
+                        lambda **kwargs: CycleResult(refused=True))
+    monkeypatch.setattr(metadata, "load_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "_since_cursor", lambda: None)
+    with caplog.at_level(logging.INFO, logger="trustsight.full_aur.pipeline"):
+        pipeline.run_watch(interval=60, cycles=1, sleep=lambda _s: None,
+                           notify_url="https://ntfy.sh/example-topic")
+
+    assert "alert webhook: configured" in caplog.text

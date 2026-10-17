@@ -219,7 +219,8 @@ def _ip_literal_hosts(hosts) -> list[str]:
     return out
 
 def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
-                       config, add, tree_manifest=None) -> None:
+                       config, add, tree_manifest=None,
+                       post_text=None) -> None:
     """G1/G3/G4/G5/G6/G7 predicates over the typed core."""
     from ...recipedoc import array_diff
 
@@ -242,6 +243,18 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
     # names a different file, so pacman never runs the shipped hook.
     if scope_doc is not None:
         declared = post.scalars.get("install", "") if post is not None else ""
+        # The diff reconstruction holds only what the hunks show, so an
+        # `install=` that is unchanged and sits outside the hunk reads as
+        # absent, and C024 fired on packages that do declare their install
+        # file (keymux/sonarr-develop: `install=keymux.install`).  The
+        # complete new recipe is authoritative whenever the caller has it.
+        if post_text:
+            try:
+                from ...recipedoc import parse_recipe
+
+                declared = parse_recipe(post_text).scalars.get("install", "")
+            except Exception:  # noqa: BLE001 - a refusal keeps the diff read
+                pass
         declared_base = declared.rsplit("/", 1)[-1] if declared else ""
         # A variable-bearing declaration cannot be basename-compared without
         # resolution; treat it as declaring rather than guess a mismatch.

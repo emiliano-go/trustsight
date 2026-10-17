@@ -71,6 +71,10 @@ class GitSession:
     def __init__(self) -> None:
         self.proc = spawn_isolated(_WORKER_MODULE)
         self._closed = False
+        #: Limit failures the worker reported.  Empty means the worker's
+        #: resource bounds and NO_NEW_PRIVS were all applied.
+        self.degraded: list = []
+        self._degraded_reported = False
         # Drain stderr, or a child that writes a warning or a traceback
         # blocks on a full pipe.  The worker prints nothing by design, but
         # libgit2 or the interpreter can, and a wedged worker is a hang.
@@ -122,6 +126,17 @@ class GitSession:
             raise GitSandboxUnavailable("malformed response from the git worker")
         if "error" in response:
             raise GitOpError(response["error"])
+        degraded = response.get("degraded")
+        if degraded:
+            # A limit that failed to apply weakens the isolation, but the
+            # analysis is still complete.  Report it once, loudly, rather
+            # than letting a swallowed setrlimit read as full protection.
+            self.degraded = list(degraded)
+            if not self._degraded_reported:
+                self._degraded_reported = True
+                _log.warning(
+                    "git sandbox protection degraded: %s",
+                    "; ".join(str(d) for d in degraded))
         if "result" not in response:
             self.close()
             raise GitSandboxUnavailable("response carried neither result nor error")

@@ -49,8 +49,21 @@ jobs:
         run: |
           git init ../trustsight-harness
           git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
-          git -C ../trustsight-harness fetch --depth 1 origin 100c017fd61afb56bff12fb38088f0ab61e73911
+          git -C ../trustsight-harness fetch --depth 1 origin 7c632307655c14b209cf82ec8e5d51a7fd40223f
           git -C ../trustsight-harness checkout --detach FETCH_HEAD
+
+      # The harness clones unprivileged user namespaces everywhere (the
+      # analysis worker, `bash -n`, the pool) and has no degradation path, so a
+      # runner that cannot create them cannot measure at all.  Ubuntu 24.04
+      # lets AppArmor restrict unprivileged userns; lift the restriction where
+      # the knob exists, then ask the kernel directly.  This mirrors the
+      # harness's own CI, which does the same before its suite.
+      - name: Enable unprivileged user namespaces
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user true
 
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
 

@@ -172,6 +172,7 @@ Explanation = [
   {"Alert Budget" = "explanation/alert-budget.md"},
   {"Campaign Alert Mode" = "explanation/campaign-alert-mode.md"},
   {"Neighborhood Elevation" = "explanation/neighborhood-elevation.md"},
+  {"Reducing the H-Series" = "explanation/reducing-the-h-series.md"},
   {"Override Tolerance" = "explanation/override-tolerance.md"},
   {"Escalation Licensing" = "explanation/escalation-licensing.md"},
 ]

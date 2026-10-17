@@ -1,0 +1,9 @@
+{
+  "created_at": "2026-10-17T06:44:11.846121Z",
+  "created_at_obs": 0,
+  "package": "visual-studio-code-insiders-bin",
+  "reason": "Routine daily auto-update by long-time maintainer dcelasun (package page and git history). Commit 7fa0ba0 only bumps pkgver from 1792172168 to 1792198792, rewrites the three arch-specific source URLs under the official Microsoft VS Code CDN vscode.download.prss.microsoft.com, and updates sha256sums. PKGBUILD package(), the .install file, and the launcher .sh were not modified. Sources are official Microsoft insider .deb artifacts with checksums declared for all non-VCS sources. No malicious or unexpected changes.",
+  "requires_clear_indicators": true,
+  "rule_id": "R007",
+  "ttl_observations": null
+}

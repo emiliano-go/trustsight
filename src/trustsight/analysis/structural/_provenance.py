@@ -16,7 +16,8 @@ _URL_SCALAR_RE = re.compile(r"^\s*url\s*=\s*['\"]?([^'\"\s]+)", re.MULTILINE)
 _PREBUILT_SUFFIX = "-bin"
 
 _TRUSTED_SOURCE_BUCKETS = frozenset(
-    {"trusted_forge", "official", "raw_hosting", "homograph_attack"}
+    {"trusted_forge", "official", "raw_hosting", "homograph_attack",
+     "declared_upstream"}
 )
 
 def _declared_upstream_url(pkgbuild_text: str | None) -> str:

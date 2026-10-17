@@ -623,7 +623,7 @@ For a complete reference including the core and expanded rules, see [Fire Rates]
 | H027 | INFO | 282 | 7.54 % | INFO weight 0; not a scoring impact. |
 | H029 | HIGH | 0/202 pkgs | 0.00 % | Measured via package-name scan with seeded DB. The confusable/plain observation floors removed the `dosbox-x` and `electron36` false positives. |
 | H030 | MEDIUM | 5 | 0.13 % | Measured with the published seed. Well under the 30% gate. |
-| D001 | HIGH | 10 | 0.27 % | Comfortably low for HIGH. The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. |
+| D001 | MEDIUM | 10 | 0.27 % | The ten hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise. MEDIUM: "never observed in the AUR" is an instrument-history prior, not a high-severity finding on its own. |
 | D002 | HIGH | 0 | 0.00 % | No false positive anywhere in the corpus. Bounded by D001, which it refines. |
 | D003 | MEDIUM | 18 | 0.48 % | Almost all are `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates. |
 | H015 | INFO | 738 | **19.7 %** | Why it is INFO. No narrowing reaches triage quality, so it carries weight 0 and reports context instead of scoring. Harmless at that weight, hence on by default. |

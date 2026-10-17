@@ -1,6 +1,7 @@
 """Bootstrap and incremental corpus pipeline."""
 
 import logging
+import os
 import sys
 import time
 from collections import deque
@@ -68,11 +69,16 @@ log = logging.getLogger(__name__)
 # someone to notice later.
 _FLAGGED_SCORE = 40
 
-# The benign corpus's p95 (published-figures.json): a score past it is
-# outside everything the benign corpus does, which is the bar a watcher's
-# urgent notification should use.  `flagged` stays at 40 (the report bar);
-# this is the lower, alerting bar.
-_OVER_BENIGN_P95 = 30
+# The benign corpus's measured p95, from published-figures.json
+# (`calibration.benign_p95 = 35`): a score strictly past it is outside 95% of
+# what the benign corpus does, which is the bar a watcher's alert should use.
+# The comparison is `score > _OVER_BENIGN_P95`, so a value of 35 alerts on
+# scores of 36+.  `flagged` stays at 40 (the report bar); this is the lower,
+# alerting bar.  It used to be 30 while the comment and docs called it the
+# p95; it is now the measured p95.  (The 20-point review threshold and its
+# 9.7% benign rate are a separate, stricter review-workload policy - see
+# scoring.FLAG_THRESHOLD.)
+_OVER_BENIGN_P95 = 35
 
 # One day of AUR time per backfill cycle (see run_baseline_build's *since*).
 _SINCE_DAY_SECONDS = 86400
@@ -243,13 +249,21 @@ def _impersonates(
     return match[0] if match else ""
 
 
-def _campaign_identity(finding: dict) -> tuple[str, list[str]] | None:
-    """``(campaign_id, scope)`` for a corroborated cluster, or None.
+def _campaign_identity(finding: dict) -> tuple[str, dict[str, list[str]]] | None:
+    """``(campaign_id, typed_scope)`` for a corroborated cluster, or None.
 
-    Only G-series clusters corroborate a campaign.  A G005 impersonation
-    cluster keys on the maintainer and scopes to its member names and the
-    impersonated targets; the other G rules key on the value they join on
-    (host, literal, dependency, adopter) and scope to their members.
+    Only G-series clusters corroborate a campaign.  The scope is **typed**, so
+    a reader knows what a value *is*: a set of package names cannot be
+    compared against a set of hosts.  The untyped list this replaced stored
+    package members for every rule and then compared them against gained
+    hosts, which is why G006 never fired.
+
+    * ``package_names`` - the campaign's members.
+    * ``hosts`` - the shared/gained hosts a host campaign joins on.
+    * ``dependencies`` - the upstream dependency a G004 campaign joins on.
+    * ``targets`` - the legitimate packages a G005 campaign impersonates.
+      These are **not** members: a clone is suspicious because it targets
+      ``yay``, not because ``yay`` exists.
     """
     if not isinstance(finding, dict):
         return None
@@ -269,23 +283,36 @@ def _campaign_identity(finding: dict) -> tuple[str, list[str]] | None:
         except TypeError:
             return []
 
-    members = [str(m) for m in _seq(params.get("members"))]
+    members = sorted({str(m) for m in _seq(params.get("members"))})
     if rule_id == "G005":
         key = str(params.get("maintainer", "") or "unknown")
-        scope = sorted(set(members) | {str(t) for t in _seq(params.get("targets"))})
-        return f"g005:{key}", scope
+        targets = sorted({str(t) for t in _seq(params.get("targets"))})
+        return f"g005:{key}", {"package_names": members, "targets": targets}
+
+    scope: dict[str, list[str]] = {"package_names": members}
+    host = str(params.get("host", "") or "")
+    if host:
+        scope["hosts"] = [host]
+    dependency = str(params.get("dependency", "") or "")
+    if dependency:
+        scope["dependencies"] = [dependency]
     key = (params.get("host") or params.get("literal")
            or params.get("dependency") or params.get("maintainer") or "")
-    return f"{rule_id}:{key}", members
+    return f"{rule_id}:{key}", scope
 
 
-def _activate_campaigns(findings: list[dict], config: dict) -> None:
+def _activate_campaigns(findings: list[dict], config: dict) -> list[str]:
     """Prime campaign state for every corroborated cluster this cycle.
 
     A campaign is instrument state: it is written only by corroborated
     findings on recorded cycles, never by a package, and it expires on the
     observation clock (A11).  Bounded by ``[alerts] max_active_campaigns``;
     a live TTL is never shortened.
+
+    Returns the campaign ids the cap **refused**.  Campaign mode is temporary
+    memory, and silently failing to remember a new campaign would violate the
+    transparency the mechanism is built around, so the caller reports each
+    refusal rather than dropping it.
     """
     alerts = (config or {}).get("alerts", {}) or {}
     try:
@@ -296,13 +323,18 @@ def _activate_campaigns(findings: list[dict], config: dict) -> None:
         ttl = int(alerts.get("campaign_ttl_observations", 40) or 40)
     except (TypeError, ValueError, OverflowError):
         ttl = 40
+    refused: list[str] = []
     for finding in findings or ():
         identity = _campaign_identity(finding)
         if identity is None:
             continue
         campaign_id, scope = identity
-        activate_campaign(campaign_id, scope, str(finding.get("rule_id", "")),
-                          ttl_obs=ttl, max_active=max_active)
+        activated = activate_campaign(
+            campaign_id, scope, str(finding.get("rule_id", "")),
+            ttl_obs=ttl, max_active=max_active)
+        if not activated:
+            refused.append(campaign_id)
+    return refused
 
 
 def _report_expired_campaigns(log) -> None:
@@ -321,40 +353,68 @@ def _report_expired_campaigns(log) -> None:
 
 
 def _neighborhood_elevation(records: list[dict]) -> list[dict]:
-    """G006: a package touches a host in an active campaign's scope (weight 0).
+    """G006: a package stands in an active campaign's neighbourhood (weight 0).
 
-    The cytokine effect: an alerted neighborhood raises the tissue's
-    readiness.  It is reported, never scored, in v1 - "touches an alerted
-    neighborhood" names a context, not a behavior - and never forbids a
-    clean verdict.  Only *gained* hosts count, so a package that already had
-    the host is not newly elevated.
+    The cytokine effect: an alerted neighbourhood raises the tissue's
+    readiness.  Reported, never scored, and it never forbids a clean verdict.
+    The neighbourhood is **typed**, never conflated:
+
+    * **host** - the record *gains* a host in a campaign's ``hosts``.  Only
+      gained hosts count, so a package that already had the host is not
+      newly elevated.
+    * **target** - the record's own ``impersonated_target`` is a package a
+      G005 campaign impersonates: this is a *new clone* of that target.  The
+      legitimate target itself is not elevated for merely existing.
+
+    A package that is itself a campaign member is excluded: it is the
+    campaign, not a neighbour of it.
     """
     campaigns = active_campaigns()
     if not campaigns:
         return []
     host_to_campaign: dict[str, str] = {}
+    target_to_campaign: dict[str, str] = {}
+    members_of: dict[str, set[str]] = {}
     for campaign in campaigns:
-        for value in campaign.get("scope", ()):
-            host_to_campaign.setdefault(str(value), campaign["campaign_id"])
+        scope = campaign.get("scope", {}) or {}
+        if not isinstance(scope, dict):
+            scope = {}
+        campaign_id = campaign["campaign_id"]
+        members_of[campaign_id] = {
+            str(n) for n in scope.get("package_names", ()) or ()}
+        for host in scope.get("hosts", ()) or ():
+            host_to_campaign.setdefault(str(host), campaign_id)
+        for target in scope.get("targets", ()) or ():
+            target_to_campaign.setdefault(str(target), campaign_id)
+
     by_campaign: dict[str, set[str]] = {}
+    reasons: dict[str, set[str]] = {}
     for record in records or ():
         if not isinstance(record, dict):
             continue
+        package = str(record.get("package", ""))
         gained = record.get("hosts_gained") or ()
         if isinstance(gained, str):
             gained = [gained]
         for host in gained:
             campaign_id = host_to_campaign.get(str(host))
-            if campaign_id:
-                by_campaign.setdefault(campaign_id, set()).add(
-                    str(record.get("package", "")))
+            if campaign_id and package not in members_of.get(campaign_id, ()):
+                by_campaign.setdefault(campaign_id, set()).add(package)
+                reasons.setdefault(campaign_id, set()).add(f"gained host {host}")
+        target = str(record.get("impersonated_target", "") or "")
+        if target:
+            campaign_id = target_to_campaign.get(target)
+            if campaign_id and package not in members_of.get(campaign_id, ()):
+                by_campaign.setdefault(campaign_id, set()).add(package)
+                reasons.setdefault(campaign_id, set()).add(
+                    f"a new clone of impersonated {target}")
     return [
         {
             "rule_id": "G006",
             "name": "Neighborhood Under Campaign Alert",
             "severity": "INFO", "category": "correlation",
-            "match": (f"{len(members)} package(s) gained a host in active "
-                      f"campaign {campaign_id}"),
+            "match": (f"{len(members)} package(s) in active campaign "
+                      f"{campaign_id}: " + "; ".join(sorted(reasons[campaign_id]))),
             "params": {"members": sorted(members), "campaign_id": campaign_id},
         }
         for campaign_id, members in sorted(by_campaign.items())
@@ -366,16 +426,22 @@ def _correlation_records(
     old_meta: Optional[dict],
     processed: set[str],
     popular: Optional[list[tuple[str, int]]] = None,
+    source_repos: Optional[dict[str, set[str]]] = None,
 ) -> list[dict]:
     """Per-package records the G-series correlates.
 
     Gained hosts come from the ``source_hosts`` property timeline (the
     corpus already stores every change as JSON old/new values); adoption is
-    a maintainer change between the two snapshots.  Added-literals have no
-    corpus feed yet, so they are empty here (the G002 engine ships and is
-    unit-tested; the literal hash view is the pending corpus work).
+    a maintainer change between the two snapshots.  ``source_repos`` is the
+    per-package source-repository set the sweep already computed, so G003 can
+    tell a maintainer co-adopting one variant family (one shared repo, H052's
+    shape) from a coordinated takeover of unrelated packages.  Added-literals
+    have no corpus feed yet, so they are empty here (the G002 engine ships and
+    is unit-tested; the literal hash view is the pending corpus work).
     """
     from ..db import correlation_feed, record_property_transition
+
+    repo_index = source_repos or {}
 
     # record this cycle's maintainer transitions so the
     # adoption_events view serves G003.  H044 is an ownership transition
@@ -406,6 +472,9 @@ def _correlation_records(
             "maintainer": meta.get("Maintainer") or info.get("maintainer", ""),
             "adoption": bool(predicates),
             "adoption_predicates": predicates,
+            # The package's own source repositories, so G003 can require the
+            # members to be unrelated (a shared repo is H052's signal).
+            "source_repos": sorted(repo_index.get(name, ()) or ()),
             # The popular package this name clones, when it is one (the
             # corpus H029 check).  G005 groups these into a campaign.
             "impersonated_target": _impersonates(name, meta, popular) if popular else "",
@@ -457,23 +526,46 @@ def _run_corpus_sweep(
     # cycle's records (collective input, so it runs here and not per package).
     from ..analysis.correlation import correlate
 
-    records = _correlation_records(new_meta, old_meta, processed, popular)
+    records = _correlation_records(new_meta, old_meta, processed, popular,
+                                   source_repos)
     config = load_config()
     findings.extend(correlate(records, config))
 
-    _activate_campaigns(findings, config)
+    refused = _activate_campaigns(findings, config)
+    if refused:
+        # Campaign mode is temporary memory; refusing to remember a campaign
+        # because every slot holds a live TTL must be visible, not silent.
+        log.warning(
+            "campaign cap reached; %d campaign(s) not activated this cycle: %s",
+            len(refused), ", ".join(sorted(refused)),
+        )
     findings.extend(_neighborhood_elevation(records))
 
+    _apply_cluster_weights(findings, new_meta, popular, scores)
+    return findings
+
+
+def _apply_cluster_weights(findings, new_meta, popular, scores) -> None:
+    """Add each cluster finding's severity weight to its members' profiles.
+
+    A correlation cluster (**G001**-**G004**) is an alert about a *set*, not
+    evidence against each member: the members still get the cluster alert and
+    the campaign state, but membership must not inflate a member's own score.
+    **G005** (impersonation) is the sharp signal and still scores.
+
+    A shared-repo / attribute-burst cluster (`H052`/`H055`) is not a campaign
+    on its own either: a maintainer updating their own variant family trips
+    both.  Only when a member impersonates a far-more-popular package does the
+    burst read as an attack - then it scores; otherwise it is demoted to
+    context (see the alerting filter in the cycle body).
+    """
     weights = load_config().get("severity_weights", {})
     for finding in findings:
+        rule_id = str(finding.get("rule_id", ""))
+        if rule_id.startswith("G") and rule_id != "G005":
+            continue
         members = finding.get("params", {}).get("members", [])
-        # A shared-repo / attribute-burst cluster is not a campaign on its
-        # own: a maintainer updating their own variant family (same
-        # maintainer, same real repo) trips both.  Only when a member
-        # impersonates a far-more-popular package does the burst read as an
-        # attack - then it scores; otherwise it contributes nothing and is
-        # demoted to context (see the alerting filter in the cycle body).
-        if finding.get("rule_id") in _IMPERSONATION_GATED_RULES:
+        if rule_id in _IMPERSONATION_GATED_RULES:
             impersonated = bool(popular) and any(
                 _impersonates(member, new_meta.get(member), popular)
                 for member in members
@@ -489,7 +581,6 @@ def _run_corpus_sweep(
                 continue
             new_score = max(0, min(100, _profile_score(member, scores) + delta))
             save_package_profile(member, new_score, risk_level(new_score))
-    return findings
 
 
 @dataclass
@@ -505,6 +596,11 @@ class CycleResult:
     flagged: list[tuple[str, int]] = field(default_factory=list)
     over_threshold: list[tuple[str, int]] = field(default_factory=list)
     ioc_hits: list[tuple[str, str]] = field(default_factory=list)
+    # Packages whose analysis hit a parser refusal (X026/X027): the change
+    # was not fully read, so they are alert-worthy independent of score (the
+    # refusal weight is capped so it cannot lift a clean package over the bar
+    # by itself).  Reported like IOC hits, outside the score.
+    refusals: list[str] = field(default_factory=list)
     backfilling: bool = False
     # The AUR day (YYYY-MM-DD) this cycle replayed, when backfilling.
     backfill_day: str = ""
@@ -807,6 +903,7 @@ def _run_baseline_build(
     # what happened, not only that it did.
     detail: dict[str, dict] = {}
     ioc_hits: dict[str, list[str]] = {}
+    refusals: set[str] = set()
 
     # Cap the work per invocation so even a bootstrap advances in bounded,
     # resumable chunks.  The remainder is picked up on the next run.
@@ -903,15 +1000,40 @@ def _run_baseline_build(
             # looking package on the list would never cross the alerting bar.
             for m in fact.ioc_matches:
                 ioc_hits[name].append(f"{m.type}:{m.value}")
+        # What a notification needs to say *where* a finding fired, not only
+        # that a rule did.  Each entry names the rule, the file and line of
+        # the evidence, its severity/weight and the rendered reason, so a
+        # reader can point at the exact line in the PKGBUILD.  A rule with no
+        # location (corpus, novelty, provenance) carries file="" and line=None
+        # rather than a guessed one.
+        #
+        # Every entry rides, weight or not: a zero-weight finding is still a
+        # finding (a declared practice, a coverage gap, a boundary warning),
+        # and dropping it here is how the feed ended up unable to explain the
+        # signals the score deliberately excludes.
+        findings = [
+            {
+                "rule_id": e.rule_id,
+                "severity": e.severity,
+                "weight": e.weight,
+                "file": e.file or "",
+                "line": e.line,
+                "reason": e.reason,
+            }
+            for e in fact.score_breakdown
+        ]
+        # A parser refusal means part of the change was not read.  It is
+        # alert-worthy regardless of score (the weight is capped so it cannot
+        # cross the bar alone), so it is tracked as its own tier.
+        if any(f["rule_id"] in ("X026", "X027") for f in findings):
+            refusals.add(name)
         detail[name] = {
             "score": fact.final_score,
             "old_version": old_snapshot["version"] if old_snapshot else "",
             "new_version": fact.new_version or meta.get("Version", ""),
             "last_modified": meta.get("LastModified"),
-            "rules": [
-                e.rule_id for e in fact.score_breakdown
-                if e.weight > 0 or e.severity in ("FATAL", "CRITICAL", "HIGH")
-            ],
+            "rules": [f["rule_id"] for f in findings],
+            "findings": findings,
         }
         return "ok"
 
@@ -978,6 +1100,7 @@ def _run_baseline_build(
         (name, indicator)
         for name, indicators in ioc_hits.items() for indicator in indicators
     )
+    result.refusals = sorted(refusals)
     result.detail = detail
 
     if partial:
@@ -1129,12 +1252,51 @@ def run_watch(
     delay = watch_interval_seconds(interval)
     _log = _logger(json_output)
     results: list[CycleResult] = []
+    # A startup banner, so an unattended watcher's log opens with what build
+    # is running and where its state lives, not only the cycle interval.
+    from .. import __version__
+    from ..db import get_db_path
+
     _log(
-        f"Watching the AUR: one cycle every {delay}s"
+        f"trustsight {__version__} watching the AUR: one cycle every {delay}s"
         + (f", {cycles} cycle(s)" if cycles else ", until interrupted")
     )
+    try:
+        _log(f"  database: {get_db_path()}")
+    except Exception:  # noqa: BLE001 - the banner must never fail the watch
+        pass
+    try:
+        from ..notify import notify_url as _configured_notify_url
+
+        # The banner must name the webhook that will actually be used: a
+        # `--notify` URL passed on the command line is the effective one, and
+        # reading only the config printed "none" on a watcher that was in fact
+        # delivering every alert.
+        _effective = notify_url or _configured_notify_url()
+        _log(f"  alert webhook: {'configured' if _effective else 'none'}")
+    except Exception:  # noqa: BLE001
+        pass
+    # rules.toml is written once, at install, and only ever gains rules, so a
+    # rule whose fields moved in a later build keeps its old behaviour until it
+    # is synced.  An unattended watcher must not analyze with a stale ruleset,
+    # so sync the safe way once at startup: add missing rules, fix non-pattern
+    # drift and superseded patterns, and never touch a pattern the user edited.
+    # Logged, not silent (the design refuses silent adoption);
+    # TRUSTSIGHT_NO_SYNC_RULES opts out; a config write must never kill the
+    # watch, so it fails open.
+    if not os.environ.get("TRUSTSIGHT_NO_SYNC_RULES", "").strip():
+        try:
+            from ..config import drifted_shipped_rules, sync_rules
+
+            added, updated = sync_rules(update_outdated=True)
+            if added or updated:
+                _log(f"  ruleset synced: {len(added)} added, {len(updated)} updated")
+            remaining = drifted_shipped_rules()
+            if remaining:
+                _log(f"  ruleset still drifted (user edits kept): {remaining}")
+        except Exception as exc:  # noqa: BLE001 - never fail the watch over this
+            _log(f"  ruleset sync skipped: {exc}")
     attempts = 0
-    last_heartbeat = 0.0
     try:
         while True:
             # A transient failure (network blip, rate limit) must not kill an
@@ -1186,15 +1348,15 @@ def run_watch(
             # announced once here and never again, and an over-threshold
             # package is what the watcher exists for - so the webhook is how
             # either reaches anyone not reading the log.
-            from ..notify import HEARTBEAT_SECONDS, maybe_heartbeat, maybe_notify
+            from ..notify import maybe_heartbeat, maybe_notify
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
-            # Silence is otherwise ambiguous between "nothing found" and
-            # "the watcher is dead": one low-priority beat a day.
-            if time.time() - last_heartbeat > HEARTBEAT_SECONDS:
-                if maybe_heartbeat(result, notify_url):
-                    last_heartbeat = time.time()
+            elif maybe_heartbeat(result, notify_url):
+                # Every analysis that raised no alert still beats, so silence
+                # on the channel unambiguously means the watcher is dead
+                # rather than merely quiet.
+                _log("  heartbeat delivered")
             if cycles and len(results) >= cycles:
                 break
             # A backfill is a queue, not a schedule: the interval governs the

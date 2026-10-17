@@ -16,7 +16,12 @@ ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     # Use the base image's interpreter: a uv-managed Python lands under the
     # build user's HOME and breaks once the image runs as `ts`.
-    UV_PYTHON_PREFERENCE=system
+    UV_PYTHON_PREFERENCE=system \
+    # Unbuffered output: a detached watcher's logs must reach the runtime's
+    # log collector as they are written, not when a buffer happens to flush.
+    PYTHONUNBUFFERED=1 \
+    # Print a traceback on a hard crash instead of a bare exit.
+    PYTHONFAULTHANDLER=1
 # `.python-version` pins a patch version older than the base image's, which
 # would make uv download a managed interpreter; --python overrides it.
 

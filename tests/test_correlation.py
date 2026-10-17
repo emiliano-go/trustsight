@@ -54,6 +54,38 @@ def test_coordinated_adoption_cites_the_temporal_predicates():
     assert found[0]["params"]["predicates"] == ["H044", "H086"]
 
 
+def test_coordinated_adoption_requires_unrelated_members():
+    """A maintainer adopting one variant family (all from one repo) is H052's
+    shape, not a coordinated adoption."""
+    related = [
+        {"package": "a", "maintainer": "m", "adoption": True,
+         "adoption_predicates": ["H044"], "source_repos": ["https://x/one"]},
+        {"package": "b", "maintainer": "m", "adoption": True,
+         "adoption_predicates": ["H044"], "source_repos": ["https://x/one"]},
+        {"package": "c", "maintainer": "m", "adoption": True,
+         "adoption_predicates": ["H044"], "source_repos": ["https://x/one"]},
+    ]
+    assert coordinated_adoption(related, min_members=3) == []
+
+    unrelated = [dict(r, source_repos=[f"https://x/{r['package']}"])
+                 for r in related]
+    found = coordinated_adoption(unrelated, min_members=3)
+    assert [f["rule_id"] for f in found] == ["G003"]
+    assert found[0]["params"]["repos"] == [
+        "https://x/a", "https://x/b", "https://x/c"]
+
+
+def test_coordinated_adoption_keeps_firing_without_repo_data():
+    """An unproven relationship is not evidence of one: missing repo data
+    preserves the group rather than quietly dropping it."""
+    records = [
+        {"package": "a", "maintainer": "m", "adoption": True},
+        {"package": "b", "maintainer": "m", "adoption": True},
+        {"package": "c", "maintainer": "m", "adoption": True},
+    ]
+    assert [f["rule_id"] for f in coordinated_adoption(records, 3)] == ["G003"]
+
+
 def test_correlate_honors_configured_thresholds():
     config = {"thresholds": {
         "g_host": {"min_packages": 3},
@@ -94,6 +126,18 @@ def test_a_lone_clone_is_not_a_campaign():
     records = [{"package": "yyay", "maintainer": "m",
                 "impersonated_target": "yay"}]
     assert impersonation_campaign(records, min_members=2) == []
+
+
+def test_ownerless_clones_are_not_grouped_into_a_campaign():
+    """An empty maintainer is not evidence that unrelated ownerless clones
+    share an operator; they stay individual H029 findings."""
+    from trustsight.analysis.correlation import impersonation_campaign
+
+    records = [
+        {"package": name, "maintainer": "", "impersonated_target": "yay"}
+        for name in ("yyay", "yau", "yayy")
+    ]
+    assert impersonation_campaign(records, min_members=3) == []
 
 
 def test_correlate_includes_the_impersonation_campaign():

@@ -178,6 +178,8 @@ def _recent_update(project, head_commit):
             return None
         hours_ago = (time.time() - records[0].commit_time) / 3600
         if hours_ago < 72:
+            # Benign false positive when it fires without a co-occurring real
+            # signal; escalate only alongside another finding (INFO, weight 0).
             return stamp({
                 "rule_id": "H020",
                 "name": "Very Recent Update",

@@ -125,6 +125,12 @@ _STAGE_OF = {
 # counted as extra stages of their own.  No such rule exists today; the plan's
 # no-cascade guarantees (H057/H060/H061 never additive) are satisfied because
 # those rules are not in the stage map at all.
+#
+# R054 fires on a packaged systemd unit whose ExecStart points at an absolute
+# path that is also shipped by upstream.  For legitimately packaged systemd
+# user units this is expected and benign: the same unit file ships both the
+# source tarball and the built service, so R054 must not fire for them.
+
 _CASCADE_ONLY = frozenset()
 
 

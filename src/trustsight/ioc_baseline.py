@@ -154,6 +154,8 @@ def _normalize_value(type_: str, value: str) -> str | None:
         return canonical if canonical and compile_ioc_pattern(canonical) else None
     if type_ == "upstream_repo":
         return normalize_ioc("upstream_repo", value)
+    if type_ == "upstream_hash":
+        return value
     return None
 
 
@@ -696,6 +698,11 @@ def match_upstream_repo(repo: str) -> list[IocMatch]:
     must name exactly.  A miss is uninformative, as for every other type.
     """
     return match_ioc("upstream_repo", repo)
+
+
+def match_upstream_hash(value: str) -> list[IocMatch]:
+    """Active upstream_hash entries for one URL, version, checksum triple."""
+    return match_ioc("upstream_hash", value)
 
 
 def active_patterns(source: str | None = None, expired: bool = False):

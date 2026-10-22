@@ -39,7 +39,7 @@ log = logging.getLogger(__name__)
 # It is matched against a recipe's declared ``url=``, never fetched.
 IOC_TYPES = frozenset({
     "package", "domain", "hash", "file_path", "pkgbuild_pattern",
-    "upstream_repo",
+    "upstream_repo", "upstream_hash",
 })
 
 #: Types the corpus pivot understands.  `file_path` and `pkgbuild_pattern`

@@ -61,6 +61,42 @@ _ARCH_SCOPED_ADDED_SUMS = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 
+def _upstream_hash_key(current_text):
+    # The corroboration key: source URL, version, checksum. A signed
+    # upstream_hash baseline names exactly this triple.
+    if not current_text:
+        return ""
+    from ...recipedoc import parse_recipe
+
+    try:
+        recipe = parse_recipe(current_text)
+    except Exception:
+        return ""
+    sources = recipe.arrays.get("source", ())
+    sums = recipe.arrays.get("sha256sums", ())
+    version = recipe.scalars.get("pkgver", "")
+    if len(sources) != 1 or len(sums) != 1 or not version:
+        return ""
+    url = str(sources[0]).strip().split("::", 1)[-1]
+    url = url.strip().strip("'").strip('"')
+    checksum = str(sums[0]).strip().strip("'").strip('"')
+    if not url or checksum in ("", "SKIP"):
+        return ""
+    return f"{url}|{version}|{checksum}"
+
+
+def _upstream_hash_corroborated(current_text):
+    key = _upstream_hash_key(current_text)
+    if not key:
+        return False
+    try:
+        from ...ioc_baseline import match_upstream_hash
+
+        return bool(match_upstream_hash(key))
+    except Exception:
+        return False
+
+
 def _structural_findings(
     diff_text: str,
     source_changes,
@@ -326,8 +362,10 @@ def _structural_findings(
                 else "checksum updated with a version bump that also adds "
                      f"{capability}"
             )
+            corroborated = _upstream_hash_corroborated(current_text)
             add("C001", "Checksum Changed Without Source Change With Stable Version",
-                "HIGH", "integrity", match,
+                "INFO" if corroborated else "HIGH", "integrity", match,
+                weight_override=0 if corroborated else None,
                 line=find_line_in_diff(diff_text, r"""sha256sums\s*=\s*\('"""))
         else:
             add("C002", "Checksum Updated With Version Bump", "INFO", "integrity",

@@ -130,6 +130,10 @@ _STAGED_PREFIX_RE = re.compile(
 
 def _is_staged(target: str) -> bool:
     """True for a write into the package/build trees ($pkgdir, $srcdir...)."""
+    # A unit whose destination is inside the package/build staging tree ships in
+    # package and installs to the user's home; it is not persistence outside root.
+    if _is_staged(target):
+        return None
     return bool(_STAGED_PREFIX_RE.match(target.strip().strip("\"'")))
 
 

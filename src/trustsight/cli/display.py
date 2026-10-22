@@ -212,6 +212,22 @@ def _tier_of(entry) -> str:
     return TIER_OF.get(entry.rule_id, ("A", ""))[0]
 
 
+def makepkg_source_url(source: str) -> str | None:
+    """Split a makepkg ``filename::url`` source entry on its first ``::``,
+    recovering the upstream endpoint as in-source.
+
+    A bare path with no separator returns ``None``; an empty URL is also
+    rejected so release/archive URLs such as ``foo-1.0.tar.gz`` are not
+    mistaken for a mirror.
+    """
+    if source.count("::") < 1:
+        return None
+    filename, _, url = source.partition("::")
+    if not url.strip():
+        return None
+    return url
+
+
 def _severity_text(severity: str) -> "Text":
     from rich.text import Text
 

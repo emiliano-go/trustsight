@@ -185,6 +185,23 @@ def test_import_is_additive_and_never_clobbers_local_rows(artifact):
     assert _counts()["dependency_names"] == 2  # 'lib-xyz' merged in
 
 
+def test_importing_the_artifact_twice_does_not_double_dependency_counts(artifact):
+    """The artifact carries a corpus snapshot; a second import replaces its
+    own contribution instead of adding the whole corpus again (issue #48)."""
+    import_baseline(str(artifact))
+    import_baseline(str(artifact))
+
+    with get_connection() as conn:
+        rows = {
+            row["name"]: (row["observation_count"], row["seed_observation_count"])
+            for row in conn.execute(
+                "SELECT name, observation_count, seed_observation_count "
+                "FROM dependency_names")
+        }
+    assert rows["python"] == (40, 40)
+    assert rows["lib-xyz"] == (2, 2)
+
+
 def test_local_package_id_is_not_portable(tmp_path, monkeypatch):
     """A builder-local package id must never reach the FK'd column.
 

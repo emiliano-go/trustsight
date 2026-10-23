@@ -22,9 +22,10 @@ def import_seed(seed_path: Path) -> dict:
 
     Supports the legacy SQLite ``.db``/``.db.gz`` format and the v2
     hashed-maintainer format (a directory or ``.tar.gz`` containing a
-    ``trustsight-seed-v2/`` directory).  Additive and idempotent: existing
-    rows win, so a seed can never overwrite something learned from a real
-    analysis.  Returns counts of what was imported.
+    ``trustsight-seed-v2/`` directory).  URLs and maintainers are additive
+    and idempotent; the dependency corpus replaces the contribution of the
+    previous snapshot while keeping anything observed locally.  Returns
+    counts of what was imported.
     """
 
     init_db()
@@ -350,7 +351,13 @@ def _import_v2_source_urls(conn: sqlite3.Connection, path: Path) -> None:
         )
 
 def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
-    """Read dependency_names.jsonl and merge into the local table."""
+    """Replace the dependency corpus with the snapshot in *path*.
+
+    A seed is a snapshot of the whole AUR corpus, so importing it twice must
+    not count every dependency twice.  Rows track how much of their count
+    came from the last snapshot in ``seed_observation_count``; the snapshot's
+    own contribution is subtracted first and the local remainder is kept.
+    """
     rows = []
     with open(path, "r", encoding="utf-8") as fh:
         for lineno, line in enumerate(fh, 1):
@@ -368,14 +375,21 @@ def _import_v2_dependency_names(conn: sqlite3.Connection, path: Path) -> None:
                 obj.get("first_seen_globally_timestamp"),
                 obj.get("observation_count", 1),
             ))
+    conn.execute(
+        """UPDATE dependency_names
+           SET observation_count = MAX(observation_count - seed_observation_count, 0),
+               seed_observation_count = 0"""
+    )
     if rows:
         conn.executemany(
             """INSERT INTO dependency_names
-               (name, first_seen_globally_timestamp, observation_count)
-               VALUES (?, ?, ?)
+               (name, first_seen_globally_timestamp, observation_count,
+                seed_observation_count)
+               VALUES (?, ?, ?, ?)
                ON CONFLICT(name) DO UPDATE SET
-                   observation_count = observation_count + excluded.observation_count""",
-            rows,
+                   observation_count = observation_count + excluded.observation_count,
+                   seed_observation_count = excluded.observation_count""",
+            [(name, ts, count, count) for name, ts, count in rows],
         )
 
 def _import_v2_maintainers(conn: sqlite3.Connection, path: Path) -> None:
@@ -442,13 +456,25 @@ def _import_sqlite_seed(path: Path, origin: str, digest: str) -> dict:
             "WHERE type='table' AND name='dependency_names'"
         ).fetchone()
         if has_deps:
+            # The legacy seed is a corpus snapshot too: subtract what the
+            # previous snapshot contributed before applying this one, so a
+            # second import does not double every count.
+            conn.execute(
+                """UPDATE dependency_names
+                   SET observation_count = MAX(observation_count - seed_observation_count, 0),
+                       seed_observation_count = 0"""
+            )
             conn.execute(
                 """INSERT INTO dependency_names
-                   (name, first_seen_globally_timestamp, observation_count)
-                   SELECT name, first_seen_globally_timestamp, observation_count
+                   (name, first_seen_globally_timestamp, observation_count,
+                    seed_observation_count)
+                   SELECT name, first_seen_globally_timestamp, observation_count,
+                          observation_count
                    FROM seed.dependency_names WHERE true
                    ON CONFLICT(name) DO UPDATE SET
-                       observation_count = observation_count + excluded.observation_count"""
+                       observation_count = dependency_names.observation_count
+                           + excluded.observation_count,
+                       seed_observation_count = excluded.observation_count"""
             )
             deps = conn.execute(
                 "SELECT COUNT(*) AS n FROM dependency_names"

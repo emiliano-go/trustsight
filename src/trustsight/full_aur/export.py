@@ -126,9 +126,10 @@ def canonical_artifact_bytes(
 # These mirror the seed importer's tables and merge semantics exactly
 # (``_import_v2_source_urls`` / ``_import_v2_dependency_names`` /
 # ``_import_v2_maintainers`` in ``db.py``): source URLs ignore duplicates,
-# dependency names add their observation counts onto any existing row, and
-# maintainer rows are inserted only when the (name_hash, email_hash) pair
-# is absent, under whichever salt the local database already uses.
+# dependency names replace the previous snapshot's contribution while keeping
+# locally observed counts, and maintainer rows are inserted only when the
+# (name_hash, email_hash) pair is absent, under whichever salt the local
+# database already uses.
 # ---------------------------------------------------------------------------
 
 def _canonical_observations(
@@ -599,9 +600,10 @@ def _import_observations(observations_in: dict) -> dict:
     """Merge a version 2 observation section into the local database.
 
     The merge semantics are the seed importer's: source URLs ignore rows
-    already present, dependency names add their counts onto the existing
-    row, and maintainer rows are inserted only when their
-    (name_hash, email_hash) pair is new, in the local salt's namespace.
+    already present, dependency names replace the previous snapshot's
+    contribution while preserving locally observed counts, and maintainer
+    rows are inserted only when their (name_hash, email_hash) pair is new,
+    in the local salt's namespace.
     Like the seed importer, a stored salt wins over a foreign artifact
     salt and the incoming maintainer rows are skipped rather than
     orphaned (the stored salt is the namespace every existing row lives
@@ -661,17 +663,28 @@ def _import_observations(observations_in: dict) -> dict:
             for row in observations_in.get("dependency_names", [])
             if isinstance(row, dict) and isinstance(row.get("name"), str)
         ]
-        if dep_rows:
-            # Counts accumulate onto the existing row, as the seed importer
-            # does; a baseline assert observations, it never rewrites them.
-            conn.executemany(
-                """INSERT INTO dependency_names
-                   (name, first_seen_globally_timestamp, observation_count)
-                   VALUES (?, ?, ?)
-                   ON CONFLICT(name) DO UPDATE SET
-                       observation_count = observation_count + excluded.observation_count""",
-                dep_rows,
+        if "dependency_names" in observations_in:
+            # The artifact carries a corpus snapshot, not a delta.  Subtract
+            # its previous contribution before applying this one so importing
+            # the same artifact twice does not double every count; locally
+            # observed counts stay.
+            conn.execute(
+                """UPDATE dependency_names
+                   SET observation_count = MAX(observation_count - seed_observation_count, 0),
+                       seed_observation_count = 0"""
             )
+            if dep_rows:
+                conn.executemany(
+                    """INSERT INTO dependency_names
+                       (name, first_seen_globally_timestamp, observation_count,
+                        seed_observation_count)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(name) DO UPDATE SET
+                           observation_count = dependency_names.observation_count
+                               + excluded.observation_count,
+                           seed_observation_count = excluded.observation_count""",
+                    [(name, ts, count, count) for name, ts, count in dep_rows],
+                )
             counts["dependency_names"] = len(dep_rows)
 
         maint_rows = [

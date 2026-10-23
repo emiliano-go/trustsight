@@ -154,6 +154,42 @@ def test_import_v2_seed_populates_optional_urls_and_deps(db, tmp_path):
     assert stats["dependency_names"] == 1
 
 
+def _dep_row(name: str):
+    with get_connection() as conn:
+        return conn.execute(
+            "SELECT observation_count, seed_observation_count "
+            "FROM dependency_names WHERE name = ?", (name,)).fetchone()
+
+
+def test_reimport_of_the_same_seed_does_not_double_dependency_counts(db, tmp_path):
+    """A seed is a corpus snapshot, so a second fetch replaces its own
+    contribution instead of counting the whole AUR a second time (issue #48).
+    """
+    seed_dir = _build_v2_seed(
+        tmp_path, deps=[{"name": "openssl", "observation_count": 100}])
+    import_seed(seed_dir)
+    import_seed(seed_dir)
+
+    row = _dep_row("openssl")
+    assert row["observation_count"] == 100
+    assert row["seed_observation_count"] == 100
+
+
+def test_seed_import_keeps_local_dependency_counts(db, tmp_path):
+    """The snapshot split must not discard observations recorded locally."""
+    from trustsight.db import record_dependency_names
+
+    record_dependency_names(["openssl", "openssl"])
+    seed_dir = _build_v2_seed(
+        tmp_path, deps=[{"name": "openssl", "observation_count": 100}])
+    import_seed(seed_dir)
+    import_seed(seed_dir)
+
+    row = _dep_row("openssl")
+    assert row["observation_count"] == 102
+    assert row["seed_observation_count"] == 100
+
+
 def test_import_v2_seed_records_provenance(db, tmp_path):
     seed_dir = _build_v2_seed(tmp_path)
     import_seed(seed_dir)

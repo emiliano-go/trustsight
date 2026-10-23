@@ -332,7 +332,13 @@ def init_db():
                 id INTEGER PRIMARY KEY,
                 name TEXT UNIQUE,
                 first_seen_globally_timestamp TEXT,
-                observation_count INTEGER
+                observation_count INTEGER,
+                /* How much of observation_count came from the last imported
+                   seed or baseline snapshot.  Kept apart from the locally
+                   observed remainder so re-importing a snapshot replaces
+                   its own contribution instead of adding to it a second
+                   time (a baseline is a snapshot of the whole corpus). */
+                seed_observation_count INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE INDEX IF NOT EXISTS idx_dependency_names_name
@@ -669,6 +675,11 @@ _ADDED_COLUMNS = {
     "observed_added_literals": {
         "literal_hash": "TEXT",
     },
+    # A seed or baseline import replaces its own contribution to the
+    # dependency corpus; the local remainder is preserved.
+    "dependency_names": {
+        "seed_observation_count": "INTEGER NOT NULL DEFAULT 0",
+    },
 }
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -694,8 +705,45 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
     _migrate_rule_ids(conn)
     _repair_first_observation_adoptions(conn)
+    _migrate_dependency_seed_counts(conn)
 
 _SCHEMA_VERSION = 1
+
+def _migrate_dependency_seed_counts(conn: sqlite3.Connection) -> int:
+    """Split pre-0.23 dependency totals into seed and local contributions.
+
+    Before ``seed_observation_count`` existed, the table held one total and
+    every import added the whole baseline onto it, so an install that fetched
+    a seed twice had doubled counts.  Those rows cannot be split after the
+    fact: the old code kept no record of which part was the snapshot.  The
+    only safe reading is that the whole total came from the snapshot, because
+    every seed fetch contributed the entire corpus.  Marking it that way lets
+    the next import subtract it and replace it, healing the inflated counts.
+    Locally observed counts recorded before the upgrade are dropped at that
+    point; they are re-observed by ordinary use and are far smaller than the
+    corpus.
+
+    One-shot, keyed in ``metadata``: re-running the update on a database that
+    already tracks the split would relabel local observations as seed.
+    """
+    key = "dependency_seed_counts_v1"
+    if conn.execute(
+        "SELECT 1 FROM metadata WHERE key = ?", (key,)
+    ).fetchone():
+        return 0
+    cur = conn.execute(
+        "UPDATE dependency_names SET seed_observation_count = observation_count"
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, '1')",
+        (key,),
+    )
+    if cur.rowcount:
+        log.info(
+            "Marked %d dependency row(s) as seed-derived for the count split",
+            cur.rowcount,
+        )
+    return cur.rowcount
 
 def _repair_first_observation_adoptions(conn: sqlite3.Connection) -> int:
     """Remove first-submission rows the old pipeline mislabeled as H086.

@@ -261,7 +261,8 @@ def test_init_db_idempotent(db):
 
 # --- Seed import and maturity bootstrap ---
 
-def _make_seed(path, urls=("https://github.com/a/v0.tar.gz",), observations=279):
+def _make_seed(path, urls=("https://github.com/a/v0.tar.gz",), observations=279,
+               deps=None):
     import sqlite3
 
     conn = sqlite3.connect(str(path))
@@ -274,6 +275,9 @@ def _make_seed(path, urls=("https://github.com/a/v0.tar.gz",), observations=279)
                                   total_uses INTEGER, last_seen_timestamp TEXT);
         CREATE TABLE maintainer_counts (name TEXT PRIMARY KEY, count INTEGER);
         CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE dependency_names (id INTEGER PRIMARY KEY, name TEXT UNIQUE,
+                                       first_seen_globally_timestamp TEXT,
+                                       observation_count INTEGER);
     """)
     conn.execute("INSERT INTO packages (id, name) VALUES (0, '__seed__')")
     for u in urls:
@@ -281,11 +285,57 @@ def _make_seed(path, urls=("https://github.com/a/v0.tar.gz",), observations=279)
             """INSERT INTO source_urls (url, first_seen_package_id,
                first_seen_globally_timestamp, total_uses, last_seen_timestamp)
                VALUES (?, 0, '2024-01-01', 500, '2024-01-01')""", (u,))
+    for name, count in deps or ():
+        conn.execute(
+            """INSERT INTO dependency_names
+               (name, first_seen_globally_timestamp, observation_count)
+               VALUES (?, '2024-01-01', ?)""", (name, count))
     conn.execute("INSERT INTO maintainer_counts (name, count) VALUES ('Someone', 12)")
     conn.execute("INSERT INTO metadata (key, value) VALUES ('seed_observation_count', ?)",
                  (str(observations),))
     conn.commit()
     conn.close()
+
+
+def test_legacy_seed_reimport_replaces_dependency_snapshot(db, tmp_path):
+    """The SQLite seed path had the same doubling bug as the v2 path."""
+    from trustsight.db import get_connection, import_seed
+
+    seed = tmp_path / "seed.db"
+    _make_seed(seed, deps=[("openssl", 100)])
+    import_seed(seed)
+    import_seed(seed)
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT observation_count, seed_observation_count "
+            "FROM dependency_names WHERE name = 'openssl'").fetchone()
+    assert row["observation_count"] == 100
+    assert row["seed_observation_count"] == 100
+
+
+def test_upgrade_marks_existing_dependency_totals_as_seed(db):
+    """A pre-column database cannot be split; its total is the old snapshot,
+    so the next import replaces it and heals the doubled counts."""
+    from trustsight.db import get_connection
+
+    with get_connection() as conn:
+        conn.execute("ALTER TABLE dependency_names DROP COLUMN seed_observation_count")
+        conn.execute(
+            "DELETE FROM metadata WHERE key = 'dependency_seed_counts_v1'")
+        conn.execute(
+            """INSERT INTO dependency_names
+               (name, observation_count) VALUES ('legacy-dep', 7)""")
+        conn.commit()
+
+    init_db()
+
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT observation_count, seed_observation_count "
+            "FROM dependency_names WHERE name = 'legacy-dep'").fetchone()
+    assert row["observation_count"] == 7
+    assert row["seed_observation_count"] == 7
 
 
 def test_seed_observation_count_defaults_to_zero(db):

@@ -308,4 +308,14 @@ def bound_tokenizer_lines(text: str) -> str:
     lines = text.split("\n")
     if not any(len(line) > MAX_TOKENIZER_LINE_BYTES for line in lines):
         return text
-    return "\n".join(line[:MAX_TOKENIZER_LINE_BYTES] for line in lines)
+    bounded = []
+    for line in lines:
+        if len(line) > MAX_TOKENIZER_LINE_BYTES:
+            # Spend the budget on content, not on padding: a shell ignores a
+            # run of leading spaces, and collapsing it keeps a payload that
+            # sits past the raw ceiling visible to the tokenizer and rules.
+            line = _WHITESPACE_RUN_RE.sub(" ", line)
+            if len(line) > MAX_TOKENIZER_LINE_BYTES:
+                line = line[:MAX_TOKENIZER_LINE_BYTES]
+        bounded.append(line)
+    return "\n".join(bounded)

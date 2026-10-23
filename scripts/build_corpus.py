@@ -90,6 +90,14 @@ def ensure_aur_clone() -> Path:
     repo_dir = CACHE_DIR / "aur.git"
     if repo_dir.exists():
         if _clone_is_usable(repo_dir):
+            # The clone may have arrived from anywhere: the operator can
+            # fill the cache in themselves (it is tens of gigabytes), or an
+            # older version of this script left it there.  Neither
+            # `git clone --bare` nor `git init --bare` writes an
+            # `info/attributes`, so a reused clone is unprepared until
+            # _ensure_xfuncname says otherwise - and an unprepared clone
+            # groups the hunks differently, which changes the corpus bytes.
+            _ensure_xfuncname(repo_dir)
             return repo_dir
         print("  Existing clone is incomplete, removing and re-cloning...")
         shutil.rmtree(repo_dir, ignore_errors=True)
@@ -153,12 +161,42 @@ XFUNCNAME = (
     r"(post|pre)_(install|upgrade|remove))[[:space:]]*\(\))[[:space:]]*\{.*$"
 )
 
+#: The attributes that route PKGBUILD (and a package's install script)
+#: through the ``pkgbuild`` diff driver, whose ``xfuncname`` is
+#: :data:`XFUNCNAME`.  The driver is what makes ``git diff -W`` group the
+#: hunks by function; without the mapping git groups them by its own
+#: default heuristic and the diffs differ byte-for-byte.
+_XFUNC_ATTRIBUTES = (
+    "PKGBUILD diff=pkgbuild",
+    "*.install diff=pkgbuild",
+)
+
 
 def _ensure_xfuncname(repo_dir: Path) -> None:
-    """Install xfuncname so git diff -W produces useful hunk headers."""
+    """Install xfuncname so git diff -W produces useful hunk headers.
+
+    Two things are needed and only one of them is a config value: the
+    ``pkgbuild`` driver has to be *mapped* for ``PKGBUILD`` (a line in
+    ``info/attributes``), and the driver's ``xfuncname`` has to be set (the
+    repo config below).  The config alone configures a driver nothing uses,
+    so without the attributes line ``-W`` falls back to git's default
+    function-context heuristic, the hunks are grouped differently, and the
+    diffs are byte-different from the ones the baseline was measured with.
+
+    So the mapping is *ensured* rather than merely created: a clone that
+    already carries an ``info/attributes`` of its own keeps it and gains
+    the two lines it is missing.
+    """
     attrs = repo_dir / "info" / "attributes"
-    if not attrs.exists():
-        attrs.write_text("PKGBUILD diff=pkgbuild\n*.install diff=pkgbuild\n")
+    attrs.parent.mkdir(parents=True, exist_ok=True)
+    existing = (
+        attrs.read_text(encoding="utf-8").splitlines() if attrs.exists() else []
+    )
+    missing = [line for line in _XFUNC_ATTRIBUTES if line not in existing]
+    if missing:
+        prefix = "\n" if existing and existing[-1].strip() else ""
+        with attrs.open("a", encoding="utf-8") as handle:
+            handle.write(prefix + "\n".join(missing) + "\n")
     subprocess.run(
         ["git", "-C", str(repo_dir), "config", "diff.pkgbuild.xfuncname", XFUNCNAME],
         capture_output=True, timeout=10,

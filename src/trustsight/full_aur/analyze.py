@@ -62,6 +62,7 @@ from ..override import (
 from ..analysis.structural_rules import apply_structural_rules
 from ..rules import (
     apply_rules,
+    bound_tokenizer_lines,
     clamp_diff_lines,
     clamp_text,
     get_raw_diff_lines_indexed,
@@ -552,6 +553,8 @@ def analyze_package_text(
     # over a million lines.  The review paths clamp by line count; the
     # corpus path must too, or a package chooses how long its cycle runs.
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
+    long_lines = oversized_lines(diff_text.split("\n"))
+    diff_text = bound_tokenizer_lines(diff_text)
 
     source_changes = extract_urls_from_diff(diff_text)
     url_acks = match_url_acks(pkg_name, source_changes.added_urls)
@@ -713,7 +716,7 @@ def analyze_package_text(
         partial_files=partial_files,
         tree_analyzed=bool(tree_manifest),
         unresolved_sources=unresolved_sources,
-        long_lines=oversized_lines(raw_lines),
+        long_lines=long_lines,
         parse_time_substitutions=parse_time_subs,
         snapshot_refused=snapshot_refused,
         upstream_manifest_incomplete=upstream_manifest_incomplete,

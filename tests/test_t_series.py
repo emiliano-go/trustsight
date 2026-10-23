@@ -139,3 +139,34 @@ def test_t007_silent_without_data():
     project = _Project(messages=["import package"])
     assert t_packager_not_in_history(project, "", "someone", None) == []
     assert t_packager_not_in_history(project, "abc", "", None) == []
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("Stephan Springer <buzo+arch@Lini.de>", "lini.de"),
+        ("buzo+arch@Lini.de", "lini.de"),
+        ("buzo+arch@Lini.de (comment)", "lini.de"),
+        ("Name <buzo+arch@Lini.de", "lini.de"),
+        ("Name Only", ""),
+    ],
+)
+def test_maintainer_domain_parses_aur_forms(value, expected):
+    from trustsight.maintainer_email import maintainer_domain
+
+    assert maintainer_domain(value) == expected
+
+
+def test_t002_reports_the_bare_domain_from_brackets(db):
+    record_observed_domain("known.example")
+    got = t_domain_findings("Stephan Springer <buzo+arch@Lini.de>", None)
+
+    assert [f["rule_id"] for f in got] == ["T002"]
+    assert got[0]["params"]["domain"] == "lini.de"
+    assert "lini.de>" not in got[0]["match"]
+
+
+def test_t002_matches_a_recorded_bare_domain(db):
+    record_observed_domain("lini.de", observed_at="2020-01-01 00:00:00")
+    assert t_domain_findings(
+        "Stephan Springer <buzo+arch@Lini.de>", None) == []

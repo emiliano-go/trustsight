@@ -1355,3 +1355,43 @@ def test_added_literal_digest_distinguishes_long_prefixes(db):
     found = shared_added_literal(records, min_packages=2, min_length=256)
     assert [f["rule_id"] for f in found] == ["G002"]
     assert found[0]["params"]["literal_length"] == 5001
+
+
+def test_upgrade_normalizes_observed_maintainer_domains(db):
+    """Rows written before the extractor fix carry the closing bracket."""
+    from trustsight.db import get_connection
+
+    with get_connection() as conn:
+        conn.executemany(
+            """INSERT INTO observed_maintainer_domains(domain, first_seen)
+               VALUES (?, ?)""",
+            [
+                ("gmail.com>", "2020-01-01 00:00:00"),
+                ("gmail.com", "2021-01-01 00:00:00"),
+                ("lini.de> (comment)", "2022-01-01 00:00:00"),
+            ],
+        )
+        conn.execute(
+            "DELETE FROM metadata WHERE key = 'observed_domains_normalized_v1'")
+        conn.commit()
+
+    init_db()
+
+    with get_connection() as conn:
+        rows = {
+            row["domain"]: row["first_seen"]
+            for row in conn.execute(
+                "SELECT domain, first_seen FROM observed_maintainer_domains")
+        }
+    assert rows == {
+        "gmail.com": "2020-01-01 00:00:00",
+        "lini.de": "2022-01-01 00:00:00",
+    }
+
+
+def test_record_observed_domain_strips_the_bracket(db):
+    from trustsight.db import domain_first_seen, record_observed_domain
+
+    record_observed_domain("GMAIL.COM>")
+
+    assert domain_first_seen("gmail.com") is not None

@@ -28,6 +28,7 @@ from ...override import (
 )
 from ...rules import (
     apply_rules,
+    bound_tokenizer_lines,
     clamp_text,
     get_raw_diff_lines_indexed,
 )
@@ -96,6 +97,8 @@ def scan_diff(
     diff_text, diff_truncated, scan_truncated = apply_diff_caps(
         diff_text, config, package_name
     )
+    long_lines = oversized_lines(diff_text.split("\n"))
+    diff_text = bound_tokenizer_lines(diff_text)
 
     source_changes = extract_urls_from_diff(diff_text)
     url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}
@@ -243,7 +246,7 @@ def scan_diff(
                            diff_text, tree_manifest)),
         binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
-        long_lines=oversized_lines(raw_lines),
+        long_lines=long_lines,
         parse_time_substitutions=parse_time_subs,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, current_text),
         # This path analyses no dependencies at all, so any dependency the

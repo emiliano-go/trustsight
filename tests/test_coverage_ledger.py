@@ -52,3 +52,14 @@ def test_ledger_audit_names_unexpected_and_unmoved_expectations():
     assert "H015" in audit["moved"]
     assert "H016" in audit["unexpected"]
     assert audit["unmoved_expectations"] == []
+
+
+def test_t_series_source_exercises_the_stateful_t_rules():
+    import coverage_ledger
+
+    fired = {
+        rule_id
+        for row in coverage_ledger._scan_t_series()
+        for rule_id in row["fired"]
+    }
+    assert fired == {"T001", "T002", "T003"}

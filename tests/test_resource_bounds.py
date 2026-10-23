@@ -449,3 +449,14 @@ def test_srcinfo_diff_does_not_cost_the_product_of_its_sides():
     changes = srcinfo.diff_srcinfo(old, new)
     assert len(changes["depends"]["added"]) == 2000
     assert len(changes["depends"]["removed"]) == 2000
+
+
+def test_the_tokenizer_bound_preserves_line_count_and_caps_the_line():
+    from trustsight.rules import MAX_TOKENIZER_LINE_BYTES, bound_tokenizer_lines
+
+    text = "short\n" + "a" * (MAX_TOKENIZER_LINE_BYTES * 2) + "\nshort"
+    lines = bound_tokenizer_lines(text).split("\n")
+
+    assert lines[0] == "short"
+    assert len(lines[1]) == MAX_TOKENIZER_LINE_BYTES
+    assert lines[2] == "short"

@@ -51,6 +51,7 @@ from ...override import (
 )
 from ...rules import (
     apply_rules,
+    bound_tokenizer_lines,
     clamp_diff_lines,
     clamp_text,
     get_raw_diff_lines_indexed,
@@ -377,6 +378,8 @@ def analyze_package(
     if diff_truncated:
         log.warning("diff for %s exceeds %d bytes; truncating", pkg_name, max_bytes)
     diff_text, scan_truncated = clamp_diff_lines(diff_text, pkg_name)
+    long_lines = oversized_lines(diff_text.split("\n"))
+    diff_text = bound_tokenizer_lines(diff_text)
     # A hunk cut mid-stream with no truncation flag set is a silent
     # partial read; gaps_from declares it as `partial_hunk`, and the
     # details name the file, the hunk and the missing line count.
@@ -709,7 +712,7 @@ def analyze_package(
         companion_truncated=companion_truncated,
         binary_metadata=bool(binary_meta),
         unresolved_sources=unresolved_sources,
-        long_lines=oversized_lines(raw_lines),
+        long_lines=long_lines,
         parse_time_substitutions=parse_time_subs,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, head_pkgbuild),
         # A dependency this diff *adds* and this run did not analyse is
@@ -754,12 +757,14 @@ def analyze_package(
             record_observed_domain,
             record_observed_key,
         )
+        from ...maintainer_email import maintainer_domain
 
         pgp = (change or {}).get("pgp_keys", {}) or {}
         for key in (*pgp.get("gained", ()), *pgp.get("lost", ())):
             record_observed_key(key)
-        if new_maintainer and "@" in new_maintainer:
-            record_observed_domain(new_maintainer.rsplit("@", 1)[1])
+        domain = maintainer_domain(new_maintainer)
+        if domain:
+            record_observed_domain(domain)
         # keep the added encoded literals so G002 can join
         # across packages from the corpus index.
         from ..entropy import added_literals, added_text

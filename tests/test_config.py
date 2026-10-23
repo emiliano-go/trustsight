@@ -972,3 +972,77 @@ def test_fingerprint_covers_override_ttl(monkeypatch):
                               ttl_observations=10)],
     )
     assert config.config_fingerprint() != base
+
+
+def test_every_historical_shipped_pattern_is_recognised_and_repaired(
+        tmp_path, monkeypatch):
+    """A pattern an earlier release shipped is never a user edit.
+
+    ``LEGACY_RULE_PATTERNS`` is now merged with the tag-derived history, so
+    every old spelling of every current rule must be flagged and replaced
+    (issue #47).  The hand list kept missing releases; this pins the whole
+    generated set rather than the four spellings that were reported.
+    """
+    import re
+
+    from trustsight import config
+    from trustsight.config._legacy_shipped_patterns import HISTORICAL_RULE_PATTERNS
+
+    monkeypatch.setattr(config, "CONFIG_DIR", tmp_path)
+    config.ensure_default_configs()
+    path = tmp_path / "rules.toml"
+    base = path.read_text()
+    blocks = config._rule_blocks(config.DEFAULT_RULES)
+    shipped = {r["id"]: r["pattern"] for r in config.shipped_rules()}
+
+    checked = 0
+    for rule_id, patterns in HISTORICAL_RULE_PATTERNS.items():
+        for legacy in patterns:
+            assert legacy != shipped[rule_id]
+            replacement = "pattern = " + config._toml_escape_str(legacy)
+            block = re.sub(
+                r"^pattern\s*=\s*.*$", lambda _match: replacement,
+                blocks[rule_id], count=1, flags=re.MULTILINE,
+            )
+            path.write_text(
+                config._replace_rule_block(base, rule_id, block))
+            assert rule_id in config.outdated_shipped_rules(), rule_id
+            _, updated = config.sync_rules(update_outdated=True)
+            assert rule_id in updated
+            repaired = {r["id"]: r["pattern"] for r in config.load_rules()}
+            assert repaired[rule_id] == shipped[rule_id]
+            checked += 1
+    assert checked >= 25, "the generated history looks empty"
+
+
+def test_generated_shipped_pattern_history_is_current():
+    """The committed data file must match a fresh extraction from the tags."""
+    import shutil
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    from trustsight.config._legacy_shipped_patterns import HISTORICAL_RULE_PATTERNS
+
+    root = Path(__file__).resolve().parent.parent
+    if shutil.which("git") is None or not (root / ".git").exists():
+        import pytest
+
+        pytest.skip("no git checkout")
+    tags = subprocess.run(
+        ["git", "tag"], cwd=root, capture_output=True, text=True)
+    if not tags.stdout.strip():
+        import pytest
+
+        pytest.skip("no tags in this checkout")
+
+    sys.path.insert(0, str(root / "scripts"))
+    try:
+        import build_legacy_shipped_patterns as builder
+    finally:
+        sys.path.pop(0)
+
+    assert builder.collect() == {
+        rule_id: set(patterns)
+        for rule_id, patterns in HISTORICAL_RULE_PATTERNS.items()
+    }

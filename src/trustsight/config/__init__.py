@@ -27,6 +27,7 @@ from ._default_config import (
     _toml_str_list,
     _toml_value,
 )
+from ._legacy_shipped_patterns import HISTORICAL_RULE_PATTERNS as _HISTORICAL_RULE_PATTERNS
 from ._default_rules import (
     DEFAULT_DOMAINS,
     DEFAULT_RULES,
@@ -400,6 +401,13 @@ LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
     # `config sync-rules --update` repairs an install that still carries it.
     "R054": {r'(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?:[\s"\x27]|\$\{?pkgdir\}?)(?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))'},
 }
+
+# Patterns every earlier release shipped, extracted from the tags by
+# scripts/build_legacy_shipped_patterns.py.  The hand-curated entries above
+# carry the pre-history cases and their explanations; this closes the gap a
+# hand-maintained list kept leaving when a release changed a pattern.
+for _rule_id, _patterns in _HISTORICAL_RULE_PATTERNS.items():
+    LEGACY_RULE_PATTERNS.setdefault(_rule_id, set()).update(_patterns)
 
 def outdated_shipped_rules() -> list[str]:
     """Ids whose on-disk pattern is a superseded shipped pattern."""

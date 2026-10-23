@@ -6,8 +6,9 @@ from ..tokenizer import (
     split_lines,
 )
 from ._common import MAX_RULE_LINE_BYTES, MAX_SCANNED_LINES, _log
+from ..expansion import _MAX_LINE_LEN as MAX_TOKENIZER_LINE_BYTES
 
-__all__ = ['_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_PRINTER_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_printer_quote_body_indices', '_to_pairs', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
+__all__ = ['MAX_TOKENIZER_LINE_BYTES', '_COMMAND_CHAIN_RE', '_COMMENT_OR_DEP_RE', '_DEP_DECLARATION_RE', '_MESSAGE_LINE_RE', '_PRINTER_LINE_RE', '_WHITESPACE_RUN_RE', '_has_unquoted_redirect', '_is_message_line', '_printer_quote_body_indices', '_to_pairs', 'bound_tokenizer_lines', 'clamp', 'clamp_diff_lines', 'clamp_text', 'filter_raw_lines', 'get_raw_diff_lines', 'get_raw_diff_lines_indexed']
 
 _COMMENT_OR_DEP_RE = re.compile(
     r"^(?:\+|)\s*(?:"
@@ -288,3 +289,23 @@ def get_raw_diff_lines_indexed(diff_text: str) -> tuple[list[str], list[int]]:
 def get_raw_diff_lines(diff_text: str) -> list[str]:
     """Return non-empty diff lines with continuations joined."""
     return get_raw_diff_lines_indexed(diff_text)[0]
+
+
+def bound_tokenizer_lines(text: str) -> str:
+    """Cut every line to the tokenizer's input ceiling, keeping line count.
+
+    The engine bounds an *expansion* to 64 KiB, but it still has to scan the
+    raw line first.  A multi-megabyte added line therefore spent the
+    sandboxed worker's whole CPU budget before any rule ran, and the analysis
+    reported the package as unvettable.  The same bound the engine applies to
+    its output is applied here to its input.
+
+    Line count is preserved, so ``map_diff_lines`` and every index computed
+    from the original text still point at the right line.
+    """
+    if not text:
+        return text
+    lines = text.split("\n")
+    if not any(len(line) > MAX_TOKENIZER_LINE_BYTES for line in lines):
+        return text
+    return "\n".join(line[:MAX_TOKENIZER_LINE_BYTES] for line in lines)

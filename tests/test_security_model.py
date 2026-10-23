@@ -475,6 +475,15 @@ def test_an_over_long_line_is_recorded_as_a_gap():
     assert fact.risk == "Inconclusive" or verdict_label(fact).endswith(INCOMPLETE_SUFFIX)
 
 
+def test_a_multi_megabyte_line_is_bounded_before_the_tokenizer():
+    """The tokenizer worker used to spend its CPU limit on the raw line and
+    close the channel, so a hostile diff was reported as unvettable."""
+    diff = HEADER + "+build() { " + "a" * (5 * 1024 * 1024) + " ; }\n"
+    fact = scan_diff(diff, package_name="demo")
+
+    assert LINE_TRUNCATED in fact.coverage_gaps
+
+
 def test_an_ordinary_line_is_not_a_gap():
     fact = scan_diff(HEADER + "+echo hello\n", package_name="demo")
     assert LINE_TRUNCATED not in fact.coverage_gaps

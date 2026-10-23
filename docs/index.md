@@ -12,7 +12,7 @@ the boundaries behind that promise, and how each one is enforced.
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white&style=for-the-badge)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/License-MIT-10AC84?style=for-the-badge)](https://github.com/emiliano-go/trustsight/blob/master/LICENSE)
-[![Tests](https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/test.yml?branch=master&style=for-the-badge&logo=github&label=Tests)](https://github.com/emiliano-go/trustsight/actions/workflows/test.yml)
+[![Release tests](https://img.shields.io/github/actions/workflow/status/emiliano-go/trustsight/release-tests.yml?style=for-the-badge&logo=github&label=Release%20tests)](https://github.com/emiliano-go/trustsight/actions/workflows/release-tests.yml)
 [![PyPI](https://img.shields.io/pypi/v/trustsight?logo=pypi&logoColor=white&style=for-the-badge&cacheSeconds=60)](https://pypi.org/project/trustsight/)
 
 Ready to get started? Head over to the [Tutorial](tutorial/installation.md) for installation and your first review.

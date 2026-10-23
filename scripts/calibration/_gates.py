@@ -9,8 +9,10 @@ from trustsight.rules import (
     load_rules,
 )
 from scripts.calibration._core import CLASS_C_RULES, CLASS_D_RULES, FIXTURES, Gate, MANIFEST_CORPUS, MAX_BENIGN_FIRE_RATE, MAX_SCORE_SIZE_CORRELATION, MAX_X_RATE_DRIFT, X_RULES, _META_ESCALATORS, _NOT_RULES, _S_RULES, _fixture_failures, _gap_detected_by_another_rule, _is_attack_fixture, pearson, percentile, scan_corpus, shipped_config, warm_dependency_corpus
+from scripts.calibration._ledger import (DISPOSITION_PLANS, DISPOSITION_STATUSES,
+                                         unmet_expectations)
 
-__all__ = ['gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability']
+__all__ = ['gate_benign_fire_rates', 'gate_cluster_rate_below_members', 'gate_coverage_expectations', 'gate_d_series_warm', 'gate_h035_position', 'gate_homograph_single_script', 'gate_ioc_exact_match', 'gate_known_gaps_unchanged', 'gate_malicious_recall', 'gate_manifest_benign_corpus', 'gate_meta_escalation_below_cap', 'gate_published_figures', 'gate_s_series_fixture_pairs', 'gate_s_series_last_fired_coverage', 'gate_score_not_size', 'gate_separation', 'gate_stateful_rules_stay_out', 'gate_weight_zero_annotations', 'gate_x_series_rate_stability']
 
 def gate_benign_fire_rates(benign: list[dict]) -> Gate:
     """`benign_fire_rate(rule) < 0.30` for every *scoring* rule.
@@ -394,7 +396,7 @@ def gate_s_series_last_fired_coverage(
     )
 
 
-def gate_coverage_ledger_complete() -> Gate:
+def gate_coverage_ledger_complete(ledger_path: Path | None = None) -> Gate:
     """Every catalog id has exactly one coverage state and a reason.
 
     The ledger is the expansion's control panel.  A rule missing from it, a
@@ -404,7 +406,7 @@ def gate_coverage_ledger_complete() -> Gate:
     from trustsight.contract import pseudo_rule_ids, rule_ids
 
     name = "coverage ledger is complete"
-    path = FIXTURES / "coverage-ledger.json"
+    path = ledger_path or FIXTURES / "coverage-ledger.json"
     if not path.exists():
         return Gate(name, False, 0, 0, "coverage-ledger.json missing")
     doc = json.loads(path.read_text())
@@ -432,6 +434,76 @@ def gate_coverage_ledger_complete() -> Gate:
         problems.append(f"measured without source: {measured_no_source[:8]}")
     return Gate(name, not problems, {"rules": len(rows), "expected": len(expected)},
                 0, "; ".join(problems))
+
+
+def gate_coverage_expectations(ledger_path: Path | None = None) -> Gate:
+    """Every unmet expected rule is a reviewed, dispositioned gap.
+
+    This is a ratchet, not a demand that every rule fire on benign data.  An
+    expected rule must either be exercised by a benign source or carry a
+    ``deferred`` disposition naming the plan that will exercise it.  A
+    ``resolved`` disposition whose plan says the rule is attack-only or not
+    measurable must not still be declared as a benign expectation.
+    """
+    name = "coverage expectations are met or dispositioned"
+    path = ledger_path or FIXTURES / "coverage-ledger.json"
+    if not path.exists():
+        return Gate(name, False, 0, 0, f"{path.name} missing")
+    doc = json.loads(path.read_text())
+    rows = doc.get("rules") or {}
+    expected = {
+        rid: row.get("expected_strata") or []
+        for rid, row in rows.items() if row.get("expected_strata")
+    }
+    unmet = unmet_expectations(doc, expected)
+    missing: list[str] = []
+    bad_status: list[str] = []
+    bad_plan: list[str] = []
+    stale_add: list[str] = []
+    stale_expectation: list[str] = []
+    no_expectation_plans = {
+        "attack_only", "not_measurable", "expectation_wrong",
+        "weight_zero", "unverifiable", "pseudo", "known_false_positive",
+    }
+    for rid in sorted(unmet):
+        disposition = rows.get(rid, {}).get("disposition")
+        if not isinstance(disposition, dict):
+            missing.append(rid)
+            continue
+        status = disposition.get("status")
+        plan = disposition.get("plan")
+        if status not in DISPOSITION_STATUSES:
+            bad_status.append(f"{rid}:{status}")
+        if plan not in DISPOSITION_PLANS:
+            bad_plan.append(f"{rid}:{plan}")
+    for rid, row in sorted(rows.items()):
+        disposition = row.get("disposition")
+        if not isinstance(disposition, dict):
+            continue
+        status = disposition.get("status")
+        plan = disposition.get("plan")
+        if plan and str(plan).startswith("add_") and row.get("expected_met"):
+            stale_add.append(rid)
+        if status == "resolved" and plan in no_expectation_plans and row.get("expected_strata"):
+            stale_expectation.append(rid)
+    problems: list[str] = []
+    if missing:
+        problems.append(f"unmet without disposition: {', '.join(missing[:12])}")
+    if bad_status:
+        problems.append(f"bad status: {', '.join(bad_status[:8])}")
+    if bad_plan:
+        problems.append(f"bad plan: {', '.join(bad_plan[:8])}")
+    if stale_add:
+        problems.append(f"stale add_* disposition: {', '.join(stale_add[:8])}")
+    if stale_expectation:
+        problems.append(
+            f"resolved non-benign plan still expected: {', '.join(stale_expectation[:8])}")
+    return Gate(
+        name, not problems,
+        {"expectations": len(expected), "unmet": len(unmet),
+         "missing_disposition": len(missing), "stale_disposition": len(stale_add),
+         "stale_expectation": len(stale_expectation)},
+        0, "; ".join(problems))
 
 
 def gate_artifact_corpus() -> Gate:

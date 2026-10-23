@@ -34,7 +34,7 @@ File the first three through the [False positive issue form](https://github.com/
 5. The fix ships as a PR with the code change, the true-positive twin, and a visible suppression entry. A human merges it.
 6. A true positive takes the alert path instead of the PR path.
 
-Maintainers can gather step 2 from a checkout with `scripts/fp_evidence.sh <alert-slug>` or the **FP evidence** workflow. The intake workflow applies `needs-info` when the report is incomplete, `fp-intake-ok` when it is complete, and `overweighted` or `benign-practice` for those report kinds.
+Maintainers can gather step 2 from a checkout with `scripts/fp_evidence.sh <alert-slug>` or the **FP evidence** workflow. The intake workflow applies `needs-info` when the report is incomplete, `fp-intake-ok` when it is complete, and `overweighted` or `benign-practice` for those report kinds. Maintainers move the issue through `confirmed-fp`, `fixed`, or `wontfix` as triage progresses.
 
 The pipeline is deliberately split: the reporter supplies the package and the evidence, the agent proposes, deterministic checks decide, and a maintainer merges. No issue text becomes a verdict on its own.
 

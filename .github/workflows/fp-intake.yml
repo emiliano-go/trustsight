@@ -40,6 +40,12 @@ jobs:
           gh label create benign-practice --color c5def5 \
             --description "Real finding about a packager practice, not a rule bug" \
             --force
+          gh label create confirmed-fp --color 1d76db \
+            --description "Triage confirmed a bad rule trigger" \
+            --force
+          gh label create fixed --color 0e8a16 \
+            --description "The false-positive fix merged" \
+            --force
 
       - name: Validate the report
         env:

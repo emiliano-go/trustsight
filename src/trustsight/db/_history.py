@@ -5,6 +5,7 @@ import hashlib
 from typing import Optional
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
+from ..maintainer_email import normalize_domain
 
 __all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
 
@@ -337,7 +338,7 @@ def observed_key_count() -> int:
 
 def record_observed_domain(domain: str, observed_at: Optional[str] = None) -> None:
     """Record a maintainer email domain as observed in the ecosystem."""
-    domain = (domain or "").strip().lower()[:253]
+    domain = normalize_domain(domain)
     if not domain:
         return
     with get_connection() as conn:
@@ -363,7 +364,7 @@ def domain_first_seen(domain: str) -> Optional[str]:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT first_seen FROM observed_maintainer_domains WHERE domain = ?",
-            ((domain or "").strip().lower()[:253],),
+            (normalize_domain(domain),),
         ).fetchone()
     return row[0] if row else None
 
@@ -378,7 +379,7 @@ T002's window, not merely "never observed". A domain
         row = conn.execute(
             "SELECT first_seen >= datetime('now', ?) "
             "FROM observed_maintainer_domains WHERE domain = ?",
-            (f"-{int(days)} days", (domain or "").strip().lower()[:253]),
+            (f"-{int(days)} days", normalize_domain(domain)),
         ).fetchone()
     return bool(row and row[0])
 

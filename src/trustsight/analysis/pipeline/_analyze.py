@@ -754,12 +754,14 @@ def analyze_package(
             record_observed_domain,
             record_observed_key,
         )
+        from ...maintainer_email import maintainer_domain
 
         pgp = (change or {}).get("pgp_keys", {}) or {}
         for key in (*pgp.get("gained", ()), *pgp.get("lost", ())):
             record_observed_key(key)
-        if new_maintainer and "@" in new_maintainer:
-            record_observed_domain(new_maintainer.rsplit("@", 1)[1])
+        domain = maintainer_domain(new_maintainer)
+        if domain:
+            record_observed_domain(domain)
         # keep the added encoded literals so G002 can join
         # across packages from the corpus index.
         from ..entropy import added_literals, added_text

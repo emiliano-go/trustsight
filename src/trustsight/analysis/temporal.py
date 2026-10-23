@@ -74,10 +74,9 @@ def t_domain_findings(maintainer: str, config) -> list[dict]:
     (see T001).
     """
     from ..db import domain_first_seen, domain_seen_within, observed_domain_count
+    from ..maintainer_email import maintainer_domain
 
-    if not maintainer or "@" not in maintainer:
-        return []
-    domain = maintainer.rsplit("@", 1)[1].strip().lower()
+    domain = maintainer_domain(maintainer)
     if not domain:
         return []
     if observed_domain_count() < _t_thresholds(

@@ -4,7 +4,8 @@
 This is the corpus-expansion control panel.  It reuses the calibration scan,
 so it costs one replay (shared with the gates when CI passes rows) and then
 adds the sources a diff replay cannot cover: the history corpus, the manifest
-corpus, the artifact corpus and the labelled attack fixtures.
+corpus, the artifact corpus, the stateful T-series sample and the labelled
+attack fixtures.
 
 Usage:
     uv run python scripts/coverage_ledger.py
@@ -83,6 +84,42 @@ def _scan_artifact_corpus(directory: Path) -> list[dict]:
     return rows
 
 
+def _scan_t_series() -> list[dict]:
+    """Exercise the stateful T rules the stateless diff replay cannot reach."""
+    from trustsight.analysis.temporal import (
+        t_domain_findings,
+        t_key_findings,
+        t_key_rotation,
+    )
+    from trustsight.db import (
+        init_db,
+        record_observed_domain,
+        record_observed_key,
+    )
+
+    with cg.shipped_config():
+        init_db()
+        record_observed_key("KNOWNKEY")
+        record_observed_domain("known.example", observed_at="2020-01-01 00:00:00")
+        samples = (
+            ("t001-signing-key", "signed_sources",
+             t_key_findings({"pgp_keys": {"gained": ["NEWKEY"]}}, None)),
+            ("t002-maintainer-domain", "maintainer_churn",
+             t_domain_findings("Name <user@novel.example>", None)),
+            ("t003-key-rotation", "signed_sources",
+             t_key_rotation(
+                 {"pgp_keys": {"gained": ["NEWKEY"], "lost": ["OLDKEY"]}})),
+        )
+        return [
+            {
+                "name": name,
+                "stratum": stratum,
+                "fired": sorted({finding["rule_id"] for finding in findings}),
+            }
+            for name, stratum, findings in samples
+        ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Build the coverage ledger")
     parser.add_argument("--corpus", type=Path, default=FIXTURES / "benign-corpus")
@@ -138,6 +175,8 @@ def main() -> int:
     if not args.no_artifact:
         observations.append(observation_from_rows(
             _scan_artifact_corpus(args.artifact_dir), "artifact"))
+
+    observations.append(observation_from_rows(_scan_t_series(), "t-series"))
 
     if not args.no_malicious:
         with cg.shipped_config():

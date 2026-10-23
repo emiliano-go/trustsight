@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Optional
 from ..rule_id_history import RENAMED_RULE_IDS
+from ..maintainer_email import normalize_domain
 from ._common import log
 
 __all__ = ['DEFAULT_HASH_ALGORITHM', 'MAX_SEED_BYTES', 'MAX_SEED_MEMBERS', 'MAX_SEED_MEMBER_BYTES', 'SEED_META_HASH_ALGORITHM_KEY', 'SEED_META_SALT_KEY', '_ADDED_COLUMNS', '_SCHEMA_VERSION', '_SYNC_MODES', '_SYNC_SQL', '_ensure_salt', '_generate_salt', '_get_salt', '_hash_maintainer_rows', '_hash_maintainer_value', '_local', '_migrate', '_migrate_plaintext_maintainers', '_migrate_rule_ids', '_new_connection', '_synchronous_mode', 'close_connections', 'get_connection', 'get_db_path', 'get_read_only_connection', 'init_db', 'write_batch']
@@ -706,8 +707,55 @@ def _migrate(conn: sqlite3.Connection) -> None:
     _migrate_rule_ids(conn)
     _repair_first_observation_adoptions(conn)
     _migrate_dependency_seed_counts(conn)
+    _migrate_observed_domains(conn)
 
 _SCHEMA_VERSION = 1
+
+def _migrate_observed_domains(conn: sqlite3.Connection) -> int:
+    """Collapse maintainer domains the old extractor stored with the bracket.
+
+    The domain came from everything after ``@``, so ``Name <user@Lini.de>``
+    recorded ``lini.de>`` and ``user@domain (comment)`` recorded
+    ``domain (comment)``.  Normalize every row, drop empty ones, and merge a
+    collision on the earlier ``first_seen`` so the novelty window stays
+    conservative.
+
+    One-shot, keyed in ``metadata``: the writer now normalizes, so only rows
+    from an older database need this.
+    """
+    key = "observed_domains_normalized_v1"
+    if conn.execute(
+        "SELECT 1 FROM metadata WHERE key = ?", (key,)
+    ).fetchone():
+        return 0
+    rows = conn.execute(
+        "SELECT domain, first_seen FROM observed_maintainer_domains"
+    ).fetchall()
+    merged: dict[str, Optional[str]] = {}
+    for row in rows:
+        domain = normalize_domain(row["domain"])
+        if not domain:
+            continue
+        first = row["first_seen"]
+        current = merged.get(domain)
+        if domain not in merged or (first and (current is None or first < current)):
+            merged[domain] = first
+    conn.execute("DELETE FROM observed_maintainer_domains")
+    conn.executemany(
+        """INSERT OR REPLACE INTO observed_maintainer_domains(
+               domain, first_seen) VALUES (?, ?)""",
+        merged.items(),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, '1')",
+        (key,),
+    )
+    if len(merged) != len(rows):
+        log.info(
+            "Normalized %d observed maintainer domain(s) into %d",
+            len(rows), len(merged),
+        )
+    return len(rows)
 
 def _migrate_dependency_seed_counts(conn: sqlite3.Connection) -> int:
     """Split pre-0.23 dependency totals into seed and local contributions.

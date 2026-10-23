@@ -3,8 +3,8 @@
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
-    "cold_only": 44,
-    "measured": 158,
+    "cold_only": 41,
+    "measured": 161,
     "zero_fire": 68
   },
   "rules": {
@@ -6313,40 +6313,67 @@
       "expected_strata": [
         "signed_sources"
       ],
-      "fires": 0,
+      "fires": 1,
       "id": "T001",
       "pseudo": false,
-      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "reason": "",
       "series": "T",
-      "sources": {},
-      "state": "cold_only",
-      "strata": [],
+      "sources": {
+        "t-series": {
+          "fires": 1,
+          "strata": [
+            "signed_sources"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "signed_sources"
+      ],
       "uid": "TS-0211"
     },
     "T002": {
       "expected_strata": [],
-      "fires": 0,
+      "fires": 1,
       "id": "T002",
       "pseudo": false,
-      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "reason": "",
       "series": "T",
-      "sources": {},
-      "state": "cold_only",
-      "strata": [],
+      "sources": {
+        "t-series": {
+          "fires": 1,
+          "strata": [
+            "maintainer_churn"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "maintainer_churn"
+      ],
       "uid": "TS-0212"
     },
     "T003": {
       "expected_strata": [
         "signed_sources"
       ],
-      "fires": 0,
+      "fires": 1,
       "id": "T003",
       "pseudo": false,
-      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "reason": "",
       "series": "T",
-      "sources": {},
-      "state": "cold_only",
-      "strata": [],
+      "sources": {
+        "t-series": {
+          "fires": 1,
+          "strata": [
+            "signed_sources"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "signed_sources"
+      ],
       "uid": "TS-0213"
     },
     "T006": {

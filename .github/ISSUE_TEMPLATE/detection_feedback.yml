@@ -1,5 +1,5 @@
-name: False positive / missed detection
-description: TrustSight flagged a benign update, or did not flag one it should have. Detection tuning and rule requests go here.
+name: Missed detection / new rule request
+description: TrustSight did not flag a suspicious update, or you have a pattern it should recognize. For a rule that fired with no bad practice behind it, use the False positive template.
 title: "[Detection]: "
 labels: ["detection"]
 body:
@@ -7,9 +7,11 @@ body:
     attributes:
       value: |
         TrustSight is an evidence tool with [published limits](https://github.com/emiliano-go/trustsight/blob/master/docs/explanation/what-trustsight-cannot-see.md).
-        "It missed something" is usually a rule request, not a vulnerability,
-        and "it flagged a normal update" is calibration feedback. Both are
-        welcome here.
+        "It missed something" is usually a rule request, not a vulnerability.
+
+        If a rule fired but you think it was wrong, use the *False positive*
+        template instead. A hit on a genuine bad practice is a real finding,
+        not a rule bug. See [Tuning False Positives](https://docs.trustsight.org/guides/tuning-false-positives/).
 
         If the miss lets a package **execute code on the reviewing machine**
         or breach an invariant in [Part A/B](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md),
@@ -19,7 +21,6 @@ body:
     attributes:
       label: Which is it?
       options:
-        - False positive (benign update flagged / scored too high)
         - Missed detection (a suspicious update scored too low or UNFLAGGED)
         - New rule request (a pattern TrustSight should recognise)
     validations:

@@ -14,9 +14,13 @@ body:
           integrity breach): do **not** open a public issue. Report it
           privately, see the security link on the new-issue page or
           [How to report](https://github.com/emiliano-go/trustsight/blob/master/docs/security.md#how-to-report).
-        - **"It flagged a benign package" or "it missed a bad one"**: that is
-          usually a detection request, not a bug. Use the
-          *False positive / missed detection* template instead.
+        - **"It flagged a benign package"**: check
+          [Tuning False Positives](https://docs.trustsight.org/guides/tuning-false-positives/)
+          first. A hit on a genuine bad practice is a real finding, not a rule
+          bug. If the rule fired with no bad practice behind it, use the
+          *False positive* template.
+        - **"It missed a bad one"**: that is a detection request, not a bug.
+          Use the *Missed detection / new rule request* template.
   - type: input
     id: version
     attributes:

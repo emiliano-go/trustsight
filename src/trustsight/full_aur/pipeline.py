@@ -76,12 +76,12 @@ log = logging.getLogger(__name__)
 _FLAGGED_SCORE = 40
 
 # The benign corpus's measured p95, from published-figures.json
-# (`calibration.benign_p95 = 30`): a score strictly past it is outside 95% of
+# (`calibration.benign_p95 = 35`): a score strictly past it is outside 95% of
 # what the benign corpus does, which is the bar a watcher's alert should use.
 # The comparison is `score > _OVER_BENIGN_P95`, so a value of 35 alerts on
-# scores of 31+.  `flagged` stays at 40 (the report bar); this is the lower,
-# alerting bar.  (The 20-point review threshold and its 7.1% benign rate are a
-# separate, stricter review-workload policy - see scoring.FLAG_THRESHOLD.)
+# scores of 36+.  `flagged` stays at 40 (the report bar); this is the lower,
+# alerting bar.  (The 20-point review threshold and its 8.7% benign rate are a
+# separate, stricter review-workload policy, see scoring.FLAG_THRESHOLD.)
 _OVER_BENIGN_P95 = 35
 
 # One day of AUR time per backfill cycle (see run_baseline_build's *since*).

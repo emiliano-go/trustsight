@@ -1,0 +1,94 @@
+name: False positive
+description: A rule fired with no bad practice or malicious behavior behind it. Read the distinction before filing; not every flagged benign update is a rule bug.
+title: "[False positive]: "
+labels: ["false-positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        TrustSight's rules are calibrated, and false-positive tuning is ongoing.
+
+        **Check which kind of false positive this is first.** A *benign false
+        positive* is a rule hit on a genuine bad practice by the packager. The
+        finding is real, the practice is undesirable, and the fix belongs with
+        the packager, not this tracker. A *malicious false positive* is a bad
+        rule trigger: the rule fired with no bad practice or malicious behavior
+        behind it. Only the second is a rule bug we can tune. The definitions
+        are in [Tuning False Positives](https://docs.trustsight.org/guides/tuning-false-positives/#two-kinds-of-false-positive).
+
+        If this is a security issue (code execution, an unexpected network
+        host, or an integrity breach), report it privately instead:
+        [How to report](https://docs.trustsight.org/security/#how-to-report).
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This is a malicious false positive. The rule fired with no bad practice or malicious behavior behind it, and it is not a real finding about a bad packager practice.
+          required: true
+        - label: I checked the documented known false positives and this is not one of them.
+          required: true
+        - label: This is not a private security report.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: TrustSight version
+      description: Output of `trustsight --version`, or the analyzer version shown on the feed.
+      placeholder: "trustsight 0.22.0"
+    validations:
+      required: true
+  - type: input
+    id: package
+    attributes:
+      label: AUR package
+      description: The package name the finding is about.
+      placeholder: "some-package"
+    validations:
+      required: true
+  - type: input
+    id: alert_url
+    attributes:
+      label: Feed alert URL (optional)
+      description: The watcher alert page, when the finding came from the feed.
+      placeholder: "https://watcher.trustsight.org/2026-10-23/110000/"
+    validations:
+      required: false
+  - type: textarea
+    id: reported
+    attributes:
+      label: What TrustSight reported
+      description: The score, verdict, rule ids, and the exact finding text. Paste `trustsight inspect <pkg> --json` when you can.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: why-benign
+    attributes:
+      label: Why this is a bad rule trigger
+      description: What the rule misread, and why there is no bad practice or malicious behavior behind it. This is the key field.
+    validations:
+      required: true
+  - type: textarea
+    id: pkgbuild
+    attributes:
+      label: PKGBUILD or diff
+      description: The recipe or diff that triggered the finding. This is the single most useful artifact.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command or mode (optional)
+      description: For example `trustsight review`, `trustsight inspect`, `trustsight lint`, or the watcher.
+      placeholder: "trustsight inspect some-package"
+    validations:
+      required: false
+  - type: input
+    id: config_fingerprint
+    attributes:
+      label: Config fingerprint (optional)
+      description: The `config_fingerprint` value from the JSON report, when you have it.
+    validations:
+      required: false

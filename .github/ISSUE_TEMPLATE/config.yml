@@ -13,6 +13,17 @@ contact_links:
     about: >
       Before filing a missed detection, check the documented limits. "It missed
       a compromised upstream tarball" is a known ceiling, not a defect.
+  - name: Tuning False Positives
+    url: https://docs.trustsight.org/guides/tuning-false-positives/
+    about: >
+      Read the difference between a benign false positive (a real finding about
+      a bad packager practice) and a malicious false positive (a bad rule
+      trigger) before reporting.
+  - name: Report a false positive
+    url: https://github.com/emiliano-go/trustsight/issues/new?template=false_positive.yml
+    about: >
+      A rule fired with no bad practice or malicious behavior behind it. For a
+      real finding about a bad packager practice, use the tuning guide instead.
   - name: Documentation
     url: https://github.com/emiliano-go/trustsight/tree/master/docs
     about: CLI reference, rules, configuration, and the security model.

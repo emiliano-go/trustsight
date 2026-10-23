@@ -3,10 +3,12 @@
 import json
 from urllib.parse import urlencode
 
+from .release import GITHUB_WEB
+
 __all__ = ["ISSUE_TEMPLATE_URL", "issue_body", "issue_url"]
 
 ISSUE_TEMPLATE_URL = (
-    "https://github.com/emiliano-go/trustsight/issues/new"
+    f"{GITHUB_WEB}/emiliano-go/trustsight/issues/new"
     "?template=false_positive.yml"
 )
 

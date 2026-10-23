@@ -51,6 +51,30 @@ COLD_ONLY_RULES = frozenset(
 #: Families measured by their own attack corpora, not by benign packaging.
 ADVERSARIAL_SERIES = frozenset({"S", "X"})
 
+#: Sources that count as benign coverage.  ``malicious`` is the only source
+#: whose fires say nothing about the benign floor.
+ADVERSARIAL_SOURCES = frozenset({"malicious"})
+
+#: Status of a disposition.  ``deferred`` is a ratified gap with a scheduled
+#: plan; ``resolved`` means the plan has been applied and the expectation must
+#: now agree with the ledger.
+DISPOSITION_STATUSES = frozenset({"deferred", "resolved"})
+
+#: Plans a deferred expectation may carry.  The gate fails when a new
+#: expectation appears without one.
+DISPOSITION_PLANS = frozenset({
+    "add_benign_shape",
+    "add_history_or_warm",
+    "add_artifact_or_manifest",
+    "attack_only",
+    "not_measurable",
+    "expectation_wrong",
+    "weight_zero",
+    "unverifiable",
+    "pseudo",
+    "known_false_positive",
+})
+
 
 def _severity(rule_id: str) -> str:
     try:
@@ -117,6 +141,7 @@ def build_ledger(
     observations: Iterable[Observation],
     *,
     expected: dict[str, list[str]] | None = None,
+    dispositions: dict[str, dict] | None = None,
     corpus_sha256: str = "",
     version: str = "",
 ) -> dict:
@@ -125,8 +150,13 @@ def build_ledger(
     *expected* maps rule id -> strata that are supposed to exercise it, from
     ``strata.toml``'s ``expected_rules`` fields.  It is advisory: a mismatch is
     reported by the ledger audit, never silently hidden.
+
+    *dispositions* maps rule id -> a reviewed plan for a rule that is not yet
+    benign-measured.  The coverage gate fails when an expected rule has no
+    disposition, so a silent gap cannot survive a corpus change.
     """
     expected = expected or {}
+    dispositions = dispositions or {}
     by_rule: dict[str, dict] = {}
     all_ids = list(rule_ids()) + list(pseudo_rule_ids())
 
@@ -153,6 +183,24 @@ def build_ledger(
         else:
             state = "zero_fire"
         is_pseudo = rule_id in set(pseudo_rule_ids())
+        benign_sources = sorted(
+            src for src in sources if src not in ADVERSARIAL_SOURCES)
+        benign_strata = sorted({
+            stratum
+            for src in benign_sources
+            for stratum in sources[src]["strata"]
+        })
+        expected_strata = sorted(expected.get(rule_id, []))
+        if is_pseudo:
+            benign_state = "pseudo"
+        elif benign_sources:
+            benign_state = "fire"
+        elif state in {"cold_only", "adversarial_only"}:
+            benign_state = state
+        elif total:
+            benign_state = "malicious_only"
+        else:
+            benign_state = "zero_fire"
         by_rule[rule_id] = {
             "id": rule_id,
             "uid": REGISTRY.uid_of(rule_id) if not is_pseudo else None,
@@ -161,9 +209,16 @@ def build_ledger(
             "state": state,
             "fires": total,
             "strata": sorted(strata),
-            "expected_strata": sorted(expected.get(rule_id, [])),
+            "benign_sources": benign_sources,
+            "benign_strata": benign_strata,
+            "benign_state": benign_state,
+            "expected_strata": expected_strata,
+            "expected_met": bool(benign_sources),
+            "expected_strata_met": sorted(
+                set(expected_strata) & set(benign_strata)),
+            "disposition": dispositions.get(rule_id),
             "sources": sources,
-            "reason": _reason(rule_id, state, sorted(expected.get(rule_id, []))),
+            "reason": _reason(rule_id, state, expected_strata),
         }
 
     counts: dict[str, int] = defaultdict(int)
@@ -185,6 +240,47 @@ def expected_from_strata(strata: dict) -> dict[str, list[str]]:
         for rule_id in cfg.get("expected_rules") or ():
             out[str(rule_id)].append(name)
     return {rule_id: sorted(set(names)) for rule_id, names in out.items()}
+
+
+def unmet_expectations(ledger: dict, expected: dict[str, list[str]] | None = None,
+                       *, require_stratum: bool = False) -> dict[str, dict]:
+    """Name every expectation the ledger does not meet.
+
+    The default is the ratchet the CI gate enforces: an expected rule must be
+    exercised by at least one benign source.  ``require_stratum=True`` is the
+    stricter review view: the rule must also fire in the stratum that declared
+    the expectation.  Both are reported so a corpus expansion can distinguish
+    "not measured at all" from "measured somewhere else".
+    """
+    expected = expected or {
+        rid: row.get("expected_strata") or []
+        for rid, row in (ledger.get("rules") or {}).items()
+        if row.get("expected_strata")
+    }
+    out: dict[str, dict] = {}
+    for rule_id, names in sorted(expected.items()):
+        row = (ledger.get("rules") or {}).get(rule_id)
+        if row is None:
+            out[rule_id] = {"reason": "missing", "expected": sorted(names)}
+            continue
+        if not row.get("benign_sources"):
+            out[rule_id] = {
+                "reason": "no_benign_source",
+                "expected": sorted(names),
+                "benign_state": row.get("benign_state"),
+            }
+            continue
+        if require_stratum:
+            fired = set(row.get("benign_strata") or [])
+            missing = sorted(set(names) - fired)
+            if missing:
+                out[rule_id] = {
+                    "reason": "wrong_stratum",
+                    "expected": sorted(names),
+                    "missing_strata": missing,
+                    "fired_in": sorted(fired),
+                }
+    return out
 
 
 def ledger_audit(before: dict, after: dict, expected: dict[str, list[str]] | None = None) -> dict:

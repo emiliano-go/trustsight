@@ -7,10 +7,17 @@ adds the sources a diff replay cannot cover: the history corpus, the manifest
 corpus, the artifact corpus, the stateful T-series sample and the labelled
 attack fixtures.
 
+Every expected rule is reported as benign-measured or as a dispositioned gap.
+``--check`` rebuilds and compares the committed ledger; ``--check-existing``
+compares an already-built ledger without a second replay.
+
 Usage:
     uv run python scripts/coverage_ledger.py
     uv run python scripts/coverage_ledger.py --jobs 8 \\
         --out tests/fixtures/coverage-ledger.json
+    uv run python scripts/coverage_ledger.py --rows scan-rows.json \\
+        --out coverage-ledger.json --check-existing \\
+        tests/fixtures/coverage-ledger.json
 """
 
 from __future__ import annotations
@@ -42,6 +49,60 @@ def _stratum_map(manifest: Path) -> dict[str, str]:
         return {}
     lock = json.loads(manifest.read_text())
     return {e["pkg"]: e["stratum"] for e in lock.get("entries", [])}
+
+
+#: Fields that describe coverage and dispositions rather than prose or
+#: timing.  ``--check`` compares these, so a stale committed ledger fails
+#: without making a fire-count fluctuation look like a structural drift.
+_FUNCTIONAL_FIELDS = (
+    "state", "benign_state", "benign_sources", "benign_strata",
+    "expected_strata", "expected_met", "expected_strata_met",
+)
+
+
+def _disposition_projection(disposition) -> dict | None:
+    """The machine-relevant part of a disposition, not its prose note."""
+    if not isinstance(disposition, dict):
+        return None
+    return {key: disposition.get(key) for key in ("status", "plan", "phase")}
+
+
+def _canonical_ledger(ledger: dict) -> dict:
+    rules = {}
+    for rid, row in (ledger.get("rules") or {}).items():
+        rules[rid] = {field: row.get(field) for field in _FUNCTIONAL_FIELDS}
+        rules[rid]["disposition"] = _disposition_projection(row.get("disposition"))
+    return {
+        "version": ledger.get("version"),
+        "corpus_content_sha256": ledger.get("corpus_content_sha256"),
+        "catalog_size": ledger.get("catalog_size"),
+        "counts": ledger.get("counts"),
+        "rules": rules,
+    }
+
+
+def _ledger_drift(committed_path: Path, ledger: dict) -> list[str]:
+    committed = _canonical_ledger(json.loads(committed_path.read_text()))
+    current = _canonical_ledger(ledger)
+    problems: list[str] = []
+    for key in ("version", "corpus_content_sha256", "catalog_size", "counts"):
+        if committed.get(key) != current.get(key):
+            problems.append(
+                f"{key}: committed {committed.get(key)!r} != current {current.get(key)!r}")
+    old, new = committed.get("rules") or {}, current.get("rules") or {}
+    missing = sorted(set(old) - set(new))
+    extra = sorted(set(new) - set(old))
+    if missing:
+        problems.append(f"missing ids: {missing[:8]}")
+    if extra:
+        problems.append(f"unknown ids: {extra[:8]}")
+    for rid in sorted(set(old) & set(new)):
+        for field in (*_FUNCTIONAL_FIELDS, "disposition"):
+            if old[rid].get(field) != new[rid].get(field):
+                problems.append(
+                    f"{rid}.{field}: committed {old[rid].get(field)!r} != "
+                    f"current {new[rid].get(field)!r}")
+    return problems
 
 
 def _load_history() -> list[dict]:
@@ -129,6 +190,15 @@ def main() -> int:
                         default=FIXTURES / "artifact-corpus")
     parser.add_argument("--out", type=Path,
                         default=FIXTURES / "coverage-ledger.json")
+    parser.add_argument("--dispositions", type=Path,
+                        default=FIXTURES / "coverage-dispositions.json",
+                        help="reviewed plans for rules not yet benign-measured")
+    parser.add_argument("--check", type=Path, metavar="LEDGER",
+                        help="rebuild, compare with this committed ledger, and "
+                             "exit nonzero on coverage drift")
+    parser.add_argument("--check-existing", type=Path, metavar="LEDGER",
+                        help="compare the already-built --out ledger with this "
+                             "committed ledger, without rescanning")
     parser.add_argument("--jobs", type=int, default=cg.default_jobs())
     parser.add_argument("--no-history", action="store_true")
     parser.add_argument("--no-manifest", action="store_true")
@@ -137,6 +207,22 @@ def main() -> int:
     parser.add_argument("--rows", type=Path,
                         help="reuse a calibration --rows artifact instead of rescanning")
     args = parser.parse_args()
+
+    if args.check_existing:
+        if not args.out.exists():
+            print(f"coverage: ledger missing: {args.out}", file=sys.stderr)
+            return 2
+        problems = _ledger_drift(
+            args.check_existing, json.loads(args.out.read_text()))
+        if problems:
+            print(f"coverage ledger drift: {args.check_existing}", file=sys.stderr)
+            for problem in problems[:20]:
+                print(f"  {problem}", file=sys.stderr)
+            if len(problems) > 20:
+                print(f"  ... {len(problems) - 20} more", file=sys.stderr)
+            return 1
+        print(f"coverage ledger matches: {args.check_existing}")
+        return 0
 
     if not args.corpus.exists():
         print(f"corpus not found: {args.corpus}", file=sys.stderr)
@@ -196,11 +282,20 @@ def main() -> int:
         if warm_obs.fires:
             observations.append(warm_obs)
 
+    dispositions: dict[str, dict] = {}
+    if args.dispositions.exists():
+        dispositions = json.loads(args.dispositions.read_text())
+    elif args.check:
+        print(f"coverage: dispositions file missing: {args.dispositions}",
+              file=sys.stderr)
+
     digest = ""
     if (FIXTURES / "baseline.json").exists():
         digest = json.loads((FIXTURES / "baseline.json").read_text()).get(
             "corpus_content_sha256", "")
-    ledger = build_ledger(observations, expected=expected, corpus_sha256=digest, version="2")
+    ledger = build_ledger(
+        observations, expected=expected, dispositions=dispositions,
+        corpus_sha256=digest, version="2")
     write_ledger(args.out, ledger)
 
     print(f"coverage ledger: {args.out}")
@@ -213,6 +308,20 @@ def main() -> int:
         print(f"  ERROR: {len(unnamed)} non-measured rules have no reason",
               file=sys.stderr)
         return 1
+
+    if args.check:
+        if args.check.resolve() == args.out.resolve():
+            print("  ERROR: --check target must differ from --out", file=sys.stderr)
+            return 2
+        problems = _ledger_drift(args.check, ledger)
+        if problems:
+            print(f"coverage ledger drift: {args.check}", file=sys.stderr)
+            for problem in problems[:20]:
+                print(f"  {problem}", file=sys.stderr)
+            if len(problems) > 20:
+                print(f"  ... {len(problems) - 20} more", file=sys.stderr)
+            return 1
+        print(f"  matches committed ledger: {args.check}")
     return 0
 
 

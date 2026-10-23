@@ -115,6 +115,24 @@ jobs:
           --rows scan-rows.json
           --out coverage-ledger.json
 
+      # A corpus or disposition change must move the committed ledger with it.
+      # This compares the freshly built ledger without a second corpus replay.
+      - name: Check the committed coverage ledger is current
+        run: >-
+          uv run python scripts/coverage_ledger.py
+          --out coverage-ledger.json
+          --check-existing tests/fixtures/coverage-ledger.json
+
+      # The ratchet: every expected rule is either benign-measured or has a
+      # reviewed disposition naming the plan that will exercise it.  This is
+      # the check that makes the current gaps visible and blocks new ones.
+      - name: Gate coverage expectations
+        run: >-
+          uv run python scripts/calibration_gates.py
+          --coverage-only
+          --coverage-ledger coverage-ledger.json
+          --json coverage-gates.json
+
       - name: Audit provenance of the reconstructed corpus
         run: uv run python scripts/corpus_provenance.py --corpus tests/fixtures/benign-corpus
 
@@ -171,6 +189,7 @@ jobs:
           name: calibration-gates
           path: |
             gates.json
+            coverage-gates.json
             h-reduction-audit.json
             history-replay.json
             coverage-ledger.json

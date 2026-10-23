@@ -1,0 +1,386 @@
+{
+  "C006": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C017": {
+    "expected_strata": [
+      "appimage_repack",
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "C031": {
+    "expected_strata": [
+      "persist_surface"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "D001": {
+    "expected_strata": [
+      "dependency_heavy",
+      "lang_deep"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "D002": {
+    "expected_strata": [
+      "dependency_heavy",
+      "lang_deep"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "D004": {
+    "expected_strata": [
+      "dependency_heavy"
+    ],
+    "note": "Known kernel-module-provides false positive; document and drop the benign expectation.",
+    "phase": "C",
+    "plan": "known_false_positive",
+    "status": "deferred"
+  },
+  "H006": {
+    "expected_strata": [
+      "dependency_heavy"
+    ],
+    "note": "Verify the rule is emitted before adding a dependency-change shape.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H029": {
+    "expected_strata": [
+      "dependency_heavy",
+      "lang_deep"
+    ],
+    "note": "Typosquat detection; add a malicious fixture or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H032": {
+    "expected_strata": [
+      "appimage_repack",
+      "large_electron",
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H035": {
+    "expected_strata": [
+      "appimage_repack",
+      "large_electron",
+      "persist_surface"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H037": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H039": {
+    "expected_strata": [
+      "appimage_repack",
+      "dkms_kernel",
+      "persist_surface"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign systemd-unit shape.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H041": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H048": {
+    "expected_strata": [
+      "autotools",
+      "dependency_heavy",
+      "lang_deep"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H049": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H050": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H051": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H054": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H058": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H064": {
+    "expected_strata": [
+      "dependency_heavy"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H068": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H071": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H072": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H075": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "H084": {
+    "expected_strata": [
+      "appimage_repack",
+      "bin_repack",
+      "dkms_kernel",
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H086": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H088": {
+    "expected_strata": [
+      "maintainer_churn"
+    ],
+    "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+    "phase": "B",
+    "plan": "add_history_or_warm",
+    "status": "deferred"
+  },
+  "H090": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H093": {
+    "expected_strata": [
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H094": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "H095": {
+    "expected_strata": [
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R017": {
+    "expected_strata": [
+      "persist_surface"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R044": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R045": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R046": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R048": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R049": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R050": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R055": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  },
+  "R056": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "Attack-only by construction; drop the benign expectation or record the attack fixture.",
+    "phase": "C",
+    "plan": "attack_only",
+    "status": "deferred"
+  },
+  "R057": {
+    "expected_strata": [
+      "multi_client_fetch"
+    ],
+    "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+    "phase": "D",
+    "plan": "add_benign_shape",
+    "status": "deferred"
+  }
+}

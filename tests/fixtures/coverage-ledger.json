@@ -9,7 +9,13 @@
   },
   "rules": {
     "A001": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "A001",
       "pseudo": false,
@@ -21,7 +27,17 @@
       "uid": "TS-0001"
     },
     "A002": {
+      "benign_sources": [
+        "artifact"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "A002",
       "pseudo": false,
@@ -42,7 +58,17 @@
       "uid": "TS-0002"
     },
     "A003": {
+      "benign_sources": [
+        "artifact"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "A003",
       "pseudo": false,
@@ -63,7 +89,13 @@
       "uid": "TS-0003"
     },
     "A004": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "A004",
       "pseudo": false,
@@ -75,7 +107,18 @@
       "uid": "TS-0004"
     },
     "A005": {
+      "benign_sources": [
+        "artifact"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "A005",
       "pseudo": false,
@@ -98,7 +141,13 @@
       "uid": "TS-0005"
     },
     "A006": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "A006",
       "pseudo": false,
@@ -110,7 +159,17 @@
       "uid": "TS-0006"
     },
     "A007": {
+      "benign_sources": [
+        "artifact"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "A007",
       "pseudo": false,
@@ -131,7 +190,17 @@
       "uid": "TS-0007"
     },
     "A008": {
+      "benign_sources": [
+        "artifact"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "A008",
       "pseudo": false,
@@ -152,7 +221,27 @@
       "uid": "TS-0008"
     },
     "C001": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dkms_kernel",
+        "lang_deep",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 22,
       "id": "C001",
       "pseudo": false,
@@ -206,7 +295,33 @@
       "uid": "TS-0009"
     },
     "C002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 500,
       "id": "C002",
       "pseudo": false,
@@ -278,7 +393,33 @@
       "uid": "TS-0010"
     },
     "C003": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 164,
       "id": "C003",
       "pseudo": false,
@@ -354,7 +495,29 @@
       "uid": "TS-0011"
     },
     "C004": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "data_fonts",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "persist_surface",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 46,
       "id": "C004",
       "pseudo": false,
@@ -414,7 +577,23 @@
       "uid": "TS-0012"
     },
     "C005": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "large_electron",
+        "persist_surface",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 197,
       "id": "C005",
       "pseudo": false,
@@ -460,9 +639,23 @@
       "uid": "TS-0013"
     },
     "C006": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C006",
       "pseudo": false,
@@ -474,7 +667,19 @@
       "uid": "TS-0014"
     },
     "C007": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "persist_surface",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 5,
       "id": "C007",
       "pseudo": false,
@@ -504,7 +709,13 @@
       "uid": "TS-0015"
     },
     "C008": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C008",
       "pseudo": false,
@@ -516,7 +727,13 @@
       "uid": "TS-0016"
     },
     "C009": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C009",
       "pseudo": false,
@@ -528,7 +745,13 @@
       "uid": "TS-0017"
     },
     "C010": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C010",
       "pseudo": false,
@@ -540,7 +763,20 @@
       "uid": "TS-0018"
     },
     "C011": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 21,
       "id": "C011",
       "pseudo": false,
@@ -577,7 +813,13 @@
       "uid": "TS-0019"
     },
     "C012": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "C012",
       "pseudo": false,
@@ -594,7 +836,22 @@
       "uid": "TS-0020"
     },
     "C013": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "multi_client_fetch",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 45,
       "id": "C013",
       "pseudo": false,
@@ -637,7 +894,25 @@
       "uid": "TS-0021"
     },
     "C014": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "maintainer_churn",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 28,
       "id": "C014",
       "pseudo": false,
@@ -685,7 +960,21 @@
       "uid": "TS-0022"
     },
     "C015": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 24,
       "id": "C015",
       "pseudo": false,
@@ -721,7 +1010,13 @@
       "uid": "TS-0023"
     },
     "C016": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C016",
       "pseudo": false,
@@ -733,10 +1028,25 @@
       "uid": "TS-0024"
     },
     "C017": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "appimage_repack",
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "appimage_repack",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C017",
       "pseudo": false,
@@ -748,7 +1058,26 @@
       "uid": "TS-0025"
     },
     "C018": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "maintainer_churn",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 34,
       "id": "C018",
       "pseudo": false,
@@ -799,7 +1128,28 @@
       "uid": "TS-0026"
     },
     "C019": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 41,
       "id": "C019",
       "pseudo": false,
@@ -856,7 +1206,18 @@
       "uid": "TS-0027"
     },
     "C020": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "C020",
       "pseudo": false,
@@ -883,15 +1244,39 @@
       "uid": "TS-0028"
     },
     "C021": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 76,
+      "expected_strata_met": [],
+      "fires": 53,
       "id": "C021",
       "pseudo": false,
       "reason": "",
       "series": "C",
       "sources": {
         "cold": {
-          "fires": 62,
+          "fires": 39,
           "strata": [
             "bin_repack",
             "data_fonts",
@@ -899,7 +1284,6 @@
             "dkms_kernel",
             "lang_deep",
             "lang_ecosystem",
-            "large_electron",
             "maintainer_churn",
             "multi_client_fetch",
             "persist_surface",
@@ -949,7 +1333,31 @@
       "uid": "TS-0029"
     },
     "C022": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 37,
       "id": "C022",
       "pseudo": false,
@@ -1015,7 +1423,13 @@
       "uid": "TS-0030"
     },
     "C023": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C023",
       "pseudo": false,
@@ -1027,7 +1441,27 @@
       "uid": "TS-0031"
     },
     "C024": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 40,
       "id": "C024",
       "pseudo": false,
@@ -1085,7 +1519,31 @@
       "uid": "TS-0032"
     },
     "C025": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 70,
       "id": "C025",
       "pseudo": false,
@@ -1155,7 +1613,20 @@
       "uid": "TS-0033"
     },
     "C026": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "lang_deep",
+        "large_electron"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 9,
       "id": "C026",
       "pseudo": false,
@@ -1188,7 +1659,13 @@
       "uid": "TS-0034"
     },
     "C027": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C027",
       "pseudo": false,
@@ -1200,7 +1677,25 @@
       "uid": "TS-0035"
     },
     "C028": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 54,
       "id": "C028",
       "pseudo": false,
@@ -1252,7 +1747,25 @@
       "uid": "TS-0036"
     },
     "C029": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "dependency_heavy",
+        "dkms_kernel",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "persist_surface"
+      ],
+      "expected_strata_met": [
         "persist_surface"
       ],
       "fires": 15,
@@ -1296,7 +1809,19 @@
       "uid": "TS-0037"
     },
     "C030": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "lang_ecosystem"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "C030",
       "pseudo": false,
@@ -1326,9 +1851,23 @@
       "uid": "TS-0038"
     },
     "C031": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "persist_surface"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "C031",
       "pseudo": false,
@@ -1345,7 +1884,13 @@
       "uid": "TS-0039"
     },
     "C032": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "C032",
       "pseudo": false,
@@ -1357,7 +1902,34 @@
       "uid": "TS-0040"
     },
     "COVERAGE": {
+      "benign_sources": [
+        "cold",
+        "manifest",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 8618,
       "id": "COVERAGE",
       "pseudo": true,
@@ -1439,10 +2011,25 @@
       "uid": null
     },
     "D001": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy",
+          "lang_deep"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy",
         "lang_deep"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "D001",
       "pseudo": false,
@@ -1454,10 +2041,25 @@
       "uid": "TS-0041"
     },
     "D002": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy",
+          "lang_deep"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy",
         "lang_deep"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "D002",
       "pseudo": false,
@@ -1469,7 +2071,32 @@
       "uid": "TS-0042"
     },
     "D003": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 84,
       "id": "D003",
       "pseudo": false,
@@ -1542,9 +2169,23 @@
       "uid": "TS-0043"
     },
     "D004": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy"
+        ],
+        "note": "Known kernel-module-provides false positive; document and drop the benign expectation.",
+        "phase": "C",
+        "plan": "known_false_positive",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "D004",
       "pseudo": false,
@@ -1556,7 +2197,13 @@
       "uid": "TS-0044"
     },
     "D005": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "D005",
       "pseudo": false,
@@ -1568,7 +2215,13 @@
       "uid": "TS-0274"
     },
     "E001": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "E001",
       "pseudo": false,
@@ -1580,7 +2233,13 @@
       "uid": "TS-0045"
     },
     "E002": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "E002",
       "pseudo": false,
@@ -1592,7 +2251,13 @@
       "uid": "TS-0046"
     },
     "E003": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "E003",
       "pseudo": false,
@@ -1604,7 +2269,13 @@
       "uid": "TS-0047"
     },
     "G001": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G001",
       "pseudo": false,
@@ -1616,7 +2287,13 @@
       "uid": "TS-0048"
     },
     "G002": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G002",
       "pseudo": false,
@@ -1628,7 +2305,13 @@
       "uid": "TS-0049"
     },
     "G003": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G003",
       "pseudo": false,
@@ -1640,7 +2323,13 @@
       "uid": "TS-0050"
     },
     "G004": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G004",
       "pseudo": false,
@@ -1652,7 +2341,13 @@
       "uid": "TS-0051"
     },
     "G005": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G005",
       "pseudo": false,
@@ -1664,7 +2359,13 @@
       "uid": "TS-0052"
     },
     "G006": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G006",
       "pseudo": false,
@@ -1676,7 +2377,13 @@
       "uid": "TS-0053"
     },
     "G007": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G007",
       "pseudo": false,
@@ -1688,7 +2395,13 @@
       "uid": "TS-0054"
     },
     "G008": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G008",
       "pseudo": false,
@@ -1700,7 +2413,13 @@
       "uid": "TS-0055"
     },
     "G009": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G009",
       "pseudo": false,
@@ -1712,7 +2431,13 @@
       "uid": "TS-0056"
     },
     "G010": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G010",
       "pseudo": false,
@@ -1724,7 +2449,13 @@
       "uid": "TS-0266"
     },
     "G012": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G012",
       "pseudo": false,
@@ -1736,7 +2467,13 @@
       "uid": "TS-0275"
     },
     "G013": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G013",
       "pseudo": false,
@@ -1748,7 +2485,13 @@
       "uid": "TS-0276"
     },
     "G014": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "G014",
       "pseudo": false,
@@ -1760,8 +2503,37 @@
       "uid": "TS-0277"
     },
     "H001": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "bin_repack",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "expected_strata_met": [
         "signed_sources",
         "source_patched",
         "vcs_git",
@@ -1836,11 +2608,25 @@
       "uid": "TS-0057"
     },
     "H002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "signed_sources",
         "source_patched",
         "vcs_git",
         "vcs_other"
+      ],
+      "expected_strata_met": [
+        "vcs_git"
       ],
       "fires": 6,
       "id": "H002",
@@ -1875,7 +2661,29 @@
       "uid": "TS-0058"
     },
     "H003": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "data_fonts",
+        "dkms_kernel",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 59,
       "id": "H003",
       "pseudo": false,
@@ -1939,7 +2747,18 @@
       "uid": "TS-0059"
     },
     "H004": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "H004",
       "pseudo": false,
@@ -1970,7 +2789,13 @@
       "uid": "TS-0060"
     },
     "H005": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H005",
       "pseudo": false,
@@ -1982,9 +2807,23 @@
       "uid": "TS-0061"
     },
     "H006": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy"
+        ],
+        "note": "Verify the rule is emitted before adding a dependency-change shape.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H006",
       "pseudo": false,
@@ -1996,7 +2835,13 @@
       "uid": "TS-0062"
     },
     "H007": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H007",
       "pseudo": false,
@@ -2008,7 +2853,13 @@
       "uid": "TS-0063"
     },
     "H008": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H008",
       "pseudo": false,
@@ -2020,7 +2871,13 @@
       "uid": "TS-0064"
     },
     "H009": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H009",
       "pseudo": false,
@@ -2032,7 +2889,13 @@
       "uid": "TS-0065"
     },
     "H010": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H010",
       "pseudo": false,
@@ -2044,7 +2907,13 @@
       "uid": "TS-0066"
     },
     "H011": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H011",
       "pseudo": false,
@@ -2056,7 +2925,13 @@
       "uid": "TS-0067"
     },
     "H012": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H012",
       "pseudo": false,
@@ -2068,7 +2943,13 @@
       "uid": "TS-0068"
     },
     "H013": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H013",
       "pseudo": false,
@@ -2080,7 +2961,13 @@
       "uid": "TS-0069"
     },
     "H014": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H014",
       "pseudo": false,
@@ -2092,7 +2979,36 @@
       "uid": "TS-0070"
     },
     "H015": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "autotools",
+        "source_patched"
+      ],
+      "expected_strata_met": [
         "autotools",
         "source_patched"
       ],
@@ -2171,10 +3087,25 @@
       "uid": "TS-0071"
     },
     "H016": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "dkms_kernel",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch",
         "vcs_other"
       ],
+      "expected_strata_met": [],
       "fires": 16,
       "id": "H016",
       "pseudo": false,
@@ -2217,9 +3148,21 @@
       "uid": "TS-0072"
     },
     "H017": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "large_electron"
       ],
+      "expected_strata_met": [],
       "fires": 10,
       "id": "H017",
       "pseudo": false,
@@ -2253,7 +3196,13 @@
       "uid": "TS-0073"
     },
     "H018": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H018",
       "pseudo": false,
@@ -2265,7 +3214,18 @@
       "uid": "TS-0074"
     },
     "H019": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H019",
       "pseudo": false,
@@ -2292,7 +3252,13 @@
       "uid": "TS-0075"
     },
     "H020": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H020",
       "pseudo": false,
@@ -2304,7 +3270,13 @@
       "uid": "TS-0076"
     },
     "H021": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H021",
       "pseudo": false,
@@ -2316,7 +3288,13 @@
       "uid": "TS-0077"
     },
     "H022": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H022",
       "pseudo": false,
@@ -2328,7 +3306,35 @@
       "uid": "TS-0078"
     },
     "H023": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "autotools",
+        "dkms_kernel",
+        "source_patched"
+      ],
+      "expected_strata_met": [
         "autotools",
         "dkms_kernel",
         "source_patched"
@@ -2398,7 +3404,20 @@
       "uid": "TS-0079"
     },
     "H024": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "maintainer_churn",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 7,
       "id": "H024",
       "pseudo": false,
@@ -2435,7 +3454,29 @@
       "uid": "TS-0080"
     },
     "H025": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "data_fonts",
+        "dependency_heavy",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 54,
       "id": "H025",
       "pseudo": false,
@@ -2495,9 +3536,19 @@
       "uid": "TS-0081"
     },
     "H026": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H026",
       "pseudo": false,
@@ -2518,15 +3569,41 @@
       "uid": "TS-0082"
     },
     "H027": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 1158,
+      "expected_strata_met": [],
+      "fires": 1154,
       "id": "H027",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 1117,
+          "fires": 1113,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -2594,7 +3671,13 @@
       "uid": "TS-0083"
     },
     "H028": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H028",
       "pseudo": false,
@@ -2606,10 +3689,25 @@
       "uid": "TS-0084"
     },
     "H029": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy",
+          "lang_deep"
+        ],
+        "note": "Typosquat detection; add a malicious fixture or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy",
         "lang_deep"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H029",
       "pseudo": false,
@@ -2621,7 +3719,33 @@
       "uid": "TS-0085"
     },
     "H030": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 230,
       "id": "H030",
       "pseudo": false,
@@ -2695,7 +3819,19 @@
       "uid": "TS-0086"
     },
     "H031": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 33,
       "id": "H031",
       "pseudo": false,
@@ -2725,11 +3861,27 @@
       "uid": "TS-0087"
     },
     "H032": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "appimage_repack",
+          "large_electron",
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "appimage_repack",
         "large_electron",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H032",
       "pseudo": false,
@@ -2741,7 +3893,26 @@
       "uid": "TS-0088"
     },
     "H033": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 29,
       "id": "H033",
       "pseudo": false,
@@ -2796,7 +3967,19 @@
       "uid": "TS-0089"
     },
     "H034": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 9,
       "id": "H034",
       "pseudo": false,
@@ -2826,11 +4009,27 @@
       "uid": "TS-0090"
     },
     "H035": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "appimage_repack",
+          "large_electron",
+          "persist_surface"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "appimage_repack",
         "large_electron",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "H035",
       "pseudo": false,
@@ -2847,7 +4046,18 @@
       "uid": "TS-0091"
     },
     "H036": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "H036",
       "pseudo": false,
@@ -2878,9 +4088,23 @@
       "uid": "TS-0092"
     },
     "H037": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H037",
       "pseudo": false,
@@ -2892,7 +4116,13 @@
       "uid": "TS-0093"
     },
     "H038": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H038",
       "pseudo": false,
@@ -2909,11 +4139,27 @@
       "uid": "TS-0094"
     },
     "H039": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "appimage_repack",
+          "dkms_kernel",
+          "persist_surface"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign systemd-unit shape.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "appimage_repack",
         "dkms_kernel",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H039",
       "pseudo": false,
@@ -2930,7 +4176,13 @@
       "uid": "TS-0095"
     },
     "H040": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H040",
       "pseudo": false,
@@ -2942,9 +4194,23 @@
       "uid": "TS-0096"
     },
     "H041": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H041",
       "pseudo": false,
@@ -2961,7 +4227,19 @@
       "uid": "TS-0097"
     },
     "H042": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy",
+        "lang_deep"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 5,
       "id": "H042",
       "pseudo": false,
@@ -2991,7 +4269,19 @@
       "uid": "TS-0098"
     },
     "H043": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 10,
       "id": "H043",
       "pseudo": false,
@@ -3025,7 +4315,27 @@
       "uid": "TS-0099"
     },
     "H044": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "dependency_heavy",
+        "history",
+        "lang_deep",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "maintainer_churn"
+      ],
+      "expected_strata_met": [
         "maintainer_churn"
       ],
       "fires": 11,
@@ -3064,7 +4374,17 @@
       "uid": "TS-0100"
     },
     "H045": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H045",
       "pseudo": false,
@@ -3085,7 +4405,13 @@
       "uid": "TS-0101"
     },
     "H046": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H046",
       "pseudo": false,
@@ -3097,7 +4423,13 @@
       "uid": "TS-0102"
     },
     "H047": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H047",
       "pseudo": false,
@@ -3109,11 +4441,27 @@
       "uid": "TS-0103"
     },
     "H048": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "autotools",
+          "dependency_heavy",
+          "lang_deep"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "autotools",
         "dependency_heavy",
         "lang_deep"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H048",
       "pseudo": false,
@@ -3125,9 +4473,23 @@
       "uid": "TS-0104"
     },
     "H049": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H049",
       "pseudo": false,
@@ -3139,9 +4501,23 @@
       "uid": "TS-0105"
     },
     "H050": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H050",
       "pseudo": false,
@@ -3153,9 +4529,23 @@
       "uid": "TS-0106"
     },
     "H051": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H051",
       "pseudo": false,
@@ -3167,7 +4557,25 @@
       "uid": "TS-0107"
     },
     "H052": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "dependency_heavy",
+        "history",
+        "lang_deep",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 9,
       "id": "H052",
       "pseudo": false,
@@ -3204,11 +4612,21 @@
       "uid": "TS-0108"
     },
     "H053": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "dependency_heavy",
         "lang_deep",
         "lang_ecosystem"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H053",
       "pseudo": false,
@@ -3229,9 +4647,23 @@
       "uid": "TS-0109"
     },
     "H054": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H054",
       "pseudo": false,
@@ -3243,7 +4675,17 @@
       "uid": "TS-0110"
     },
     "H055": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H055",
       "pseudo": false,
@@ -3264,7 +4706,13 @@
       "uid": "TS-0111"
     },
     "H056": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H056",
       "pseudo": false,
@@ -3276,7 +4724,13 @@
       "uid": "TS-0112"
     },
     "H057": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H057",
       "pseudo": false,
@@ -3288,9 +4742,23 @@
       "uid": "TS-0113"
     },
     "H058": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H058",
       "pseudo": false,
@@ -3302,10 +4770,20 @@
       "uid": "TS-0114"
     },
     "H059": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "dependency_heavy",
         "lang_ecosystem"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H059",
       "pseudo": false,
@@ -3326,7 +4804,13 @@
       "uid": "TS-0115"
     },
     "H060": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H060",
       "pseudo": false,
@@ -3338,7 +4822,13 @@
       "uid": "TS-0116"
     },
     "H061": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H061",
       "pseudo": false,
@@ -3350,7 +4840,23 @@
       "uid": "TS-0117"
     },
     "H062": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "dependency_heavy",
+        "lang_deep",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 24,
       "id": "H062",
       "pseudo": false,
@@ -3396,7 +4902,25 @@
       "uid": "TS-0118"
     },
     "H063": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 27,
       "id": "H063",
       "pseudo": false,
@@ -3444,9 +4968,23 @@
       "uid": "TS-0119"
     },
     "H064": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "dependency_heavy"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "dependency_heavy"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H064",
       "pseudo": false,
@@ -3458,15 +4996,37 @@
       "uid": "TS-0120"
     },
     "H065": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "persist_surface",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 73,
+      "expected_strata_met": [],
+      "fires": 70,
       "id": "H065",
       "pseudo": false,
       "reason": "",
       "series": "H",
       "sources": {
         "cold": {
-          "fires": 57,
+          "fires": 54,
           "strata": [
             "autotools",
             "bin_repack",
@@ -3522,7 +5082,13 @@
       "uid": "TS-0121"
     },
     "H066": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H066",
       "pseudo": false,
@@ -3534,7 +5100,19 @@
       "uid": "TS-0122"
     },
     "H067": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "multi_client_fetch",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 6,
       "id": "H067",
       "pseudo": false,
@@ -3568,9 +5146,23 @@
       "uid": "TS-0123"
     },
     "H068": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H068",
       "pseudo": false,
@@ -3587,9 +5179,20 @@
       "uid": "TS-0124"
     },
     "H069": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "H069",
       "pseudo": false,
@@ -3620,7 +5223,13 @@
       "uid": "TS-0125"
     },
     "H070": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H070",
       "pseudo": false,
@@ -3632,9 +5241,23 @@
       "uid": "TS-0126"
     },
     "H071": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H071",
       "pseudo": false,
@@ -3646,9 +5269,23 @@
       "uid": "TS-0127"
     },
     "H072": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H072",
       "pseudo": false,
@@ -3665,7 +5302,17 @@
       "uid": "TS-0128"
     },
     "H073": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H073",
       "pseudo": false,
@@ -3686,9 +5333,19 @@
       "uid": "TS-0129"
     },
     "H074": {
+      "benign_sources": [
+        "history"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "history"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H074",
       "pseudo": false,
@@ -3709,9 +5366,23 @@
       "uid": "TS-0130"
     },
     "H075": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "Measured only by malicious fixtures; add a benign negative control or drop the benign expectation.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H075",
       "pseudo": false,
@@ -3728,7 +5399,23 @@
       "uid": "TS-0131"
     },
     "H076": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "lang_deep",
+        "persist_surface",
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "appimage_repack"
+      ],
+      "expected_strata_met": [
         "appimage_repack"
       ],
       "fires": 13,
@@ -3770,7 +5457,24 @@
       "uid": "TS-0132"
     },
     "H077": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "multi_client_fetch",
+        "persist_surface",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 23,
       "id": "H077",
       "pseudo": false,
@@ -3819,7 +5523,23 @@
       "uid": "TS-0133"
     },
     "H078": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 30,
       "id": "H078",
       "pseudo": false,
@@ -3865,7 +5585,18 @@
       "uid": "TS-0134"
     },
     "H079": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 5,
       "id": "H079",
       "pseudo": false,
@@ -3896,7 +5627,18 @@
       "uid": "TS-0135"
     },
     "H080": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 7,
       "id": "H080",
       "pseudo": false,
@@ -3927,7 +5669,18 @@
       "uid": "TS-0136"
     },
     "H081": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H081",
       "pseudo": false,
@@ -3954,7 +5707,25 @@
       "uid": "TS-0137"
     },
     "H082": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "lang_deep",
+        "lang_ecosystem",
+        "multi_client_fetch",
+        "persist_surface",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "multi_client_fetch"
+      ],
+      "expected_strata_met": [
         "multi_client_fetch"
       ],
       "fires": 14,
@@ -3998,12 +5769,23 @@
       "uid": "TS-0138"
     },
     "H083": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "bin_repack",
         "signed_sources",
         "vcs_git",
         "vcs_other"
       ],
+      "expected_strata_met": [],
       "fires": 5,
       "id": "H083",
       "pseudo": false,
@@ -4034,12 +5816,29 @@
       "uid": "TS-0139"
     },
     "H084": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "appimage_repack",
+          "bin_repack",
+          "dkms_kernel",
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "appimage_repack",
         "bin_repack",
         "dkms_kernel",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H084",
       "pseudo": false,
@@ -4051,10 +5850,21 @@
       "uid": "TS-0140"
     },
     "H085": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "large_electron"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "bin_repack",
         "signed_sources"
       ],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "H085",
       "pseudo": false,
@@ -4081,9 +5891,23 @@
       "uid": "TS-0141"
     },
     "H086": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H086",
       "pseudo": false,
@@ -4095,7 +5919,33 @@
       "uid": "TS-0142"
     },
     "H087": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 153,
       "id": "H087",
       "pseudo": false,
@@ -4171,9 +6021,23 @@
       "uid": "TS-0143"
     },
     "H088": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "maintainer_churn"
+        ],
+        "note": "Needs observation history or warm state; schedule a history/warm cycle.",
+        "phase": "B",
+        "plan": "add_history_or_warm",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "maintainer_churn"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H088",
       "pseudo": false,
@@ -4185,9 +6049,22 @@
       "uid": "TS-0144"
     },
     "H089": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "multi_client_fetch",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 6,
       "id": "H089",
       "pseudo": false,
@@ -4220,9 +6097,23 @@
       "uid": "TS-0145"
     },
     "H090": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H090",
       "pseudo": false,
@@ -4234,7 +6125,13 @@
       "uid": "TS-0146"
     },
     "H091": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "H091",
       "pseudo": false,
@@ -4251,7 +6148,13 @@
       "uid": "TS-0147"
     },
     "H092": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H092",
       "pseudo": false,
@@ -4263,9 +6166,23 @@
       "uid": "TS-0148"
     },
     "H093": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H093",
       "pseudo": false,
@@ -4277,9 +6194,23 @@
       "uid": "TS-0149"
     },
     "H094": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H094",
       "pseudo": false,
@@ -4291,9 +6222,23 @@
       "uid": "TS-0150"
     },
     "H095": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H095",
       "pseudo": false,
@@ -4305,7 +6250,20 @@
       "uid": "TS-0151"
     },
     "H096": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "dkms_kernel",
+        "lang_deep"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 7,
       "id": "H096",
       "pseudo": false,
@@ -4338,7 +6296,19 @@
       "uid": "TS-0152"
     },
     "H097": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "large_electron"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "H097",
       "pseudo": false,
@@ -4368,7 +6338,13 @@
       "uid": "TS-0153"
     },
     "H098": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H098",
       "pseudo": false,
@@ -4380,7 +6356,23 @@
       "uid": "TS-0154"
     },
     "H099": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "dkms_kernel",
+        "persist_surface",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 13,
       "id": "H099",
       "pseudo": false,
@@ -4426,7 +6418,30 @@
       "uid": "TS-0155"
     },
     "H100": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 60,
       "id": "H100",
       "pseudo": false,
@@ -4493,7 +6508,31 @@
       "uid": "TS-0156"
     },
     "H101": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 46,
       "id": "H101",
       "pseudo": false,
@@ -4563,7 +6602,13 @@
       "uid": "TS-0157"
     },
     "H102": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H102",
       "pseudo": false,
@@ -4575,7 +6620,13 @@
       "uid": "TS-0158"
     },
     "H103": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H103",
       "pseudo": false,
@@ -4587,7 +6638,13 @@
       "uid": "TS-0159"
     },
     "H104": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "H104",
       "pseudo": false,
@@ -4599,7 +6656,18 @@
       "uid": "TS-0273"
     },
     "M001": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "M001",
       "pseudo": false,
@@ -4630,15 +6698,41 @@
       "uid": "TS-0160"
     },
     "M002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 496,
+      "expected_strata_met": [],
+      "fires": 497,
       "id": "M002",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 479,
+          "fires": 480,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4706,15 +6800,41 @@
       "uid": "TS-0161"
     },
     "M003": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 306,
+      "expected_strata_met": [],
+      "fires": 307,
       "id": "M003",
       "pseudo": false,
       "reason": "",
       "series": "M",
       "sources": {
         "cold": {
-          "fires": 261,
+          "fires": 262,
           "strata": [
             "appimage_repack",
             "autotools",
@@ -4782,7 +6902,13 @@
       "uid": "TS-0162"
     },
     "M004": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "M004",
       "pseudo": false,
@@ -4794,7 +6920,13 @@
       "uid": "TS-0163"
     },
     "M005": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "M005",
       "pseudo": false,
@@ -4806,7 +6938,13 @@
       "uid": "TS-0164"
     },
     "M006": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "M006",
       "pseudo": false,
@@ -4818,7 +6956,13 @@
       "uid": "TS-0165"
     },
     "NOVELTY": {
+      "benign_sources": [],
+      "benign_state": "pseudo",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "NOVELTY",
       "pseudo": true,
@@ -4830,7 +6974,33 @@
       "uid": null
     },
     "P001": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 7153,
       "id": "P001",
       "pseudo": true,
@@ -4906,7 +7076,26 @@
       "uid": null
     },
     "P002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "dependency_heavy",
+        "dkms_kernel",
+        "maintainer_churn",
+        "persist_surface",
+        "signed_sources",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 682,
       "id": "P002",
       "pseudo": true,
@@ -4957,7 +7146,13 @@
       "uid": null
     },
     "P003": {
+      "benign_sources": [],
+      "benign_state": "pseudo",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "P003",
       "pseudo": true,
@@ -4969,7 +7164,29 @@
       "uid": null
     },
     "P005": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 233,
       "id": "P005",
       "pseudo": true,
@@ -5029,7 +7246,32 @@
       "uid": null
     },
     "P006": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 968,
       "id": "P006",
       "pseudo": true,
@@ -5102,7 +7344,33 @@
       "uid": null
     },
     "P007": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3975,
       "id": "P007",
       "pseudo": true,
@@ -5178,7 +7446,31 @@
       "uid": null
     },
     "P008": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1204,
       "id": "P008",
       "pseudo": true,
@@ -5248,7 +7540,13 @@
       "uid": null
     },
     "P009": {
+      "benign_sources": [],
+      "benign_state": "pseudo",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "P009",
       "pseudo": true,
@@ -5260,7 +7558,13 @@
       "uid": null
     },
     "R001": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 12,
       "id": "R001",
       "pseudo": false,
@@ -5277,7 +7581,13 @@
       "uid": "TS-0166"
     },
     "R002": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "R002",
       "pseudo": false,
@@ -5294,7 +7604,13 @@
       "uid": "TS-0167"
     },
     "R003": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "R003",
       "pseudo": false,
@@ -5311,7 +7627,31 @@
       "uid": "TS-0168"
     },
     "R007": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 188,
       "id": "R007",
       "pseudo": false,
@@ -5381,7 +7721,13 @@
       "uid": "TS-0169"
     },
     "R008": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "R008",
       "pseudo": false,
@@ -5398,7 +7744,25 @@
       "uid": "TS-0170"
     },
     "R010": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "data_fonts",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 97,
       "id": "R010",
       "pseudo": false,
@@ -5450,7 +7814,21 @@
       "uid": "TS-0171"
     },
     "R011": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "dkms_kernel",
+        "maintainer_churn",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 17,
       "id": "R011",
       "pseudo": false,
@@ -5486,7 +7864,20 @@
       "uid": "TS-0172"
     },
     "R012": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep",
+        "large_electron",
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 34,
       "id": "R012",
       "pseudo": false,
@@ -5523,7 +7914,13 @@
       "uid": "TS-0173"
     },
     "R013": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 69,
       "id": "R013",
       "pseudo": false,
@@ -5540,9 +7937,23 @@
       "uid": "TS-0174"
     },
     "R017": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "persist_surface"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R017",
       "pseudo": false,
@@ -5554,7 +7965,22 @@
       "uid": "TS-0175"
     },
     "R039": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "data_fonts",
+        "multi_client_fetch",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 24,
       "id": "R039",
       "pseudo": false,
@@ -5597,7 +8023,13 @@
       "uid": "TS-0176"
     },
     "R040": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R040",
       "pseudo": false,
@@ -5609,7 +8041,13 @@
       "uid": "TS-0177"
     },
     "R041": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R041",
       "pseudo": false,
@@ -5621,7 +8059,13 @@
       "uid": "TS-0178"
     },
     "R042": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R042",
       "pseudo": false,
@@ -5633,7 +8077,13 @@
       "uid": "TS-0179"
     },
     "R043": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "R043",
       "pseudo": false,
@@ -5650,9 +8100,23 @@
       "uid": "TS-0180"
     },
     "R044": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R044",
       "pseudo": false,
@@ -5664,9 +8128,23 @@
       "uid": "TS-0181"
     },
     "R045": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R045",
       "pseudo": false,
@@ -5678,9 +8156,23 @@
       "uid": "TS-0182"
     },
     "R046": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R046",
       "pseudo": false,
@@ -5692,9 +8184,20 @@
       "uid": "TS-0183"
     },
     "R047": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "R047",
       "pseudo": false,
@@ -5721,9 +8224,23 @@
       "uid": "TS-0184"
     },
     "R048": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R048",
       "pseudo": false,
@@ -5735,9 +8252,23 @@
       "uid": "TS-0185"
     },
     "R049": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R049",
       "pseudo": false,
@@ -5749,9 +8280,23 @@
       "uid": "TS-0186"
     },
     "R050": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R050",
       "pseudo": false,
@@ -5763,9 +8308,22 @@
       "uid": "TS-0187"
     },
     "R051": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "dkms_kernel",
+        "source_patched"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 7,
       "id": "R051",
       "pseudo": false,
@@ -5798,10 +8356,21 @@
       "uid": "TS-0188"
     },
     "R052": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "R052",
       "pseudo": false,
@@ -5832,9 +8401,23 @@
       "uid": "TS-0189"
     },
     "R053": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "bin_repack",
+        "large_electron",
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 13,
       "id": "R053",
       "pseudo": false,
@@ -5874,10 +8457,21 @@
       "uid": "TS-0190"
     },
     "R054": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
         "multi_client_fetch",
         "persist_surface"
       ],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "R054",
       "pseudo": false,
@@ -5908,9 +8502,23 @@
       "uid": "TS-0191"
     },
     "R055": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R055",
       "pseudo": false,
@@ -5922,9 +8530,23 @@
       "uid": "TS-0192"
     },
     "R056": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "Attack-only by construction; drop the benign expectation or record the attack fixture.",
+        "phase": "C",
+        "plan": "attack_only",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R056",
       "pseudo": false,
@@ -5936,9 +8558,23 @@
       "uid": "TS-0193"
     },
     "R057": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": {
+        "expected_strata": [
+          "multi_client_fetch"
+        ],
+        "note": "No benign shape in the locked corpus yet; schedule a shape-based stratum expansion.",
+        "phase": "D",
+        "plan": "add_benign_shape",
+        "status": "deferred"
+      },
+      "expected_met": false,
       "expected_strata": [
         "multi_client_fetch"
       ],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R057",
       "pseudo": false,
@@ -5950,7 +8586,18 @@
       "uid": "TS-0194"
     },
     "R058": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "R058",
       "pseudo": false,
@@ -5981,7 +8628,13 @@
       "uid": "TS-0195"
     },
     "R059": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "R059",
       "pseudo": false,
@@ -5998,7 +8651,13 @@
       "uid": "TS-0196"
     },
     "R078": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R078",
       "pseudo": false,
@@ -6010,7 +8669,13 @@
       "uid": "TS-0197"
     },
     "R091": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R091",
       "pseudo": false,
@@ -6022,7 +8687,20 @@
       "uid": "TS-0198"
     },
     "R099": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "data_fonts",
+        "dkms_kernel",
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 13,
       "id": "R099",
       "pseudo": false,
@@ -6055,7 +8733,13 @@
       "uid": "TS-0199"
     },
     "R104": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R104",
       "pseudo": false,
@@ -6067,7 +8751,13 @@
       "uid": "TS-0200"
     },
     "R144": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "R144",
       "pseudo": false,
@@ -6079,7 +8769,21 @@
       "uid": "TS-0201"
     },
     "R152": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 12,
       "id": "R152",
       "pseudo": false,
@@ -6119,7 +8823,13 @@
       "uid": "TS-0202"
     },
     "S001": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "S001",
       "pseudo": false,
@@ -6136,7 +8846,13 @@
       "uid": "TS-0203"
     },
     "S002": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "S002",
       "pseudo": false,
@@ -6153,7 +8869,13 @@
       "uid": "TS-0204"
     },
     "S003": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S003",
       "pseudo": false,
@@ -6170,7 +8892,13 @@
       "uid": "TS-0205"
     },
     "S004": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S004",
       "pseudo": false,
@@ -6187,7 +8915,13 @@
       "uid": "TS-0206"
     },
     "S005": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S005",
       "pseudo": false,
@@ -6204,7 +8938,13 @@
       "uid": "TS-0207"
     },
     "S006": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S006",
       "pseudo": false,
@@ -6221,7 +8961,13 @@
       "uid": "TS-0208"
     },
     "S007": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S007",
       "pseudo": false,
@@ -6238,7 +8984,13 @@
       "uid": "TS-0209"
     },
     "S008": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "S008",
       "pseudo": false,
@@ -6255,7 +9007,32 @@
       "uid": "TS-0210"
     },
     "SOURCE_BUCKET": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "pseudo",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1731,
       "id": "SOURCE_BUCKET",
       "pseudo": true,
@@ -6310,7 +9087,19 @@
       "uid": null
     },
     "T001": {
+      "benign_sources": [
+        "t-series"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "signed_sources"
+      ],
+      "expected_strata_met": [
         "signed_sources"
       ],
       "fires": 1,
@@ -6333,7 +9122,17 @@
       "uid": "TS-0211"
     },
     "T002": {
+      "benign_sources": [
+        "t-series"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "T002",
       "pseudo": false,
@@ -6354,7 +9153,19 @@
       "uid": "TS-0212"
     },
     "T003": {
+      "benign_sources": [
+        "t-series"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [
+        "signed_sources"
+      ],
+      "expected_strata_met": [
         "signed_sources"
       ],
       "fires": 1,
@@ -6377,7 +9188,13 @@
       "uid": "TS-0213"
     },
     "T006": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "T006",
       "pseudo": false,
@@ -6389,7 +9206,13 @@
       "uid": "TS-0214"
     },
     "T007": {
+      "benign_sources": [],
+      "benign_state": "cold_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "T007",
       "pseudo": false,
@@ -6401,7 +9224,13 @@
       "uid": "TS-0215"
     },
     "U001": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U001",
       "pseudo": false,
@@ -6413,7 +9242,17 @@
       "uid": "TS-0216"
     },
     "U002": {
+      "benign_sources": [
+        "manifest"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "U002",
       "pseudo": false,
@@ -6438,7 +9277,13 @@
       "uid": "TS-0217"
     },
     "U003": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "U003",
       "pseudo": false,
@@ -6455,7 +9300,13 @@
       "uid": "TS-0218"
     },
     "U004": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U004",
       "pseudo": false,
@@ -6467,7 +9318,13 @@
       "uid": "TS-0219"
     },
     "U005": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U005",
       "pseudo": false,
@@ -6479,7 +9336,17 @@
       "uid": "TS-0220"
     },
     "U006": {
+      "benign_sources": [
+        "manifest"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "signed_sources"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "U006",
       "pseudo": false,
@@ -6504,7 +9371,13 @@
       "uid": "TS-0221"
     },
     "U007": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U007",
       "pseudo": false,
@@ -6516,7 +9389,13 @@
       "uid": "TS-0267"
     },
     "U008": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U008",
       "pseudo": false,
@@ -6528,7 +9407,13 @@
       "uid": "TS-0268"
     },
     "U009": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "U009",
       "pseudo": false,
@@ -6540,7 +9425,19 @@
       "uid": "TS-0269"
     },
     "U010": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy",
+        "lang_deep"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "U010",
       "pseudo": false,
@@ -6570,7 +9467,24 @@
       "uid": "TS-0270"
     },
     "W001": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy",
+        "lang_deep",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 35,
       "id": "W001",
       "pseudo": false,
@@ -6619,7 +9533,27 @@
       "uid": "TS-0222"
     },
     "W002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "dependency_heavy",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 60,
       "id": "W002",
       "pseudo": false,
@@ -6677,7 +9611,32 @@
       "uid": "TS-0223"
     },
     "W003": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 223,
       "id": "W003",
       "pseudo": false,
@@ -6746,7 +9705,13 @@
       "uid": "TS-0224"
     },
     "W004": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "W004",
       "pseudo": false,
@@ -6758,7 +9723,26 @@
       "uid": "TS-0225"
     },
     "W005": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_ecosystem",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "signed_sources",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 32,
       "id": "W005",
       "pseudo": false,
@@ -6809,7 +9793,18 @@
       "uid": "TS-0226"
     },
     "W006": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "large_electron"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "W006",
       "pseudo": false,
@@ -6836,7 +9831,32 @@
       "uid": "TS-0227"
     },
     "W007": {
+      "benign_sources": [
+        "cold"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 922,
       "id": "W007",
       "pseudo": false,
@@ -6891,7 +9911,33 @@
       "uid": "TS-0228"
     },
     "W008": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 478,
       "id": "W008",
       "pseudo": false,
@@ -6967,7 +10013,13 @@
       "uid": "TS-0229"
     },
     "W009": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "W009",
       "pseudo": false,
@@ -6979,7 +10031,13 @@
       "uid": "TS-0230"
     },
     "W010": {
+      "benign_sources": [],
+      "benign_state": "zero_fire",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "W010",
       "pseudo": false,
@@ -6991,7 +10049,33 @@
       "uid": "TS-0231"
     },
     "W011": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4177,
       "id": "W011",
       "pseudo": false,
@@ -7067,7 +10151,33 @@
       "uid": "TS-0271"
     },
     "W012": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "signed_sources",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4177,
       "id": "W012",
       "pseudo": false,
@@ -7143,7 +10253,13 @@
       "uid": "TS-0272"
     },
     "X001": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "X001",
       "pseudo": false,
@@ -7160,7 +10276,21 @@
       "uid": "TS-0232"
     },
     "X002": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack",
+        "lang_deep",
+        "persist_surface",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 20,
       "id": "X002",
       "pseudo": false,
@@ -7200,7 +10330,13 @@
       "uid": "TS-0233"
     },
     "X003": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X003",
       "pseudo": false,
@@ -7212,7 +10348,19 @@
       "uid": "TS-0234"
     },
     "X004": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep",
+        "maintainer_churn"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 6,
       "id": "X004",
       "pseudo": false,
@@ -7246,7 +10394,13 @@
       "uid": "TS-0235"
     },
     "X005": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "X005",
       "pseudo": false,
@@ -7263,7 +10417,13 @@
       "uid": "TS-0236"
     },
     "X006": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "X006",
       "pseudo": false,
@@ -7280,7 +10440,20 @@
       "uid": "TS-0237"
     },
     "X007": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "lang_deep",
+        "large_electron",
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 15,
       "id": "X007",
       "pseudo": false,
@@ -7317,7 +10490,13 @@
       "uid": "TS-0238"
     },
     "X008": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X008",
       "pseudo": false,
@@ -7329,7 +10508,13 @@
       "uid": "TS-0239"
     },
     "X009": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X009",
       "pseudo": false,
@@ -7341,7 +10526,13 @@
       "uid": "TS-0240"
     },
     "X010": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "X010",
       "pseudo": false,
@@ -7358,7 +10549,22 @@
       "uid": "TS-0241"
     },
     "X011": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 15,
       "id": "X011",
       "pseudo": false,
@@ -7401,7 +10607,19 @@
       "uid": "TS-0242"
     },
     "X012": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "multi_client_fetch",
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 5,
       "id": "X012",
       "pseudo": false,
@@ -7431,7 +10649,18 @@
       "uid": "TS-0243"
     },
     "X013": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dkms_kernel"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "X013",
       "pseudo": false,
@@ -7458,7 +10687,13 @@
       "uid": "TS-0244"
     },
     "X014": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X014",
       "pseudo": false,
@@ -7470,7 +10705,18 @@
       "uid": "TS-0245"
     },
     "X015": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "bin_repack"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 3,
       "id": "X015",
       "pseudo": false,
@@ -7497,7 +10743,13 @@
       "uid": "TS-0246"
     },
     "X016": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "X016",
       "pseudo": false,
@@ -7514,7 +10766,13 @@
       "uid": "TS-0247"
     },
     "X017": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X017",
       "pseudo": false,
@@ -7526,7 +10784,13 @@
       "uid": "TS-0248"
     },
     "X018": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X018",
       "pseudo": false,
@@ -7538,7 +10802,13 @@
       "uid": "TS-0249"
     },
     "X019": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X019",
       "pseudo": false,
@@ -7550,7 +10820,13 @@
       "uid": "TS-0250"
     },
     "X020": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X020",
       "pseudo": false,
@@ -7562,7 +10838,19 @@
       "uid": "TS-0251"
     },
     "X021": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "dependency_heavy",
+        "multi_client_fetch"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 4,
       "id": "X021",
       "pseudo": false,
@@ -7592,7 +10880,13 @@
       "uid": "TS-0252"
     },
     "X022": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X022",
       "pseudo": false,
@@ -7604,7 +10898,18 @@
       "uid": "TS-0253"
     },
     "X023": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 12,
       "id": "X023",
       "pseudo": false,
@@ -7635,22 +10940,42 @@
       "uid": "TS-0254"
     },
     "X024": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
-      "fires": 43,
+      "expected_strata_met": [],
+      "fires": 42,
       "id": "X024",
       "pseudo": false,
       "reason": "",
       "series": "X",
       "sources": {
         "cold": {
-          "fires": 32,
+          "fires": 31,
           "strata": [
             "autotools",
             "bin_repack",
             "data_fonts",
             "dkms_kernel",
             "lang_deep",
-            "lang_ecosystem",
             "large_electron",
             "multi_client_fetch",
             "persist_surface",
@@ -7692,7 +11017,13 @@
       "uid": "TS-0255"
     },
     "X025": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X025",
       "pseudo": false,
@@ -7704,7 +11035,31 @@
       "uid": "TS-0256"
     },
     "X026": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "bin_repack",
+        "data_fonts",
+        "dependency_heavy",
+        "dkms_kernel",
+        "lang_deep",
+        "lang_ecosystem",
+        "large_electron",
+        "maintainer_churn",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git",
+        "vcs_other"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 173,
       "id": "X026",
       "pseudo": false,
@@ -7770,7 +11125,26 @@
       "uid": "TS-0257"
     },
     "X027": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "autotools",
+        "data_fonts",
+        "dependency_heavy",
+        "lang_deep",
+        "large_electron",
+        "multi_client_fetch",
+        "persist_surface",
+        "source_patched",
+        "vcs_git"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 76,
       "id": "X027",
       "pseudo": false,
@@ -7821,7 +11195,13 @@
       "uid": "TS-0258"
     },
     "X028": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X028",
       "pseudo": false,
@@ -7833,7 +11213,13 @@
       "uid": "TS-0259"
     },
     "X029": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X029",
       "pseudo": false,
@@ -7845,7 +11231,13 @@
       "uid": "TS-0260"
     },
     "X030": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X030",
       "pseudo": false,
@@ -7857,7 +11249,13 @@
       "uid": "TS-0261"
     },
     "X031": {
+      "benign_sources": [],
+      "benign_state": "adversarial_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 0,
       "id": "X031",
       "pseudo": false,
@@ -7869,7 +11267,13 @@
       "uid": "TS-0262"
     },
     "X032": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 1,
       "id": "X032",
       "pseudo": false,
@@ -7886,7 +11290,21 @@
       "uid": "TS-0263"
     },
     "X033": {
+      "benign_sources": [
+        "cold",
+        "warm"
+      ],
+      "benign_state": "fire",
+      "benign_strata": [
+        "appimage_repack",
+        "autotools",
+        "lang_ecosystem",
+        "persist_surface"
+      ],
+      "disposition": null,
+      "expected_met": true,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 10,
       "id": "X033",
       "pseudo": false,
@@ -7922,7 +11340,13 @@
       "uid": "TS-0264"
     },
     "X034": {
+      "benign_sources": [],
+      "benign_state": "malicious_only",
+      "benign_strata": [],
+      "disposition": null,
+      "expected_met": false,
       "expected_strata": [],
+      "expected_strata_met": [],
       "fires": 2,
       "id": "X034",
       "pseudo": false,

@@ -6,7 +6,6 @@ from email.utils import parseaddr
 __all__ = ["maintainer_domain", "normalize_domain"]
 
 _ANGLE_EMAIL_RE = re.compile(r"<([^<>]+)>")
-_EMAIL_TOKEN_RE = re.compile(r"[^<>\s(),;:]+@[^<>\s(),;:]+")
 _EDGE_CHARS = "<>()[],;:"
 
 
@@ -36,8 +35,11 @@ def maintainer_domain(value: str) -> str:
     match = _ANGLE_EMAIL_RE.search(text)
     address = match.group(1).strip() if match else parseaddr(text)[1]
     if "@" not in address:
-        match = _EMAIL_TOKEN_RE.search(text)
-        address = match.group(0) if match else ""
+        for token in text.split():
+            candidate = token.strip(_EDGE_CHARS)
+            if "@" in candidate:
+                address = candidate
+                break
     if "@" not in address:
         return ""
     return normalize_domain(address.rsplit("@", 1)[1])

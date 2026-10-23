@@ -212,6 +212,14 @@ jobs:
         with:
           packages-dir: artifacts/dist/
 
+      # The same GITHUB_TOKEN limitation applies to the release badge: run the
+      # test matrix on the tag so the badge describes the published commit,
+      # not master HEAD.
+      - name: Test the released tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release-tests.yml -f tag="${{ inputs.tag }}"
+
       # Verify the release users will actually download: rebuild from the
       # tag, compare to the PKGBUILD checksum and the published asset, then
       # `makepkg -si` from it.  Dispatched here because a release published

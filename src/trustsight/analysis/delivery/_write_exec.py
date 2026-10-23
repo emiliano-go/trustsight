@@ -11,7 +11,7 @@ from ..build import (
 )
 from ._common import _BUILD_FUNCTIONS, _CMD_START, _EXECUTION_RE, _IMPLICIT_BUILD_INPUTS, _is_directory_path, _norm_path
 
-__all__ = ['_CLONE_DEST_RE', '_COMMAND_ARG_DRIVER_RE', '_DEFAULT_DEST_RE', '_DRIVER_CHDIR_RE', '_DRIVER_INPUT_FLAG_RE', '_FETCH_CLIENT_RE', '_FETCH_OUTPUT_RE', '_FETCH_SCOPE_FUNCTIONS', '_INTERPRETER_OUTPUT_RE', '_LINE_URL_RE', '_OPERAND_DRIVER_RE', '_OUTPUT_FLAG_CLIENTS', '_PHASE_RANK', '_PKGDIR_LINE_RE', '_PROC_SUBST_STDIN_RE', '_SOURCE_EXEC_RE', '_body_references', '_body_under_dir', '_clone_destinations', '_collect_executions', '_collect_fetch_outputs', '_declared_source_urls', '_driver_commands']
+__all__ = ['_CLONE_DEST_RE', '_COMMAND_ARG_DRIVER_RE', '_DEFAULT_DEST_RE', '_DRIVER_CHDIR_RE', '_DRIVER_INPUT_FLAG_RE', '_FETCH_CLIENT_RE', '_FETCH_OUTPUT_RE', '_NON_FILE_FETCH_CLIENTS', '_PACKAGE_MANAGER_FETCH_RE', '_FETCH_SCOPE_FUNCTIONS', '_INTERPRETER_OUTPUT_RE', '_LINE_URL_RE', '_OPERAND_DRIVER_RE', '_OUTPUT_FLAG_CLIENTS', '_PHASE_RANK', '_PKGDIR_LINE_RE', '_PROC_SUBST_STDIN_RE', '_SOURCE_EXEC_RE', '_body_references', '_body_under_dir', '_clone_destinations', '_collect_executions', '_collect_fetch_outputs', '_declared_source_urls', '_driver_commands']
 
 _DRIVER_CHDIR_RE = re.compile(
     r"\b(?:g?make|cmake|ninja|meson)\b[^;&|\n]*?\s-(?:C|S)\s*"
@@ -122,6 +122,24 @@ _FETCH_CLIENT_RE = re.compile(
     r"\b(?:" + _NETWORK_CLIENT + r")\b|(?:" + _INTERPRETER_FETCH + r")",
     re.IGNORECASE,
 )
+
+#: A package manager resolving its own registry.  W002 reports the
+#: registry-dependency gap; pairing `cargo fetch` with a build script as an
+#: "unattributed fetch then execute" doubles the claim and was a live
+#: false positive (ankaios).
+_PACKAGE_MANAGER_FETCH_RE = re.compile(
+    r"\b(?:cargo|npm|yarn|pnpm|pip|pip3|poetry|python\s+-m\s+pip|go|"
+    r"composer|gem|bundle|mix|dotnet|mvn|gradle|cabal|stack|opam|conan)"
+    r"\s+(?:fetch|install|download|sync|ci|get|tidy)\b",
+    re.IGNORECASE,
+)
+
+#: DNS/metadata clients.  They resolve a name; they do not download a file
+#: that a later line can execute.  `host` also matches inside `host-tuple`.
+_NON_FILE_FETCH_CLIENTS = frozenset({
+    "host", "dig", "nslookup", "drill", "kdig", "whois", "ping",
+    "traceroute", "tracepath", "mtr",
+})
 
 _INTERPRETER_OUTPUT_RE = re.compile(
     r"(?:urlretrieve|getstore|open|File\.write|writeFileSync|copyfileobj)"

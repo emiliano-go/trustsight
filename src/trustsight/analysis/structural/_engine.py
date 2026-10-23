@@ -456,7 +456,24 @@ def _structural_findings(
         arch_split = bool(_ARCH_SCOPED_SUMS.search(current_text or "")) or bool(
             _ARCH_SCOPED_ADDED_SUMS.search(diff_text)
         )
-        if not still_present and not arch_split:
+        # A local source (a patch, a launcher, a config file) and its
+        # checksum removed together is a deletion, not weakened verification:
+        # the file the hash covered is gone.  A remote URL removal is left to
+        # the source-change path above.
+        removed_local_sources = [
+            item for item in (cdelta.sources.lost if cdelta else ())
+            if item and "://" not in item
+            and not item.startswith(("$", "/", "~", "{"))
+        ]
+        removed_checksums = (
+            len(cdelta.checksums.lost) - len(cdelta.checksums.gained)
+            if cdelta else 0
+        )
+        source_left_with_checksum = (
+            bool(removed_local_sources)
+            and removed_checksums <= len(removed_local_sources)
+        )
+        if not still_present and not arch_split and not source_left_with_checksum:
             add("C004", "Checksum Removed For Unchanged Source", "CRITICAL",
                 "integrity",
                 "checksum array deleted while source URLs stayed the same"

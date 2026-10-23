@@ -501,9 +501,12 @@ def change_delta(
     # the checksum classification the same walk settles (including its
     # `checksum_array_removed` override for a declaration deleted whole).
     url_changes = extract_urls_from_diff(diff_text)
+    declared_urls = set(url_changes.declared_urls)
     manifests = _manifest_deltas(doc)
-    added_hosts = {_host(u) for u in url_changes.added_urls if _host(u)}
-    removed_hosts = {_host(u) for u in url_changes.removed_urls if _host(u)}
+    added_hosts = {_host(u) for u in url_changes.added_urls
+                   if u not in declared_urls and _host(u)}
+    removed_hosts = {_host(u) for u in url_changes.removed_urls
+                     if u not in declared_urls and _host(u)}
     # U003: a remote host a committed manifest introduces joins the same
     # ``hosts_gained`` view as a ``source=()`` host, so host-novelty tiers,
     # source buckets and the G-series read both the same way.

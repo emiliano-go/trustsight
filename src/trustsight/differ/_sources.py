@@ -95,10 +95,17 @@ def is_skip_justified(diff_text: str, current_text: str | None = None) -> str:
 
 _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
+#: A scalar ``url=``/``*_url=`` declaration.  This is the package's declared
+#: upstream, not a fetched source: the URL is metadata.  Treating it as a
+#: source charged SOURCE_BUCKET and novelty for a host no build downloads
+#: from (a project homepage, a bug tracker, a vendor CDN named in the URL).
+_URL_DECL_RE = re.compile(r"^\s*(?:url|[A-Za-z0-9_]*_url)\s*=")
+
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
     removed_urls: set[str] = set()
+    declared_urls: set[str] = set()
 
     # Raw lines, headers included: the text walk matched on them, so the
     # typed document supplies them unchanged.  The quote state is carried
@@ -136,6 +143,13 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         body, quote = strip_comment_stateful(raw[len(prefix):], quote)
         if prefix not in ("+", "-") or line.index in heredoc_bodies:
             continue
+        # `url=`/`_url=` is the declared upstream, not a fetched source.
+        # The URL is still collected here (callers use the generic list for
+        # host changes), but it is marked so buckets and novelty can exclude
+        # it.  A `source=()` line is not a declaration.
+        is_declaration = bool(
+            _URL_DECL_RE.match(body)
+            and not _SOURCE_ARRAY_START_RE.match(body))
         resolved = resolve_text(body, new_table if prefix == "+" else old_table)
         if "http" not in resolved:
             continue
@@ -157,6 +171,8 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             if url_host_is_non_routable(cleaned):
                 continue
             target.add(cleaned)
+            if is_declaration:
+                declared_urls.add(cleaned)
 
     checksum_behavior = detect_checksum_changes(diff_text)
     # A declaration deleted with no replacement is also a checksum change,
@@ -173,6 +189,7 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         added_urls=sorted(added_urls),
         removed_urls=sorted(removed_urls),
         checksum_behavior=checksum_behavior,
+        declared_urls=sorted(declared_urls),
     )
 
 _SOURCE_CMD_SUBST_RE = re.compile(

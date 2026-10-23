@@ -434,6 +434,11 @@ def _scope_matches(
 #: rules.toml until a migration.
 _INERT_URL_RULES = frozenset({"R046", "R047"})
 
+#: URL-family raw-line rules that must not read the declared upstream
+#: ``url=``/``*_url=`` scalar.  That URL is package metadata, not a fetched
+#: source; ankaios's project homepage on github.io fired R152.
+_URL_DECLARATION_RULES = frozenset({"R003", "R046", "R047", "R048", "R152"})
+
 #: Rules that make no sense inside an install scriptlet.  A hook runs as
 #: root on the *target* system after pacman unpacks the package, so an
 #: absolute-path chmod/setcap/write there is packaging - the chrome-sandbox
@@ -711,6 +716,10 @@ def apply_rules(
                     # fetch commands, so this only drops inert printers.
                     from ..buckets import url_line_is_inert
                     if url_line_is_inert(item):
+                        continue
+                if rule["id"] in _URL_DECLARATION_RULES:
+                    stripped_item = item.lstrip("+").lstrip()
+                    if _METADATA_SCALAR_RE.match(stripped_item):
                         continue
                 if rule["id"] == "R007":
                     # See the note above: a source=() mention of the file

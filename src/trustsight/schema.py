@@ -23,6 +23,10 @@ class SourceChanges:
     added_urls: list[str] = field(default_factory=list)
     removed_urls: list[str] = field(default_factory=list)
     checksum_behavior: str = ""
+    #: URLs carried by a scalar ``url=``/``*_url=`` declaration.  They are
+    #: still added/removed URLs, but they are the declared upstream, not a
+    #: fetched source, so source buckets and novelty exclude them.
+    declared_urls: list[str] = field(default_factory=list)
 
 
 @dataclass

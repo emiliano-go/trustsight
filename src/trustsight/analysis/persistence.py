@@ -290,6 +290,44 @@ def _is_in_place_filter_rewrite(match: str) -> bool:
     return any(count >= 2 for count in counts.values())
 
 
+def _stages_into_pkgdir(match: str) -> bool:
+    """True when R054's destination is inside the package root.
+
+    R054 is "outside package root"; a ``$pkgdir`` target is the package's own
+    content whether the source is committed, a heredoc, or ``/dev/stdin``.
+    Handles ``install -t DIR SOURCE`` where the destination is an option
+    argument rather than the last operand.
+    """
+    body = match.lstrip("+-").lstrip()
+    if "<<" in body or ">" in body:
+        return False
+    try:
+        tokens = shlex.split(body)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+    verb = tokens[0].rsplit("/", 1)[-1]
+    if verb not in _R054_STAGING_VERBS:
+        return False
+
+    def _inside(value: str) -> bool:
+        value = value.strip("\"'")
+        # A traversal spelling is not proof of being inside the package
+        # root: `$pkgdir/lib/../etc/cron.d` lands in the live `/etc` only
+        # after the kernel resolves it, and the rule has its own collapse
+        # check for that spelling.  Leave those findings alone.
+        if ".." in value.split("/"):
+            return False
+        return value.startswith(("$pkgdir", "${pkgdir}"))
+
+    if "-t" in tokens:
+        index = tokens.index("-t")
+        return index + 1 < len(tokens) and _inside(tokens[index + 1])
+    operands = [t for t in tokens[1:] if not t.startswith("-")]
+    return bool(operands) and _inside(operands[-1])
+
+
 def _stages_only_committed(match: str, committed: frozenset[str]) -> bool:
     """True when every source operand is a file committed in the tree.
 
@@ -345,14 +383,20 @@ def stand_down_committed_staging(
         if finding.get("rule_id") != "R054"
         or not _is_in_place_filter_rewrite(finding.get("match") or "")
     ]
+    without_pkgdir = [
+        finding
+        for finding in without_in_place
+        if finding.get("rule_id") != "R054"
+        or not _stages_into_pkgdir(finding.get("match") or "")
+    ]
     if not tree_manifest:
-        return without_in_place
+        return without_pkgdir
     committed = frozenset(
         path.lstrip("./") for path, _head in tree_manifest
     )
     return [
         finding
-        for finding in without_in_place
+        for finding in without_pkgdir
         if finding.get("rule_id") != "R054"
         or not _stages_only_committed(finding.get("match") or "", committed)
     ]

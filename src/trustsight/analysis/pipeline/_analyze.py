@@ -411,8 +411,10 @@ def analyze_package(
     # contributes no novelty and no bucket prior.  The structural rules
     # keep the full URL list and bucket map: an ack is about the generic
     # provenance score, not about switching off a concrete finding.
-    url_acks = match_url_acks(pkg_name, source_changes.added_urls)
-    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
+    declared = set(source_changes.declared_urls)
+    source_urls = [u for u in source_changes.added_urls if u not in declared]
+    url_acks = match_url_acks(pkg_name, source_urls)
+    scored_urls = [u for u in source_urls if u not in url_acks]
 
     from ...recipedoc import parse_recipe as _parse_recipe
 
@@ -421,7 +423,7 @@ def analyze_package(
         if head_pkgbuild else ()
     )
     source_buckets = classify_urls(
-        source_changes.added_urls,
+        source_urls,
         upstream_host=unchanged_upstream_host(diff_text, head_pkgbuild),
     )
 

@@ -1,6 +1,7 @@
 """Extracted from crossfire.py: _engine."""
 
 from __future__ import annotations
+import re
 from ...buckets import url_host_is_non_routable, url_line_is_inert
 from ...coverage import note_stage_failure
 from ...deps import _strip_comment
@@ -14,6 +15,12 @@ from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_STANDDOWN_RE, X012_RE, X01
 from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_passthrough, _x024_is_test_pythonpath
 
 __all__ = ['crossfire_techniques']
+
+#: A grep invocation (optionally after leading assignments).  A pattern
+#: passed to grep is data being searched for, not an assignment the shell
+#: will execute.
+_GREP_CMD_RE = re.compile(
+    r"(?:^|[;&|]\s*)\s*(?:[\w./-]+=\S+\s+)*grep\b")
 
 def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
     """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
@@ -372,8 +379,9 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
             record("X015", line_no, "work scheduled to run after the build",
                    body.strip())
 
-        env_code = X014_RE.search(body)
-        if env_code and not X014_STANDDOWN_RE.search(body):
+        x014_body = _blank_quoted(body) if _GREP_CMD_RE.search(body) else body
+        env_code = X014_RE.search(x014_body)
+        if env_code and not X014_STANDDOWN_RE.search(x014_body):
             record("X014", line_no,
                    f"{env_code.group('var')} names code the shell will run",
                    body.strip())

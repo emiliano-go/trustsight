@@ -74,6 +74,10 @@ def register_commands(app: typer.Typer):
             False, "--explain",
             help="Show what the parser believed: the recipe and diff documents",
         ),
+        fp_template: bool = typer.Option(
+            False, "--fp-template",
+            help="Print a Markdown false-positive issue body instead of the report",
+        ),
     ):
         """Show a detailed analysis of a single package."""
         _show_score = score
@@ -171,6 +175,27 @@ def register_commands(app: typer.Typer):
             else:
                 _print_colored(msg, "red", stderr=True)
             raise typer.Exit(code=2)
+        if fp_template:
+            from ... import __version__
+            from ...fp_issue import issue_body, issue_url
+            from ...reporting import evaluate_fact, report_body
+
+            report = report_body(
+                evaluate_fact(fact), include_score=True, verbose=verbose)
+            package_name = report.get("package") or package
+            rule_ids = [
+                finding["rule_id"]
+                for finding in report.get("findings", ())
+                if finding.get("rule_id")
+            ]
+            typer.echo(issue_body(
+                package=package_name,
+                report=report,
+                version=__version__,
+                command=f"trustsight inspect {package} --fp-template",
+            ))
+            typer.echo(f"\nFile at: {issue_url(package_name, rule_ids)}")
+            return
         body = _inspect_one(
             fact,
             show_score=_show_score,

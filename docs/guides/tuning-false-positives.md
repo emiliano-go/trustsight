@@ -12,6 +12,32 @@ A **malicious false positive** is a bad rule trigger: the rule fired with no bad
 
 The term names a false positive of the *maliciousness* claim, not a malicious false positive. The normative definitions are in [Standards](../standards.md#false-positive-vocabulary).
 
+### What to file
+
+| Report | What it means | Who fixes it | Internal verdict |
+|---|---|---|---|
+| Bad rule trigger | The rule fired with no bad practice and no malicious behavior behind it | Rule or analysis code | `FP` |
+| Correct finding, wrong weight or severity | The rule is right, but the score or band overstates it | Weights, severity, calibration | `overweighted` |
+| Real finding about a packager practice | The rule is right and the practice is undesirable | The packager, or a documented known FP | `TP-but-benign` |
+| Not sure | You can see the output is wrong but cannot name the class | Maintainer triage | `uncertain` |
+
+File the first three through the [False positive issue form](https://github.com/emiliano-go/trustsight/issues/new?template=false_positive.yml). Pick "Not sure" when the class is unclear; a maintainer classifies it. A real finding about a packager practice is not a rule bug, so do not file it as one.
+
+`trustsight inspect <pkg> --fp-template` prints a ready-to-paste issue body and the issue link. The watcher feed offers the same text through "Copy FP report".
+
+### What happens after you report
+
+1. The issue form asks for the facts, not for you to classify the rule. The intake workflow checks the required evidence and labels the issue.
+2. A maintainer or the feed-driven triage agent gathers deterministic evidence with `fp_triage`: the current AUR snapshot, the version transition, and the checks for the rules that fired.
+3. The two factual questions are answered in order: is there a bad practice, and is there malicious behavior. An unanswered question is `uncertain`, never a quiet FP.
+4. A malicious FP gets a minimal reproducer. `fp_verify` reloads the analyzer and requires the reproducer to score at or below 35. Incomplete analysis cannot verify a fix.
+5. The fix ships as a PR with the code change, the true-positive twin, and a visible suppression entry. A human merges it.
+6. A true positive takes the alert path instead of the PR path.
+
+Maintainers can gather step 2 from a checkout with `scripts/fp_evidence.sh <alert-slug>` or the **FP evidence** workflow. The intake workflow applies `needs-info` when the report is incomplete, `fp-intake-ok` when it is complete, and `overweighted` or `benign-practice` for those report kinds.
+
+The pipeline is deliberately split: the reporter supplies the package and the evidence, the agent proposes, deterministic checks decide, and a maintainer merges. No issue text becomes a verdict on its own.
+
 ## Step 1: Check fire rates
 
 Start from the measured corpus fire rates in [Fire Rates](../explanation/fire-rates.md), then check how often the rule fires across your own reviewed packages:
@@ -23,6 +49,30 @@ trustsight review --verbose
 For each rule, note the **fire rate**: the percentage of your reviewed packages where it triggered. Re-derive the corpus rates with `scripts/rebaseline.py` after changing rules or weights.
 
 > **The >30% heuristic:** A rule firing on more than 30% of your packages is not detecting anomalies; it is describing a property of your package set. That rule is now a **census**, not a signal.
+
+### Quick local remedies
+
+| Situation | Use | Why |
+|---|---|---|
+| A rule is noisy only for one package | `trustsight override add <rule> --package <pkg> --reason "..."` | Visible suppression, scoped to one package |
+| One source URL is the problem | `trustsight override add-url <pkg> <url> --reason "..."` | Suppresses that URL, not the next one |
+| A TOML rule is too heavy for your set | `[rules.<ID>] weight_override` in `config.toml` | Keeps the finding, lowers the arithmetic |
+| A TOML rule never applies to you | `[rules.<ID>] enabled = false` | Last resort; use a reason and revisit |
+| You want to understand the triggers | `trustsight override wizard <pkg>` | Interactive, shows the non-FATAL rules |
+| Suppression should expire | `ttl_observations` in `overrides.json` | Counted in recorded analyses, not wall clock |
+| Suppression must not hide an indicator | `requires_clear_indicators` in `overrides.json` | The finding becomes visible again when corroborated |
+
+A suppression still appears under **Suppressed by override**, with the reason you gave. FATAL rules cannot be suppressed. C-series rules cannot be disabled through config, so investigate them before suppressing anything.
+
+### Which lever is it?
+
+1. Is the rule FATAL or a C-series invariant? Do not tune it; investigate or report it.
+2. Is the rule right but the packager practice undesirable? Document it or tell the packager; it is a real finding.
+3. Is one URL the problem? `override add-url`.
+4. Is the rule wrong? File the false-positive issue; do not silence it locally.
+5. Is it only noisy for your package set? `override add --package` or `weight_override`.
+6. Is the weight or band wrong but the rule right? File it as `overweighted`.
+7. Need the suppression to lapse? Add `ttl_observations` or `requires_clear_indicators`.
 
 ## Step 2: Understand why
 
@@ -111,7 +161,9 @@ If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Rest
 ## Known false positives
 
 Some patterns are deliberately left triggering and documented instead of
-suppressed, because the same shape is a real signal elsewhere.
+suppressed, because the same shape is a real signal elsewhere. Each rule page
+also names its own known false positives; this section covers the cross-rule
+ones.
 
 ### Kernel module provides (H064, D004, H098)
 

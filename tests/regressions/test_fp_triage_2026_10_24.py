@@ -342,8 +342,8 @@ def test_documentation_source_is_not_a_source_host():
         "        'OPENSSL-LICENSE::https://raw.githubusercontent.com/openssl/openssl/OpenSSL_1_1_1f/LICENSE')\n"
     )
     props = extract_properties(text)
-    assert "raw.githubusercontent.com" not in props["source_hosts"]
-    assert "example.org" in props["source_hosts"]
+    # Exact set equality: the documentation source contributes no host.
+    assert props["source_hosts"] == frozenset({"example.org"})
 
 
 # --- D003: a VCS client is not a new network reach -------------------------

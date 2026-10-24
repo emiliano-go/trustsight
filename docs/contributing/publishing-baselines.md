@@ -17,8 +17,8 @@ prefix, and **a baseline release ships the whole family**:
 
 - `baseline-seed.tar.gz` (the v2 hashed novelty seed) plus `.sig`;
 - `baseline-corpus.tar.zst` (the corpus baseline) plus `.sig`;
-- `baseline-manifest.json` (per-asset SHA-256, size and signature) plus its
-  detached `.sig`.
+- `baseline-manifest.json` (per-asset SHA-256, size and signature, plus a
+  monotonic `version` and optional `expires_at`) plus its detached `.sig`.
 
 One further asset is **not** part of the signed family:
 `baseline-benign-corpus.tar.gz` packs the calibration corpus

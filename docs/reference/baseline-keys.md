@@ -76,13 +76,19 @@ cadence and `seed fetch --tag` for pinning.
 | `baseline-ioc-<source>-<incident>-manifest.json` | one IOC baseline's signed manifest (carries the curator key) | `trustsight ioc update` |
 | `baseline-ioc-<source>-<incident>-iocs.jsonl` | the corresponding indicator list | `trustsight ioc update` |
 | `baseline-corpus.tar.zst` | the corpus baseline artifact | downloaded and imported with `trustsight import-baseline` |
-| `baseline-manifest.json` | per-asset SHA-256, size and signature, plus the public key used | release inventory |
+| `baseline-manifest.json` | per-asset SHA-256, size and signature, plus the monotonic release `version`, optional `expires_at` and the public key used | release inventory |
 
 The seed, corpus and `baseline-manifest.json` live only on a `baseline-<date>`
 release; the IOC pairs live only on an `ioc-<date>` release.
 
 Every asset ships with a detached `.sig` sibling: the raw 64-byte Ed25519
 signature over the **exact asset bytes**, under the pinned distribution key.
+The signed `baseline-manifest.json` binds each asset's name, SHA-256 and size
+to a monotonic `version` and an optional `expires_at`. A seed or corpus pull
+verifies the asset against that inventory, refuses an expired manifest, and
+refuses a `version` lower than the one already imported. A release that
+predates the inventory is accepted as unknown; the next versioned release
+becomes the floor.
 The bounded asset bytes must be downloaded before that signature can be
 verified; verification then happens before the payload is parsed, imported, or
 used. A download that does not verify is refused (`ReleaseSignatureError`).

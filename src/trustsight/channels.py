@@ -14,12 +14,14 @@ Nothing here draws anything or decides policy; the caller prints and records.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import shutil
 import sys
 import tempfile
 from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import channel_state, release
@@ -41,10 +43,139 @@ CORPUS_ASSET_NAME = "baseline-corpus.tar.zst"
 #: The imported watchlist release asset.
 WATCHLIST_ASSET_NAME = "watchlist-official.json"
 
+#: The signed inventory of a baseline release.  It binds each asset's name,
+#: SHA-256 and size, plus the release version and expiry.
+BASELINE_MANIFEST_ASSET = "baseline-manifest.json"
+
 #: A progress factory: given a description, a context manager yielding an
 #: ``on_progress(pos, total)`` callback.  The CLI passes a Rich factory; the
 #: watcher passes nothing (no terminal to draw on).
 ProgressFactory = Callable[[str], object]
+
+
+def _manifest_expired(expires_at: str) -> bool:
+    if not expires_at:
+        return False
+    try:
+        moment = datetime.fromisoformat(expires_at)
+    except (TypeError, ValueError):
+        return False
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment < datetime.now(timezone.utc)
+
+
+def _manifest_version(manifest: dict) -> int | None:
+    value = manifest.get("version")
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise release.ReleaseManifestError(
+            "the signed baseline manifest has a non-integer version"
+        ) from exc
+
+
+def fetch_baseline_manifest(
+    channel: release.Channel,
+    tag: str | None = None,
+    pubkey_path: Path | None = None,
+) -> dict | None:
+    """Fetch and verify the signed baseline inventory, or ``None``.
+
+    ``None`` means the release predates the inventory (or the channel does
+    not carry one).  The download itself is still signature-checked; a
+    malformed or mismatched inventory is a refusal, never a silent skip.
+    """
+    try:
+        data = _verified_download(
+            BASELINE_MANIFEST_ASSET, tag=tag, channel=channel,
+            progress=None, pubkey_path=pubkey_path,
+        )
+    except release.ReleaseFetchError:
+        return None
+    try:
+        manifest = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise release.ReleaseManifestError(
+            f"the signed baseline manifest is not a JSON object: {exc}"
+        ) from exc
+    if not isinstance(manifest, dict):
+        raise release.ReleaseManifestError(
+            "the signed baseline manifest must be a JSON object"
+        )
+    return manifest
+
+
+def check_baseline_manifest(manifest: dict) -> int | None:
+    """Refuse an expired or replayed inventory; return its version.
+
+    A manifest without a version (an older release) is accepted as unknown;
+    the caller still verifies the asset hash, and the next versioned release
+    becomes the floor.
+    """
+    expires_at = str(manifest.get("expires_at") or "")
+    if _manifest_expired(expires_at):
+        raise release.ReleaseExpiredError(
+            f"the signed baseline expired at {expires_at}; refusing it"
+        )
+    version = _manifest_version(manifest)
+    if version is not None:
+        from .db import BASELINE_MANIFEST_VERSION_KEY, get_metadata
+
+        stored = get_metadata(BASELINE_MANIFEST_VERSION_KEY)
+        try:
+            stored_version = int(stored) if stored is not None else None
+        except (TypeError, ValueError):
+            stored_version = None
+        if stored_version is not None and version < stored_version:
+            raise release.ReleaseRollbackError(
+                f"the signed baseline is release {version}, older than the "
+                f"imported {stored_version}; refusing a replay"
+            )
+    return version
+
+
+def verify_manifest_asset(manifest: dict, asset_name: str, data: bytes) -> None:
+    """Require *data* to match the signed inventory's entry for *asset_name*."""
+    assets = manifest.get("assets")
+    if not isinstance(assets, list):
+        raise release.ReleaseManifestError(
+            "the signed baseline manifest has no asset inventory"
+        )
+    entry = next(
+        (item for item in assets
+         if isinstance(item, dict) and item.get("name") == asset_name),
+        None,
+    )
+    if entry is None:
+        raise release.ReleaseManifestError(
+            f"the signed baseline manifest does not list {asset_name}"
+        )
+    expected = str(entry.get("sha256") or "").lower()
+    if expected and hashlib.sha256(data).hexdigest() != expected:
+        raise release.ReleaseManifestError(
+            f"{asset_name} does not match the signed manifest's SHA-256"
+        )
+    try:
+        size = int(entry.get("size"))
+    except (TypeError, ValueError):
+        size = None
+    if size is not None and size != len(data):
+        raise release.ReleaseManifestError(
+            f"{asset_name} does not match the signed manifest's size"
+        )
+
+
+def record_baseline_manifest_version(manifest: dict) -> None:
+    """Record the accepted manifest version as the rollback floor."""
+    version = _manifest_version(manifest)
+    if version is None:
+        return
+    from .db import BASELINE_MANIFEST_VERSION_KEY, set_metadata
+
+    set_metadata(BASELINE_MANIFEST_VERSION_KEY, str(version))
 
 
 def channel_key_fingerprint(channel: release.Channel) -> str | None:
@@ -137,10 +268,18 @@ def pull_baseline_seed(
     # signature step would run, only early.
     release._channel_pubkey(channel, pubkey_path)
     _emit_warning(channel)
+    # The signed inventory binds the asset name, hash, size, version and
+    # expiry.  A release that predates it is accepted as unknown; a release
+    # that carries it must match, and an older version is refused.
+    manifest = fetch_baseline_manifest(channel, tag=tag, pubkey_path=pubkey_path)
+    if manifest is not None:
+        check_baseline_manifest(manifest)
     data = _verified_download(
         SEED_ASSET_NAME, tag=tag, channel=channel, progress=progress,
         pubkey_path=pubkey_path,
     )
+    if manifest is not None:
+        verify_manifest_asset(manifest, SEED_ASSET_NAME, data)
     tmp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-fetch-"))
     try:
         path = tmp_dir / SEED_ASSET_NAME
@@ -148,6 +287,8 @@ def pull_baseline_seed(
         stats = import_seed(path)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
+    if manifest is not None:
+        record_baseline_manifest_version(manifest)
     url = release.asset_url(SEED_ASSET_NAME, tag, channel)
     resolved = release.tag_from_asset_url(url)
     channel_state.record_pull(channel_state.BASELINE, resolved, channel.repo)

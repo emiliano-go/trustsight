@@ -3,7 +3,7 @@
 from typing import Optional
 from ._connection import get_connection
 
-__all__ = ['OBSERVATION_SEQ_KEY', 'SEED_DIGEST_KEY', 'SEED_OBSERVATION_KEY', 'SEED_ORIGIN_KEY', 'SEED_OWNED_KEYS', 'SEED_VERSION_KEY', 'bump_observation_seq', 'get_metadata', 'observation_seq', 'seed_observation_count', 'set_metadata']
+__all__ = ['BASELINE_MANIFEST_VERSION_KEY', 'OBSERVATION_SEQ_KEY', 'SEED_DIGEST_KEY', 'SEED_OBSERVATION_KEY', 'SEED_ORIGIN_KEY', 'SEED_OWNED_KEYS', 'SEED_VERSION_KEY', 'bump_observation_seq', 'get_metadata', 'observation_seq', 'seed_observation_count', 'set_metadata']
 
 SEED_OBSERVATION_KEY = "seed_observation_count"
 
@@ -16,6 +16,11 @@ SEED_OBSERVATION_KEY = "seed_observation_count"
 OBSERVATION_SEQ_KEY = "observation_seq"
 
 SEED_VERSION_KEY = "seed_version"
+
+#: The last signed baseline-manifest version this database accepted.
+#: A release pull refuses an older one; an older local seed is refused
+#: unless the caller explicitly allows a downgrade.
+BASELINE_MANIFEST_VERSION_KEY = "baseline_manifest_version"
 
 SEED_DIGEST_KEY = "seed_sha256"
 

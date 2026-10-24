@@ -6,6 +6,8 @@ suite covers the one rule of that channel: a download that does not
 verify against the pinned distribution key is refused, never imported.
 """
 
+import hashlib
+import json
 import sys
 import tarfile
 from pathlib import Path
@@ -385,7 +387,20 @@ def test_auto_import_fetches_and_verifies_a_missing_seed(tmp_path, monkeypatch):
     # here the verified payload is simulated by returning the asset bytes
     # directly from fetch_verified_asset (whose own verification is covered
     # by the signature tests above).
-    monkeypatch.setattr(release, "fetch_verified_asset", lambda name, **kw: seed_bytes)
+    manifest = json.dumps({
+        "version": 1,
+        "expires_at": "",
+        "assets": [{
+            "name": "baseline-seed.tar.gz",
+            "sha256": hashlib.sha256(seed_bytes).hexdigest(),
+            "size": len(seed_bytes),
+        }],
+    }).encode("utf-8")
+
+    def fake_fetch(name, **kw):
+        return manifest if name == "baseline-manifest.json" else seed_bytes
+
+    monkeypatch.setattr(release, "fetch_verified_asset", fake_fetch)
     monkeypatch.setattr(
         dbmod, "bundled_seed_path", lambda: tmp_path / "absent-seed.db.gz"
     )
@@ -636,3 +651,69 @@ def test_releases_json_returns_none_over_the_byte_cap():
             raise AssertionError("read1 must be preferred")
 
     assert release._read_releases_json(Huge()) is None
+
+
+# --- baseline manifest rollback and asset binding --------------------------
+
+def _manifest(**fields):
+    data = {"version": 1, "expires_at": "", "assets": []}
+    data.update(fields)
+    return data
+
+
+def test_baseline_manifest_refuses_an_expired_release(monkeypatch, tmp_path):
+    import trustsight.db as dbmod
+    from trustsight import channels
+
+    monkeypatch.setattr(dbmod, "DATA_DIR", tmp_path)
+    init_db()
+    with pytest.raises(release.ReleaseExpiredError):
+        channels.check_baseline_manifest(
+            _manifest(expires_at="2000-01-01T00:00:00+00:00"))
+
+
+def test_baseline_manifest_refuses_a_replay(monkeypatch, tmp_path):
+    import trustsight.db as dbmod
+    from trustsight import channels
+
+    monkeypatch.setattr(dbmod, "DATA_DIR", tmp_path)
+    init_db()
+    dbmod.set_metadata(dbmod.BASELINE_MANIFEST_VERSION_KEY, "10")
+
+    with pytest.raises(release.ReleaseRollbackError):
+        channels.check_baseline_manifest(_manifest(version=9))
+    assert channels.check_baseline_manifest(_manifest(version=11)) == 11
+    channels.record_baseline_manifest_version(_manifest(version=11))
+    assert dbmod.get_metadata(dbmod.BASELINE_MANIFEST_VERSION_KEY) == "11"
+
+
+def test_baseline_manifest_requires_the_asset_hash_and_size():
+    from trustsight import channels
+
+    data = b"payload"
+    manifest = _manifest(assets=[{
+        "name": "baseline-seed.tar.gz",
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "size": len(data),
+    }])
+    channels.verify_manifest_asset(manifest, "baseline-seed.tar.gz", data)
+    with pytest.raises(release.ReleaseManifestError):
+        channels.verify_manifest_asset(manifest, "baseline-seed.tar.gz", b"other")
+    with pytest.raises(release.ReleaseManifestError):
+        channels.verify_manifest_asset(manifest, "missing", data)
+
+
+def test_an_older_seed_is_refused_unless_downgrade_is_allowed(
+        monkeypatch, tmp_path):
+    import trustsight.db as dbmod
+
+    monkeypatch.setattr("trustsight.db.DATA_DIR", tmp_path)
+    init_db()
+    seed_path = tmp_path / "seed.tar.gz"
+    seed_path.write_bytes(_build_v2_seed_tar(tmp_path))
+    dbmod.set_metadata(dbmod.SEED_VERSION_KEY, "2099-01-01")
+
+    with pytest.raises(ValueError, match="older"):
+        dbmod.import_seed(seed_path)
+    stats = dbmod.import_seed(seed_path, allow_downgrade=True)
+    assert stats["maintainers"] == 2

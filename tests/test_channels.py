@@ -10,6 +10,7 @@ again.
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -26,6 +27,11 @@ def _isolated_cache(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config, "CACHE_DIR", tmp_path / "cache")
     (tmp_path / "cache").mkdir(parents=True, exist_ok=True)
+    import trustsight.db as dbmod
+
+    monkeypatch.setattr(dbmod, "DATA_DIR", tmp_path / "data")
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    dbmod.init_db()
 
 
 def test_a_pull_is_recorded_and_read_back():
@@ -192,10 +198,22 @@ def test_a_bad_asset_prefix_on_a_channel_url_is_refused():
 def test_pull_baseline_seed_verifies_and_records(monkeypatch, tmp_path):
     seen = {}
 
+    seed = b"seed-bytes"
+    manifest = json.dumps({
+        "version": 1,
+        "assets": [{
+            "name": channels.SEED_ASSET_NAME,
+            "sha256": hashlib.sha256(seed).hexdigest(),
+            "size": len(seed),
+        }],
+    }).encode("utf-8")
+
     def _fetch(asset_name, **kwargs):
+        if asset_name == channels.BASELINE_MANIFEST_ASSET:
+            return manifest
         seen["asset_name"] = asset_name
         seen["channel"] = kwargs["channel"].repo
-        return b"seed-bytes"
+        return seed
 
     monkeypatch.setattr(release, "fetch_verified_asset", _fetch)
     imported = {}
@@ -211,7 +229,7 @@ def test_pull_baseline_seed_verifies_and_records(monkeypatch, tmp_path):
 
     assert seen["asset_name"] == channels.SEED_ASSET_NAME
     assert seen["channel"] == release.OFFICIAL_REPO
-    assert imported["bytes"] == b"seed-bytes"
+    assert imported["bytes"] == seed
     assert stats["entries"] == 3
     assert channel_state.pulled_tag(channel_state.BASELINE) == "baseline-2026-01-01"
 

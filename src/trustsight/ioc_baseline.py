@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .bounded_io import read_file_capped
-from .db import get_connection
+from .db import get_connection, get_metadata, set_metadata
 from .iocs import IOC_TYPES, compile_ioc_pattern, normalize as normalize_ioc
 
 import sqlite3
@@ -72,11 +72,22 @@ class MalformedBaselineError(Exception):
     """Raised when the baseline files cannot be parsed."""
 
 
+class ExpiredBaselineError(MalformedBaselineError):
+    """Raised when a signed baseline's own expiry has passed."""
+
+
+class ReplayedBaselineError(MalformedBaselineError):
+    """Raised when a signed baseline is older than the one already imported."""
+
+
 @dataclass(frozen=True)
 class BaselineManifest:
     """Parsed ``manifest.json`` for an IOC baseline."""
 
     version: int = 1
+    #: Monotonic release version, bound by the signature.  ``None`` on
+    #: manifests built before the field existed.
+    release_version: int | None = None
     source: str = ""
     created_at: str = ""
     expires_at: str = ""
@@ -222,16 +233,26 @@ def _load_manifest(path: Path) -> BaselineManifest:
         version = int(data.get("version", 1))
     except (TypeError, ValueError) as exc:
         raise MalformedBaselineError("manifest.json version must be an integer") from exc
+    raw_release_version = data.get("release_version")
+    try:
+        release_version = (
+            int(raw_release_version) if raw_release_version is not None else None
+        )
+    except (TypeError, ValueError) as exc:
+        raise MalformedBaselineError(
+            "manifest.json release_version must be an integer"
+        ) from exc
     return BaselineManifest(
         version=version,
+        release_version=release_version,
         source=str(data.get("source", "")),
         created_at=str(data.get("created_at", "")),
         expires_at=str(data.get("expires_at", "")),
         signature=str(data.get("signature", "")),
         public_key=str(data.get("public_key", "")),
         extra={k: v for k, v in data.items() if k not in {
-            "version", "source", "created_at", "expires_at",
-            "signature", "public_key",
+            "version", "release_version", "source", "created_at",
+            "expires_at", "signature", "public_key",
         }},
     )
 
@@ -336,8 +357,10 @@ def _verify_signature(
         "expires_at": manifest.expires_at,
         "signature": "",
         "public_key": manifest.public_key,
-        **manifest.extra,
     }
+    if manifest.release_version is not None:
+        manifest_dict["release_version"] = manifest.release_version
+    manifest_dict.update(manifest.extra)
     manifest_bytes = json.dumps(
         manifest_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
@@ -354,6 +377,7 @@ def import_baseline(
     source_name: str | None = None,
     allow_unsigned: bool = False,
     trust_manifest_key: bool = False,
+    allow_expired: bool = False,
 ) -> dict:
     """Import an IOC federation baseline directory.
 
@@ -432,6 +456,25 @@ def import_baseline(
         source = base.name or "unknown"
 
     now = _now_iso()
+    if not allow_expired and _is_expired(manifest.expires_at):
+        raise ExpiredBaselineError(
+            f"the signed baseline for {source!r} expired at "
+            f"{manifest.expires_at}; refusing to import it"
+        )
+    rollback_key = f"ioc_release_version:{source}"
+    incoming_version = manifest.release_version
+    if incoming_version is not None:
+        stored = get_metadata(rollback_key)
+        try:
+            stored_version = int(stored) if stored is not None else None
+        except (TypeError, ValueError):
+            stored_version = None
+        if stored_version is not None and incoming_version < stored_version:
+            raise ReplayedBaselineError(
+                f"the signed baseline for {source!r} is release "
+                f"{incoming_version}, older than the imported "
+                f"{stored_version}; refusing a replay"
+            )
     skipped = 0
     with get_connection() as conn:
         # Refresh the current view of the source: manifest rows replace the
@@ -504,6 +547,9 @@ def import_baseline(
                     ),
                 )
         conn.commit()
+
+    if incoming_version is not None:
+        set_metadata(rollback_key, str(incoming_version))
 
     return {
         "source": source,

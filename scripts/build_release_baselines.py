@@ -218,6 +218,12 @@ def main() -> int:
                         help="Curator key for the IOC manifests (default: the distribution key)")
     parser.add_argument("--corpus", type=Path, default=None,
                         help="Corpus baseline artifact (.tar.zst) to re-sign")
+    parser.add_argument("--baseline-version", type=int, default=None,
+                        help="Monotonic release version recorded in the signed "
+                             "baseline-manifest.json (default: the current epoch)")
+    parser.add_argument("--expires-at", default="",
+                        help="Optional ISO timestamp after which the signed "
+                             "baseline must not be imported")
     parser.add_argument("--ioc-only", action="store_true",
                         help="Build only the IOC pair(s), for the dedicated "
                              "ioc-* channel: no seed, corpus or "
@@ -291,7 +297,13 @@ def main() -> int:
 
     manifest = {
         "schema_version": 1,
+        "version": (
+            args.baseline_version
+            if args.baseline_version is not None
+            else int(datetime.now(timezone.utc).timestamp())
+        ),
         "built_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": args.expires_at,
         "distribution_pubkey": pubkey_hex,
         "assets": assets,
     }

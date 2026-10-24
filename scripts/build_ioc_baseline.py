@@ -37,6 +37,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import time
 import json
 import sys
 from datetime import datetime, timezone
@@ -130,6 +131,7 @@ def build(
 
     manifest = {
         "version": 1,
+        "release_version": int(time.time()),
         "source": source,
         "created_at": _now_iso(),
         "expires_at": "",
@@ -152,8 +154,10 @@ def build(
             "expires_at": parsed.expires_at,
             "signature": "",
             "public_key": parsed.public_key,
-            **parsed.extra,
         }
+        if parsed.release_version is not None:
+            signed_manifest["release_version"] = parsed.release_version
+        signed_manifest.update(parsed.extra)
         payload = json.dumps(
             signed_manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False
         ).encode("utf-8") + iocs_path.read_bytes()

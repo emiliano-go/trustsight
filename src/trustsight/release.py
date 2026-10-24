@@ -94,6 +94,18 @@ class ReleaseSignatureError(ReleaseError):
     """The asset failed verification against the pinned distribution key."""
 
 
+class ReleaseManifestError(ReleaseError):
+    """The signed baseline manifest is missing, malformed, or mismatched."""
+
+
+class ReleaseRollbackError(ReleaseError):
+    """The signed baseline is older than the version already imported."""
+
+
+class ReleaseExpiredError(ReleaseError):
+    """The signed baseline's own expiry has passed."""
+
+
 def offline() -> bool:
     """Return True when the operator has forbidden outbound requests.
 

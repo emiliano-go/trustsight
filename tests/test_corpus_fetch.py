@@ -7,6 +7,7 @@ These tests mock the release download (like the seed-fetch and ioc-update
 suites do), so nothing reaches the network.
 """
 
+import hashlib
 import json
 
 import pytest
@@ -16,6 +17,25 @@ from typer.testing import CliRunner
 from trustsight import release
 from trustsight.cli import app
 from trustsight.db import get_connection, init_db
+
+
+def _manifest_for(data: bytes) -> bytes:
+    return json.dumps({
+        "version": 1,
+        "assets": [{
+            "name": "baseline-corpus.tar.zst",
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size": len(data),
+        }],
+    }).encode("utf-8")
+
+
+def _fake_fetch(data: bytes):
+    def fetch(asset_name, **kwargs):
+        if asset_name == "baseline-manifest.json":
+            return _manifest_for(data)
+        return data
+    return fetch
 
 
 @pytest.fixture(autouse=True)
@@ -114,14 +134,15 @@ def test_fetch_downloads_verifies_and_imports(isolated, signed_artifact, monkeyp
 
     def fake_fetch(asset_name, **kwargs):
         fetched.append(asset_name)
-        return signed_artifact
+        return (_manifest_for(signed_artifact)
+                if asset_name == "baseline-manifest.json" else signed_artifact)
 
     monkeypatch.setattr(release, "fetch_verified_asset", fake_fetch)
 
     result = CliRunner().invoke(app, ["corpus", "fetch", "--yes", "--json"])
 
     assert result.exit_code == 0, result.output
-    assert fetched == ["baseline-corpus.tar.zst"]
+    assert fetched == ["baseline-manifest.json", "baseline-corpus.tar.zst"]
     assert _profile_count() == 1
     with get_connection() as conn:
         deps = conn.execute("SELECT COUNT(*) AS n FROM dependency_names").fetchone()["n"]
@@ -168,10 +189,8 @@ def test_fetch_prompts_before_merging_into_a_non_empty_corpus(
         )
         conn.commit()
 
-    def fake_fetch(asset_name, **kwargs):
-        return signed_artifact
-
-    monkeypatch.setattr(release, "fetch_verified_asset", fake_fetch)
+    monkeypatch.setattr(
+        release, "fetch_verified_asset", _fake_fetch(signed_artifact))
 
     declined = CliRunner().invoke(app, ["corpus", "fetch"], input="n\n")
     assert declined.exit_code == 2
@@ -193,10 +212,8 @@ def test_fetch_json_prints_the_plan_without_prompting(
         )
         conn.commit()
 
-    def fake_fetch(asset_name, **kwargs):
-        return signed_artifact
-
-    monkeypatch.setattr(release, "fetch_verified_asset", fake_fetch)
+    monkeypatch.setattr(
+        release, "fetch_verified_asset", _fake_fetch(signed_artifact))
 
     # No input: if it prompted, the runner would abort on EOF and exit 1/2.
     result = CliRunner().invoke(app, ["corpus", "fetch", "--json"])

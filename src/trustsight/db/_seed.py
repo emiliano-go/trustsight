@@ -17,7 +17,7 @@ from ._packages import count_observations
 
 __all__ = ['_decompress_sqlite_seed', '_digest_seed_dir', '_extract_v2_archive', '_import_seed_from_release', '_import_sqlite_seed', '_import_v2_dependency_names', '_import_v2_maintainers', '_import_v2_seed', '_import_v2_source_urls', '_seed_file_digest', 'bundled_seed_path', 'import_seed', 'maybe_auto_import_seed']
 
-def import_seed(seed_path: Path) -> dict:
+def import_seed(seed_path: Path, *, allow_downgrade: bool = False) -> dict:
     """Merge a seed into the user's database.
 
     Supports the legacy SQLite ``.db``/``.db.gz`` format and the v2
@@ -45,14 +45,14 @@ def import_seed(seed_path: Path) -> dict:
                     f"seed directory does not contain trustsight-seed-v2/: {path}"
                 )
             digest = _digest_seed_dir(seed_dir)
-            result = _import_v2_seed(seed_dir, digest, origin)
+            result = _import_v2_seed(seed_dir, digest, origin, allow_downgrade=allow_downgrade)
         elif str(path).endswith(".tar.gz") or path.suffix == ".tgz":
             temp_dir = Path(tempfile.mkdtemp(prefix="trustsight-seed-"))
             seed_dir = _extract_v2_archive(path, temp_dir)
             if seed_dir is None:
                 raise ValueError(f"tar archive does not contain trustsight-seed-v2/: {path}")
             digest = _digest_seed_dir(seed_dir)
-            result = _import_v2_seed(seed_dir, digest, origin)
+            result = _import_v2_seed(seed_dir, digest, origin, allow_downgrade=allow_downgrade)
         elif path.suffix == ".gz":
             # Legacy .db.gz seed: decompress to a single sqlite file.
             temp_file = _decompress_sqlite_seed(path)
@@ -187,7 +187,7 @@ def _decompress_sqlite_seed(path: Path) -> Path:
         raise
     return temp
 
-def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
+def _import_v2_seed(seed_dir: Path, digest: str, origin: str, *, allow_downgrade: bool = False) -> dict:
     """Import a trustsight-seed-v2 directory into the user's database.
 
     The salt is the namespace every maintainer hash lives in, and it
@@ -208,6 +208,23 @@ def _import_v2_seed(seed_dir: Path, digest: str, origin: str) -> dict:
 
     salt = meta.get("salt") or _generate_salt()
     hash_algorithm = meta.get("hash_algorithm", DEFAULT_HASH_ALGORITHM)
+
+    incoming_version = meta.get("seed_version") or meta.get("built_at", "")[:10]
+    if incoming_version:
+        from ._metadata import get_metadata
+
+        stored_version = get_metadata(SEED_VERSION_KEY)
+        if stored_version and str(incoming_version) < str(stored_version):
+            if not allow_downgrade:
+                raise ValueError(
+                    f"seed version {incoming_version} is older than the "
+                    f"imported {stored_version}; refusing a downgrade. Pass "
+                    "allow_downgrade=True only for a seed you trust locally."
+                )
+            log.warning(
+                "importing an older seed (%s < %s) because a downgrade was "
+                "explicitly allowed", incoming_version, stored_version,
+            )
 
     conn = _new_connection(get_db_path())
     try:

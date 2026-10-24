@@ -9,8 +9,10 @@ from pathlib import Path
 import pytest
 
 from trustsight.ioc_baseline import (
+    ExpiredBaselineError,
     InvalidSignatureError,
     MalformedBaselineError,
+    ReplayedBaselineError,
     UnsignedBaselineError,
     active_iocs,
     all_ioc_sources,
@@ -684,3 +686,85 @@ def test_file_path_and_pattern_entries_round_trip(tmp_path: Path, isolated_db):
     entry, compiled = patterns[0]
     assert entry.value == r"\bnpm\s+install\b"
     assert compiled.search("  npm install atomic-lockfile")
+
+
+# --- rollback and expiry protection ---------------------------------------
+
+
+def _rewrite_manifest(base: Path, **fields) -> None:
+    path = base / "manifest.json"
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    manifest.update(fields)
+    path.write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _write_iocs(base: Path, rows: list[dict]) -> None:
+    (base / "iocs.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+
+
+def test_expired_manifest_is_refused_by_default(baseline_dir, isolated_db):
+    _rewrite_manifest(
+        baseline_dir,
+        expires_at=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+    )
+    with pytest.raises(ExpiredBaselineError):
+        import_baseline(baseline_dir, allow_unsigned=True)
+
+
+def test_expired_manifest_imports_with_the_explicit_flag(baseline_dir, isolated_db):
+    _rewrite_manifest(
+        baseline_dir,
+        expires_at=(datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+    )
+    result = import_baseline(
+        baseline_dir, allow_unsigned=True, allow_expired=True)
+    assert result["entries_imported"] == 3
+
+
+def test_an_older_release_is_refused_and_the_newer_rows_survive(
+        baseline_dir, isolated_db):
+    _rewrite_manifest(baseline_dir, release_version=10)
+    import_baseline(baseline_dir, allow_unsigned=True)
+
+    # A replay of release 9 with a different indicator must not replace the
+    # rows release 10 already imported.
+    _rewrite_manifest(baseline_dir, release_version=9)
+    _write_iocs(baseline_dir, [
+        {"type": "domain", "value": "older.example", "source": "test-feed"},
+    ])
+    with pytest.raises(ReplayedBaselineError):
+        import_baseline(baseline_dir, allow_unsigned=True)
+
+    values = {entry.value for entry in active_iocs("test-feed")}
+    assert "malware.example" in values
+    assert "older.example" not in values
+
+
+def test_a_newer_release_replaces_the_source_rows(baseline_dir, isolated_db):
+    _rewrite_manifest(baseline_dir, release_version=10)
+    import_baseline(baseline_dir, allow_unsigned=True)
+
+    _rewrite_manifest(baseline_dir, release_version=11)
+    _write_iocs(baseline_dir, [
+        {"type": "domain", "value": "newer.example", "source": "test-feed"},
+    ])
+    result = import_baseline(baseline_dir, allow_unsigned=True)
+    assert result["entries_imported"] == 1
+
+    values = {entry.value for entry in active_iocs("test-feed")}
+    assert values == {"newer.example"}
+
+
+def test_an_equal_release_is_idempotent(baseline_dir, isolated_db):
+    _rewrite_manifest(baseline_dir, release_version=10)
+    import_baseline(baseline_dir, allow_unsigned=True)
+    result = import_baseline(baseline_dir, allow_unsigned=True)
+    assert result["entries_imported"] == 3
+
+
+def test_a_manifest_without_a_version_still_imports(baseline_dir, isolated_db):
+    """Older baselines predate release_version; they are unknown, not replayed."""
+    import_baseline(baseline_dir, allow_unsigned=True)
+    assert {entry.value for entry in active_iocs("test-feed")} >= {
+        "malware.example", "evil-pkg"}

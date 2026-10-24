@@ -161,6 +161,9 @@ def corpus_fetch(
     if warning:
         _print_colored(warning, "yellow", stderr=True)
     try:
+        manifest = channels.fetch_baseline_manifest(active_channel, tag=tag)
+        if manifest is not None:
+            channels.check_baseline_manifest(manifest)
         with download_progress(
             f"Downloading {CORPUS_ASSET_NAME}...",
             enabled=use_rich_progress() and not json_output,
@@ -169,6 +172,8 @@ def corpus_fetch(
                 CORPUS_ASSET_NAME, tag=tag, on_progress=on_download,
                 channel=active_channel,
             )
+        if manifest is not None:
+            channels.verify_manifest_asset(manifest, CORPUS_ASSET_NAME, data)
     except release.ReleaseError as exc:
         msg = f"Corpus fetch refused: {exc}"
         if json_output:
@@ -189,6 +194,8 @@ def corpus_fetch(
         artifact_path.write_bytes(data)
         try:
             import_baseline(str(artifact_path), json_output=json_output)
+            if manifest is not None:
+                channels.record_baseline_manifest_version(manifest)
         except Exception as exc:
             # fetch_verified_asset already pinned the signature, so a
             # failure here is a malformed artifact, not an unverified one;

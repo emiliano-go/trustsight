@@ -46,6 +46,10 @@ RELEASE_BASE_URL = "https://github.com/emiliano-go/trustsight/releases"
 #: asset-bearing ``baseline-*`` release.  The second declared release host.
 GITHUB_API_URL = "https://api.github.com"
 
+#: The browser base for issue and release pages.  It is not a fetch target;
+#: it lives here so the declared-host audit keeps one place for the host.
+GITHUB_WEB = "https://github.com"
+
 #: The canonical, always-followed channel.  Its key is pinned inside the
 #: package; an operator can follow other channels but cannot un-follow this one.
 OFFICIAL_REPO = "emiliano-go/trustsight"

@@ -121,10 +121,22 @@ jobs:
               | set(CRITICAL_PATHS)
           )
 
-          diff = subprocess.check_output(
-              ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
-              text=True,
-          ).splitlines()
+          try:
+              diff = subprocess.check_output(
+                  ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
+                  text=True,
+              ).splitlines()
+          except subprocess.CalledProcessError:
+              # A force push can name a "before" commit that is no longer an
+              # ancestor, so the three-dot range is invalid.  Treat it like a
+              # first push: check the tip and its parent instead of failing
+              # the job on a revision expression.
+              print("Force push with no common base; checking the tip commit.")
+              base_sha = f"{head_sha}^"
+              diff = subprocess.check_output(
+                  ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
+                  text=True,
+              ).splitlines()
           touched = sorted(path for path in diff if path in critical_paths)
           if not touched:
               print("No critical paths touched; signature check skipped.")

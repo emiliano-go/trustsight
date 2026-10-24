@@ -213,6 +213,17 @@ class ArrayDelta:
     removing one copy of a duplicate is a loss, which a set difference
     could not see.  ``reordered`` compares the matched occurrences only, so
     a multiplicity change is not a reorder.
+
+    :ivar gained: entries the change added, in order.
+    :ivar lost: entries the change removed, in order.
+    :ivar reordered: the matched entries changed relative order.
+
+    Example:
+        .. code-block:: python
+
+            delta = report.change_delta.dependencies
+            print("added:", delta.gained)
+            print("removed:", delta.lost)
     """
 
     gained: tuple[str, ...]
@@ -229,6 +240,7 @@ class ArrayDelta:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ArrayDelta":
+        """Rebuild an array delta from :meth:`to_dict` output."""
         return cls(
             gained=tuple(data.get("gained", ())),
             lost=tuple(data.get("lost", ())),

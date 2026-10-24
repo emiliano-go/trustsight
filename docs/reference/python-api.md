@@ -18,7 +18,7 @@ if report.flagged:
 
 ## What is public and what is not
 
-Public: everything exported from `trustsight.api`, re-exported at the package root (`from trustsight import TrustSight`).
+Public: everything exported from `trustsight.api`, re-exported at the package root (`from trustsight import TrustSight`). That includes the typed change layer (`ChangeDelta`, `FileDelta`, `VersionFacts`, `ArrayDelta`, `ManifestDelta`).
 
 Internal: everything else under `trustsight.`, including `schema.PackageFact`, `db`, `analysis`, `full_aur`, `rules` and `scoring`. Those change shape between releases without notice. If you find yourself importing one of them, the API is missing something; open an issue rather than pinning to an internal.
 
@@ -393,7 +393,7 @@ The analysis of one package.
 | `scan_truncated` | `bool` | More lines than `rules.MAX_SCANNED_LINES`; the tail was not matched. Separate from `diff_truncated` because the caps are separate. |
 | `comparison_base` | `str` | The saved state the diff was taken against (`recorded`, `none`, ...), carried on the fact path as well as the review-row path (a B11 surface-parity fix). |
 | `indicators` | `tuple[IocMatch, ...]` | The indicator tier, mirroring `ioc_matches` as a first-class surface. Outside the heuristic score, at maximum alert priority. |
-| `change` | `dict` | The typed change-as-data view (`ChangeDelta.to_dict()`); the same object the prose summary renders. See the [report schema](report-schema.md). |
+| `change` | `dict` | The typed change-as-data view (`ChangeDelta.to_dict()`), as JSON. The same object the prose summary renders. Use `report.change_delta` for the typed object. See the [report schema](report-schema.md). |
 | `unresolved_assignments` | `tuple[dict, ...]` | Every assignment the tokenizer refused, as `{name, line, file}`. Non-empty forbids `fully_vetted`. |
 | `partial_files` | `tuple[str, ...]` | `.install` files whose diff showed only part of the file, behind a `partial_file_analysis` gap. |
 | `resolution_coverage` | `dict` | How much of the diff the tokenizer resolved, which resolved-target R-rules fired, and the `x026_pointer` when refusals left one silent. |
@@ -401,6 +401,50 @@ The analysis of one package.
 | `boundaries` | `tuple[AnalysisBoundary, ...]` | The unified analysis boundaries: one per coverage gap and one per W-rendering, each `{kind, gap, w_rule, detail, forbids_clean}`. |
 
 Derived properties: `flagged` (score above the 20-point threshold), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).
+
+### The change layer: `report.change_delta`
+
+`report.change` is the JSON body. `report.change_delta` is the same data as a frozen, typed `ChangeDelta`, which is what gives an IDE completion on the fields without parsing the dict by hand. The two are always equal:
+
+```python
+assert report.change_delta.to_dict() == report.change
+```
+
+```python
+from trustsight import TrustSight
+
+change = TrustSight().inspect("some-package").change_delta
+if change.version.moved:
+    print(change.version.old_pkgver, "->", change.version.new_pkgver)
+for name in change.added_dependencies.get("depends", ()):
+    print("new dependency:", name)
+for file in change.files:
+    print(file.status, file.path, file.hunks)
+```
+
+The change layer is exported from `trustsight.api` and the package root: `ChangeDelta`, `FileDelta`, `VersionFacts`, `ArrayDelta`, `ManifestDelta`. It is the only part of the typed core that is public; `PackageFact` and the diff/recipe parsers remain internal.
+
+### `ChangeDelta`
+
+`files`, `hosts_gained`, `hosts_lost`, `sources`, `checksums`, `pgp_keys`, `dependencies`, `makedependencies`, `checkdependencies`, `optdependencies`, `version`, `provides`, `replaces`, `conflicts`, `added_dependencies`, `checksum_behavior`, `local_sources_gained`, `local_sources_lost`, `reordered`, `checksum_parity`, `source_array_grew`, `manifests`.
+
+`files` is a tuple of `FileDelta`; the array fields are `ArrayDelta`; `version` is `VersionFacts`; `manifests` is a tuple of `ManifestDelta`. `added_dependencies` is `{field: (name, ...)}` with version constraints and optdepends descriptions dropped, the same normalised view the D-series rules read.
+
+### `FileDelta`
+
+`path`, `old_path`, `status` (`added`, `removed`, `modified`) and `hunks` (each hunk's new-side start line).
+
+### `VersionFacts`
+
+`old_pkgver`, `new_pkgver`, `old_pkgrel`, `new_pkgrel`, `old_epoch`, `new_epoch`, `pkgver_changed` (`pkgver` itself moved) and `moved` (any of the three moved by resolved value).
+
+### `ArrayDelta`
+
+`gained`, `lost` and `reordered`. `gained`/`lost` are multiset differences in order, so adding an entry twice is two gains and removing one copy of a duplicate is a loss.
+
+### `ManifestDelta`
+
+`path`, `format`, `status`, `added`, `removed`, `remote_added`, `redirects`, `unresolved`, `old_count`, `new_count`. One committed manifest the diff touched.
 
 ### `DependencyReport`
 

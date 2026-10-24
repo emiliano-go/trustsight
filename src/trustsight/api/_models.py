@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ..changes import ChangeDelta
     from ..depth import DependencyReport
 
 __all__ = ['AcknowledgedUrl', 'ClusterFinding', 'CycleReport', 'FailedPackage', 'FileChange', 'Finding', 'HistoryEntry', 'PivotMatch', 'PivotResult', 'Progress', 'ProgressHook', 'Report', 'ReviewResult', 'Status', 'SuppressedRule', 'TrackedPackage', '_evaluate_fact_dict_fallback']
@@ -338,7 +339,8 @@ class Report:
     """The typed change-as-data view: ``ChangeDelta.to_dict``.
 
     The same object the prose summary renders, exposed for consumers that
-    want the host/source/checksum/dependency deltas as data.
+    want the host/source/checksum/dependency deltas as data.  Use
+    :attr:`change_delta` for the typed, attribute-accessible object.
     """
 
     unresolved_assignments: tuple = ()
@@ -438,6 +440,32 @@ class Report:
         score. Use :meth:`to_dict` for the body the CLI emits.
         """
         return dict(self._raw)
+
+    @property
+    def change_delta(self) -> "ChangeDelta":
+        """The typed change-as-data view behind :attr:`change`.
+
+        Reconstructed from the serialised ``change`` body, so it is always
+        equal to ``ChangeDelta.from_dict(report.change)``.  Every field is
+        typed and frozen, which is what makes IDE completion work without
+        parsing the dict by hand.
+
+        :returns: the typed :class:`ChangeDelta` for this report.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                change = TrustSight().inspect("some-package").change_delta
+                if change.version.moved:
+                    print(change.version.old_pkgver, "->", change.version.new_pkgver)
+                for name in change.added_dependencies.get("depends", ()):
+                    print("new dependency:", name)
+        """
+        from ..changes import ChangeDelta
+
+        return ChangeDelta.from_dict(self.change)
 
     def to_dict(self, *, include_score: bool = False, verbose: bool = False) -> dict:
         """The same JSON body ``trustsight review --json`` writes.

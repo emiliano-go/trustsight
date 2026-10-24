@@ -95,7 +95,9 @@ from ._validation import (
 from .client import (
     TrustSight,
 )
+from ..changes import ChangeDelta, FileDelta, ManifestDelta, VersionFacts
 from ..depth import DependencyReport
+from ..recipedoc import ArrayDelta
 
 __all__ = [
     "TrustSight",
@@ -114,6 +116,11 @@ __all__ = [
     "PivotMatch",
     "Progress",
     "DependencyReport",
+    "ChangeDelta",
+    "FileDelta",
+    "VersionFacts",
+    "ArrayDelta",
+    "ManifestDelta",
     "TrustSightError",
     "PackageNotFound",
     "FLAG_THRESHOLD",

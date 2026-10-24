@@ -366,8 +366,14 @@ def analyze_package(
     # rules as the PKGBUILD, or a curl|bash simply moves one file over and the
     # filename filter above drops it.  Appended before the byte cap, so an
     # oversized companion truncates the combined diff and fails closed.
+    #
+    # A parent baseline is not a prior review: it is the single AUR commit
+    # before HEAD, used because this run has no recorded baseline.  Skipping
+    # an unchanged companion there would let a payload committed before the
+    # parent stay invisible on a first review (#57), so read companions whole.
+    companion_baseline = "" if parent_baseline else old_commit
     companion, companion_truncated = project.companion_hunks(
-        head_commit, baseline_oid=old_commit)
+        head_commit, baseline_oid=companion_baseline)
     if companion:
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 

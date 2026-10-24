@@ -708,7 +708,7 @@ def analyze_package_text(
     )
 
     unresolved_sources = unresolved_source_lines(diff_text)
-    parse_time_subs = parse_time_substitution_lines(diff_text)
+    parse_time_subs = parse_time_substitution_lines(diff_text, new_pkgbuild)
     unresolved_assignments = unresolved_assignment_rows(
         clamp_text(new_pkgbuild) or "", file="PKGBUILD",
         extra_lines=[*unresolved_sources, *parse_time_subs])

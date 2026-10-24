@@ -31,6 +31,7 @@ from trustsight.coverage import (  # noqa: E402
     fail_closed,
     gaps_from,
     oversized_lines,
+    parse_time_substitution_lines,
     qualified_band,
     unresolved_source_lines,
 )
@@ -152,6 +153,54 @@ def test_removed_lines_are_not_a_gap():
     """A maintainer deleting a computed source is closing the gap, not opening it."""
     diff = HEADER + '-_url="$(curl -s https://example.org/redirect)"\n'
     assert unresolved_source_lines(diff) == []
+
+
+# --- parse-time substitutions: PKGBUILD, top-level, real substitutions ---
+
+
+def test_parse_time_gap_ignores_a_companion_scriptlet():
+    """A .install runs at pacman time, not while makepkg sources metadata."""
+    diff = (
+        "--- /dev/null\n+++ b/demo.install\n@@ -0,0 +1,2 @@\n"
+        '+_all_off="$(tput sgr0)"\n'
+        '+_bold="${_all_off}$(tput bold)"\n'
+    )
+    assert parse_time_substitution_lines(diff) == []
+
+
+def test_parse_time_gap_uses_the_post_state_function_body():
+    """A hunk can begin inside a function; within-hunk depth alone is wrong."""
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,5 @@\n"
+        " pkgname=demo\n pkgver=1.0\n build() {\n"
+        '+  local _x="$(tput sgr0)"\n'
+        " }\n"
+    )
+    current = (
+        'pkgname=demo\npkgver=1.0\nbuild() {\n'
+        '  local _x="$(tput sgr0)"\n}\n'
+    )
+    assert parse_time_substitution_lines(diff, current) == []
+
+
+def test_parse_time_gap_ignores_comments_and_single_quoted_backticks():
+    diff = (
+        HEADER
+        + "+pam # `mlock` / `mlogind` authenticate the user\n"
+        + "+optdepends=('moss-language: run .moss with `moss run`')\n"
+    )
+    assert parse_time_substitution_lines(diff) == []
+
+
+def test_parse_time_gap_still_flags_a_real_top_level_substitution():
+    diff = HEADER + "+_pin=$(_latest_commit)\n"
+    assert parse_time_substitution_lines(diff) == ["_pin=$(_latest_commit)"]
+
+
+def test_parse_time_gap_ignores_arithmetic_expansion():
+    """``$((n + 1))`` evaluates an integer, not a command."""
+    diff = HEADER + "+n=$((n + 1))\n"
+    assert parse_time_substitution_lines(diff) == []
 
 
 @pytest.mark.parametrize("gap", [DIFF_TRUNCATED, TREE_NOT_ANALYZED, UNRESOLVED_SOURCE])

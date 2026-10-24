@@ -228,7 +228,7 @@ _SOURCE_ASSIGN_RE = re.compile(
 # is whatever a program printed on the build machine.  ``${var}`` is not
 # included, because the tokenizer does resolve those and R-rules already
 # cover the ones it cannot.
-_COMMAND_SUBSTITUTION_RE = re.compile(r"\$\(|`")
+_COMMAND_SUBSTITUTION_RE = re.compile(r"\$\((?!\()|`")
 
 
 #: A VCS source entry.  makepkg spells the scheme as `<vcs>+<url>`.
@@ -307,10 +307,16 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
     controls, the same reason backslash continuations are joined before A5
     measures a line.
     """
+    from .line_lex import lex_lines
+
     found: list[str] = []
     in_source_array = False
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         if line.raw.startswith("+++") or line.raw.startswith("---") or line.raw.startswith("@@"):
+            continue
+        # A source= assignment is a PKGBUILD declaration; a companion's
+        # literal text is not a source the build fetches.
+        if line.file and line.file.rsplit("/", 1)[-1] != "PKGBUILD":
             continue
         # A removal cannot introduce an unresolved source; context ("  ")
         # lines inside an added array still belong to the logical entry.
@@ -318,10 +324,12 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
             continue
         body = line.content if line.side in ("add", "context") else line.raw
         stripped = body.lstrip()
+        code = lex_lines([body], fragment=True)[0].code
 
         if in_source_array:
-            # A comment line inside the array carries no value.
-            if not stripped.startswith("#") and _COMMAND_SUBSTITUTION_RE.search(body):
+            # A comment or single-quoted literal carries no substitution;
+            # the lexer has already blanked both.
+            if not stripped.startswith("#") and _COMMAND_SUBSTITUTION_RE.search(code):
                 found.append(body.strip()[:200])
             if ")" in body:
                 in_source_array = False
@@ -330,7 +338,7 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
         if stripped.startswith("#") or not _SOURCE_ASSIGN_RE.match(body):
             continue
         # The opener line itself, then decide whether the array stays open.
-        if _COMMAND_SUBSTITUTION_RE.search(body):
+        if _COMMAND_SUBSTITUTION_RE.search(code):
             found.append(body.strip()[:200])
         # Open only when it is an array whose ``)`` has not arrived yet.
         if "(" in body and ")" not in body:
@@ -338,8 +346,10 @@ def unresolved_source_lines(diff_text: str) -> list[str]:
     return found
 
 
-def parse_time_substitution_lines(diff_text: str) -> list[str]:
-    """Added top-level lines whose command substitution runs at parse time.
+def parse_time_substitution_lines(
+    diff_text: str, current_text: str | None = None
+) -> list[str]:
+    """Added PKGBUILD lines whose command substitution runs at parse time.
 
     makepkg *sources* the PKGBUILD to extract metadata, and so does every
     AUR helper's ``--printsrcinfo`` refresh: a ``$(...)`` or backtick
@@ -348,20 +358,44 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
     its output.  The recipe is then not statically analyzable as text, so
     the line is recorded as a gap rather than matched against rules.
 
+    Only the PKGBUILD is sourced for metadata.  A companion scriptlet's
+    top-level ``$(...)`` runs when pacman installs or removes the package,
+    not before the analysis, so it is not this gap's.  The body is lexed
+    first, because a backtick in a comment or inside single quotes is text,
+    not a substitution.
+
     Lines inside a function body run at build time and are already the
     rule engine's territory; lines a ``source=`` assignment owns are the
     ``unresolved_source`` gap's.  Both are excluded here so each gap
-    reports the lines only it can explain.  A continuation of a top-level
-    array assignment (``_pinned=(`` ... ``"$(get_rev)"``) is parse time
-    too: the whole assignment is evaluated when the file is sourced.
+    reports the lines only it can explain.  *current_text* is the full
+    post-state PKGBUILD when the caller has it: a hunk can start inside a
+    function, so within-hunk depth alone would call a body line top-level.
+
+    A continuation of a top-level array assignment (``_pinned=(`` ...
+    ``"$(get_rev)"``) is parse time too: the whole assignment is evaluated
+    when the file is sourced.
     """
-    from .rules import _FUNCTION_CLOSE_RE, _FUNCTION_OPEN_RE
+    from .rules import (
+        _FUNCTION_CLOSE_RE,
+        _FUNCTION_OPEN_RE,
+        _classify_line_context,
+    )
+    from .line_lex import lex_lines
 
     found: list[str] = []
     depth = 0
     in_source_array = False
+    post_contexts = (
+        _classify_line_context(split_lines(current_text))
+        if current_text else {}
+    )
     for line in parse_diff_lines(split_lines(diff_text)).lines:
         if line.raw.startswith("+++") or line.raw.startswith("---") or line.raw.startswith("@@"):
+            continue
+        # A source= assignment is a PKGBUILD declaration.  Reading a
+        # companion scriptlet here turned pacman-time colour setup into a
+        # parse-time gap on every google-chrome review.
+        if line.file and line.file.rsplit("/", 1)[-1] != "PKGBUILD":
             continue
         # Removals belong to the old file; context and added lines make up
         # the new one, so both move the function-depth and array state.
@@ -370,6 +404,11 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
         body = line.content if line.side in ("add", "context") else line.raw
         stripped = body.lstrip()
 
+        in_function = False
+        if line.side == "add" and post_contexts and line.new_lineno is not None:
+            in_function = (
+                post_contexts.get(line.new_lineno - 1) == "function_body"
+            )
         if in_source_array:
             if ")" in body:
                 in_source_array = False
@@ -382,13 +421,15 @@ def parse_time_substitution_lines(diff_text: str) -> list[str]:
             continue
 
         opens = bool(_FUNCTION_OPEN_RE.search(stripped))
+        code = lex_lines([body], fragment=True)[0].code
         if (
             line.side == "add"
+            and not in_function
             and depth == 0
             and not opens
             and not stripped.startswith("#")
             and not _SOURCE_ASSIGN_RE.match(body)
-            and _COMMAND_SUBSTITUTION_RE.search(body)
+            and _COMMAND_SUBSTITUTION_RE.search(code)
         ):
             found.append(body.strip()[:200])
 

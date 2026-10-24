@@ -738,7 +738,7 @@ def analyze_package(
     # name every assignment the tokenizer refused on the
     # analysed surface (the full post-state PKGBUILD here), plus the
     # refusals the coverage layer knows independently.
-    parse_time_subs = parse_time_substitution_lines(diff_text)
+    parse_time_subs = parse_time_substitution_lines(diff_text, head_pkgbuild)
     unresolved_assignments = unresolved_assignment_rows(
         clamp_text(head_pkgbuild) or "", file="PKGBUILD",
         extra_lines=[*unresolved_sources, *parse_time_subs])

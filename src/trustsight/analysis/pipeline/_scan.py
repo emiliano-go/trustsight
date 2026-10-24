@@ -235,7 +235,7 @@ def scan_diff(
     # the analysed surface is the caller's post-state text
     # when given, else the diff's own post projection (with per-file
     # origins, so each refusal names the file it came from).
-    parse_time_subs = parse_time_substitution_lines(diff_text)
+    parse_time_subs = parse_time_substitution_lines(diff_text, current_text)
     unresolved_assignments = unresolved_assignment_rows(
         clamp_text(current_text or "\n".join(surface_doc.post_lines())),
         file="PKGBUILD" if current_text else "",

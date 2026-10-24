@@ -56,7 +56,7 @@ The verdict is telling you: "I see some novelty but I don't have enough history 
 - `tree_not_analyzed`: the repository file manifest was unavailable, so only the PKGBUILD was read. This matters because the files committed beside the recipe - `.install` scriptlets, patches - run as root; a text-only result did not look at them.
 - `companion_truncated`: a committed file the recipe runs was larger than the companion read budget.
 - `unresolved_source`: a `source=` entry is computed at build time, so the URL the build will fetch is not in the text.
-- `unresolved_parse_time`: a command substitution runs when the recipe is parsed, so its result is not in the analysed text.
+- `unresolved_parse_time`: a top-level command substitution in the PKGBUILD runs when the recipe is sourced for metadata, so its result is not in the analysed text.
 - `snapshot_refused`: the snapshot archive exceeded a read bound and was refused.
 - `upstream_manifest_incomplete`: a committed dependency manifest was too large to read whole, so the shared-upstream-dependency comparison skipped this package and kept its previous dependency state.
 - `unpinned_build_deps`: a build step resolves dependencies from a package registry.

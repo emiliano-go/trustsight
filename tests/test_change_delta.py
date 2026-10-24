@@ -44,8 +44,11 @@ def test_hosts_and_checksums_match_the_summary_reference():
         text = path.read_text(encoding="utf-8", errors="replace")
         delta = change_delta(text)
         reference = extract_urls_from_diff(text)
-        added = {_host(u) for u in reference.added_urls if _host(u)}
-        removed = {_host(u) for u in reference.removed_urls if _host(u)}
+        declared = set(reference.declared_urls)
+        added = {_host(u) for u in reference.added_urls
+                 if u not in declared and _host(u)}
+        removed = {_host(u) for u in reference.removed_urls
+                   if u not in declared and _host(u)}
         assert set(delta.hosts_gained) == added - removed, path.name
         assert set(delta.hosts_lost) == removed - added, path.name
         assert delta.checksum_behavior == reference.checksum_behavior, path.name

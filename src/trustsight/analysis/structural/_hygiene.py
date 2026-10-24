@@ -161,6 +161,11 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
         if client:
             return f"a network fetch ({client.group(0)[:40]})"
         for path in _collect_executions(body):
+            # A standard system path is not a new capability: the system
+            # binary is neither fetched by this diff nor part of the
+            # package.  `electron44`'s launcher was read as a C001 signal.
+            if path.startswith(("/usr/", "/bin/", "/sbin/", "/opt/")):
+                continue
             base = os.path.basename(path)
             # Only a *script-like* execution is a capability: `python -m
             # unittest` in a newly added check() is ordinary test

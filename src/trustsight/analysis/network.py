@@ -32,7 +32,7 @@ from ..config import (
 )
 from ..deps import _strip_comment
 from ..line_lex import lex_lines
-from ..tokenizer import resolve_added_lines
+from ..tokenizer import join_line_continuations, resolve_added_lines
 from .base import iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
 from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
@@ -107,7 +107,7 @@ def _source_schemes(config=None) -> frozenset[str]:
 
 def _exotic_protocol_findings(diff_text, config, add) -> None:
     """A source URL uses a scheme outside the configured allowlist (H034)."""
-    allowed = _source_schemes(config)
+    allowed = _source_schemes(config) | _declared_dlagent_schemes(diff_text)
     for scheme, url in _source_url_tokens(diff_text):
         base = scheme.rsplit("+", 1)[-1].lower()
         if base not in allowed:
@@ -456,6 +456,39 @@ _PIPE_TO_SHELL_RE = re.compile(
 _CMDSUB_CALL_RE = re.compile(r"(?:\$\(|`)\s*(\w+)\b")
 
 
+def _array_member_indices(raw_lines: list[str]) -> set[int]:
+    """Indices of lines that are entries in a variable array.
+
+    H077 reads the tokenizer's *resolved* lines, where a quoted array entry
+    has already lost its quotes.  ``depends=("curl")`` therefore looked like
+    a top-level ``curl`` command.  The raw diff lines still carry the
+    assignment shape, so array membership is decided here and the resolved
+    text is used only for the fetch pattern.
+    """
+    members: set[int] = set()
+    in_array = False
+    depth = 0
+    for i, raw in enumerate(raw_lines):
+        if not raw or raw.startswith(("+++", "---", "@@")):
+            continue
+        prefix = raw[:1]
+        body = _strip_comment(raw[1:] if prefix in "+- " else raw)
+        if not body.strip():
+            continue
+        if not in_array:
+            if not _ASSIGNMENT_LINE_RE.match(body):
+                continue
+            depth = body.count("(") - body.count(")")
+            if depth > 0:
+                in_array = True
+            continue
+        members.add(i)
+        depth += body.count("(") - body.count(")")
+        if depth <= 0:
+            in_array = False
+    return members
+
+
 def _fetch_function_names(diff_text: str, config) -> set[str]:
     """Return names of added functions whose bodies contain a parse-time fetch.
 
@@ -508,6 +541,11 @@ def edge_parse_time_fetch(ctx, add) -> None:
     diff_text = ctx.diff_text
     config = ctx.config
     lines = mask_to_recipe(ctx.lines)
+    raw_lines = [
+        parsed.raw for parsed in parse_diff_lines(
+            join_line_continuations(split_lines(diff_text))).lines
+    ]
+    array_members = _array_member_indices(raw_lines)
     lexed = lex_lines(lines, fragment=True)
     patterns = _parse_time_fetch_patterns(config)
     fetch_funcs = _fetch_function_names(diff_text, config)
@@ -523,6 +561,8 @@ def edge_parse_time_fetch(ctx, add) -> None:
         if not stripped:
             continue
         substitutes = "$(" in body or "`" in body
+        if i in array_members and not substitutes:
+            continue
         opens_array = (
             _ASSIGNMENT_LINE_RE.match(body) and "(" in body and ")" not in body
         )
@@ -694,6 +734,29 @@ _DLAGENTS_VAR_RE = re.compile(
     r"^\s*(?:export\s+|declare\s+-x\s+)?DLAGENTS\s*\+?=",
     re.IGNORECASE,
 )
+_DLAGENT_SCHEME_RE = re.compile(r"['\"]?([A-Za-z][A-Za-z0-9+.-]{0,31})::")
+_DLAGENT_NETWORK_RE = re.compile(
+    r"\b(?:curl|wget2?|aria2c|axel|lftp|git|svn|hg|ssh|scp|sftp|rsync|"
+    r"nc|ncat|socat|telnet|ftp|tftp)\b", re.IGNORECASE)
+_DLAGENT_MANUAL_RE = re.compile(
+    r"\b(?:echo|printf|exit|true|false)\b", re.IGNORECASE)
+
+
+def _declared_dlagent_schemes(diff_text: str) -> frozenset[str]:
+    """Schemes a recipe declares a DLAGENT for.
+
+    A package that uses `hib://` for a manual, vendor-gated download also
+    declares the `hib::` agent that tells the user how to obtain it.  That
+    declaration is the packaging contract, not an exotic network protocol.
+    """
+    schemes: set[str] = set()
+    for line in mask_to_recipe(resolve_added_lines(diff_text)):
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        body = _strip_comment(line[1:])
+        if _DLAGENTS_VAR_RE.match(body):
+            schemes.update(s.lower() for s in _DLAGENT_SCHEME_RE.findall(body))
+    return frozenset(schemes)
 
 
 def _dlagents_override_findings(diff_text, config, add) -> None:
@@ -710,6 +773,12 @@ def _dlagents_override_findings(diff_text, config, add) -> None:
             continue
         body = _strip_comment(line[1:])
         if _DLAGENTS_VAR_RE.match(body):
+            # A manual-download agent (`hib::/usr/bin/echo "fetch it
+            # yourself"; exit 1`) redirects nothing: it declines the fetch.
+            # The override only becomes a download redirection when the
+            # agent runs a network client.
+            if _DLAGENT_MANUAL_RE.search(body) and not _DLAGENT_NETWORK_RE.search(body):
+                continue
             add("H096", "Download Agent Override", "MEDIUM", "network",
                 "DLAGENTS is assigned, redirecting source downloads",
                 line=i + 1, body=body.strip()[:80],

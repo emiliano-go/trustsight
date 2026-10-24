@@ -24,6 +24,7 @@ from .base import _code_rule_enabled
 from .network import (
     _PKGVER_ASSIGN_RE,
     _SAFE_VERSION_RE,
+    _declared_dlagent_schemes,
     _source_schemes,
     _source_url_tokens,
 )
@@ -96,7 +97,7 @@ def emit_scheme_downgrade(ctx: URLContext, add: Callable) -> None:
 
 def emit_exotic_protocol(ctx: URLContext, add: Callable) -> None:
     """H034: a source scheme outside the configured allowlist."""
-    allowed = _source_schemes(ctx.config)
+    allowed = _source_schemes(ctx.config) | _declared_dlagent_schemes(ctx.diff_text)
     for scheme, url in ctx.tokens():
         base = scheme.rsplit("+", 1)[-1].lower()
         if base not in allowed:

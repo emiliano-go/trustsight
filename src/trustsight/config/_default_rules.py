@@ -647,6 +647,16 @@ domains = [
     # Qoder's project-owned Alibaba Cloud OSS bucket: the vendor's own
     # distribution host, the same model as cef-builds.spotifycdn.com.
     "qoder-ide.oss-accelerate.aliyuncs.com",
+    # Vendors that publish their own prebuilt binaries from a CDN on a
+    # subdomain of their registered domain.  The parent-domain check makes
+    # the registered entry enough; the specific hosts are named so the
+    # intent is visible.
+    "microsoft.com",
+    "prss.microsoft.com",
+    "msecnd.net",
+    # Gentoo's developer host: a project-controlled mirror for patchsets,
+    # not a raw paste or file-drop service.
+    "gentoo.org",
 ]
 
 [raw_hosting]

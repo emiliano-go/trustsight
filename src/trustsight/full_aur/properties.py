@@ -12,6 +12,7 @@ import logging
 import re
 
 from ..differ import resolved_source_urls
+from ..differ._sources import _is_documentation_source
 from ..recipedoc import _function_body_segments
 from ..tokenizer import split_lines
 from dataclasses import dataclass
@@ -225,6 +226,10 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     hosts: set[str] = set()
     orgs: set[str] = set()
     for url in resolved_source_urls(new_pkgbuild):
+        # A licence/readme source is documentation, not build provenance.
+        # Adding one made H049 report a source-host move (nhiicc).
+        if _is_documentation_source(url):
+            continue
         _extract_host_org(url, hosts, orgs)
     props["source_hosts"] = _bounded(hosts)
     props["source_orgs"] = _bounded(orgs)

@@ -198,8 +198,13 @@ X003_SHAPES = (
     # curl/wget long options cut to a unique prefix: --upload-f for
     # --upload-file. Legitimate recipes spell options out.
     ("truncated-option", re.compile(
-        r"\b(?:curl|wget)\b[^\n|;&]*?\s--(?:upload-f|dat|outp|hea|loca|"
-        r"inse|conf|remote-na|post-f)[a-z]*(?=\s|$)")),
+        # The full option is the ordinary spelling: --output, --data,
+        # --header, --location, --insecure, --config, --remote-name and
+        # --post-file are not truncations.  Only a prefix shorter than the
+        # full name is the shape, so each family asserts the missing tail.
+        r"\b(?:curl|wget)\b[^\n|;&]*?\s--(?:upload-f(?!ile)|dat(?!a)|"
+        r"outp(?!ut)|hea(?!der)|loca(?!tion)|inse(?!cure)|conf(?!ig)|"
+        r"remote-na(?!me)|post-f(?!ile))[a-z]*(?=\s|$)")),
     # A shell invoked with its options stuffed together: bash -lc, sh -ec.
     # `sh -c` is ordinary; `sh -lc` / `bash -ec` stuffs extra options around
     # -c, which is how a payload gets a login shell or error suppression

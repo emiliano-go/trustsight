@@ -562,6 +562,39 @@ def test_a_report_serialises_to_the_documented_json(ts, monkeypatch):
     json.loads(report.to_json())
 
 
+def test_a_report_exposes_the_typed_change_layer(ts, monkeypatch):
+    from trustsight.changes import ChangeDelta, change_delta
+
+    delta = change_delta(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,2 @@\n"
+        "-pkgver=1.0\n+pkgver=1.1\n"
+    )
+    monkeypatch.setattr(
+        "trustsight.analysis.analyze_package",
+        lambda name, **_kw: _fact("change-pkg", change=delta.to_dict()),
+    )
+    report = ts.inspect("change-pkg", check_aur=False)
+
+    typed = report.change_delta
+    assert isinstance(typed, ChangeDelta)
+    assert typed == delta
+    assert typed.to_dict() == report.change
+    assert typed.version.moved
+
+
+def test_an_empty_change_still_returns_a_typed_delta(ts, monkeypatch):
+    from trustsight.changes import ChangeDelta
+
+    monkeypatch.setattr(
+        "trustsight.analysis.analyze_package",
+        lambda name, **_kw: _fact("empty-change"),
+    )
+    report = ts.inspect("empty-change", check_aur=False)
+
+    assert isinstance(report.change_delta, ChangeDelta)
+    assert report.change_delta.files == ()
+
+
 def test_the_report_carries_the_config_fingerprint(ts, monkeypatch):
     """B1: two results are only comparable under the same instrument."""
     monkeypatch.setattr("trustsight.analysis.analyze_package", lambda name, **_kw: _fact("fp"))

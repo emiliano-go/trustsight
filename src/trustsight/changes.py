@@ -43,7 +43,20 @@ _DEP_ALL_FIELDS = _DEP_FAMILIES + ("provides", "replaces", "conflicts")
 
 @dataclass(frozen=True)
 class FileDelta:
-    """One file's change: its status and the hunks it carries."""
+    """One file's change: its status and the hunks it carries.
+
+    :ivar path: path in the post-change tree.
+    :ivar old_path: path in the pre-change tree (the same as :attr:`path`
+        unless the file was renamed).
+    :ivar status: one of ``added``, ``removed`` or ``modified``.
+    :ivar hunks: each hunk's new-side start line.
+
+    Example:
+        .. code-block:: python
+
+            for change in report.change_delta.files:
+                print(change.status, change.path, change.hunks)
+    """
 
     path: str
     old_path: str
@@ -51,6 +64,7 @@ class FileDelta:
     hunks: tuple[int, ...]  # each hunk's new-side start line
 
     def to_dict(self) -> dict:
+        """Serialize the file change to a plain dict."""
         return {
             "path": self.path,
             "old_path": self.old_path,
@@ -60,6 +74,7 @@ class FileDelta:
 
     @classmethod
     def from_dict(cls, data: dict) -> "FileDelta":
+        """Rebuild a file change from :meth:`to_dict` output."""
         return cls(
             path=data.get("path", ""),
             old_path=data.get("old_path", ""),
@@ -75,6 +90,23 @@ class VersionFacts:
     A value the pre- or post-projection does not carry (its assignment
     line sat outside every hunk) stays empty, and a comparison needs both
     sides, so ``moved`` is false rather than guessed.
+
+    :ivar old_pkgver: resolved ``pkgver`` before the change, or "".
+    :ivar new_pkgver: resolved ``pkgver`` after the change, or "".
+    :ivar old_pkgrel: ``pkgrel`` before the change, or "".
+    :ivar new_pkgrel: ``pkgrel`` after the change, or "".
+    :ivar old_epoch: ``epoch`` before the change, or "".
+    :ivar new_epoch: ``epoch`` after the change, or "".
+    :ivar pkgver_changed: the diff moved ``pkgver`` itself.
+    :ivar moved: any of ``pkgver``/``pkgrel``/``epoch`` moved by resolved
+        value.
+
+    Example:
+        .. code-block:: python
+
+            version = report.change_delta.version
+            if version.moved:
+                print(version.old_pkgver, "->", version.new_pkgver)
     """
 
     old_pkgver: str = ""
@@ -87,6 +119,7 @@ class VersionFacts:
     moved: bool = False
 
     def to_dict(self) -> dict:
+        """Serialize the version facts to a plain dict."""
         return {
             "old_pkgver": self.old_pkgver,
             "new_pkgver": self.new_pkgver,
@@ -100,6 +133,7 @@ class VersionFacts:
 
     @classmethod
     def from_dict(cls, data: dict) -> "VersionFacts":
+        """Rebuild version facts from :meth:`to_dict` output."""
         return cls(
             old_pkgver=data.get("old_pkgver", ""),
             new_pkgver=data.get("new_pkgver", ""),
@@ -118,6 +152,24 @@ class ManifestDelta:
 
     Derived once from the parsed ``ManifestDoc`` on each side, so the change
     summary, the U-rules and the correlation feed read one object.
+
+    :ivar path: manifest path in the package tree.
+    :ivar format: manifest format (for example ``Cargo.lock`` or
+        ``package.json``).
+    :ivar status: ``added``, ``removed`` or ``modified``.
+    :ivar added: dependency names the change added.
+    :ivar removed: dependency names the change removed.
+    :ivar remote_added: remote name/host pairs the change introduced.
+    :ivar redirects: ``(from, to)`` registry redirects the change records.
+    :ivar unresolved: entries the parser could not resolve.
+    :ivar old_count: dependency count before the change.
+    :ivar new_count: dependency count after the change.
+
+    Example:
+        .. code-block:: python
+
+            for manifest in report.change_delta.manifests:
+                print(manifest.format, manifest.added)
     """
 
     path: str
@@ -132,6 +184,7 @@ class ManifestDelta:
     new_count: int = 0
 
     def to_dict(self) -> dict:
+        """Serialize the manifest change to a plain dict."""
         return {
             "path": self.path,
             "format": self.format,
@@ -147,6 +200,7 @@ class ManifestDelta:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ManifestDelta":
+        """Rebuild a manifest change from :meth:`to_dict` output."""
         return cls(
             path=data.get("path", ""),
             format=data.get("format", ""),
@@ -170,6 +224,45 @@ class ChangeDelta:
     array family is an ``array_diff`` multiset query.  Consumers render
     this object instead of re-deriving change facts from raw text, so the
     summary, the change report and the rules cannot disagree.
+
+    :ivar files: one :class:`FileDelta` per file the diff touched.
+    :ivar hosts_gained: canonical source hosts the change introduced.
+    :ivar hosts_lost: canonical source hosts the change removed.
+    :ivar sources: multiset delta of the raw ``source=()`` entries.
+    :ivar checksums: multiset delta of the checksum arrays.
+    :ivar pgp_keys: multiset delta of ``validpgpkeys``.
+    :ivar dependencies: multiset delta of ``depends``.
+    :ivar makedependencies: multiset delta of ``makedepends``.
+    :ivar checkdependencies: multiset delta of ``checkdepends``.
+    :ivar optdependencies: multiset delta of ``optdepends``.
+    :ivar version: resolved ``pkgver``/``pkgrel``/``epoch`` movement.
+    :ivar provides: multiset delta of ``provides``.
+    :ivar replaces: multiset delta of ``replaces``.
+    :ivar conflicts: multiset delta of ``conflicts``.
+    :ivar added_dependencies: normalised added names per dependency field,
+        the same view ``deps.extract_dependency_changes`` produces.
+    :ivar checksum_behavior: the checksum classification the summary
+        emits (``checksum_added_or_changed``, ``checksum_array_emptied``,
+        ...).
+    :ivar local_sources_gained: non-URL ``source=()`` local names that
+        appeared.
+    :ivar local_sources_lost: non-URL ``source=()`` local names that left.
+    :ivar reordered: a checksum array's entries changed relative order.
+    :ivar checksum_parity: ``(sources, sums, var)`` when the declared
+        checksum array is short, else ``None``.
+    :ivar source_array_grew: the source array grew in this diff.
+    :ivar manifests: one :class:`ManifestDelta` per committed manifest the
+        diff touched.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            change = TrustSight().inspect("some-package").change_delta
+            print(change.version.old_pkgver, "->", change.version.new_pkgver)
+            for name in change.added_dependencies.get("depends", ()):
+                print("new dependency:", name)
     """
 
     files: tuple[FileDelta, ...]
@@ -193,7 +286,7 @@ class ChangeDelta:
     #: ``deps.extract_dependency_changes`` produces (version constraints and
     #: optdepends descriptions dropped, unresolved/soname entries filtered).
     #: H030/H064 and the D-series read this instead of re-extracting, so the
-    # change view and the rules cannot disagree.
+    #: change view and the rules cannot disagree.
     added_dependencies: dict[str, tuple[str, ...]] = field(default_factory=dict)
     #: The checksum-behaviour classification the summary already emits
     #: (``checksum_added_or_changed``, ``checksum_array_emptied``, ...).
@@ -209,7 +302,7 @@ class ChangeDelta:
     local_sources_lost: frozenset[str] = frozenset()
     #: True when a checksum array's entries changed relative order.
     #: Populated from ``sources``/``checksums``/``pgp_keys``; no rule
-    # consumes it in v1.
+    #: consumes it in v1.
     reordered: bool = False
     #: H091's parity result over wholly-added arrays, and whether the source
     #: array grew in the diff (the gate for reading the complete recipe
@@ -223,6 +316,7 @@ class ChangeDelta:
     manifests: tuple[ManifestDelta, ...] = ()
 
     def to_dict(self) -> dict:
+        """Serialize the change view to the report's ``change`` body."""
         return {
             "files": [f.to_dict() for f in self.files],
             "hosts_gained": sorted(self.hosts_gained),
@@ -257,6 +351,7 @@ class ChangeDelta:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ChangeDelta":
+        """Rebuild the change view from :meth:`to_dict` output."""
         from .recipedoc import ArrayDelta
 
         return cls(
@@ -501,9 +596,12 @@ def change_delta(
     # the checksum classification the same walk settles (including its
     # `checksum_array_removed` override for a declaration deleted whole).
     url_changes = extract_urls_from_diff(diff_text)
+    declared_urls = set(url_changes.declared_urls)
     manifests = _manifest_deltas(doc)
-    added_hosts = {_host(u) for u in url_changes.added_urls if _host(u)}
-    removed_hosts = {_host(u) for u in url_changes.removed_urls if _host(u)}
+    added_hosts = {_host(u) for u in url_changes.added_urls
+                   if u not in declared_urls and _host(u)}
+    removed_hosts = {_host(u) for u in url_changes.removed_urls
+                     if u not in declared_urls and _host(u)}
     # U003: a remote host a committed manifest introduces joins the same
     # ``hosts_gained`` view as a ``source=()`` host, so host-novelty tiers,
     # source buckets and the G-series read both the same way.

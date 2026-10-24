@@ -1,4 +1,4 @@
-"""Extracted from api.py: _reports."""
+"""Internal projections from analysis facts to the public API result objects."""
 
 from __future__ import annotations
 from dataclasses import replace

@@ -1035,7 +1035,7 @@ def test_the_alerting_bar_is_the_measured_benign_p95():
     figures = json.loads(
         (Path(__file__).parent / "fixtures" / "published-figures.json").read_text()
     )
-    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 35
+    assert _OVER_BENIGN_P95 == figures["calibration"]["benign_p95"] == 30
 
 
 def test_the_watch_logs_a_startup_banner(monkeypatch, caplog):

@@ -156,6 +156,13 @@ The ecosystem carve-out matters: thousands of unrelated packages share `python-`
 
 MEDIUM because adding `git` to fetch submodules is legitimate. It is a signal, not a verdict.
 
+A VCS client the recipe already needs for its own source is not a *new*
+network reach: when `source=` already carries `git+`/`svn+`/`hg+`/`bzr+`/
+`fossil+`, or the package name is a `-git`/`-svn`/… variant, that client is
+excluded from the finding. `waycentral-git` moving `git` from `depends` to
+`makedepends` while keeping a `git+https://` source is a packaging
+correction, not a fetch capability.
+
 ### H064: Provides/Replaces Scope Expansion {#h064}
 
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
@@ -204,14 +211,17 @@ is what raises the severity.
 
 H053 reads the name as a claim about where a package should come from, and checks
 the source against it. A `python-`, `ruby-` or `nodejs-` package is normally
-published on that ecosystem's own index (PyPI, RubyGems, npm) or built straight
-from a forge such as GitHub or GitLab. This rule fires on a new package whose name
-claims an ecosystem but whose source comes from a host that is neither: a name
-pointing one way while the source points another is the shape of a typosquat, or
-of a dependency silently redirected to somebody else's server. It compares the
-name to the source, not the code, so a project that legitimately mirrors its
-release elsewhere, or publishes only from a personal server, can trip it. The
-finding names the prefix and the host so the reader can judge that call.
+published on that ecosystem's own index (PyPI, RubyGems, npm), built straight
+from a forge such as GitHub or GitLab, or downloaded from the project's own
+distribution host (`nodejs.org` for Node.js, `cpan.org` and its subdomains for
+Perl). The canonical set matches the host and its subdomains, so
+`search.cpan.org` is the same ecosystem as `cpan.org`. This rule fires on a new
+package whose name claims an ecosystem but whose source comes from a host that is
+neither: a name pointing one way while the source points another is the shape of
+a typosquat, or of a dependency silently redirected to somebody else's server. It
+compares the name to the source, not the code, so a project that legitimately
+mirrors its release elsewhere, or publishes only from a personal server, can trip
+it. The finding names the prefix and the host so the reader can judge that call.
 
 ### H059: Name/Repo Divergence {#h059}
 

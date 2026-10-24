@@ -846,6 +846,17 @@ def _reconstruction_findings(diff_text, config, add) -> None:
             continue
         if not _OBFUSCATION_MARKER_RE.search(body):
             continue
+        # Partial quoting is only obfuscation when it hides a command word.
+        # `install -Dm"$mode"` and `install -Dm"755"` are ordinary shell
+        # quoting of an option argument; the command word is unchanged, so
+        # the reconstruction reveals nothing a rule did not already see.
+        # The explicit forms (empty-quote concatenation, printf, ANSI-C)
+        # still report in any position.
+        explicit = any(marker in body for marker in ("''", '""', "$(printf", "$'"))
+        raw_word = body.strip().split(None, 1)[0] if body.strip() else ""
+        rebuilt_word = rebuilt.strip().split(None, 1)[0] if rebuilt.strip() else ""
+        if not explicit and raw_word == rebuilt_word:
+            continue
         revealed = [
             token for token in _REVEALED_RUN_RE.findall(rebuilt)
             if token not in body

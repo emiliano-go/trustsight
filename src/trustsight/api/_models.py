@@ -1,10 +1,14 @@
-"""Extracted from api.py: _models."""
+"""The public result dataclasses returned by :mod:`trustsight.api`."""
 
 from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Iterator, Optional
+from typing import Any, Callable, Iterator, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..changes import ChangeDelta
+    from ..depth import DependencyReport
 
 __all__ = ['AcknowledgedUrl', 'ClusterFinding', 'CycleReport', 'FailedPackage', 'FileChange', 'Finding', 'HistoryEntry', 'PivotMatch', 'PivotResult', 'Progress', 'ProgressHook', 'Report', 'ReviewResult', 'Status', 'SuppressedRule', 'TrackedPackage', '_evaluate_fact_dict_fallback']
 
@@ -47,6 +51,12 @@ class Finding:
     :ivar evidence: rule-specific match detail, as a plain dict.
     :ivar techniques: per-finding evasion-technique tags
         (``X002:spliced-variable`` and peers); additive instrumentation.
+
+    Example:
+        .. code-block:: python
+
+            for finding in report.findings:
+                print(finding.rule_id, finding.severity, finding.description)
     """
 
     rule_id: str
@@ -211,13 +221,24 @@ class Report:
         all unchanged, so nothing was re-computed.
     :ivar cached_at: when the reused analysis was recorded; empty unless
         :attr:`cached`.
-:ivar layers: the assurance-layer profile: per layer,
+    :ivar layers: the assurance-layer profile: per layer,
         ``status`` (``fired``/``passed``/``unreadable``) and the rule ids
         that fired there.
-:ivar boundaries: the unified analysis boundaries (W1): one
+    :ivar boundaries: the unified analysis boundaries (W1): one
         object per coverage gap and per W-series rendering.
-:ivar indicators: the indicator tier, promoted from
+    :ivar indicators: the indicator tier, promoted from
         ``ioc_matches``.  Outside the heuristic score.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            report = TrustSight().inspect("some-package")
+            if report.flagged:
+                print(report.verdict)
+                for finding in report.findings:
+                    print(finding.rule_id, finding.description)
     """
 
     package: str
@@ -275,7 +296,7 @@ class Report:
     """Which rules, weights and overrides produced this.  Results are only
     comparable across runs with the same fingerprint."""
 
-    dependencies: tuple = ()
+    dependencies: tuple["DependencyReport", ...] = ()
     """Analysed AUR dependencies, each with its own score and band.
 
     Never folded into this package's ``score``: depth is not part of the
@@ -318,7 +339,8 @@ class Report:
     """The typed change-as-data view: ``ChangeDelta.to_dict``.
 
     The same object the prose summary renders, exposed for consumers that
-    want the host/source/checksum/dependency deltas as data.
+    want the host/source/checksum/dependency deltas as data.  Use
+    :attr:`change_delta` for the typed, attribute-accessible object.
     """
 
     unresolved_assignments: tuple = ()
@@ -379,7 +401,7 @@ class Report:
         return self.score > self.review_threshold
 
     @property
-    def flagged_dependencies(self) -> tuple:
+    def flagged_dependencies(self) -> tuple["DependencyReport", ...]:
         """Analysed dependencies that cleared the threshold on their own."""
         return tuple(d for d in self.dependencies if d.flagged)
 
@@ -419,6 +441,32 @@ class Report:
         """
         return dict(self._raw)
 
+    @property
+    def change_delta(self) -> "ChangeDelta":
+        """The typed change-as-data view behind :attr:`change`.
+
+        Reconstructed from the serialised ``change`` body, so it is always
+        equal to ``ChangeDelta.from_dict(report.change)``.  Every field is
+        typed and frozen, which is what makes IDE completion work without
+        parsing the dict by hand.
+
+        :returns: the typed :class:`ChangeDelta` for this report.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                change = TrustSight().inspect("some-package").change_delta
+                if change.version.moved:
+                    print(change.version.old_pkgver, "->", change.version.new_pkgver)
+                for name in change.added_dependencies.get("depends", ()):
+                    print("new dependency:", name)
+        """
+        from ..changes import ChangeDelta
+
+        return ChangeDelta.from_dict(self.change)
+
     def to_dict(self, *, include_score: bool = False, verbose: bool = False) -> dict:
         """The same JSON body ``trustsight review --json`` writes.
 
@@ -433,7 +481,20 @@ class Report:
         What this method will not do is volunteer the number to a caller who
         only asked to serialise the result.
 
+        :param include_score: include ``score``, ``risk`` and
+            ``risk_label`` in the body.
+        :param verbose: include ``score_breakdown`` and the verbose
+            per-finding detail.
         :returns: the report as the CLI's JSON body.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                body = TrustSight().inspect("some-package").to_dict()
+                scores_body = TrustSight().inspect(
+                    "some-package").to_dict(include_score=True)
         """
         from ..reporting import report_body
 
@@ -443,13 +504,24 @@ class Report:
             verbose=verbose,
         )
 
-    def to_json(self, indent: int | None = 2, **kwargs) -> str:
+    def to_json(self, indent: int | None = 2, **kwargs: Any) -> str:
         """Serialize to a JSON string.
 
         Keyword arguments are passed to :meth:`to_dict`, so
         ``include_score`` and ``verbose`` behave exactly as they do there.
 
+        :param indent: JSON indentation; ``None`` emits a compact document.
+        :param kwargs: forwarded to :meth:`to_dict`.
         :returns: the report as JSON text.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                text = TrustSight().inspect("some-package").to_json(
+                    include_score=True,
+                )
         """
         return json.dumps(self.to_dict(**kwargs), indent=indent)
 
@@ -459,6 +531,16 @@ class Report:
         *diff_text*, when given, lets a removed-line finding anchor to the
         pre-image (``old_lineno``) instead of being dropped; without it,
         only findings whose line resolves in the post-state get a region.
+
+        :param diff_text: the diff this report analysed, when held.
+        :returns: a SARIF 2.1.0 document as a plain dict.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                sarif = TrustSight().inspect("some-package").to_sarif()
         """
         from ..reporting import report_to_sarif
 
@@ -499,6 +581,17 @@ class ReviewResult:
     :ivar metadata_bootstrapped: this call did nothing but download the
         first AUR metadata snapshot.  There was no prior copy to diff
         against, so there is no delta yet; call ``review`` again.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            result = TrustSight().review(limit=10)
+            for report in result.flagged:
+                print(report.package, report.verdict)
+            for failure in result.failures:
+                print(failure.package, "NOT vetted:", failure.error)
     """
 
     reports: tuple[Report, ...] = ()
@@ -534,6 +627,8 @@ class ReviewResult:
         ``include_score=True`` corresponds to ``--score`` or ``--risk``;
         ``verbose=True`` corresponds to ``--verbose``.
 
+        :param include_score: include score and band fields in each body.
+        :param verbose: include the verbose per-finding detail.
         :returns: one JSON body per report, failures included.
         """
         from ..reporting import report_body
@@ -563,6 +658,14 @@ class HistoryEntry:
     :ivar risk: band that run produced.
     :ivar triggered_rules: rules that fired, when ``with_rules`` asked for
         them.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            for entry in TrustSight().history("some-package", limit=5):
+                print(entry.timestamp, entry.score, entry.risk)
     """
 
     timestamp: str
@@ -586,6 +689,14 @@ class TrackedPackage:
     :ivar score: score of the latest analysis, or ``None`` if never scored.
     :ivar risk: band of the latest analysis, or "" if never scored.
     :ivar maintainer: last recorded maintainer.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            for pkg in TrustSight().packages(limit=10):
+                print(pkg.name, pkg.version, pkg.risk)
     """
 
     name: str
@@ -613,6 +724,14 @@ class Status:
     :ivar database_path: path to the SQLite database file.
     :ivar config_fingerprint: identifies the rules, weights and overrides in
         force.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            state = TrustSight().status()
+            print(state.packages_tracked, state.dependency_corpus_loaded)
     """
 
     packages_tracked: int
@@ -675,6 +794,14 @@ class CycleReport:
     :ivar new_alerts: ``(package, rule_id)`` for clusters seen for the
         first time.  A cluster already reported on an earlier cycle is
         counted, not re-announced.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            for cycle in TrustSight().watch(cycles=2):
+                print(cycle.processed, cycle.flagged)
     """
 
     added: int = 0
@@ -747,6 +874,15 @@ class PivotResult:
     :ivar confidence: confidence of the baseline listing, or "".
     :ivar matches: packages that reference the indicator.
     :ivar sources: corpora that were searched.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            result = TrustSight().pivot("evil.example")
+            for match in result.matches:
+                print(match.package, match.surface, match.detail)
     """
 
     indicator: str

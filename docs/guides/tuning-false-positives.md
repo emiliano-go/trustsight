@@ -142,7 +142,7 @@ Score changes: the demoted/disabled rule contributes less. Verify that the packa
 
 ## Step 5: Validate with benchmarks
 
-TrustSight's current test suite has a zero-rate of **69.7%** (benign packages scoring 0). After tuning, re-run:
+TrustSight's current test suite has a zero-rate of **72.1%** (benign packages scoring 0). After tuning, re-run:
 
 ```bash
 uv run --extra dev pytest tests/
@@ -154,7 +154,7 @@ Ensure CRITICAL recall stays at **100%**: every known malicious pattern must sti
 |--------|-------|
 | CRITICAL recall | 100% |
 | CRITICAL p5 | 60 |
-| Benign p95 | 35 |
+| Benign p95 | 30 |
 
 If demoting a rule drops CRITICAL recall below 100%, you have gone too far. Restore the rule and find another approach.
 
@@ -194,6 +194,28 @@ trustsight override add H064 --reason "kernel module provides are ABI aliases, n
 H098 needs two distinct naming signals, so removing D004/H064 can clear
 the cluster only where one of them was the second member - investigate
 the other member before assuming the cluster is the same false positive.
+
+### Benign findings from the 2026-10-23 watcher triage
+
+These are **benign false positives**, not bad rule triggers: the finding
+describes a real practice in the recipe, and the package itself is not
+malicious. The rule is doing its job; the fix belongs with the packager.
+
+| Package | Finding | Why it is not malicious |
+|---------|---------|-------------------------|
+| minetest-game-cdb | H016, W011, W012 | `prepare()` curls an unchecksummed CDB zip outside `source=()`; the zip is byte-identical to the upstream tag and contains no executable Lua. A pin and checksum follow-up is still the right packaging fix. |
+| chest-backup | H042, R054, R007, H100 | A root hook seeds a user config and enables a user unit; it downloads and executes nothing. |
+| sysc-greet-hyprland | H017, R007, H100 | Documented greeter setup: creates the greeter and enables greetd. |
+| librechat | H017, X011, R007, H100 | Server packaging: `npm ci` at build time and an ownership-only hook. |
+| hermes-agent-desktop | X011 | Declared, lockfile-pinned `uv`/`npm` build step. |
+| paseo-cli-edge | X011 | `npm install` at build time; the published tarball has no install scripts and its checksum matches AUR. |
+| firedragon | D003 | Firefox's build system uses `pnpm` in `prepare()`; no payload. |
+| actor-framework | H101, H033 | A commit pin became a movable `tag=${pkgver}`. Reproducibility weakens; no payload. |
+| yandex-messenger | C003, SOURCE_BUCKET | An expiring signed vendor URL with no version bump; the downloaded `.deb` matches the declared b2sum. |
+
+The first row is also a real packaging issue. The rule hit is correct even
+though the package is benign, so the long-term fix is to pin the CDB zip and
+add it to `source=()` with a checksum, not to silence H016.
 
 ## When not to tune
 

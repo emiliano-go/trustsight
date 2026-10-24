@@ -101,15 +101,17 @@ def scan_diff(
     diff_text = bound_tokenizer_lines(diff_text)
 
     source_changes = extract_urls_from_diff(diff_text)
-    url_acks = match_url_acks(package_name, source_changes.added_urls) if package_name else {}
-    scored_urls = [u for u in source_changes.added_urls if u not in url_acks]
+    declared = set(source_changes.declared_urls)
+    source_urls = [u for u in source_changes.added_urls if u not in declared]
+    url_acks = match_url_acks(package_name, source_urls) if package_name else {}
+    scored_urls = [u for u in source_urls if u not in url_acks]
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, current_text
     )
     version_moved = any_version_scalar_moved(diff_text, current_text)
 
     source_buckets = classify_urls(
-        source_changes.added_urls,
+        source_urls,
         upstream_host=unchanged_upstream_host(diff_text, current_text),
     )
 

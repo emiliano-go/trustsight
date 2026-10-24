@@ -23,6 +23,12 @@ class SourceChanges:
     added_urls: list[str] = field(default_factory=list)
     removed_urls: list[str] = field(default_factory=list)
     checksum_behavior: str = ""
+    #: URLs that do not score a source bucket or novelty: a scalar
+    #: ``url=``/``*_url=`` declaration (the declared upstream) and a
+    #: documentation source (LICENSE/README/COPYING).  They are still
+    #: added/removed URLs for the audit trail, but they are not a fetched
+    #: build input, so source buckets and novelty exclude them.
+    declared_urls: list[str] = field(default_factory=list)
 
 
 @dataclass

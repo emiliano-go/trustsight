@@ -122,6 +122,11 @@ silently disappeared. `H063` owns the introduction; `C030` the removal.
 
 Source removal is not a host change: when the new set is empty, H002 owns the finding and H049 stays quiet. When both `source_hosts` and `source_orgs` change in one cycle, they are two views of the same source set, so H049 emits one finding that shows both triggers and scores once.
 
+A documentation source (`LICENSE`, `COPYING`, `README`, `CHANGELOG`, …) is not
+build provenance. Adding one does not change the source-host set, so a
+licence file added from a different host no longer reads as a source move
+(nhiicc).
+
 ### H050: Version Scheme Changed {#h050}
 
 - **Severity:** INFO (weight 0)
@@ -136,12 +141,22 @@ Source removal is not a host change: when the new set is empty, H002 owns the fi
 
 - **Condition:** A long-stable `pkgdesc` token set changed.
 
+A declared `pkgver`/`pkgrel`/`epoch` move is the ordinary reason a
+description changes, so the rule stands down for that cycle. It still fires
+when the description changes at a stable version, which is the shape worth a
+prompt.
+
 ### H054: Build System Changed {#h054}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
 
 - **Condition:** Long-stable `build_system_markers` or `build_line_count` changed.
+
+A declared `pkgver`/`pkgrel`/`epoch` move is the ordinary reason a build
+recipe changes, so the rule stands down for that cycle. It still fires when
+the build system changes at a stable version, which is the shape worth a
+prompt.
 
 ### H026: Untrusted Maintainer Takeover (corpus path) {#h026-corpus}
 
@@ -186,7 +201,11 @@ burst. Bumping one project's own naming family in lockstep (a kernel's
 `-docs`/`-headers` splits, `foo`/`foo-bin`/`foo-qt` released together) is one
 logical update spread over several package names, not a deviation, so the
 rule stands down when every active package belongs to a single
-relatedness cluster. The same holds for a periodic refresh of every
+relatedness cluster. Split outputs are the same shape even when the common
+name sits behind an ecosystem prefix (`ttf-kreativekorp-lisa-*`): the rule
+compares the members' **package bases**, so one base or one variant family
+(`sqldef` plus `sqldef-bin`) is one update, and the finding's member list
+still carries every output. The same holds for a periodic refresh of every
 auto-tracking recipe: `-git`, `-latest` and `-nightly` names, and packages
 whose `source=` is a `.git` checkout, take a new `pkgver` from upstream on
 each sweep, so one cycle touches unrelated upstreams by construction. When

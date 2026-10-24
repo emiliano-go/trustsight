@@ -187,6 +187,8 @@ from ._write_exec import (
     _LINE_URL_RE,
     _OPERAND_DRIVER_RE,
     _OUTPUT_FLAG_CLIENTS,
+    _NON_FILE_FETCH_CLIENTS,
+    _PACKAGE_MANAGER_FETCH_RE,
     _PHASE_RANK,
     _PKGDIR_LINE_RE,
     _PROC_SUBST_STDIN_RE,
@@ -340,6 +342,12 @@ def edge_fetch_then_execute(ctx, add) -> None:
             cloned_by_fn.setdefault(fn, []).append(
                 (directory, line.startswith("+")))
         client = _FETCH_CLIENT_RE.search(body)
+        if client and client.group(0).lower() in _NON_FILE_FETCH_CLIENTS:
+            client = None
+        if client and _PACKAGE_MANAGER_FETCH_RE.search(body):
+            # `cargo fetch`/`npm ci` resolve a registry; W002 owns that
+            # boundary and does not pair it with a later script execution.
+            client = None
         if client:
             for m in _INPUT_FILE_RE.finditer(body):
                 for base in url_inputs.get(_norm_path(m.group(1)), ()):

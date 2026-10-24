@@ -1,4 +1,4 @@
-"""Extracted from api.py: client."""
+"""The :class:`TrustSight` client: the public methods for analysis, review, corpus cycles and stored state."""
 
 from __future__ import annotations
 import time
@@ -59,7 +59,19 @@ class TrustSight:
         """Release the database connections held by this thread.
 
         Not required for a short-lived process; useful in a long-running
-        one, or in tests that swap the database out underneath.
+        one, or in tests that swap the database out underneath.  Using the
+        instance as a context manager calls this on exit.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                ts = TrustSight()
+                try:
+                    report = ts.inspect("some-package")
+                finally:
+                    ts.close()
         """
         from ..db import close_connections
 
@@ -76,14 +88,20 @@ class TrustSight:
 
     @property
     def config_dir(self) -> Path:
-        """The TrustSight configuration directory (``~/.config/trustsight/``)."""
+        """The TrustSight configuration directory (``~/.config/trustsight/``).
+
+        :returns: the configuration directory path.
+        """
         from ..config import CONFIG_DIR
 
         return CONFIG_DIR
 
     @property
     def database_path(self) -> Path:
-        """The path to the SQLite database file."""
+        """The path to the SQLite database file.
+
+        :returns: the database file path.
+        """
         from ..db import get_db_path
 
         return get_db_path()
@@ -93,6 +111,8 @@ class TrustSight:
         """Identifies the rules, weights and overrides in force.
 
         Two reports are only comparable when their fingerprints match.
+
+        :returns: a stable digest of the effective configuration.
         """
         from ..config import config_fingerprint
 
@@ -103,6 +123,13 @@ class TrustSight:
         """The effective configuration, defaults merged with the user's file.
 
         :returns: the merged config as a plain dict.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                thresholds = TrustSight().config().get("thresholds", {})
         """
         from ..config import load_config
 
@@ -113,6 +140,14 @@ class TrustSight:
         """Database and corpus health: what ``trustsight status`` reports.
 
         :returns: the current :class:`Status`.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                state = TrustSight().status()
+                print(state.packages_tracked, state.dependency_corpus_loaded)
         """
         from ..config import config_fingerprint
         from ..db import (
@@ -215,7 +250,20 @@ class TrustSight:
         ``Report.adapter`` reads ``corpus`` here: this is a narrower look at
         the package than :meth:`inspect` gets.
 
+        :param package: package name the analysis is attributed to.
+        :param new_pkgbuild: the complete post-change ``PKGBUILD`` text.
+        :param old_pkgbuild: the complete pre-change ``PKGBUILD`` text, or
+            ``None`` for a first-seen package.
+        :param maintainer: maintainer to attribute the analysis to.
+        :param srcinfo: optional ``.SRCINFO`` text for the same package.
+        :param last_modified: AUR ``LastModified`` in Unix seconds.
+        :param first_submitted: AUR ``FirstSubmitted`` in Unix seconds.
+        :param previous_modified: the previous observation's ``LastModified``
+            in Unix seconds.
+        :param record: persist the run as an observation and analysis
+            history.  ``False`` keeps the call read-only.
         :returns: the analysis of the supplied text.
+        :raises ValueError: an argument fails the API's input bounds.
 
         Example:
             .. code-block:: python
@@ -290,7 +338,13 @@ class TrustSight:
         ``diff_truncated`` and the other coverage gaps apply with full
         force: pasted diffs are the most likely to be mangled.
 
+        :param diff_text: the unified diff to analyse.
+        :param package: optional package name used for attribution and
+            package-scoped overrides.
+        :param post_pkgbuild: optional complete post-diff ``PKGBUILD``; when
+            supplied it sharpens the unresolved/parse-time analysis.
         :returns: the analysis of the supplied diff.
+        :raises ValueError: an argument fails the API's input bounds.
 
         Example:
             .. code-block:: python
@@ -320,7 +374,7 @@ class TrustSight:
     def verify_build(self, package: str, *, diff_text: str = "",
                      manifest: Optional[list] = None,
                      declared: Optional[dict] = None,
-                     static_clean: Optional[bool] = None) -> dict:
+                     static_clean: Optional[bool] = None    ) -> dict:
         """The optional L9 build lane, off by default.
 
         When ``[verify] enabled`` is false, or the rootless container is
@@ -333,6 +387,32 @@ class TrustSight:
         *static_clean* is the caller's L1-L8 outcome; when it and the L9
         findings disagree, the result carries ``l9_divergence`` - both
         profiles render, and L9 never edits the static verdict.
+
+        :param package: package name the result is attributed to.
+        :param diff_text: reserved for callers that keep the analysed diff;
+            the manifest inspection does not read it.
+        :param manifest: the artifact manifest to inspect, or ``None`` to
+            report the lane as unavailable.
+        :param declared: the package's declared artifact facts, used by the
+            A-series comparisons.
+        :param static_clean: the caller's L1-L8 outcome, or ``None`` when it
+            was not computed.
+        :returns: a dict with ``package``, ``status`` (``l9_unavailable`` or
+            ``l9_analyzed``), ``findings`` and, on disagreement,
+            ``l9_divergence``.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                result = TrustSight().verify_build(
+                    "some-package",
+                    manifest=manifest,
+                    static_clean=True,
+                )
+                if result["status"] == "l9_unavailable":
+                    print(result["reason"])
         """
         _validate_name(package)
         from ..config import load_config
@@ -515,12 +595,25 @@ class TrustSight:
         build when no snapshot exists; it takes hours. ``resume=True``
         continues an interrupted build.
 
+        :param bootstrap: permit the initial whole-AUR build when no
+            snapshot exists; it takes hours.
+        :param resume: continue an interrupted bootstrap build.
+        :param export_path: write the refreshed snapshot to this path.
+        :param sign_key: sign the exported snapshot with this GPG key.
         :param over_threshold: the alerting bar for
             ``CycleReport.over_threshold``.  ``None`` uses the benign
             corpus's p95.
         :param since: a unix timestamp to replay change history from, one
             AUR day per cycle, or ``None`` for the normal delta.
         :returns: what the cycle added, changed, removed and flagged.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                cycle = TrustSight().refresh_corpus()
+                print(cycle.processed, cycle.flagged)
         """
         from ..full_aur.pipeline import run_baseline_build
 
@@ -604,7 +697,17 @@ class TrustSight:
         unknown provenance being written into the database that every
         subsequent novelty judgement reads.
 
+        :param path: baseline archive to import.
+        :param allow_unsigned: accept an unsigned local build.  Never set
+            this for an artifact downloaded from a release channel.
         :returns: None.  The import raises on any failure.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                TrustSight().import_baseline("baseline-seed.tar.gz")
         """
         from ..full_aur.export import import_baseline
 
@@ -618,11 +721,22 @@ class TrustSight:
         or artifact hash, which packages touch it.  Reads only stored
         corpus material, never the network.
 
+        :param indicator: a package name, domain or artifact hash.
         :param type: force the indicator type (``package``, ``domain`` or
             ``hash``) when the shape is ambiguous.
         :returns: which corpus packages reference *indicator*.
         :raises TrustSightError: the indicator type is unknown or the
             indicator could not be classified.
+        :raises ValueError: the indicator is empty.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                result = TrustSight().pivot("evil.example")
+                for match in result.matches:
+                    print(match.package, match.surface)
         """
         from ..full_aur.pivot import pivot as _pivot
         from ..iocs import PIVOT_IOC_TYPES
@@ -669,7 +783,18 @@ class TrustSight:
         Returns an empty list when the package has never been analysed:
         that is a fact about this database, not an error.
 
+        :param package: package name to read.
+        :param limit: maximum number of entries, newest first.
+        :param with_rules: include the rule ids that fired in each entry.
         :returns: past analyses, newest first.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                for entry in TrustSight().history("some-package", limit=5):
+                    print(entry.timestamp, entry.score, entry.risk)
         """
         from ..db import get_history, get_package_id, get_triggered_rules
         from ..scoring import stored_band
@@ -699,7 +824,16 @@ class TrustSight:
 
         What ``trustsight list`` shows.
 
+        :param limit: maximum number of packages to return (0 = all).
         :returns: one :class:`TrackedPackage` per tracked package.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                for pkg in TrustSight().packages(limit=10):
+                    print(pkg.name, pkg.version, pkg.risk)
         """
         from ..db import get_all_packages, get_last_analysis
         from ..scoring import stored_band
@@ -732,7 +866,17 @@ class TrustSight:
         not tracked maps to an empty dict.  This is not reversible: the
         observations it removes are what the novelty signals count.
 
+        :param packages: package names to forget.
         :returns: per-package, per-table counts of what was deleted.
+        :raises TrustSightError: a name is not a valid package name.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                deleted = TrustSight().forget("old-package")
+                print(deleted["old-package"])
         """
         from ..db import forget_package
 
@@ -750,12 +894,21 @@ class TrustSight:
 
         Set *dry_run* to see what would go without deleting it.
 
+        :param dry_run: report what would be deleted without deleting it.
         :returns: per-package, per-table counts of what would be or was
             deleted.
         :raises TrustSightError: the AUR gave no authoritative answer
             (network failure, retry exhaustion, malformed reply), so which
             packages still exist could not be determined.  Deleting on a
             guess would forget the whole database over a network blip.
+
+        Example:
+            .. code-block:: python
+
+                from trustsight import TrustSight
+
+                would_go = TrustSight().prune(dry_run=True)
+                print(sum(len(v) for v in would_go.values()), "rows")
         """
         from ..db import forget_prune, get_all_packages
         from ..discovery import get_existing_aur_package_names

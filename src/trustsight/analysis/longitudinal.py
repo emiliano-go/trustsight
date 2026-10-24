@@ -157,6 +157,7 @@ def longitudinal_findings(
     package_name: str,
     breaks: list,
     config: dict | None = None,
+    current_text: str | None = None,
 ) -> list[dict]:
     """Concrete findings from a cycle's property breaks (H047-H051/H054/H037).
 
@@ -170,11 +171,23 @@ def longitudinal_findings(
         break_ for break_ in breaks
         if break_.weight > 0.0 and break_.stable_for_n >= floor
     ]
+    # A declared version move is the ordinary reason a description or a build
+    # recipe changes.  H051/H054 still fire when either changes at a stable
+    # version, which is the shape worth a prompt; a version bump would
+    # otherwise make every legitimate upstream release alert (waycentral-git).
+    from .version import any_version_scalar_moved
+
+    version_moved = any_version_scalar_moved(diff_text, current_text)
+    version_move_stands_down = (
+        "pkgdesc_tokens", "build_system_markers", "build_line_count",
+    )
     findings: list[dict] = _h049_findings(
         [break_ for break_ in gated if break_.key in _H049_KEYS]
     )
     for break_ in gated:
         if break_.key in _H049_KEYS:
+            continue
+        if version_moved and break_.key in version_move_stands_down:
             continue
         findings.extend(_finding_for_break(diff_text, break_, config))
     return findings

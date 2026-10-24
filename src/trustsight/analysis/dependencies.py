@@ -1,3 +1,5 @@
+import re
+
 from ..config import (
     DEFAULT_NETWORK_TOOLS,
     load_patterns,
@@ -18,6 +20,22 @@ from ..novelty import is_dependency_novel, typosquat_target
 from .base import _code_rule_enabled, _rarities_of
 
 _DEP_EXPANSION_GATE = 1.5
+
+#: A VCS source already needs its client in `makedepends`; adding that client
+#: is not a *new* network reach.  `waycentral-git` moved `git` from `depends`
+#: to `makedepends` while its source stayed `git+https://...`, and D003 read
+#: the correction as a new fetch capability.
+_VCS_SCHEME_RE = re.compile(r"\b(git|svn|hg|bzr|fossil)\+", re.IGNORECASE)
+_VCS_NAME_SUFFIXES = ("git", "svn", "hg", "bzr", "fossil")
+
+
+def _vcs_tools(text: str | None, package_name: str) -> set[str]:
+    """VCS clients the recipe already needs to fetch its own source."""
+    tools = {match.lower() for match in _VCS_SCHEME_RE.findall(text or "")}
+    for suffix in _VCS_NAME_SUFFIXES:
+        if package_name.endswith("-" + suffix):
+            tools.add(suffix)
+    return tools
 
 # A name this many packages depend on counts as "widely provided" for H064.
 # Uses the same observation table as the typosquat proxy; overridden by
@@ -273,7 +291,11 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                         field=field, dep_name=name)
 
     if "D003" in wanted:
-        new_network = sorted(added_deps.get("makedepends", set()) & _network_tools(config))
+        network = added_deps.get("makedepends", set()) & _network_tools(config)
+        # A VCS client the recipe already needs to fetch its own source is not
+        # a new network capability.  Keep curl/wget and every other fetch tool.
+        network -= _vcs_tools(current_text or diff_text, package_name)
+        new_network = sorted(network)
         if new_network:
             add("D003", "New Network-Using Makedepends", "MEDIUM", "dependency",
                 f"build can now reach the network via {new_network}",

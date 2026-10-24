@@ -734,7 +734,7 @@ _DLAGENTS_VAR_RE = re.compile(
     r"^\s*(?:export\s+|declare\s+-x\s+)?DLAGENTS\s*\+?=",
     re.IGNORECASE,
 )
-_DLAGENT_SCHEME_RE = re.compile(r"['\"]?([A-Za-z][A-Za-z0-9+.-]*)::")
+_DLAGENT_SCHEME_RE = re.compile(r"['\"]?([A-Za-z][A-Za-z0-9+.-]{0,31})::")
 _DLAGENT_NETWORK_RE = re.compile(
     r"\b(?:curl|wget2?|aria2c|axel|lftp|git|svn|hg|ssh|scp|sftp|rsync|"
     r"nc|ncat|socat|telnet|ftp|tftp)\b", re.IGNORECASE)

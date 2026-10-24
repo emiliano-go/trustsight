@@ -644,7 +644,10 @@ def analyze_package_text(
     )
 
     triggered_rules.extend(
-        longitudinal_findings(diff_text, pkg_name, breaks, config)
+        longitudinal_findings(
+            diff_text, pkg_name, breaks, config,
+            current_text=new_pkgbuild,
+        )
     )
 
     if not any(r["rule_id"] == "R007" for r in triggered_rules):

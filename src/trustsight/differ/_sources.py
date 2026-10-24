@@ -8,7 +8,9 @@ from ..line_lex import _heredoc_body_indices, strip_comment_stateful
 from ..tokenizer import split_lines
 from ._bounds import MAX_URLS_PER_SIDE, MAX_URL_TOKEN_BYTES
 from ._checksums import detect_checksum_changes, detect_checksum_removed
-from ._common import _SOURCE_ARRAY_START_RE, _clean_url, _post_diff_lines
+from ._common import (
+    _SOURCE_ARRAY_START_RE, _clean_url, _is_metadata_path, _post_diff_lines,
+)
 
 __all__ = ['_ARRAY_TOKEN_RE', '_CMD_SUBST_RE', '_DKMS_RE', '_GIT_PKG_RE', '_SIG_SRC_RE', '_SKIP_JUSTIFICATION_CHECKS', '_SOURCE_CMD_SUBST_RE', '_SOURCE_OPEN_RE', '_URL_TOKEN_RE', '_VALIDPGPKEYS_RE', '_VCS_SOURCE_RE', 'extract_source_array_urls', 'extract_urls_from_diff', 'is_skip_justified', 'local_source_names', 'resolved_source_urls', 'source_array_has_command_substitution', 'urls_from_pkgbuild_text']
 
@@ -95,6 +97,78 @@ def is_skip_justified(diff_text: str, current_text: str | None = None) -> str:
 
 _URL_TOKEN_RE = re.compile(r"https?://[^\s\'\"\)]+")
 
+#: A long hexadecimal path segment is a signing/lease token, not a version.
+#: `20261024` is all digits and stays a version; the tokens that rotate on
+#: every request carry at least one a-f letter.
+_OPAQUE_TOKEN_RE = re.compile(r"^[0-9a-fA-F]{8,}$")
+_OPAQUE_LETTER_RE = re.compile(r"[a-fA-F]")
+
+
+def _url_rotation_key(url: str) -> tuple[str, str, str, str]:
+    """The version-stable identity of a source URL, ignoring lease tokens.
+
+    Yandex Disk (and similar signed endpoints) mint a fresh hex path segment
+    per request.  The local name, host, non-token path and query are what the
+    recipe actually asked for; the token is not a source change and must not
+    reach buckets, novelty or the URL-change rules.
+    """
+    local, sep, rest = url.partition("::")
+    if not sep:
+        local, rest = "", url
+    body, _, query = rest.partition("?")
+    _, _, hostpath = body.partition("://")
+    host, _, path = hostpath.partition("/")
+    segments = [
+        "{token}"
+        if _OPAQUE_TOKEN_RE.match(segment) and _OPAQUE_LETTER_RE.search(segment)
+        else segment
+        for segment in path.split("/")
+    ]
+    return (local, host.lower(), "/".join(segments), query)
+
+
+def _drop_rotated_source_replacements(
+    added: set[str], removed: set[str]
+) -> tuple[set[str], set[str]]:
+    """Remove a same-source URL swap whose only change is a lease token."""
+    if not added or not removed:
+        return added, removed
+    rotated = (
+        {_url_rotation_key(url) for url in added}
+        & {_url_rotation_key(url) for url in removed}
+    )
+    if not rotated:
+        return added, removed
+    return (
+        {url for url in added if _url_rotation_key(url) not in rotated},
+        {url for url in removed if _url_rotation_key(url) not in rotated},
+    )
+
+
+#: A source whose only job is documentation: licence text, copying terms,
+#: readme/changelog prose.  Its host is not build provenance and its first
+#: sighting is not novelty; treating `LICENSE` as a fetched artifact charged
+#: a licence file as a raw-hosting source and made a documentation addition
+#: look like a source-host move.
+_DOC_SOURCE_RE = re.compile(
+    r"(?:^|[-_.])(?:licen[cs]e|copying|readme|changelog|authors|notice|patent)"
+    r"(?:[-_.]|$)",
+    re.IGNORECASE,
+)
+
+
+def _is_documentation_source(token: str) -> bool:
+    """True when a ``name::url`` source is documentation, not a build input."""
+    local, sep, url = token.partition("::")
+    if not sep:
+        local, url = "", local
+    if local and _DOC_SOURCE_RE.search(local):
+        return True
+    path = url.split("?", 1)[0].split("#", 1)[0].rstrip("/")
+    basename = path.rsplit("/", 1)[-1]
+    return bool(basename and _DOC_SOURCE_RE.search(basename))
+
+
 #: A scalar ``url=``/``*_url=`` declaration.  This is the package's declared
 #: upstream, not a fetched source: the URL is metadata.  Treating it as a
 #: source charged SOURCE_BUCKET and novelty for a host no build downloads
@@ -131,6 +205,12 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
         if raw.startswith("+++ "):
             # A new file cannot continue a quote from the previous one.
             quote = ""
+            continue
+        # Only the files the analysis reads can declare a source.  A URL in
+        # an added LICENSE/README/patch/asset file is content, not a fetch:
+        # harvesting it charged a licence-prose URL as a raw-hosting source
+        # (nhiicc) and turned a committed patch into a host move.
+        if not _is_metadata_path(line.file):
             continue
         if raw.startswith(("diff --git ", "@@ ", "--- ")) or raw in ("---", "+++"):
             continue
@@ -171,7 +251,9 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             if url_host_is_non_routable(cleaned):
                 continue
             target.add(cleaned)
-            if is_declaration:
+            if is_declaration or (
+                prefix == "+" and _is_documentation_source(cleaned)
+            ):
                 declared_urls.add(cleaned)
 
     checksum_behavior = detect_checksum_changes(diff_text)
@@ -184,6 +266,29 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # because a removed declaration also trips the entry-removal signal.
     if detect_checksum_removed(diff_text):
         checksum_behavior = "checksum_array_removed"
+
+    # A line re-spelled without changing the URL (a local name moved, a
+    # variable notation changed) is not a source swap.  Keeping it on both
+    # sides charged a bufferless SOURCE_BUCKET prior for an unchanged archive
+    # (nhiicc's vendor zip) and made a cosmetic rewrite look like a host move.
+    # Keep the swap when verification was weakened: then the URL's bucket is
+    # still evidence about the source whose checksum just disappeared.
+    weakened = checksum_behavior in (
+        "changed_from_sha256_to_skip", "checksum_array_emptied",
+        "checksum_entry_removed", "checksum_array_removed",
+    )
+    if not weakened:
+        unchanged = added_urls & removed_urls
+        if unchanged:
+            added_urls -= unchanged
+            removed_urls -= unchanged
+
+    # A rotating signed-URL token is not a source change.  Only collapse the
+    # swap while a checksum still pins the content: with the verification
+    # gone, a changed URL is exactly the event the rules must keep.
+    if checksum_behavior == "unchanged":
+        added_urls, removed_urls = _drop_rotated_source_replacements(
+            added_urls, removed_urls)
 
     return SourceChanges(
         added_urls=sorted(added_urls),

@@ -193,18 +193,20 @@ _FLOATING_PATH_RE = re.compile(r"/(?:latest|HEAD)(?:/|$)")
 def _pinning_of(url: str) -> str:
     """``"pinned"`` or ``"floating"`` for one source URL (H101).
 
-    A VCS entry is pinned by a `#commit=` fragment and floating on a
-    branch ref, a tag, HEAD, or no fragment at all: a tag is a movable ref,
-    and force-moving one is the classic supply-chain attack.  A plain
-    archive URL is floating only when it names a moving target
+    A VCS entry is pinned by a `#commit=` or `#tag=` fragment and floating
+    on a branch ref, HEAD, or no fragment at all.  A tag is a declared pin
+    (P006) even though it is movable: H101 reports the *loss* of a pin, so
+    calling a tag-pinned source unpinned contradicted P006 and fired on a
+    package that had just moved from a dummy archive to a signed tag.  A
+    plain archive URL is floating only when it names a moving target
     (`/latest/`, `/HEAD`); every other archive carries its version in the
     path by convention.
     """
     fragment = url.split("#", 1)[1] if "#" in url else ""
     # Any `transport+address` spelling (`git+`, `hg+`, `bzr+lp:`) is a VCS
-    # fetch: floating without a commit fragment, whatever the transport.
+    # fetch: floating without a commit/tag fragment, whatever the transport.
     if re.match(r"\w+\+", url) or url.startswith("git://") or fragment:
-        if fragment.startswith("commit="):
+        if fragment.startswith(("commit=", "tag=")):
             return "pinned"
         return "floating"
     if _FLOATING_PATH_RE.search(url):

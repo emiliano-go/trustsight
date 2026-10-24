@@ -313,19 +313,16 @@ def _stages_into_pkgdir(match: str) -> bool:
 
     def _inside(value: str) -> bool:
         value = value.strip("\"'")
-        # A traversal spelling is not proof of being inside the package
-        # root: `$pkgdir/lib/../etc/cron.d` lands in the live `/etc` only
-        # after the kernel resolves it, and the rule has its own collapse
-        # check for that spelling.  Leave those findings alone.
-        if ".." in value.split("/"):
-            return False
         return value.startswith(("$pkgdir", "${pkgdir}"))
 
-    if "-t" in tokens:
-        index = tokens.index("-t")
-        return index + 1 < len(tokens) and _inside(tokens[index + 1])
-    operands = [t for t in tokens[1:] if not t.startswith("-")]
-    return bool(operands) and _inside(operands[-1])
+    # Only the ``-t DIR`` form put the destination before the source and
+    # made the rule read the destination as the source.  The ordinary
+    # ``install SOURCE "$pkgdir/..."`` form already has the destination
+    # last, and the rule's own quoting anchor decides whether it fires.
+    if "-t" not in tokens:
+        return False
+    index = tokens.index("-t")
+    return index + 1 < len(tokens) and _inside(tokens[index + 1])
 
 
 def _stages_only_committed(match: str, committed: frozenset[str]) -> bool:

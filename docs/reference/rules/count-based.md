@@ -78,7 +78,12 @@ itself is the signal.
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
 
-- **Condition:** One maintainer submitted at least `[thresholds] h045.min_packages` (default 10) packages within `h045.window_days` (default 7).
+- **Condition:** One maintainer submitted at least `[thresholds] h045.min_packages` (default 10) **package bases** within `h045.window_days` (default 7).
+
+A split package is one adoption: a single `PKGBUILD` with twelve `pkgname`
+outputs files twelve package names but one upstream release. The threshold is
+therefore counted over distinct `pkgbase` values, while every output is still
+carried in the finding's member list and analysed on its own for content.
 
 ### H052: Shared Source Repository {#h052}
 
@@ -92,7 +97,13 @@ itself is the signal.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
 
-- **Condition:** At least `[thresholds] h055.min_packages` (default 5) packages sharing a maintainer were modified within `h055.window_hours` (default 24).
+- **Condition:** At least `[thresholds] h055.min_packages` (default 5) **package bases** sharing a maintainer were modified within `h055.window_hours` (default 24).
 
 Only modified packages count. H045 already claims the added-package clusters,
 so counting additions here would report the same maintainer twice.
+
+The count is over distinct `pkgbase` values, and a family whose bases share one
+variant stem (`foo`, `foo-bin`, `foo-git`) stands down: a split package
+touching every output in one cycle is one logical update, not a burst across
+packages. The member list still carries every output so each is analysed and
+shown.

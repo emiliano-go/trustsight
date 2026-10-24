@@ -59,8 +59,14 @@ def _check(path_str: str) -> str | None:
     text = path.read_text(encoding="utf-8", errors="replace")
     delta = change_delta(text)
     reference = extract_urls_from_diff(text)
-    added = {_host(u) for u in reference.added_urls if _host(u)}
-    removed = {_host(u) for u in reference.removed_urls if _host(u)}
+    # Declared upstreams (`url=`) and documentation sources are not fetched
+    # build inputs; `ChangeDelta` excludes them from the host sets, so the
+    # reference must too.
+    declared = set(reference.declared_urls)
+    added = {_host(u) for u in reference.added_urls
+             if u not in declared and _host(u)}
+    removed = {_host(u) for u in reference.removed_urls
+               if u not in declared and _host(u)}
     local = (
         local_source_names("\n".join(_post_diff_lines(text)))
         - local_source_names("\n".join(_pre_diff_lines(text)))

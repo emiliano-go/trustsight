@@ -266,6 +266,41 @@ def acknowledged_url_rows(
     ]
 
 
+_URL_IN_FINDING = re.compile(r"https?://[^\s'\"<>)]+")
+
+
+def suppress_acknowledged_url_findings(
+    findings: list[dict], package: str
+) -> list[dict]:
+    """Drop R152 findings whose every URL the operator acknowledged.
+
+    An acknowledgement is a per-package statement about a concrete URL.  It
+    already stops that URL scoring in SOURCE_BUCKET and novelty; leaving the
+    free-hosting rule to fire on the same URL meant a benign
+    ``Documentation=`` link still added points after it had been reviewed.
+    The match is against every ack for the package, not only the URLs the
+    source-array parser found: R152 also reads companion files, whose links
+    never enter ``source=()``.  A finding citing an unacknowledged URL on the
+    same line is kept.
+    """
+    if not package:
+        return findings
+    keys = {
+        _ack_key(ack.url) for ack in load_url_acks()
+        if ack.package == package
+    }
+    if not keys:
+        return findings
+    kept = []
+    for finding in findings:
+        if finding.get("rule_id") == "R152":
+            urls = _URL_IN_FINDING.findall(str(finding.get("match", "")))
+            if urls and all(_ack_key(url) in keys for url in urls):
+                continue
+        kept.append(finding)
+    return kept
+
+
 _OVERRIDE_SANITIZE = re.compile(r"[\x00-\x1F\x7F]")
 
 

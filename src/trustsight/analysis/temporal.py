@@ -139,28 +139,36 @@ def t_metadata_git_divergence(project, head_commit, last_modified,
 
 def t_packager_not_in_history(project, head_commit, maintainer,
                               config) -> list[dict]:
-    """T007 - AUR maintainer not found in git commit messages (weight 0).
+    """T007 - AUR maintainer not found in the retained git history (weight 0).
 
     A weight-0 corroboration signal: the AUR says this account packaged the
-    project, but no commit in the retained git history mentions them.  Name
-    matching is fuzzy (display name vs email vs git config), so this
-    corroborates T006 and G008 but never scores alone.  On its own tier it is
-    nearly a confession; as a solo scorer it would eventually burn someone
-    with an unusual committer setup.
+    project, but no commit in the retained git history mentions them.  The
+    message is only one place an identity appears: a maintainer who imported
+    the package often signs the commit with the same name or address and
+    writes no message at all, so the author and committer identities count
+    too.  Name matching is fuzzy (display name vs email vs git config), so
+    this corroborates T006 and G008 but never scores alone.
     """
     if not maintainer or not head_commit:
         return []
     try:
         name_lower = maintainer.lower()
         for commit in project.walk(head_commit, 200):
-            if name_lower in (commit.message or "").lower():
+            identities = [
+                getattr(commit, "message", "") or "",
+                getattr(commit, "author_name", "") or "",
+                getattr(commit, "author_email", "") or "",
+                getattr(commit, "committer_name", "") or "",
+                getattr(commit, "committer_email", "") or "",
+            ]
+            if any(name_lower in identity.lower() for identity in identities):
                 return []
         return [stamp({
             "rule_id": "T007",
             "name": "Packager Not In History",
             "severity": "INFO", "category": "temporal",
             "match": (f"AUR maintainer '{maintainer}' not found in any "
-                      "commit message in the retained git history"),
+                      "commit identity in the retained git history"),
             "params": {"maintainer": maintainer},
         })]
     except (GitSandboxUnavailable, GitOpError):

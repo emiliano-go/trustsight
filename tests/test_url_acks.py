@@ -110,6 +110,32 @@ def test_ack_does_not_silence_structural_findings(overrides_file):
     assert any(e.rule_id == "H003" for e in fact.score_breakdown)
 
 
+def test_ack_silences_r152_on_the_same_url(overrides_file):
+    """#57 side note: an acknowledged URL must not keep firing R152."""
+    diff = (
+        "--- /dev/null\n+++ b/demo.service\n@@ -0,0 +1,2 @@\n"
+        "+[Service]\n"
+        "+Documentation=https://demo.github.io/docs/\n"
+    )
+    assert any(e.rule_id == "R152" for e in scan_diff(
+        diff, package_name="demo").score_breakdown)
+
+    add_url_ack("demo", "https://demo.github.io/docs/", "reviewed docs link")
+    fact = scan_diff(diff, package_name="demo")
+    assert not any(e.rule_id == "R152" for e in fact.score_breakdown)
+
+
+def test_ack_does_not_silence_r152_on_an_unacknowledged_url(overrides_file):
+    add_url_ack("demo", "https://demo.github.io/other/", "reviewed docs link")
+    diff = (
+        "--- /dev/null\n+++ b/demo.service\n@@ -0,0 +1,2 @@\n"
+        "+[Service]\n"
+        "+Documentation=https://demo.github.io/docs/\n"
+    )
+    assert any(e.rule_id == "R152" for e in scan_diff(
+        diff, package_name="demo").score_breakdown)
+
+
 # --- CLI -------------------------------------------------------------------
 
 

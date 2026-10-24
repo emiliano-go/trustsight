@@ -48,6 +48,7 @@ from ...override import (
     acknowledged_url_rows,
     filter_triggered_rules,
     match_url_acks,
+    suppress_acknowledged_url_findings,
 )
 from ...rules import (
     apply_rules,
@@ -71,7 +72,7 @@ from ...coverage import (
     unresolved_assignment_rows,
     unresolved_source_lines,
 )
-from ...scoring import calculate_score
+from ...scoring import ScoreEntry, calculate_score
 from ...schema import (
     with_changes,
     DiffSummary,
@@ -115,6 +116,37 @@ from ._common import log
 from ._tree import _added_dependency_names, _binary_metadata_finding, _cached_analysis, _deps_not_scanned, _has_noextract, _parent_commit, _scriptlet_files_unread
 
 __all__ = ['_make_fresh_analysis', '_walk_dependencies', 'analyze_package', 'apply_diff_caps', 'scored_source_urls']
+
+
+def _present_before_findings(diff_text: str, config: dict) -> list[dict]:
+    """What the rules see in companion content that did not move.
+
+    These are not findings about this update.  They are emitted at weight 0
+    so a reviewed trap, ``.install`` file or ``Documentation=`` URL stays
+    visible on a later review instead of silently disappearing when the
+    companion is diffed against the recorded baseline.
+    """
+    if not diff_text.strip():
+        return []
+    resolved, _unresolved, resolved_indices = tokenize_and_resolve_indexed(
+        diff_text)
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff_text)
+    findings = apply_rules(
+        resolved, raw_lines,
+        include_experimental=config.get("rules", {}).get("experimental", False),
+        line_map=map_diff_lines(diff_text),
+        resolved_indices=resolved_indices,
+        raw_indices=raw_indices,
+    )
+    for finding in findings:
+        finding["weight_override"] = 0
+        params = finding.setdefault("params", {})
+        params["present_before"] = True
+        finding["name"] = (
+            f"{finding.get('name', finding['rule_id'])} "
+            "(present before, unchanged)"
+        )
+    return findings
 
 def _walk_dependencies(pkg_name, depth, config, seen, record: bool = False,
                        added_names: set[str] | None = None):
@@ -372,8 +404,15 @@ def analyze_package(
     # an unchanged companion there would let a payload committed before the
     # parent stay invisible on a first review (#57), so read companions whole.
     companion_baseline = "" if parent_baseline else old_commit
-    companion, companion_truncated = project.companion_hunks(
-        head_commit, baseline_oid=companion_baseline)
+    present_before = ""
+    if companion_baseline:
+        companion, companion_truncated, present_before = (
+            project.companion_hunks_with_present_before(
+                head_commit, baseline_oid=companion_baseline)
+        )
+    else:
+        companion, companion_truncated = project.companion_hunks(
+            head_commit, baseline_oid=companion_baseline)
     if companion:
         diff_text = f"{diff_text.rstrip(chr(10))}\n{companion}" if diff_text.strip() else companion
 
@@ -583,6 +622,8 @@ def analyze_package(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    triggered_rules = suppress_acknowledged_url_findings(
+        triggered_rules, pkg_name)
     from ..persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     expired_overrides: list[str] = []
@@ -809,6 +850,30 @@ def analyze_package(
 
     score, breakdown = _campaign_corroboration(
         score, breakdown, pkg_name, source_changes.added_urls)
+
+    # Companion content the recorded baseline already held: reported, never
+    # scored.  Appended after the campaign pass so it cannot corroborate a
+    # chain or move a number; the (present before, unchanged) name carries
+    # the provenance into both the terminal and the JSON finding rows.
+    present_rules = suppress_acknowledged_url_findings(
+        _present_before_findings(present_before, config), pkg_name)
+    if present_rules:
+        present_rules, present_suppressed = filter_triggered_rules(
+            present_rules, package=pkg_name, expired_out=expired_overrides)
+        suppressed_rules.extend(present_suppressed)
+        for finding in present_rules:
+            breakdown.append(ScoreEntry(
+                rule_id=finding["rule_id"],
+                severity=finding["severity"],
+                weight=0,
+                reason=f"{finding['name']}: {finding.get('match', '')}",
+                params=dict(finding.get("params") or {}),
+                template=finding.get("template", ""),
+                evidence=dict(finding.get("evidence") or {}),
+                file=finding.get("file", ""),
+                line=finding.get("line"),
+                techniques=tuple(finding.get("techniques") or ()),
+            ))
 
     # The installed version is a full [epoch:]pkgver-pkgrel built locally;
     # head_version is the bare pkgver the AUR PKGBUILD declares.  For a VCS

@@ -601,6 +601,45 @@ class TestComparisonBase:
         assert "parent_baseline" in fact.coverage_gaps
         assert "R001" in {entry.rule_id for entry in fact.score_breakdown}
 
+    def test_a_recorded_review_reports_unchanged_companion_content(self, tmp_path, monkeypatch):
+        """#57 side note: unchanged content is listed, not silently dropped."""
+        _env(tmp_path, monkeypatch)
+        repo = _multi_commit_repo(
+            tmp_path, monkeypatch, commits=3,
+            extra="source=('setup.sh')\nprepare(){ bash setup.sh; }\n",
+            companion=b"trap 'rm -f \"$t\"' EXIT\n",
+        )
+        git_project.head_commit_id(repo)
+        git_project.record_fetch(repo)
+        from trustsight.analysis.pipeline import analyze_package
+
+        with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
+            analyze_package("testpkg", installed_version="1.0", depth=0, record=True)
+
+            sig = pygit2.Signature("Tester", "tester@example.com")
+            tree = repo.head.peel().tree
+            builder = repo.TreeBuilder(tree)
+            builder.insert(
+                "PKGBUILD",
+                repo.create_blob(_make_pkgbuild(
+                    "1.4", "source=('setup.sh')\nprepare(){ bash setup.sh; }\n")),
+                pygit2.GIT_FILEMODE_BLOB,
+            )
+            repo.create_commit(
+                "HEAD", sig, sig, "version 3", builder.write(),
+                [repo.head.peel().id])
+            git_project.head_commit_id(repo)
+
+            fact = analyze_package("testpkg", installed_version="1.0", depth=0)
+
+        assert fact.comparison_base == "recorded"
+        present = [e for e in fact.score_breakdown
+                   if (e.params or {}).get("present_before")]
+        assert present, "unchanged companion content vanished from the report"
+        assert {e.rule_id for e in present} == {"R099"}
+        assert all(e.weight == 0 for e in present)
+        assert "present before, unchanged" in present[0].reason
+
     def test_a_recorded_analysis_reports_the_recorded_base(self, tmp_path, monkeypatch):
         _env(tmp_path, monkeypatch)
         repo = _multi_commit_repo(tmp_path, monkeypatch, commits=3)
@@ -610,6 +649,21 @@ class TestComparisonBase:
 
         with patch("trustsight.discovery.get_aur_package_info", return_value=_mock_aur()):
             analyze_package("testpkg", installed_version="1.0", depth=0, record=True)
+
+            sig = pygit2.Signature("Tester", "tester@example.com")
+            tree = repo.head.peel().tree
+            builder = repo.TreeBuilder(tree)
+            builder.insert(
+                "PKGBUILD",
+                repo.create_blob(_make_pkgbuild(
+                    "1.4", "source=('setup.sh')\nprepare(){ bash setup.sh; }\n")),
+                pygit2.GIT_FILEMODE_BLOB,
+            )
+            repo.create_commit(
+                "HEAD", sig, sig, "version 3", builder.write(),
+                [repo.head.peel().id])
+            git_project.head_commit_id(repo)
+
             fact = analyze_package("testpkg", installed_version="1.0", depth=0)
 
         assert fact.comparison_base == "recorded"

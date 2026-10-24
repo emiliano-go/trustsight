@@ -368,9 +368,44 @@ def binary_metadata_paths(repo, old_oid: str, new_oid: str) -> list[str]:
     return found
 
 
+class _IndentInsensitiveLine(str):
+    """A diff line that compares equal when only its indentation moved.
+
+    ``difflib`` is given these objects, so a reindented companion produces
+    no hunk while the lines it does emit keep their original spelling.
+    """
+
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return self.lstrip() == str(other).lstrip()
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(self.lstrip())
+
+
+def _companion_diff(old_lines: list[str], new_lines: list[str],
+                    name: str) -> list[str]:
+    return list(difflib.unified_diff(
+        [_IndentInsensitiveLine(line) for line in old_lines],
+        [_IndentInsensitiveLine(line) for line in new_lines],
+        fromfile=f"a/{name}", tofile=f"b/{name}", lineterm=""))
+
+
+def _whole_file_hunk(name: str, lines: list[str]) -> list[str]:
+    return [
+        "--- /dev/null",
+        f"+++ b/{name}",
+        f"@@ -0,0 +1,{len(lines)} @@",
+    ] + ["+" + line for line in lines]
+
+
 def companion_source_hunks(
     repo: pygit2.Repository, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES,
-    baseline_oid: str = "",
+    baseline_oid: str = "", present_before: list[str] | None = None,
 ) -> tuple[str, bool]:
     """Committed companion files as added-file hunks, and whether any was cut.
 
@@ -392,6 +427,11 @@ def companion_source_hunks(
     URL that had not moved.  A file the baseline did not name is still
     emitted whole, so a payload committed earlier and merely referenced now
     is read.
+
+    *present_before*, when given, collects the whole content of companions
+    the baseline already named and whose bytes did not move.  That content
+    is not analysis input; the caller reports it at weight 0 so an unchanged
+    trap or Documentation= link is listed rather than silently vanishing.
     """
     max_bytes = max(1, min(max_bytes, MAX_COMPANION_BYTES))
     commit = repo.get(commit_oid)
@@ -419,6 +459,7 @@ def companion_source_hunks(
 
     hunks: list[str] = []
     used = 0
+    present_used = 0
     truncated = False
     baseline_tree = None
     baseline_selected: set[str] = set()
@@ -470,7 +511,25 @@ def companion_source_hunks(
         if old_entry is not None and old_entry.id == entry.id:
             # Already present at the baseline and still referenced: it was
             # scored when it arrived, and replaying it as added lines made
-            # every later update start at the same baseline noise.
+            # every later update start at the same baseline noise.  Its
+            # content is still collected for the weight-0 "present before"
+            # report when the caller asked for it.
+            if present_before is not None and present_used < max_bytes:
+                try:
+                    blob = repo[entry.id]
+                    remaining = min(share, max_bytes - present_used)
+                    data = read_blob_head(blob, remaining)
+                except (KeyError, TypeError, ValueError):
+                    data = None
+                if (data is not None and b"\x00" not in data[:8192]
+                        and data[:4] != b"\x7fELF"):
+                    lines = split_lines(
+                        data.decode("utf-8", errors="replace"))
+                    if lines:
+                        chunk = _whole_file_hunk(name, lines)
+                        if present_used + sum(len(line) + 1 for line in chunk) <= max_bytes:
+                            present_before.append("\n".join(chunk))
+                            present_used += sum(len(line) + 1 for line in chunk)
             continue
         remaining = min(share, max_bytes - used)
         if remaining <= 0:
@@ -508,15 +567,9 @@ def companion_source_hunks(
         new_lines = split_lines(text)
         if not new_lines:
             continue
-        def whole() -> list[str]:
-            return [
-                "--- /dev/null",
-                f"+++ b/{name}",
-                f"@@ -0,0 +1,{len(new_lines)} @@",
-            ] + ["+" + ln for ln in new_lines]
 
         if old_entry is None:
-            chunk = whole()
+            chunk = _whole_file_hunk(name, new_lines)
         else:
             # A companion the baseline already named: only the lines this
             # update adds are new evidence.  Context lines stay visible to
@@ -537,12 +590,9 @@ def companion_source_hunks(
             if old_lines is None:
                 # The prior text is unavailable; keep the conservative
                 # whole-file scan rather than call an unread change clean.
-                chunk = whole()
+                chunk = _whole_file_hunk(name, new_lines)
             else:
-                chunk = list(difflib.unified_diff(
-                    old_lines, new_lines,
-                    fromfile=f"a/{name}", tofile=f"b/{name}",
-                    lineterm=""))
+                chunk = _companion_diff(old_lines, new_lines, name)
         lines: list[str] = []
         for ln in chunk:
             if used + len(ln) + 1 > max_bytes:

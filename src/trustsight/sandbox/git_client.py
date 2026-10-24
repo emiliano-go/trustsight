@@ -245,10 +245,12 @@ class GitSession:
 
     def companion_hunks(self, pkg: str, cache_dir: str, oid: str,
                         max_bytes: int | None = None,
-                        baseline_oid: str = ""):
+                        baseline_oid: str = "",
+                        present_before: bool = False):
         return self.request("companion_hunks", {
             "pkg": pkg, "cache_dir": cache_dir, "oid": oid,
             "max_bytes": max_bytes, "baseline": baseline_oid,
+            "present_before": present_before,
         })
 
     def opaque_changed(self, pkg: str, cache_dir: str, old: str, new: str):
@@ -263,7 +265,7 @@ class GitSession:
 
     def walk(self, pkg: str, cache_dir: str, head: str,
              limit: int | None = None) -> list[dict]:
-        """Commits under *head*, newest first: ``{id, commit_time, parents}``."""
+        """Commits under *head*, newest first, with their identities."""
         return self.request("walk", {
             "pkg": pkg, "cache_dir": cache_dir, "head": head, "limit": limit,
         })["commits"]
@@ -312,7 +314,11 @@ class GitSession:
         self.close()
 
 
-_Commit = namedtuple("Commit", "id commit_time parents message")
+_Commit = namedtuple(
+    "Commit",
+    "id commit_time parents message author_name author_email "
+    "committer_name committer_email",
+)
 
 #: The fetch marker filename.  Repeated here rather than imported from
 #: ``git_project`` so the parent never pulls libgit2 into the process.
@@ -345,6 +351,10 @@ class GitProject:
             commit_time=record.get("commit_time", 0),
             parents=list(record.get("parents", ())),
             message=record.get("message", ""),
+            author_name=record.get("author_name", ""),
+            author_email=record.get("author_email", ""),
+            committer_name=record.get("committer_name", ""),
+            committer_email=record.get("committer_email", ""),
         )
 
     def head_commit(self) -> str:
@@ -410,6 +420,17 @@ class GitProject:
         result = self._session.companion_hunks(
             self.pkg, self.cache_dir, oid, max_bytes, baseline_oid)
         return result["text"], result["truncated"]
+
+    def companion_hunks_with_present_before(
+            self, oid: str, max_bytes: int | None = None,
+            baseline_oid: str = ""):
+        result = self._session.companion_hunks(
+            self.pkg, self.cache_dir, oid, max_bytes, baseline_oid,
+            present_before=True)
+        return (
+            result["text"], result["truncated"],
+            result.get("present_before", ""),
+        )
 
     def opaque_changed(self, old: str, new: str) -> list[str]:
         return self._session.opaque_changed(self.pkg, self.cache_dir, old, new)

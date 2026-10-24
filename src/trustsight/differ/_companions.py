@@ -190,9 +190,9 @@ def binary_metadata_in_text(diff_text: str) -> list[str]:
 
 def companion_source_hunks(
     repo, commit_oid: str, max_bytes: int = _COMPANION_MAX_BYTES,
-    baseline_oid: str = "",
+    baseline_oid: str = "", present_before: list[str] | None = None,
 ) -> tuple[str, bool]:
     """Committed companion files as added-file hunks (git work in git_project)."""
     from ..sandbox.git_project import companion_source_hunks as _core
 
-    return _core(repo, commit_oid, max_bytes, baseline_oid)
+    return _core(repo, commit_oid, max_bytes, baseline_oid, present_before)

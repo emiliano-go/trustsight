@@ -32,6 +32,8 @@ def finding_rows(fact) -> list[dict]:
 
     rows = []
     for entry in fact.score_breakdown:
+        present_before = bool(
+            (entry.params or {}).get("present_before"))
         if (entry.weight > 0
                 or entry.severity in ("FATAL", "CRITICAL")
                 or entry.rule_id in ALWAYS_SHOWN_ANNOTATIONS
@@ -39,7 +41,11 @@ def finding_rows(fact) -> list[dict]:
                 # unless shown: its whole content is "something ran that
                 # nobody read", which is a statement to a reader and not a
                 # component of any number.
-                or entry.rule_id.startswith("W")):
+                or entry.rule_id.startswith("W")
+                # Unchanged companion content is recorded so it does not
+                # disappear between reviews.  It is explicitly not evidence
+                # about this update, so it never enters the score.
+                or present_before):
             rows.append({
                 "rule_id": entry.rule_id,
                 # The permanent identity behind ``rule_id``, so a stored
@@ -54,6 +60,7 @@ def finding_rows(fact) -> list[dict]:
                 "evidence": dict(entry.evidence) if entry.evidence else {},
                 "severity": entry.severity,
                 "weight": entry.weight,
+                "present_before": present_before,
                 "techniques": list(getattr(entry, "techniques", ()) or ()),
             })
     return rows
@@ -84,6 +91,8 @@ def is_trivial(fact, findings: Sequence[dict] | None = None) -> bool:
     if not fact.diff_summary.files_changed:
         return True
     for finding in findings if findings is not None else finding_rows(fact):
+        if finding.get("present_before"):
+            continue
         if finding.get("rule_id") not in ("C002",):
             return False
     return True

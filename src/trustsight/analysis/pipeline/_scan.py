@@ -25,6 +25,7 @@ from ...deps import extract_dependency_changes
 from ...override import (
     acknowledged_url_rows,
     match_url_acks,
+    suppress_acknowledged_url_findings,
 )
 from ...rules import (
     apply_rules,
@@ -157,6 +158,8 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+    triggered_rules = suppress_acknowledged_url_findings(
+        triggered_rules, package_name)
     from ..persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
 

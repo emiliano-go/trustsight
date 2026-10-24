@@ -367,6 +367,8 @@ def layer_profile(fact, findings, *, correlation_ran: bool = False,
     """
     by_layer: dict[Layer, list[str]] = {layer: [] for layer in LAYER_ORDER}
     for finding in findings:
+        if finding.get("present_before"):
+            continue
         layer = layer_of(str(finding.get("rule_id", "")), overrides)
         if layer is not None:
             by_layer[layer].append(str(finding.get("rule_id", "")))

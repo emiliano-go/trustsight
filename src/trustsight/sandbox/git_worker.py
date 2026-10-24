@@ -510,13 +510,18 @@ def _companion_hunks(payload: dict) -> dict:
     baseline = _require_oid(payload.get("baseline") or "", "commit id")
     repo = _open_repo(payload.get("cache_dir", ""), payload.get("pkg", ""))
     max_bytes = _positive_int(payload.get("max_bytes"), 0)
+    present_before = [] if payload.get("present_before") else None
+    kwargs = {"baseline_oid": baseline, "present_before": present_before}
     if max_bytes:
         text, truncated = companion_source_hunks(
-            repo, oid, max_bytes=max_bytes, baseline_oid=baseline)
+            repo, oid, max_bytes=max_bytes, **kwargs)
     else:
-        text, truncated = companion_source_hunks(
-            repo, oid, baseline_oid=baseline)
-    return {"text": text, "truncated": truncated}
+        text, truncated = companion_source_hunks(repo, oid, **kwargs)
+    return {
+        "text": text,
+        "truncated": truncated,
+        "present_before": "\n".join(present_before or ()),
+    }
 
 
 def _opaque_changed(payload: dict) -> dict:
@@ -542,11 +547,25 @@ def _commit_record(commit) -> dict:
         message = commit.message or ""
     except (AttributeError, UnicodeDecodeError):
         message = ""
+
+    def signature(attr):
+        try:
+            sig = getattr(commit, attr)
+            return getattr(sig, "name", "") or "", getattr(sig, "email", "") or ""
+        except (AttributeError, UnicodeDecodeError, TypeError):
+            return "", ""
+
+    author_name, author_email = signature("author")
+    committer_name, committer_email = signature("committer")
     return {
         "id": str(commit.id),
         "commit_time": int(commit.commit_time),
         "parents": [str(parent.id) for parent in commit.parents],
         "message": message,
+        "author_name": author_name,
+        "author_email": author_email,
+        "committer_name": committer_name,
+        "committer_email": committer_email,
     }
 
 
@@ -554,8 +573,8 @@ def _walk(payload: dict) -> dict:
     """Commits under *head*, newest first, as lightweight records.
 
     Reuses ``git_project.walk_bounded`` so the same commit ceiling applies in
-    the worker; only ``id``, ``commit_time`` and ``parents`` cross the
-    boundary, never a libgit2 handle.
+    the worker; only plain fields (id, time, parents, message and the
+    author/committer identities) cross the boundary, never a libgit2 handle.
     """
     from trustsight.sandbox.git_project import MAX_HISTORY_COMMITS, walk_bounded
 

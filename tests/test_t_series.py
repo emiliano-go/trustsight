@@ -28,9 +28,15 @@ def db(tmp_path, monkeypatch):
 
 
 class _Commit:
-    def __init__(self, commit_time: int = 0, message: str = ""):
+    def __init__(self, commit_time: int = 0, message: str = "",
+                 author_name: str = "", author_email: str = "",
+                 committer_name: str = "", committer_email: str = ""):
         self.commit_time = commit_time
         self.message = message
+        self.author_name = author_name
+        self.author_email = author_email
+        self.committer_name = committer_name
+        self.committer_email = committer_email
 
 
 class _Project:
@@ -133,6 +139,27 @@ def test_t007_silent_when_maintainer_appears_in_a_commit():
     project = _Project(messages=["import package by tippfehlr"])
     assert t_packager_not_in_history(
         project, "abc123", "tippfehlr", None) == []
+
+
+def test_t007_reads_the_commit_author_not_only_the_message():
+    """#57 side note: the import commit is often unsigned in its message."""
+    project = _Project(messages=["import package"])
+    project.walk = lambda head, limit=None: [
+        _Commit(message="import package", author_name="Ralf Seichter",
+                author_email="rseichter@example.org")
+    ]
+    assert t_packager_not_in_history(
+        project, "abc123", "rseichter", None) == []
+
+
+def test_t007_reads_the_committer_identity():
+    project = _Project(messages=["import package"])
+    project.walk = lambda head, limit=None: [
+        _Commit(message="import package", committer_name="rseichter",
+                committer_email="rseichter@example.org")
+    ]
+    assert t_packager_not_in_history(
+        project, "abc123", "rseichter", None) == []
 
 
 def test_t007_silent_without_data():

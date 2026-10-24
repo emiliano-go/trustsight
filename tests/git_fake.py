@@ -16,6 +16,21 @@ from trustsight.sandbox import git_project
 from trustsight.sandbox.git_client import _Commit
 
 
+def _signature(commit, attr):
+    sig = getattr(commit, attr)
+    return getattr(sig, "name", "") or "", getattr(sig, "email", "") or ""
+
+
+def _commit_from(commit):
+    author_name, author_email = _signature(commit, "author")
+    committer_name, committer_email = _signature(commit, "committer")
+    return _Commit(
+        str(commit.id), int(commit.commit_time),
+        [str(p.id) for p in commit.parents], commit.message or "",
+        author_name, author_email, committer_name, committer_email,
+    )
+
+
 class FakeGitProject:
     def __init__(self, repo, pkg="pkg", cache_dir=""):
         self._repo = repo
@@ -45,8 +60,7 @@ class FakeGitProject:
 
     def walk(self, head, limit=None):
         return [
-            _Commit(str(c.id), int(c.commit_time),
-                    [str(p.id) for p in c.parents], c.message or "")
+            _commit_from(c)
             for c in git_project.walk_bounded(self._repo, head, limit=limit)
         ]
 
@@ -55,9 +69,7 @@ class FakeGitProject:
         for oid in oids:
             commit = self._repo.get(oid) if oid else None
             if isinstance(commit, pygit2.Commit):
-                out.append(_Commit(str(commit.id), int(commit.commit_time),
-                                   [str(p.id) for p in commit.parents],
-                                   commit.message or ""))
+                out.append(_commit_from(commit))
         return out
 
     def parent_commit(self, head) -> str:
@@ -76,6 +88,18 @@ class FakeGitProject:
                 self._repo, oid, baseline_oid=baseline_oid)
         return git_project.companion_source_hunks(
             self._repo, oid, max_bytes=max_bytes, baseline_oid=baseline_oid)
+
+    def companion_hunks_with_present_before(
+            self, oid, max_bytes=None, baseline_oid=""):
+        present = []
+        kwargs = {"baseline_oid": baseline_oid, "present_before": present}
+        if max_bytes is None:
+            text, truncated = git_project.companion_source_hunks(
+                self._repo, oid, **kwargs)
+        else:
+            text, truncated = git_project.companion_source_hunks(
+                self._repo, oid, max_bytes=max_bytes, **kwargs)
+        return text, truncated, "\n".join(present)
 
     def opaque_changed(self, old, new):
         return git_project.changed_opaque_members(self._repo, old, new)

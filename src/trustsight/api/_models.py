@@ -51,6 +51,9 @@ class Finding:
     :ivar evidence: rule-specific match detail, as a plain dict.
     :ivar techniques: per-finding evasion-technique tags
         (``X002:spliced-variable`` and peers); additive instrumentation.
+    :ivar present_before: true for unchanged companion content reported at
+        weight 0 as "present before, unchanged"; not evidence about this
+        update.
 
     Example:
         .. code-block:: python
@@ -71,6 +74,7 @@ class Finding:
     #: peers).  Additive instrumentation for the harness shape archive;
     #: never rendered, scored or suppressed.
     techniques: tuple[str, ...] = ()
+    present_before: bool = False
 
     def to_dict(self) -> dict:
         """Serialize to a plain dict."""
@@ -103,10 +107,11 @@ class SuppressedRule:
 class AcknowledgedUrl:
     """A source URL explicitly acknowledged for this package.
 
-    It did not contribute to SOURCE_BUCKET or NOVELTY.  It is reported
-    anyway: an acknowledgement a caller cannot see is one it cannot audit,
-    and the whole point of an ack (against a rule override) is that it
-    covers one URL rather than the next one the package adds.
+    It did not contribute to SOURCE_BUCKET or NOVELTY, and R152 stands
+    down for it.  It is reported anyway: an acknowledgement a caller cannot
+    see is one it cannot audit, and the whole point of an ack (against a
+    rule override) is that it covers one URL rather than the next one the
+    package adds.
 
     :ivar url: the acknowledged URL.
     :ivar reason: the reason recorded with the acknowledgement.
@@ -153,8 +158,8 @@ class Report:
         review.
     :ivar findings: rules that fired, with the evidence that made them fire.
     :ivar suppressed: rules that matched but an override silenced.
-    :ivar acknowledged_urls: source URLs acknowledged for this package;
-        they did not score SOURCE_BUCKET or NOVELTY.
+    :ivar acknowledged_urls: URLs acknowledged for this package; they did
+        not score SOURCE_BUCKET or NOVELTY, and R152 stands down for them.
     :ivar changes: what the diff did, whether or not a rule matched.
         Context, not findings.
     :ivar coverage_gaps: non-empty means part of the change was not read.
@@ -258,7 +263,7 @@ class Report:
     findings: tuple[Finding, ...] = ()
     suppressed: tuple[SuppressedRule, ...] = ()
     acknowledged_urls: tuple[AcknowledgedUrl, ...] = ()
-    """Source URLs acknowledged for this package; they did not score SOURCE_BUCKET or NOVELTY."""
+    """URLs acknowledged for this package; they did not score SOURCE_BUCKET or NOVELTY, and R152 stands down for them."""
     changes: tuple[str, ...] = ()
     """What the diff did, whether or not a rule matched.  Context, not findings."""
 

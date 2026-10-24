@@ -1995,7 +1995,7 @@
     "severity_text": "INFO (weight 0)",
     "severity": "INFO",
     "capability": "temporal",
-    "target": "programmatic (AUR maintainer vs git commit messages)"
+    "target": "programmatic (AUR maintainer vs git commit identities)"
   },
   "u001": {
     "uid": "TS-0216",

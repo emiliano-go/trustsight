@@ -467,16 +467,18 @@ Overrides live in `~/.config/trustsight/overrides.json`.
 A rule override is too coarse for a source URL: suppressing SOURCE_BUCKET
 for a package also hides the *next* URL the package adds, which is the swap
 TrustSight exists to catch. `override add-url` names the URL, and only that
-URL in that package stops scoring SOURCE_BUCKET and NOVELTY. A different
-URL, or the same URL in another package, is judged as before. Matching is
-after normalisation, so a routine version bump of the same URL stays
+URL in that package stops scoring SOURCE_BUCKET and NOVELTY. It also stands
+R152 (free-hosting or dynamic-DNS host) down for that URL, including a
+`Documentation=` link in a companion unit file. A different URL, or the
+same URL in another package, is judged as before. Matching is after
+normalisation, so a routine version bump of the same URL stays
 acknowledged.
 
-An acknowledgement suppresses the score contribution only. Concrete rules
-that match the URL (C011, C012, H016, and the rest) still fire, and the
-report shows the acknowledged URL under **Acknowledged source URLs**, with
-the reason, so a suppression cannot be mistaken for a URL that never
-existed.
+An acknowledgement suppresses the provenance contribution and R152 only.
+Other concrete rules that match the URL (C011, C012, H016, and the rest)
+still fire, and the report shows the acknowledged URL under
+**Acknowledged source URLs**, with the reason, so a suppression cannot be
+mistaken for a URL that never existed.
 
 ---
 

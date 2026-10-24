@@ -179,12 +179,17 @@ read it.
 ```
 
 W findings are weight 0 and never change the score, the risk band, or the
-verdict. They are shown even so, unlike other weight-0 findings, because a
-statement whose only value is to a reader is worthless if filtered. A W
+verdict. They are shown even so, unlike most other weight-0 findings, because
+a statement whose only value is to a reader is worthless if filtered. A W
 finding is not evidence of wrongdoing: a recipe running a script from inside
 a checksummed archive is following the packaging format. What it tells you is
 where to look if you decide to look. The full series is in the
 [unverifiable rules reference](../reference/rules/unverifiable.md).
+
+Unchanged companion content follows the same rule. When a recorded baseline
+already held a `.install` file, a cleanup `trap` or a `Documentation=` link,
+the match is listed at weight 0 as **present before, unchanged** rather than
+disappearing between reviews. It is not evidence about this update.
 
 ## Putting it together: a worked example
 

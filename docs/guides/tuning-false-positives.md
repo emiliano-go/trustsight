@@ -55,7 +55,7 @@ For each rule, note the **fire rate**: the percentage of your reviewed packages 
 | Situation | Use | Why |
 |---|---|---|
 | A rule is noisy only for one package | `trustsight override add <rule> --package <pkg> --reason "..."` | Visible suppression, scoped to one package |
-| One source URL is the problem | `trustsight override add-url <pkg> <url> --reason "..."` | Suppresses that URL, not the next one |
+| One source URL is the problem | `trustsight override add-url <pkg> <url> --reason "..."` | Suppresses that URL (including R152), not the next one |
 | A TOML rule is too heavy for your set | `[rules.<ID>] weight_override` in `config.toml` | Keeps the finding, lowers the arithmetic |
 | A TOML rule never applies to you | `[rules.<ID>] enabled = false` | Last resort; use a reason and revisit |
 | You want to understand the triggers | `trustsight override wizard <pkg>` | Interactive, shows the non-FATAL rules |

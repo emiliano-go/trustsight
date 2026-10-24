@@ -138,16 +138,19 @@ where push logs survive even when git history does not.
 
 ### T007: Packager Not In History {#t007}
 
-- **Target:** programmatic (AUR maintainer vs git commit messages)
+- **Target:** programmatic (AUR maintainer vs git commit identities)
 - **Severity:** INFO (weight 0)
 - **Category:** `temporal`
 
 - **Condition:** The AUR maintainer name does not appear in any commit
-  message in the retained git history of the package.
+  message, author identity or committer identity in the retained git
+  history of the package.
 
 A weight-0 corroboration signal: the AUR says this account packaged the
-project, but no commit in history mentions them. Name matching is fuzzy
-(display name vs email vs git config), so this corroborates T006 and G008
-but never scores alone. On its own tier it is nearly a confession; as a
-solo scorer it would eventually burn someone with an unusual committer
-setup.
+project, but no commit in history names them. The message is only one place
+an identity appears, so the author and committer names and addresses count
+too; a maintainer who imported the package often signs the commit and
+writes no message at all. Name matching is fuzzy (display name vs email vs
+git config), so this corroborates T006 and G008 but never scores alone. On
+its own tier it is nearly a confession; as a solo scorer it would
+eventually burn someone with an unusual committer setup.

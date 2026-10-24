@@ -73,6 +73,7 @@ def _findings_from_evaluation(evaluated: dict) -> tuple[Finding, ...]:
             template=row["template"],
             evidence=row["evidence"],
             techniques=tuple(row.get("techniques") or ()),
+            present_before=bool(row.get("present_before")),
         )
         for row in evaluated["findings"]
     )

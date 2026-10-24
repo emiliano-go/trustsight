@@ -458,7 +458,7 @@ for dep in report.flagged_dependencies:
 
 ### `Finding`
 
-`rule_id`, `rule_uid`, `severity`, `weight`, `description`, `file`, `line`, `template`, `evidence`. `rule_uid` is the permanent `TS-` identifier; a pseudo rule carries `null`.
+`rule_id`, `rule_uid`, `severity`, `weight`, `description`, `file`, `line`, `template`, `evidence`, `present_before`. `rule_uid` is the permanent `TS-` identifier; a pseudo rule carries `null`. `present_before` is true only for unchanged companion content reported at weight 0 as "present before, unchanged"; it is not evidence about the current update.
 
 ### `SuppressedRule`
 

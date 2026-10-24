@@ -103,7 +103,8 @@ def override_list(
         con.print(
             f"[dim]{', '.join(sorted(FATAL_RULES))} cannot be overridden; a FATAL "
             f"finding is never suppressed. An acknowledged URL stops scoring "
-            f"SOURCE_BUCKET and NOVELTY for that package only.[/]"
+            f"SOURCE_BUCKET and NOVELTY and stands R152 down for that package "
+            f"only.[/]"
         )
     else:
         for o in overrides:
@@ -200,10 +201,10 @@ def override_add_url(
     """Acknowledge one source URL for one package.
 
     This is the "I reviewed this particular change" flow: the URL no longer
-    scores SOURCE_BUCKET or NOVELTY for this package, while a rule override
-    (``override add``) is the "disable this detection for future changes"
-    flow. A different URL, or the same URL in another package, is judged as
-    before.
+    scores SOURCE_BUCKET or NOVELTY for this package, and R152 stands down
+    for it, while a rule override (``override add``) is the "disable this
+    detection for future changes" flow. A different URL, or the same URL in
+    another package, is judged as before.
 
     Note: the URL is normalised before it is stored - version, hash and
     date components are stripped - so this acknowledgement can carry

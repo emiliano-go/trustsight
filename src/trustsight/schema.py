@@ -137,11 +137,11 @@ class PackageFact:
     #: finding" and "a suppression silently expired".
     overrides_expired: list[str] = field(default_factory=list)
 
-    # Source URLs the operator explicitly acknowledged for this package
+    # URLs the operator explicitly acknowledged for this package
     # (`trustsight override add-url`).  They do not score SOURCE_BUCKET or
-    # NOVELTY, and they are reported here rather than dropped: a
-    # suppression the report does not show is indistinguishable from a
-    # detection that never happened.
+    # NOVELTY, and R152 stands down for the same URL.  They are reported
+    # here rather than dropped: a suppression the report does not show is
+    # indistinguishable from a detection that never happened.
     acknowledged_urls: list[dict] = field(default_factory=list)
 
     # True when the diff was larger than the configured cap and only its

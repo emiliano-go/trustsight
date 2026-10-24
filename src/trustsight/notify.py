@@ -97,6 +97,109 @@ def _member_list(finding, key: str) -> list:
         return []
 
 
+#: Rules whose finding is a statement about who owns a package.  A non-empty
+#: previous maintainer on one of these is a transition, not a first sighting.
+_OWNERSHIP_RULES = frozenset({
+    "G003", "G005", "H026", "H044", "H046", "H060", "H074", "H086",
+})
+
+
+def _transition(params: dict) -> dict:
+    """The old/new maintainer pair a finding carries, under either naming."""
+    if not isinstance(params, dict):
+        return {}
+    if "old" in params or "new" in params:
+        return {key: params[key] for key in ("old", "new") if key in params}
+    old = params.get("previous_maintainer")
+    new = params.get("current_maintainer")
+    if old is None and new is None:
+        return {}
+    return {key: value for key, value in (("old", old), ("new", new))
+            if value is not None}
+
+
+def _detail_fields(detail: dict | None) -> dict:
+    """The maintainer facts one cycle stored for a package."""
+    if not isinstance(detail, dict):
+        return {}
+    fields = {}
+    current = detail.get("maintainer")
+    if isinstance(current, str) and current:
+        fields["maintainer"] = current
+    previous = detail.get("previous_maintainer")
+    if isinstance(previous, str) and previous:
+        fields["previous_maintainer"] = previous
+    return fields
+
+
+def _alert_entries(cycle) -> list[dict]:
+    """The cycle's new alerts, with the ownership detail corpus rules carry.
+
+    An H044/H026 finding already knows the maintainer it moved from and to,
+    but the published entry used to be just ``(package, rule_id)``, so a feed
+    could say "ownership changed" without naming either side.  Carry the
+    finding's transition onto the entry, and fall back to the per-package
+    detail when the finding names only one side (H074) or none.  Only keys
+    with a value are added, and the payload trimmer still bounds the document.
+    """
+    transitions: dict[tuple[str, str], dict] = {}
+    for finding in (getattr(cycle, "cluster_findings", None) or ()):
+        if not isinstance(finding, dict):
+            continue
+        extra = _transition(finding.get("params"))
+        if not extra:
+            continue
+        rule_id = str(finding.get("rule_id", ""))
+        for member in _member_list(finding, "members"):
+            transitions[(str(member), rule_id)] = extra
+    detail = getattr(cycle, "detail", {}) or {}
+    entries: list[dict] = []
+    for package, rule_id in getattr(cycle, "new_alerts", None) or ():
+        entry = {"package": package, "rule_id": rule_id}
+        fields = _detail_fields(detail.get(package))
+        entry.update({k: v for k, v in fields.items() if k == "maintainer"})
+        entry.update(transitions.get((package, rule_id), {}))
+        # A finding that carries only one side still gets both when the cycle
+        # recorded the previous maintainer.
+        if rule_id in _OWNERSHIP_RULES and fields:
+            entry.setdefault("maintainer", fields.get("maintainer", ""))
+            if fields.get("previous_maintainer"):
+                entry.setdefault("old", fields["previous_maintainer"])
+            if fields.get("maintainer"):
+                entry.setdefault("new", fields["maintainer"])
+        elif fields.get("previous_maintainer") and fields.get("maintainer"):
+            # Any other rule on a package whose owner changed still carries
+            # the transition, so a feed can explain why the change matters.
+            entry.setdefault("old", fields["previous_maintainer"])
+            entry.setdefault("new", fields["maintainer"])
+        entries.append({key: value for key, value in entry.items()
+                        if value not in ("", None)})
+    return entries
+
+
+def _member_details(cycle, members: list[str]) -> list[dict]:
+    """Per-member ownership facts for a campaign cluster."""
+    detail = getattr(cycle, "detail", {}) or {}
+    out = []
+    for member in members:
+        fields = _detail_fields(detail.get(member))
+        if not fields:
+            continue
+        entry = {"package": member}
+        entry.update(fields)
+        d = detail.get(member) or {}
+        if d.get("new_version") or d.get("old_version"):
+            entry["version"] = (
+                f"{d.get('old_version') or '?'} -> "
+                f"{d.get('new_version') or '?'}"
+            )
+        if d.get("last_modified"):
+            entry["last_modified"] = time.strftime(
+                "%Y-%m-%d %H:%M UTC", time.gmtime(d["last_modified"]))
+        out.append(entry)
+    return out
+
+
 def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
     """A short, deterministic name for the cycle, naming the top signal.
 
@@ -215,6 +318,7 @@ def alert_payload(cycle) -> dict:
         if d.get("last_modified"):
             entry["last_modified"] = time.strftime(
                 "%Y-%m-%d %H:%M UTC", time.gmtime(d["last_modified"]))
+        entry.update(_detail_fields(d))
         if d.get("rules"):
             entry["rules"] = d["rules"]
         # The located evidence: rule, file, line, severity and rendered
@@ -257,11 +361,18 @@ def alert_payload(cycle) -> dict:
         # G006 is bounded neighbourhood context, never a campaign either.
         if not rule_id.startswith("G") or rule_id == "G006" or len(members) < 2:
             continue
-        campaign_cluster.append({
+        cluster = {
             "rule_id": rule_id,
             "members": members,
             "count": len(members),
-        })
+        }
+        # A campaign is a claim about packages changing together, so name the
+        # ownership facts per member: a reader needs to see which maintainer
+        # adopted which package, not only the member list.
+        member_details = _member_details(cycle, members)
+        if member_details:
+            cluster["members_detail"] = member_details
+        campaign_cluster.append(cluster)
     # An impersonation campaign (G005) is the one alert a reviewer must not
     # skim past: many typosquats of a popular package under one account.
     # Surfaced on its own, ahead of everything, with the maintainer and the
@@ -294,10 +405,7 @@ def alert_payload(cycle) -> dict:
             "removed": cycle.removed,
             "processed": cycle.processed,
         },
-        "alerts": [
-            {"package": package, "rule_id": rule_id}
-            for package, rule_id in cycle.new_alerts
-        ],
+        "alerts": _alert_entries(cycle),
         "over_threshold": over,
         "over_threshold_grouped": over_grouped,
         "ioc_matches": iocs,
@@ -331,9 +439,10 @@ def _fit_payload(payload: dict) -> dict:
     real one - north of ``_PAYLOAD_BUDGET_BYTES`` - where it sheds the least
     essential detail, in order: the human ``reason`` strings (the rule catalog
     still explains a rule id), then findings beyond a small per-package cap,
-    then findings entirely (``rules`` and the counts remain), then the
-    lowest-scoring over-threshold entries.  The headline, counts, packages,
-    rules, campaigns, IOCs and refusals always survive.
+    then findings entirely (``rules`` and the counts remain), then campaign
+    member detail, then the lowest-scoring over-threshold entries.  The
+    headline, counts, packages, rules, campaigns, IOCs and refusals always
+    survive.
     """
     if _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES:
         return payload
@@ -358,6 +467,11 @@ def _fit_payload(payload: dict) -> dict:
         if findings:
             entry["findings_truncated"] = len(findings)
             del entry["findings"]
+    if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
+        return out
+
+    for cluster in out.get("campaign_cluster", ()) or ():
+        cluster.pop("members_detail", None)
     if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
         return out
 

@@ -1290,6 +1290,39 @@ def test_manifest_deps_null_preserves_the_previous_observation(db):
         '[["evil", "evil.example"]]')
 
 
+def test_previous_snapshot_keeps_exactly_the_last_revision(db):
+    from trustsight.db import (
+        get_pkgbuild_snapshot,
+        get_previous_pkgbuild_snapshot,
+        save_pkgbuild_snapshot,
+    )
+
+    save_pkgbuild_snapshot("a", "pkgver=1", "1", install_text="one.install")
+    assert get_previous_pkgbuild_snapshot("a") is None
+    save_pkgbuild_snapshot("a", "pkgver=2", "2", install_text="two.install")
+    previous = get_previous_pkgbuild_snapshot("a")
+    assert previous["pkgbuild_text"] == "pkgver=1"
+    assert previous["install_text"] == "one.install"
+    assert previous["version"] == "1"
+    # Re-saving identical text is not a change: the true prior survives.
+    save_pkgbuild_snapshot("a", "pkgver=2", "2", install_text="two.install")
+    assert get_previous_pkgbuild_snapshot("a")["pkgbuild_text"] == "pkgver=1"
+    save_pkgbuild_snapshot("a", "pkgver=3", "3")
+    assert get_pkgbuild_snapshot("a")["pkgbuild_text"] == "pkgver=3"
+    assert get_previous_pkgbuild_snapshot("a")["pkgbuild_text"] == "pkgver=2"
+
+
+def test_baseline_import_does_not_seed_a_previous_revision(db):
+    from trustsight.db import (
+        get_previous_pkgbuild_snapshot,
+        save_pkgbuild_snapshot,
+    )
+
+    save_pkgbuild_snapshot("a", "pkgver=1", "1")
+    save_pkgbuild_snapshot("a", "pkgver=2", "2", retain_previous=False)
+    assert get_previous_pkgbuild_snapshot("a") is None
+
+
 def test_correlation_feeds_are_cycle_local(db):
     """G001/G002/G003/G004 join on this cycle's transitions, not history.
 

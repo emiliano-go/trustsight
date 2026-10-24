@@ -2,19 +2,40 @@
   "alert_payload": {
     "alerts": [
       {
+        "maintainer": "newm",
+        "new": "newm",
+        "old": "oldm",
         "package": "some-pkg",
-        "rule_id": "H088"
+        "rule_id": "H044"
+      },
+      {
+        "new": "newm",
+        "old": "oldm",
+        "package": "other-pkg",
+        "rule_id": "H026"
       }
     ],
     "campaign_cluster": [
       {
-        "count": 3,
+        "count": 2,
         "members": [
           "a",
-          "b",
-          "c"
+          "b"
         ],
-        "rule_id": "G001"
+        "members_detail": [
+          {
+            "last_modified": "2026-05-01 00:00 UTC",
+            "maintainer": "newm",
+            "package": "a",
+            "previous_maintainer": "oldm",
+            "version": "1 -> 2"
+          },
+          {
+            "maintainer": "newm",
+            "package": "b"
+          }
+        ],
+        "rule_id": "G003"
       },
       {
         "count": 2,
@@ -77,7 +98,9 @@
           }
         ],
         "last_modified": "2026-05-01 00:00 UTC",
+        "maintainer": "hotm",
         "package": "hot-pkg",
+        "previous_maintainer": "oldhotm",
         "rules": [
           "R001",
           "P001"
@@ -123,19 +146,40 @@
     "body": {
       "alerts": [
         {
+          "maintainer": "newm",
+          "new": "newm",
+          "old": "oldm",
           "package": "some-pkg",
-          "rule_id": "H088"
+          "rule_id": "H044"
+        },
+        {
+          "new": "newm",
+          "old": "oldm",
+          "package": "other-pkg",
+          "rule_id": "H026"
         }
       ],
       "campaign_cluster": [
         {
-          "count": 3,
+          "count": 2,
           "members": [
             "a",
-            "b",
-            "c"
+            "b"
           ],
-          "rule_id": "G001"
+          "members_detail": [
+            {
+              "last_modified": "2026-05-01 00:00 UTC",
+              "maintainer": "newm",
+              "package": "a",
+              "previous_maintainer": "oldm",
+              "version": "1 -> 2"
+            },
+            {
+              "maintainer": "newm",
+              "package": "b"
+            }
+          ],
+          "rule_id": "G003"
         },
         {
           "count": 2,
@@ -198,7 +242,9 @@
             }
           ],
           "last_modified": "2026-05-01 00:00 UTC",
+          "maintainer": "hotm",
           "package": "hot-pkg",
+          "previous_maintainer": "oldhotm",
           "rules": [
             "R001",
             "P001"

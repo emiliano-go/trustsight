@@ -95,12 +95,17 @@ other, and with no key the feed sink is skipped.
 
 The document carries the cycle counts and the alerts. Every
 `over_threshold` entry says what happened, not only that it did: the
-version transition, the AUR change date and the rules that fired. While a
-`--since` replay runs, `day` names the AUR day being analysed. The
-alerting bar is `--over-threshold N` (the `over_threshold` argument on
-`refresh_corpus`/`watch`); the default is 30, the benign corpus's measured
-95th percentile (`calibration.benign_p95`), and a package alerts when its
-score is **strictly above** it.
+version transition, the AUR change date, the current and previous
+maintainer and the rules that fired. Each `alerts` entry names the
+package and rule, and an ownership rule (H044/H026) also carries `old`
+and `new`; a `campaign_cluster` carries `members_detail` with the same
+ownership and version context for each member, so a reader can see which
+maintainer adopted which package. While a `--since` replay runs, `day`
+names the AUR day being analysed. The alerting bar is `--over-threshold
+N` (the `over_threshold` argument on `refresh_corpus`/`watch`); the
+default is 30, the benign corpus's measured 95th percentile
+(`calibration.benign_p95`), and a package alerts when its score is
+**strictly above** it.
 
 ```json
 {
@@ -110,7 +115,10 @@ score is **strictly above** it.
   "priority": "default",
   "day": "2026-05-01",
   "cycle": {"added": 3, "changed": 41, "removed": 2, "processed": 44},
-  "alerts": [{"package": "some-pkg", "rule_id": "H088"}],
+  "alerts": [
+    {"package": "adopted-pkg", "rule_id": "H044",
+     "maintainer": "newm", "old": "oldm", "new": "newm"}
+  ],
   "over_threshold": [
     {
       "package": "hot-pkg",
@@ -118,7 +126,20 @@ score is **strictly above** it.
       "aur": "https://aur.archlinux.org/packages/hot-pkg",
       "version": "1.0 -> 1.1",
       "last_modified": "2026-05-01 12:40 UTC",
+      "maintainer": "hotm",
+      "previous_maintainer": "oldhotm",
       "rules": ["H001", "R001"]
+    }
+  ],
+  "campaign_cluster": [
+    {
+      "rule_id": "G003",
+      "members": ["adopted-pkg", "other-pkg"],
+      "count": 2,
+      "members_detail": [
+        {"package": "adopted-pkg", "maintainer": "newm",
+         "previous_maintainer": "oldm", "version": "1.0 -> 2.0"}
+      ]
     }
   ],
   "ioc_matches": []

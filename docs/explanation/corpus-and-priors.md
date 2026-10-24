@@ -148,6 +148,24 @@ operator-run feature for installations that want to keep local corpus context
 current; it is not required for ordinary package review, and it does more than
 refresh priors.
 
+### Prior-revision retention
+
+A snapshot row is the current recipe. The row also keeps **exactly one prior
+revision** in `previous_pkgbuild_text`, `previous_srcinfo_text`,
+`previous_install_text`, `previous_version`, `previous_last_modified` and
+`previous_captured_at`. When a cycle saves a recipe whose text differs from
+the stored one, the stored row moves to those columns first; re-saving
+identical text leaves the true prior in place. `get_previous_pkgbuild_snapshot`
+returns it, and the ownership rules read it to show what the adopter changed.
+
+The bound is one revision on purpose, not a history. The question an adoption
+raises is "what did the recipe look like immediately before this owner?", and
+one prior answers it. A retained log of every revision would scale the corpus
+by its depth (the full AUR times dozens of revisions), and the feature has no
+reader that needs older text. A baseline import passes `retain_previous=False`:
+it may replace the current row, but a signed artifact describes one point in
+time and must not seed a prior revision the watcher never observed (A13).
+
 Each run is one **cycle**: fetch the AUR metadata dump, diff it against the
 stored snapshot, analyse the PKGBUILDs of everything added or changed, then run
 the Class D corpus sweep across the whole delta. The sweep is the part that

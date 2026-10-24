@@ -7,7 +7,7 @@ from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 from ..maintainer_email import normalize_domain
 
-__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
+__all__ = ['clear_correlation_feeds', 'clear_upstream_dep_additions', 'MAX_OBSERVED_DOMAINS', 'MAX_OBSERVED_KEYS', 'MAX_OBSERVED_LITERALS', 'MAX_PROPERTY_TRANSITIONS_PER_KEY', 'MAX_RECIPE_OBSERVATIONS_PER_PACKAGE', '_array_entries_hash', '_parse_ts', 'array_seen_before', 'correlation_feed', 'domain_first_seen', 'domain_seen_within', 'get_all_packages', 'get_history', 'get_pkgbuild_snapshot', 'get_previous_pkgbuild_snapshot', 'get_property_transitions', 'key_observed_before', 'maintainer_first_seen', 'observed_domain_count', 'observed_key_count', 'package_added_literals', 'read_aur_cache', 'record_added_literals', 'record_observed_domain', 'record_observed_key', 'record_property_transition', 'record_recipe_document', 'record_upstream_dep_additions', 'save_pkgbuild_snapshot', 'tuple_observation_count', 'write_aur_cache']
 
 def get_history(package_id: int, limit: int = 20, *, from_date: str | None = None, to_date: str | None = None) -> list[dict]:
     """Return recent analysis history for *package_id*, newest first.
@@ -151,6 +151,35 @@ def get_pkgbuild_snapshot(package_name: str) -> Optional[dict]:
         ).fetchone()
         return dict(row) if row else None
 
+def get_previous_pkgbuild_snapshot(package_name: str) -> Optional[dict]:
+    """Return the recipe this package held before its current snapshot.
+
+    ``None`` when the package has been observed once, or when the current
+    row was written by a baseline import (which never seeds prior state).
+    The shape matches :func:`get_pkgbuild_snapshot`.
+    """
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT previous_pkgbuild_text, previous_srcinfo_text,
+                      previous_install_text, previous_version,
+                      previous_last_modified, previous_captured_at
+               FROM pkgbuild_snapshots WHERE package_name = ?""",
+            (package_name,),
+        ).fetchone()
+    if not row or row["previous_pkgbuild_text"] is None:
+        return None
+    return {
+        "package_name": package_name,
+        "pkgbuild_text": row["previous_pkgbuild_text"],
+        "srcinfo_text": row["previous_srcinfo_text"],
+        "install_text": row["previous_install_text"],
+        "version": row["previous_version"] or "",
+        "last_modified": row["previous_last_modified"] or 0,
+        "captured_at": row["previous_captured_at"],
+        "manifest_deps": None,
+    }
+
+
 def save_pkgbuild_snapshot(
     package_name: str,
     pkgbuild_text: str,
@@ -159,6 +188,7 @@ def save_pkgbuild_snapshot(
     srcinfo_text: Optional[str] = None,
     install_text: Optional[str] = None,
     manifest_deps: Optional[str] = None,
+    retain_previous: bool = True,
 ) -> None:
     """Insert or update the PKGBUILD snapshot for *package_name*.
 
@@ -167,6 +197,12 @@ def save_pkgbuild_snapshot(
     existing value is preserved: a baseline import (which has no live
     manifest state) must not erase what the corpus learned, and must not
     seed prior state it did not measure (A13).
+
+    *retain_previous* keeps exactly one prior revision: when the recipe text
+    changes, the row being replaced moves to the ``previous_*`` columns, so
+    a review can read the immediate pre-change PKGBUILD.  A baseline import
+    passes ``False``: it may replace the current row, but it must not create
+    a prior revision the watcher never observed.
     """
     # Same guard as upsert_package.  These two tables are keyed by
     # package_name directly rather than through packages(id), so they were
@@ -176,11 +212,50 @@ def save_pkgbuild_snapshot(
     if package_name in _RESERVED_NAMES or package_name.startswith("__"):
         raise ValueError(f"reserved package name: {package_name!r}")
     with get_connection() as conn:
+        existing = conn.execute(
+            """SELECT pkgbuild_text, srcinfo_text, install_text, version,
+                      last_modified, captured_at, previous_pkgbuild_text,
+                      previous_srcinfo_text, previous_install_text,
+                      previous_version, previous_last_modified,
+                      previous_captured_at
+               FROM pkgbuild_snapshots WHERE package_name = ?""",
+            (package_name,),
+        ).fetchone()
+        previous = {
+            "previous_pkgbuild_text": (
+                existing["previous_pkgbuild_text"] if existing else None),
+            "previous_srcinfo_text": (
+                existing["previous_srcinfo_text"] if existing else None),
+            "previous_install_text": (
+                existing["previous_install_text"] if existing else None),
+            "previous_version": (
+                existing["previous_version"] if existing else None),
+            "previous_last_modified": (
+                existing["previous_last_modified"] if existing else 0),
+            "previous_captured_at": (
+                existing["previous_captured_at"] if existing else None),
+        }
+        # Shift only a real change: a re-import of identical text must not
+        # replace the true prior revision with a copy of the current one.
+        if (retain_previous and existing is not None
+                and existing["pkgbuild_text"] != pkgbuild_text):
+            previous = {
+                "previous_pkgbuild_text": existing["pkgbuild_text"],
+                "previous_srcinfo_text": existing["srcinfo_text"],
+                "previous_install_text": existing["install_text"],
+                "previous_version": existing["version"],
+                "previous_last_modified": existing["last_modified"],
+                "previous_captured_at": existing["captured_at"],
+            }
         conn.execute(
             """INSERT INTO pkgbuild_snapshots
                (package_name, pkgbuild_text, srcinfo_text, install_text,
-                manifest_deps, version, last_modified, captured_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                manifest_deps, version, last_modified, captured_at,
+                previous_pkgbuild_text, previous_srcinfo_text,
+                previous_install_text, previous_version,
+                previous_last_modified, previous_captured_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'),
+                       ?, ?, ?, ?, ?, ?)
                ON CONFLICT(package_name) DO UPDATE SET
                    pkgbuild_text = excluded.pkgbuild_text,
                    srcinfo_text = excluded.srcinfo_text,
@@ -190,9 +265,22 @@ def save_pkgbuild_snapshot(
                        pkgbuild_snapshots.manifest_deps),
                    version = excluded.version,
                    last_modified = excluded.last_modified,
-                   captured_at = excluded.captured_at""",
+                   captured_at = excluded.captured_at,
+                   previous_pkgbuild_text =
+                       excluded.previous_pkgbuild_text,
+                   previous_srcinfo_text = excluded.previous_srcinfo_text,
+                   previous_install_text = excluded.previous_install_text,
+                   previous_version = excluded.previous_version,
+                   previous_last_modified = excluded.previous_last_modified,
+                   previous_captured_at = excluded.previous_captured_at""",
             (package_name, pkgbuild_text, srcinfo_text, install_text,
-             manifest_deps, version, last_modified),
+             manifest_deps, version, last_modified,
+             previous["previous_pkgbuild_text"],
+             previous["previous_srcinfo_text"],
+             previous["previous_install_text"],
+             previous["previous_version"],
+             previous["previous_last_modified"],
+             previous["previous_captured_at"]),
         )
         conn.commit()
 

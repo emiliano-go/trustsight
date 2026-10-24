@@ -1428,6 +1428,13 @@ def _run_baseline_build(
             "old_version": old_snapshot["version"] if old_snapshot else "",
             "new_version": fact.new_version or meta.get("Version", ""),
             "last_modified": meta.get("LastModified"),
+            # Who owns the package now, and who owned it in the previous
+            # snapshot.  The alert document needs both sides for an ownership
+            # rule, and a campaign needs them per member; keeping them out of
+            # `detail` meant every consumer had to re-fetch the AUR metadata.
+            "maintainer": meta.get("Maintainer") or "",
+            "previous_maintainer": (
+                ((old_meta or {}).get(name) or {}).get("Maintainer") or ""),
             "rules": [f["rule_id"] for f in findings],
             "payload_urls": payload_targets,
             "findings": findings,

@@ -56,8 +56,11 @@ def test_the_sample_payload_exercises_every_branch():
     payload = contract.sample_alert_payload()
     assert payload["event"] == "trustsight.alerts"
     assert payload["alerts"]
+    assert any(a.get("old") and a.get("new") for a in payload["alerts"])
     assert payload["over_threshold"][0]["findings"]
+    assert payload["over_threshold"][0]["maintainer"]
     assert payload["ioc_matches"]
     assert payload["campaign_cluster"]
+    assert any(c.get("members_detail") for c in payload["campaign_cluster"])
     assert payload["impersonation"]
     assert payload["refusals"]

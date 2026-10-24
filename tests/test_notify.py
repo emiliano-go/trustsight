@@ -76,6 +76,84 @@ def test_payload_carries_the_alerts_and_the_cycle_counts():
     assert payload["over_threshold"] == []
 
 
+def test_ownership_alerts_name_the_maintainer_transition():
+    """An H044/H026 entry carries old -> new, so a feed can show both sides."""
+    cycle = _cycle(
+        new_alerts=[("evil-pkg", "H026"), ("evil-pkg2", "R001")],
+        cluster_findings=[
+            {"rule_id": "H026", "params": {
+                "members": ["evil-pkg"], "old": "oldm", "new": "newm"}},
+            {"rule_id": "R001", "params": {"members": ["evil-pkg2"]}},
+        ],
+    )
+    assert alert_payload(cycle)["alerts"] == [
+        {"package": "evil-pkg", "rule_id": "H026",
+         "old": "oldm", "new": "newm"},
+        {"package": "evil-pkg2", "rule_id": "R001"},
+    ]
+
+
+def test_ownership_alerts_accept_the_h026_parameter_names():
+    """H026 names its sides previous_maintainer/current_maintainer."""
+    cycle = _cycle(
+        new_alerts=[("evil-pkg", "H026")],
+        cluster_findings=[{
+            "rule_id": "H026",
+            "params": {
+                "members": ["evil-pkg"],
+                "previous_maintainer": "oldm",
+                "current_maintainer": "newm",
+            },
+        }],
+    )
+    assert alert_payload(cycle)["alerts"] == [{
+        "package": "evil-pkg", "rule_id": "H026",
+        "old": "oldm", "new": "newm",
+    }]
+
+
+def test_alerts_fall_back_to_the_cycle_detail_for_a_maintainer_change():
+    """H074 names only the adopter; the previous owner is in the detail."""
+    cycle = _cycle(
+        new_alerts=[("evil-pkg", "H074"), ("clean-pkg", "R001")],
+        detail={
+            "evil-pkg": {"maintainer": "newm",
+                         "previous_maintainer": "oldm"},
+            "clean-pkg": {"maintainer": "stable"},
+        },
+    )
+    payload = alert_payload(cycle)
+    assert payload["alerts"] == [
+        {"package": "evil-pkg", "rule_id": "H074",
+         "maintainer": "newm", "old": "oldm", "new": "newm"},
+        {"package": "clean-pkg", "rule_id": "R001",
+         "maintainer": "stable"},
+    ]
+
+
+def test_campaign_members_carry_their_ownership_and_version():
+    cycle = CycleResult(
+        cluster_findings=[{
+            "rule_id": "G003", "severity": "MEDIUM",
+            "params": {"members": ["a", "b"]},
+        }],
+        detail={
+            "a": {"maintainer": "adopter", "previous_maintainer": "olda",
+                  "old_version": "1", "new_version": "2",
+                  "last_modified": 1777593600},
+            "b": {"maintainer": "adopter"},
+        },
+    )
+    cluster = alert_payload(cycle)["campaign_cluster"][0]
+    assert cluster["members"] == ["a", "b"]
+    assert cluster["members_detail"] == [
+        {"package": "a", "maintainer": "adopter",
+         "previous_maintainer": "olda", "version": "1 -> 2",
+         "last_modified": "2026-05-01 00:00 UTC"},
+        {"package": "b", "maintainer": "adopter"},
+    ]
+
+
 def test_over_threshold_stays_at_the_default_priority():
     cycle = CycleResult(over_threshold=[("hot-pkg", 45), ("warm-pkg", 31)])
     payload = alert_payload(cycle)

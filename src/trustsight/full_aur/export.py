@@ -338,9 +338,16 @@ def build_artifact(
             dict(r) for r in
             conn.execute("SELECT * FROM package_profiles ORDER BY package_name").fetchall()
         ]
+        # The ``previous_*`` retention columns are local analysis state: an
+        # artifact describes one point in time and must not carry (or seed)
+        # a prior revision.
         snapshots = [
             dict(r) for r in
-            conn.execute("SELECT * FROM pkgbuild_snapshots ORDER BY package_name").fetchall()
+            conn.execute(
+                "SELECT package_name, pkgbuild_text, srcinfo_text, "
+                "install_text, version, last_modified, captured_at, "
+                "manifest_deps FROM pkgbuild_snapshots "
+                "ORDER BY package_name").fetchall()
         ]
         from ..db import _get_salt
         obs_salt = _get_salt(conn)
@@ -545,6 +552,10 @@ def import_baseline(
                 version=snap.get("version", ""),
                 last_modified=snap.get("last_modified", 0),
                 srcinfo_text=snap.get("srcinfo_text"),
+                # A signed artifact describes one point in time.  It may
+                # replace the current row, but it must not seed a prior
+                # revision the watcher never observed (A13).
+                retain_previous=False,
             )
         except ValueError as exc:
             log.warning("skipping baseline snapshot: %s", exc)

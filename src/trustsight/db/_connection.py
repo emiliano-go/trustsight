@@ -399,7 +399,18 @@ def init_db():
                 install_text TEXT,
                 version TEXT NOT NULL,
                 last_modified INTEGER DEFAULT 0,
-                captured_at TEXT NOT NULL
+                captured_at TEXT NOT NULL,
+                /* Exactly one prior revision, written when the current
+                   text changes.  Bounded on purpose: the analysis needs the
+                   immediately preceding recipe, and an unbounded per-
+                   package history would multiply the corpus by its depth.
+                   A baseline import never seeds these (A13). */
+                previous_pkgbuild_text TEXT,
+                previous_srcinfo_text TEXT,
+                previous_install_text TEXT,
+                previous_version TEXT,
+                previous_last_modified INTEGER DEFAULT 0,
+                previous_captured_at TEXT
             );
 
             /* the corpus as documents. Per observed package
@@ -658,6 +669,12 @@ _ADDED_COLUMNS = {
         # a baseline import leaves it NULL so a signed artifact cannot seed
         # prior state and suppress an addition (A13).
         "manifest_deps": "TEXT",
+        "previous_pkgbuild_text": "TEXT",
+        "previous_srcinfo_text": "TEXT",
+        "previous_install_text": "TEXT",
+        "previous_version": "TEXT",
+        "previous_last_modified": "INTEGER DEFAULT 0",
+        "previous_captured_at": "TEXT",
     },
     # M006 re-activation pressure: how often a campaign class has re-armed and
     # the observation span over which it did so.

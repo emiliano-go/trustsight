@@ -154,7 +154,18 @@ def fake_aur(tmp_path, monkeypatch):
     init_db()
 
     state = {"meta": {}}
-    monkeypatch.setattr(pipeline, "fetch_metadata", lambda *a, **k: state["meta"])
+    import trustsight.full_aur.metadata as metadata_module
+
+    monkeypatch.setattr(metadata_module, "_current_dump", None)
+
+    def _fetch_meta(*args, **kwargs):
+        # The real fetch installs the dump for depth.default_metadata; a
+        # fake that only returns it would leave the walk reading the previous
+        # snapshot file.
+        metadata_module._current_dump = state["meta"]
+        return state["meta"]
+
+    monkeypatch.setattr(pipeline, "fetch_metadata", _fetch_meta)
     monkeypatch.setattr(
         pipeline, "fetch_pkgbuild_with_tree",
         lambda base: ("pkgname=%s\npkgver=1.0\n" % base, None, None, False, None, None, None, True),
@@ -198,6 +209,132 @@ def test_a_second_cycle_reports_the_takeover_once(fake_aur, monkeypatch):
 
     third = run_baseline_build()
     assert third.new_alerts == []
+
+
+def test_a_missing_unchanged_dependency_is_prefilled(fake_aur):
+    """A dependency the watcher has never processed is baselined before the
+    root walk, so the root does not fail closed on an unread AUR package."""
+    import json
+
+    from trustsight.db import (
+        forget_package,
+        get_last_analysis,
+        get_package_id,
+        get_package_profile,
+        get_pkgbuild_snapshot,
+    )
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    fake_aur["meta"] = {
+        "pkg": _entry("pkg", "alice", 1_800_000_000),
+        "dep": _entry("dep", "bob", 1_800_000_000),
+    }
+    run_baseline_build(bootstrap=True)
+    forget_package("dep")
+    assert get_pkgbuild_snapshot("dep") is None
+
+    fake_aur["meta"] = {
+        "pkg": {**_entry("pkg", "alice", 1_800_000_010, version="2.0"),
+                "Depends": ["dep"]},
+        "dep": _entry("dep", "bob", 1_800_000_000),
+    }
+    result = run_baseline_build()
+
+    assert get_pkgbuild_snapshot("dep") is not None
+    assert get_package_profile("dep") is not None
+    assert "dep" not in result.detail, "a prefilled dependency is not a root alert"
+    fact = json.loads(get_last_analysis(get_package_id("pkg"))["fact_json"])
+    assert "deps_not_scanned" not in fact["coverage_gaps"]
+    assert [d["name"] for d in fact["dependencies"]] == ["dep"]
+    assert fact["dependencies"][0]["failed"] is False
+
+
+def test_delta_dependencies_are_analysed_before_their_dependents():
+    """A changed dependency must be stored before the root that needs it."""
+    from trustsight.full_aur.pipeline import _dependencies_first
+
+    meta = {
+        "app": {"Depends": ["lib"]},
+        "lib": {},
+        "other": {},
+    }
+    assert _dependencies_first(["app", "other", "lib"], meta) == [
+        "lib", "app", "other"]
+
+
+def test_a_dependency_cycle_keeps_every_package():
+    from trustsight.full_aur.pipeline import _dependencies_first
+
+    meta = {"a": {"Depends": ["b"]}, "b": {"Depends": ["a"]}}
+    assert sorted(_dependencies_first(["a", "b"], meta)) == ["a", "b"]
+
+
+def test_a_dependency_in_the_delta_is_not_prefilled(fake_aur):
+    """A changed dependency must be analysed as a root, or its diff is lost."""
+    from trustsight.full_aur.pipeline import _missing_direct_dependencies
+
+    meta = {
+        "root": {"Depends": ["dep", "changed"]},
+        "dep": {},
+        "changed": {},
+    }
+    missing, capped = _missing_direct_dependencies(
+        meta, ["root"], {"root", "changed"}, 10)
+    assert missing == ["dep"]
+    assert capped is False
+
+
+def test_dependency_prefill_is_capped(fake_aur):
+    from trustsight.full_aur.pipeline import _missing_direct_dependencies
+
+    meta = {
+        "root": {"Depends": ["dep-a", "dep-b"]},
+        "dep-a": {},
+        "dep-b": {},
+    }
+    missing, capped = _missing_direct_dependencies(meta, ["root"], {"root"}, 1)
+    assert missing == ["dep-a"]
+    assert capped is True
+
+
+def test_a_dependency_fetch_failure_still_reports_the_gap(fake_aur, monkeypatch):
+    """Prefill is best-effort: a mirror failure must stay visible."""
+    import json
+
+    import trustsight.full_aur.pipeline as pipeline
+    from trustsight.db import (
+        forget_package,
+        get_last_analysis,
+        get_package_id,
+        get_pkgbuild_snapshot,
+    )
+    from trustsight.full_aur.pipeline import run_baseline_build
+
+    fake_aur["meta"] = {
+        "pkg": _entry("pkg", "alice", 1_800_000_000),
+        "dep": _entry("dep", "bob", 1_800_000_000),
+    }
+    run_baseline_build(bootstrap=True)
+    forget_package("dep")
+
+    real_fetch = pipeline.fetch_pkgbuild_with_tree
+
+    def _fetch(base):
+        if base == "dep":
+            return (None, None, None, False, None, None, None, True)
+        return real_fetch(base)
+
+    monkeypatch.setattr(pipeline, "fetch_pkgbuild_with_tree", _fetch)
+    fake_aur["meta"] = {
+        "pkg": {**_entry("pkg", "alice", 1_800_000_010, version="2.0"),
+                "Depends": ["dep"]},
+        "dep": _entry("dep", "bob", 1_800_000_000),
+    }
+    run_baseline_build()
+
+    assert get_pkgbuild_snapshot("dep") is None
+    fact = json.loads(get_last_analysis(get_package_id("pkg"))["fact_json"])
+    assert "deps_not_scanned" in fact["coverage_gaps"]
 
 
 def test_g004_fires_only_after_a_manifest_baseline(fake_aur, monkeypatch):

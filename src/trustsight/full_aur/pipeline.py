@@ -38,6 +38,7 @@ from ..db import (
     get_connection,
     get_metadata,
     record_alerts,
+    get_package_profile,
     get_pkgbuild_snapshot,
     latest_cycle_time,
     record_cycle_events,
@@ -48,10 +49,12 @@ from ..db import (
     set_metadata,
     write_batch,
 )
+from ..deps import normalize_dependency
 from ..safe_text import clean
 from ..schema import TemporalContext
 from ..scoring import risk_level
 from ..tokenizer import TokenizerUnavailable
+from ..depth import MAX_DEPTH_NODES
 from .analyze import analyze_package_text
 from .corpus import run_corpus_sweep, source_repos_from_pkgbuild
 from .fetch import (
@@ -857,6 +860,128 @@ def _max_per_cycle() -> int:
     return n if n > 0 else 0
 
 
+#: Direct dependency fields the AUR metadata dump carries.  Same fields as
+#: ``depth.DEPTH_FIELDS``, under the RPC's capitalisation.
+_META_DEPENDENCY_FIELDS = ("Depends", "MakeDepends", "CheckDepends")
+
+#: How many distinct dependency names the prefill scan may inspect before it
+#: gives up.  The cap on *fetches* is ``MAX_DEPTH_NODES``; this one bounds the
+#: database lookups a crafted metadata entry could ask for, and leaves room
+#: for many already-stored names before the fetches are chosen.
+_MAX_PREFILL_CANDIDATES = MAX_DEPTH_NODES * 10
+
+
+def _needs_dependency_prefill(name: str) -> bool:
+    """True when the corpus has no usable stored result for *name*.
+
+    Mirrors :func:`full_aur.analyze._corpus_dependency_fact`: a profile with
+    a score or a PKGBUILD snapshot is enough, and anything less leaves the
+    dependency walk unable to read it.
+    """
+    profile = get_package_profile(name)
+    if profile and profile.get("last_score") is not None:
+        return False
+    row = get_pkgbuild_snapshot(name)
+    return not (row and row.get("pkgbuild_text"))
+
+
+#: Cap on the metadata edges the dependency-first ordering will read.  Above
+#: it the cycle keeps the delta's natural order; the cap bounds CPU/memory a
+#: crafted metadata dump could ask for, and a missed edge only means a
+#: same-cycle dependency may still leave a gap for one run.
+_MAX_ORDER_CANDIDATES = MAX_DEPTH_NODES * 50
+
+
+def _dependencies_first(pending: list[str], new_meta: dict[str, dict]) -> list[str]:
+    """Order *pending* so a dependency is analysed before its dependents.
+
+    The full-AUR walk reads a stored result.  When a dependency changed in
+    the same cycle as a package that needs it, analysing the dependent first
+    would report ``deps_not_scanned`` for a package the cycle is about to
+    process anyway.  A stable Kahn ordering removes that transient without
+    changing the set or hiding a diff.  A cycle or an over-cap metadata edge
+    list falls back to the delta's order.
+    """
+    from heapq import heappop, heappush
+
+    pending_set = set(pending)
+    edges: dict[str, set[str]] = {name: set() for name in pending}
+    dependents: dict[str, list[str]] = {}
+    examined = 0
+    for parent in pending:
+        entry = new_meta.get(parent) or {}
+        for field_name in _META_DEPENDENCY_FIELDS:
+            for raw in entry.get(field_name) or ():
+                examined += 1
+                if examined > _MAX_ORDER_CANDIDATES:
+                    return pending
+                dep = normalize_dependency(raw)
+                if not dep or dep not in pending_set or dep == parent:
+                    continue
+                if dep not in edges[parent]:
+                    edges[parent].add(dep)
+                    dependents.setdefault(dep, []).append(parent)
+    ready = [name for name in pending if not edges[name]]
+    ready.sort()
+    ordered: list[str] = []
+    emitted: set[str] = set()
+    while ready:
+        name = heappop(ready)
+        if name in emitted:
+            continue
+        emitted.add(name)
+        ordered.append(name)
+        for parent in dependents.get(name, ()):
+            edges[parent].discard(name)
+            if not edges[parent]:
+                heappush(ready, parent)
+    if len(ordered) != len(pending):
+        # A dependency cycle: keep the deterministic remainder rather than
+        # dropping packages from the cycle.
+        ordered.extend(sorted(name for name in pending if name not in emitted))
+    return ordered
+
+
+def _missing_direct_dependencies(
+    new_meta: dict[str, dict],
+    pending: list[str],
+    to_process: set[str],
+    cap: int,
+) -> tuple[list[str], bool]:
+    """Dependencies to baseline before this cycle's roots are analysed.
+
+    Only packages *not* in this cycle's delta are eligible.  A dependency
+    that is itself pending must be analysed as a root so its own diff is
+    recorded; saving its snapshot here first would turn that change into an
+    unchanged first observation.  The cap bounds the extra fetch work the
+    same way ``MAX_DEPTH_NODES`` bounds one walk, and the scan stops as soon
+    as the cap is reached so a hostile metadata entry cannot make this pass
+    query the database for an unbounded dependency list.
+
+    Returns ``(missing, capped)``.
+    """
+    seen: set[str] = set()
+    missing: list[str] = []
+    for parent in pending:
+        entry = new_meta.get(parent) or {}
+        for field_name in _META_DEPENDENCY_FIELDS:
+            for raw in entry.get(field_name) or ():
+                dep = normalize_dependency(raw)
+                if not dep or dep in seen:
+                    continue
+                seen.add(dep)
+                if len(seen) > _MAX_PREFILL_CANDIDATES:
+                    return missing, True
+                if dep not in new_meta or dep in to_process:
+                    continue
+                if not _needs_dependency_prefill(dep):
+                    continue
+                if len(missing) >= cap:
+                    return missing, True
+                missing.append(dep)
+    return missing, False
+
+
 def _iter_prefetched(names, fetch_fn, workers: int):
     """Yield ``(name, fetch_result)`` in *names* order, fetching ahead.
 
@@ -1112,6 +1237,7 @@ def _run_baseline_build(
     pending_all = [n for n in to_process if n not in processed]
     pending = pending_all[:cap] if cap else pending_all
     partial = bool(cap) and len(pending_all) > cap
+    process_order = _dependencies_first(pending, new_meta)
     _log(
         f"Processing {len(pending)} package(s) this cycle "
         f"({len(processed)} already done, {len(pending_all)} pending)"
@@ -1129,22 +1255,28 @@ def _run_baseline_build(
             return (None, None, None, False, None, None, None, True)
         return fetch_pkgbuild_with_tree(_pkg_or_base(meta))
 
-    def _store(name, fetched) -> str:
-        """Analyse and persist one fetched package.  Returns a status string:
-        ``ok``, ``vanished``, ``reserved`` or ``fetch_failed``."""
+    def _analyse_and_store(name, fetched, analyse_depth):
+        """Analyse one fetched package and persist its result.
+
+        Returns ``(status, fact)``.  This is the shared half of the root
+        path and the dependency prefill: it owns the tokenizer refusal, the
+        snapshot/profile write and G004's baseline handling, but emits no
+        alert.  A prefill must persist the dependency without entering the
+        cycle's score/detail maps.
+        """
         meta = new_meta.get(name)
         if meta is None:
             log.warning("metadata for %s vanished; skipping", name)
-            return "vanished"
+            return "vanished", None
         if is_reserved_name(name):
             log.warning("skipping reserved package name %r", name)
-            return "reserved"
+            return "reserved", None
         (new_pkgbuild, tree_manifest, trailer_finding, snapshot_refused,
          install_text, install_name, manifest_texts,
          manifest_complete) = fetched
         if new_pkgbuild is None:
             log.debug("could not fetch PKGBUILD for %s (base: %s)", name, _pkg_or_base(meta))
-            return "fetch_failed"
+            return "fetch_failed", None
 
         old_snapshot = get_pkgbuild_snapshot(name)
         old_pkgbuild = old_snapshot["pkgbuild_text"] if old_snapshot else None
@@ -1195,7 +1327,7 @@ def _run_baseline_build(
                     tree_manifest=tree_manifest,
                     archive_trailer_finding=trailer_finding,
                     snapshot_refused=snapshot_refused,
-                    depth=depth,
+                    depth=analyse_depth,
                     # The corpus builder is a writer by definition: it exists to
                     # accumulate the observations the read-only default consumes.
                     record=True,
@@ -1231,7 +1363,17 @@ def _run_baseline_build(
             # not analysed and nothing is persisted, so it cannot enter the
             # corpus as if it had been vetted; the cycle continues.
             log.warning("tokenizer unavailable for %s: %s; not vetted", name, exc)
-            return "not_vetted"
+            return "not_vetted", None
+        return "ok", fact
+
+    def _store(name, fetched) -> str:
+        """Analyse and persist one fetched package.  Returns a status string:
+        ``ok``, ``vanished``, ``reserved`` or ``fetch_failed``."""
+        status, fact = _analyse_and_store(name, fetched, depth)
+        if status != "ok":
+            return status
+        meta = new_meta.get(name) or {}
+        old_snapshot = get_pkgbuild_snapshot(name)
         scores[name] = fact.final_score
         if fact.ioc_matches:
             # A known-bad match pages at maximum priority whatever the score:
@@ -1292,12 +1434,44 @@ def _run_baseline_build(
         }
         return "ok"
 
+    # A direct AUR dependency missing from the corpus makes the root's walk
+    # fail closed as deps_not_scanned.  The watcher analyses only changed
+    # packages, so an unchanged dependency that predates the corpus would
+    # otherwise stay unread indefinitely.  Baseline those dependencies here,
+    # before the roots, with depth 0 so this cannot recurse.  Anything in the
+    # current delta is excluded: its own turn as a root must record the diff.
+    missing_deps, prefill_capped = _missing_direct_dependencies(
+        new_meta, pending, set(to_process), MAX_DEPTH_NODES)
+    if missing_deps:
+        _log(
+            f"Prefilling {len(missing_deps)} missing AUR "
+            f"dependenc{'y' if len(missing_deps) == 1 else 'ies'} "
+            "so this cycle's walks can read them"
+        )
+        prefetched = 0
+        for dep_name, fetched in _iter_prefetched(
+                missing_deps, _fetch_one, _fetch_workers()):
+            status, _fact = _analyse_and_store(dep_name, fetched, 0)
+            if status == "ok":
+                prefetched += 1
+            else:
+                log.warning(
+                    "dependency prefill for %s did not complete (%s); the "
+                    "dependent may report deps_not_scanned", dep_name, status)
+        _log(f"Prefilled {prefetched}/{len(missing_deps)} dependencies")
+    if prefill_capped:
+        _log(
+            f"Dependency prefill stopped at its bound "
+            f"({MAX_DEPTH_NODES} fetches / {_MAX_PREFILL_CANDIDATES} "
+            "candidates); more may remain for a later cycle"
+        )
+
     fetch_failures = 0
     not_vetted = 0
     progress = _corpus_progress(len(pending), json_output)
     try:
         done = 0
-        for name, fetched in _iter_prefetched(pending, _fetch_one, _fetch_workers()):
+        for name, fetched in _iter_prefetched(process_order, _fetch_one, _fetch_workers()):
             status = _store(name, fetched)
             if status == "fetch_failed":
                 fetch_failures += 1

@@ -95,6 +95,7 @@ from ._validation import (
 from .client import (
     TrustSight,
 )
+from ..depth import DependencyReport
 
 __all__ = [
     "TrustSight",
@@ -112,6 +113,7 @@ __all__ = [
     "PivotResult",
     "PivotMatch",
     "Progress",
+    "DependencyReport",
     "TrustSightError",
     "PackageNotFound",
     "FLAG_THRESHOLD",

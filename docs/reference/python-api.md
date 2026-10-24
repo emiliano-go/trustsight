@@ -145,9 +145,18 @@ with TrustSight() as ts:
 
 The effective configuration: defaults merged with the user's file.
 
+```python
+thresholds = ts.config().get("thresholds", {})
+```
+
 ### `status() -> Status`
 
 Database and corpus health. What `trustsight status` reports, plus the config directory, database path and fingerprint.
+
+```python
+state = ts.status()
+print(state.packages_tracked, state.dependency_corpus_loaded)
+```
 
 ### `close()`
 
@@ -192,6 +201,16 @@ report = ts.analyze_diff(pathlib.Path("change.diff").read_text())
 ### `verify_build(package, *, diff_text="", manifest=None, declared=None, static_clean=None) -> dict`
 
 The optional **L9 build lane**, off by default (`[verify] enabled = false`). With the lane disabled or the container unavailable it returns `{"status": "l9_unavailable", ...}` - a weight-0 boundary that never reads as clean or malicious. Given a `manifest` it inspects the built artifact (A001-A008) without executing anything (the build that produced the manifest runs outside the static core) and returns `{"status": "l9_analyzed", "findings": [...]}`. Pass `static_clean` (the L1-L8 outcome) to set `l9_divergence: true` when the two disagree; both profiles render and L9 never edits the static verdict. See [Artifact](rules/artifact.md).
+
+```python
+result = ts.verify_build(
+    "some-package",
+    manifest=manifest,
+    static_clean=True,
+)
+if result["status"] == "l9_unavailable":
+    print(result["reason"])
+```
 
 ### `review(*, packages=None, limit=0, repos=None, foreign=False, all_repos=False, all_packages=False, on_progress=None, on_warning=None, depth=None, deps=False, record=False) -> ReviewResult`
 
@@ -250,6 +269,11 @@ Refreshes the AUR metadata snapshot, analyses what changed since the stored copy
 
 `over_threshold` is the alerting bar for `CycleReport.over_threshold`; `None` uses the benign corpus's measured p95 (30). `since` is a unix timestamp to replay change history from, one AUR day per cycle, or `None` for the normal delta.
 
+```python
+cycle = ts.refresh_corpus()
+print(cycle.processed, cycle.flagged)
+```
+
 ### `watch(*, interval=None, cycles=0, over_threshold=None, since=None, sleep=time.sleep) -> Iterator[CycleReport]`
 
 `trustsight full-aur --watch` as a generator. Each cycle is exactly what `refresh_corpus` does once; the loop adds repetition plus memory. A cluster appears in `new_alerts` the first time it is seen and is then counted, not re-announced, so a quiet cycle yields a report with nothing new in it rather than the same forty-package adoption again.
@@ -268,13 +292,23 @@ for cycle in ts.watch(interval=1800):
 
 Import a signed baseline corpus artifact. Unsigned artifacts are rejected unless `allow_unsigned` is set, which is for local builds only: an unsigned baseline is data of unknown provenance being written into the database that every subsequent novelty judgement reads.
 
+```python
+ts.import_baseline("baseline-seed.tar.gz")
+```
+
 ### `pivot(indicator, *, type=None) -> PivotResult`
 
 Find every corpus package referencing `indicator`, the inverse of a per-package finding. Equivalent to `trustsight corpus pivot`.
 
 The match is exact and reads only stored corpus material, never the network. `type` forces the indicator type (`package`, `domain` or `hash`) when the shape is ambiguous.
 
-An empty `matches` means the corpus holds no reference, not that the indicator is harmless. Check `PivotResult.searched` first: when it is `False` there was no corpus to search at all.
+An empty `matches` means the corpus holds no reference, not that the indicator is harmless. Check `PivotResult.sources` first: when it is empty there was no corpus to search at all.
+
+```python
+result = ts.pivot("evil.example")
+for match in result.matches:
+    print(match.package, match.surface, match.detail)
+```
 
 ---
 
@@ -284,9 +318,19 @@ An empty `matches` means the corpus holds no reference, not that the indicator i
 
 Past analyses of `package`, newest first. Returns an empty list when the package has never been analysed, which is a fact about this database rather than an error. `with_rules=True` also loads the rules that fired on each run.
 
+```python
+for entry in ts.history("some-package", limit=5):
+    print(entry.timestamp, entry.score, entry.risk)
+```
+
 ### `packages(*, limit=0) -> list[TrackedPackage]`
 
 Every package in the database with its latest score. What `trustsight list` shows.
+
+```python
+for pkg in ts.packages(limit=10):
+    print(pkg.name, pkg.version, pkg.risk)
+```
 
 ### `forget(*packages) -> dict[str, dict]`
 
@@ -294,9 +338,19 @@ Delete tracked packages and all their history. Returns `{package: {table: rows_d
 
 Not reversible. The observations it removes are what the novelty signals count.
 
+```python
+deleted = ts.forget("old-package")
+print(deleted["old-package"])
+```
+
 ### `prune(*, dry_run=False) -> dict[str, dict]`
 
 Forget every tracked package that no longer exists in the AUR. Raises `TrustSightError` when the AUR gave no authoritative answer (network failure, retry exhaustion, malformed reply), rather than reading a network blip as "the whole AUR is gone".
+
+```python
+would_go = ts.prune(dry_run=True)
+print(sum(len(v) for v in would_go.values()), "rows")
+```
 
 ---
 
@@ -347,6 +401,16 @@ The analysis of one package.
 | `boundaries` | `tuple[AnalysisBoundary, ...]` | The unified analysis boundaries: one per coverage gap and one per W-rendering, each `{kind, gap, w_rule, detail, forbids_clean}`. |
 
 Derived properties: `flagged` (score above the 20-point threshold), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).
+
+### `DependencyReport`
+
+`name`, `depth`, `score`, `risk`, `risk_label`, `finding_count`, `coverage_gaps`, `via`, `parent`, `failed`, `error`. Derived: `flagged`. One analysed dependency, each a full analysis in its own right; `via` names the dependency field that pulled it in, and `parent` the package that declared it.
+
+```python
+report = ts.inspect("some-package", depth=2)
+for dep in report.flagged_dependencies:
+    print(f"L{dep.depth} {dep.name}: {dep.score}/100 ({dep.risk})")
+```
 
 ### `Finding`
 

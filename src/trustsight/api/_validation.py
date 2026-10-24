@@ -1,4 +1,4 @@
-"""Extracted from api.py: _validation."""
+"""Input validation, bounds and public exceptions for :mod:`trustsight.api`."""
 
 from __future__ import annotations
 from typing import Sequence

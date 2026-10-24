@@ -91,6 +91,29 @@ class DependencyReport:
     any package, so duplicating it inside the parent's stored record would
     bloat ``fact_json`` without adding a fact. This is what a reader needs
     to decide whether to go and look.
+
+    :ivar name: dependency package name.
+    :ivar depth: level in the dependency walk (1 = direct).
+    :ivar score: the dependency's own 0-100 score.
+    :ivar risk: the band its own analysis supports.
+    :ivar risk_label: ``risk`` qualified in prose when coverage was
+        incomplete.
+    :ivar finding_count: number of findings its analysis emitted.
+    :ivar coverage_gaps: what its analysis could not read.
+    :ivar via: the dependency field of the parent that brought it in.
+    :ivar parent: the package that declared it.
+    :ivar failed: it could not be analysed at all; distinct from a clean
+        result.
+    :ivar error: the failure message when :attr:`failed`.
+
+    Example:
+        .. code-block:: python
+
+            from trustsight import TrustSight
+
+            report = TrustSight().inspect("some-package", depth=2)
+            for dep in report.flagged_dependencies:
+                print(f"L{dep.depth} {dep.name}: {dep.score}/100 ({dep.risk})")
     """
 
     name: str
@@ -110,11 +133,13 @@ class DependencyReport:
 
     @property
     def flagged(self) -> bool:
+        """True when the dependency's own score clears the review threshold."""
         from .review_policy import review_policy
 
         return review_policy().flagged(self.score)
 
     def to_dict(self) -> dict:
+        """Serialize the dependency to a plain dict."""
         return {
             "name": self.name,
             "depth": self.depth,

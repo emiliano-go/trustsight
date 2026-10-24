@@ -1,0 +1,53 @@
+name: False positive intake
+
+# Validate a false-positive issue form, label it, and post the intake
+# checklist.  This is deliberately read-only over the issue text and never
+# runs the harness or the AUR clients from an untrusted issue event.
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  intake:
+    if: >-
+      github.event.issue.pull_request == null &&
+      contains(github.event.issue.labels.*.name, 'false-positive')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Ensure intake labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create fp-intake-ok --color 0e8a16 \
+            --description "The false-positive issue has the required evidence" \
+            --force
+          gh label create needs-info --color d93f0b \
+            --description "The false-positive issue is missing required evidence" \
+            --force
+          gh label create overweighted --color fbca04 \
+            --description "Correct finding, weight or severity to review" \
+            --force
+          gh label create benign-practice --color c5def5 \
+            --description "Real finding about a packager practice, not a rule bug" \
+            --force
+          gh label create confirmed-fp --color 1d76db \
+            --description "Triage confirmed a bad rule trigger" \
+            --force
+          gh label create fixed --color 0e8a16 \
+            --description "The false-positive fix merged" \
+            --force
+
+      - name: Validate the report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/fp_intake.py

@@ -400,6 +400,45 @@ def test_read_deadline_refuses_a_slow_stream():
         read_capped_with_deadline(Endless(), 10**9, "slow", deadline_seconds=-1)
 
 
+def test_read_deadline_is_checked_after_each_read(monkeypatch):
+    """A reader that keeps returning bytes must not outlive the budget."""
+    import time
+
+    from trustsight import bounded_io
+
+    class Endless:
+        def __init__(self):
+            self.calls = 0
+
+        def read1(self, n):
+            self.calls += 1
+            return b"x"
+
+        def read(self, n):  # pragma: no cover - proves read1 is preferred
+            raise AssertionError("read1 must be preferred")
+
+    clock = iter([0.0, 0.0, 1.0])
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+    reader = Endless()
+
+    with pytest.raises(ReadTimedOut):
+        bounded_io.read_capped_with_deadline(
+            reader, 10**9, "slow", deadline_seconds=0.5)
+    assert reader.calls == 1
+
+
+def test_read_deadline_keeps_normal_reads(monkeypatch):
+    """The deadline must not disturb a reader that finishes promptly."""
+    import io
+    import time
+
+    from trustsight import bounded_io
+
+    monkeypatch.setattr(time, "monotonic", lambda: 0.0)
+    assert bounded_io.read_capped_with_deadline(
+        io.BytesIO(b"abc"), 10, "normal", deadline_seconds=1.0) == b"abc"
+
+
 def test_snapshot_manifest_bounds_total_members():
     """The member bound counts every visited member, not only appended files.
 

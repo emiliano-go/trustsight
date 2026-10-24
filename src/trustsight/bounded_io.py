@@ -51,6 +51,27 @@ def read_capped(fh: BinaryIO, limit: int, what: str) -> bytes:
     return bytes(out)
 
 
+def _bound_socket_timeout(fh: BinaryIO, remaining: float) -> None:
+    """Cap the underlying socket wait at the remaining wall-clock budget.
+
+    A logical deadline checked only between reads is not a deadline:
+    ``HTTPResponse.read(n)`` blocks until it has ``n`` bytes, so one slow
+    chunk can outlive the budget.  This lowers the socket timeout when the
+    response exposes a real socket and leaves synthetic readers untouched.
+    """
+    sock = getattr(getattr(getattr(fh, "fp", None), "raw", None), "_sock", None)
+    if sock is None:
+        return
+    try:
+        current = sock.gettimeout()
+        if current is None or current > remaining:
+            sock.settimeout(remaining)
+    except (OSError, ValueError):
+        # A synthetic or already-closed transport: the logical deadline below
+        # still refuses, and the caller's per-op timeout remains the bound.
+        pass
+
+
 def read_capped_with_deadline(
     fh: BinaryIO, limit: int, what: str, deadline_seconds: float
 ) -> bytes:
@@ -59,19 +80,26 @@ def read_capped_with_deadline(
     ``urlopen(timeout=...)`` bounds a single socket operation, not the
     download: a slow-drip server resets it on every chunk, so a response
     can be held open indefinitely while staying under the byte cap.  This
-    charges the whole transfer one deadline.
+    charges the whole transfer one deadline, checks it before every read,
+    and lowers the socket timeout to the remaining budget.  ``read1`` is
+    preferred when available so one call cannot demand the whole remaining
+    body; a reader without it still gets the between-read deadline check.
     """
     import time
 
     deadline = time.monotonic() + deadline_seconds
     out = bytearray()
+    read1 = getattr(fh, "read1", None)
+    reader = read1 if callable(read1) else fh.read
     while True:
-        if time.monotonic() > deadline:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             raise ReadTimedOut(
                 f"{what} exceeded its {deadline_seconds:g}s deadline; refusing "
                 "to keep reading"
             )
-        chunk = fh.read(_CHUNK_BYTES)
+        _bound_socket_timeout(fh, remaining)
+        chunk = reader(_CHUNK_BYTES)
         if not chunk:
             break
         out.extend(chunk)

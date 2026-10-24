@@ -594,3 +594,45 @@ def test_download_progress_draws_on_stderr_and_stops(monkeypatch):
         on_progress(0, 10)
         on_progress(10, 10)
     assert "Downloading x..." in buf.getvalue()
+
+# --- release-listing reads carry the total deadline ------------------------
+
+def test_releases_json_uses_the_bounded_reader(monkeypatch):
+    class Good:
+        def __init__(self):
+            self.chunks = [b'[{"tag_name": "baseline-2026-10-22"}]', b""]
+
+        def read1(self, n):
+            return self.chunks.pop(0)
+
+        def read(self, n):  # pragma: no cover - read1 must be preferred
+            raise AssertionError("read1 must be preferred")
+
+    assert b"baseline-2026-10-22" in release._read_releases_json(Good())
+
+
+def test_releases_json_returns_none_on_a_slow_drip(monkeypatch):
+    import time
+
+    class Slow:
+        def read1(self, n):
+            return b"x"
+
+        def read(self, n):  # pragma: no cover
+            raise AssertionError("read1 must be preferred")
+
+    clock = iter([0.0, 0.0, release._DOWNLOAD_DEADLINE_SECONDS + 1])
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    assert release._read_releases_json(Slow()) is None
+
+
+def test_releases_json_returns_none_over_the_byte_cap():
+    class Huge:
+        def read1(self, n):
+            return b"x" * (release._MAX_RELEASES_JSON_BYTES + 1)
+
+        def read(self, n):  # pragma: no cover
+            raise AssertionError("read1 must be preferred")
+
+    assert release._read_releases_json(Huge()) is None

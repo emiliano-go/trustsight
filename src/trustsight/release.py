@@ -236,6 +236,24 @@ _TAG_CACHE: dict[tuple[str, str], str | None] = {}
 _TAGS_RESOLVED: set[tuple[str, str]] = set()
 
 
+def _read_releases_json(resp) -> bytes | None:
+    """Read a release-listing response under the byte cap and total deadline.
+
+    ``None`` means the listing could not be read whole (too large or too
+    slow), which every caller already treats as "cannot tell", never as an
+    empty or up-to-date answer.
+    """
+    from .bounded_io import ReadTimedOut, ReadTooLarge, read_capped_with_deadline
+
+    try:
+        return read_capped_with_deadline(
+            resp, _MAX_RELEASES_JSON_BYTES, "GitHub releases listing",
+            _DOWNLOAD_DEADLINE_SECONDS,
+        )
+    except (ReadTimedOut, ReadTooLarge):
+        return None
+
+
 def _resolve_channel_tag(prefix: str, channel: Channel | None = None) -> str | None:
     """Find the most recent ``<prefix>*`` release tag that carries assets.
 
@@ -260,10 +278,10 @@ def _resolve_channel_tag(prefix: str, channel: Channel | None = None) -> str | N
             },
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
-        # A truncated JSON body must not be parsed as if it were complete:
-        # fall back to ``latest`` instead of reading a cut-off listing.
-        if len(body) > _MAX_RELEASES_JSON_BYTES:
+            body = _read_releases_json(resp)
+        # A truncated or timed-out JSON body must not be parsed as if it were
+        # complete: fall back to ``latest`` instead of reading a cut-off listing.
+        if body is None:
             return None
         releases = json.loads(body)
         for release in releases:
@@ -430,9 +448,9 @@ def latest_release_tag() -> str | None:
             },
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
-            body = resp.read(_MAX_RELEASES_JSON_BYTES + 1)
-        # A truncated body must not be parsed as if complete.
-        if len(body) > _MAX_RELEASES_JSON_BYTES:
+            body = _read_releases_json(resp)
+        # A truncated or timed-out body must not be parsed as if complete.
+        if body is None:
             return None
         _LATEST_TAG_CACHE = _newest_semver_tag(json.loads(body))
     except Exception:
@@ -565,6 +583,15 @@ class _ProgressReader:
 
     def read(self, n: int = -1) -> bytes:
         chunk = self._fh.read(n)
+        if chunk:
+            self._pos += len(chunk)
+            self._on_progress(self._pos, self._total)
+        return chunk
+
+    def read1(self, n: int = -1) -> bytes:
+        """Forward ``read1`` so the bounded reader can avoid a blocking read."""
+        inner = getattr(self._fh, "read1", None)
+        chunk = inner(n) if callable(inner) else self._fh.read(n)
         if chunk:
             self._pos += len(chunk)
             self._on_progress(self._pos, self._total)

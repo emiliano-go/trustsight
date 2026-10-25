@@ -448,7 +448,7 @@ def ioc_list(
                 from ..ioc_baseline import _is_expired
                 if _is_expired(e.expires_at):
                     line += " [EXPIRED]"
-            print(line)
+            print(clean(line))
 
 
 def _export_row(e) -> dict:

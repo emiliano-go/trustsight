@@ -64,17 +64,17 @@ def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
     return bool(names - have)
 
 _NOEXTRACT_RE = re.compile(
-    r"^\+\s*noextract\s*=\s*\(", re.MULTILINE
+    r"^\+?\s*noextract\s*=\s*\(", re.MULTILINE
 )
 
-def _has_noextract(diff_text: str) -> bool:
-    """True when the diff adds a noextract=() declaration.
+def _has_noextract(text: str) -> bool:
+    """True when the post-state recipe declares noextract=().
 
-    noextract=() suppresses extraction of specific source archives.
-    When present, the contents of those archives are not available to
-    the analysis, so any rule that would examine them cannot fire.
+    Accept either a raw PKGBUILD or a diff (added/context lines, never a
+    removed line).  noextract=() suppresses extraction of source archives,
+    whose contents are then unavailable to every analysis path.
     """
-    return bool(_NOEXTRACT_RE.search(diff_text))
+    return bool(_NOEXTRACT_RE.search(text))
 
 def _binary_metadata_finding(paths: list[str]) -> dict:
     """A HIGH finding for metadata git refused to diff as text.

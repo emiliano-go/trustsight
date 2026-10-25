@@ -154,6 +154,7 @@ def gate_regex_input_is_bounded() -> Gate:
 
 def gate_coverage_fails_closed() -> Gate:
     """An analysis that did not see everything cannot report Low."""
+    from trustsight.analysis import scan_diff
     from trustsight.coverage import GAPS, DIFF_TRUNCATED, fail_closed
     from trustsight.schema import ScoreEntry
 
@@ -169,6 +170,25 @@ def gate_coverage_fails_closed() -> Gate:
         problems.append("a HIGH finding was downgraded to Inconclusive")
     if fail_closed("Low", [], []) != "Low":
         problems.append("a complete analysis was downgraded")
+
+    # Exercise known incomplete *inputs*, not only gaps already constructed:
+    # a producer that never contributes the gap otherwise passes this gate.
+    unresolved = scan_diff(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n pkgname=demo\n"
+        "+foo=('a \"unterminated)\n",
+        package_name="", tree_manifest=[("PKGBUILD", b"pkgname=demo\n")],
+    )
+    if not unresolved.coverage_gaps or unresolved.risk == "Low":
+        problems.append("an unresolved assignment reported a complete Low result")
+    current = "pkgname=demo\npkgver=2\nnoextract=('payload.tar.gz')\n"
+    noextract = scan_diff(
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n-pkgver=1\n+pkgver=2\n",
+        package_name="", current_text=current,
+        tree_manifest=[("PKGBUILD", current.encode())],
+    )
+    if "noextract_suppressed" not in noextract.coverage_gaps \
+            or noextract.risk == "Low":
+        problems.append("existing noextract reported a complete Low result")
     return Gate("incomplete coverage fails closed", not problems, problems)
 
 def gate_truncation_is_visible() -> Gate:
@@ -683,17 +703,27 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
     Enumerated from the source rather than from the paths a test happens
     to call.  Most producers set ``coverage_gaps``; one, the first-analysis
     path, declared ``tree_analyzed=True`` having read no tree at all and
-    reported a bare "Low".  A producer added later fails here rather than
-    shipping a result that silently claims full coverage.
+    reported a bare "Low".  Every gaps_from producer must also account for
+    unresolved assignments and the post-state noextract declaration, so a
+    new entry point cannot silently omit either known boundary.
     """
     hits: list[str] = []
     found = 0
+    gap_calls = 0
     for path in _python_files():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
-            if _call_name(node).split(".")[-1] != "PackageFact":
+            name = _call_name(node).split(".")[-1]
+            if name == "gaps_from":
+                gap_calls += 1
+                kwargs = {kw.arg for kw in node.keywords}
+                for required in ("unresolved_assignments", "noextract_present"):
+                    if required not in kwargs:
+                        hits.append(f"{_rel(path)}:{node.lineno} no {required}=")
+                continue
+            if name != "PackageFact":
                 continue
             found += 1
             kwargs = {kw.arg for kw in node.keywords}
@@ -708,4 +738,6 @@ def gate_every_producer_accounts_for_coverage() -> Gate:
                         )
     if not found:
         hits.append("no PackageFact construction found: the check sees nothing")
+    if not gap_calls:
+        hits.append("no gaps_from producer found: the check sees nothing")
     return Gate("every result declares its coverage", not hits, hits or found)

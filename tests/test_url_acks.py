@@ -123,6 +123,11 @@ def test_ack_silences_r152_on_the_same_url(overrides_file):
     add_url_ack("demo", "https://demo.github.io/docs/", "reviewed docs link")
     fact = scan_diff(diff, package_name="demo")
     assert not any(e.rule_id == "R152" for e in fact.score_breakdown)
+    # B5: removing the finding must not remove its visible acknowledgement.
+    assert fact.acknowledged_urls == [{
+        "url": "https://demo.github.io/docs/",
+        "reason": "reviewed docs link",
+    }]
 
 
 def test_ack_does_not_silence_r152_on_an_unacknowledged_url(overrides_file):

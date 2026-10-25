@@ -127,6 +127,20 @@ def _h049_findings(breaks: list) -> list[dict]:
         changed.append((break_, old, new))
     if not changed:
         return []
+    # An org set that only *lost* entries while the host set stayed the same
+    # is not a source move: it is the representation change from counting a
+    # non-forge path segment as an owner (or an existing database losing those
+    # entries).  A real move adds an owner or changes the host, and still
+    # fires; an empty new set was already skipped above.
+    hosts_changed = any(break_.key == "source_hosts" for break_, _, _ in changed)
+    if not hosts_changed:
+        changed = [
+            (break_, old, new)
+            for break_, old, new in changed
+            if not (break_.key == "source_orgs" and set(new) <= set(old))
+        ]
+        if not changed:
+            return []
     keys = [key for key in _H049_KEYS if any(b.key == key for b, _, _ in changed)]
     triggers = [
         {
@@ -139,7 +153,7 @@ def _h049_findings(breaks: list) -> list[dict]:
     ]
     stable_for_n = min(break_.stable_for_n for break_, _, _ in changed)
     return [stamp({
-        "rule_id": "H049", "name": "Source Host Changed",
+        "rule_id": "H049", "name": "Source Origin Changed",
         "severity": "MEDIUM", "category": "source",
         "match": f"source {', '.join(keys)} changed after "
                  f"{stable_for_n} stable obs",

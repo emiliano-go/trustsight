@@ -6,6 +6,7 @@ false-positive workflow: a fix that merely stops firing is not a fix.
 
 import sys
 import difflib
+import json
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -172,3 +173,66 @@ def test_g010_does_not_headline_a_census():
     assert "Campaign across" not in payload["title"]
     assert payload["title"].startswith("TrustSight: sfptool-bin scored 50")
     assert [c["rule_id"] for c in payload["campaign_cluster"]] == ["G010"]
+
+
+# ---------------------------------------------------------------------------
+# H049 - source_orgs on a non-forge host is a directory, not an owner
+# ---------------------------------------------------------------------------
+
+def test_h049_org_extraction_is_forge_only_and_case_normalised():
+    from trustsight.full_aur.properties import _extract_host_org
+
+    hosts: set[str] = set()
+    orgs: set[str] = set()
+    _extract_host_org("https://www.heidisql.com/builds/a.exe", hosts, orgs)
+    assert hosts == {"www.heidisql.com"}
+    assert orgs == set()
+    _extract_host_org("https://github.com/Ceereals/whispy/a.tar.gz", hosts, orgs)
+    assert "github.com/ceereals" in orgs
+
+
+def _break(key, old, new):
+    from trustsight.full_aur.properties import PropertyBreak
+
+    return PropertyBreak(key=key, old_value=json.dumps(sorted(old)),
+                         new_value=json.dumps(sorted(new)),
+                         stable_for_n=20, weight=15)
+
+
+def test_h049_a_subset_org_change_is_a_representation_change():
+    from trustsight.analysis.longitudinal import _h049_findings
+
+    assert _h049_findings([
+        _break("source_orgs", {"github.com/a", "x/builds"}, {"github.com/a"}),
+    ]) == []
+
+
+def test_h049_an_owner_or_host_change_still_fires():
+    from trustsight.analysis.longitudinal import _h049_findings
+
+    assert _h049_findings([
+        _break("source_orgs", {"github.com/a"}, {"github.com/b"}),
+    ])
+    assert _h049_findings([
+        _break("source_hosts", {"a.example"}, {"b.example"}),
+    ])
+
+
+# ---------------------------------------------------------------------------
+# H097 - a scriptlet helper is not makepkg function shadowing
+# ---------------------------------------------------------------------------
+
+def test_h097_a_helper_in_an_install_scriptlet_is_quiet():
+    install = (
+        "--- /dev/null\n+++ b/foo.install\n@@ -0,0 +1,3 @@\n"
+        "+msg() {\n+  :\n+}\n"
+    )
+    assert "H097" not in _ids(install)
+
+
+def test_h097_a_helper_in_the_pkgbuild_still_fires():
+    pkgbuild = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+        " pkgname=p\n pkgver=1\n pkgrel=1\n+msg() { :; }\n"
+    )
+    assert "H097" in _ids(pkgbuild)

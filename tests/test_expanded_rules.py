@@ -644,7 +644,7 @@ def test_h026_all_gates_pass(monkeypatch):
     result = _h026_finding(True, "stranger", monkeypatch)
     assert result is not None
     assert result["rule_id"] == "H026"
-    assert result["name"] == "Untrusted Maintainer Takeover"
+    assert result["name"] == "New Maintainer Without Prior History"
     assert result["severity"] == "HIGH"
     assert result["category"] == "maintainer"
     assert "stranger" in result["match"]

@@ -245,7 +245,8 @@ def test_source_properties_resolve_recipe_variables():
     )
     props = extract_properties(pkgbuild)
     assert props["source_hosts"] == frozenset({"github.com"})
-    assert props["source_orgs"] == frozenset({"github.com/FluxaMedia"})
+    # Forge owners are case-insensitive; the property is normalised.
+    assert props["source_orgs"] == frozenset({"github.com/fluxamedia"})
 
     # A genuine host move still changes the property, so the fix does not
     # merely stop H049 firing.

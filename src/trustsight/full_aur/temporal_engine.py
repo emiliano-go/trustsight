@@ -492,7 +492,7 @@ def _ownership_transition_findings(snapshot: HistorySnapshot) -> list[dict]:
         if new_m not in known:
             out.append(_cluster(
                 "H026",
-                "Untrusted Maintainer Takeover",
+                "New Maintainer Without Prior History",
                 f"maintainer of {name} changed to '{new_m}', who maintained "
                 f"no package in the previous snapshot",
                 [name],
@@ -797,7 +797,7 @@ CYCLE_INSTANCES: tuple[TemporalInstance, ...] = (
     # the emitter above emits both, so this row documents the id without a
     # second call.
     TemporalInstance(
-        "H026", "Untrusted Maintainer Takeover", "transition", "cycle", "HIGH", "maintainer",
+        "H026", "New Maintainer Without Prior History", "transition", "cycle", "HIGH", "maintainer",
         doc="docs/reference/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(
@@ -869,7 +869,7 @@ PER_PACKAGE_INSTANCES: tuple[TemporalInstance, ...] = (
         doc="docs/reference/rules/corpus-behavioral.md",
         fixtures=("tests/test_full_aur.py",)),
     TemporalInstance(
-        "H026", "Untrusted Maintainer Takeover", "transition", "package", "HIGH", "maintainer",
+        "H026", "New Maintainer Without Prior History", "transition", "package", "HIGH", "maintainer",
         doc="docs/reference/rules/maintainer-and-metadata.md",
         fixtures=("tests/test_class_d.py",)),
     TemporalInstance(

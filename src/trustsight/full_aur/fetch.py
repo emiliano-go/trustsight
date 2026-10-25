@@ -136,26 +136,27 @@ def _http_get(url: str) -> Optional[bytes]:
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "trustsight/1.0"})
             resp = urllib.request.urlopen(req, timeout=_HTTP_TIMEOUT)
-            buf = bytearray()
-            deadline = time.monotonic() + _DOWNLOAD_DEADLINE_SECONDS
-            while True:
-                if time.monotonic() > deadline:
-                    log.warning(
-                        "response from %s exceeded its %gs deadline; abandoning",
-                        url, _DOWNLOAD_DEADLINE_SECONDS,
-                    )
-                    return None
-                chunk = resp.read(65536)
-                if not chunk:
-                    break
-                buf.extend(chunk)
-                if len(buf) > MAX_RESPONSE_BYTES:
-                    log.warning(
-                        "response from %s exceeds %d bytes; abandoning",
-                        url, MAX_RESPONSE_BYTES,
-                    )
-                    return None
-            return bytes(buf)
+            from ..bounded_io import (
+                ReadTimedOut,
+                read_capped_with_deadline,
+            )
+            try:
+                return read_capped_with_deadline(
+                    resp, MAX_RESPONSE_BYTES, f"response from {url}",
+                    _DOWNLOAD_DEADLINE_SECONDS,
+                )
+            except ReadTooLarge:
+                log.warning(
+                    "response from %s exceeds %d bytes; abandoning",
+                    url, MAX_RESPONSE_BYTES,
+                )
+                return None
+            except ReadTimedOut:
+                log.warning(
+                    "response from %s exceeded its %gs deadline; abandoning",
+                    url, _DOWNLOAD_DEADLINE_SECONDS,
+                )
+                return None
         except urllib.error.HTTPError as e:
             if e.code in _RETRYABLE_STATUS and attempt < _MAX_RETRIES:
                 delay = _retry_after(e)

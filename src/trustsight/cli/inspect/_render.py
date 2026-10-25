@@ -604,4 +604,6 @@ def _explain_lines(fact, project) -> list[str]:
         cuts = doc.cut_hunks()
         if cuts:
             lines.append(f"  cut hunks: {cuts}")
-    return lines
+    # This renderer is a terminal boundary too: recipe values, unresolved
+    # assignments and diff paths are all package-controlled.
+    return [clean(line) for line in lines]

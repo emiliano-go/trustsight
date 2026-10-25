@@ -126,7 +126,7 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
             # incompatibility is the common benign shape).  A conflict alone
             # never composes into H098, because D004 stays provides/replaces.
             if field == "conflicts":
-                severity = "HIGH" if widely else "MEDIUM"
+                severity = "HIGH" if widely else "INFO"
                 kind = "widely depended on" if widely else "established"
             else:
                 severity = "HIGH" if established else "MEDIUM"
@@ -136,7 +136,8 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
                 f"{field} claims '{name}', {kind} but unrelated "
                 f"to '{package_name}'",
                 field=field, dep_name=name, kind=kind,
-                package_name=package_name)
+                package_name=package_name,
+                weight_override=0 if field == "conflicts" and not widely else None)
             return
 
 

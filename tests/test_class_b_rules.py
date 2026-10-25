@@ -195,7 +195,7 @@ def test_h064_existing_provides_unchanged_is_quiet(establish):
     assert "H064" not in ids(d, package_name="bar")
 
 
-def test_h064_conflicts_is_medium_not_high(establish, observe):
+def test_h064_conflicts_is_unscored_info_not_high(establish, observe):
     """A conflict with an established package is a scope note, not a hijack."""
     establish(True)
     observe(0)
@@ -203,7 +203,8 @@ def test_h064_conflicts_is_medium_not_high(establish, observe):
         f for f in structural("+conflicts=('icedtea-web')\n")
         if f["rule_id"] == "H064"
     )
-    assert finding["severity"] == "MEDIUM"
+    assert finding["severity"] == "INFO"
+    assert finding["weight_override"] == 0
     assert finding["params"]["field"] == "conflicts"
 
 

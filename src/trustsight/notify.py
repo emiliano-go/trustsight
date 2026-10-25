@@ -404,6 +404,12 @@ def alert_payload(cycle) -> dict:
         }
         params = finding.get("params")
         if isinstance(params, dict):
+            host = params.get("host")
+            if isinstance(host, str) and host:
+                cluster["host"] = host
+            match = finding.get("match")
+            if isinstance(match, str) and match:
+                cluster["match"] = match
             campaign_id = params.get("campaign_id")
             if isinstance(campaign_id, str) and campaign_id:
                 cluster["campaign_id"] = campaign_id
@@ -746,7 +752,11 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
     receiver never kills the watcher.
     """
     effective = url if url is not None else notify_url()
-    if not cycle.new_alerts and not cycle.over_threshold \
+    alerting = [
+        (package, rule) for package, rule in cycle.new_alerts
+        if rule not in _CONTEXT_CLUSTER_RULES
+    ]
+    if not alerting and not cycle.over_threshold \
             and not getattr(cycle, "ioc_hits", []) \
             and not getattr(cycle, "refusals", []):
         return flush_outbox(effective)

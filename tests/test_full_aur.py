@@ -61,6 +61,22 @@ def test_fetch_metadata_no_callback():
     assert result == {"pkg-a": entries[0]}
 
 
+def test_fetch_metadata_uses_nonblocking_reads_for_the_total_deadline():
+    entries = [{"Name": "pkg-a", "Version": "1.0"}]
+    raw = gzip.compress(json.dumps(entries).encode())
+
+    class Reader(_ChunkReader):
+        def read1(self, size=-1):
+            return super().read(size)
+
+        def read(self, size=-1):
+            raise AssertionError("read() can block past the total deadline")
+
+    reader = Reader([raw], {"Content-Length": str(len(raw))})
+    with patch("trustsight.full_aur.metadata.urlopen", return_value=reader):
+        assert fetch_metadata() == {"pkg-a": entries[0]}
+
+
 def _snapshot_tarball(name: str, pkgbuild: str, extra: dict[str, bytes] | None = None) -> bytes:
     """Build an AUR-style snapshot tarball in memory."""
     buf = io.BytesIO()
@@ -839,6 +855,24 @@ def test_unchanged_install_scriptlet_is_not_represented_as_modified():
     assert any(e.rule_id == "R007" for e in changed.score_breakdown)
 
 
+def test_corpus_noextract_is_a_gap_on_first_seen_and_incremental_paths():
+    from trustsight.config import ensure_default_configs
+    from trustsight.coverage import NOEXTRACT_SUPPRESSED
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    current = "pkgname=demo\npkgver=1.1\nnoextract=('payload.tar.gz')\n"
+    for old in (None, "pkgname=demo\npkgver=1.0\n"):
+        fact = analyze_package_text(
+            pkg_name="demo", old_pkgbuild=old, new_pkgbuild=current,
+            maintainer="tester", temporal=TemporalContext(),
+        )
+        assert NOEXTRACT_SUPPRESSED in fact.coverage_gaps
+        assert fact.risk == "Inconclusive"
+
+
 def test_corpus_path_records_added_literals_for_g002():
     """G002 joins added literals across packages; the corpus analysis path
     must write them to the feed the cycle-end correlation reads."""
@@ -903,6 +937,29 @@ def test_install_hunk_uses_the_scriptlets_real_name():
     r007 = [e for e in fact.score_breakdown if e.rule_id == "R007"]
     assert r007 and "monsoon.install" in r007[0].reason
     assert "monsoon-git.install" not in r007[0].reason
+
+
+def test_fresh_corpus_consults_upstream_federation_without_scoring_it():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+    from trustsight.ioc_baseline import IocMatch
+
+    ensure_default_configs()
+    init_db()
+    repo = "github.com/owner/repo"
+    match = IocMatch(type="upstream_repo", value=repo, source="feed")
+    with patch("trustsight.ioc_baseline.match_upstream_repo", return_value=[match]):
+        fact = analyze_package_text(
+            pkg_name="demo", old_pkgbuild=None,
+            new_pkgbuild=(
+                'pkgname=demo\npkgver=1\nurl="https://github.com/owner/repo"\n'),
+            maintainer="tester", temporal=TemporalContext(),
+        )
+    federated = [e for e in fact.score_breakdown if e.rule_id == "U007"]
+    assert len(federated) == 1
+    assert federated[0].weight == 0
+    assert any(e.rule_id == "W011" for e in fact.score_breakdown)
 
 
 def test_h103_reaches_the_corpus_first_seen_path():

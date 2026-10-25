@@ -295,18 +295,32 @@ def _tokenize_desc(desc: str) -> list[str]:
 
 
 def _extract_host_org(url: str, hosts: set[str], orgs: set[str]) -> None:
+    """Add the URL's host, and its owner only on a code forge.
+
+    A forge path's first segment is an account/repository owner, so an owner
+    move under the same host is a meaningful source change.  On any other
+    host the first segment is a directory (`builds`, `downloads`), and
+    treating it as an org made a path move read as a host move (heidisql-wine).
+    Owner case is normalised because forge names are case-insensitive.
+    """
     from urllib.parse import urlparse
 
-    from ..buckets import canonical_host
+    from ..buckets import canonical_host, classify_url
     try:
         parsed = urlparse(url)
         host = canonical_host(parsed.netloc) if parsed.netloc else ""
-        if host:
-            hosts.add(host)
-            path = parsed.path.strip("/")
-            parts = path.split("/")
-            if parts and parts[0]:
-                orgs.add(f"{host}/{parts[0]}")
+        if not host:
+            return
+        hosts.add(host)
+        try:
+            bucket, _domain = classify_url(url)
+        except Exception:
+            return
+        if bucket != "trusted_forge":
+            return
+        parts = parsed.path.strip("/").split("/")
+        if parts and parts[0]:
+            orgs.add(f"{host}/{parts[0].lower()}")
     except Exception:
         pass
 

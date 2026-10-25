@@ -2,6 +2,12 @@
 
 # Changelog
 
+## [0.24.1] - 2026-10-25
+
+### Fixed
+
+- **X016 stays within the regex budget on a full-length line.** The unanchored network-client alternation walked every position of a long line in the Arch container, so the installed package's `check()` could time out the regex safety test. A leading word boundary keeps the same clients and skips the positions that cannot start one.
+
 ## [0.24.0] - 2026-10-24
 
 ### Added
@@ -5404,7 +5410,7 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.1...HEAD
 [0.1.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.1.0
 [0.2.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.0
 [0.2.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.2
@@ -5455,5 +5461,6 @@ separate reconciliation.
 [0.21.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.21.0
 [0.22.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.22.0
 [0.23.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.23.0
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.1...HEAD
 [0.24.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.24.0
+[0.24.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.24.1

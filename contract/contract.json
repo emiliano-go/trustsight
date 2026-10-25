@@ -125,7 +125,7 @@
     ],
     "title": "TrustSight: impersonation campaign by marchos1as (2 name-clones)",
     "tool": "trustsight",
-    "tool_version": "0.24.0"
+    "tool_version": "0.24.1"
   },
   "coverage_gaps": [
     "binary_metadata",
@@ -275,7 +275,7 @@
       ],
       "title": "TrustSight: impersonation campaign by marchos1as (2 name-clones)",
       "tool": "trustsight",
-      "tool_version": "0.24.0"
+      "tool_version": "0.24.1"
     },
     "headers": [
       "webhook-id",

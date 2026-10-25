@@ -286,7 +286,7 @@ X015_RE = re.compile(
 
 _X009_CLIENT_RE = re.compile(r"\b(?:" + _OTHER_FETCH_CLIENT + r")", re.IGNORECASE)
 
-_X016_FETCH_RE = re.compile(r"(?:" + _NETWORK_CLIENT + r")", re.IGNORECASE)
+_X016_FETCH_RE = re.compile(r"\b(?:" + _NETWORK_CLIENT + r")", re.IGNORECASE)
 
 _X016_CONSUMER_RE = re.compile(r"\A(?:" + _DATA_CONSUMER + r")\Z", re.IGNORECASE)
 

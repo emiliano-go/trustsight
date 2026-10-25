@@ -278,6 +278,22 @@ def test_registry_name_extraction_edge_cases(command, expected):
     assert [n for _f, _c, n in registry_install_names(diff)] == expected
 
 
+@pytest.mark.parametrize("command", [
+    "python -m pip install evil",
+    "python3 -m pip install evil",
+    "py -m pip install evil",
+])
+def test_interpreter_module_pip_is_a_registry_resolution(command):
+    diff = f"diff --git a/PKGBUILD b/PKGBUILD\n build() {{\n+  {command}\n }}\n"
+    assert has_unpinned_build_deps(diff)
+    assert [n for _f, _c, n in registry_install_names(diff)] == ["evil"]
+
+
+def test_other_python_modules_are_not_registry_resolutions():
+    diff = "diff --git a/PKGBUILD b/PKGBUILD\n build() {\n+  python -m venv .venv\n }\n"
+    assert not has_unpinned_build_deps(diff)
+
+
 def test_a_variable_driven_version_bump_silences_h087():
     """`pkgver=${_gtkver}` with the variable bumped is an upstream move.
 

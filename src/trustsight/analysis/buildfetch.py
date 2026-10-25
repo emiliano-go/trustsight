@@ -60,6 +60,8 @@ _REGISTRY_RESOLVE = [
     r"bunx\s+",
     # Python.
     r"pip3?\s+install\b",
+    r"python3?\s+-m\s+pip3?\s+install\b",
+    r"py\s+-m\s+pip3?\s+install\b",
     r"uv\s+(?:pip\s+install|sync|add)\b",
     r"poetry\s+(?:install|add)\b",
     # Rust, Go, Ruby, PHP, Java, .NET, Haskell, Elixir.

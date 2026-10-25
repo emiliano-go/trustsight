@@ -384,6 +384,13 @@ def test_h098_silent_on_one_signal():
     assert naming_cluster_annotation([_stage_stub("H029")]) is None
 
 
+@pytest.mark.parametrize("upstream", ["U003", "U004", "U011"])
+def test_h098_composes_naming_with_upstream_redirects(upstream):
+    hit = naming_cluster_annotation([_stage_stub("H029"), _stage_stub(upstream)])
+    assert hit and hit["rule_id"] == "H098"
+    assert naming_cluster_annotation([_stage_stub(upstream)]) is None
+
+
 def test_h098_ignores_unrelated_rules():
     rules = [_stage_stub(r) for r in ("H029", "H015", "H023")]
     assert naming_cluster_annotation(rules) is None

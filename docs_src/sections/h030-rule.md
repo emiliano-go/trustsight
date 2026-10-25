@@ -1,5 +1,6 @@
 <!-- uid: TS-0086 -->
 <!-- anchor: h030-rule -->
+<!-- name: Dependency-Set Expansion -->
 
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 

@@ -63,7 +63,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Correlation](correlation.md) | `correlation` | 13 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
-| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 6 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
+| [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 8 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
 | [Upstream Release Integrity](upstream-release.md) | `upstream-release` | 4 | What a recipe declares about upstream - its URL, its sources, their access mode - and the CI surface it commits.  Upstream content is never read (A2/A8); the CI exfil and history-sweep shapes arrive over the signed federation channel instead. |
 <!-- /generated: legend -->
 
@@ -184,7 +184,7 @@ is deliberately non-contiguous; see
 | [H023](install-and-persist.md#h023) | Install Hook Present | Heuristic | INFO | [Install and Persistence](install-and-persist.md) |
 | [H024](integrity.md#h024) | GPG Verification Removed | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H025](integrity.md#h025) | Build Environment Subversion | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
-| [H026](maintainer-and-metadata.md#h026) | Untrusted Maintainer Takeover | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H026](maintainer-and-metadata.md#h026) | New Maintainer Without Prior History | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H027](composition.md#h027) | Capability Density Anomaly | Heuristic | INFO | [Composition](composition.md) |
 | [H028](corpus-behavioral.md#h028) | Accelerated Release Cadence | Heuristic | - | [Corpus Behavioral](corpus-behavioral.md) |
 | [H029](naming-and-dependency.md#h029-rule) | Package-Name Typosquat | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
@@ -207,7 +207,7 @@ is deliberately non-contiguous; see
 | [H046](corpus-behavioral.md#h046) | Orphan/Adoption Dependency | Heuristic | MEDIUM | [Corpus Behavioral](corpus-behavioral.md) |
 | [H047](integrity.md#h047) | Security-Relevant Build Flag Change | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H048](naming-and-dependency.md#h048) | Dependency Vendored Into Source | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
-| [H049](maintainer-and-metadata.md#h049) | Source Host Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H049](maintainer-and-metadata.md#h049) | Source Origin Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H050](maintainer-and-metadata.md#h050) | Version Scheme Changed | Heuristic | INFO | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H051](maintainer-and-metadata.md#h051) | Package Description Changed | Heuristic | MEDIUM | [Maintainer and Metadata](maintainer-and-metadata.md) |
 | [H052](count-based.md#h052) | Shared Source Repository | Heuristic | HIGH | [Count-Based](count-based.md) |
@@ -329,6 +329,8 @@ is deliberately non-contiguous; see
 | [U008](upstream-release.md#u008) | Git-History Credential Sweep | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
 | [U009](upstream-release.md#u009) | New CI Surface Committed | U | LOW | [Upstream Release Integrity](upstream-release.md) |
 | [U010](upstream-release.md#u010) | Unauditable Upstream | U | MEDIUM | [Upstream Release Integrity](upstream-release.md) |
+| [U011](upstream-manifests.md#u011) | Upstream Origin Changed | U | - | [Upstream Manifests](upstream-manifests.md) |
+| [U012](upstream-manifests.md#u012) | Lockfile Integrity Weakened | U | - | [Upstream Manifests](upstream-manifests.md) |
 | [W001](unverifiable.md#w001) | Executes Code This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W002](unverifiable.md#w002) | Build Resolves Dependencies From A Registry | Unverifiable | - | [Unverifiable](unverifiable.md) |
 | [W003](unverifiable.md#w003) | Applies A Patch This Analysis Did Not Read | Unverifiable | - | [Unverifiable](unverifiable.md) |

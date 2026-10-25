@@ -299,10 +299,17 @@ DEFAULT_OBFUSCATION_INDICATORS = [
     r"(?<=\w)''(?=\w)",
 ]
 
+#: The udev/chroot guard an install scriptlet legitimately runs to decide
+#: whether udev is present.  It is not an analysis probe, so it is excluded
+#: by a negative lookahead on the command; `systemd-detect-virt -q`, `--vm`
+#: and `--container` still fire.
+H067_SYSTEMD_DETECT_VIRT_PROBE = r"systemd-detect-virt(?!\s+--chroot\b)"
+H067_LEGACY_SYSTEMD_DETECT_VIRT = r"systemd-detect-virt"
+
 DEFAULT_ANTI_ANALYSIS_PROBES = [
     r"TracerPid",                                   # /proc/self/status debugger marker
     r"\b(?:gdb|strace|lldb|ptrace)\b",              # debugger clients / probe interfaces
-    r"systemd-detect-virt",
+    H067_SYSTEMD_DETECT_VIRT_PROBE,
     r"virt-what",
     r"\bdmidecode\b",
     r"hypervisor",                                  # DMI / /proc/cpuinfo virtualization marker
@@ -387,7 +394,8 @@ DEFAULT_PARSE_TIME_FETCH = [
 DEFAULT_NETWORK_TOOLS = [
     "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
     "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
-    "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
+    "python-pip", "python-uv", "ruby-net-http", "nodejs", "npm", "pnpm",
+    "yarn", "bun", "uv", "cargo", "go",
 ]
 
 DEFAULT_VARIANT_SUFFIXES = (

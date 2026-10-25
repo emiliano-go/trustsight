@@ -1230,6 +1230,14 @@ See [U005: Dependency Surface Jump](upstream-manifests.md#u005).
 
 See [U006: Manifest Changed Without Its Lockfile](upstream-manifests.md#u006).
 
+### U011 {#u011}
+
+See [U011: Upstream Origin Changed](upstream-manifests.md#u011).
+
+### U012 {#u012}
+
+See [U012: Lockfile Integrity Weakened](upstream-manifests.md#u012).
+
 ### U007 {#u007}
 
 See [U007: CI Exfil Shape](upstream-release.md#u007).
@@ -1726,6 +1734,6 @@ Measured against the TrustSight test corpus.
 | CRITICAL class (all) | 100 % | Every CRITICAL-class sample detected. |
 | R012 (prompt injection) | 17 % | Tripwire; catches obvious patterns only. Low recall is intentional. |
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
-| Benign zero-rate | 72.1 % | Percentage of benign diffs scoring 0. |
+| Benign zero-rate | 73.0 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 30 | 95th percentile score on benign corpus. |
 | CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |

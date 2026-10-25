@@ -54,9 +54,11 @@ severity weights and the reserved identifier ranges.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `installer`
 
+<!-- name: Install File Modification -->
+
 - **Pattern:** `^\+.*\.install`
 - **Scope:** All lines (no function-body restriction)
-- **Description:** Fires when a `.install` file is added or modified in the diff. Install scripts run with root privileges and are a common vector for persistent backdoors.
+- **Description:** Fires when a `.install` file is added or modified in the diff. Install scripts run with root privileges and are a common vector for persistent backdoors. A modified hook whose added and context lines only print a notice stands down; commands that change files, permissions, services, or other system state still fire.
 - **Note:** The pattern was `\+.*\.install.*` before 0.13.2. The anchored form bounds the search to an added diff line and matches the same intended file paths. `trustsight config sync-rules --update` replaces the superseded pattern in an unmodified local rule file.
 
 ### R017: Setuid/Setgid Permission {#r017}
@@ -64,6 +66,8 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `privilege`
+
+<!-- name: Setuid/Setgid Permission -->
 
 - **Pattern:** `chmod.*\+s`
 - **Description:** Detects symbolic `chmod ... +s` commands that set a setuid or setgid bit. A setuid binary runs with its owner's privileges, the shape of many local-privilege-escalation backdoors. R053 and R059 own the target-specific symbolic and octal forms, so R017 defers to them rather than scoring one command twice.
@@ -74,6 +78,8 @@ severity weights and the reserved identifier ranges.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Dotfile Written To User Profile -->
+
 - **Pattern:** `\b(?:install|cp|mv|tee)\s+[^;&|]*(?:\$HOME|~|/root|/home/[^/\s]+)/\.\w+`
 - **Description:** Detects writes to a dotfile under `$HOME`, `~`, `/root`, or `/home/<user>`, the shape of shell-profile persistence. Dotfiles written inside `$pkgdir` (such as `/etc/skel` templates) are ordinary packaging and do not match.
 
@@ -82,6 +88,8 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `privilege`
+
+<!-- name: Setuid Or Setgid Bit Set In Package Root -->
 
 - **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+(?!["\x27]?/)|\s+(?!--\s)(?!["\x27]?/))|\bsetcap\s+(?:-\S+\s+)*["\x27]?cap_\w+[^\s]*\s+(?!["\x27]?/)|\binstall\s+(?:-\S+\s+)*(?:--mode=|-m\s*)[2467][0-7]{3}\b[^;\n&|]*?\$\{?(?:pkgdir|DESTDIR)\}?`
 - **Description:** Setuid or setgid applied to a path being staged into the package. Detects both octal (`4755`, `2755`) and symbolic (`u+s`) forms, on `chmod` and on `install -m`; ordinary modes such as `644`, `755` and `+x` do not match. Chromium's sandbox helper legitimately requires `4755`, so this fires on essentially every Electron package. Measured across the benign corpus, MEDIUM changes **no** package's risk band; the evidence stays visible in the tiered breakdown without reclassifying routine updates. At HIGH it would have reclassified every Electron package as Medium.
@@ -92,6 +100,8 @@ severity weights and the reserved identifier ranges.
 - **Severity:** HIGH (weight 25)
 - **Category:** `privilege`
 
+<!-- name: Setuid Or Setgid Bit Set Outside Package Root -->
+
 - **Pattern:** `\bchmod\s+(?:-\S+\s+)*(?:(?:--mode=)?(?:[2467][0-7]{3}\b|[ugoa]*\+s\b))(?:\s+--\s+["\x27]?/|\s+(?!--\s)["\x27]?/)|\bsetcap\s+(?:-\S+\s+)*["\x27]?cap_\w+[^\s]*\s+["\x27]?/|\binstall\s+(?:-\S+\s+)*(?:--mode=|-m\s*)[2467][0-7]{3}\b[^;\n&|]*?(?<![\w$}])["\x27]?/`
 - **Description:** The same operation against an absolute path. This touches the live filesystem rather than `$pkgdir`, so it is a privilege change on the build host and not packaging. Split from R053 because the two are materially different: `chmod u+s "$pkgdir/opt/x/chrome-sandbox"` is ordinary Electron packaging, while `chmod u+s "/usr/bin/helper"` is not.
 
@@ -101,6 +111,8 @@ severity weights and the reserved identifier ranges.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Persistence Unit Outside Package Root -->
+
 - **Pattern:** `(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?<!\})[\s"\x27](?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))`
 - **Description:** Detects a cron job or systemd unit written to a system path. A unit staged into `$pkgdir` is flagged too, in any quoting style (`"${pkgdir}"/usr/lib/...`, `"${pkgdir}/usr/lib/..."`, `$pkgdir/usr/lib/...`): pacman installs what the recipe staged, so all three produce the same persistent root-level unit. Writing to the live filesystem during a build is the worse case of the same finding.
 
@@ -109,6 +121,8 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (defined in `src/trustsight/analysis/build.py`)
 - **Severity:** HIGH (weight 25) for a fetch or dynamic execution; MEDIUM (weight 15) for privileged setup (service enable, account change, sudoers, setuid)
 - **Category:** `installer`
+
+<!-- name: Install Hook Fetches Or Executes -->
 
 - **Description:** A `.install` hook body (`post_install`, `post_upgrade`, `pre_install`, `pre_upgrade`, `pre_remove`, `post_remove`) downloads something or performs a privileged operation: `chmod u+s`, `systemctl enable`, `eval`, `useradd`.
 
@@ -126,6 +140,8 @@ Overlaps [R007](install-and-persist.md#r007), which matches any line mentioning 
 - **Severity:** INFO (weight 0)
 - **Category:** `context`
 
+<!-- name: Install Hook Present -->
+
 - **Condition:** The PKGBUILD declares a non-empty `install=` file, or the diff touches a `*.install` file.
 
 An `.install` scriptlet runs code **as root** at install time. H023 is pure context - "this package has a root-time hook" - not an accusation. It is the metadata a human wants when weighing other signals.
@@ -139,6 +155,8 @@ An `.install` scriptlet runs code **as root** at install time. H023 is pure cont
 - **Target:** programmatic (resolved install hook lines, position-scoped)
 - **Severity:** HIGH (weight 25)
 - **Category:** `installer`
+
+<!-- name: Foreign Package Manager In Install Hook -->
 
 - **Condition:** An added line inside an install hook body (`post_install`, `post_upgrade`, `pre_install`, `pre_upgrade`, `pre_remove`, `post_remove`) invokes a foreign package manager: `pip install`, `npm install`, `cargo install`, `gem install`, `go install`, `dnf install`, `yum install`, `apt-get install`, `pacman -S`/`-U`, or `make install` without `DESTDIR`.
 
@@ -157,6 +175,8 @@ x"`) is output for the reader, not a command, and does not fire.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Write To User Home Or RC -->
+
 - **Condition:** A build or install function writes into `$HOME`, `.bashrc`, `.zshrc`, `.profile` or `.config`, outside `$pkgdir` staging.
 
 Fire rate: 0 on the v1 corpus.
@@ -172,6 +192,8 @@ categorical rather than suspicious.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Systemd ExecStart From Runtime-Writable Path -->
+
 - **Condition:** A systemd unit the package installs has an `ExecStart` pointing into a runtime-writable path (`/tmp`, `/var/tmp`, `/dev/shm`, `$HOME`, `/run`).
 
 The rule reads the unit's *content*, including a heredoc body, not the unit's
@@ -184,6 +206,8 @@ Fire rate: 0 on the v1 corpus.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `persistence`
 
+<!-- name: Pacman Hook Installed -->
+
 - **Condition:** A file is placed under `/usr/share/libalpm/hooks/`.
 
 A pacman hook runs on every later transaction, which is why it is reported;
@@ -195,6 +219,8 @@ Fire rate: 4 on the v1 corpus (0.12 %), all packages that legitimately ship hook
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Service ExecStart Targets Undeclared Binary -->
 
 - **Condition:** A systemd service unit's `ExecStart` points at an absolute path, and the recipe installs an executable to that path whose source is neither declared in `source=()` nor present in the repository manifest.
 
@@ -210,6 +236,8 @@ Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery.py
 - **Target:** `raw_line`
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Packaged File Points At A World-Writable Path -->
 
 - **Pattern:** `^\+?(?=[^\n]*\$\{?pkgdir\}?)(?=[^\n]*(?:/tmp/|/var/tmp/|/dev/shm/))\S`
 - **Condition:** A line that both references `$pkgdir` and names a path under `/tmp`, `/var/tmp` or `/dev/shm`.
@@ -236,6 +264,8 @@ config at `/tmp` is not something the ecosystem does.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Packaged File Names A Build-Only Path -->
 
 - **Condition:** Content written into `$pkgdir` - a heredoc body or a
   `printf`/`echo`/`tee`/`cat` redirect - that names `$srcdir`,
@@ -273,6 +303,8 @@ Zero occurrences in the v1 benign corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Committed Config Points At A Build-Only Path -->
 
 - **Condition:** A committed `.service`, `.desktop`, `.rules`, `.conf` (and
   the rest of the carrier set H090 reads) holding a directive that runs
@@ -316,6 +348,8 @@ does.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Boot Or Image Artifact Built From The Source Tree -->
+
 - **Condition:** `dracut`, `mkinitcpio`, `update-initramfs`,
   `grub-mkconfig`, `grub-install`, `guestfish`, `virt-customize` or
   `bootctl` invoked with an argument naming `$srcdir`, `$startdir`, `$PWD`
@@ -345,6 +379,8 @@ None of these tools appear in the benign corpus with a build-tree argument.
   diff; MEDIUM (weight 15) when only the declaration moves.
 - **Category:** `install-and-persist`
 
+<!-- name: Install Hook Added Or Retargeted -->
+
 - **Condition:** The `install=` scalar appears, or points at a different
   hook file than before.
 
@@ -360,6 +396,8 @@ as MEDIUM.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `install-and-persist`
+
+<!-- name: Scriptlet Executes Commands At Top Level -->
 
 - **Condition:** A committed `.install` or alpm `.hook` scriptlet executes
   a command outside every hook function.
@@ -386,6 +424,8 @@ C032 yields, so one piece of evidence never scores twice.
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
 
+<!-- name: Install Hook Writes To A User-Writable Location -->
+
 - **Condition:** A hook writes to `$HOME`/`~`, `/root`, `/tmp`,
   `/var/tmp`, `/dev/shm`, `$XDG_*` or `/run/user/...`. The hook runs as
   root at pacman time, so a user-writable destination is a privilege
@@ -400,6 +440,8 @@ Measured on the locked benign corpus: 0 on the v1 corpus.
 - **Severity:** INFO (weight 0)
 - **Category:** `persistence`
 
+<!-- name: Backup Array Gains Entries -->
+
 - **Condition:** `backup=()` gains at least one entry. backup-listed
   files receive config-file treatment on upgrade, so a new entry changes
   what pacman preserves across a package update.
@@ -412,6 +454,8 @@ for the reader rather than treated as suspicion.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Boot Or System Image Tool Run During Build -->
 
 - **Condition:** A build-time function (`prepare`/`build`/`check`/
   `package`) runs `dracut`, `mkinitcpio`, `update-initramfs`,

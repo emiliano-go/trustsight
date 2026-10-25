@@ -95,3 +95,20 @@ def test_lint_cli_refuses_a_missing_file(tmp_path):
         app, ["lint", str(tmp_path / "nope"), "--json"])
     assert result_json.exit_code == 2
     assert "error" in json.loads(result_json.stdout)
+
+
+def test_lint_cli_sanitizes_hostile_recipe_text(tmp_path):
+    target = tmp_path / "PKGBUILD"
+    target.write_text(
+        "pkgname=demo\nurl=https://example.invalid/\x1b[2JFORGED\n"
+        "source=($(printf '\\x9b31m'))\n",
+        encoding="utf-8",
+    )
+
+    # color=True keeps Click from hiding raw escapes as it does for pipes.
+    result = CliRunner().invoke(app, ["lint", str(target)], color=True)
+
+    assert result.exit_code == 0
+    assert "FORGED" in result.stdout
+    assert "\x1b" not in result.stdout
+    assert "\x9b" not in result.stdout

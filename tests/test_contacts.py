@@ -78,6 +78,37 @@ def test_shared_first_seen_host_is_g010_and_needs_a_fresh_host():
                                   first_seen_hosts={"new-cdn.net"}) == []
 
 
+def test_g010_skips_trusted_forges_official_hosts_and_one_project():
+    records = [
+        {"package": f"p{i}", "pkgbase": f"base{i}", "maintainer": f"m{i}",
+         "hosts_gained": ["github.com"]}
+        for i in range(5)
+    ]
+    assert shared_first_seen_host(
+        records, 5, first_seen_hosts={"github.com"}) == []
+
+    split = [dict(record, pkgbase="one-project") for record in records]
+    assert shared_first_seen_host(
+        split, 5, first_seen_hosts={"github.com"}) == []
+    for record in split:
+        record["hosts_gained"] = ["cdn.example"]
+    assert shared_first_seen_host(
+        split, 5, first_seen_hosts={"cdn.example"}) == []
+
+
+def test_g010_skips_one_maintainers_name_family_but_keeps_unrelated_members():
+    records = [
+        {"package": f"firefox-nightly-i18n-{lang}", "pkgbase": f"base-{lang}",
+         "maintainer": "one", "hosts_gained": ["cdn.example"]}
+        for lang in ("en", "de", "fr", "es", "it")
+    ]
+    assert shared_first_seen_host(
+        records, 5, first_seen_hosts={"cdn.example"}) == []
+    records[0]["maintainer"] = "other"
+    assert shared_first_seen_host(
+        records, 5, first_seen_hosts={"cdn.example"})
+
+
 # --- the recording path -----------------------------------------------------
 
 

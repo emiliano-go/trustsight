@@ -49,6 +49,13 @@ _MAX_FINDINGS_PER_PACKAGE = 12
 #: plausible webhook acknowledgement.
 _MAX_RESPONSE_BYTES = 64 * 1024
 
+#: Correlation rules that describe the corpus (a first-seen-host census, a
+#: bounded neighbourhood) rather than an alerting campaign.  They stay in the
+#: payload as evidence but never become the notification headline: the scored
+#: package is the signal a reader acts on, and "Campaign across 50 packages
+#: (G010)" on a routine bulk refresh trains the reader to ignore the title.
+_CONTEXT_CLUSTER_RULES = frozenset({"G006", "G010"})
+
 #: Reads `[notify] webhook` and `[notify] feed` from config.toml.
 _CONFIG_SECTION = "notify"
 _CONFIG_KEY = "webhook"
@@ -246,8 +253,12 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
             return f"IOC match on {packages[0]}"
         return f"{len(iocs)} IOC matches ({packages[0]} first)"
 
-    if campaign_cluster:
-        top = max(campaign_cluster, key=lambda c: (c["count"], c["rule_id"]))
+    alerting_clusters = [
+        cluster for cluster in campaign_cluster
+        if cluster.get("rule_id") not in _CONTEXT_CLUSTER_RULES
+    ]
+    if alerting_clusters:
+        top = max(alerting_clusters, key=lambda c: (c["count"], c["rule_id"]))
         return f"Campaign across {top['count']} packages ({top['rule_id']})"
 
     refusals = getattr(cycle, "refusals", None) or []
@@ -393,6 +404,12 @@ def alert_payload(cycle) -> dict:
         }
         params = finding.get("params")
         if isinstance(params, dict):
+            host = params.get("host")
+            if isinstance(host, str) and host:
+                cluster["host"] = host
+            match = finding.get("match")
+            if isinstance(match, str) and match:
+                cluster["match"] = match
             campaign_id = params.get("campaign_id")
             if isinstance(campaign_id, str) and campaign_id:
                 cluster["campaign_id"] = campaign_id
@@ -735,7 +752,11 @@ def maybe_notify(cycle, url: str | None = None) -> bool:
     receiver never kills the watcher.
     """
     effective = url if url is not None else notify_url()
-    if not cycle.new_alerts and not cycle.over_threshold \
+    alerting = [
+        (package, rule) for package, rule in cycle.new_alerts
+        if rule not in _CONTEXT_CLUSTER_RULES
+    ]
+    if not alerting and not cycle.over_threshold \
             and not getattr(cycle, "ioc_hits", []) \
             and not getattr(cycle, "refusals", []):
         return flush_outbox(effective)

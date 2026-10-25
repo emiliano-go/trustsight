@@ -235,9 +235,12 @@ _NAMING_CLUSTER_MEMBERS: dict[str, str] = {
     "D004": "dependency hijack",
     "H064": "provides/replaces scope",
     "C012": "source domain lookalike",
+    "U003": "new upstream source host",
+    "U004": "registry redirect",
+    "U011": "upstream origin change",
     "H053": "name/host divergence",
     "H059": "name/repo divergence",
-    "H026": "untrusted maintainer takeover",
+    "H026": "new maintainer without prior history",
 }
 
 

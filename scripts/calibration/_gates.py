@@ -263,11 +263,32 @@ def gate_manifest_benign_corpus() -> Gate:
         for entry in row["entries"]:
             fired[entry["rule_id"]] += 1
     problems: list[str] = []
-    for rule_id in ("U003", "U004"):
+    for rule_id in ("U003", "U004", "U011"):
         if fired.get(rule_id, 0):
             problems.append(f"{rule_id} fired on {fired[rule_id]} benign diff(s)")
     if not (fired.get("U002") or fired.get("U006")):
         problems.append("corpus exercised no U ledger rule (vacuous)")
+
+    # The benign corpus proves what not to fire on; the normalized state
+    # transition proves the full-AUR path is wired at all (not just scan_diff).
+    from trustsight.analysis.manifest_state import (
+        build_manifest_state,
+        manifest_state_delta,
+    )
+
+    previous = build_manifest_state(
+        [("Cargo.toml", '[dependencies]\nfoo = { git = "https://github.com/good/foo" }\n')],
+        [],
+    )
+    current = build_manifest_state(
+        [("Cargo.toml", '[dependencies]\nfoo = { git = "https://github.com/evil/foo" }\n')],
+        [(".github/workflows/ci.yml", b"name: CI\n")],
+    )
+    manifests, workflows = manifest_state_delta(previous, current)
+    if not manifests or not manifests[0].origin_changes:
+        problems.append("full-AUR origin transition produced no U011 delta")
+    if not workflows:
+        problems.append("full-AUR workflow transition produced no U009 delta")
     detail = ("; ".join(problems) or
               f"{len(rows)} diffs; U002={fired.get('U002', 0)} "
               f"U006={fired.get('U006', 0)}")

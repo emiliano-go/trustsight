@@ -58,3 +58,22 @@ def test_explain_without_a_diff_renders_the_recipe_alone(tmp_path):
     out = "\n".join(_explain_lines(fact, FakeGitProject(repo)))
     assert "pkgname=demo" in out
     assert "diff:" not in out
+
+
+def test_explain_sanitizes_hostile_recipe_and_diff_text(tmp_path):
+    hostile = (
+        "pkgname=demo\nurl=https://example.invalid/\x1b[2JFORGED\n"
+        "source=($(printf '\\x9b31m'))\n"
+    )
+    repo, head = _repo(tmp_path, [
+        {"PKGBUILD": _V1},
+        {"PKGBUILD": hostile, "evil\x1b[2J": "payload"},
+    ])
+    old = str(repo.revparse_single("HEAD~1").id)
+    fact = PackageFact(package_name="demo", old_commit=old, new_commit=head)
+
+    out = "\n".join(_explain_lines(fact, FakeGitProject(repo)))
+
+    assert "FORGED" in out
+    assert "\x1b" not in out
+    assert "\x9b" not in out

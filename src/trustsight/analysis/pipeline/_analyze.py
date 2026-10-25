@@ -86,6 +86,7 @@ from ..base import (
     _ensure_init,
     _get_installed_version,
     _has_install_hook,
+    _without_notice_only_install_modifications,
 )
 from ..composition import (
     _meta_annotations,
@@ -622,8 +623,10 @@ def analyze_package(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    triggered_rules = _without_notice_only_install_modifications(
+        triggered_rules, diff_text)
     triggered_rules = suppress_acknowledged_url_findings(
-        triggered_rules, pkg_name)
+        triggered_rules, pkg_name, url_acks)
     from ..persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     expired_overrides: list[str] = []
@@ -778,7 +781,8 @@ def analyze_package(
         parent_baseline=parent_baseline,
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
-        noextract_present=_has_noextract(diff_text),
+        unresolved_assignments=bool(unresolved_assignments),
+        noextract_present=_has_noextract(head_pkgbuild or diff_text),
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
     )
@@ -856,7 +860,7 @@ def analyze_package(
     # chain or move a number; the (present before, unchanged) name carries
     # the provenance into both the terminal and the JSON finding rows.
     present_rules = suppress_acknowledged_url_findings(
-        _present_before_findings(present_before, config), pkg_name)
+        _present_before_findings(present_before, config), pkg_name, url_acks)
     if present_rules:
         present_rules, present_suppressed = filter_triggered_rules(
             present_rules, package=pkg_name, expired_out=expired_overrides)
@@ -1081,6 +1085,26 @@ def _make_fresh_analysis(
         tree_manifest, tree_complete = project.tree_files(commit)
         if tree_manifest:
             triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
+    from ..upstream_release import upstream_release_findings
+
+    def _upstream_add(rid, name, severity, category, match,
+                      weight_override=None, **params):
+        finding = {
+            "rule_id": rid, "name": name, "severity": severity,
+            "category": category, "match": match, "params": params,
+        }
+        if weight_override is not None:
+            finding["weight_override"] = weight_override
+        triggered_rules.append(stamp(finding))
+
+    upstream_release_findings(
+        "", None, _upstream_add, config, pkg_name, current_text=head_pkgbuild,
+    )
+    url_acks: dict = {}
+    triggered_rules = suppress_acknowledged_url_findings(
+        triggered_rules, pkg_name, url_acks)
+    unresolved_assignments = unresolved_assignment_rows(
+        clamp_text(head_pkgbuild) or "", file="PKGBUILD")
     # This path used to declare tree_analyzed=True unconditionally, which
     # was false whenever there was no commit to read a tree from: a first
     # analysis of an empty repository examined nothing and reported a bare
@@ -1093,6 +1117,7 @@ def _make_fresh_analysis(
                            head_pkgbuild, tree_manifest)),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
+        unresolved_assignments=bool(unresolved_assignments),
         noextract_present=_has_noextract(head_pkgbuild or ""),
     )
     # The same scorer the incremental path uses, on the findings this path
@@ -1127,6 +1152,7 @@ def _make_fresh_analysis(
         current_maintainer=get_maintainer_from_commit(project, commit) or "" if commit else "",
         diff_summary=DiffSummary(),
         novelty_context=novelty,
+        acknowledged_urls=acknowledged_url_rows(url_acks),
         first_seen=True,
         comparison_base="none",
         temporal_source="git_commit",
@@ -1134,6 +1160,7 @@ def _make_fresh_analysis(
                        and not _scriptlet_files_unread(
                            head_pkgbuild, tree_manifest)),
         coverage_gaps=gaps,
+        unresolved_assignments=unresolved_assignments,
         ioc_matches=ioc_baseline_matches("", pkg_name, current_text=head_pkgbuild),
         score_breakdown=breakdown,
         risk=risk,

@@ -118,3 +118,30 @@ def test_an_array_collection_failure_stays_reportable():
     fact = scan_diff(diff, package_name="demo")
     assert any(row["name"] == "depends"
                for row in fact.unresolved_assignments)
+
+
+def test_unresolved_assignment_forbids_a_clean_verdict():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n"
+        " pkgname=demo\n+foo=('a \"unterminated)\n"
+    )
+    fact = scan_diff(
+        diff, package_name="",
+        tree_manifest=[("PKGBUILD", b"pkgname=demo\n")],
+    )
+    assert fact.unresolved_assignments
+    assert fact.coverage_gaps
+    assert fact.risk == "Inconclusive"
+
+
+def test_existing_noextract_is_a_coverage_gap():
+    from trustsight.coverage import NOEXTRACT_SUPPRESSED
+
+    current = "pkgname=demo\npkgver=2\nnoextract=('payload.tar.gz')\n"
+    diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n-pkgver=1\n+pkgver=2\n"
+    fact = scan_diff(
+        diff, package_name="", current_text=current,
+        tree_manifest=[("PKGBUILD", current.encode())],
+    )
+    assert NOEXTRACT_SUPPRESSED in fact.coverage_gaps
+    assert fact.risk == "Inconclusive"

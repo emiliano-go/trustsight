@@ -206,6 +206,22 @@ def test_a_normal_response_is_returned_whole(monkeypatch):
     assert corpus_fetch._http_get("https://example.invalid/x") == b"pkgname=demo\n"
 
 
+def test_http_get_uses_nonblocking_reads_for_the_total_deadline(monkeypatch):
+    class Response:
+        def __init__(self):
+            self.chunks = [b"pkgname=demo\n", b""]
+
+        def read1(self, n):
+            return self.chunks.pop(0)
+
+        def read(self, n):
+            raise AssertionError("read() can block past the total deadline")
+
+    monkeypatch.setattr(
+        corpus_fetch.urllib.request, "urlopen", lambda *a, **k: Response())
+    assert corpus_fetch._http_get("https://example.invalid/x") == b"pkgname=demo\n"
+
+
 def _tar_with(members: int) -> tarfile.TarFile:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w") as tf:
@@ -379,6 +395,28 @@ def test_seed_archive_rejects_excessive_member_count(tmp_path, monkeypatch):
 
     with pytest.raises(ValueError, match="members"):
         db._extract_v2_archive(archive, tmp_path / "out")
+
+
+def test_seed_archive_enforces_member_cap_before_whole_archive_listing(tmp_path):
+    """getmembers() would materialise the attack before checking its size."""
+    import tarfile
+    from unittest.mock import patch
+
+    import trustsight.db as db
+
+    archive = tmp_path / "seed.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        info = tarfile.TarInfo("trustsight-seed-v2/seed_meta.json")
+        payload = b"{}"
+        info.size = len(payload)
+        tf.addfile(info, io.BytesIO(payload))
+
+    with patch.object(
+        tarfile.TarFile, "getmembers",
+        side_effect=AssertionError("whole-archive listing is unbounded"),
+    ):
+        extracted = db._extract_v2_archive(archive, tmp_path / "out")
+    assert extracted == tmp_path / "out" / "trustsight-seed-v2"
 
 
 def test_a_snapshot_member_declaring_gigabytes_is_refused(monkeypatch):

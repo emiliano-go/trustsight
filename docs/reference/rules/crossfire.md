@@ -91,6 +91,8 @@ engine runs.
 
 ### X001: Encoded Payload Decoded And Executed {#x001}
 
+<!-- name: Encoded Payload Decoded And Executed -->
+
 **CRITICAL** (weight 40) · category `evasion`
 
 Fires when an encoded blob is decoded and the result reaches a shell or
@@ -109,6 +111,8 @@ rule's claim; no recipe pipes a hex blob into an interpreter by accident.
 **Related:** [R003](obfuscation.md#r003), [R043](obfuscation.md#r043)
 
 ### X002: Non-Literal Executable Name {#x002}
+
+<!-- name: Non-Literal Executable Name -->
 
 **CRITICAL** (weight 40) · category `evasion`
 
@@ -136,6 +140,8 @@ Three exclusions keep it precise:
 
 ### X003: Obfuscated Command Argument {#x003}
 
+<!-- name: Obfuscated Command Argument -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires on a `curl`/`wget` long option truncated to a unique prefix
@@ -148,6 +154,8 @@ two letters, and the `c` may sit anywhere in it.
 
 ### X004: Build Output Suppressed {#x004}
 
+<!-- name: Build Output Suppressed -->
+
 **MEDIUM** (weight 15) · category `evasion`
 
 Fires on `TERM=dumb` (quoted or not), `set +x` in any letter order,
@@ -159,6 +167,8 @@ MEDIUM because hiding output is weak evidence alone; its value is
 compositional, in [X007](#x007). Bare `2>/dev/null` is excluded as noise.
 
 ### X005: Home Reached By An Alternative Spelling {#x005}
+
+<!-- name: Home Reached By An Alternative Spelling -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -176,6 +186,8 @@ expands to nothing, so `"$PKGDIR/../../home/alice/.bashrc"` is a home write.
 
 ### X006: Source Points Somewhere Unexpected {#x006}
 
+<!-- name: Source Points Somewhere Unexpected -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires on a URL shortener or a raw-IP URL anywhere in the diff. Neither is
@@ -187,12 +199,16 @@ requires and curl accepts.
 
 ### X007: Multiple Evasion Techniques {#x007}
 
+<!-- name: Multiple Evasion Techniques -->
+
 **CRITICAL** (weight 40) · category `evasion`
 
 Fires when two or more distinct crossfire techniques appear in one diff. One
 technique can be an accident of style; two is a method.
 
 ### X008: Whitespace A Shell Does Not Split On {#x008}
+
+<!-- name: Whitespace A Shell Does Not Split On -->
 
 **MEDIUM** (weight 15) · category `evasion`
 
@@ -215,6 +231,8 @@ codepoints at FATAL.
 
 ### X009: Fetch Through An Uncatalogued Client {#x009}
 
+<!-- name: Fetch Through An Uncatalogued Client -->
+
 **CRITICAL** (weight 40) · category `evasion`
 
 Fires when a network client other than `curl`/`wget` feeds a shell or
@@ -236,6 +254,8 @@ scored twice is its own kind of wrong.
 
 ### X010: Interpreter One-Liner Reaches The Network {#x010}
 
+<!-- name: Interpreter One-Liner Reaches The Network -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a `-c`/`-e`/`-r` script contains a URL or a fetch call
@@ -243,6 +263,8 @@ Fires when a `-c`/`-e`/`-r` script contains a URL or a fetch call
 No shell client is involved, so H016's inventory never sees it.
 
 ### X011: Package Manager Runs Fetched Code At Build Time {#x011}
+
+<!-- name: Package Manager Runs Fetched Code At Build Time -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -259,6 +281,8 @@ weight 0 when nothing else claims it.
 
 ### X012: Build Toolchain Redirected Into The Source Tree {#x012}
 
+<!-- name: Build Toolchain Redirected Into The Source Tree -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when `CC`, `CXX`, `LD`, `AR`, `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`,
@@ -274,6 +298,8 @@ component.
 
 ### X013: Fetch Redirected Or Trust Root Replaced {#x013}
 
+<!-- name: Fetch Redirected Or Trust Root Replaced -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when the recipe changes where a fetch goes or what it trusts: a proxy
@@ -286,6 +312,8 @@ off; this is the other half, keeping verification on and owning what it
 checks against.
 
 ### X014: Environment Variable Names Code To Run {#x014}
+
+<!-- name: Environment Variable Names Code To Run -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -313,6 +341,8 @@ Stands down when the value is a harmless constant (`PAGER=cat`,
 
 ### X015: Work Scheduled To Run After The Build {#x015}
 
+<!-- name: Work Scheduled To Run After The Build -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires on `crontab`, `at`, `batch`, `systemd-run`, `incrontab`, `entr`,
@@ -327,6 +357,8 @@ Plain `systemctl enable` is absent: a package's `.install` scriptlet enabling
 its own unit is ordinary packaging, and R054 reads the unit file itself.
 
 ### X016: Fetch Piped Into An Unrecognised Consumer {#x016}
+
+<!-- name: Fetch Piped Into An Unrecognised Consumer -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -355,6 +387,8 @@ Zero occurrences in the benign corpus.
 
 ### X017: Tool Flag Or Builtin Carries A Command {#x017}
 
+<!-- name: Tool Flag Or Builtin Carries A Command -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires on a command placed where a command is not expected:
@@ -373,6 +407,8 @@ Fires on a command placed where a command is not expected:
 Zero occurrences in the benign corpus.
 
 ### X018: Interpreter One-Liner Assembles A Name {#x018}
+
+<!-- name: Interpreter One-Liner Assembles A Name -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -393,6 +429,8 @@ calls naming a build directory.
 
 ### X019: Host Material Sent Or Packaged {#x019}
 
+<!-- name: Host Material Sent Or Packaged -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires on two shapes of one act.
@@ -410,6 +448,8 @@ DNS clients are anchored to command position: `host` is also an English word,
 and `echo "Host: $(uname -rn)"` is a build script printing a banner.
 
 ### X020: Recipe Writes The Build Steps The Engine Runs {#x020}
+
+<!-- name: Recipe Writes The Build Steps The Engine Runs -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -430,6 +470,8 @@ Zero occurrences in the benign corpus.
 **Related:** [W004](unverifiable.md#w004), [W005](unverifiable.md#w005)
 
 ### X021: Executor Runs A File Chosen At Runtime {#x021}
+
+<!-- name: Executor Runs A File Chosen At Runtime -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -453,6 +495,8 @@ suspicious alone, and `exec "$@"` is how a wrapper forwards its arguments.
 Zero occurrences in the benign corpus.
 
 ### X022: Generated Config Handed To The Tool That Reads It {#x022}
+
+<!-- name: Generated Config Handed To The Tool That Reads It -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -484,6 +528,8 @@ weight 0 when no tool reads it.
 
 ### X023: Command Output Executed As A Script {#x023}
 
+<!-- name: Command Output Executed As A Script -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a pipeline ends in a shell and does not start with a network
@@ -510,13 +556,17 @@ No package in the v1 benign corpus pipes anything into a shell.
 
 ### X024: Indirect Sensitive Assignment {#x024}
 
+<!-- name: Indirect Sensitive Assignment -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when a sensitive makepkg variable (`DLAGENTS`, `COMPRESS*`,
 `PACMAN_AUTH`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `MAKEFLAGS`, `RUSTFLAGS`,
 `PATH`, `LD_PRELOAD`, `LD_LIBRARY_PATH`, `PYTHONPATH`) is assigned a value
 that comes from another variable, a command substitution, or an array
-expansion.
+expansion. Build-tool search paths configured from other variables
+(`CMAKE_PREFIX_PATH`, `CMAKE_MODULE_PATH`, `PKG_CONFIG_PATH`, `ACLOCAL_PATH`,
+`GIT_EXEC_PATH`, ...) are build plumbing, not loader paths, and stay quiet.
 
 | Fires | Quiet |
 |---|---|
@@ -530,6 +580,8 @@ the actual value was set in a function. Good PKGBUILDs assign literal
 values to these variables.
 
 ### X025: Multi-Line Function Shadow {#x025}
+
+<!-- name: Multi-Line Function Shadow -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -548,12 +600,18 @@ function definitions across lines.
 
 ### X026: Unresolved Constructs In Executable Positions {#x026}
 
+<!-- name: Unresolved Constructs In Executable Positions -->
+
 **MEDIUM** (weight 15; HIGH at three or more distinct names) · category `evasion`
 
-Fires when an assignment the tokenizer refused is *referenced from*
-`build()`, `prepare()`, `check()` or `package()`. Top-level metadata
-(`pkgver=$(date)`, decorative variables) is not an executable position.
-The finding lists the unresolved names and the functions that reference
+Fires when an assignment the tokenizer refused reaches an *executable position*
+in `build()`, `prepare()`, `check()` or `package()`: a command word, an
+interpreter/source/eval target, a pipeline into a shell, or an `xargs`/`find
+-exec` target. Using the value as a filename, URL, job count, or test operand is
+data flow, not execution. Top-level metadata (`pkgver=$(date)`, decorative
+variables) is not an executable position either. Function-local declarations
+are excluded from W008's report-facing boundary list.
+The finding lists the unresolved names and the functions that execute
 them; `[thresholds] x026.min_count` sets the firing floor (default 1).
 The unresolved-is-not-seen contract holds: X026 reports the refusal, it
 never makes another rule treat the value as read.
@@ -568,6 +626,8 @@ Windows-ISO helper variables).
 
 ### X027: Refusal Cluster {#x027}
 
+<!-- name: Refusal Cluster -->
+
 **CRITICAL** (weight 40) · category `evasion`
 
 Fires when X026's input set holds two or more distinct unresolved names in
@@ -581,6 +641,8 @@ and ISO build machinery); the rate is published as the calibration floor.
 
 ### X028: Pattern Completed Across Commits {#x028}
 
+<!-- name: Pattern Completed Across Commits -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Joins the immediately preceding recorded review's added lines with the
@@ -593,6 +655,8 @@ safety invariant is tested.
 
 ### X029: Encoded Material At Rest {#x029}
 
+<!-- name: Encoded Material At Rest -->
+
 **MEDIUM** (weight 15) · category `evasion`
 
 Fires on a base64, base32 or hex literal above the length floor (default
@@ -602,6 +666,8 @@ The finding names the literal class, never the literal's content.
 Measured on the locked benign corpus: 1 on the v1 corpus.
 
 ### X030: ANSI-C Quoted Content In Commands {#x030}
+
+<!-- name: ANSI-C Quoted Content In Commands -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -613,6 +679,8 @@ single token (a path, a flag, a filename). Formatting-only escapes
 
 ### X031: Build Reads Non-Code Text {#x031}
 
+<!-- name: Build Reads Non-Code Text -->
+
 **HIGH** (weight 25) · category `evasion`
 
 Fires when `build()`/`prepare()`/`package()` reads its own PKGBUILD (by
@@ -622,6 +690,8 @@ reading the recipe for metadata without execution, stands down.
 Measured on the locked benign corpus: 0 on the v1 corpus.
 
 ### X032: Command Name Assembled By Splicing {#x032}
+
+<!-- name: Command Name Assembled By Splicing -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -633,6 +703,8 @@ family's residual: a splice a shell executes but the tokenizer folds can
 still be reported as the *attempt* it is.
 
 ### X033: File With No Provenance Executed {#x033}
+
+<!-- name: File With No Provenance Executed -->
 
 **HIGH** (weight 25) · category `evasion`
 
@@ -649,6 +721,8 @@ stay out of scope. A script-runtime subcommand (`bun run build`,
 keyed to bun and deno, and `bash run` still runs a file called `run`.
 
 ### X034: Fetch Laundered Through An Archival Service {#x034}
+
+<!-- name: Fetch Laundered Through An Archival Service -->
 
 **HIGH** (weight 25) · category `evasion`
 

@@ -164,6 +164,8 @@ class ManifestDelta:
     :ivar unresolved: entries the parser could not resolve.
     :ivar old_count: dependency count before the change.
     :ivar new_count: dependency count after the change.
+    :ivar origin_changes: credential-free dependency origin transitions.
+    :ivar integrity_changes: lock integrity removals or algorithm downgrades.
 
     Example:
         .. code-block:: python
@@ -182,6 +184,8 @@ class ManifestDelta:
     unresolved: tuple[str, ...] = ()
     old_count: int = 0
     new_count: int = 0
+    origin_changes: tuple[str, ...] = ()
+    integrity_changes: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         """Serialize the manifest change to a plain dict."""
@@ -196,6 +200,8 @@ class ManifestDelta:
             "unresolved": list(self.unresolved),
             "old_count": self.old_count,
             "new_count": self.new_count,
+            "origin_changes": list(self.origin_changes),
+            "integrity_changes": list(self.integrity_changes),
         }
 
     @classmethod
@@ -212,6 +218,8 @@ class ManifestDelta:
             unresolved=tuple(data.get("unresolved", ())),
             old_count=int(data.get("old_count", 0)),
             new_count=int(data.get("new_count", 0)),
+            origin_changes=tuple(data.get("origin_changes", ())),
+            integrity_changes=tuple(data.get("integrity_changes", ())),
         )
 
 
@@ -639,30 +647,94 @@ def change_delta(
     )
 
 
-def _manifest_deltas(doc) -> tuple[ManifestDelta, ...]:
-    """One :class:`ManifestDelta` per manifest file the diff touched.
+def manifest_delta_from_docs(
+    path: str, fmt: str, status: str, pre_doc, post_doc,
+    *, added_text: str = "", removed_text: str = "",
+) -> ManifestDelta:
+    """Diff two parsed manifests, optionally with hunk-only fallback text.
 
-    The pre and post text of a single file is projected from the parsed
-    ``DiffDoc`` lines (context plus that side's changes), parsed through the
-    same ``ManifestDoc`` contract the tree walk uses, and diffed by
-    dependency name and remote host.  No new parse, no new walker.
-
-    A hunk carries three lines of context, so the structured parse can lose a
-    dependency whose section header is outside the hunk.  The scored signal
-    (a new remote host) is therefore also read by a section-agnostic scan of
-    the added and removed lines, which no header can hide.
+    Complete old/new documents give exact old state. The fallback keeps the
+    section-agnostic reader for standalone diffs whose section headers sit
+    outside the hunk.
     """
     from .analysis.manifests import (
-        manifest_format,
-        parse_manifest,
         upstream_redirect_signals,
         upstream_source_deps,
         upstream_source_hosts,
     )
 
+    old = {d.name for d in (pre_doc.dependencies if pre_doc else ()) if d.name}
+    new = {d.name for d in (post_doc.dependencies if post_doc else ()) if d.name}
+    old |= {d.name for d in upstream_source_deps(removed_text) if d.name}
+    new |= {d.name for d in upstream_source_deps(added_text) if d.name}
+    old_remotes = {
+        d.remote for d in (pre_doc.dependencies if pre_doc else ()) if d.remote
+    }
+    new_remotes = {
+        d.remote for d in (post_doc.dependencies if post_doc else ()) if d.remote
+    }
+    old_remotes |= upstream_source_hosts(removed_text)
+    new_remotes |= upstream_source_hosts(added_text)
+
+    before = {d.name: d for d in (pre_doc.dependencies if pre_doc else ()) if d.name}
+    after = {d.name: d for d in (post_doc.dependencies if post_doc else ()) if d.name}
+    origin_changes = []
+    integrity_changes = []
+    for name in sorted(before.keys() & after.keys()):
+        old_dep, new_dep = before[name], after[name]
+        old_origin = (old_dep.source_kind, old_dep.origin)
+        new_origin = (new_dep.source_kind, new_dep.origin)
+        if old_origin != new_origin and (old_dep.origin or new_dep.origin):
+            old_label = old_dep.origin or "default registry"
+            new_label = new_dep.origin or "default registry"
+            origin_changes.append(f"{name}: {old_label} -> {new_label}")
+        old_integrity, new_integrity = old_dep.integrity, new_dep.integrity
+        if old_integrity and not new_integrity:
+            integrity_changes.append(f"{name} (integrity removed)")
+        elif old_integrity and new_integrity:
+            def strength(value):
+                algorithm = value.split("-", 1)[0].lower()
+                return {"md5": 1, "sha1": 1, "sha256": 2, "sha384": 3,
+                        "sha512": 4}.get(algorithm, 0)
+            if strength(new_integrity) < strength(old_integrity):
+                integrity_changes.append(f"{name} (integrity algorithm downgraded)")
+
+    unresolved = ()
+    if status in ("added", "removed"):
+        unresolved = tuple(pre_doc.unresolved if pre_doc else ()) + tuple(
+            post_doc.unresolved if post_doc else ())
+    post_redirects: dict[str, str] = {}
+    for kind, value in (post_doc.redirects if post_doc else ()):
+        post_redirects[value] = kind
+    for kind, value in upstream_redirect_signals(added_text):
+        post_redirects.setdefault(value, kind)
+    pre_redirects = {value for _kind, value in (pre_doc.redirects if pre_doc else ())}
+    pre_redirects |= {value for _kind, value in upstream_redirect_signals(removed_text)}
+    redirects = tuple(sorted(
+        (kind, value) for value, kind in post_redirects.items()
+        if value not in pre_redirects
+    ))
+    return ManifestDelta(
+        path=path, format=fmt, status=status,
+        added=tuple(sorted(new - old)), removed=tuple(sorted(old - new)),
+        remote_added=tuple(sorted(new_remotes - old_remotes)),
+        origin_changes=tuple(origin_changes),
+        integrity_changes=tuple(integrity_changes),
+        redirects=redirects, unresolved=unresolved,
+        old_count=len(old), new_count=len(new),
+    )
+
+
+def _manifest_deltas(doc) -> tuple[ManifestDelta, ...]:
+    """One :class:`ManifestDelta` per manifest file the diff touched."""
+    from .analysis.manifests import manifest_format, parse_manifest
+
     out: list[ManifestDelta] = []
     for file in doc.files:
-        fmt = manifest_format(file.path)
+        path = file.old_path if file.status == "removed" else file.path
+        if not path or path == "/dev/null":
+            path = file.path
+        fmt = manifest_format(path)
         if fmt is None:
             continue
         pre_text = "\n".join(
@@ -681,50 +753,11 @@ def _manifest_deltas(doc) -> tuple[ManifestDelta, ...]:
             line.content for line in doc.lines
             if line.file == file.path and line.side == "remove"
         )
-        pre_doc = parse_manifest(file.path, pre_text) if pre_text else None
-        post_doc = parse_manifest(file.path, post_text) if post_text else None
-        old = {d.name for d in (pre_doc.dependencies if pre_doc else ()) if d.name}
-        new = {d.name for d in (post_doc.dependencies if post_doc else ()) if d.name}
-        old |= {d.name for d in upstream_source_deps(removed_text) if d.name}
-        new |= {d.name for d in upstream_source_deps(added_text) if d.name}
-        old_remotes = {
-            d.remote for d in (pre_doc.dependencies if pre_doc else ()) if d.remote
-        }
-        new_remotes = {
-            d.remote for d in (post_doc.dependencies if post_doc else ()) if d.remote
-        }
-        old_remotes |= upstream_source_hosts(removed_text)
-        new_remotes |= upstream_source_hosts(added_text)
-        # A refusal is only a refusal when the whole file was in the diff: an
-        # added or removed manifest is present in full, while a modified one
-        # is reconstructed from a three-line hunk and is expected to be a
-        # fragment.  Naming that a "manifest that could not be parsed" would
-        # be a boundary the committed file does not have.
-        if file.status in ("added", "removed"):
-            unresolved = tuple(pre_doc.unresolved if pre_doc else ()) + tuple(
-                post_doc.unresolved if post_doc else ())
-        else:
-            unresolved = ()
-        # Combine the structured redirects with the section-agnostic scan,
-        # deduped on the destination so a line both readers see is one
-        # finding, not two.
-        post_redirects: dict[str, str] = {}
-        for kind, value in (post_doc.redirects if post_doc else ()):
-            post_redirects[value] = kind
-        for kind, value in upstream_redirect_signals(added_text):
-            post_redirects.setdefault(value, kind)
-        pre_redirects = {value for _kind, value in (pre_doc.redirects if pre_doc else ())}
-        pre_redirects |= {value for _kind, value in upstream_redirect_signals(removed_text)}
-        redirects = tuple(sorted(
-            (kind, value) for value, kind in post_redirects.items()
-            if value not in pre_redirects
-        ))
-        out.append(ManifestDelta(
-            path=file.path, format=fmt, status=file.status,
-            added=tuple(sorted(new - old)), removed=tuple(sorted(old - new)),
-            remote_added=tuple(sorted(new_remotes - old_remotes)),
-            redirects=redirects, unresolved=unresolved,
-            old_count=len(old), new_count=len(new),
+        pre_doc = parse_manifest(path, pre_text) if pre_text else None
+        post_doc = parse_manifest(path, post_text) if post_text else None
+        out.append(manifest_delta_from_docs(
+            path, fmt, file.status, pre_doc, post_doc,
+            added_text=added_text, removed_text=removed_text,
         ))
     return tuple(out)
 

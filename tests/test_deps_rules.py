@@ -366,6 +366,17 @@ def test_d003_fires_on_a_compound_assignment(enabled, rules):
     assert "D003" in fired(diff, enabled, rules)
 
 
+@pytest.mark.parametrize("manager", ["python-pip", "pnpm", "bun", "uv"])
+def test_d003_covers_registry_capable_managers(enabled, rules, manager):
+    diff = HEADER + f"+makedepends=('{manager}')\n"
+    assert "D003" in fired(diff, enabled, rules)
+
+
+def test_d003_covers_checkdepends(enabled, rules):
+    diff = HEADER + "+checkdepends=('npm')\n"
+    assert "D003" in fired(diff, enabled, rules)
+
+
 def test_h016_silent_when_source_is_declared_with_a_compound_assignment(enabled, rules):
     diff = HEADER + (
         "+source+=('https://good.example/a.tar.gz')\n"
@@ -942,3 +953,17 @@ def test_post_validation_returns_diff_claims_when_the_recipe_cannot_parse(
     assert extract_dependency_changes(
         diff, "demo", current_text="pkgname=demo\n"
     )["depends"] == {"newdep"}
+
+
+def test_d004_does_not_treat_a_conflict_as_a_provides_claim(
+        seeded_db, all_enabled, rules):
+    """alda: ``conflicts=('icedtea-web')`` documents an incompatibility.
+
+    A conflict refuses co-installation; it does not claim to be or replace
+    the name.  H064 reports that shape at its own severity so the hijack
+    cluster (D004/H098) stays about actual provides/replaces claims.
+    """
+    assert "D004" not in fired(
+        HEADER + "+conflicts=('openssl')\n", all_enabled, rules)
+    assert "D004" in fired(
+        HEADER + "+provides=('openssl')\n", all_enabled, rules)

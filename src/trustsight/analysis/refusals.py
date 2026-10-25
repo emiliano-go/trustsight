@@ -24,6 +24,54 @@ def _references(name: str) -> re.Pattern:
     return re.compile(r"\$\{?" + re.escape(name) + r"(?:\}|\b|\[)")
 
 
+def _executes(name: str, body: str) -> bool:
+    """Whether *name* can reach a command rather than only data.
+
+    An unresolved value in a URL, a ``-j`` argument or a test is a boundary,
+    not an execution: ``jobs`` from ``nproc`` and ``uv_ver`` from ``sed`` are
+    build data.  X026 is about the value the shell will *run*, so only a
+    command word, an interpreter/source/eval target, ``xargs``/``find -exec``
+    or a command substitution counts.
+    """
+    from ..deps import _strip_comment
+    from ..tokenizer import join_line_continuations, split_lines
+    from .crossfire._common import _command_words, _pipeline_sink, _split_commands
+
+    ref = _references(name)
+    target = re.compile(
+        r"(?:^|[;&|(])\s*(?:[A-Za-z0-9_./-]+=|\S+\s+)*-*\s*"
+        r"(?:bash|sh|zsh|dash|ksh|python[23]?|perl|ruby|node"
+        r"|source|\.|eval)\b\s+(?:-[^\s]+\s+)*[\"']?" + ref.pattern,
+        re.IGNORECASE,
+    )
+    declaration = re.compile(
+        r"^\s*(?:local|declare|typeset|export|readonly)\b"
+    )
+    for raw in join_line_continuations(split_lines(body)):
+        line = _strip_comment(raw).strip()
+        if not line:
+            continue
+        sink = _pipeline_sink(line)
+        if (sink and ref.search(line.rsplit("|", 1)[0])
+                and re.match(
+                    r"(?:bash|sh|zsh|dash|ksh|python[23]?|perl|ruby"
+                    r"|node|eval|xargs)\b", sink, re.IGNORECASE)):
+            return True
+        for part in _split_commands(line):
+            part = part.strip()
+            if not part or declaration.match(part):
+                continue
+            if ref.search(part) and any(ref.search(word) for word in _command_words(part)):
+                return True
+            if target.search(part):
+                return True
+            if re.search(r"-exec\s+[\"']?" + ref.pattern, part):
+                return True
+            if re.search(r"\$\(\s*[\"']?" + ref.pattern, part):
+                return True
+    return False
+
+
 _ANSI_C_LITERAL_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
 _HEX_ESCAPE_RE = re.compile(r"\\x([0-9A-Fa-f]{2})")
 _OCTAL_ESCAPE_RE = re.compile(r"\\0([0-7]{1,3})")
@@ -115,24 +163,33 @@ _FUNCTION_LOCAL_DECL_RE = re.compile(r"^(?:local|declare)\s")
 def _reportable_unresolved_names(recipe) -> list[str]:
     """The W008-facing unresolved names: function locals excluded.
 
-    A ``local``/``declare`` refusal inside a function body is ordinary
-    build machinery; the name is still "not seen" to every rule, but naming
-    it to the reader as a boundary trained them to skim the list.
+    A ``local``/``declare`` name inside a function body is ordinary build
+    machinery; the name is still "not seen" to every rule, but naming it to
+    the reader as a boundary trained them to skim the list.  Track the
+    declared *name*, not the declaration line: the refusal is often a later
+    ``name=$(command)`` assignment.
     """
     from ..recipedoc import _ASSIGNMENT_SHAPE_RE
     from ..tokenizer import split_lines
 
-    function_lines = {
-        raw.strip()
-        for body in recipe.functions.values()
-        for raw in split_lines(body)
-    }
+    local_names: set[str] = set()
+    for body in recipe.functions.values():
+        for raw in split_lines(body):
+            raw = raw.strip()
+            if not _FUNCTION_LOCAL_DECL_RE.match(raw):
+                continue
+            for token in raw.split()[1:]:
+                if token.startswith("-"):
+                    continue
+                name = token.split("=", 1)[0].strip("\"'{}")
+                if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                    local_names.add(name)
     names: list[str] = []
     for line in recipe.unresolved:
         match = _ASSIGNMENT_SHAPE_RE.match(line)
         if not match or match.group(1) in names:
             continue
-        if _FUNCTION_LOCAL_DECL_RE.match(line) and line in function_lines:
+        if match.group(1) in local_names:
             continue
         names.append(match.group(1))
     return names
@@ -237,10 +294,9 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
     names = _unresolved_names(post)
     referenced: list[tuple[str, list[str]]] = []
     for name in names:
-        pattern = _references(name)
         functions = [
             fn for fn in _EXECUTABLE_FUNCTIONS
-            if pattern.search(post.functions.get(fn, ""))
+            if _executes(name, post.functions.get(fn, ""))
         ]
         if functions:
             referenced.append((name, functions))

@@ -59,6 +59,7 @@ from ..base import (
     _GLOBAL_URL_KEY,
     _aggregate_pinning,
     _has_install_hook,
+    _without_notice_only_install_modifications,
 )
 from ..composition import (
     _meta_annotations,
@@ -158,8 +159,10 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+    triggered_rules = _without_notice_only_install_modifications(
+        triggered_rules, diff_text)
     triggered_rules = suppress_acknowledged_url_findings(
-        triggered_rules, package_name)
+        triggered_rules, package_name, url_acks)
     from ..persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
 
@@ -260,7 +263,8 @@ def scan_diff(
         deps_not_scanned=_adds_a_dependency(diff_text),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
-        noextract_present=_has_noextract(diff_text),
+        unresolved_assignments=bool(unresolved_assignments),
+        noextract_present=_has_noextract(current_text or diff_text),
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
     )

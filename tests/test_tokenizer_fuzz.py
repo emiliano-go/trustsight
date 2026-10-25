@@ -194,6 +194,9 @@ def test_generated_diffs_are_safe_at_the_analysis_boundary():
             "tree_not_analyzed",
             "unresolved_source",
             "unresolved_parse_time",
+            # Malformed generated assignments are unresolved too; that refusal
+            # must forbid a clean verdict rather than disappear from this set.
+            "stage_degraded",
             # A random diff may add a dependency, and this run analyses
             # none of them.
             "deps_not_scanned",

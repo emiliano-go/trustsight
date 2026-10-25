@@ -358,6 +358,8 @@ def emit_path_injection(ctx: GraphContext, add: Callable) -> None:
                     continue
                 if subdir in ctx.extraction_dirs:
                     continue
+                if subdir in ctx.created_dirs:
+                    continue
                 if manifest_basenames is not None and subdir in manifest_basenames:
                     continue
                 add("H085", "PATH Injection With Undeclared Directory", "HIGH", "build",

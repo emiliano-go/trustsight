@@ -90,12 +90,30 @@ def _canonical_anchors() -> dict[str, str]:
     return first
 
 
+def _head_metadata() -> dict:
+    """The last committed metadata, used only for prose-only legacy sections."""
+    import subprocess
+
+    result = subprocess.run(
+        ["git", "show", "HEAD:src/trustsight/registry_meta.json"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+    )
+    if result.returncode:
+        return {}
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 def main() -> None:
     force = "--force" in sys.argv[1:]
     if OUT.exists() and not force:
         raise SystemExit(f"{OUT} exists; pass --force to rewrite it")
 
     canonical = _canonical_anchors()
+    previous = _head_metadata()
     meta: dict[str, dict] = {}
     for section in sorted(SECTIONS.glob("*.md")):
         text = section.read_text()
@@ -109,19 +127,27 @@ def main() -> None:
         capability = values.get("Category")
         if capability:
             capability = capability.strip("`").strip()
+        prior = previous.get(anchor, {})
         meta[anchor] = {
             "uid": uid,
-            "name": comments.get("name"),
+            # Older prose-only sections have no name comment. Preserve the
+            # committed display metadata rather than nulling every rule when
+            # the registry is regenerated (new comments always win).
+            "name": comments.get("name") or prior.get("name"),
             "canonical": canonical.get(uid) == anchor,
-            "severity_text": severity_text or None,
-            "severity": found.group(1) if found else None,
-            "capability": capability or None,
-            "target": values.get("Target") or None,
+            "severity_text": severity_text or prior.get("severity_text"),
+            "severity": found.group(1) if found else prior.get("severity"),
+            "capability": capability or prior.get("capability"),
+            "target": values.get("Target") or prior.get("target"),
         }
-        # Prose only: the bullets are rendered back from the registry.
+        # Prose only: the bullets are rendered back from the registry. Keep
+        # the name comment too, or the next regeneration cannot reproduce it.
+        name = meta[anchor]["name"]
         section.write_text(
             f"<!-- uid: {uid} -->\n"
-            f"<!-- anchor: {anchor} -->\n\n"
+            f"<!-- anchor: {anchor} -->\n"
+            + (f"<!-- name: {name} -->\n" if name else "")
+            + "\n"
             + "\n".join(body).strip("\n")
             + "\n"
         )

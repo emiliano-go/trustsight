@@ -24,7 +24,7 @@ from ..tokenizer import (
     reconstruct_lines,
     resolve_added_lines,
 )
-from .base import _code_rule_enabled, mask_to_recipe
+from .base import _code_rule_enabled, mask_to_pkgbuild, mask_to_recipe
 from ..tokenizer import split_lines
 
 
@@ -1007,7 +1007,7 @@ def _function_shadow_findings(diff_text, config, add) -> None:
     or .() redirects file inclusion.  No benign PKGBUILD does any of
     these.
     """
-    lines = mask_to_recipe(resolve_added_lines(diff_text))
+    lines = mask_to_pkgbuild(resolve_added_lines(diff_text))
     for i, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):
             continue

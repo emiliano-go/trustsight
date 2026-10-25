@@ -466,6 +466,32 @@ def _archive_extract_dir(basename: str) -> str | None:
             return basename[: -len(suffix)]
     return None
 
+_CREATED_SOURCE_DIR_RE = re.compile(
+    r"\b(?:mkdir(?:\s+-p)?|install\s+-\S*d\S*)\s+[^\n;]*?"
+    r"\$\{?(?:srcdir|startdir)\}?/([A-Za-z0-9._+-]+)",
+    re.IGNORECASE,
+)
+
+
+def _created_source_dirs(diff_text: str,
+                         current_text: str | None = None) -> frozenset[str]:
+    """Directories the recipe itself creates under ``$srcdir``.
+
+    H085's target is a directory the build *did not declare*.  A recipe that
+    runs ``mkdir -p "$srcdir/bin"`` and then puts it on PATH has declared the
+    directory in the recipe; the executable it later installs there is
+    visible to the other rules.  Only names without a path separator count,
+    and only ``mkdir``/``install -d`` shapes; a PATH entry naming an
+    arbitrary existing build-tree directory still fires.
+    """
+    text = current_text if current_text is not None else diff_text
+    return frozenset(
+        match.group(1).strip("\"'").rstrip("/")
+        for match in _CREATED_SOURCE_DIR_RE.finditer(text)
+        if match.group(1).strip("\"'").rstrip("/")
+    )
+
+
 def _declared_extraction_dirs(
     diff_text: str, current_text: str | None = None
 ) -> set[str]:

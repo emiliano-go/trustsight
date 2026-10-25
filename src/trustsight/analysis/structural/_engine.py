@@ -460,10 +460,19 @@ def _structural_findings(
         # checksum removed together is a deletion, not weakened verification:
         # the file the hash covered is gone.  A remote URL removal is left to
         # the source-change path above.
+        # A source entry is local when it names a file the recipe carries
+        # rather than a URL.  A `$`-prefixed name is often a local file
+        # (`$_pkgname-logtruncate.service`, `$pkgname-$pkgver.tar.gz`); the
+        # old filter excluded every `$` entry, so pi-hole's removed service
+        # files and their checksums read as "checksums removed, sources
+        # unchanged".  Keep excluding absolute/system paths and anything
+        # carrying a scheme; a `$`-prefixed entry with a path separator is
+        # left to the URL/source-change path rather than guessed at.
         removed_local_sources = [
             item for item in (cdelta.sources.lost if cdelta else ())
             if item and "://" not in item
-            and not item.startswith(("$", "/", "~", "{"))
+            and not item.startswith(("/", "~", "{"))
+            and not (item.startswith("$") and "/" in item)
         ]
         removed_checksums = (
             len(cdelta.checksums.lost) - len(cdelta.checksums.gained)

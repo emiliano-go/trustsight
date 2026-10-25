@@ -193,3 +193,36 @@ def test_h064_existing_provides_unchanged_is_quiet(establish):
     establish(True)
     d = "-provides=('openssl')\n+provides=('openssl')\n+pkgrel=2\n"
     assert "H064" not in ids(d, package_name="bar")
+
+
+def test_h064_conflicts_is_unscored_info_not_high(establish, observe):
+    """A conflict with an established package is a scope note, not a hijack."""
+    establish(True)
+    observe(0)
+    finding = next(
+        f for f in structural("+conflicts=('icedtea-web')\n")
+        if f["rule_id"] == "H064"
+    )
+    assert finding["severity"] == "INFO"
+    assert finding["weight_override"] == 0
+    assert finding["params"]["field"] == "conflicts"
+
+
+def test_h064_a_widely_depended_conflict_is_high(establish, observe):
+    establish(False)
+    observe(30)
+    finding = next(
+        f for f in structural("+conflicts=('glibc')\n")
+        if f["rule_id"] == "H064"
+    )
+    assert finding["severity"] == "HIGH"
+
+
+def test_h064_provides_of_an_established_package_stays_high(establish, observe):
+    establish(True)
+    observe(0)
+    finding = next(
+        f for f in structural("+provides=('openssl')\n")
+        if f["rule_id"] == "H064"
+    )
+    assert finding["severity"] == "HIGH"

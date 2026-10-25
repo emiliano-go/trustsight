@@ -124,6 +124,24 @@ def _has_install_hook(diff_text: str) -> bool:
         post, re.MULTILINE))
 
 
+def _without_notice_only_install_modifications(findings, diff_text: str):
+    """Keep R007 for behaviour changes, not hooks that only print notices."""
+    from .delivery import install_hook_notice_only
+
+    kept = []
+    for finding in findings:
+        if finding.get("rule_id") != "R007":
+            kept.append(finding)
+            continue
+        evidence = finding.get("evidence") or {}
+        match = str(evidence.get("match") or finding.get("match") or "")
+        header = re.fullmatch(r"\+\+\+\s+b/(.+\.install)", match.strip())
+        if not header or not install_hook_notice_only(
+                diff_text, header.group(1).rsplit("/", 1)[-1]):
+            kept.append(finding)
+    return kept
+
+
 def _url_domain(url: str) -> str:
     """The host of *url*, through the one canonical spelling.
 
@@ -236,12 +254,30 @@ def mask_to_recipe(lines: list[str]) -> list[str]:
     ``resolve_added_lines``/``_classify_enclosing_function`` and with the
     diff's own line numbers.
     """
+    return _mask_to(lines, ("PKGBUILD",), install_hooks=True)
+
+
+def mask_to_pkgbuild(lines: list[str]) -> list[str]:
+    """Blank every hunk line that is not the PKGBUILD.
+
+    `mask_to_recipe` keeps ``.install`` scriptlets because their commands are
+    package logic.  A rule whose claim is about *makepkg* (H097 function
+    shadowing) must not read a scriptlet: pacman runs the hook, makepkg's
+    helpers are not in scope, and a local ``msg()`` notice helper is
+    ordinary.  Same blanking/indices as `mask_to_recipe`.
+    """
+    return _mask_to(lines, ("PKGBUILD",), install_hooks=False)
+
+
+def _mask_to(lines: list[str], names: tuple[str, ...], *,
+             install_hooks: bool) -> list[str]:
     out: list[str] = []
     in_recipe = True
     for line in lines:
         match = _DIFF_FILE_RE.match(line)
         if match:
             name = match.group(1).rsplit("/", 1)[-1]
-            in_recipe = name == "PKGBUILD" or name.endswith(".install")
+            in_recipe = name in names or (
+                install_hooks and name.endswith(".install"))
         out.append(line if in_recipe else "")
     return out

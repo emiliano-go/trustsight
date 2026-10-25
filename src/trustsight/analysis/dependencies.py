@@ -114,22 +114,31 @@ def _scope_expansion_findings(diff_text, package_name, config, add,
         for name in sorted(added_deps.get(field, ())):
             if is_related_package(name, package_name):
                 continue
-            if is_established_package(name):
-                add("H064", "Provides/Replaces Scope Expansion", "HIGH",
-                    "dependency",
-                    f"{field} claims '{name}', an established package unrelated "
-                    f"to '{package_name}'",
-                    field=field, dep_name=name, kind="established",
-                    package_name=package_name)
-                return
-            if _is_widely_provided(name, config):
-                add("H064", "Provides/Replaces Scope Expansion", "MEDIUM",
-                    "dependency",
-                    f"{field} claims '{name}', widely depended on but unrelated "
-                    f"to '{package_name}'",
-                    field=field, dep_name=name, kind="widely depended on",
-                    package_name=package_name)
-                return
+            established = is_established_package(name)
+            widely = _is_widely_provided(name, config)
+            if not (established or widely):
+                continue
+            # `provides`/`replaces` *claim* the name, so official-repo
+            # membership alone is enough for HIGH.  `conflicts` only refuses
+            # co-installation; it is a scope statement when the target is one
+            # the ecosystem depends on, and a lower-confidence note when it is
+            # merely established (alda's documented icedtea-web
+            # incompatibility is the common benign shape).  A conflict alone
+            # never composes into H098, because D004 stays provides/replaces.
+            if field == "conflicts":
+                severity = "HIGH" if widely else "INFO"
+                kind = "widely depended on" if widely else "established"
+            else:
+                severity = "HIGH" if established else "MEDIUM"
+                kind = "established" if established else "widely depended on"
+            add("H064", "Provides/Replaces Scope Expansion", severity,
+                "dependency",
+                f"{field} claims '{name}', {kind} but unrelated "
+                f"to '{package_name}'",
+                field=field, dep_name=name, kind=kind,
+                package_name=package_name,
+                weight_override=0 if field == "conflicts" and not widely else None)
+            return
 
 
 def name_shadow_findings(text: str, package_name: str,
@@ -291,7 +300,8 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                         field=field, dep_name=name)
 
     if "D003" in wanted:
-        network = added_deps.get("makedepends", set()) & _network_tools(config)
+        network = (added_deps.get("makedepends", set())
+                   | added_deps.get("checkdepends", set())) & _network_tools(config)
         # A VCS client the recipe already needs to fetch its own source is not
         # a new network capability.  Keep curl/wget and every other fetch tool.
         network -= _vcs_tools(current_text or diff_text, package_name)
@@ -302,7 +312,11 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
                 new_network=", ".join(new_network))
 
     if "D004" in wanted:
-        for field in ("provides", "replaces", "conflicts"):
+        # A `conflicts` entry refuses co-installation; it does not claim to be
+        # or replace the name.  H064 reports that shape at its own severity,
+        # so D004 (and the H098 cluster) stay about actual provides/replaces
+        # hijacks.
+        for field in ("provides", "replaces"):
             for name in sorted(added_deps.get(field, ())):
                 if is_related_package(name, package_name):
                     continue

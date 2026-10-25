@@ -68,6 +68,8 @@ from ._defaults_executor import (
     DEFAULT_VARIANT_SUFFIXES,
     EXEC_WRAPPER,
     GETENT_ENUMERATION_FRAGMENT,
+    H067_LEGACY_SYSTEMD_DETECT_VIRT,
+    H067_SYSTEMD_DETECT_VIRT_PROBE,
     NETWORK_CLIENT,
     NETWORK_CLIENT_ALTERNATIVES,
     OTHER_FETCH_CLIENT,
@@ -198,6 +200,30 @@ def _refresh_legacy_recon_commands() -> bool:
     _log.info("repaired the legacy H040 getent fragment in patterns.toml")
     return True
 
+def _refresh_legacy_anti_analysis_probes() -> bool:
+    """Repair the stale shipped H067 ``systemd-detect-virt`` probe.
+
+    The probe fired on ``systemd-detect-virt --chroot``, the udev/chroot
+    availability guard an install scriptlet legitimately runs.  patterns.toml
+    is written once at install and never synced, so an existing install keeps
+    the broad fragment; when the file still carries it, that one line is
+    swapped in place and user customisation of the rest is preserved.
+    """
+    path = CONFIG_DIR / "patterns.toml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    old_line = "    " + _toml_value(H067_LEGACY_SYSTEMD_DETECT_VIRT) + ",\n"
+    new_line = "    " + _toml_value(H067_SYSTEMD_DETECT_VIRT_PROBE) + ",\n"
+    if text.count(old_line) != 1:
+        return False
+    path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
+    _toml_cache.pop("patterns.toml", None)
+    _log.info("repaired the legacy H067 systemd-detect-virt probe in patterns.toml")
+    return True
+
+
 def ensure_default_configs():
     """Write default config files if they do not exist, and add missing shipped rules."""
     ensure_dirs()
@@ -211,6 +237,7 @@ def ensure_default_configs():
     write_default_file(CONFIG_DIR / "iocs.toml", DEFAULT_IOCS)
     _refresh_legacy_iocs()
     _refresh_legacy_recon_commands()
+    _refresh_legacy_anti_analysis_probes()
     _refresh_legacy_review_limit()
     # Append any shipped rules the user's file is missing.  The file is
     # written once at install time, so an older install can lack rules

@@ -188,6 +188,7 @@ def save_pkgbuild_snapshot(
     srcinfo_text: Optional[str] = None,
     install_text: Optional[str] = None,
     manifest_deps: Optional[str] = None,
+    manifest_state: Optional[str] = None,
     retain_previous: bool = True,
 ) -> None:
     """Insert or update the PKGBUILD snapshot for *package_name*.
@@ -250,11 +251,11 @@ def save_pkgbuild_snapshot(
         conn.execute(
             """INSERT INTO pkgbuild_snapshots
                (package_name, pkgbuild_text, srcinfo_text, install_text,
-                manifest_deps, version, last_modified, captured_at,
+                manifest_deps, manifest_state, version, last_modified, captured_at,
                 previous_pkgbuild_text, previous_srcinfo_text,
                 previous_install_text, previous_version,
                 previous_last_modified, previous_captured_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'),
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'),
                        ?, ?, ?, ?, ?, ?)
                ON CONFLICT(package_name) DO UPDATE SET
                    pkgbuild_text = excluded.pkgbuild_text,
@@ -263,6 +264,9 @@ def save_pkgbuild_snapshot(
                    manifest_deps = COALESCE(
                        excluded.manifest_deps,
                        pkgbuild_snapshots.manifest_deps),
+                   manifest_state = COALESCE(
+                       excluded.manifest_state,
+                       pkgbuild_snapshots.manifest_state),
                    version = excluded.version,
                    last_modified = excluded.last_modified,
                    captured_at = excluded.captured_at,
@@ -274,7 +278,7 @@ def save_pkgbuild_snapshot(
                    previous_last_modified = excluded.previous_last_modified,
                    previous_captured_at = excluded.previous_captured_at""",
             (package_name, pkgbuild_text, srcinfo_text, install_text,
-             manifest_deps, version, last_modified,
+             manifest_deps, manifest_state, version, last_modified,
              previous["previous_pkgbuild_text"],
              previous["previous_srcinfo_text"],
              previous["previous_install_text"],

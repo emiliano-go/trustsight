@@ -471,6 +471,7 @@ def gaps_from(
     parent_baseline: bool = False,
     ruleset_drifted: bool = False,
     degraded_stages: list[str] | None = None,
+    unresolved_assignments: bool = False,
     noextract_present: bool = False,
     partial_hunks: int = 0,
     partial_files: list[str] | None = None,
@@ -557,8 +558,10 @@ def gaps_from(
     if ruleset_drifted:
         gaps.append(RULESET_DRIFTED)
     # Last, because it is the least specific: when a named gap already
-    # explains the same shortfall the reader wants that one first.
-    if degraded_stages:
+    # explains the same shortfall the reader wants that one first.  Unresolved
+    # assignments use this existing boundary rather than reporting Low beside
+    # W008 and a structured refusal list.
+    if degraded_stages or unresolved_assignments:
         gaps.append(STAGE_DEGRADED)
     # noextract=() suppresses extraction of specific source archives.
     # When present, the contents of those archives are not available to

@@ -38,6 +38,8 @@ severity weights and the reserved identifier ranges.
 - **Severity:** MEDIUM (weight 15) - corpus rate 0.13 % (published dependency seed)
 - **Category:** `dependency`
 
+<!-- name: Dependency-Set Expansion -->
+
 - **Condition:** A single diff adds 3+ `depends`/`makedepends`/`optdepends`/`checkdepends` entries whose **count × mean rarity** exceeds the expansion gate (≥1.5, tuned on corpus).
 
 **Why not count alone:** Adding 5 deps that are all common (`glibc`, `qt6-base`, `cmake`) is a normal heavy build and should not fire. The signal is count **weighted by how rare/novel each added dep is**, reusing D001's `dependency_observation_count` as a rarity proxy. Novel/obscure deps push the magnitude up; common deps contribute near zero.
@@ -51,6 +53,8 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (resolved build-function lines, position-scoped)
 - **Severity:** MEDIUM (weight 15), or HIGH (weight 25) when the reconstructed line reveals an executable action
 - **Category:** `obfuscation`
+
+<!-- name: Shell Obfuscation Density -->
 
 - **Condition:** A single added line inside a critical build function (`build()`, `prepare()`, `check()`, `package()`) contains **3 or more** distinct obfuscation indicators:
 
@@ -78,6 +82,8 @@ itself is the signal.
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
 
+<!-- name: Mass Adoption -->
+
 - **Condition:** One maintainer submitted at least `[thresholds] h045.min_packages` (default 10) **package bases** within `h045.window_days` (default 7).
 
 A split package is one adoption: a single `PKGBUILD` with twelve `pkgname`
@@ -90,12 +96,16 @@ carried in the finding's member list and analysed on its own for content.
 - **Severity:** HIGH (weight 25)
 - **Category:** `adoption`
 
+<!-- name: Shared Source Repository -->
+
 - **Condition:** At least `[thresholds] h052.min_packages` (default 3) otherwise unrelated packages share a source repository. A shared new domain is [G001](correlation.md#g001)/[G010](correlation.md#g010); a shared adoption window from several accounts is [G014](correlation.md#g014).
 
 ### H055: Attribute Burst {#h055}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
+
+<!-- name: Attribute Burst -->
 
 - **Condition:** At least `[thresholds] h055.min_packages` (default 5) **package bases** sharing a maintainer were modified within `h055.window_hours` (default 24).
 

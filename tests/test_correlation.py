@@ -297,17 +297,21 @@ def test_g008_fires_for_first_seen_account_adopting_dormant_packages(
 
     now = time.time()
     dormant_cutoff = now - 180 * 86400
+    # Relative to the run, not a fixed calendar date: the rule's window is
+    # seven days, so a hardcoded "today" silently ages out of it.
+    observed = time.strftime("%Y-%m-%d %H:%M:%S",
+                             time.gmtime(now - 86400))
 
     records = [
         {"package": f"pkg{i}", "maintainer": "fennekuiper",
          "adoption": True, "adoption_predicates": ["H086"],
-         "adoption_observed_at": "2026-10-18 12:00:00",
+         "adoption_observed_at": observed,
          "last_modified": int(dormant_cutoff - 86400)}
         for i in range(5)
     ]
     monkeypatch.setattr(
         "trustsight.db.maintainer_first_seen",
-        lambda m: "2026-10-18 12:00:00" if m == "fennekuiper" else None,
+        lambda m: observed if m == "fennekuiper" else None,
     )
     found = first_seen_adoption_burst(records, None)
     assert [f["rule_id"] for f in found] == ["G008"]

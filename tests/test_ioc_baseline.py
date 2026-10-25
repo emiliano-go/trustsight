@@ -470,6 +470,27 @@ def test_cli_ioc_list(baseline_dir, isolated_db, monkeypatch):
     assert "malware.example" in result.output
 
 
+def test_plain_ioc_list_strips_terminal_controls(monkeypatch, capsys):
+    from trustsight.cli.ioc import ioc_list
+    from trustsight.ioc_baseline import IocEntry
+
+    entry = IocEntry(
+        type="package", value="bad\x1b[2Jpkg",
+        source="feed\x1b]0;forged\x07", confidence="confirmed\x9b31m",
+    )
+    monkeypatch.setattr(
+        "trustsight.ioc_baseline.active_iocs", lambda **kwargs: [entry])
+    monkeypatch.setattr("trustsight.cli.ioc.use_rich", lambda: False)
+
+    ioc_list(source=None, type=None, include_expired=False, json_output=False)
+
+    out = capsys.readouterr().out
+    assert "badpkg" in out
+    assert "\x1b" not in out
+    assert "\x07" not in out
+    assert "\x9b" not in out
+
+
 def test_cli_ioc_sources(baseline_dir, isolated_db, monkeypatch):
     from typer.testing import CliRunner
 

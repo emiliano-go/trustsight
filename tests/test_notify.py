@@ -378,6 +378,20 @@ def test_maybe_notify_is_quiet_without_alerts(receiver):
     assert receiver.requests == []
 
 
+def test_g010_only_cycle_does_not_notify(receiver):
+    members = ["a", "b", "c", "d", "e"]
+    cycle = CycleResult(
+        new_alerts=[(package, "G010") for package in members],
+        cluster_findings=[{
+            "rule_id": "G010", "severity": "INFO",
+            "match": "first-seen host cdn.example gained by 5 packages",
+            "params": {"members": members, "host": "cdn.example"},
+        }],
+    )
+    assert maybe_notify(cycle, receiver.url) is False
+    assert receiver.requests == []
+
+
 def test_maybe_notify_is_quiet_without_a_url(monkeypatch):
     monkeypatch.setattr("trustsight.config.load_config", lambda: {})
     assert maybe_notify(_cycle(), None) is False

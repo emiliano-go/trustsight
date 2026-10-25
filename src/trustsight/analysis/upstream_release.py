@@ -52,8 +52,6 @@ __all__ = [
 
 def _strip_rename(token: str) -> str:
     """The URL half of a ``name::url`` source entry, or the token unchanged."""
-    if "://" in token:
-        return token
     if "::" in token:
         return token.split("::", 1)[1]
     return token
@@ -118,13 +116,18 @@ def has_validpgpkeys(recipe_text: str | None) -> bool:
     return "validpgpkeys" in recipe.arrays or "validpgpkeys" in recipe.scalars
 
 
+def is_ci_workflow_path(path: str) -> bool:
+    """Whether *path* is a committed GitHub Actions workflow."""
+    return bool(_CI_WORKFLOW_RE.search(path))
+
+
 def added_ci_workflows(delta) -> list[str]:
     """Added ``.github/workflows/*`` paths the diff introduced, sorted."""
     if delta is None:
         return []
     return sorted(
         f.path for f in getattr(delta, "files", ())
-        if f.status == "added" and _CI_WORKFLOW_RE.search(f.path)
+        if f.status == "added" and is_ci_workflow_path(f.path)
     )
 
 
@@ -172,9 +175,14 @@ def _federation_matches(repo: str, config: dict | None, matches) -> list:
     if not _ioc_section(config).get("enabled", True):
         return []
     try:
+        from ..config import load_ioc_sources
         from ..ioc_baseline import match_upstream_repo
 
-        return match_upstream_repo(repo)
+        matched = match_upstream_repo(repo)
+        sources = set(load_ioc_sources())
+        if sources:
+            matched = [m for m in matched if getattr(m, "source", "") in sources]
+        return matched
     except Exception:  # noqa: BLE001 - a cold or unlocked store is no matches
         return []
 
@@ -257,7 +265,10 @@ def upstream_release_findings(
             ioc_source=getattr(match, "source", ""),
             provenance=getattr(match, "provenance", ""),
             campaign=getattr(match, "campaign", ""),
-            pkgver_bumped=pkgver_bumped)
+            pkgver_bumped=pkgver_bumped,
+            # Federation is an indicator tier: maximum-priority alerting,
+            # never heuristic points (the same contract as other IOC hits).
+            weight_override=0)
         federated_fired = True
 
     # U009: a CI workflow committed into the AUR repository (weight 0).

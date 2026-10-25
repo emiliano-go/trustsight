@@ -1230,6 +1230,14 @@ See [U005: Dependency Surface Jump](upstream-manifests.md#u005).
 
 See [U006: Manifest Changed Without Its Lockfile](upstream-manifests.md#u006).
 
+### U011 {#u011}
+
+See [U011: Upstream Origin Changed](upstream-manifests.md#u011).
+
+### U012 {#u012}
+
+See [U012: Lockfile Integrity Weakened](upstream-manifests.md#u012).
+
 ### U007 {#u007}
 
 See [U007: CI Exfil Shape](upstream-release.md#u007).

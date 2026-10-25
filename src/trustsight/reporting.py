@@ -22,7 +22,12 @@ from typing import Any, Sequence
 #:
 #: Computing and hiding is the worst of the three options; the other two
 #: are to show them or to stop computing them.
-ALWAYS_SHOWN_ANNOTATIONS = frozenset({"H043", "H065"})
+ALWAYS_SHOWN_ANNOTATIONS = frozenset({
+    "H043", "H065",
+    # Reader-facing upstream ledgers: computed to be read, not merely to feed
+    # correlation. U005 remains feed-only by design.
+    "U001", "U002", "U006", "U009", "U012",
+})
 
 
 def finding_rows(fact) -> list[dict]:

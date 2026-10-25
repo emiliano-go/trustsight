@@ -214,32 +214,60 @@ def fetch_metadata(on_progress=None) -> dict:
             f"cannot reach the AUR metadata dump ({_METADATA_URL}): {exc}"
         ) from exc
     try:
-        import time
-        total = int(resp.headers.get("Content-Length", 0))
+        from ..bounded_io import (
+            ReadTimedOut,
+            ReadTooLarge,
+            read_capped_with_deadline,
+        )
+
+        class _ProgressReader:
+            def __init__(self, fh):
+                self._fh = fh
+                self.pos = 0
+
+            @property
+            def fp(self):
+                return getattr(self._fh, "fp", None)
+
+            def _report(self, chunk):
+                if chunk:
+                    self.pos += len(chunk)
+                    on_progress(self.pos, total)
+                return chunk
+
+            def read(self, n=-1):
+                return self._report(self._fh.read(n))
+
+            def read1(self, n=-1):
+                inner = getattr(self._fh, "read1", None)
+                chunk = inner(n) if callable(inner) else self._fh.read(n)
+                return self._report(chunk)
+
+        try:
+            total = int(resp.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            total = 0
         response_etag = resp.headers.get("ETag")
         response_last_modified = resp.headers.get("Last-Modified")
-        buf = bytearray()
-        deadline = time.monotonic() + DOWNLOAD_DEADLINE_SECONDS
-        while True:
-            if time.monotonic() > deadline:
-                raise RuntimeError(
-                    "AUR metadata download exceeded its "
-                    f"{DOWNLOAD_DEADLINE_SECONDS:g}s deadline"
-                )
-            chunk = resp.read(65536)
-            if not chunk:
-                break
-            buf.extend(chunk)
-            if len(buf) > MAX_RESPONSE_BYTES:
-                raise ResponseTooLarge(
-                    f"metadata response exceeds {MAX_RESPONSE_BYTES} bytes"
-                )
-            if on_progress:
-                on_progress(len(buf), total)
+        source = _ProgressReader(resp) if on_progress else resp
+        try:
+            body = read_capped_with_deadline(
+                source, MAX_RESPONSE_BYTES, "metadata response",
+                DOWNLOAD_DEADLINE_SECONDS,
+            )
+        except ReadTooLarge as exc:
+            raise ResponseTooLarge(
+                f"metadata response exceeds {MAX_RESPONSE_BYTES} bytes"
+            ) from exc
+        except ReadTimedOut as exc:
+            raise RuntimeError(
+                "AUR metadata download exceeded its "
+                f"{DOWNLOAD_DEADLINE_SECONDS:g}s deadline"
+            ) from exc
     finally:
         if hasattr(resp, "close"):
             resp.close()
-    data = json.loads(gunzip_capped(bytes(buf)))
+    data = json.loads(gunzip_capped(body))
     metadata: dict[str, dict] = {}
     for entry in data:
         metadata[entry["Name"]] = entry

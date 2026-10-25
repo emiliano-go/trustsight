@@ -259,6 +259,42 @@ def test_download_progress_ignores_an_implausible_length(monkeypatch):
     assert seen == [(0, None), (3, None)]
 
 
+def test_download_progress_preserves_the_socket_deadline(monkeypatch):
+    """The wrapper must not hide fp from the bounded reader's socket guard."""
+    import time
+
+    from trustsight.bounded_io import read_capped_with_deadline
+
+    class Socket:
+        timeout = 60.0
+
+        def gettimeout(self):
+            return self.timeout
+
+        def settimeout(self, value):
+            self.timeout = value
+
+    class Raw:
+        _sock = Socket()
+
+    class Response:
+        fp = type("FP", (), {"raw": Raw()})()
+
+        def read1(self, n):
+            return b""
+
+        def read(self, n):  # pragma: no cover - read1 is preferred
+            raise AssertionError("read1 must be preferred")
+
+    response = Response()
+    source = release._ProgressReader(response, lambda pos, total: None, None)
+    clock = iter([0.0, 0.0])
+    monkeypatch.setattr(time, "monotonic", lambda: next(clock))
+
+    assert read_capped_with_deadline(source, 1024, "asset", 5.0) == b""
+    assert response.fp.raw._sock.timeout == 5.0
+
+
 # ---------------------------------------------------------------------------
 # Signature verification
 # ---------------------------------------------------------------------------

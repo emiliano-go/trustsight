@@ -593,6 +593,11 @@ class _ProgressReader:
         self._total = total
         self._pos = 0
 
+    @property
+    def fp(self):
+        """Expose the response so the bounded reader can cap its socket wait."""
+        return getattr(self._fh, "fp", None)
+
     def read(self, n: int = -1) -> bytes:
         chunk = self._fh.read(n)
         if chunk:

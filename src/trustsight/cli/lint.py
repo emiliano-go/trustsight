@@ -191,6 +191,8 @@ def lint_report(text: str, filename: str) -> dict:
 
 def register_commands(app: typer.Typer):
     """Register the ``lint`` subcommand on *app*."""
+    from ..safe_text import clean
+
     @app.command()
     def lint(
         path: str = typer.Argument(..., help="Local PKGBUILD or .install path"),
@@ -203,7 +205,7 @@ def register_commands(app: typer.Typer):
             if json_output:
                 typer.echo(json.dumps({"error": message}))
             else:
-                typer.echo(message, err=True)
+                typer.echo(clean(message), err=True)
             raise typer.Exit(code=2)
 
         target = pathlib.Path(path)
@@ -223,20 +225,20 @@ def register_commands(app: typer.Typer):
         if json_output:
             typer.echo(json.dumps(report, indent=2))
             return
-        typer.echo(f"Lint: {report['file']}")
+        typer.echo(clean(f"Lint: {report['file']}"))
         if report["scalars"]:
             scalars = ", ".join(
                 f"{k}={v}" for k, v in sorted(report["scalars"].items()))
-            typer.echo(f"  scalars: {scalars}")
+            typer.echo(clean(f"  scalars: {scalars}"))
         for name, info in sorted(report["arrays"].items()):
             note = f" [{'; '.join(info['notes'])}]" if info["notes"] else ""
-            typer.echo(f"  array {name}: {info['entries']} entries{note}")
-        typer.echo(
-            f"  functions: {', '.join(report['functions']) or '(none)'}")
+            typer.echo(clean(f"  array {name}: {info['entries']} entries{note}"))
+        typer.echo(clean(
+            f"  functions: {', '.join(report['functions']) or '(none)'}"))
         for row in report["unresolved_assignments"]:
-            typer.echo(f"  unresolved: {row['name']}: {row['line']}")
+            typer.echo(clean(f"  unresolved: {row['name']}: {row['line']}"))
         for finding in report["rules"]:
-            typer.echo(
+            typer.echo(clean(
                 f"  {finding['rule_id']} ({finding['severity']}): "
-                f"{finding['message']}")
+                f"{finding['message']}"))
         typer.echo("  score: none (lint is not a verdict)")

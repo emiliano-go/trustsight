@@ -83,9 +83,8 @@ _COMMAND_POSITION = r"(?:\A\s*|[;&|(]\s*|\$\(\s*|&&\s*|\|\|\s*)"
 _PATH_PREFIX = r"(?:/?(?:[\w.$~{}-]+/)+)?"
 
 _REGISTRY_RESOLVE_RE = re.compile(
-    "|".join(
-        f"{_COMMAND_POSITION}{_PATH_PREFIX}{frag}" for frag in _REGISTRY_RESOLVE
-    ),
+    f"{_COMMAND_POSITION}{_PATH_PREFIX}"
+    f"(?:{'|'.join(_REGISTRY_RESOLVE)})",
     re.IGNORECASE,
 )
 

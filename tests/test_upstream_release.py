@@ -97,6 +97,7 @@ def test_a_federated_shape_files_its_rule(shape, rule_id):
     assert _u_ids(fired) == [rule_id]
     assert fired[0]["severity"] == "MEDIUM"
     assert fired[0]["upstream_repo"] == REPO
+    assert fired[0]["weight_override"] == 0
 
 
 def test_federation_is_silent_without_a_match():
@@ -166,6 +167,16 @@ def test_each_unauditable_transport_files_u010(token):
 def test_a_public_source_is_not_u010():
     fired = _collect(_source_diff("https://example.com/x.tar.gz"), current_text=BASE)
     assert _u_ids(fired) == []
+
+
+@pytest.mark.parametrize("token, access", [
+    ("demo::git+ssh://git@internal.example/x.git", "ssh"),
+    ("demo::file:///srv/src/x.tar.gz", "file"),
+    ("demo::https://10.1.2.3/x.tar.gz", "private_network"),
+])
+def test_renamed_sources_are_classified_after_stripping_the_name(token, access):
+    assert access_of_source(token)[0] == access
+    assert _u_ids(_collect(_source_diff(token), current_text=BASE)) == ["U010"]
 
 
 def test_u010_amplifies_when_validpgpkeys_is_absent():

@@ -7,7 +7,7 @@ from ..manifest_syntax import (
     load_json,
     load_toml,
 )
-from ._common import Dep, ManifestDoc, _host, _is_default_registry, _pep508, _registry_host, _url_source
+from ._common import Dep, ManifestDoc, _host, _is_default_registry, _origin, _pep508, _registry_host, _url_source
 from ._formats_b import _add_pixi, _as_list, _source_dep
 
 __all__ = ['_GEMLOCK_SPEC_RE', '_GEM_LINE_RE', '_GEM_SOURCE_RE', '_GO_BLOCK_RE', '_GO_REPLACE_RE', '_GO_REQUIRE_RE', '_NODE_MODULES_RE', '_NPMRC_HOST_RE', '_NPMRC_RE', '_PIP_OPTION_RE', '_PLATFORM_PREFIXES', '_PNPM_NAME_RE', '_PNPM_URL_RE', '_YARNRC_RE', '_YARN_URL_RE', '_cargo_config', '_cargo_lock', '_cargo_toml', '_composer_json', '_composer_lock', '_gemfile', '_gemfile_lock', '_go_mod', '_go_sum', '_is_go_path', '_json_deps', '_json_object', '_npm_lock', '_npm_package_json', '_npmrc', '_pipfile', '_pnpm_lock', '_poetry_dep_tables', '_poetry_lock', '_pyproject', '_requirements', '_toml_lock', '_yarn_lock', '_yarnrc']
@@ -15,6 +15,7 @@ __all__ = ['_GEMLOCK_SPEC_RE', '_GEM_LINE_RE', '_GEM_SOURCE_RE', '_GO_BLOCK_RE',
 def _cargo_toml(text: str) -> ManifestDoc | None:
     data = load_toml(text)
     deps: list[Dep] = []
+    redirects: list[tuple[str, str]] = []
     tables = []
     for key in ("dependencies", "dev-dependencies", "build-dependencies"):
         if isinstance(data.get(key), dict):
@@ -43,16 +44,20 @@ def _cargo_toml(text: str) -> ManifestDoc | None:
                 if value.get("git"):
                     constraint = (value.get("tag") or value.get("branch")
                                   or value.get("rev") or value.get("version"))
-                    deps.append(Dep(name, constraint, "git", _host(value["git"])))
+                    deps.append(Dep(name, constraint, "git", _host(value["git"]),
+                                    origin=_origin(value["git"])))
                 elif value.get("path"):
                     deps.append(Dep(name, value.get("version"), "path", None))
                 elif value.get("registry"):
                     # A per-dep custom registry (e.g. sparse+https://host/...)
-                    deps.append(Dep(name, value.get("version"), "registry",
-                                    _registry_host(value["registry"])))
+                    remote = _registry_host(value["registry"])
+                    deps.append(Dep(name, value.get("version"), "registry", remote,
+                                    origin=_origin(value["registry"])))
+                    if remote:
+                        redirects.append(("cargo-dependency-registry", remote))
                 else:
                     deps.append(Dep(name, value.get("version"), "registry", None))
-    return ManifestDoc("", "cargo", tuple(deps))
+    return ManifestDoc("", "cargo", tuple(deps), redirects=tuple(redirects))
 
 def _cargo_lock(text: str) -> ManifestDoc | None:
     data = load_toml(text)
@@ -63,16 +68,20 @@ def _cargo_lock(text: str) -> ManifestDoc | None:
         name = pkg.get("name", "")
         version = pkg.get("version")
         source = pkg.get("source", "") or ""
+        integrity = pkg.get("checksum")
         if source.startswith("git+"):
-            deps.append(Dep(name, version, "git", _host(source)))
+            deps.append(Dep(name, version, "git", _host(source),
+                            origin=_origin(source), integrity=integrity))
         elif source.startswith(("registry+", "sparse+")):
             prefix = "registry+" if source.startswith("registry+") else "sparse+"
             deps.append(Dep(name, version, "registry",
-                            _registry_host(source[len(prefix):])))
+                            _registry_host(source[len(prefix):]),
+                            origin=_origin(source), integrity=integrity))
         elif source:
-            deps.append(Dep(name, version, "unknown", _registry_host(source)))
+            deps.append(Dep(name, version, "unknown", _registry_host(source),
+                            origin=_origin(source), integrity=integrity))
         else:
-            deps.append(Dep(name, version, "path", None))
+            deps.append(Dep(name, version, "path", None, integrity=integrity))
     return ManifestDoc("", "cargo", tuple(deps))
 
 def _cargo_config(text: str) -> ManifestDoc | None:
@@ -120,19 +129,25 @@ def _json_deps(section) -> list[Dep]:
             forge = low.split(":", 1)[0]
             host = {"github": "github.com", "gitlab": "gitlab.com",
                     "bitbucket": "bitbucket.org"}[forge]
-            deps.append(Dep(name, None, "git", host))
+            deps.append(Dep(name, None, "git", host, origin=_origin(v)))
         elif (re.fullmatch(r"[\w.-]+/[\w.-]+(?:#.*)?", v)
                 and "://" not in v and not v.startswith((".", "/"))):
             # npm's `user/repo` GitHub shorthand (not a relative path).
-            deps.append(Dep(name, None, "git", "github.com"))
+            deps.append(Dep(name, None, "git", "github.com",
+                            origin=f"github.com/{v.split('#', 1)[0]}"))
         elif low.startswith(("git+", "git://", "git:")) or v.startswith("git@"):
-            deps.append(Dep(name, None, "git", _host(v)))
+            deps.append(Dep(name, None, "git", _host(v), origin=_origin(v)))
         elif low.startswith(("file:", "link:")):
             deps.append(Dep(name, None, "path", None))
         elif low.startswith("npm:"):
-            deps.append(Dep(name, None, "registry", None))
+            target = v[4:]
+            # Keep the alias target, not its version, so npm:foo -> npm:evil
+            # is visible while an ordinary version update stays quiet.
+            target_name = target.rsplit("@", 1)[0] if "@" in target else target
+            deps.append(Dep(name, None, "registry", None,
+                            origin=f"npm:{target_name}"))
         elif "://" in v:
-            deps.append(Dep(name, None, "git", _host(v)))
+            deps.append(Dep(name, None, "git", _host(v), origin=_origin(v)))
         else:
             deps.append(Dep(name, v, "registry", None))
     return deps
@@ -155,15 +170,13 @@ def _npm_lock(text: str) -> ManifestDoc | None:
         for key, entry in packages.items():
             if not key or not isinstance(entry, dict):
                 continue
-            name = ""
-            m = _NODE_MODULES_RE.search(key)
-            if m:
-                name = m.group(1)
-            elif key.startswith("@"):
-                name = key
+            # Nested lock paths end at the package itself; splitting at the
+            # last node_modules preserves both scoped and unscoped identities.
+            name = key.rsplit("node_modules/", 1)[-1]
             resolved = entry.get("resolved", "") or entry.get("from", "")
             kind, host = _url_source(resolved)
-            deps.append(Dep(name, entry.get("version"), kind, host))
+            deps.append(Dep(name, entry.get("version"), kind, host,
+                            origin=_origin(resolved), integrity=entry.get("integrity")))
     deps_section = data.get("dependencies")
     if isinstance(deps_section, dict):  # lockfile v1
         for name, entry in deps_section.items():
@@ -171,7 +184,8 @@ def _npm_lock(text: str) -> ManifestDoc | None:
                 continue
             resolved = entry.get("resolved", "") or entry.get("from", "")
             kind, host = _url_source(resolved)
-            deps.append(Dep(name, entry.get("version"), kind, host))
+            deps.append(Dep(name, entry.get("version"), kind, host,
+                            origin=_origin(resolved), integrity=entry.get("integrity")))
     return ManifestDoc("", "npm", tuple(deps))
 
 _NPMRC_RE = re.compile(r"^\s*(?P<scope>@[\w.-]+:)?registry\s*=\s*(?P<url>\S+)\s*$",
@@ -207,14 +221,13 @@ def _yarn_lock(text: str) -> ManifestDoc | None:
             # `name@range, name@range2:` (v1) or `"name@npm:1":` (berry)
             spec = line.split(",", 1)[0].rsplit(":", 1)[0].strip().strip('"')
             name = spec.rsplit("@", 1)[0] if "@" in spec else spec
-            name = name.lstrip("@")
         else:
             if not name:
                 continue
             for url in _YARN_URL_RE.findall(line):
                 if _is_default_registry(url):
                     continue
-                deps.append(Dep(name, None, "git", _host(url)))
+                deps.append(Dep(name, None, "git", _host(url), origin=_origin(url)))
     return ManifestDoc("", "npm", tuple(deps))
 
 _PNPM_URL_RE = re.compile(r"(?:git\+https|git\+ssh|git\+|https?)://[^\s'\"#]+")
@@ -545,7 +558,8 @@ def _go_sum(text: str) -> ManifestDoc | None:
             if key in seen:
                 continue
             seen.add(key)
-            deps.append(Dep(parts[0], parts[1], "registry", None))
+            deps.append(Dep(parts[0], parts[1], "registry", None,
+                            integrity=parts[2] if len(parts) > 2 else None))
     return ManifestDoc("", "go", tuple(deps))
 
 _GEM_LINE_RE = re.compile(r"^\s*gem\s+['\"]([\w.-]+)['\"](.*)$", re.MULTILINE)

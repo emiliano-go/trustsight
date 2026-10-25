@@ -118,8 +118,14 @@ def _transition(params: dict) -> dict:
             if value is not None}
 
 
-def _detail_fields(detail: dict | None) -> dict:
-    """The maintainer facts one cycle stored for a package."""
+def _detail_fields(detail: dict | None, *, include_diff: bool = False) -> dict:
+    """The package facts one cycle stored, for a notification entry.
+
+    The digest names the exact analysed revision.  The diff is optional: it is
+    the largest field and the first thing the payload trimmer may drop, so a
+    caller that only needs identity (a campaign member) asks for the digests
+    and leaves the text behind.
+    """
     if not isinstance(detail, dict):
         return {}
     fields = {}
@@ -129,6 +135,18 @@ def _detail_fields(detail: dict | None) -> dict:
     previous = detail.get("previous_maintainer")
     if isinstance(previous, str) and previous:
         fields["previous_maintainer"] = previous
+    for key in ("pkgbuild_sha256", "previous_pkgbuild_sha256",
+                "diff_sha256"):
+        value = detail.get(key)
+        if isinstance(value, str) and value:
+            fields[key] = value
+    if include_diff:
+        for key in ("diff",):
+            value = detail.get(key)
+            if isinstance(value, str) and value:
+                fields[key] = value
+        if detail.get("diff_truncated") is True:
+            fields["diff_truncated"] = True
     return fields
 
 
@@ -156,8 +174,13 @@ def _alert_entries(cycle) -> list[dict]:
     entries: list[dict] = []
     for package, rule_id in getattr(cycle, "new_alerts", None) or ():
         entry = {"package": package, "rule_id": rule_id}
-        fields = _detail_fields(detail.get(package))
-        entry.update({k: v for k, v in fields.items() if k == "maintainer"})
+        fields = _detail_fields(detail.get(package), include_diff=True)
+        entry.update({
+            key: value for key, value in fields.items()
+            if key in {"maintainer", "pkgbuild_sha256",
+                       "previous_pkgbuild_sha256", "diff", "diff_truncated",
+                       "diff_sha256"}
+        })
         entry.update(transitions.get((package, rule_id), {}))
         # A finding that carries only one side still gets both when the cycle
         # recorded the previous maintainer.
@@ -318,7 +341,7 @@ def alert_payload(cycle) -> dict:
         if d.get("last_modified"):
             entry["last_modified"] = time.strftime(
                 "%Y-%m-%d %H:%M UTC", time.gmtime(d["last_modified"]))
-        entry.update(_detail_fields(d))
+        entry.update(_detail_fields(d, include_diff=True))
         if d.get("rules"):
             entry["rules"] = d["rules"]
         # The located evidence: rule, file, line, severity and rendered
@@ -366,6 +389,13 @@ def alert_payload(cycle) -> dict:
             "members": members,
             "count": len(members),
         }
+        params = finding.get("params")
+        if isinstance(params, dict):
+            campaign_id = params.get("campaign_id")
+            if isinstance(campaign_id, str) and campaign_id:
+                cluster["campaign_id"] = campaign_id
+            if "campaign_active" in params:
+                cluster["campaign_active"] = bool(params["campaign_active"])
         # A campaign is a claim about packages changing together, so name the
         # ownership facts per member: a reader needs to see which maintainer
         # adopted which package, not only the member list.
@@ -437,16 +467,25 @@ def _fit_payload(payload: dict) -> dict:
     4096-byte limit (and retries a transient fetch), so detail is no longer
     traded away to stay inline.  This only fires for a cycle far past any
     real one - north of ``_PAYLOAD_BUDGET_BYTES`` - where it sheds the least
-    essential detail, in order: the human ``reason`` strings (the rule catalog
-    still explains a rule id), then findings beyond a small per-package cap,
-    then findings entirely (``rules`` and the counts remain), then campaign
-    member detail, then the lowest-scoring over-threshold entries.  The
-    headline, counts, packages, rules, campaigns, IOCs and refusals always
-    survive.
+    essential detail, in order: the analysed ``diff`` text (its digest and the
+    revision hash remain), the human ``reason`` strings (the rule catalog
+    still explains a rule id), findings beyond a small per-package cap, then
+    findings entirely (``rules`` and the counts remain), then campaign member
+    detail, then the lowest-scoring over-threshold entries.  The headline,
+    counts, packages, rules, campaigns, IOCs and refusals always survive.
     """
     if _payload_size(payload) <= _PAYLOAD_BUDGET_BYTES:
         return payload
     out = copy.deepcopy(payload)
+
+    for entry in out.get("over_threshold", ()) or ():
+        if entry.pop("diff", None) is not None:
+            entry["diff_truncated"] = True
+    for entry in out.get("alerts", ()) or ():
+        if entry.pop("diff", None) is not None:
+            entry["diff_truncated"] = True
+    if _payload_size(out) <= _PAYLOAD_BUDGET_BYTES:
+        return out
 
     for entry in out.get("over_threshold", ()) or ():
         for finding in entry.get("findings", ()) or ():

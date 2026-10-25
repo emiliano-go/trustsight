@@ -131,6 +131,73 @@ def test_alerts_fall_back_to_the_cycle_detail_for_a_maintainer_change():
     ]
 
 
+def test_campaign_ids_and_analysed_diffs_travel_with_the_alert():
+    """A campaign keeps one id, and an alert names the bytes it analysed."""
+    cycle = _cycle(
+        new_alerts=[("evil-pkg", "H044")],
+        detail={
+            "evil-pkg": {
+                "maintainer": "newm", "previous_maintainer": "oldm",
+                "pkgbuild_sha256": "new-sha",
+                "previous_pkgbuild_sha256": "old-sha",
+                "diff": "--- a/PKGBUILD\n+++ b/PKGBUILD\n-# Maintainer: oldm\n"
+                        "+# Maintainer: newm",
+                "diff_sha256": "diff-sha",
+            },
+        },
+        cluster_findings=[{
+            "rule_id": "H044", "severity": "MEDIUM",
+            "params": {"members": ["evil-pkg"], "old": "oldm", "new": "newm",
+                       "campaign_id": "g003:key", "campaign_active": True},
+            "campaign_id": "g003:key",
+        }],
+    )
+    payload = alert_payload(cycle)
+    alert = payload["alerts"][0]
+    assert alert["pkgbuild_sha256"] == "new-sha"
+    assert alert["previous_pkgbuild_sha256"] == "old-sha"
+    assert alert["diff_sha256"] == "diff-sha"
+    assert "-# Maintainer: oldm" in alert["diff"]
+    # H044 is not a G cluster, so it does not appear in campaign_cluster; the
+    # campaign id is only attached to corroborated G-series findings.
+
+def test_campaign_cluster_names_its_stable_id():
+    cycle = CycleResult(
+        cluster_findings=[{
+            "rule_id": "G003", "severity": "HIGH",
+            "params": {"members": ["a", "b"], "campaign_id": "g003:key",
+                       "campaign_active": True},
+        }],
+    )
+    cluster = alert_payload(cycle)["campaign_cluster"][0]
+    assert cluster["campaign_id"] == "g003:key"
+    assert cluster["campaign_active"] is True
+
+
+def test_analysed_diff_is_stripped_from_a_very_large_payload():
+    from trustsight.notify import _fit_payload
+
+    payload = {
+        "alerts": [{"package": "x", "rule_id": "R001",
+                    "diff": "x" * 1000}],
+        "over_threshold": [],
+        "campaign_cluster": [],
+        "ioc_matches": [],
+        "impersonation": [],
+        "refusals": [],
+    }
+    # Force the trimmer without constructing a megabyte of findings.
+    from trustsight import notify as notify_mod
+    old = notify_mod._PAYLOAD_BUDGET_BYTES
+    try:
+        notify_mod._PAYLOAD_BUDGET_BYTES = 10
+        out = _fit_payload(payload)
+    finally:
+        notify_mod._PAYLOAD_BUDGET_BYTES = old
+    assert "diff" not in out["alerts"][0]
+    assert out["alerts"][0]["diff_truncated"] is True
+
+
 def test_campaign_members_carry_their_ownership_and_version():
     cycle = CycleResult(
         cluster_findings=[{

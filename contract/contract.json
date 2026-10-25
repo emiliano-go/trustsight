@@ -2,10 +2,14 @@
   "alert_payload": {
     "alerts": [
       {
+        "diff": "--- a/PKGBUILD\n+++ b/PKGBUILD\n-# Maintainer: oldm\n+# Maintainer: newm",
+        "diff_sha256": "diff-sha",
         "maintainer": "newm",
         "new": "newm",
         "old": "oldm",
         "package": "some-pkg",
+        "pkgbuild_sha256": "new-sha",
+        "previous_pkgbuild_sha256": "old-sha",
         "rule_id": "H044"
       },
       {
@@ -17,6 +21,8 @@
     ],
     "campaign_cluster": [
       {
+        "campaign_active": true,
+        "campaign_id": "g003:key",
         "count": 2,
         "members": [
           "a",
@@ -146,10 +152,14 @@
     "body": {
       "alerts": [
         {
+          "diff": "--- a/PKGBUILD\n+++ b/PKGBUILD\n-# Maintainer: oldm\n+# Maintainer: newm",
+          "diff_sha256": "diff-sha",
           "maintainer": "newm",
           "new": "newm",
           "old": "oldm",
           "package": "some-pkg",
+          "pkgbuild_sha256": "new-sha",
+          "previous_pkgbuild_sha256": "old-sha",
           "rule_id": "H044"
         },
         {
@@ -161,6 +171,8 @@
       ],
       "campaign_cluster": [
         {
+          "campaign_active": true,
+          "campaign_id": "g003:key",
           "count": 2,
           "members": [
             "a",

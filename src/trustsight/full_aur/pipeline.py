@@ -1,5 +1,7 @@
 """Bootstrap and incremental corpus pipeline."""
 
+import difflib
+import hashlib
 import json
 import logging
 import os
@@ -40,6 +42,7 @@ from ..db import (
     record_alerts,
     get_package_profile,
     get_pkgbuild_snapshot,
+    get_previous_pkgbuild_snapshot,
     latest_cycle_time,
     record_cycle_events,
     record_upstream_dep_additions,
@@ -50,7 +53,7 @@ from ..db import (
     write_batch,
 )
 from ..deps import normalize_dependency
-from ..safe_text import clean
+from ..safe_text import clean, clean_log
 from ..schema import TemporalContext
 from ..scoring import risk_level
 from ..tokenizer import TokenizerUnavailable
@@ -115,6 +118,46 @@ _IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
 _CAMPAIGN_RULES = frozenset(
     {"G001", "G002", "G003", "G004", "G005", "G008",
      "G012", "G013", "G014"})
+
+#: The analysed diff a notification may carry.  The notification already has
+#: a total payload budget; this is the per-package bound before the total
+#: trimmer drops it.  A large rewrite degrades to the digests, not to a lost
+#: alert.
+_MAX_NOTIFY_DIFF_BYTES = 32 * 1024
+
+
+def _recipe_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
+
+
+def _notify_diff(old_text: str, new_text: str) -> dict:
+    """A bounded, inert unified diff for the notification document.
+
+    The diff is attacker-controlled text.  ``clean_log`` removes escape
+    sequences, C0/C1 controls and bidi overrides while keeping the newlines
+    and tabs a diff needs; the feed renders the result as text.  A diff over
+    the budget travels as its digest only, never as a silently truncated
+    patch a reader could mistake for the whole change.
+
+    ``diff_sha256`` is over the sanitized text a reader sees; the exact byte
+    identity of the recipe is ``pkgbuild_sha256`` on the detail entry.  Keeping
+    the two separate means stripping a bidi override for display cannot be
+    mistaken for changing the analysed evidence.
+    """
+    if not old_text and not new_text:
+        return {}
+    if old_text == new_text:
+        return {}
+    lines = list(difflib.unified_diff(
+        old_text.splitlines(), new_text.splitlines(),
+        fromfile="a/PKGBUILD", tofile="b/PKGBUILD", lineterm=""))
+    text = clean_log("\n".join(lines))
+    out = {"diff_sha256": _recipe_digest(text)}
+    if len(text.encode("utf-8")) <= _MAX_NOTIFY_DIFF_BYTES:
+        out["diff"] = text
+    else:
+        out["diff_truncated"] = True
+    return out
 
 
 def _since_cursor() -> Optional[int]:
@@ -387,6 +430,15 @@ def _activate_campaigns(findings: list[dict], config: dict, log=None) -> list[st
         activated = activate_campaign(
             campaign_id, scope, str(finding.get("rule_id", "")),
             ttl_obs=ttl, max_active=max_active)
+        # The id is public notification data: it is what makes a campaign one
+        # durable object across cycles.  Attach it to the finding so the
+        # payload does not have to recompute the identity from a scope the
+        # feed never sees.  A refused activation is still a detected cluster;
+        # mark it inactive rather than hiding the evidence.
+        params = finding.setdefault("params", {})
+        if isinstance(params, dict):
+            params["campaign_id"] = campaign_id
+            params["campaign_active"] = bool(activated)
         if not activated:
             refused.append(campaign_id)
     _report_reactivation_pressure(alerts, log)
@@ -1423,6 +1475,9 @@ def _run_baseline_build(
             # must not abort the cycle or the package's stored result.
             payload_targets = []
 
+        new_pkgbuild = fetched[0] or ""
+        previous_snapshot = get_previous_pkgbuild_snapshot(name) or {}
+        old_pkgbuild = previous_snapshot.get("pkgbuild_text") or ""
         detail[name] = {
             "score": fact.final_score,
             "old_version": old_snapshot["version"] if old_snapshot else "",
@@ -1435,9 +1490,16 @@ def _run_baseline_build(
             "maintainer": meta.get("Maintainer") or "",
             "previous_maintainer": (
                 ((old_meta or {}).get(name) or {}).get("Maintainer") or ""),
+            # The exact bytes the analysis read.  The feed otherwise has to
+            # serve the current AUR file, which may be several commits past
+            # the analysed change.  The diff is bounded and inert; when it is
+            # too large the digest still names the analysed revision.
+            "pkgbuild_sha256": _recipe_digest(new_pkgbuild),
+            "previous_pkgbuild_sha256": _recipe_digest(old_pkgbuild or ""),
             "rules": [f["rule_id"] for f in findings],
             "payload_urls": payload_targets,
             "findings": findings,
+            **_notify_diff(old_pkgbuild or "", new_pkgbuild),
         }
         return "ok"
 

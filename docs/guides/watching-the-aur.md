@@ -98,9 +98,12 @@ The document carries the cycle counts and the alerts. Every
 version transition, the AUR change date, the current and previous
 maintainer and the rules that fired. Each `alerts` entry names the
 package and rule, and an ownership rule (H044/H026) also carries `old`
-and `new`; a `campaign_cluster` carries `members_detail` with the same
-ownership and version context for each member, so a reader can see which
-maintainer adopted which package. While a `--since` replay runs, `day`
+and `new`; a `campaign_cluster` carries its stable `campaign_id` and
+`members_detail` with the same ownership and version context for each member,
+so a reader can see which maintainer adopted which package and follow the
+campaign across cycles. An alert may also carry `pkgbuild_sha256`,
+`previous_pkgbuild_sha256` and a bounded `diff` of the exact recipe change;
+when the diff exceeds the cap, `diff_truncated` and `diff_sha256` remain. While a `--since` replay runs, `day`
 names the AUR day being analysed. The alerting bar is `--over-threshold
 N` (the `over_threshold` argument on `refresh_corpus`/`watch`); the
 default is 30, the benign corpus's measured 95th percentile

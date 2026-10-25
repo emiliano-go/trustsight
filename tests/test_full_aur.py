@@ -1112,3 +1112,42 @@ def test_the_corpus_log_is_inert_for_a_hostile_cluster(monkeypatch):
     assert "\x9b" not in lines[0]
     assert "\n" not in lines[0]
     assert "evil.example" in lines[0]
+
+
+def test_notify_diff_is_inert_and_bounded():
+    from trustsight.full_aur.pipeline import _MAX_NOTIFY_DIFF_BYTES, _notify_diff
+
+    old = "pkgver=1\n# \x1b[31mred\x1b[0m\n"
+    new = "pkgver=2\n# \u202eevil\n"
+    out = _notify_diff(old, new)
+    assert "pkgver=1" in out["diff"]
+    assert "pkgver=2" in out["diff"]
+    assert "\x1b" not in out["diff"]
+    assert "\u202e" not in out["diff"]
+    assert out["diff_sha256"]
+
+    huge_old = "a\n" * (_MAX_NOTIFY_DIFF_BYTES // 2 + 1)
+    huge_new = "b\n" * (_MAX_NOTIFY_DIFF_BYTES // 2 + 1)
+    bounded = _notify_diff(huge_old, huge_new)
+    assert "diff" not in bounded
+    assert bounded["diff_truncated"] is True
+    assert bounded["diff_sha256"]
+
+
+def test_activation_attaches_the_public_campaign_id(monkeypatch):
+    from trustsight.full_aur import pipeline
+
+    seen = {}
+
+    def fake_activate(campaign_id, scope, source, **kwargs):
+        seen["id"] = campaign_id
+        seen["source"] = source
+        return True
+
+    monkeypatch.setattr(pipeline, "activate_campaign", fake_activate)
+    monkeypatch.setattr(pipeline, "_report_reactivation_pressure",
+                        lambda *args, **kwargs: None)
+    finding = {"rule_id": "G003", "params": {"members": ["a", "b"]}}
+    pipeline._activate_campaigns([finding], {"alerts": {}})
+    assert finding["params"]["campaign_id"] == seen["id"]
+    assert finding["params"]["campaign_active"] is True

@@ -1,7 +1,7 @@
 {
   "generated": "2026-10-25",
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
-  "pipeline_version": "0.24.1",
+  "pipeline_version": "0.25.0",
   "corpus_version": 2,
   "strata": {
     "maintainer_churn": {

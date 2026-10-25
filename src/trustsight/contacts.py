@@ -168,21 +168,40 @@ def shared_first_seen_host(records, min_packages: int = 5,
     AUR being the AUR and five is a distribution infrastructure.  Weight 0
     (INFO): strangers in company are a signal, strangers alone are a census.
     """
+    from .analysis.correlation import (
+        _UBIQUITOUS_BUCKETS, _one_name_family, _one_project,
+    )
+    from .buckets import canonical_host, classify_url
+
     fresh = None if first_seen_hosts is None else {str(h) for h in first_seen_hosts}
-    by_host: dict[str, set[str]] = defaultdict(set)
+    by_host: dict[str, dict[str, dict]] = defaultdict(dict)
     for record in records or ():
         gained = record.get("hosts_gained", ()) or ()
         if isinstance(gained, str):
             gained = [gained]
         for host in gained:
-            if not host:
+            normalised = canonical_host(str(host)) if host else ""
+            if not normalised:
                 continue
-            if fresh is not None and str(host) not in fresh:
+            if fresh is not None and normalised not in fresh:
                 continue
-            by_host[str(host)].add(str(record.get("package", "")))
+            by_host[normalised][str(record.get("package", ""))] = record
     out: list = []
     for host, members in sorted(by_host.items()):
-        if len(members) < int(min_packages):
+        if len(members) < int(min_packages) or _one_project(members.values()):
+            continue
+        maintainers = {
+            str(record.get("maintainer") or "").strip().lower()
+            for record in members.values()
+        }
+        maintainers.discard("")
+        if maintainers and len(maintainers) < 2 and _one_name_family(members):
+            continue
+        try:
+            bucket, _domain = classify_url(f"https://{host}")
+        except Exception:
+            bucket = "unknown"
+        if bucket in _UBIQUITOUS_BUCKETS:
             continue
         out.append({
             "rule_id": "G010",

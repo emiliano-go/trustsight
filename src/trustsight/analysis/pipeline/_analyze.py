@@ -86,6 +86,7 @@ from ..base import (
     _ensure_init,
     _get_installed_version,
     _has_install_hook,
+    _without_notice_only_install_modifications,
 )
 from ..composition import (
     _meta_annotations,
@@ -622,6 +623,8 @@ def analyze_package(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    triggered_rules = _without_notice_only_install_modifications(
+        triggered_rules, diff_text)
     triggered_rules = suppress_acknowledged_url_findings(
         triggered_rules, pkg_name, url_acks)
     from ..persistence import stand_down_committed_staging

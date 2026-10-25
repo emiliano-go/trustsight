@@ -775,7 +775,7 @@
   },
   "h026": {
     "uid": "TS-0082",
-    "name": "Untrusted Maintainer Takeover",
+    "name": "New Maintainer Without Prior History",
     "canonical": true,
     "severity_text": "HIGH (weight 25) - always on; corpus rate TBD (requires live git history)",
     "severity": "HIGH",
@@ -991,7 +991,7 @@
   },
   "h049": {
     "uid": "TS-0105",
-    "name": "Source Host Changed",
+    "name": "Source Origin Changed",
     "canonical": true,
     "severity_text": "MEDIUM (weight 15)",
     "severity": "MEDIUM",
@@ -2087,6 +2087,24 @@
     "capability": "source",
     "target": "declared source=() transport and access mode"
   },
+  "u011": {
+    "uid": "TS-0278",
+    "name": "Upstream Origin Changed",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
+  "u012": {
+    "uid": "TS-0279",
+    "name": "Lockfile Integrity Weakened",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
   "w001": {
     "uid": "TS-0222",
     "name": "Executes Code This Analysis Did Not Read",
@@ -2168,6 +2186,15 @@
     "capability": null,
     "target": null
   },
+  "w010": {
+    "uid": "TS-0231",
+    "name": "Alert Volume Capped",
+    "canonical": true,
+    "severity_text": null,
+    "severity": null,
+    "capability": null,
+    "target": null
+  },
   "w011": {
     "uid": "TS-0271",
     "name": "Upstream Content Not Read",
@@ -2180,15 +2207,6 @@
   "w012": {
     "uid": "TS-0272",
     "name": "Federation Not Consulted",
-    "canonical": true,
-    "severity_text": null,
-    "severity": null,
-    "capability": null,
-    "target": null
-  },
-  "w010": {
-    "uid": "TS-0231",
-    "name": "Alert Volume Capped",
     "canonical": true,
     "severity_text": null,
     "severity": null,

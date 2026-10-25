@@ -45,12 +45,16 @@ severity weights and the reserved identifier ranges.
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
 
+<!-- name: Base64 Decode and Execute -->
+
 - **Pattern:** `base64(?:(?![|;&]).)*?(?:\-d|\-\-decode)\b.*(?<!\\)\|`
 - **Description:** Detects `base64 -d |` and `base64 --decode |` piped to execution. Base64-encoded scripts are a common obfuscation technique to hide malicious commands from casual review.
 - **Note:** The pipe must be **unescaped**. An escaped bar is an argument to the command and starts no pipeline, so it is not a match. The tokenizer preserves the escape (`tokenizer._ESCAPE_REMOVABLE`) so the distinction survives resolution. A `rules.toml` written by an earlier release may hold a wider pattern that does match it; [`trustsight config sync-rules --update`](../cli.md#sync-rules) replaces patterns this project shipped previously.
 - **Printed text:** A `base64 -d | ...` that sits wholly inside a printer's quoted text is output for the reader, not an executed pipeline, so the rule stands down.
 
 ### H014: Eval or Exec Usage {#h014}
+
+<!-- name: Eval or Exec Usage -->
 
 H014 is retained as a documentation anchor for a retired rule. It emits no
 finding: `eval` of a substitution is [R039](#r039), and a top-level fetch
@@ -62,6 +66,8 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
 
+<!-- name: Eval With Dynamic Content -->
+
 - **Pattern:** `` \beval\s+(?:"|\$\(|\$\{|`|\$[a-zA-Z_]) ``
 - **Description:** Detects `eval` applied to a variable, command substitution, or backtick expression. The payload is assembled at runtime, so no static pattern can see what will execute.
 
@@ -70,6 +76,8 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `execution`
+
+<!-- name: Shell -c With Dynamic Payload -->
 
 - **Pattern:** `` \b(?:(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh))\s+-c\s+(?:\$\(|`|\$\{|["\x27]?\$[A-Za-z_]|"[^"]*\$) ``
 - **Description:** Detects `sh -c` / `bash -c` whose argument contains a variable or substitution rather than a literal command.
@@ -80,6 +88,8 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
 
+<!-- name: Base64 Blob Decode -->
+
 - **Pattern:** `base64\s+(?:-d|--decode)\s*(?:<<<|<<\w*|\$\{?[a-zA-Z_])`
 - **Description:** Detects `base64 -d` fed from a here-string or a variable, as opposed to decoding a file that is itself part of the source array.
 
@@ -88,6 +98,8 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 - **Target:** `resolved`
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `obfuscation`
+
+<!-- name: Binary Encoding Pipe -->
 
 - **Pattern:** `\b(?:xxd|uudecode)\s+[^|]*(?<!\\)\|`
 - **Description:** Detects `xxd` or `uudecode` piped onward. Both reconstruct binary content from a text representation, a way to carry a payload past text review.
@@ -98,6 +110,8 @@ that accompanies an `exec` is [H077](fetch-and-execution.md#h077).
 
 - **Severity:** INFO (weight 0)
 - **Category:** `obfuscation`
+
+<!-- name: Obfuscated Literal Reconstructed -->
 
 - **Condition:** An added line changes under literal reconstruction (ANSI-C hex `$'\x62\x75\x6e'`, ANSI-C octal, empty-quote concatenation `b''u''n`, `$(printf '\x62...')`) and the reconstruction reveals a word the raw line did not carry, or an ANSI-C quote survives reconstruction.
 
@@ -116,6 +130,8 @@ Fire rate: 58 on the v1 corpus (1.55 %), all weight-0 reconstruction notes.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `obfuscation`
+
+<!-- name: Indirect Command Expansion -->
 
 - **Condition:** An added line contains the indirect-expansion form `${!name}` where `name` is a plain (non-subscripted) variable name. The rule flags the form itself, on any added line, without requiring the expanded fragment to reach a shell.
 

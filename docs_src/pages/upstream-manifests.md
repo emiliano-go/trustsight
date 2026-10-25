@@ -17,21 +17,23 @@ the build-time registry blind spot has, and these rules are the sensor in
 that window.
 
 Adding a dependency is ordinary packaging, so most of the series is a
-weight-0 ledger. Only **fetch-surface extension** (a new remote source) and
-**a redirected resolver** score.
+weight-0 ledger. Only **fetch-surface extension** (a new remote source),
+**an origin move**, and **a redirected resolver** score. On the full-AUR
+watcher, complete normalized manifest and workflow state is compared between
+cycles; an incomplete read preserves the prior state instead of inventing a
+delta.
 
 This is a reference page. For how weight and scope work, see
 [Rule System](system.md).
 
 ## Reading a U finding
 
-- U003 and U004 are **MEDIUM floors, not ceilings**: corpus measurement
+- U003, U004 and U011 are **MEDIUM floors, not ceilings**: corpus measurement
   decides the published rate, as with the X-series. A git dependency is
-  normal in Rust `-git` packaging; a redirected resolver is not.
-- U001, U002 and U005 are **weight 0** and never move a number. U002 is a
-  declared-surface ledger - it says what the recipe's committed manifests
-  changed, not that any of it is malicious (B10). U005's primary consumer is
-  the correlation feed.
+  normal in Rust `-git` packaging; a redirected resolver or origin is not.
+- U001, U002, U006 and U012 are **weight 0** reader-facing ledgers and never
+  move a number. U005 is also weight 0, but is feed-only: its primary consumer
+  is the correlation feed rather than the default findings list.
 - A manifest that cannot be parsed is named by
   [W009](unverifiable.md#w009), never skipped.
 

@@ -47,6 +47,8 @@ This is a reference page. For how weight and scope work, see
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
 
+<!-- name: Claim Contradicted By Structure -->
+
 - **Condition:** The recipe's declared practice contradicts a structural finding in the same run.
 
 It joins the *real* claims ledger - the P-series ids the run's declared facts imply (`trustsight.scoring.declared_claims`) - against the structural findings: checksums declared (P001) while H091 reports the arrays do not cover every source, GPG verification declared (P002) while H024 reports it removed, a source pinned (P005) while H101 reports the pinning lost, a trusted forge declared (P007) while H099 reports the host swapped, a prebuilt deliverable declared (P009) while H066 reports an ELF committed to the repository outside `source=()`.
@@ -68,6 +70,8 @@ because a hit is about the tool, not the package.
 - **Severity:** MEDIUM, weight 0 (annotation)
 - **Category:** `meta`
 
+<!-- name: Weak Signal Across Layers -->
+
 - **Condition:** Three or more distinct assurance layers fired, none above the alert bar (`[thresholds] m002.min_layers`, default 3).
 
 An attacker who spreads weak signals across layers stays under
@@ -81,6 +85,8 @@ locked benign corpus: 112 on the v1 corpus (3.0%).
 - **Target:** programmatic (finding set)
 - **Severity:** MEDIUM, weight 0 (annotation)
 - **Category:** `meta`
+
+<!-- name: Composition Not Owned Elsewhere -->
 
 - **Condition:** Two or more distinct capability families co-occur while none of the cluster owners (H027, H098, X007) recorded the composition - typically because the owner is disabled.
 
@@ -97,6 +103,8 @@ cluster-rate gate the M constitution requires.
 - **Severity:** INFO, weight 0
 - **Category:** `meta`
 
+<!-- name: Expected Co-fire Absent -->
+
 A construct that historically co-fires with another rule appeared without
 it. A hit means the **tool**, not the package, needs attention, so this is
 never added to a package's finding list: it rides the report's
@@ -107,6 +115,8 @@ never added to a package's finding list: it rides the report's
 - **Target:** programmatic (tool health)
 - **Severity:** INFO, weight 0
 - **Category:** `meta`
+
+<!-- name: Licensor Absent On Licensed Shape -->
 
 A rule declaring `escalates_when` fired while none of its declared licensors
 did - the detector travelled without its usual company. Like M004 this is a
@@ -119,6 +129,8 @@ sensor-health observation, not evidence about the package, so it goes to the
 - **Target:** programmatic (tool health)
 - **Severity:** INFO, weight 0
 - **Category:** `meta`
+
+<!-- name: Campaign Re-armed Too Often -->
 
 A campaign re-armed faster than
 `[alerts] campaign_min_reactivation_observations` allows. The window is still

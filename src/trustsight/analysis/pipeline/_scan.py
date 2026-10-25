@@ -59,6 +59,7 @@ from ..base import (
     _GLOBAL_URL_KEY,
     _aggregate_pinning,
     _has_install_hook,
+    _without_notice_only_install_modifications,
 )
 from ..composition import (
     _meta_annotations,
@@ -158,6 +159,8 @@ def scan_diff(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, package_name)
         )
+    triggered_rules = _without_notice_only_install_modifications(
+        triggered_rules, diff_text)
     triggered_rules = suppress_acknowledged_url_findings(
         triggered_rules, package_name, url_acks)
     from ..persistence import stand_down_committed_staging

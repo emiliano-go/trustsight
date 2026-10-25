@@ -467,3 +467,75 @@ def test_a_benign_function_local_is_not_in_the_w008_names():
     ), package_name="demo")
     entries = {e.rule_id: e for e in fact.score_breakdown}
     assert "W008" in entries
+
+
+def test_nerd_fonts_archive_paths_are_data_not_refusals():
+    body = (
+        "build() {\n"
+        "  local pkgFile=$(find \"$srcdir\" -name '*.pkg.tar.zst' | head -1)\n"
+        "  local payloadFile=$(find \"$srcdir\" -name '*.tar.zst' | head -1)\n"
+        "  bsdtar -xf \"$pkgFile\"\n"
+        "  bsdtar -xf \"$payloadFile\"\n"
+        "}\n"
+    )
+    ids = _ids(_diff(body))
+    assert "X026" not in ids
+    assert "X027" not in ids
+    assert "W008" not in ids
+
+
+def test_two_interpreter_targets_still_cluster():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local pkgFile=$(find \"$srcdir\" -name '*.pkg.tar.zst' | head -1)\n"
+        "  local payloadFile=$(find \"$srcdir\" -name '*.tar.zst' | head -1)\n"
+        "  bash \"$pkgFile\"\n"
+        "  bash \"$payloadFile\"\n"
+        "}\n"
+    ))
+    assert "X026" in ids
+    assert "X027" in ids
+
+
+def test_a_job_count_local_is_not_a_refusal():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local jobs=$(nproc)\n"
+        "  cmake --build . -j \"$jobs\"\n"
+        "}\n"
+    ))
+    assert "X026" not in ids
+    assert "W008" not in ids
+
+
+def test_a_local_version_used_in_a_url_is_not_a_refusal():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local uv_ver=\"$(sed -n 's/.*VERSION //p' file)\"\n"
+        "  url=\"https://example.invalid/${uv_ver}/asset.tar.gz\"\n"
+        "}\n"
+    ))
+    assert "X026" not in ids
+    assert "W008" not in ids
+
+
+def test_a_local_used_only_in_a_test_is_not_w008():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local installed_godot\n"
+        "  installed_godot=\"$(pacman -Qi godot | grep Version)\"\n"
+        "  [[ \"$installed_godot\" != 1 ]]\n"
+        "}\n"
+    ))
+    assert "X026" not in ids
+    assert "W008" not in ids
+
+
+def test_a_local_used_as_a_command_still_refuses():
+    ids = _ids(_diff(
+        "build() {\n"
+        "  local cmd=$(printf bash)\n"
+        "  \"$cmd\" -c true\n"
+        "}\n"
+    ))
+    assert "X026" in ids

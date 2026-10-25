@@ -124,6 +124,24 @@ def _has_install_hook(diff_text: str) -> bool:
         post, re.MULTILINE))
 
 
+def _without_notice_only_install_modifications(findings, diff_text: str):
+    """Keep R007 for behaviour changes, not hooks that only print notices."""
+    from .delivery import install_hook_notice_only
+
+    kept = []
+    for finding in findings:
+        if finding.get("rule_id") != "R007":
+            kept.append(finding)
+            continue
+        evidence = finding.get("evidence") or {}
+        match = str(evidence.get("match") or finding.get("match") or "")
+        header = re.fullmatch(r"\+\+\+\s+b/(.+\.install)", match.strip())
+        if not header or not install_hook_notice_only(
+                diff_text, header.group(1).rsplit("/", 1)[-1]):
+            kept.append(finding)
+    return kept
+
+
 def _url_domain(url: str) -> str:
     """The host of *url*, through the one canonical spelling.
 

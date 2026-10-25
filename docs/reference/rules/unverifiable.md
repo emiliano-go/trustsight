@@ -70,6 +70,8 @@ rules, because a W is weight-0 by construction:
 
 ### W001: Executes Code This Analysis Did Not Read {#w001}
 
+<!-- name: Executes Code This Analysis Did Not Read -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when a build function runs a script - through an interpreter, or as
@@ -103,6 +105,8 @@ Fires on 0.08% of the benign corpus.
 
 ### W002: Build Resolves Dependencies From A Registry {#w002}
 
+<!-- name: Build Resolves Dependencies From A Registry -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires on a build step that resolves packages from a language registry:
@@ -119,6 +123,8 @@ What a gap cannot say is *where*.
 Fires on 0.29% of the benign corpus.
 
 ### W003: Applies A Patch This Analysis Did Not Read {#w003}
+
+<!-- name: Applies A Patch This Analysis Did Not Read -->
 
 **INFO** (weight 0) · category `unverifiable`
 
@@ -138,6 +144,8 @@ correct answer rather than a tuning problem.
 
 ### W004: Build Engine Runs A Manifest This Analysis Did Not Read {#w004}
 
+<!-- name: Build Engine Runs A Manifest This Analysis Did Not Read -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when `make`, `ninja`, `bazel`, `scons` or a sibling is given an
@@ -155,6 +163,8 @@ nothing. Naming a particular file is a choice.
 Zero occurrences in the benign corpus.
 
 ### W005: Build Runs A Target Whose Recipe Was Not Read {#w005}
+
+<!-- name: Build Runs A Target Whose Recipe Was Not Read -->
 
 **INFO** (weight 0) · category `unverifiable`
 
@@ -177,6 +187,8 @@ Fires on 0.29% of the benign corpus.
 
 ### W006: Generated File Names A Build-Only Path {#w006}
 
+<!-- name: Generated File Names A Build-Only Path -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when a `printf`/`echo`/`cat`/`tee` writes a file outside `$pkgdir`
@@ -198,6 +210,8 @@ Zero occurrences in the benign corpus.
 
 ### W007: Dependency Novelty Declined For Insufficient Observations {#w007}
 
+<!-- name: Dependency Novelty Declined For Insufficient Observations -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when D001/D002 would have judged an added dependency but abstained
@@ -212,6 +226,8 @@ rules that declined.
 
 ### W008: Unresolved Construct In A Recipe {#w008}
 
+<!-- name: Unresolved Construct In A Recipe -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when the tokenizer could not resolve one or more assignments in the
@@ -225,6 +241,8 @@ same diff](crossfire.md#x026), weight-0 vs scored.
 Names the unresolved assignments (capped). It never changes the score.
 
 ### W009: Upstream Manifests Not Examined {#w009}
+
+<!-- name: Upstream Manifests Not Examined -->
 
 **INFO** (weight 0) · category `unverifiable`
 
@@ -242,6 +260,8 @@ fallback) is reported separately as `tree_not_analyzed`.
 
 ### W010: Alert Volume Capped {#w010}
 
+<!-- name: Alert Volume Capped -->
+
 **INFO** (weight 0) · category `unverifiable`
 
 Fires when a run produces more findings than `[alerts] max_rendered_findings`
@@ -256,6 +276,8 @@ forbids a clean verdict (`forbids_clean` is false) and never changes the
 score. Volume is a statement about the run, not about any single package.
 
 ### W011: Upstream Content Not Read {#w011}
+
+<!-- name: Upstream Content Not Read -->
 
 **INFO** (weight 0) · category `unverifiable`
 
@@ -281,6 +303,8 @@ weight 0, so the breadth is a statement about the analysis, not about any
 package.
 
 ### W012: Federation Not Consulted {#w012}
+
+<!-- name: Federation Not Consulted -->
 
 **INFO** (weight 0) · category `unverifiable`
 

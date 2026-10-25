@@ -33,6 +33,8 @@ severity weights and the reserved identifier ranges.
 
 ### H028: Accelerated Release Cadence {#h028}
 
+<!-- name: Accelerated Release Cadence -->
+
 H028 is **metadata, never a scored finding**. The pipeline records whether the
 HEAD commit has 3+ commits within 24 hours (counting HEAD itself) as the
 `recent_commit_burst` boolean on `PackageFact`; it is not appended to
@@ -43,12 +45,16 @@ HEAD commit has 3+ commits within 24 hours (counting HEAD itself) as the
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
 
+<!-- name: Orphan/Adoption Dependency -->
+
 - **Condition:** A package depends directly on a package orphaned or adopted in this cycle.
 
 ### H057: Transitive Exposure {#h057}
 
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency`
+
+<!-- name: Transitive Exposure -->
 
 - **Condition:** A package's transitive closure, at least `[thresholds] h057.min_hops` (default 2) hops away, reaches a package adopted out of the orphan state this cycle. Context only, never additive.
 
@@ -57,6 +63,8 @@ HEAD commit has 3+ commits within 24 hours (counting HEAD itself) as the
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency`
 
+<!-- name: Transitive Orphan Risk -->
+
 - **Condition:** A package's transitive closure includes a currently orphaned package. Context only, never additive.
 
 ### H061: Dependency Centrality {#h061}
@@ -64,11 +72,15 @@ HEAD commit has 3+ commits within 24 hours (counting HEAD itself) as the
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency`
 
+<!-- name: Dependency Centrality -->
+
 - **Condition:** A package is depended on by at least `[thresholds] h061.min_dependents` (default 50) AUR packages. Prioritisation only: it says what a compromise would reach, not that anything is wrong.
 
 ### H073: Introduction Rate Deviation {#h073}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
+
+<!-- name: Introduction Rate Deviation -->
 
 - **Condition:** The corpus-wide introduction rate for a cycle deviates from the baseline mean by at least `[thresholds] h073.z_score` (default 3.0), once at least `h073.min_history_cycles` (default 3) cycles of history exist. An immature history is quiet.

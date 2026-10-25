@@ -43,6 +43,8 @@ weights and the reserved identifier ranges.
 - **Severity:** MEDIUM
 - **Category:** `upstream-ci`
 
+<!-- name: CI Exfil Shape -->
+
 - **Condition:** A signed federation finding reports that the repository this
   recipe declares as its upstream (`url=`) gained a workflow matching the
   GhostAction exfil shape: a `${{ secrets.` reference paired with an outbound
@@ -60,6 +62,8 @@ A miss is uninformative, as with every indicator.
 - **Severity:** MEDIUM
 - **Category:** `upstream-ci`
 
+<!-- name: Git-History Credential Sweep -->
+
 - **Condition:** The same federation channel, the history-sweep shape: a
   workflow that materializes full history (`fetch-depth: 0`) and greps the
   commit history for credential patterns.
@@ -73,6 +77,8 @@ the signed `upstream_repo` entry is the only source.
 - **Target:** committed .github/workflows/* files
 - **Severity:** LOW (weight 0)
 - **Category:** `upstream-ci`
+
+<!-- name: New CI Surface Committed -->
 
 - **Condition:** The diff adds a file under `.github/workflows/`
   (`*.yml` or `*.yaml`) to the package repository.
@@ -89,6 +95,8 @@ committed beside the recipe is a surface worth naming.
 - **Severity:** MEDIUM
 - **Category:** `source`
 
+<!-- name: Unauditable Upstream -->
+
 - **Condition:** A gained `source=()` entry the public cannot inspect, in one
   of these shapes: embedded credentials in the authority
   (`scheme://user:token@host/...`); a private access transport
@@ -103,8 +111,9 @@ why the verdict is a review-queue entry and the severity sits at MEDIUM.
 A credential-bearing public web URL is [C020](integrity.md#c020)'s finding, and
 a public IP-literal host is [C023](integrity.md#c023)'s; U010 stands down on
 both and keeps the transports they cannot see. When the recipe also carries no
-`validpgpkeys`, no third party can see the source and no signature vouches for
-it, so the finding is amplified to the top of the band.
+`validpgpkeys`, the finding calls that out explicitly: no third party can see
+the source and no signature vouches for it. This is corroborating evidence,
+not a score change.
 
 Measured on the v1 benign corpus, U010 fires on none: the transports it
 reads are deliberate choices, not background churn.

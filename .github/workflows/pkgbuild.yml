@@ -59,24 +59,59 @@ jobs:
           fi
           echo "Checksum matches: ${actual}"
 
-      - name: Build and install from the release tarball
+      - name: Prepare a proposed-source package when the release is older
+        id: proposed
+        run: |
+          set -eu
+          cd "$GITHUB_WORKSPACE"
+          pkgver=$(sed -n 's/^pkgver=//p' packaging/aur/PKGBUILD)
+          if ! git rev-parse -q --verify "v${pkgver}" >/dev/null || \
+              git diff --quiet "v${pkgver}" -- . ':!packaging'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cd packaging/aur
+          # First authenticate the immutable release archive whose checksum
+          # was verified above.  Then replace it with the proposed sources so
+          # the package's check() tests this PR, not an archived, aging suite.
+          gpg --batch --import "$GITHUB_WORKSPACE/scripts/commit_signing_key.asc"
+          gpg --batch --verify "trustsight-${pkgver}.tar.gz.sig" "trustsight-${pkgver}.tar.gz"
+          python "$GITHUB_WORKSPACE/scripts/build_release_tarball.py" \
+            --rev WORKTREE --pkgver "$pkgver" \
+            --output "trustsight-${pkgver}.tar.gz"
+          digest=$(sha256sum "trustsight-${pkgver}.tar.gz" | cut -d' ' -f1)
+          python - "$digest" <<'PY'
+          import pathlib
+          import re
+          import sys
+
+          path = pathlib.Path("PKGBUILD")
+          updated, count = re.subn(
+              r"sha256sums=\('[0-9a-f]{64}'",
+              f"sha256sums=('{sys.argv[1]}'", path.read_text(), count=1,
+          )
+          if count != 1:
+              raise SystemExit("could not pin the proposed archive checksum")
+          path.write_text(updated)
+          PY
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build and install from the source tarball
         run: |
           set -eu
           cd "$GITHUB_WORKSPACE/packaging/aur"
           pkgver=$(sed -n 's/^pkgver=//p' PKGBUILD)
-          # No --nocheck: check() runs the shipped test suite from the
-          # release archive, which is the build every user will do.
-          if git -C "$GITHUB_WORKSPACE" rev-parse -q --verify "v${pkgver}" >/dev/null; then
-            # A tagged version ships the signed tarball whose exact bytes the
-            # committed `.sig` covers, so verify the signature the way a user
-            # does.  The key is the public half only; CI can verify, not sign.
+          # No --nocheck: check() runs the shipped test suite from the source
+          # archive, which is the build every user will do.
+          if git -C "$GITHUB_WORKSPACE" rev-parse -q --verify "v${pkgver}" >/dev/null && \
+              [ "${{ steps.proposed.outputs.changed }}" != true ]; then
+            # The tagged path verifies the release signature in full.  The key
+            # is public; CI can verify the maintainer's signature, not sign.
             su builder -c "gpg --batch --import '$GITHUB_WORKSPACE/scripts/commit_signing_key.asc'"
             su builder -c "cd '$PWD' && makepkg -si --noconfirm"
           else
-            # Pre-release tree: the deterministic tarball moved since the
-            # committed `.sig` was made, so the signature cannot verify here.
-            # Checksums still do; the tagged path above verifies the
-            # signature in full.
+            # The proposed archive has no maintainer signature.  makepkg still
+            # verifies its freshly pinned checksum and runs the complete suite.
             su builder -c "cd '$PWD' && makepkg -si --skippgpcheck --noconfirm"
           fi
 

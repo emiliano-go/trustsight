@@ -1,5 +1,6 @@
 <!-- uid: TS-0082 -->
 <!-- anchor: h026-corpus -->
+<!-- name: Untrusted Maintainer Takeover (corpus path) -->
 
 - **Condition:** An ownership transition whose incoming maintainer maintained no package at all in the previous snapshot.
 

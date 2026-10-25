@@ -1,5 +1,6 @@
 <!-- uid: TS-0085 -->
 <!-- anchor: h029-rule -->
+<!-- name: Package-Name Typosquat -->
 
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 

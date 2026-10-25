@@ -75,6 +75,8 @@ HIGH weights without spending fire-rate budget the rest of the ruleset needs.
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `sabotage`
 
+<!-- name: Recursive Self-Spawn -->
+
 - **Condition:** A function whose body pipes itself into itself and backgrounds the result, or an unbounded loop that backgrounds work.
 
 The classic `:(){ :|:& };:` and its named variants. Detected structurally
@@ -90,6 +92,8 @@ and does not fire.
 
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `sabotage`
+
+<!-- name: Recursive Deletion Outside The Build Tree -->
 
 - **Condition:** `rm -rf` (in either flag order) whose dangerous target is not a build-sandbox path.
 
@@ -108,6 +112,8 @@ following `rm -rf ~`.
 - **Severity:** CRITICAL (weight 40)
 - **Category:** `sabotage`
 
+<!-- name: Raw Block Device Write -->
+
 - **Condition:** `dd of=`, `mkfs`, `wipefs`, `blkdiscard`, `sgdisk`, `fdisk`, `parted` or `shred` targeting a block device, or `dd of=/dev/mem`.
 
 Nothing a package build legitimately does writes to `/dev/sda`. `dd` writing
@@ -118,6 +124,8 @@ fire; only a device target does.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `sabotage`
+
+<!-- name: Secure Deletion Of User Data -->
 
 - **Condition:** `shred`, `srm` or `wipe` targeting the operator's home, `/home/`, or a credential directory (`.ssh`, `.gnupg`, `.aws`, `.config`, `.local`), on a line naming no sandbox variable.
 
@@ -130,6 +138,8 @@ the response differs even though the intent looks the same.
 - **Severity:** HIGH (weight 25)
 - **Category:** `sabotage`
 
+<!-- name: Permission Change On A System Path -->
+
 - **Condition:** `chmod 777` on a system path or the operator's home, or `chown` of a system path, outside the build sandbox.
 
 World-writable system directories are a privilege-escalation primitive left
@@ -141,6 +151,8 @@ packaging, not this rule's business.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `sabotage`
+
+<!-- name: System Service Disruption -->
 
 - **Condition:** `systemctl stop`/`disable`/`mask` of a **system** unit, `systemctl isolate`/`poweroff`/`reboot`/`halt`, `killall`/`pkill` of a system daemon, `ufw disable`, `firewall-cmd --panic-off`/`--remove-service`, or `setenforce 0`.
 
@@ -166,6 +178,8 @@ build legitimately does reboots the machine.
 - **Severity:** HIGH (weight 25)
 - **Category:** `sabotage`
 
+<!-- name: Cryptocurrency Miner -->
+
 - **Condition:** A known miner binary in command position, a `stratum+tcp://` or `stratum+ssl://` URL, `--donate-level`, or a known mining-pool hostname.
 
 Resource theft rather than damage, and the reason the family is called
@@ -178,6 +192,8 @@ file is how a miner is installed, not how one is mentioned.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `sabotage`
+
+<!-- name: Shell History Or Log Destruction -->
 
 - **Condition:** `history -c`, deletion or truncation of a shell history file, `unset HISTFILE`, `set +o history`, `journalctl --vacuum-*`, or truncation of `/var/log/`.
 

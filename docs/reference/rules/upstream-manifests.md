@@ -17,21 +17,23 @@ the build-time registry blind spot has, and these rules are the sensor in
 that window.
 
 Adding a dependency is ordinary packaging, so most of the series is a
-weight-0 ledger. Only **fetch-surface extension** (a new remote source) and
-**a redirected resolver** score.
+weight-0 ledger. Only **fetch-surface extension** (a new remote source),
+**an origin move**, and **a redirected resolver** score. On the full-AUR
+watcher, complete normalized manifest and workflow state is compared between
+cycles; an incomplete read preserves the prior state instead of inventing a
+delta.
 
 This is a reference page. For how weight and scope work, see
 [Rule System](system.md).
 
 ## Reading a U finding
 
-- U003 and U004 are **MEDIUM floors, not ceilings**: corpus measurement
+- U003, U004 and U011 are **MEDIUM floors, not ceilings**: corpus measurement
   decides the published rate, as with the X-series. A git dependency is
-  normal in Rust `-git` packaging; a redirected resolver is not.
-- U001, U002 and U005 are **weight 0** and never move a number. U002 is a
-  declared-surface ledger - it says what the recipe's committed manifests
-  changed, not that any of it is malicious (B10). U005's primary consumer is
-  the correlation feed.
+  normal in Rust `-git` packaging; a redirected resolver or origin is not.
+- U001, U002, U006 and U012 are **weight 0** reader-facing ledgers and never
+  move a number. U005 is also weight 0, but is feed-only: its primary consumer
+  is the correlation feed rather than the default findings list.
 - A manifest that cannot be parsed is named by
   [W009](unverifiable.md#w009), never skipped.
 
@@ -48,6 +50,8 @@ This is a reference page. For how weight and scope work, see
 | [U004](#u004) | Registry Redirect | MEDIUM |
 | [U005](#u005) | Dependency Surface Jump | INFO |
 | [U006](#u006) | Manifest Changed Without Its Lockfile | INFO |
+| [U011](#u011) | Upstream Origin Changed | - |
+| [U012](#u012) | Lockfile Integrity Weakened | - |
 <!-- /generated: page-index -->
 
 ### U001: Manifest Added Or Removed {#u001}
@@ -55,6 +59,8 @@ This is a reference page. For how weight and scope work, see
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
+
+<!-- name: Manifest Added Or Removed -->
 
 - **Condition:** A known manifest (from `[patterns] manifest_filenames`) is
   added to or removed from the repository in the diff.
@@ -68,6 +74,8 @@ surface is, but its mere presence is not a claim about intent.
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
 
+<!-- name: Upstream Dependency Delta -->
+
 - **Condition:** A manifest's parsed dependency set gains or loses a name.
 
 A declared-surface ledger entry, presented with its own group and the
@@ -80,6 +88,8 @@ reported as counts and named top-level dependencies, not a full delta.
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
+
+<!-- name: New Remote Source In Manifest -->
 
 - **Condition:** A manifest gains a `source_kind=git` dependency, or a
   non-default-registry dependency, whose canonical host was not present in
@@ -96,6 +106,8 @@ manifest-introduced host exactly like a declared one. The claim is precise:
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
+
+<!-- name: Registry Redirect -->
 
 - **Condition:** A committed file redirects the resolver away from its
   default: a pip `--index-url`/`--extra-index-url`, `pip.conf`/`pip.ini` or
@@ -114,6 +126,8 @@ other way to see.
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
 
+<!-- name: Dependency Surface Jump -->
+
 - **Condition:** A manifest's dependency count multiplies past
   `[thresholds] u005.jump_factor` (default 3x) in one update.
 
@@ -127,6 +141,8 @@ across packages, not a per-package verdict.
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
 
+<!-- name: Manifest Changed Without Its Lockfile -->
+
 - **Condition:** A declaration manifest (`go.mod`, `Cargo.toml`,
   `package.json`, `pyproject.toml`/`requirements*.txt`, `pubspec.yaml`,
   `mix.exs`, `stack.yaml`, `shard.yml`, `Package.swift`, `*.cabal`) changed in
@@ -137,3 +153,27 @@ committed alongside the declaration, so what the build will actually fetch is
 unstated. It stays **weight 0** because VCS and library packaging legitimately
 omit lockfiles - the corpus must adjudicate a scored rate before it can be
 promoted.
+
+### U011: Upstream Origin Changed {#u011}
+
+<!-- name: Upstream Origin Changed -->
+
+- **Condition:** A dependency present in both the old and new manifest changes origin (source kind or registry/host) while at least one side names one.
+
+The declared origin moved under a dependency that already existed: a
+registry entry became a git/VCS entry, or a lockfile entry started resolving
+from a different registry or host. The build now fetches the same name from a
+different place, which is the manifest-level counterpart of a source host
+move. A dependency that merely appears or disappears is owned by U001/U002.
+
+### U012: Lockfile Integrity Weakened {#u012}
+
+<!-- name: Lockfile Integrity Weakened -->
+
+- **Condition:** A dependency in a committed lockfile loses its integrity value, or its integrity algorithm is downgraded (e.g. `sha512` to `sha256`), or the lockfile itself is removed.
+
+Verification of the dependency's bytes was weakened. INFO and weight 0: a
+lockfile can legitimately drop integrity for a path or workspace entry, and
+the finding is a review prompt rather than a scored change. The lockfile's
+removal is reported here because the file that pinned every dependency is
+gone.

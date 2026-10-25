@@ -494,6 +494,26 @@ def test_h046_longstanding_orphan_dep_is_quiet(thresholds):
     assert _fire("H046", new, old) == []
 
 
+def test_reverse_edges_and_unique_provides_expose_unchanged_dependents(thresholds):
+    thresholds({"h057": {"min_hops": 2}})
+    old = _snapshot(["victim", "mid", "top"], "alice")
+    old["victim"]["Maintainer"] = ""
+    old["victim"]["Provides"] = ["virtual=1.0"]
+    old["mid"]["Depends"] = ["virtual"]
+    old["top"]["Depends"] = ["mid"]
+    new = copy.deepcopy(old)
+    new["victim"]["Maintainer"] = "mallory"
+    new["victim"]["LastModified"] = NOW + 1
+
+    direct = _fire("H046", new, old)
+    assert len(direct) == 1
+    assert direct[0]["params"]["members"] == ["mid"]
+    transitive = _fire("H057", new, old)
+    assert len(transitive) == 1
+    assert transitive[0]["params"]["members"] == ["top"]
+    assert transitive[0]["params"]["distance"] == 2
+
+
 # --- H057 / H060 transitive rules ---------------------------------------------
 
 

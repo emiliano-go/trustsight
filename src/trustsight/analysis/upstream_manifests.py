@@ -89,19 +89,35 @@ def _lock_peer(path: str) -> tuple[str, ...]:
     base = path.lower().rsplit("/", 1)[-1]
     if base in _LOCK_PEERS:
         return _LOCK_PEERS[base]
+    if base.startswith("requirements") and base.endswith(".txt"):
+        return _LOCK_PEERS["requirements.txt"]
     if base.endswith(".cabal"):
         return ("cabal.project.freeze",)
     return ()
 
 
+def _is_lockfile(path: str) -> bool:
+    base = path.lower().rsplit("/", 1)[-1]
+    return any(base in peers for peers in _LOCK_PEERS.values()) \
+        or base == "cabal.project.freeze"
+
+
 def _integrity_pairs(delta, add) -> None:
     """U006: a manifest changed without a lockfile that pins it (weight 0)."""
-    present = {m.path.lower().rsplit("/", 1)[-1] for m in delta.manifests}
+    present = {
+        m.path.lower() for m in delta.manifests if m.status != "removed"
+    }
     for manifest in delta.manifests:
         if manifest.status == "removed":
             continue
         peers = _lock_peer(manifest.path)
-        if not peers or any(peer in present for peer in peers):
+        if not peers:
+            continue
+        directory = manifest.path.lower().rsplit("/", 1)[0] + "/" \
+            if "/" in manifest.path else ""
+        # A workspace root lock applies; a lock in an unrelated sibling does
+        # not. Removed lockfiles never satisfy the pairing.
+        if any(directory + peer in present or peer in present for peer in peers):
             continue
         add("U006", "Manifest Changed Without Its Lockfile", "INFO",
             "dependency-manifest",
@@ -158,6 +174,18 @@ def upstream_manifest_findings(
                 f"{_names(manifest.remote_added)}",
                 file=path, hosts=_names(manifest.remote_added),
                 added=_names(manifest.added))
+
+        for change in manifest.origin_changes:
+            add("U011", "Upstream Origin Changed", "MEDIUM",
+                "dependency-manifest", f"{path}: {change}",
+                file=path, change=change)
+
+        if manifest.integrity_changes or (
+                manifest.status == "removed" and _is_lockfile(path)):
+            detail = "; ".join(manifest.integrity_changes) or "lockfile removed"
+            add("U012", "Lockfile Integrity Weakened", "INFO",
+                "dependency-manifest", f"{path}: {detail}",
+                file=path, changes="; ".join(manifest.integrity_changes))
 
         if (manifest.old_count and manifest.status != "removed"
                 and manifest.new_count >= jump * manifest.old_count):

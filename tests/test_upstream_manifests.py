@@ -108,6 +108,11 @@ def test_u001_u002_ledger_on_manifest_add():
             "+evil==1.0\n")
     fact = scan_diff(diff, package_name="p")
     assert {"U001", "U002"} <= _ids(fact)
+    from trustsight.reporting import evaluate_fact, report_body
+
+    body = report_body(evaluate_fact(fact))
+    visible = {finding["rule_id"] for finding in body["findings"]}
+    assert {"U001", "U002", "U006"} <= visible
 
 
 def test_u004_registry_redirect():
@@ -189,6 +194,98 @@ def test_default_registries_are_not_redirects():
         '[[package]]\nname = "x"\nversion = "1"\n'
         'source = "registry+https://github.com/rust-lang/crates.io-index"\n',
     ).dependencies[0].remote is None
+
+
+def test_official_registry_text_cannot_hide_in_a_host_or_path():
+    for url in (
+        "https://registry.npmjs.org.evil.example/npm",
+        "https://evil.example/registry.npmjs.org/",
+        "https://evil.example/pypi.org/simple",
+    ):
+        assert parse_manifest(".npmrc", f"registry={url}\n").redirects
+
+
+def test_npm_lock_preserves_real_and_scoped_package_names():
+    doc = parse_manifest("package-lock.json", (
+        '{"packages": {'
+        '"node_modules/foo": {"version": "1"},'
+        '"node_modules/@scope/bar": {"version": "2"},'
+        '"node_modules/a/node_modules/b": {"version": "3"}}}'
+    ))
+    assert [d.name for d in doc.dependencies] == ["foo", "@scope/bar", "b"]
+
+
+def test_yarn_preserves_the_npm_scope():
+    doc = parse_manifest("yarn.lock", (
+        '"@scope/foo@https://evil.example/foo.git":\n'
+        '  version "1.0.0"\n'
+        '  resolution: "@scope/foo@https://evil.example/foo.git"\n'))
+    assert doc.dependencies[0].name == "@scope/foo"
+
+
+def test_generic_registry_fallback_requires_a_locator():
+    diff = ("--- /dev/null\n+++ b/Cargo.toml\n@@ -0,0 +1,2 @@\n"
+            '+[dependencies]\n+registry = "1.0"\n')
+    assert "U004" not in _ids(scan_diff(diff, package_name="p"))
+
+
+def test_u011_detects_same_host_origin_changes_not_version_moves():
+    diff = ("--- a/Cargo.toml\n+++ b/Cargo.toml\n@@ -1,2 +1,2 @@\n"
+            " [dependencies]\n"
+            '-foo = { git = "https://github.com/good/foo", tag = "v1" }\n'
+            '+foo = { git = "https://github.com/evil/foo", tag = "v1" }\n')
+    assert "U011" in _ids(scan_diff(diff, package_name="p"))
+    version_only = diff.replace("github.com/evil/foo", "github.com/good/foo") \
+        .replace('tag = "v1"', 'tag = "v2"', 1)
+    assert "U011" not in _ids(scan_diff(version_only, package_name="p"))
+
+
+def test_u011_detects_direct_reference_to_registry_transition():
+    diff = ("--- a/requirements.txt\n+++ b/requirements.txt\n@@ -1,1 +1,1 @@\n"
+            '-foo @ git+https://github.com/good/foo\n+foo==1.0\n')
+    assert "U011" in _ids(scan_diff(diff, package_name="p"))
+
+
+def test_removed_manifest_and_lockfile_are_visible():
+    diff = ("--- a/package-lock.json\n+++ /dev/null\n@@ -1,1 +0,0 @@\n"
+            '-{"packages": {"node_modules/foo": {"version": "1",'
+            ' "integrity": "sha512-abc"}}}\n')
+    ids = _ids(scan_diff(diff, package_name="p"))
+    assert {"U001", "U012"} <= ids
+
+
+def test_u012_detects_integrity_removal_not_replacement():
+    old = '{"packages": {"node_modules/foo": {"version": "1", "integrity": "sha512-old"}}}'
+    new = '{"packages": {"node_modules/foo": {"version": "1"}}}'
+    diff = f"--- a/package-lock.json\n+++ b/package-lock.json\n@@ -1,1 +1,1 @@\n-{old}\n+{new}\n"
+    assert "U012" in _ids(scan_diff(diff, package_name="p"))
+    replaced = diff.replace('"version": "1"}', '"version": "1", "integrity": "sha512-new"}')
+    assert "U012" not in _ids(scan_diff(replaced, package_name="p"))
+
+
+def test_u012_detects_cargo_checksum_removal():
+    diff = (
+        "--- a/Cargo.lock\n+++ b/Cargo.lock\n@@ -1,3 +1,2 @@\n"
+        '-[[package]]\n-name = "foo"\n-version = "1"\n-checksum = "abc"\n'
+        '+[[package]]\n+name = "foo"\n+version = "1"\n'
+    )
+    assert "U012" in _ids(scan_diff(diff, package_name="p"))
+
+
+def test_u006_pairs_lockfiles_by_workspace_and_requirements_glob():
+    sibling = (
+        "--- a/frontend/package.json\n+++ b/frontend/package.json\n@@ -1,1 +1,1 @@\n"
+        '-{"dependencies": {"a": "1"}}\n+{"dependencies": {"a": "2"}}\n'
+        "--- /dev/null\n+++ b/backend/yarn.lock\n@@ -0,0 +1,1 @@\n+foo: 1\n"
+    )
+    assert "U006" in _ids(scan_diff(sibling, package_name="p"))
+    root_lock = sibling.replace("backend/yarn.lock", "yarn.lock")
+    assert "U006" not in _ids(scan_diff(root_lock, package_name="p"))
+    requirements = (
+        "--- a/requirements-dev.txt\n+++ b/requirements-dev.txt\n"
+        "@@ -1,1 +1,1 @@\n-a==1\n+a==2\n"
+    )
+    assert "U006" in _ids(scan_diff(requirements, package_name="p"))
 
 
 def test_a_custom_cargo_registry_is_a_remote():

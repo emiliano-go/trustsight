@@ -164,6 +164,8 @@ class ManifestDelta:
     :ivar unresolved: entries the parser could not resolve.
     :ivar old_count: dependency count before the change.
     :ivar new_count: dependency count after the change.
+    :ivar origin_changes: credential-free dependency origin transitions.
+    :ivar integrity_changes: lock integrity removals or algorithm downgrades.
 
     Example:
         .. code-block:: python

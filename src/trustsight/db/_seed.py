@@ -106,12 +106,17 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
     that bans archive-extraction call names is not triggered.
     """
     with tarfile.open(archive, "r:*") as tf:
-        members = tf.getmembers()
-        if len(members) > MAX_SEED_MEMBERS:
-            raise ValueError(
-                f"seed archive contains more than {MAX_SEED_MEMBERS} members; "
-                "refusing to expand"
-            )
+        # getmembers() parses the entire archive before returning, so checking
+        # its length afterwards lets an oversized archive allocate first.
+        # Stop the lazy walk at the same bound instead.
+        members = []
+        for member in tf:
+            if len(members) >= MAX_SEED_MEMBERS:
+                raise ValueError(
+                    f"seed archive contains more than {MAX_SEED_MEMBERS} members; "
+                    "refusing to expand"
+                )
+            members.append(member)
         if not any("trustsight-seed-v2" in m.name for m in members):
             return None
         # Bounded extraction: the archive itself is small metadata.

@@ -131,12 +131,35 @@ def _maintainer_first_seen_ts(maintainer: str):
 _UBIQUITOUS_BUCKETS = frozenset({"trusted_forge", "official"})
 
 
-def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
+def _one_name_family(members) -> bool:
+    """True when every member shares a long dash-terminated name prefix.
+
+    A maintainer refreshing a translation family (``firefox-nightly-i18n-*``)
+    is one batch, not several packages meeting at a host.  The prefix must be
+    long enough to be a family and end in ``-``; ``a``/``b``/``c`` are not a
+    family, so a same-maintainer set of genuinely unrelated names still joins.
+    """
+    names = sorted(str(name) for name in members)
+    if len(names) < 2:
+        return False
+    prefix = names[0]
+    for name in names[1:]:
+        while prefix and not name.startswith(prefix):
+            prefix = prefix[:-1]
+    return len(prefix) >= 8 and prefix.endswith("-")
+
+
+def shared_gained_host(records, min_packages: int = 5,
+                       min_maintainers: int = 2) -> list[dict]:
     """G001: a gained host shared by *min_packages* distinct packages.
 
     A host that is itself a trusted forge or official channel is skipped: the
     join only means something for a *new* host a set of packages did not all
-    already reach through the ordinary sources.
+    already reach through the ordinary sources.  A batch belonging to one
+    maintainer is skipped too: one account refreshing a family (the
+    firefox-nightly-i18n packages) is a maintenance batch, not a set of
+    packages meeting at a host.  Single-account sweeps are covered by H026/
+    H058/G003; the cross-account join is what G001 adds.
     """
     from ..buckets import canonical_host, classify_url
 
@@ -151,6 +174,14 @@ def shared_gained_host(records, min_packages: int = 5) -> list[dict]:
         if len(members) < min_packages:
             continue
         if _one_project(members.values()):
+            continue
+        maintainers = {
+            str(record.get("maintainer") or "").strip().lower()
+            for record in members.values()
+        }
+        maintainers.discard("")
+        if (maintainers and len(maintainers) < min_maintainers
+                and _one_name_family(members)):
             continue
         try:
             bucket, _domain = classify_url(f"https://{host}")

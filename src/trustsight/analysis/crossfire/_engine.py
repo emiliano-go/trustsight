@@ -12,7 +12,7 @@ from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _command_words, _continuati
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
 from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at
-from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_passthrough, _x024_is_test_pythonpath
+from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_passthrough, _x024_is_test_pythonpath
 
 __all__ = ['crossfire_techniques']
 
@@ -398,6 +398,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         indirect = X024_RE.search(x024_body)
         if (indirect is not None
                 and not _x024_is_passthrough(x024_body, indirect)
+                and not _x024_is_benign_build_path(x024_body, indirect)
                 and not _x024_is_test_pythonpath(
                     x024_body, indirect, enclosing.get(index))):
             record("X024", line_no,

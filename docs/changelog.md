@@ -2,6 +2,16 @@
 
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **H049 reads an owner only on a code forge.** `source_orgs` used the first path segment on every host, so a same-host directory move (`www.heidisql.com/builds` -> `.../downloads/builds`) read as a source-origin change. Orgs are now derived only for `trusted_forge` URLs and owner case is normalised; an org set that only loses entries while the host set is unchanged stands down. The rule is renamed **Source Origin Changed**. A real owner move or host change still fires.
+- **H097 is scoped to the PKGBUILD.** A local `msg()` notice helper in an `.install` scriptlet no longer reads as makepkg function shadowing; the same definition in the PKGBUILD still fires.
+- **H026 states the fact, not a verdict.** The finding is renamed **New Maintainer Without Prior History**. Detection and severity are unchanged (suppressing a metadata-only transition would let the later malicious update go unflagged once the account is recorded).
+
+- **The 2026-10-25 false-positive batch, with true-positive twins.** C004 now counts a `$`-prefixed local source removed with its checksum (pi-hole's service files), so a deletion is not read as weakened verification. H067 excludes `systemd-detect-virt --chroot`, the udev/chroot availability guard, while `--vm`/`--container`/`-q` still fire. X024 ignores build-config search paths (`CMAKE_PREFIX_PATH`, `CMAKE_MODULE_PATH`, `PKG_CONFIG_PATH`, ...) that matched on their `PATH` tail. H064 reports a `conflicts` entry at MEDIUM when the target is merely established and HIGH only when it is widely depended on; D004 (and H098) stay about actual `provides`/`replaces` claims. H085 treats a `$srcdir/<dir>` the recipe itself creates with `mkdir -p`/`install -d` as declared. G001 stands down for one maintainer's long-prefix name family, and a weight-0 G010 census no longer becomes the notification headline. Existing `patterns.toml` files are repaired in place for the H067 probe. Every fix ships with its true-positive twin in `tests/regressions/test_fp_triage_2026_10_25.py`.
+
 ## [0.24.1] - 2026-10-25
 
 ### Fixed

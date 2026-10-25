@@ -96,7 +96,16 @@ jobs:
       - name: Stage the detached signature for publication
         # verify_release.py already verified it against the pinned key; this
         # puts the exact bytes where the release and `SHA256SUMS` expect them.
-        run: cp packaging/aur/trustsight-*.tar.gz.sig release/
+        # Copy only this release's signature: the directory also holds the
+        # historical signatures, and `cp ...*.sig` once attached all of them
+        # to the new release.
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -eu
+          version="${TAG#v}"
+          test -s "packaging/aur/trustsight-${version}.tar.gz.sig"
+          cp "packaging/aur/trustsight-${version}.tar.gz.sig" release/
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -197,10 +206,24 @@ jobs:
             exit 1
           fi
           gh release create "$TAG" --draft --generate-notes --title "$TAG"
-          gh release upload "$TAG" artifacts/release/* artifacts/dist/*.whl
+          version="${TAG#v}"
+          gh release upload "$TAG" \
+            "artifacts/release/trustsight-${version}.tar.gz" \
+            "artifacts/release/trustsight-${version}.tar.gz.sig" \
+            "artifacts/release/SHA256SUMS" \
+            artifacts/dist/*.whl
           mkdir /tmp/release-assets
           gh release download "$TAG" --dir /tmp/release-assets
           (cd /tmp/release-assets && sha256sum --check SHA256SUMS)
+          # The release must contain exactly the manifest, not whatever else
+          # happened to be staged in release/ or packaging/aur/.
+          expected="$(awk '{print $2}' artifacts/release/SHA256SUMS | sort)"
+          actual="$(find /tmp/release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
+          if [ "$expected" != "$actual" ]; then
+            echo "::error::release assets do not match SHA256SUMS"
+            printf 'expected:\n%s\nactual:\n%s\n' "$expected" "$actual"
+            exit 1
+          fi
 
       - name: Publish the complete GitHub release
         env:

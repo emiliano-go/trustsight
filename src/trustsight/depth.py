@@ -384,12 +384,15 @@ def _aur_children(
         dep = normalize_dependency(raw)
         if not dep or dep in seen:
             continue
+        # Snapshot metadata resolves unique Provides aliases to their real
+        # package. RPC metadata cannot prove uniqueness and stays literal.
+        target = getattr(metadata, "aur_name", lambda value: value)(dep)
         try:
-            if not metadata.is_aur(dep):
+            if not metadata.is_aur(target):
                 continue
         except (OSError, json.JSONDecodeError, KeyError):
             continue
-        out.append((dep, "depends", name))
+        out.append((target, "depends", name))
     return out
 
 
@@ -442,6 +445,18 @@ class SnapshotMetadata:
 
     def __init__(self, packages: dict):
         self._packages = packages
+        from .deps import normalize_dependency
+
+        candidates: dict[str, set[str]] = {}
+        for name, entry in packages.items():
+            for provided in entry.get("Provides") or []:
+                alias = normalize_dependency(provided)
+                if alias and alias != name:
+                    candidates.setdefault(alias, set()).add(name)
+        self._aliases = {
+            alias: next(iter(names)) for alias, names in candidates.items()
+            if len(names) == 1
+        }
 
     @property
     def packages(self) -> dict:
@@ -451,6 +466,10 @@ class SnapshotMetadata:
     def available(self) -> bool:
         """A loaded snapshot answers for every name it could not find."""
         return True
+
+    def aur_name(self, name: str) -> str:
+        """Resolve a unique virtual Provides name, or leave it unchanged."""
+        return name if name in self._packages else self._aliases.get(name, name)
 
     def is_aur(self, name: str) -> bool:
         return name in self._packages

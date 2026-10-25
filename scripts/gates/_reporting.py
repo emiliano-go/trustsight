@@ -207,12 +207,14 @@ def gate_every_json_report_carries_the_fingerprint() -> Gate:
     return Gate("every JSON report carries the fingerprint", not missing, missing)
 
 def gate_suppression_is_never_hidden_by_a_flag() -> Gate:
-    """B5: a suppression is in the report whatever flags were passed.
+    """B5: a suppression is visible regardless of output flags or file type.
 
     `review --json` emitted `suppressed_rules` only under `--verbose`, so
     the default machine-readable output made a switched-off rule look
     exactly like one that never matched.  Asserted against the source of the
-    JSON body: the key must not sit under a verbosity branch.
+    JSON body: the key must not sit under a verbosity branch.  Companion URL
+    acknowledgements are exercised too: R152 may disappear only while its
+    acknowledgement remains visible.
     """
     path = SRC / "cli" / "review.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -226,6 +228,24 @@ def gate_suppression_is_never_hidden_by_a_flag() -> Gate:
         for inner in ast.walk(node):
             if isinstance(inner, ast.Constant) and inner.value == "suppressed_rules":
                 hits.append(f"{_rel(path)}:{inner.lineno} under `if {test}`")
+
+    from unittest.mock import patch
+
+    from trustsight.analysis import scan_diff
+    from trustsight.override import SourceUrlAck
+
+    ack = SourceUrlAck(
+        package="demo", url="https://demo.github.io/docs/", reason="reviewed")
+    diff = (
+        "--- /dev/null\n+++ b/demo.service\n@@ -0,0 +1,2 @@\n"
+        "+[Service]\n+Documentation=https://demo.github.io/docs/\n"
+    )
+    with patch("trustsight.override.load_url_acks", return_value=[ack]):
+        fact = scan_diff(diff, package_name="demo")
+    if any(e.rule_id == "R152" for e in fact.score_breakdown):
+        hits.append("an acknowledged companion URL still fires R152")
+    if not fact.acknowledged_urls:
+        hits.append("R152 disappeared without a visible acknowledgement")
     return Gate("suppression is never hidden by a flag", not hits, hits)
 
 def gate_the_default_output_is_not_headline_shaped() -> Gate:

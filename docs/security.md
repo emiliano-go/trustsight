@@ -65,7 +65,7 @@ TrustSight does three things, and only three: it reads, it computes, it reports.
 
 It does **not** build, run, install, or sandbox. The moment you run `makepkg`, you are outside this model.
 
-Two of the things it never does are worth stating on their own, because each removes an attack surface rather than defending one. It never fetches a URL a package declares, so there is no SSRF primitive to turn a reviewer into a probe. It never connects to a host a package names; the only hosts it can reach are the AUR endpoint at `https://aur.archlinux.org` and the GitHub release channel at `api.github.com` and `github.com`, which is confined to `release.py` and refuses any download whose signature does not verify against the pinned key.
+Two of the things it never does are worth stating on their own, because each removes an attack surface rather than defending one. It never fetches a URL a package declares, so there is no SSRF primitive to turn a reviewer into a probe. It never connects to a host a package names; the only hosts it can reach are the AUR endpoint at `https://aur.archlinux.org`, the read-only GitHub AUR mirror at `codeload.github.com/archlinux/aur` (confined to `full_aur/fetch.py`), and the GitHub release channel at `api.github.com` and `github.com`, which is confined to `release.py` and refuses any download whose signature does not verify against the pinned key.
 
 ### Assumptions
 

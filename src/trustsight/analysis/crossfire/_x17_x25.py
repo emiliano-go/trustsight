@@ -204,6 +204,35 @@ def _x024_is_test_pythonpath(body: str, match: re.Match,
         ("pytest", "py.test", "tox", "nox", "nose", "unittest"))
 
 
+#: Build-tool search paths that are configured by deriving them from other
+#: variables.  They name where a compiler/pkg-config reads metadata, not code
+#: the shell will load, so an indirect value is ordinary build plumbing.  The
+#: sensitive-variable pattern has no left boundary and `_x024_is_passthrough`
+#: only covers the same variable on both sides, so `CMAKE_PREFIX_PATH=` used
+#: to match on its `PATH` tail.
+_X024_BENIGN_BUILD_PATHS = frozenset({
+    "CMAKE_PREFIX_PATH", "CMAKE_MODULE_PATH", "CMAKE_LIBRARY_PATH",
+    "CMAKE_INCLUDE_PATH", "CMAKE_PROGRAM_PATH", "CMAKE_FRAMEWORK_PATH",
+    "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "ACLOCAL_PATH", "GIT_EXEC_PATH",
+})
+
+
+def _x024_is_benign_build_path(body: str, match: re.Match) -> bool:
+    """True when the matched tail belongs to a benign build-config path."""
+    start = match.start()
+    i = start
+    while i > 0 and (body[i - 1].isalnum() or body[i - 1] == "_"):
+        i -= 1
+    full = body[i:match.end()].split("=", 1)[0].strip().upper()
+    # A cmake/compiler define carries a `-D`/`-U` prefix before the variable
+    # name (`-DCMAKE_PREFIX_PATH=...`); the shell word starts at `D`, not at
+    # `CMAKE_`.
+    candidate = full.lstrip("-+")
+    if candidate not in _X024_BENIGN_BUILD_PATHS and candidate.startswith("D"):
+        candidate = candidate[1:]
+    return candidate in _X024_BENIGN_BUILD_PATHS
+
+
 def _x024_is_passthrough(body: str, match: re.Match) -> bool:
     """True when the indirect value is the assigned variable's own name.
 

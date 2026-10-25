@@ -36,7 +36,7 @@ def _check_untrusted_maintainer_takeover(
         return None
     return stamp({
         "rule_id": "H026",
-        "name": "Untrusted Maintainer Takeover",
+        "name": "New Maintainer Without Prior History",
         "severity": "HIGH", "category": "maintainer",
         "match": f"maintainer changed to '{new_maintainer}', "
                 f"who has never been seen in the AUR",

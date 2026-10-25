@@ -456,6 +456,17 @@ def gate_terminal_output_is_inert() -> Gate:
             sys.stderr = saved
         return buffer.getvalue()
 
+    def ioc_plain() -> str:
+        """The plain IOC table is a separate renderer from the Rich table."""
+        from trustsight.cli.ioc import ioc_list
+        from trustsight.ioc_baseline import IocEntry
+
+        entry = IocEntry(type="package", value=HOSTILE, source=HOSTILE)
+        with patch("trustsight.ioc_baseline.active_iocs", return_value=[entry]), \
+                patch("trustsight.cli.ioc.use_rich", return_value=False):
+            return plain(lambda: ioc_list(
+                source=None, type=None, include_expired=False, json_output=False))
+
     renders = {
         "review rich": lambda: rich(
             lambda: review._render_results_rich([result], 1, False, True, True, False)),
@@ -488,6 +499,7 @@ def gate_terminal_output_is_inert() -> Gate:
             lambda: forget_cli.render_removal_list([HOSTILE])),
         "corpus sweep log": corpus_log,
         "stderr log handler": stderr_log,
+        "ioc plain": ioc_plain,
     }
 
     problems = []

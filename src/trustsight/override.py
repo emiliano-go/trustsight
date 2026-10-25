@@ -270,7 +270,8 @@ _URL_IN_FINDING = re.compile(r"https?://[^\s'\"<>)]+")
 
 
 def suppress_acknowledged_url_findings(
-    findings: list[dict], package: str
+    findings: list[dict], package: str,
+    matched_out: dict[str, SourceUrlAck] | None = None,
 ) -> list[dict]:
     """Drop R152 findings whose every URL the operator acknowledged.
 
@@ -281,21 +282,24 @@ def suppress_acknowledged_url_findings(
     The match is against every ack for the package, not only the URLs the
     source-array parser found: R152 also reads companion files, whose links
     never enter ``source=()``.  A finding citing an unacknowledged URL on the
-    same line is kept.
+    same line is kept.  ``matched_out`` records what was removed so B5 keeps
+    the acknowledgement visible in the report.
     """
     if not package:
         return findings
-    keys = {
-        _ack_key(ack.url) for ack in load_url_acks()
+    acks = {
+        _ack_key(ack.url): ack for ack in load_url_acks()
         if ack.package == package
     }
-    if not keys:
+    if not acks:
         return findings
     kept = []
     for finding in findings:
         if finding.get("rule_id") == "R152":
             urls = _URL_IN_FINDING.findall(str(finding.get("match", "")))
-            if urls and all(_ack_key(url) in keys for url in urls):
+            if urls and all(_ack_key(url) in acks for url in urls):
+                if matched_out is not None:
+                    matched_out.update({url: acks[_ack_key(url)] for url in urls})
                 continue
         kept.append(finding)
     return kept

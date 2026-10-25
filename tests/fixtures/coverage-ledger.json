@@ -6569,6 +6569,30 @@
       ],
       "uid": "TS-0270"
     },
+    "U011": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "U011",
+      "pseudo": false,
+      "reason": "adversarial-only origin transitions; benign versions must not move origins",
+      "series": "U",
+      "sources": {},
+      "state": "adversarial_only",
+      "strata": [],
+      "uid": "TS-0278"
+    },
+    "U012": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "U012",
+      "pseudo": false,
+      "reason": "adversarial-only lock-integrity weakening; hash replacement is not a downgrade",
+      "series": "U",
+      "sources": {},
+      "state": "adversarial_only",
+      "strata": [],
+      "uid": "TS-0279"
+    },
     "W001": {
       "expected_strata": [],
       "fires": 35,

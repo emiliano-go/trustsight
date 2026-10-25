@@ -53,6 +53,25 @@ def _meta(edges, aur=None):
     return FakeMeta(edges, everything)
 
 
+def test_snapshot_walk_resolves_unique_provides_aliases():
+    metadata = SnapshotMetadata({
+        "app": {"Depends": ["virtual"]},
+        "provider": {"Provides": ["virtual=1.0"]},
+    })
+    result = walk_dependencies(
+        "app", depth=1, metadata=metadata, analyse=lambda name: FakeFact())
+    assert [report.name for report in result.reports] == ["provider"]
+    # Two providers are ambiguous: the walk does not pick one arbitrarily.
+    ambiguous = SnapshotMetadata({
+        "app": {"Depends": ["virtual"]},
+        "provider": {"Provides": ["virtual"]},
+        "other": {"Provides": ["virtual"]},
+    })
+    result = walk_dependencies(
+        "app", depth=1, metadata=ambiguous, analyse=lambda name: FakeFact())
+    assert result.reports == []
+
+
 def _walk(root, depth, edges, aur=None, analyse=None):
     seen_names = []
 

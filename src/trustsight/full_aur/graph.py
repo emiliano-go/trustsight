@@ -31,20 +31,37 @@ def _threshold(rule: str, key: str, default):
     return load_thresholds().get(rule, {}).get(key, default)
 
 
+def _unique_providers(meta: dict) -> dict[str, str]:
+    """Unambiguous virtual-name -> AUR package aliases from Provides."""
+    candidates: dict[str, set[str]] = {}
+    for name, entry in meta.items():
+        for provided in entry.get("Provides") or []:
+            alias = normalize_dependency(provided)
+            if alias and alias != name:
+                candidates.setdefault(alias, set()).add(name)
+    return {
+        alias: next(iter(names)) for alias, names in candidates.items()
+        if len(names) == 1
+    }
+
+
 def dependency_edges(meta: dict) -> dict[str, set[str]]:
-    """AUR-internal dependency edges ``{package: {dep, ...}}``.
+    """AUR-internal dependency edges, including unique Provides aliases.
 
     Only edges whose target also exists in *meta* are kept; official-repo
-    and external dependencies have no AUR node to attach risk to.
+    and external dependencies have no AUR node to attach risk to. An alias
+    with multiple providers is not guessed at.
     """
+    aliases = _unique_providers(meta)
     edges: dict[str, set[str]] = {}
     for name, entry in meta.items():
         deps: set[str] = set()
         for field in _DEP_FIELDS:
             for dep in entry.get(field) or []:
                 normalized = normalize_dependency(dep)
-                if normalized in meta and normalized != name:
-                    deps.add(normalized)
+                target = normalized if normalized in meta else aliases.get(normalized)
+                if target and target != name:
+                    deps.add(target)
         if deps:
             edges[name] = deps
     return edges
@@ -85,26 +102,36 @@ def _cluster(rule: str, name: str, match: str, members: list[str],
     return stamp(finding)
 
 
+def _reverse_edges(edges: dict[str, set[str]]) -> dict[str, set[str]]:
+    reverse: dict[str, set[str]] = {}
+    for dependent, dependencies in edges.items():
+        for dep in dependencies:
+            reverse.setdefault(dep, set()).add(dependent)
+    return reverse
+
+
 def _orphan_dependency_findings(
     changes: dict,
     new_meta: dict,
     edges: dict[str, set[str]],
     transitions: dict,
 ) -> list[dict]:
-    """H046 - direct dependency on a package orphaned/adopted this cycle."""
+    """H046 - direct dependents of a package transitioned this cycle.
+
+    The dependent does not need its own metadata edit: existing reverse edges
+    are exactly the exposure a newly adopted or orphaned dependency creates.
+    """
+    reverse = _reverse_edges(edges)
     out: list[dict] = []
-    for dependent, status in changes.items():
-        if status == "removed":
+    for dep, (old_m, new_m) in sorted(transitions.items()):
+        if new_m and old_m != new_m:
+            kind = "adopted"
+        elif not new_m and old_m:
+            kind = "orphaned"
+        else:
             continue
-        for dep in edges.get(dependent, set()):
-            if dep not in transitions:
-                continue
-            old_m, new_m = transitions[dep]
-            if new_m and old_m != new_m:
-                kind = "adopted"
-            elif not new_m and old_m:
-                kind = "orphaned"
-            else:
+        for dependent in sorted(reverse.get(dep, set())):
+            if changes.get(dependent) == "removed":
                 continue
             out.append(_cluster(
                 "H046",
@@ -123,27 +150,36 @@ def _transitive_exposure_findings(
     edges: dict[str, set[str]],
     transitions: dict,
 ) -> list[dict]:
-    """H057 - transitive closure reaches a package adopted from an orphan."""
+    """H057 - reverse closure reaches a package adopted from an orphan."""
     min_hops = int(_threshold("h057", "min_hops", 2))
+    reverse = _reverse_edges(edges)
     out: list[dict] = []
-    for name, status in changes.items():
-        if status == "removed":
+    for adopted, (old_m, new_m) in sorted(transitions.items()):
+        if old_m or not new_m:
             continue
-        closure = _transitive_closure(name, edges, _CLOSURE_DEPTH)
-        for dep, distance in closure.items():
-            if dep not in transitions or distance < min_hops:
+        closure: dict[str, int] = {}
+        frontier = {adopted}
+        distance = 0
+        while frontier and distance < _CLOSURE_DEPTH:
+            following: set[str] = set()
+            for node in frontier:
+                for dependent in reverse.get(node, set()):
+                    if dependent != adopted and dependent not in closure:
+                        closure[dependent] = distance + 1
+                        following.add(dependent)
+            frontier = following
+            distance += 1
+        for dependent, hops in sorted(closure.items()):
+            if hops < min_hops or changes.get(dependent) == "removed":
                 continue
-            old_m, new_m = transitions[dep]
-            if not old_m and new_m:  # adopted out of the orphan state
-                out.append(_cluster(
-                    "H057",
-                    "Transitive Exposure",
-                    f"{name} transitively depends on {dep}, adopted this cycle",
-                    [name],
-                    dep=dep,
-                    distance=distance,
-                ))
-                break
+            out.append(_cluster(
+                "H057",
+                "Transitive Exposure",
+                f"{dependent} transitively depends on {adopted}, adopted this cycle",
+                [dependent],
+                dep=adopted,
+                distance=hops,
+            ))
     return out
 
 

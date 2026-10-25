@@ -49,6 +49,7 @@ from .delivery import (
     _COMMITTED_PAYLOAD_RE,
     _SOURCE_EXEC_RE,
     _declared_source_basenames,
+    _created_source_dirs,
     _declared_extraction_dirs,
     _declared_source_urls,
     _unpinned_source_basenames,
@@ -160,6 +161,9 @@ class GraphContext:
     #: Directories the declared source archives extract to under
     #: ``$srcdir`` (archive name minus one archive suffix; VCS clone dirs).
     extraction_dirs: set[str] = field(default_factory=set)
+    #: Directories the recipe itself creates under ``$srcdir`` (``mkdir -p`` /
+    #: ``install -d``).  H085 must not call such a directory undeclared.
+    created_dirs: frozenset[str] = field(default_factory=frozenset)
     #: Of those, the ones with no real checksum (``SKIP`` or no array):
     #: content the host decides at fetch time, which is H083's target.
     unpinned_source_basenames: frozenset = field(default_factory=frozenset)
@@ -224,6 +228,7 @@ def build_context(
         heredoc_body=_heredoc_body_indices(lines),
         source_basenames=_declared_source_basenames(diff_text, current_text),
         extraction_dirs=_declared_extraction_dirs(diff_text, current_text),
+        created_dirs=_created_source_dirs(diff_text, current_text),
         unpinned_source_basenames=_unpinned_source_basenames(diff_text, current_text),
         declared_urls=_declared_source_urls(diff_text),
         declared_urls_full=frozenset(normalize_url(u) for u in declared_src),

@@ -39,10 +39,14 @@ severity weights and the reserved identifier ranges.
 
 ### H007: Symlink Redirect {#h007}
 
+<!-- name: Symlink Redirect -->
+
 H007 is retained as a documentation anchor for a retired rule. It emits no
 finding; a symlink written outside `$pkgdir` is one shape of [H076](#h076).
 
 ### H010: Suspicious file write {#h010}
+
+<!-- name: Suspicious file write -->
 
 H010 is retained as a documentation anchor for a reserved `runtime` id. No
 code emits it; a write to a sensitive location is claimed by the static rules
@@ -54,6 +58,8 @@ when the diff shows it, such as [H076](#h076) and [R058](#r058).
 - **Severity:** HIGH (weight 25)
 - **Category:** `system`
 
+<!-- name: Write Outside Package Root -->
+
 - **Pattern:** `^\+?\s*(?:sudo\s+)?(?:install|cp|mv|dd|tee)\s+[^;&|]*(?:(?<=\s)|(?<=\s["\x27]))(?:/etc|/boot|/usr/bin|/usr/lib)/`
 - **Description:** Detects writes to `/etc`, `/boot`, `/usr/bin`, or `/usr/lib` by absolute path. The same write prefixed with `$pkgdir` is normal packaging and does not match.
 
@@ -61,6 +67,8 @@ when the diff shows it, such as [H076](#h076) and [R058](#r058).
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: World-Writable Staging -->
 
 - **Condition:** `/tmp`, `/var/tmp` or `/dev/shm` is used as a working or execution directory. `mktemp -d` is excluded wholesale: a random private directory is not a fixed world-writable path.
 
@@ -70,6 +78,8 @@ Fire rate: 0 on the v1 corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Hidden Drop -->
 
 - **Condition:** A leading-dot (hidden) executable is written outside `$srcdir` and `$pkgdir`.
 
@@ -84,6 +94,8 @@ Fire rate: 0 on the v1 corpus.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `persistence`
+
+<!-- name: Build Writes Outside Staging Root -->
 
 - **Condition:** `prepare`, `build`, `check`, `package` or a top-level line writes to a plain absolute path outside `$srcdir`/`$pkgdir`.
 
@@ -102,7 +114,9 @@ Fire rate: 0 on the v1 corpus.
 - **Severity:** HIGH (weight 25)
 - **Category:** `build`
 
-- **Condition:** Inside a build/package/check/prepare function, a `PATH=` assignment adds a single-level `$srcdir/<subdir>` directory that is neither a declared `source=()` basename nor a repository manifest member.
+<!-- name: PATH Injection With Undeclared Directory -->
+
+- **Condition:** Inside a build/package/check/prepare function, a `PATH=` assignment adds a single-level `$srcdir/<subdir>` directory that is neither a declared `source=()` basename, a repository manifest member, nor a directory the recipe itself creates (`mkdir -p` / `install -d`).
 
 `PATH=$srcdir/tools:$PATH make` lets the recipe smuggle a binary into a
 standard command's search path. Adding the plain source root is common enough
@@ -114,6 +128,8 @@ layouts, so only single-level subdirectories are flagged. Detected by
 
 - **Severity:** INFO (weight 0)
 - **Category:** `recon`
+
+<!-- name: Host Reconnaissance -->
 
 - **Condition:** Host-profiling commands from `[patterns] recon_commands` run at a command position inside a build or install function.
 
@@ -128,6 +144,8 @@ Fire rate: 0 on the v1 corpus.
 - **Severity:** LOW (weight 5)
 - **Category:** `build`
 
+<!-- name: Hardening Option Disabled -->
+
 - **Condition:** `options=()` gains a hardening-disabling entry
   (`!strip`, `!debug`, `!lto`, `!fortify`, `!debugsplit`).
 
@@ -136,6 +154,8 @@ published number that decides this rule's weight. Measured on the locked
 benign corpus: 20 on the v1 corpus (0.53%).
 
 ### C028: Build Cache Outside The Build Trees {#c028}
+
+<!-- name: Build Cache Outside The Build Trees -->
 
 **INFO** (weight 0) · category `staging`
 

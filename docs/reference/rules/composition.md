@@ -44,6 +44,8 @@ severity weights and the reserved identifier ranges.
 - **Severity:** INFO (weight 0) - report-only co-occurrence flag
 - **Category:** `meta`
 
+<!-- name: Capability Density Anomaly -->
+
 - **Condition:** A single diff has rule hits in **3+ distinct capability
   categories** (e.g. `network` + `filesystem` + `execution` + `encoding`).
 
@@ -69,6 +71,8 @@ domains has a density that is itself a pattern.
 
 - **Severity:** INFO (weight 0)
 - **Category:** `meta`
+
+<!-- name: Attack-Chain Composition -->
 
 - **Condition:** The findings on one package span at least `[thresholds] h043.attack_chain_stages` (default 3) distinct kill-chain stages.
 
@@ -96,6 +100,8 @@ three distinct stages.
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
 
+<!-- name: Naming/Deception Cluster -->
+
 - **Condition:** The findings on one package carry at least `[thresholds] h098.min_signals` (default 2) distinct naming/deception signals.
 
 Members, each one independent:
@@ -106,11 +112,11 @@ Members, each one independent:
 | D001 | novel dependency added |
 | D002 | typosquatted dependency |
 | D004 | dependency hijack via `provides`/`replaces` |
-| H064 | `provides`/`replaces` scope expansion |
+| H064 | `provides`/`replaces`/`conflicts` scope expansion |
 | C012 | source domain resembles the declared upstream |
 | H053 | name/host divergence |
 | H059 | name/repo divergence |
-| H026 | untrusted maintainer takeover |
+| H026 | new maintainer without prior history |
 
 One signal can be a coincidence. A package that is *both* named like a
 popular project *and* pulls in a novel or typosquatted dependency, or
@@ -135,6 +141,8 @@ two naming/deception signals.
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
 
+<!-- name: Maintainer Change With Signing Key Change -->
+
 - **Condition:** The maintainer changed and `validpgpkeys` moved (H078)
   in the same diff.
 
@@ -151,6 +159,8 @@ composition H098 uses.
   MEDIUM (weight 15) when `optdepends` does.
 - **Category:** `composition`
 
+<!-- name: Dependency Removal During A Build Change -->
+
 - **Condition:** `checkdepends` or `optdepends` loses an entry while
   `build()`, `prepare()` or `check()` changed in the same diff.
 
@@ -165,6 +175,8 @@ fire-rate gate clears `checkdepends` for HIGH.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `composition`
+
+<!-- name: Install Script Not Declared -->
 
 - **Condition:** A diff adds or modifies a `*.install` file while the
   recipe has no `install=` scalar naming it. pacman never runs the hook,

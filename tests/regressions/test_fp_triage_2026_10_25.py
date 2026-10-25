@@ -162,6 +162,7 @@ def test_g010_does_not_headline_a_census():
     cycle = CycleResult(
         cluster_findings=[{
             "rule_id": "G010", "severity": "INFO",
+            "match": "first-seen host cdn.example gained by 3 packages in the window",
             "params": {"members": ["a", "b", "c"], "host": "cdn.example"},
         }],
         over_threshold=[("sfptool-bin", 50)],
@@ -173,6 +174,72 @@ def test_g010_does_not_headline_a_census():
     assert "Campaign across" not in payload["title"]
     assert payload["title"].startswith("TrustSight: sfptool-bin scored 50")
     assert [c["rule_id"] for c in payload["campaign_cluster"]] == ["G010"]
+    cluster = payload["campaign_cluster"][0]
+    assert cluster["host"] == "cdn.example"
+    assert cluster["match"] == "first-seen host cdn.example gained by 3 packages in the window"
+
+
+# ---------------------------------------------------------------------------
+# zenworks - file collisions and notice-only hooks are not hijacks
+# ---------------------------------------------------------------------------
+
+
+def _zenworks_entries(field, monkeypatch):
+    monkeypatch.setattr(
+        "trustsight.analysis.dependencies.is_established_package",
+        lambda name: name == "zen-browser",
+    )
+    monkeypatch.setattr(
+        "trustsight.analysis.dependencies.dependency_observation_count",
+        lambda name: 0,
+    )
+    old = "pkgname=zenworks\npkgver=0.0.5\npkgrel=1\n"
+    new = old + f"{field}=('zen-browser')\n"
+    with shipped_config():
+        return scan_diff(
+            _diff(old, new), rules=load_rules(), config=load_config(),
+            package_name="zenworks", current_text=new,
+        ).score_breakdown
+
+
+def test_zenworks_conflict_is_unscored_and_does_not_compose(monkeypatch):
+    entries = _zenworks_entries("conflicts", monkeypatch)
+    by_id = {entry.rule_id: entry for entry in entries}
+    assert "D004" not in by_id
+    assert "H098" not in by_id
+    assert by_id["H064"].severity == "INFO"
+    assert by_id["H064"].weight == 0
+
+
+def test_zenworks_provides_claim_still_composes(monkeypatch):
+    from trustsight.analysis.composition import naming_cluster_annotation
+
+    entries = _zenworks_entries("provides", monkeypatch)
+    by_id = {entry.rule_id: entry for entry in entries}
+    assert {"D004", "H064"} <= set(by_id)
+    assert by_id["H064"].weight > 0
+    annotation = naming_cluster_annotation(
+        [{"rule_id": rule_id} for rule_id in by_id], load_config())
+    assert annotation["rule_id"] == "H098"
+
+
+def _install_change(command):
+    return (
+        "--- a/zenworks.install\n+++ b/zenworks.install\n"
+        "@@ -1,3 +1,4 @@\n"
+        " post_upgrade() {\n"
+        "   echo old\n"
+        f"+  {command}\n"
+        " }\n"
+    )
+
+
+def test_notice_only_install_change_has_no_r007():
+    assert "R007" not in _ids(_install_change("echo new"))
+
+
+def test_behavioral_install_change_keeps_r007():
+    assert "R007" in _ids(_install_change("chmod u+s /usr/bin/zen"))
 
 
 # ---------------------------------------------------------------------------

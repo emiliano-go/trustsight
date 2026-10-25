@@ -45,6 +45,29 @@
       },
       {
         "count": 2,
+        "host": "cdn.example",
+        "match": "first-seen host cdn.example gained by 2 packages in the window",
+        "members": [
+          "a",
+          "b"
+        ],
+        "members_detail": [
+          {
+            "last_modified": "2026-05-01 00:00 UTC",
+            "maintainer": "newm",
+            "package": "a",
+            "previous_maintainer": "oldm",
+            "version": "1 -> 2"
+          },
+          {
+            "maintainer": "newm",
+            "package": "b"
+          }
+        ],
+        "rule_id": "G010"
+      },
+      {
+        "count": 2,
         "members": [
           "yyay",
           "parru"
@@ -192,6 +215,29 @@
             }
           ],
           "rule_id": "G003"
+        },
+        {
+          "count": 2,
+          "host": "cdn.example",
+          "match": "first-seen host cdn.example gained by 2 packages in the window",
+          "members": [
+            "a",
+            "b"
+          ],
+          "members_detail": [
+            {
+              "last_modified": "2026-05-01 00:00 UTC",
+              "maintainer": "newm",
+              "package": "a",
+              "previous_maintainer": "oldm",
+              "version": "1 -> 2"
+            },
+            {
+              "maintainer": "newm",
+              "package": "b"
+            }
+          ],
+          "rule_id": "G010"
         },
         {
           "count": 2,

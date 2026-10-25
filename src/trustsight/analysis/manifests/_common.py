@@ -144,6 +144,11 @@ class Dep:
     constraint: str | None
     source_kind: str  # "registry" | "git" | "path" | "unknown"
     remote: str | None  # canonical host of a git or non-default-registry source
+    #: Canonical host+path, without credentials, query or fragment. This
+    #: distinguishes two repositories on one host without leaking secrets.
+    origin: str | None = None
+    #: Declared lock integrity (algorithm+hash), when the format carries it.
+    integrity: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -151,6 +156,8 @@ class Dep:
             "constraint": self.constraint,
             "source_kind": self.source_kind,
             "remote": self.remote,
+            "origin": self.origin,
+            "integrity": self.integrity,
         }
 
 @dataclass
@@ -270,8 +277,28 @@ _DEFAULT_REGISTRY_FRAGMENTS = (
 )
 
 def _is_default_registry(url: str) -> bool:
-    lowered = (url or "").lower()
-    return any(fragment in lowered for fragment in _DEFAULT_REGISTRY_FRAGMENTS)
+    """Whether *url* names an official registry, never an official-looking one.
+
+    Compare the canonical host, not the whole URL: an attacker can put an
+    official name in a hostname suffix, path, or query.  The crates index is
+    the one path-identified exception because it is hosted on github.com.
+    """
+    value = (url or "").strip()
+    for prefix in ("registry+", "sparse+"):
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+            break
+    host = _host(value)
+    if not host:
+        return False
+    if host == "github.com":
+        path = urlsplit(value).path.rstrip("/")
+        if path == "/rust-lang/crates.io-index":
+            return True
+    return any(
+        host == domain or host.endswith("." + domain)
+        for domain in _DEFAULT_REGISTRY_FRAGMENTS
+    )
 
 def _registry_host(url: str) -> str | None:
     """The host of a registry address, or None when it is a default registry."""
@@ -302,6 +329,37 @@ def _url_source(url: str) -> tuple[str, str | None]:
     if host and not _is_default_registry(url):
         return "registry", host
     return "registry", None
+
+
+def _origin(url: str) -> str | None:
+    """A bounded, credential-free repository identity for *url*.
+
+    Host alone cannot distinguish two upstreams on one forge. Keep the path,
+    drop userinfo, query and fragment, and normalize trailing separators.
+    Overlong identities are refused rather than truncated into a collision.
+    """
+    value = str(url or "").strip().strip("\"'")
+    if not value or len(value.encode("utf-8", "replace")) > 2048:
+        return None
+    lowered = value.lower()
+    for forge, host in _FORGE_HOSTS.items():
+        if lowered.startswith(forge + ":"):
+            return f"{host}/{value.split(':', 1)[1].strip('/')}"
+    for prefix in ("registry+", "sparse+", "git+", "hg+", "svn+", "bzr+"):
+        if value.startswith(prefix):
+            value = value[len(prefix):]
+            break
+    if value.startswith("git@"):
+        host, _, path = value[4:].partition(":")
+        return f"{host}/{path.strip('/')}" if host and path else None
+    if value.startswith("//"):
+        value = "https:" + value
+    parsed = urlsplit(value)
+    host = _host(value)
+    if not host:
+        return None
+    path = parsed.path.strip("/")
+    return f"{host}/{path}" if path else host
 
 _FORGE_HOSTS = {
     "github": "github.com", "gitlab": "gitlab.com", "bitbucket": "bitbucket.org",
@@ -402,9 +460,14 @@ def upstream_redirect_signals(text: str) -> set[tuple[str, str]]:
         out.add(("cargo-replace-with", m.group("name")))
     for m in _REGISTRY_KEY_RE.finditer(text):
         url = m.group("url")
-        if _is_default_registry(url):
+        host = _host(url)
+        # A dependency literally named `registry = "1.0"` is not a redirect.
+        # Require an actual registry locator in the section-agnostic fallback;
+        # a bare host is accepted only with a path, not a version-shaped token.
+        locator = "://" in url or url.startswith(("git@", "//")) or "/" in url
+        if not host or not locator or _is_default_registry(url):
             continue
-        out.add(("registry-override", _host(url) or url))
+        out.add(("registry-override", host))
     return out
 
 def _pep508(raw: str) -> Dep | None:
@@ -419,7 +482,7 @@ def _pep508(raw: str) -> Dep | None:
         if url.lower().startswith("file:"):
             return Dep(name, None, "path", None)
         kind, remote = ("git", _host(url)) if "://" in url else ("unknown", None)
-        return Dep(name, None, kind, remote)
+        return Dep(name, None, kind, remote, origin=_origin(url))
     # `git+url#egg=name`
     if text.startswith(("git+", "hg+", "svn+", "bzr+")):
         remote = _host(text)

@@ -78,8 +78,14 @@ _REGISTRY_RESOLVE = [
 
 _COMMAND_POSITION = r"(?:\A\s*|[;&|(]\s*|\$\(\s*|&&\s*|\|\|\s*)"
 
+# A manager invoked through a vendored or relative path (`v/bin/pip`,
+# `./tools/node/bin/npm`) is the same registry fetch as the bare name.
+_PATH_PREFIX = r"(?:/?(?:[\w.$~{}-]+/)+)?"
+
 _REGISTRY_RESOLVE_RE = re.compile(
-    "|".join(f"{_COMMAND_POSITION}{frag}" for frag in _REGISTRY_RESOLVE),
+    "|".join(
+        f"{_COMMAND_POSITION}{_PATH_PREFIX}{frag}" for frag in _REGISTRY_RESOLVE
+    ),
     re.IGNORECASE,
 )
 

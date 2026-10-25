@@ -410,6 +410,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         # ./evil.pkg.tar.zst` installs a local package as root, scriptlets
         # and all, and the leading `./` is not a mitigation.
         distro = _DISTRO_INSTALL_RE.search(body)
+        local_target = _x011_local_target(body)
         # In an install scriptlet the manager installs the distribution's
         # own signed packages at install time (tape16-bin: `pacman -S
         # xorg-xwayland` in post_install) - not fetched code running at
@@ -418,7 +419,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         if (index not in dependency_data
                 and not in_hook
                 and X011_RE.search(body)
-                and (distro or not X011_STANDDOWN_RE.search(body))):
+                and (distro or not (X011_STANDDOWN_RE.search(body) or local_target))):
             record("X011", line_no, "package manager runs fetched code",
                    body.strip())
 
@@ -446,3 +447,23 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                raw_lines[shadow_line - 1].strip())
 
     return _resolved_records(found)
+
+
+def _x011_local_target(body: str) -> bool:
+    """True when the install target is a local path, not a registry name.
+
+    `npm install ./pkg` installs what the recipe just built; the same `./`
+    before the manager (`./tools/node/bin/npm install evil`) is the
+    executable path and the fetch is still a registry fetch.
+    """
+    words = [word.strip("\"'") for word in body.split()]
+    for index, word in enumerate(words):
+        if word.lower() in {
+            "install", "i", "add", "ci", "sync", "fetch", "get",
+            "require", "update", "build",
+        }:
+            return any(
+                later == "." or later.startswith("./")
+                for later in words[index + 1:]
+            )
+    return False

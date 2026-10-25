@@ -92,6 +92,21 @@ def test_a_build_time_registry_install_is_a_coverage_gap():
     ]
 
 
+def test_a_path_qualified_manager_is_a_build_time_registry_install():
+    """`v/bin/pip` and `./tools/node/bin/npm` resolve from the registry too."""
+    diff = """diff --git a/PKGBUILD b/PKGBUILD
+ build() {
++  v/bin/pip install demo
++  ./tools/node/bin/npm install evil
+ }
+"""
+    assert has_unpinned_build_deps(diff)
+    assert registry_resolutions(diff) == [
+        ("build", "v/bin/pip install demo"),
+        ("build", "./tools/node/bin/npm install evil"),
+    ]
+
+
 def test_the_gap_forbids_an_unflagged_result():
     """B2: a run that could not see what will execute cannot read as clean."""
     gaps = gaps_from(tree_analyzed=True, unpinned_build_deps=True)

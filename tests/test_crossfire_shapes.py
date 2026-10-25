@@ -632,6 +632,24 @@ def test_x011_still_fires_on_a_package_manager_in_a_build():
     assert "X011" in _fire("pip install requests")
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "v/bin/pip install demo",
+        "./tools/node/bin/npm install evil",
+        "/usr/bin/pip install demo",
+    ],
+)
+def test_x011_reads_a_path_qualified_package_manager(command):
+    """A vendored toolchain runs the same registry fetch through a path."""
+    assert "X011" in _fire(command)
+
+
+def test_x011_keeps_a_relative_local_target_quiet():
+    """`npm install ./pkg` installs a local tree, not a registry package."""
+    assert "X011" not in _fire("npm install ./vendor")
+
+
 def test_x015_ignores_a_printed_heredoc():
     """melody-git: `cat <<'MESSAGE'` advises the user to enable a unit.
 

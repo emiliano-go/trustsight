@@ -75,12 +75,13 @@ X019_RE = re.compile(
 X011_STANDDOWN_RE = re.compile(
     r"--ignore-scripts|--no-index|--offline|--no-deps"
     r"|--frozen-lockfile\b[^\n]*--offline"
-    # A local *target*: the current directory or a path in the build tree.
     # `--prefix "$srcdir"` is a destination, not a target, and matching any
     # occurrence of `$srcdir` stood the rule down on
     # `npm install evilpkg --prefix "$srcdir"` - a registry fetch with a
     # local install prefix, which is the opposite of what the flag means.
-    r"|\s\.(?:\s|$)|\s\./"
+    # A relative target (`npm install ./pkg`) is decided after the match by
+    # `_x011_local_target`, so a `./` in the manager's own path stays a
+    # registry fetch.
     r"|(?<!prefix=)(?<!prefix\s)(?<!prefix=\")(?<!root=)\s\$\{?(?:srcdir|startdir)\}?/"
     # A *local* artifact only, and the whole argument must be local: anchored
     # to a whitespace-preceded token so the match cannot start part-way
@@ -100,6 +101,10 @@ _DISTRO_INSTALL_RE = re.compile(
 X011_RE = re.compile(
     r"(?:\A\s*|[;&|(]\s*|&&\s*|\|\|\s*)"
     r"(?:" + _EXEC_WRAPPER + r")?"
+    # A vendored toolchain runs the manager through a path: `v/bin/pip` and
+    # `./tools/node/bin/npm` are the same command to the shell as `pip` and
+    # `npm`, and both resolve from the registry.
+    r"(?:/?(?:[\w.$~{}-]+/)+)?"
     # `python3 -m pip install` and `node --require ... npm` reach the same
     # manager through the interpreter that ships it.
     r"(?:(?:python[23]?|py|node|ruby|perl)\s+-\S+\s+)?"

@@ -308,6 +308,8 @@ def analyze_package_text(
     install_name: Optional[str] = None,
     old_install_text: Optional[str] = None,
     upstream_manifest_incomplete: bool = False,
+    manifest_deltas=(),
+    workflow_deltas=(),
 ) -> PackageFact:
     """Analyse a package from PKGBUILD text, without a git repository.
 
@@ -455,6 +457,26 @@ def analyze_package_text(
                 "", current_text=clamp_text(new_pkgbuild), package_name=pkg_name
             )
         )
+        from ..analysis.upstream_release import upstream_release_findings
+
+        def _upstream_add(rid, name, severity, category, match,
+                          weight_override=None, **params):
+            finding = {
+                "rule_id": rid, "name": name, "severity": severity,
+                "category": category, "match": match, "params": params,
+            }
+            if weight_override is not None:
+                finding["weight_override"] = weight_override
+            triggered_rules.append(stamp(finding))
+
+        upstream_release_findings(
+            "", None, _upstream_add, config, pkg_name, current_text=new_pkgbuild,
+        )
+        from ..override import suppress_acknowledged_url_findings
+
+        url_acks: dict = {}
+        triggered_rules = suppress_acknowledged_url_findings(
+            triggered_rules, pkg_name, url_acks)
         expired_overrides: list[str] = []
         triggered_rules, suppressed_rules = filter_triggered_rules(
             triggered_rules, package=pkg_name, expired_out=expired_overrides
@@ -472,6 +494,10 @@ def analyze_package_text(
             if cluster:
                 triggered_rules.append(cluster)
 
+        unresolved_assignments = unresolved_assignment_rows(
+            clamp_text(new_pkgbuild) or "", file="PKGBUILD")
+        from ..analysis.pipeline._tree import _has_noextract
+
         gaps = gaps_from(
             tree_analyzed=bool(tree_manifest),
             snapshot_refused=snapshot_refused,
@@ -479,6 +505,8 @@ def analyze_package_text(
             deps_not_scanned=depth_result.truncated,
             ruleset_drifted=bool(drifted_shipped_rules()),
             degraded_stages=stage_failures(),
+            unresolved_assignments=bool(unresolved_assignments),
+            noextract_present=_has_noextract(new_pkgbuild),
         )
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config, coverage_gaps=gaps,
@@ -492,6 +520,7 @@ def analyze_package_text(
             novelty_context=novelty,
             suppressed_rules=suppressed_rules,
             overrides_expired=expired_overrides,
+            acknowledged_urls=acknowledged_url_rows(url_acks),
             # Known here and recorded two lines below by
             # `update_package_maintainer`, so leaving it off the fact meant
             # a first-seen corpus entry reported no maintainer while the
@@ -505,6 +534,7 @@ def analyze_package_text(
             dependencies=list(depth_result.reports),
             depth_truncated=depth_result.truncated,
             depth_note=depth_result.reason,
+            unresolved_assignments=unresolved_assignments,
             risk=risk,
             score_breakdown=breakdown,
             final_score=score,
@@ -608,6 +638,18 @@ def analyze_package_text(
     triggered_rules.extend(metadata_findings)
     change_delta_obj = change_delta(clamp_text(diff_text), pkg_name,
                                 current_text=new_pkgbuild)
+    if manifest_deltas or workflow_deltas:
+        from dataclasses import replace
+
+        change_delta_obj = replace(
+            change_delta_obj,
+            files=change_delta_obj.files + tuple(workflow_deltas),
+            manifests=change_delta_obj.manifests + tuple(manifest_deltas),
+            hosts_gained=change_delta_obj.hosts_gained | frozenset({
+                host for manifest in manifest_deltas
+                for host in manifest.remote_added
+            }),
+        )
     triggered_rules.extend(
         _structural_findings(
             clamp_text(diff_text), source_changes, source_buckets,
@@ -630,6 +672,10 @@ def analyze_package_text(
         triggered_rules.extend(
             scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
         )
+    from ..override import suppress_acknowledged_url_findings
+
+    triggered_rules = suppress_acknowledged_url_findings(
+        triggered_rules, pkg_name, url_acks)
     from ..analysis.persistence import stand_down_committed_staging
     triggered_rules = stand_down_committed_staging(triggered_rules, tree_manifest)
     if archive_trailer_finding:
@@ -714,6 +760,8 @@ def analyze_package_text(
         extra_lines=[*unresolved_sources, *parse_time_subs])
     cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
     partial_files = partial_install_files(diff_text)
+    from ..analysis.pipeline._tree import _has_noextract
+
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
@@ -729,6 +777,8 @@ def analyze_package_text(
         deps_not_scanned=depth_result.truncated,
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
+        unresolved_assignments=bool(unresolved_assignments),
+        noextract_present=_has_noextract(new_pkgbuild),
     )
 
     score, breakdown, risk = calculate_score(

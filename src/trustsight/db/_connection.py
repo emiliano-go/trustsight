@@ -688,6 +688,9 @@ _ADDED_COLUMNS = {
         # a baseline import leaves it NULL so a signed artifact cannot seed
         # prior state and suppress an addition (A13).
         "manifest_deps": "TEXT",
+        # Complete normalized manifest/workflow state for U-series deltas.
+        # Live writer only; baseline imports leave it NULL (A13).
+        "manifest_state": "TEXT",
         "previous_pkgbuild_text": "TEXT",
         "previous_srcinfo_text": "TEXT",
         "previous_install_text": "TEXT",

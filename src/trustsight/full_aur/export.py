@@ -346,7 +346,7 @@ def build_artifact(
             conn.execute(
                 "SELECT package_name, pkgbuild_text, srcinfo_text, "
                 "install_text, version, last_modified, captured_at, "
-                "manifest_deps FROM pkgbuild_snapshots "
+                "manifest_deps, manifest_state FROM pkgbuild_snapshots "
                 "ORDER BY package_name").fetchall()
         ]
         from ..db import _get_salt

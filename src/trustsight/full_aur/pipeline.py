@@ -1376,6 +1376,20 @@ def _run_baseline_build(
                     }
             except (ValueError, TypeError):
                 prior_deps = None
+        manifest_state_json = None
+        manifest_deltas = ()
+        workflow_deltas = ()
+        if manifest_texts is not None and not manifest_incomplete:
+            from ..analysis.manifest_state import (
+                build_manifest_state,
+                manifest_state_delta,
+            )
+
+            manifest_state_json = build_manifest_state(
+                manifest_texts, tree_manifest)
+            if manifest_state_json and old_snapshot:
+                manifest_deltas, workflow_deltas = manifest_state_delta(
+                    old_snapshot.get("manifest_state"), manifest_state_json)
         try:
             with write_batch():
                 fact = analyze_package_text(
@@ -1403,6 +1417,8 @@ def _run_baseline_build(
                     old_install_text=(old_snapshot.get("install_text")
                                       if old_snapshot else None),
                     upstream_manifest_incomplete=manifest_incomplete,
+                    manifest_deltas=manifest_deltas,
+                    workflow_deltas=workflow_deltas,
                 )
                 save_pkgbuild_snapshot(
                     package_name=name,
@@ -1411,6 +1427,7 @@ def _run_baseline_build(
                     last_modified=meta.get("LastModified", 0),
                     install_text=install_text,
                     manifest_deps=manifest_deps_json,
+                    manifest_state=manifest_state_json,
                 )
                 if manifest_deps_json is not None and prior_deps is not None:
                     record_upstream_dep_additions(
@@ -1446,6 +1463,11 @@ def _run_baseline_build(
             # looking package on the list would never cross the alerting bar.
             for m in fact.ioc_matches:
                 ioc_hits[name].append(f"{m.type}:{m.value}")
+        # Federated upstream indicators use the same maximum-priority lane.
+        for entry in fact.score_breakdown:
+            if entry.rule_id in ("U007", "U008"):
+                repo = (entry.params or {}).get("upstream_repo", "")
+                ioc_hits[name].append(f"upstream_repo:{repo}")
         # What a notification needs to say *where* a finding fired, not only
         # that a rule did.  Each entry names the rule, the file and line of
         # the evidence, its severity/weight and the rendered reason, so a

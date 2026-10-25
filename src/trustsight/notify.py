@@ -19,8 +19,9 @@ import logging
 import os
 import time
 import urllib.request
+from pathlib import Path
 
-from .bounded_io import read_capped_with_deadline
+from .bounded_io import read_capped_with_deadline, read_file_capped
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +60,7 @@ _CONFIG_FEED_KEY = "feed"
 _FEED_URL_ENV = "TRUSTSIGHT_FEED_URL"
 _FEED_KEY_ENV = "TRUSTSIGHT_FEED_KEY"
 _FEED_KEY_ID_ENV = "TRUSTSIGHT_FEED_KEY_ID"
+_FEED_KEY_FILE_ENV = "TRUSTSIGHT_FEED_KEY_FILE"
 
 
 def _cycle_alert_cap() -> int:
@@ -621,21 +623,37 @@ def feed_url(config: dict | None = None) -> str:
 
 
 def _feed_key() -> tuple[str, str]:
-    """``(key_id, base64_pkcs8)`` from the environment, or ``("", "")``."""
-    return (os.environ.get(_FEED_KEY_ID_ENV, "").strip(),
-            os.environ.get(_FEED_KEY_ENV, "").strip())
+    """``(key_id, base64_pkcs8)`` from the environment or a secret file."""
+    key_id = os.environ.get(_FEED_KEY_ID_ENV, "").strip()
+    key = os.environ.get(_FEED_KEY_ENV, "").strip()
+    if not key:
+        path = os.environ.get(_FEED_KEY_FILE_ENV, "").strip()
+        if path:
+            try:
+                key = read_file_capped(
+                    Path(path), 4096, "feed key"
+                ).decode("ascii").strip()
+            except (OSError, UnicodeDecodeError):
+                key = ""
+    return key_id, key
 
 
-def _sign_feed(key_b64: str, key_id: str, body: bytes) -> dict:
+def _sign_feed(
+    key_b64: str, key_id: str, body: bytes,
+    timestamp: int | None = None, webhook_id: str | None = None,
+) -> dict:
     """The signature headers for *body* (material ``id.timestamp.body``).
 
-    The id is deterministic from the body and the timestamp, so a retried POST
-    carries the same id and the feed dedupes it rather than double-storing.
+    The id and timestamp can be supplied so a queued retry re-uses the exact
+    identity the feed already saw; otherwise the feed would treat the retry as
+    a new document.
     """
     from cryptography.hazmat.primitives.serialization import load_der_private_key
 
-    timestamp = int(time.time())
-    webhook_id = hashlib.sha256(f"{timestamp}.".encode() + body).hexdigest()
+    timestamp = int(timestamp if timestamp is not None else time.time())
+    webhook_id = webhook_id or hashlib.sha256(
+        f"{timestamp}.".encode() + body
+    ).hexdigest()
     key = load_der_private_key(base64.b64decode(key_b64), password=None)
     signature = key.sign(f"{webhook_id}.{timestamp}.".encode() + body)
     return {
@@ -647,53 +665,157 @@ def _sign_feed(key_b64: str, key_id: str, body: bytes) -> dict:
 
 
 def post_feed(url: str, payload: dict, key_b64: str, key_id: str,
-              timeout: float = _TIMEOUT_S) -> None:
+              timeout: float = _TIMEOUT_S, *, webhook_id: str | None = None,
+              timestamp: int | None = None) -> None:
     """POST a signed document to the feed ingest endpoint.  Raises on failure."""
     body = json.dumps(payload).encode("utf-8")
     headers = {"Content-Type": "application/json", "User-Agent": "trustsight/1.0"}
-    headers.update(_sign_feed(key_b64, key_id, body))
+    headers.update(_sign_feed(
+        key_b64, key_id, body, timestamp=timestamp, webhook_id=webhook_id
+    ))
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         read_capped_with_deadline(resp, _MAX_RESPONSE_BYTES, url, timeout)
 
 
-def _deliver(payload: dict, ntfy_url: str | None) -> bool:
-    """POST *payload* to every configured sink; True when any took it.
+def _deliver_sinks(
+    payload: dict, ntfy_url: str | None, *, feed: str | None = None,
+    key_id: str = "", key: str = "", webhook_id: str | None = None,
+    timestamp: int | None = None, skip_ntfy: bool = False,
+    skip_feed: bool = False,
+) -> tuple[bool, bool]:
+    """POST *payload* to each configured sink; ``(ntfy_ok, feed_ok)``.
 
-    ntfy and the signed feed are independent: one failing never stops the
-    other, and a missing feed URL or key simply skips the feed sink.
+    A sink that is not configured counts as done.  ntfy and the signed feed
+    are independent: one failing never stops the other.
     """
-    delivered = False
-    if ntfy_url:
+    ntfy_ok = True
+    ntfy_configured = bool(ntfy_url) and not skip_ntfy
+    if ntfy_configured:
         try:
             post_webhook(ntfy_url, payload)
-            delivered = True
+            ntfy_ok = True
         except Exception as exc:  # noqa: BLE001 - a notification never kills the loop
+            ntfy_ok = False
             log.warning("alert webhook failed: %s", exc)
-    feed = feed_url()
-    key_id, key = _feed_key()
-    if feed and key:
+    if feed is None:
+        feed = feed_url()
+    if not key:
+        key_id, key = _feed_key()
+    feed_ok = True
+    feed_configured = bool(feed and key) and not skip_feed
+    if feed_configured:
         try:
-            post_feed(feed, payload, key, key_id)
-            delivered = True
+            post_feed(
+                feed, payload, key, key_id,
+                webhook_id=webhook_id, timestamp=timestamp,
+            )
+            feed_ok = True
         except Exception as exc:  # noqa: BLE001
+            feed_ok = False
             log.warning("feed webhook failed: %s", exc)
-    return delivered
+    return ntfy_ok, feed_ok, ntfy_configured, feed_configured
+
+
+def _deliver(payload: dict, ntfy_url: str | None) -> bool:
+    """POST *payload* to every configured sink; True when any took it."""
+    ntfy_ok, feed_ok, ntfy_configured, feed_configured = _deliver_sinks(
+        payload, ntfy_url
+    )
+    return ((ntfy_configured and ntfy_ok)
+            or (feed_configured and feed_ok))
 
 
 def maybe_notify(cycle, url: str | None = None) -> bool:
-    """POST the cycle's alerts to every sink, if there is anything to say.
+    """Queue and POST the cycle's alerts to every sink.
 
     *url* overrides the configured ntfy webhook.  Returns True when any sink
-    delivered.  Every failure (no URL, no alerts, a dead receiver) is quiet by
-    design: the watcher's job is the next cycle.
+    delivered.  A document that cannot be delivered stays in the outbox and is
+    retried on the next cycle; every failure is still swallowed so a dead
+    receiver never kills the watcher.
     """
+    effective = url if url is not None else notify_url()
     if not cycle.new_alerts and not cycle.over_threshold \
             and not getattr(cycle, "ioc_hits", []) \
             and not getattr(cycle, "refusals", []):
+        return flush_outbox(effective)
+    payload = alert_payload(cycle)
+    key_id, key = _feed_key()
+    feed = feed_url() if key else ""
+    if not effective and not (feed and key):
         return False
-    return _deliver(alert_payload(cycle),
-                    url if url is not None else notify_url())
+    try:
+        from .db import enqueue_alert_payload
+
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+        webhook_id = None
+        timestamp = None
+        if feed and key:
+            headers = _sign_feed(key, key_id, body)
+            webhook_id = headers["webhook-id"]
+            timestamp = int(headers["webhook-timestamp"])
+        enqueue_alert_payload(
+            payload, webhook_id or "", int(timestamp or time.time())
+        )
+    except Exception as exc:  # noqa: BLE001 - a missing DB is not a lost alert
+        log.debug("alert outbox unavailable, delivering directly: %s", exc)
+        return _deliver(payload, effective)
+    return flush_outbox(effective)
+
+
+def flush_outbox(url: str | None = None, now=None) -> bool:
+    """Try every due outbox document; True when anything was delivered."""
+    try:
+        from .db import (
+            mark_alert_attempt, mark_alert_sink, pending_alert_payloads,
+        )
+    except Exception:  # noqa: BLE001
+        return False
+    effective = url if url is not None else notify_url()
+    feed = feed_url()
+    key_id, key = _feed_key()
+    delivered = False
+    try:
+        rows = pending_alert_payloads(now=now)
+    except Exception:  # noqa: BLE001
+        return False
+    for row in rows:
+        payload = row.get("payload") or {}
+        ntfy_ok, feed_ok, ntfy_configured, feed_configured = _deliver_sinks(
+            payload, effective, feed=feed, key_id=key_id, key=key,
+            webhook_id=row.get("webhook_id") or None,
+            timestamp=row.get("webhook_timestamp") or None,
+            skip_ntfy=bool(row.get("ntfy_delivered")),
+            skip_feed=bool(row.get("feed_delivered")),
+        )
+        if ntfy_ok:
+            mark_alert_sink(row["id"], "ntfy")
+        if feed_ok:
+            mark_alert_sink(row["id"], "feed")
+        if ((ntfy_configured and ntfy_ok)
+                or (feed_configured and feed_ok)):
+            delivered = True
+        else:
+            mark_alert_attempt(row["id"], "alert delivery failed")
+    return delivered
+
+
+def notify_watch_failure(state: dict, url: str | None = None) -> bool:
+    """Low-priority push when the watch loop has failed repeatedly."""
+    payload = {
+        "event": "trustsight.heartbeat",
+        "tool": "trustsight",
+        "tool_version": _tool_version(),
+        "title": "TrustSight: watcher failing",
+        "priority": "low",
+        "status": "failing",
+        "failure": {
+            "consecutive": int(state.get("consecutive_failures", 0)),
+            "last_success": state.get("last_success", ""),
+            "last_error": str(state.get("last_error", ""))[:500],
+        },
+    }
+    return _deliver(payload, url if url is not None else notify_url())
 
 
 def maybe_heartbeat(cycle, url: str | None = None) -> bool:

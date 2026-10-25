@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.24.0] - 2026-10-24
+
+### Added
+
+- **A durable watcher alert outbox.** A cycle now stores its alert document before trying any sink, and a failed ntfy or feed POST is retried on later cycles with capped exponential backoff. A document that cannot be delivered within 24 hours is parked and reported by `full-aur health`; the feed keeps the persisted `webhook-id` so a retry is the same document, not a duplicate.
+- **Watcher liveness and maintenance commands.** `full-aur health` reports the last successful cycle, consecutive failures, the outbox and database size, and exits nonzero when the watcher is stale. `full-aur maintenance` reports growth and can prune cycle events, alert history and reclaim space on explicit request.
+- **Graceful shutdown and one watcher per data directory.** `SIGTERM` finishes the package in flight, saves the resume state and checkpoints the WAL. An exclusive lock makes a second watcher on the same data directory fail with a clear message instead of interleaving cycles.
+
+### Changed
+
+- **The watcher container is hardened and health-checked.** The compose service now runs read-only with a tmpfs for `/tmp` and the cache, drops all capabilities, sets `no-new-privileges`, and applies PID, memory and CPU limits. Its healthcheck runs `full-aur health --optional` instead of only `--version`.
+- **The feed key can come from a file.** `TRUSTSIGHT_FEED_KEY_FILE` reads the Ed25519 private key from a mounted secret; the environment variable still wins when both are set.
+
+### Fixed
+
+- **`filelock` is upgraded to 4.2.4.** This closes the ReadWriteLock SQLite advisory and the two Windows-only advisories. TrustSight does not use `ReadWriteLock` (its only `filelock` use is `tldextract`'s `FileLock`), but the lock is patched and the Windows-only reports are out of scope for the Arch Linux target.
+
 ## [0.23.0] - 2026-10-24
 
 ### Added
@@ -5387,7 +5404,7 @@ separate reconciliation.
 - SQLite novelty tracking
 - LLM verdict integration
 - Basic CLI (review, inspect, history, config)
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.0...HEAD
 [0.1.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.1.0
 [0.2.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.0
 [0.2.2]: https://github.com/emiliano-go/trustsight/releases/tag/v0.2.2
@@ -5438,3 +5455,5 @@ separate reconciliation.
 [0.21.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.21.0
 [0.22.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.22.0
 [0.23.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.23.0
+[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.24.0

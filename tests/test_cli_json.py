@@ -66,6 +66,8 @@ CASES = [
     ("ioc sources", ["ioc", "sources"]),
     ("ioc import", ["ioc", "import", "/nonexistent"]),
     ("full-aur verify", ["full-aur", "verify", "--package", "demo"]),
+    ("full-aur health", ["full-aur", "health", "--optional"]),
+    ("full-aur maintenance", ["full-aur", "maintenance", "--dry-run"]),
     ("ioc update", ["ioc", "update"]),
     ("ioc update", [
         "ioc", "update", "--federation", "https://example.org/ioc",

@@ -35,3 +35,16 @@ def test_the_watcher_config_mount_is_writable():
     assert f"{CONFIG_DIR_IN_CONTAINER}:ro" not in guide, (
         "the docker run example mounts the config directory read-only"
     )
+
+
+def test_the_watcher_container_is_hardened_and_health_checked():
+    compose = yaml.safe_load((ROOT / "docker-compose.watcher.yml").read_text())
+    service = compose["services"]["trustsight-watch"]
+    assert service["read_only"] is True
+    assert service["init"] is True
+    assert service["stop_grace_period"] == "2m"
+    assert service["cap_drop"] == ["ALL"]
+    assert "no-new-privileges:true" in service["security_opt"]
+    assert service["pids_limit"] == 512
+    assert service["healthcheck"]["test"][-1] == "--optional"
+    assert "full-aur" in service["healthcheck"]["test"]

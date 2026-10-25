@@ -696,6 +696,8 @@ Bootstrap or update the full-AUR baseline corpus. Fetches the AUR metadata snaps
 trustsight full-aur [--bootstrap] [--resume] [--export PATH] [--sign PATH] [--json]
 trustsight full-aur --watch [--interval SECONDS] [--cycles N] [--auto-pull-baselines] [--auto-pull-iocs] [--auto-pull-watchlists] [--json]
 trustsight full-aur --transitions PACKAGE [--limit N] [--json]
+trustsight full-aur health [--json] [--optional]
+trustsight full-aur maintenance [--json] [--dry-run] [--vacuum] [--prune-cycle-events-days N] [--prune-alert-state-days N]
 ```
 
 ### Flags
@@ -726,6 +728,22 @@ Every cycle hashes each tracked property of each analysed package (source hosts 
 With a prior snapshot present (any `trustsight review` run creates one), a cycle processes only the changed packages, which is the intended cadence: run it periodically and the corpus grows incrementally. A from-scratch bootstrap is the exception, gated behind `--bootstrap`. Either way, each invocation is capped at `[limits] corpus_max_per_cycle` (default 2000) and resumes, so a large amount of work advances in bounded, resumable chunks rather than one avalanche.
 
 Use `--export` to produce a shareable baseline that other TrustSight instances can consume via `trustsight import-baseline`.
+
+### `trustsight full-aur health`
+
+```
+trustsight full-aur health [--json] [--optional]
+```
+
+Reports the recorded watch state: last successful cycle, consecutive failures, the delivery outbox and the database size. It exits 1 when the watcher is stale, has failed the failure-notice threshold, or has parked alert documents. `--optional` makes a database with no watcher state succeed, which is what the container healthcheck uses.
+
+### `trustsight full-aur maintenance`
+
+```
+trustsight full-aur maintenance [--json] [--dry-run] [--vacuum] [--prune-cycle-events-days N] [--prune-alert-state-days N]
+```
+
+Reports database and outbox size. Pruning is opt-in and destructive: cycle events older than the given number of days and alert history not seen for that many days are removed. `--vacuum` reclaims space after a prune. Run `--dry-run` first; a long-lived watcher should be pointed at a backup before deleting history.
 
 ### `trustsight full-aur verify`
 

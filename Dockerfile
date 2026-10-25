@@ -21,7 +21,10 @@ ENV UV_LINK_MODE=copy \
     # log collector as they are written, not when a buffer happens to flush.
     PYTHONUNBUFFERED=1 \
     # Print a traceback on a hard crash instead of a bare exit.
-    PYTHONFAULTHANDLER=1
+    PYTHONFAULTHANDLER=1 \
+    # The hardened compose file mounts a read-only root filesystem; Python
+    # must not try to write .pyc files into the venv.
+    PYTHONDONTWRITEBYTECODE=1
 # `.python-version` pins a patch version older than the base image's, which
 # would make uv download a managed interpreter; --python overrides it.
 
@@ -45,8 +48,8 @@ RUN useradd --create-home --shell /usr/sbin/nologin ts \
 ENV HOME=/home/ts
 USER ts
 
-HEALTHCHECK --interval=5m --timeout=10s --retries=3 \
-    CMD ["/app/.venv/bin/trustsight", "--version"]
+HEALTHCHECK --interval=5m --timeout=15s --retries=3 --start-period=10m \
+    CMD ["/app/.venv/bin/trustsight", "full-aur", "health", "--optional"]
 
 ENTRYPOINT ["/app/.venv/bin/trustsight"]
 CMD ["--help"]

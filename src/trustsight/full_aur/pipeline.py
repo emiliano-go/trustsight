@@ -5,7 +5,9 @@ import hashlib
 import json
 import logging
 import os
+import signal as _signal
 import sys
+import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -148,8 +150,14 @@ def _notify_diff(old_text: str, new_text: str) -> dict:
         return {}
     if old_text == new_text:
         return {}
+    old_lines = old_text.split("\n")
+    new_lines = new_text.split("\n")
+    if old_lines and old_lines[-1] == "":
+        old_lines.pop()
+    if new_lines and new_lines[-1] == "":
+        new_lines.pop()
     lines = list(difflib.unified_diff(
-        old_text.splitlines(), new_text.splitlines(),
+        old_lines, new_lines,
         fromfile="a/PKGBUILD", tofile="b/PKGBUILD", lineterm=""))
     text = clean_log("\n".join(lines))
     out = {"diff_sha256": _recipe_digest(text)}
@@ -854,6 +862,8 @@ class CycleResult:
     # True when the cycle deliberately did no work and the caller should
     # report a failure (from-scratch bootstrap refused, empty fetch).
     refused: bool = False
+    # True when a stop signal interrupted the cycle; progress is saved.
+    stopped: bool = False
 
 
 def _logger(json_output: bool):
@@ -1096,6 +1106,7 @@ def run_baseline_build(
     depth: Optional[int] = None,
     over_threshold: Optional[int] = None,
     since: Optional[int] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> CycleResult:
     """Bootstrap or update the full-AUR corpus.
 
@@ -1132,6 +1143,7 @@ def run_baseline_build(
             resume=resume, export_path=export_path, sign_key=sign_key,
             json_output=json_output, bootstrap=bootstrap, depth=depth,
             over_threshold=over_threshold, since=since,
+            should_stop=should_stop,
         )
     finally:
         # A cycle can write thousands of rows; leave the WAL small
@@ -1148,6 +1160,7 @@ def _run_baseline_build(
     depth: Optional[int] = None,
     over_threshold: Optional[int] = None,
     since: Optional[int] = None,
+    should_stop: Optional[Callable[[], bool]] = None,
 ) -> CycleResult:
     """The cycle body; the public wrapper checkpoints the WAL."""
     if over_threshold is None:
@@ -1537,10 +1550,14 @@ def _run_baseline_build(
 
     fetch_failures = 0
     not_vetted = 0
+    stopped = False
     progress = _corpus_progress(len(pending), json_output)
     try:
         done = 0
         for name, fetched in _iter_prefetched(process_order, _fetch_one, _fetch_workers()):
+            if should_stop is not None and should_stop():
+                stopped = True
+                break
             status = _store(name, fetched)
             if status == "fetch_failed":
                 fetch_failures += 1
@@ -1581,6 +1598,10 @@ def _run_baseline_build(
         )
 
     save_resume_state({"processed": sorted(processed)})
+    if stopped:
+        partial = True
+        result.stopped = True
+        _log("Stop requested; progress saved for the next cycle")
 
     # Per-cycle scores become the cycle's report and its alerts on EVERY
     # path: a capped chunk used to return without them, which dropped the
@@ -1747,17 +1768,27 @@ def run_watch(
     counted, not re-announced, so the second cycle of a quiet night prints
     nothing rather than the same forty-package adoption again.
 
-    *cycles* of 0 means "until interrupted".  Ctrl-C ends the loop between
-    or during a cycle; state is already durable at that point, since every
-    cycle saves the snapshot and the resume file before it returns.
+    ``SIGTERM``/``SIGINT`` set a stop event.  The current package finishes,
+    the resume file and WAL are saved, and the loop exits without starting
+    another cycle.  State is durable at every cycle boundary, so a crash
+    loses at most the cycle in flight.
     """
     delay = watch_interval_seconds(interval)
     _log = _logger(json_output)
     results: list[CycleResult] = []
-    # A startup banner, so an unattended watcher's log opens with what build
-    # is running and where its state lives, not only the cycle interval.
+    stop = threading.Event()
+    previous_handlers = {}
+    if threading.current_thread() is threading.main_thread():
+        for sig in (_signal.SIGTERM, _signal.SIGINT):
+            try:
+                previous_handlers[sig] = _signal.getsignal(sig)
+                _signal.signal(sig, lambda *_: stop.set())
+            except (OSError, ValueError):
+                pass
+
     from .. import __version__
     from ..db import get_db_path
+    from . import watch_state
 
     _log(
         f"trustsight {__version__} watching the AUR: one cycle every {delay}s"
@@ -1770,22 +1801,18 @@ def run_watch(
     try:
         from ..notify import notify_url as _configured_notify_url
 
-        # The banner must name the webhook that will actually be used: a
-        # `--notify` URL passed on the command line is the effective one, and
-        # reading only the config printed "none" on a watcher that was in fact
-        # delivering every alert.
         _effective = notify_url or _configured_notify_url()
         _log(f"  alert webhook: {'configured' if _effective else 'none'}")
     except Exception:  # noqa: BLE001
         pass
-    # rules.toml is written once, at install, and only ever gains rules, so a
-    # rule whose fields moved in a later build keeps its old behaviour until it
-    # is synced.  An unattended watcher must not analyze with a stale ruleset,
-    # so sync the safe way once at startup: add missing rules, fix non-pattern
-    # drift and superseded patterns, and never touch a pattern the user edited.
-    # Logged, not silent (the design refuses silent adoption);
-    # TRUSTSIGHT_NO_SYNC_RULES opts out; a config write must never kill the
-    # watch, so it fails open.
+    # Retry anything a previous run could not deliver before spending the
+    # next interval asleep.
+    try:
+        from ..notify import flush_outbox
+
+        flush_outbox(notify_url)
+    except Exception as exc:  # noqa: BLE001 - delivery is best effort
+        _log(f"  pending alerts not flushed: {exc}")
     if not os.environ.get("TRUSTSIGHT_NO_SYNC_RULES", "").strip():
         try:
             from ..config import drifted_shipped_rules, sync_rules
@@ -1798,35 +1825,63 @@ def run_watch(
                 _log(f"  ruleset still drifted (user edits kept): {remaining}")
         except Exception as exc:  # noqa: BLE001 - never fail the watch over this
             _log(f"  ruleset sync skipped: {exc}")
+    try:
+        watch_state.record_start(delay)
+    except Exception:
+        pass
+
+    def _sleep(seconds: float) -> None:
+        if stop.is_set():
+            return
+        if sleep is time.sleep:
+            stop.wait(seconds)
+        else:
+            sleep(seconds)
+
     attempts = 0
     try:
-        while True:
-            # A transient failure (network blip, rate limit) must not kill an
-            # unattended watcher: report, wait, and retry.  The cycle cap
-            # still bounds the total, so a persistently broken cycle cannot
-            # spin forever either.
+        while not stop.is_set():
             try:
-                result = run_baseline_build(json_output=json_output, depth=depth,
-                                            over_threshold=over_threshold,
-                                            since=since)
+                result = run_baseline_build(
+                    json_output=json_output, depth=depth,
+                    over_threshold=over_threshold, since=since,
+                    should_stop=stop.is_set,
+                )
+                try:
+                    watch_state.record_success()
+                except Exception:
+                    pass
             except Exception as exc:
                 attempts += 1
+                try:
+                    failures = watch_state.record_failure(str(exc))
+                except Exception:
+                    failures = 0
                 _log(f"Cycle failed ({exc}); retrying in {delay}s")
+                if watch_state.should_notify_failure(failures):
+                    try:
+                        from ..notify import notify_watch_failure
+
+                        if notify_watch_failure(
+                            {"consecutive_failures": failures,
+                             "last_error": str(exc)}, notify_url
+                        ):
+                            _log("  failure heartbeat delivered")
+                    except Exception as notify_exc:  # noqa: BLE001
+                        _log(f"  failure heartbeat skipped: {notify_exc}")
                 if cycles and attempts >= cycles:
                     break
-                sleep(delay)
+                _sleep(delay)
                 continue
             attempts = 0
             if result.refused:
                 from .metadata import load_metadata
 
                 if load_metadata() is None and _since_cursor() is None:
-                    # No snapshot exists to diff against and no replay is in
-                    # flight, so every cycle refuses the same way: an
-                    # unattended watch would spin forever fetching metadata
-                    # and analysing nothing.  A --since replay advances no
-                    # snapshot until it catches up, and that is not a
-                    # refusal.
+                    try:
+                        watch_state.record_failure("no corpus snapshot")
+                    except Exception:
+                        pass
                     _log(
                         "No corpus snapshot yet; the watch has nothing to "
                         "diff against. Run 'trustsight full-aur --bootstrap' "
@@ -1834,10 +1889,12 @@ def run_watch(
                     )
                     results.append(result)
                     break
-                # A transient refusal (an empty fetch with a snapshot on
-                # disk) did no work: it does not consume the cycle budget.
+                try:
+                    watch_state.record_failure("cycle did no work")
+                except Exception:
+                    pass
                 _log(f"Cycle did no work; retrying in {delay}s")
-                sleep(delay)
+                _sleep(delay)
                 continue
             results.append(result)
             if result.new_alerts:
@@ -1846,23 +1903,12 @@ def run_watch(
                     _log(f"  {rule_id}  {package}")
             elif result.cluster_findings:
                 _log("No new alerts; every cluster this cycle was already reported")
-            # An unattended watcher needs a push channel: a cluster alert is
-            # announced once here and never again, and an over-threshold
-            # package is what the watcher exists for - so the webhook is how
-            # either reaches anyone not reading the log.
             from ..notify import maybe_heartbeat, maybe_notify
 
             if maybe_notify(result, notify_url):
                 _log("  alert webhook delivered")
             elif maybe_heartbeat(result, notify_url):
-                # Every analysis that raised no alert still beats, so silence
-                # on the channel unambiguously means the watcher is dead
-                # rather than merely quiet.
                 _log("  heartbeat delivered")
-            # Data freshness, checked AFTER the scan: a newer baseline seed or
-            # IOC set is pulled once and then recorded, so the next cycle sees
-            # nothing new until the channel moves again.  Best-effort: a
-            # failed pull is logged and the watch continues.
             if auto_pull_baselines or auto_pull_iocs or auto_pull_watchlists:
                 from ..channels import auto_pull
 
@@ -1871,16 +1917,18 @@ def run_watch(
                     watchlists=auto_pull_watchlists,
                 ):
                     _log(f"  {note}")
+            if stop.is_set():
+                break
             if cycles and len(results) >= cycles:
                 break
-            # A backfill is a queue, not a schedule: the interval governs the
-            # live stream, and sleeping it would stretch a one-day replay by
-            # a day per day.  A short pause keeps an empty day from becoming
-            # a hot loop, and the live interval resumes when the replay
-            # catches up.
-            sleep(2 if result.backfilling else delay)
+            _sleep(2 if result.backfilling else delay)
     except KeyboardInterrupt:
-        _log(f"Watch stopped after {len(results)} cycle(s)")
+        stop.set()
+    finally:
+        for sig, handler in previous_handlers.items():
+            try:
+                _signal.signal(sig, handler)
+            except (OSError, ValueError):
+                pass
+    _log(f"Watch stopped after {len(results)} cycle(s)")
     return results
-
-

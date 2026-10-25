@@ -577,12 +577,25 @@ def register_commands(app: typer.Typer):
                 else:
                     _print_colored(msg, "red", stderr=True)
                 raise typer.Exit(code=2)
-            results = run_watch(interval=interval, cycles=cycles, json_output=json_output,
-                                notify_url=notify, over_threshold=over_threshold,
-                                since=since_ts,
-                                auto_pull_baselines=auto_pull_baselines,
-                                auto_pull_iocs=auto_pull_iocs,
-                                auto_pull_watchlists=auto_pull_watchlists)
+            from ..full_aur.watch_lock import WatchAlreadyRunning, watch_lock
+
+            try:
+                with watch_lock():
+                    results = run_watch(
+                        interval=interval, cycles=cycles,
+                        json_output=json_output, notify_url=notify,
+                        over_threshold=over_threshold, since=since_ts,
+                        auto_pull_baselines=auto_pull_baselines,
+                        auto_pull_iocs=auto_pull_iocs,
+                        auto_pull_watchlists=auto_pull_watchlists,
+                    )
+            except WatchAlreadyRunning as exc:
+                msg = str(exc)
+                if json_output:
+                    typer.echo(json.dumps({"error": msg}))
+                else:
+                    _print_colored(msg, "red", stderr=True)
+                raise typer.Exit(code=2)
             # A watch that ended on a refusal never analysed anything: the
             # single-shot path already maps that to exit 2, and the loop is
             # the same "could not run" case.
@@ -601,6 +614,93 @@ def register_commands(app: typer.Typer):
         maybe_notify(result, notify)
         if result.refused:
             raise typer.Exit(code=2)
+
+    @full_aur_app.command("maintenance")
+    def full_aur_maintenance_cmd(
+        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Report only; change nothing"),
+        vacuum: bool = typer.Option(False, "--vacuum", help="Reclaim space after pruning (slow)"),
+        prune_cycle_events_days: int = typer.Option(
+            0, "--prune-cycle-events-days",
+            help="Delete cycle events older than this many days (0 keeps all)",
+        ),
+        prune_alert_state_days: int = typer.Option(
+            0, "--prune-alert-state-days",
+            help="Delete alert history not seen for this many days (0 keeps all)",
+        ),
+    ):
+        """Report or reclaim watcher database growth."""
+        from ..db import (
+            database_stats, init_db, prune_alert_state, prune_cycle_events,
+            vacuum_database,
+        )
+
+        init_db()
+        before = database_stats()
+        report = {"before": before, "dry_run": dry_run, "pruned": {}}
+        if not dry_run:
+            if prune_cycle_events_days:
+                report["pruned"]["cycle_events"] = prune_cycle_events(
+                    prune_cycle_events_days)
+            if prune_alert_state_days:
+                report["pruned"]["alert_state"] = prune_alert_state(
+                    prune_alert_state_days)
+            if vacuum:
+                vacuum_database()
+                report["vacuumed"] = True
+            report["after"] = database_stats()
+        if json_output:
+            typer.echo(json.dumps(report, indent=2))
+            return
+        size = before["bytes"]
+        typer.echo(f"Database: {before['path']} ({size} bytes, WAL {before['wal_bytes']})")
+        outbox = before["outbox"]
+        typer.echo(
+            f"Outbox: {outbox['pending']} pending, {outbox['parked']} parked"
+        )
+        if dry_run:
+            typer.echo("Dry run: nothing changed")
+        else:
+            for table, count in report["pruned"].items():
+                typer.echo(f"Pruned {count} {table} row(s)")
+            if report.get("vacuumed"):
+                typer.echo("Vacuum complete")
+
+    @full_aur_app.command("health")
+    def full_aur_health_cmd(
+        json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+        optional: bool = typer.Option(
+            False, "--optional",
+            help="Exit 0 when this database has no watcher state",
+        ),
+    ):
+        """Report whether the watch loop is alive and delivering."""
+        from ..full_aur.watch_state import health
+
+        state = health()
+        if json_output:
+            typer.echo(json.dumps(state, indent=2))
+        else:
+            if not state.get("watching"):
+                typer.echo("No watcher state recorded")
+            else:
+                typer.echo(
+                    f"Watcher: {'healthy' if state['healthy'] else 'unhealthy'}"
+                    f"{' - ' + state['reason'] if state.get('reason') else ''}"
+                )
+                typer.echo(
+                    f"  last success: {state.get('last_success') or 'never'}"
+                    f"  failures: {state.get('consecutive_failures', 0)}"
+                )
+                outbox = state.get("outbox", {})
+                typer.echo(
+                    f"  outbox: {outbox.get('pending', 0)} pending, "
+                    f"{outbox.get('parked', 0)} parked"
+                )
+        if not state.get("healthy"):
+            raise typer.Exit(code=1)
+        if not state.get("watching") and not optional:
+            raise typer.Exit(code=1)
 
     @full_aur_app.command("verify")
     def full_aur_verify_cmd(

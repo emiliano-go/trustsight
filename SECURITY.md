@@ -19,6 +19,14 @@ In short: a defect is a case where the tool moved between taxonomy rows
 silently, or failed to protect the machine while doing it. "It missed
 something" is usually a rule request, not a vulnerability.
 
+## Dependency advisory triage
+
+TrustSight targets Arch Linux. A dependency advisory that is explicitly
+Windows-only is dismissed as out of scope, with the advisory linked in the
+dismissal. A Linux or POSIX advisory is treated normally even when the
+affected code path is transitive: the lock is upgraded, and the dismissal
+names why the path is not reachable if the upgrade is not possible.
+
 ## Verifying a release
 
 Release artifacts are covered by a detached GPG signature made with the

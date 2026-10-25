@@ -444,6 +444,25 @@ def init_db():
                 PRIMARY KEY (package_name, rule_id)
             );
 
+            /* Durable delivery queue.  A cycle records the alert document
+               before it tries any sink, and a failed POST stays here for the
+               next cycle instead of disappearing with the log line. */
+            CREATE TABLE IF NOT EXISTS alert_outbox (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                webhook_id TEXT NOT NULL,
+                webhook_timestamp INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                next_attempt_at TEXT,
+                ntfy_delivered INTEGER NOT NULL DEFAULT 0,
+                feed_delivered INTEGER NOT NULL DEFAULT 0,
+                parked_at TEXT,
+                last_error TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_alert_outbox_pending
+                ON alert_outbox(parked_at, next_attempt_at);
+
             /* Campaign alert mode: corroborated campaigns that keep a
                package's scope "primed" for a bounded number of observations.
                TTL is in observation units (see OBSERVATION_SEQ_KEY), not

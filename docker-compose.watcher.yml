@@ -23,6 +23,28 @@ services:
     container_name: trustsight-watch
     command: ["full-aur", "--watch", "--interval", "1800"]
     restart: unless-stopped
+    # A watcher is a long-lived service: let SIGTERM finish the package in
+    # flight, save the resume state and checkpoint the WAL.
+    init: true
+    stop_grace_period: 2m
+    # The image needs no root filesystem writes.  The data and config
+    # volumes and the two tmpfs mounts are the only writable paths.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      - /home/ts/.cache:size=64m
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 2g
+    cpus: 2.0
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 4096
     # Re-fetch :latest on every `up`.  Docker keeps an existing :latest image
     # and will not re-pull the tag on its own, so without this a host silently
     # runs the version it first pulled, however far behind the channel moves.
@@ -34,6 +56,12 @@ services:
       # Timestamp and level on every log line, so `docker logs` shows when a
       # cycle ran, not only what it did.
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
+      TMPDIR: "/tmp"
+      # Secret-file form of the feed key.  Prefer this (or a Docker secret)
+      # over putting the private key in the environment, which is visible to
+      # `docker inspect`.
+      # TRUSTSIGHT_FEED_KEY_ID: "k1"
+      # TRUSTSIGHT_FEED_KEY_FILE: "/run/secrets/trustsight_feed_key"
       # TRUSTSIGHT_LOG_LEVEL: "INFO"
       # TRUSTSIGHT_OFFLINE: "1"
       # The signed feed sink: the watcher POSTs every alert here as well as to
@@ -43,6 +71,12 @@ services:
       # TRUSTSIGHT_FEED_URL: "https://watcher.trustsight.org/api/ingest"
       # TRUSTSIGHT_FEED_KEY_ID: "k1"
       # TRUSTSIGHT_FEED_KEY: "<base64 pkcs8 ed25519>"
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/trustsight", "full-aur", "health", "--optional"]
+      interval: 5m
+      timeout: 15s
+      retries: 3
+      start_period: 10m
     logging:
       driver: json-file
       options:

@@ -173,6 +173,30 @@ bar, and the match is a fact to read rather than a higher priority.
 Single-shot cycles (a bootstrap chunk, a plain `full-aur` run) notify like
 watch cycles.
 
+## Health and delivery
+
+A failed cycle is not a dead watcher, and a quiet channel is not proof of
+life. `trustsight full-aur health` reads the recorded last start, last success,
+consecutive failures, outbox and database size; `--json` is the machine form.
+The container healthcheck uses `full-aur health --optional`, so a database with
+no watcher state is healthy and a stale or repeatedly failing watcher is not.
+
+Alerts are written to a durable outbox before any POST. If ntfy or the feed is
+down, the document stays queued and is retried with capped exponential backoff
+on later cycles; an alert that cannot be delivered within 24 hours is parked
+and `health` reports it. This is at-least-once delivery: ntfy may show a
+duplicate after a crash between the POST and the delivery mark, while the feed
+dedupes on the persisted `webhook-id`.
+
+`SIGTERM` stops the loop between packages, saves the resume state and
+checkpoints the WAL. Only one watcher may own a data directory; a second
+start fails with the lock path instead of interleaving cycles.
+
+For a container, mount the feed key as a secret and point
+`TRUSTSIGHT_FEED_KEY_FILE` at it rather than putting the private key in the
+environment. The shipped compose file runs read-only with a tmpfs for `/tmp`
+and the cache, drops all capabilities, and sets `no-new-privileges`.
+
 ## As a systemd service
 
 ```ini
@@ -185,6 +209,8 @@ After=network-online.target
 ExecStart=/usr/bin/trustsight full-aur --watch --interval 1800
 Restart=on-failure
 RestartSec=300
+KillSignal=SIGTERM
+TimeoutStopSec=120
 
 [Install]
 WantedBy=default.target
@@ -226,7 +252,8 @@ container; the process resource limits still apply, and the analysis itself
 needs no privileges.
 
 A compose file with the same settings - a fixed container name, log
-rotation, and the timestamped log format - ships as
+rotation, the timestamped log format, a read-only root filesystem, dropped
+capabilities, resource limits and the watcher healthcheck - ships as
 `docker-compose.watcher.yml`:
 
 ```bash

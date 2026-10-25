@@ -538,6 +538,7 @@ behaviour is a config key or a command flag.
 | `TRUSTSIGHT_NO_SYNC_RULES` | Any non-empty value | Skip the ruleset sync a `full-aur --watch` runs once at startup. By default the watch syncs `rules.toml` to the shipped rules the safe way (adds missing rules, fixes non-pattern drift and superseded patterns, never touches a pattern the user edited) and logs what it changed, so an unattended watcher never analyses with a stale ruleset. |
 | `TRUSTSIGHT_FEED_URL` | A URL | The signed feed ingest endpoint. The watcher POSTs every alert there as well as to ntfy, so the feed ingests directly instead of polling ntfy. Overrides `[notify] feed`; empty and no `[notify] feed` skips the feed sink. |
 | `TRUSTSIGHT_FEED_KEY` | A base64 PKCS#8 Ed25519 private key | Signs each feed POST (`webhook-id`, `webhook-timestamp`, `webhook-signature`). The feed holds only the public half, so a leaked feed secret cannot forge a document. With no key the feed sink is skipped and only ntfy is notified. |
+| `TRUSTSIGHT_FEED_KEY_FILE` | A file containing the base64 PKCS#8 Ed25519 private key | Reads the feed key from a file instead of the environment, so a container or systemd unit can mount a secret. The environment variable wins when both are set. |
 | `TRUSTSIGHT_FEED_KEY_ID` | A short identifier | Names the signing key so the feed can rotate (it accepts a current and a previous key). |
 
 Rich output is the default only when the target stream is a terminal:

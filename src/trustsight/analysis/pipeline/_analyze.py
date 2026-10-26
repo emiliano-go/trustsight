@@ -432,7 +432,7 @@ def analyze_package(
     cut_hunks = parse_diff_lines(split_lines(diff_text)).cut_hunks()
     partial_hunk_details = cut_hunk_details(cut_hunks)
 
-    source_changes = extract_urls_from_diff(diff_text)
+    source_changes = extract_urls_from_diff(diff_text, current_text=head_pkgbuild)
     pkgver_changed, _pkgver_old, _pkgver_new = pkgver_move_in_diff(
         diff_text, head_pkgbuild
     )

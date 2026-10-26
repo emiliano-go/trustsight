@@ -44,6 +44,7 @@ from ..differ import (
     _companion_names,
     _is_metadata_path,
     _top_level_blob,
+    _tree_blob,
     truncate_diff,
 )
 from ..schema import DiffSummary
@@ -500,11 +501,11 @@ def companion_source_hunks(
     selected = names[:MAX_COMPANION_FILES]
     share = max(4096, max_bytes // max(1, len(selected)))
     for name in selected:
-        entry = _top_level_blob(commit.tree, name)
+        entry = _tree_blob(commit.tree, name)
         if entry is None:
             continue
         old_entry = (
-            _top_level_blob(baseline_tree, name)
+            _tree_blob(baseline_tree, name)
             if baseline_tree is not None and name in baseline_selected
             else None
         )

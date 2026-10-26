@@ -10,6 +10,20 @@
 
 ### Fixed
 
+- **The differ module now covers the shapes it claimed to.** Rename-only and
+  binary-only deltas enter `DiffSummary` (and therefore `is_trivial`), text
+  paths are bounded with the same helper and cap as the git producer, and
+  `from trustsight.differ import *` no longer names moved sandbox symbols.
+  SKIP justification and verification evidence are comment-aware: a comment
+  containing `.sig`, `gpg --verify` or `sha256sums=` no longer counts, while
+  an unchanged signature source outside the hunk still does. Arch-scoped
+  checksum arrays (`sha256sums_x86_64` and friends) participate in change,
+  removal, parity and evidence detection, and a removed checksum entry no
+  longer supports the “checksums for all sources” claim. Nested companion
+  files under `scripts/` and other directories are scanned with validated
+  relative paths, and URL/checksum variables are resolved against the full
+  current recipe when the caller has it.
+
 - **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
 - **The corpus first-seen path now matches the review path.** A first
   analysis still reads H091 checksum parity, the placeholder and name-shadow

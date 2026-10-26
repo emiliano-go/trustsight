@@ -3,7 +3,7 @@
 from ..diffdoc import parse_diff_lines, strip_diff_path_prefix
 from ..schema import DiffSummary
 from ..tokenizer import split_lines
-from ._bounds import MAX_DIFF_BYTES, MAX_DIFF_PATH_BYTES
+from ._bounds import MAX_DIFF_BYTES, MAX_DIFF_PATH_BYTES, MAX_DIFF_SUMMARY_FILES
 
 __all__ = ['_bounded_path', '_diff_file_path', 'diff_summary_from_text', 'generate_diff', 'generate_diff_bounded', 'map_diff_lines', 'truncate_diff']
 
@@ -72,75 +72,70 @@ def generate_diff(
 def diff_summary_from_text(diff_text: str) -> DiffSummary:
     """Build a ``DiffSummary`` from raw unified-diff text.
 
-    The git producer reads ``diff.deltas`` for its file list and ``diff.stats``
-    for its line counts.  The text producers (``scan_diff`` and the corpus
-    adapter) counted ``+``/``-`` lines with ``startswith``, which also counts
-    the ``+++``/``---`` headers, and never populated ``files_changed`` /
-    ``file_changes`` at all.  That made ``is_trivial`` return True on the text
-    path for any change whatsoever - a diff adding an untrusted source URL
-    read as a trivial update - and dropped the "new file"/"file removed"
-    summary entries.  One construction serves every producer now.
+    The typed document already knows each file's status, rename metadata and
+    line counts.  This projection used to walk the raw text three times,
+    which missed rename-only and binary-only files entirely: a pure rename
+    or a replaced binary produced an empty ``files_changed``, so
+    ``is_trivial`` could call it no change at all.  Paths are bounded with
+    the same helper the git producer uses, and the file list honours the
+    shared summary cap.
     """
     if not diff_text:
         return DiffSummary()
 
-    files_changed: set[str] = set()
-    file_changes: list[dict] = []
+    doc = parse_diff_lines(split_lines(diff_text))
+    lines_added = sum(1 for line in doc.lines if line.side == "add")
+    lines_removed = sum(1 for line in doc.lines if line.side == "remove")
+
     seen: set[str] = set()
-    lines_added = 0
-    lines_removed = 0
-
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
-        raw = line.raw
-        if raw.startswith("+++ "):
-            path = _diff_file_path(raw[4:])
-            # `+++ /dev/null` is a deletion, not a path: recording it put
-            # the literal string "/dev/null" in files_changed, and the
-            # added/removed fix-up below could never find it there.
-            if path and path != "/dev/null" and path not in seen:
-                seen.add(path)
-                if path not in (".SRCINFO", ".gitignore"):
-                    file_changes.append({"path": path, "status": "modified"})
-                files_changed.add(path)
+    file_changes: list[dict] = []
+    for file in doc.files:
+        if len(seen) >= MAX_DIFF_SUMMARY_FILES:
+            break
+        if file.status == "removed":
+            path = _bounded_path(_diff_file_path(file.old_path or file.path))
+        else:
+            path = _bounded_path(_diff_file_path(file.path))
+        if not path or path == "/dev/null" or path in seen:
             continue
-        if raw.startswith("--- ") or raw.startswith("@@"):
-            continue
-        if line.side == "add":
-            lines_added += 1
-        elif line.side == "remove":
-            lines_removed += 1
+        seen.add(path)
+        status = "renamed" if file.renamed else file.status
+        if path not in (".SRCINFO", ".gitignore"):
+            file_changes.append({"path": path, "status": status})
 
-    # Statuses the text diff cannot express in one line: a path that has only
-    # a `+++ b/...` side is added, one that has only a `--- a/...` side is
-    # removed.
-    old_paths: set[str] = set()
-    new_paths: set[str] = set()
-    for line in parse_diff_lines(split_lines(diff_text)).lines:
-        raw = line.raw
-        if raw.startswith("--- ") and not raw.startswith("--- /dev/null"):
-            old_paths.add(_diff_file_path(raw[4:]))
-        elif raw.startswith("+++ ") and not raw.startswith("+++ /dev/null"):
-            new_paths.add(_diff_file_path(raw[4:]))
-    added_paths = new_paths - old_paths
-    removed_paths = old_paths - new_paths
-    for entry in file_changes:
-        if entry["path"] in added_paths:
-            entry["status"] = "added"
-    # A deleted file has no `+++` side to record in the first loop - its
-    # only header is `--- a/path` opposite `+++ /dev/null` - so it enters
-    # the summary here, already marked removed.  The git producer path
-    # reads the same fact from the delta's `old_file.path`.
-    for path in removed_paths - seen:
+    # A binary delta has no `---`/`+++` pair and no hunk, so the typed file
+    # list is empty above; git still writes the two paths on its marker line.
+    from ._companions import _BINARY_DIFF_MARKER_RE
+
+    for line in doc.lines:
+        if not line.raw.startswith("Binary files "):
+            continue
+        match = _BINARY_DIFF_MARKER_RE.match(line.raw)
+        if match is None:
+            continue
+        old_path, new_path = match.group(1), match.group(2)
+        if new_path == "/dev/null":
+            path = _bounded_path(_diff_file_path(old_path))
+            status = "removed"
+        elif old_path == "/dev/null":
+            path = _bounded_path(_diff_file_path(new_path))
+            status = "added"
+        else:
+            path = _bounded_path(_diff_file_path(new_path))
+            status = "modified"
+        if not path or path == "/dev/null" or path in seen:
+            continue
+        if len(seen) >= MAX_DIFF_SUMMARY_FILES:
+            break
         seen.add(path)
         if path not in (".SRCINFO", ".gitignore"):
-            file_changes.append({"path": path, "status": "removed"})
-        files_changed.add(path)
+            file_changes.append({"path": path, "status": status})
 
     file_changes.sort(key=lambda item: (item["path"], item["status"]))
     return DiffSummary(
         lines_added=lines_added,
         lines_removed=lines_removed,
-        files_changed=sorted(files_changed),
+        files_changed=sorted(seen),
         file_changes=file_changes,
     )
 

@@ -585,21 +585,24 @@ def test_the_two_value_generator_still_works_for_old_callers():
 
 
 @pytest.mark.parametrize("name", [
-    "../../etc/passwd", "/etc/passwd", "..", ".", "", "a/b",
-    "back\\slash", "a" * 4096,
+    "../../etc/passwd", "/etc/passwd", "..", ".", "", "a/../b",
+    "a//b", "a/./b", "back\\slash", "a" * 4096,
 ])
 def test_a_hostile_companion_name_is_refused(name):
     """A rendered hunk header names a file the reader can open.
 
-    A name carrying path structure, or an unbounded one, would name a file
-    that is not the top-level blob the scanner actually read.
+    Traversal, absolute paths and unbounded names would name a file the
+    scanner did not read.  Nested relative paths are supported and are
+    covered separately.
     """
     from trustsight.differ import _is_safe_companion_name
 
     assert _is_safe_companion_name(name) is False
 
 
-@pytest.mark.parametrize("name", ["helper.sh", "patch-1.diff", "a.tar.gz", "x"])
+@pytest.mark.parametrize("name", [
+    "helper.sh", "patch-1.diff", "a.tar.gz", "x", "scripts/helper.sh",
+])
 def test_an_ordinary_companion_name_is_accepted(name):
     from trustsight.differ import _is_safe_companion_name
 

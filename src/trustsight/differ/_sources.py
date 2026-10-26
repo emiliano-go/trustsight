@@ -10,6 +10,7 @@ from ._bounds import MAX_URLS_PER_SIDE, MAX_URL_TOKEN_BYTES
 from ._checksums import detect_checksum_changes, detect_checksum_removed
 from ._common import (
     _SOURCE_ARRAY_START_RE, _clean_url, _is_metadata_path, _post_diff_lines,
+    _without_comments,
 )
 
 __all__ = ['_ARRAY_TOKEN_RE', '_CMD_SUBST_RE', '_DKMS_RE', '_GIT_PKG_RE', '_SIG_SRC_RE', '_SKIP_JUSTIFICATION_CHECKS', '_SOURCE_CMD_SUBST_RE', '_SOURCE_OPEN_RE', '_URL_TOKEN_RE', '_VALIDPGPKEYS_RE', '_VCS_SOURCE_RE', 'extract_source_array_urls', 'extract_urls_from_diff', 'is_skip_justified', 'local_source_names', 'resolved_source_urls', 'source_array_has_command_substitution', 'urls_from_pkgbuild_text']
@@ -55,10 +56,17 @@ def _recipe_skip_justification(recipe_text: str) -> str:
         recipe = parse_recipe(recipe_text)
     except Exception:  # noqa: BLE001 - a refusal justifies nothing
         return ""
-    sources = recipe.arrays.get("source", ())
+    sources = [
+        entry
+        for name, values in recipe.arrays.items()
+        if name == "source" or name.startswith("source_")
+        for entry in values
+    ]
     if any(_VCS_ENTRY_RE.search(str(s)) or str(s).rstrip("'\"").endswith(".git")
            for s in sources):
         return "vcs source"
+    if any(_SIG_SRC_RE.search(str(s).rstrip("'\"")) for s in sources):
+        return "signature file"
     if "validpgpkeys" in recipe.arrays or "validpgpkeys" in recipe.scalars:
         return "validpgpkeys present"
     keys = list(recipe.arrays) + list(recipe.scalars)
@@ -82,7 +90,7 @@ def is_skip_justified(diff_text: str, current_text: str | None = None) -> str:
     the ``sha256sums=('SKIP')`` line, so reading the diff alone reports an
     unjustified SKIP on every such update.
     """
-    post = "\n".join(_post_diff_lines(diff_text))
+    post = _without_comments("\n".join(_post_diff_lines(diff_text)))
     if _SIG_SRC_RE.search(post):
         return "signature file"
     for reason, check in _SKIP_JUSTIFICATION_CHECKS:
@@ -175,7 +183,10 @@ def _is_documentation_source(token: str) -> bool:
 #: from (a project homepage, a bug tracker, a vendor CDN named in the URL).
 _URL_DECL_RE = re.compile(r"^\s*(?:url|[A-Za-z0-9_]*_url)\s*=")
 
-def extract_urls_from_diff(diff_text: str) -> SourceChanges:
+def extract_urls_from_diff(
+    diff_text: str, current_text: str | None = None,
+    old_text: str | None = None,
+) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
     removed_urls: set[str] = set()
@@ -191,8 +202,14 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     # (``source=($url/...$pkgver...)``).  The literal token names no host, so
     # resolving each side against its own assignments is what lets the
     # buckets, novelty and pinning see the URL that will actually be fetched.
+    from ..expansion import text_variable_table
+
     old_table = variable_table(lines, frozenset({"-", " "}))
     new_table = variable_table(lines, frozenset({"+", " "}))
+    if old_text:
+        old_table = {**text_variable_table(old_text), **old_table}
+    if current_text:
+        new_table = {**text_variable_table(current_text), **new_table}
     from ..buckets import url_host_is_non_routable, url_line_is_inert
 
     # A heredoc body is data, not a command: a URL printed in a message or
@@ -256,7 +273,7 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             ):
                 declared_urls.add(cleaned)
 
-    checksum_behavior = detect_checksum_changes(diff_text)
+    checksum_behavior = detect_checksum_changes(diff_text, current_text)
     # A declaration deleted with no replacement is also a checksum change,
     # and the strongest one: the end state verifies nothing.  It used to
     # live only in `detect_checksum_removed`, a second notion the summary

@@ -3,8 +3,9 @@
 import re
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
+from ..line_lex import strip_comment_stateful
 
-__all__ = ['_SOURCE_ARRAY_START_RE', '_SOURCE_ARRAY_START_RE_TEXT', '_clean_url', '_is_metadata_path', '_post_diff_lines', '_pre_diff_lines']
+__all__ = ['_SOURCE_ARRAY_START_RE', '_SOURCE_ARRAY_START_RE_TEXT', '_clean_url', '_is_metadata_path', '_post_diff_lines', '_pre_diff_lines', '_without_comments']
 
 def _is_metadata_path(path: str) -> bool:
     """Whether a delta path is one the analysis reads."""
@@ -17,7 +18,7 @@ def _clean_url(token: str) -> str:
     # the closing `>` in the token, and a source URL with a `>` on the end
     # is a URL no bucket or novelty lookup will ever recognise.  The
     # closing bracket is punctuation, not part of the address.
-    token = token.rstrip(")<>")
+    token = token.rstrip(")<>]")
     token = re.sub(r"[\)]+", ")", token)
     # Trailing braces from a nested shell default (`${A:-${B:-https://x}}`)
     # are shell syntax, but the `}` closing a `${var}` inside the URL is
@@ -62,3 +63,19 @@ def _pre_diff_lines(diff_text: str) -> list[str]:
     parse, as its mirror is.
     """
     return parse_diff_lines(split_lines(diff_text)).pre_lines()
+
+
+def _without_comments(text: str) -> str:
+    """*text* with shell comments removed, quote state carried per line.
+
+    Verification and SKIP-justification predicates read prose as evidence
+    when they scan raw post-diff text: a comment saying ``see x.sig`` made a
+    SKIP look signature-backed, and ``# sha256sums=…`` looked like a declared
+    checksum.  This is the same comment boundary the tokenizer uses.
+    """
+    out: list[str] = []
+    quote = ""
+    for line in text.split("\n"):
+        code, quote = strip_comment_stateful(line, quote)
+        out.append(code)
+    return "\n".join(out)

@@ -102,7 +102,7 @@ def scan_diff(
     long_lines = oversized_lines(diff_text.split("\n"))
     diff_text = bound_tokenizer_lines(diff_text)
 
-    source_changes = extract_urls_from_diff(diff_text)
+    source_changes = extract_urls_from_diff(diff_text, current_text=current_text)
     declared = set(source_changes.declared_urls)
     source_urls = [u for u in source_changes.added_urls if u not in declared]
     url_acks = match_url_acks(package_name, source_urls) if package_name else {}

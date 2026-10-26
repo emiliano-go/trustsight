@@ -15,9 +15,11 @@ _CHECKSUM_VAR_NAMES = (
 )
 
 _CHECKSUM_VARS = "|".join(_CHECKSUM_VAR_NAMES)
+#: A checksum array name, optionally arch-scoped (`sha256sums_x86_64`).
+_CHECKSUM_ARRAY_NAMES = "(?:" + _CHECKSUM_VARS + r")(?:_[A-Za-z0-9_]+)?"
 
 _CHK_DECL_RE = re.compile(
-    r"^\s*(?:" + _CHECKSUM_VARS + r")\s*=\s*", re.IGNORECASE,
+    r"^\s*(?:" + _CHECKSUM_ARRAY_NAMES + r")\s*\+?=\s*", re.IGNORECASE,
 )
 
 class _ChecksumArray(NamedTuple):
@@ -187,7 +189,9 @@ _CHK_HASH_CHAR_RE = re.compile(r"[0-9A-Za-z+/=]")
 
 _CHK_SKIP_WORD_RE = re.compile(r"[\'\"]?(?:SKIP|NONE)[\'\"]?")
 
-def _resolve_checksum_text(diff_text: str, contents: str) -> str:
+def _resolve_checksum_text(
+    diff_text: str, contents: str, current_text: str | None = None,
+) -> str:
     """*contents* with the diff's own variables substituted.
 
     Checksum rules read the array as text, so `_cs=SKIP` two lines above
@@ -198,6 +202,7 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
     """
     if "$" not in contents:
         return contents
+    from ..expansion import text_variable_table
     from ..tokenizer import TokenizerUnavailable, variable_table
 
     readable = [
@@ -205,8 +210,12 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
         for line in parse_diff_lines(split_lines(diff_text)).lines
         if line.side == "add" and not line.raw.startswith("+++")
     ]
+    if current_text:
+        table = text_variable_table(current_text)
+    else:
+        table = {}
     try:
-        table, _arrays = variable_table(readable)
+        diff_table, _arrays = variable_table(readable)
     except TokenizerUnavailable:
         # A missing tokenizer is a refusal, not "the checksum did not
         # change": the package is not vetted and the caller fails closed.
@@ -218,6 +227,7 @@ def _resolve_checksum_text(diff_text: str, contents: str) -> str:
         from ..coverage import note_stage_failure
         note_stage_failure("checksum-resolution")
         return contents
+    table.update(diff_table)
     out = contents
     for name, value in table.items():
         if not isinstance(value, str):
@@ -247,7 +257,7 @@ def checksum_array_parity(diff_text: str) -> tuple[int, int, str] | None:
         return None
     for var in _CHECKSUM_VAR_NAMES:
         items = _added_array_items(
-            diff_text, re.compile(r"^\s*" + var + r"\s*=\s*\("))
+            diff_text, re.compile(r"^\s*" + var + r"(?:_[A-Za-z0-9_]+)?\s*\+?=\s*\("))
         if items is None:
             continue
         if len(items) < len(sources):
@@ -270,7 +280,7 @@ def checksum_array_parity_in_text(recipe_text: str) -> tuple[int, int, str] | No
         return None
     for var in _CHECKSUM_VAR_NAMES:
         items = _text_array_items(
-            recipe_text, re.compile(r"^\s*" + var + r"\s*=\s*\(", re.MULTILINE))
+            recipe_text, re.compile(r"^\s*" + var + r"(?:_[A-Za-z0-9_]+)?\s*\+?=\s*\(", re.MULTILINE))
         if items is None:
             continue
         if len(items) < len(sources):
@@ -286,9 +296,13 @@ def _quoted_items(contents: str) -> list[str] | None:
     it as two. Every renamed source in the corpus then looked like an
     array one element longer than its checksum list.
     """
-    if "(" not in contents or ")" not in contents:
+    open_idx = contents.find("(")
+    if open_idx < 0:
         return None
-    inner = contents[contents.index("(") + 1:contents.rindex(")")]
+    close_idx = _unquoted_close(contents, open_idx + 1)
+    if close_idx is None:
+        return None
+    inner = contents[open_idx + 1:close_idx]
     items: list[str] = []
     current: list[str] = []
     quote = ""
@@ -380,7 +394,7 @@ def _added_array_items(diff_text: str, start_re) -> list[str] | None:
     collecting: str | None = None
     parts: list[str] = []
     for line in parse_diff_lines(split_lines(diff_text)).lines:
-        if line.raw.startswith(("+++", "---")):
+        if not line.is_content:
             continue
         added = line.side == "add"
         body = line.content if line.is_content else line.raw
@@ -449,7 +463,9 @@ def source_array_grew_in_diff(diff_text: str) -> bool:
             inside = False
     return added > removed
 
-def detect_checksum_changes(diff_text: str) -> str:
+def detect_checksum_changes(
+    diff_text: str, current_text: str | None = None,
+) -> str:
     """Detect checksum-related changes in a diff.
 
     Reads *every* checksum array, and correctly handles the multiline form:
@@ -481,10 +497,11 @@ def detect_checksum_changes(diff_text: str) -> str:
             # not a checksum change.
             continue
         seen = True
-        contents = _resolve_checksum_text(diff_text, array.added_text)
+        contents = _resolve_checksum_text(
+            diff_text, " ".join(array.added_items), current_text)
         if _CHK_SKIP_WORD_RE.search(contents):
             return "changed_from_sha256_to_skip"
-        if "(" in array.added_text and not _CHK_HASH_CHAR_RE.search(contents):
+        if array.added_any and not array.added_items:
             emptied = True
         # An entry removed from an array that survives is the integrity
         # event.  A hash *replaced* by another keeps the count, so only a
@@ -503,7 +520,7 @@ def detect_checksum_changes(diff_text: str) -> str:
     return "checksum_added_or_changed" if seen else "unchanged"
 
 _CHECKSUM_LINE_RE = re.compile(
-    r"(?:" + _CHECKSUM_VARS + r")\s*=",
+    r"(?:" + _CHECKSUM_ARRAY_NAMES + r")\s*\+?=",
     re.IGNORECASE,
 )
 
@@ -520,12 +537,14 @@ def detect_checksum_removed(diff_text: str) -> bool:
     # supplies them unchanged: a crafted `--- a/sha256sums=x` path reads
     # as a removal here, exactly as the text walk read it.
     for line in parse_diff_lines(split_lines(diff_text)).lines:
-        if line.raw.startswith("-") and _CHECKSUM_LINE_RE.search(line.raw):
+        if not line.is_content:
+            continue
+        if line.side == "remove" and _CHECKSUM_LINE_RE.search(line.content):
             removed = True
-        elif line.raw.startswith("+") and _CHECKSUM_LINE_RE.search(line.raw):
+        elif line.side == "add" and _CHECKSUM_LINE_RE.search(line.content):
             added = True
     return removed and not added
 
 _CHECKSUM_ARRAY_RE = re.compile(
-    r"(?:" + _CHECKSUM_VARS + r")\s*=\s*(?:\(|['\"]?[A-Fa-f0-9])",
+    r"(?:" + _CHECKSUM_ARRAY_NAMES + r")\s*\+?=\s*(?:\(|['\"]?[A-Fa-f0-9])",
 )

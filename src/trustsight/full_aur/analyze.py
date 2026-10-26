@@ -190,7 +190,7 @@ def _install_hunk_findings(
     diff = _install_diff_text(install_text or "", install_name or f"{pkg_name}.install")
     if not diff:
         return []
-    source_changes = extract_urls_from_diff(diff)
+    source_changes = extract_urls_from_diff(diff, current_text=new_pkgbuild)
     resolved, _unresolved, resolved_indices = tokenize_and_resolve_indexed(diff)
     raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
     findings = apply_rules(
@@ -716,7 +716,7 @@ def analyze_package_text(
     long_lines = oversized_lines(diff_text.split("\n"))
     diff_text = bound_tokenizer_lines(diff_text)
 
-    source_changes = extract_urls_from_diff(diff_text)
+    source_changes = extract_urls_from_diff(diff_text, current_text=new_pkgbuild, old_text=old_pkgbuild)
     declared = set(source_changes.declared_urls)
     source_urls = [u for u in source_changes.added_urls if u not in declared]
     url_acks = match_url_acks(pkg_name, source_urls)

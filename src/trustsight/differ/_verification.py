@@ -3,7 +3,7 @@
 import re
 from ..coverage import unpinned_source_refs
 from ._checksums import _CHECKSUM_ARRAY_RE
-from ._common import _post_diff_lines, _pre_diff_lines
+from ._common import _post_diff_lines, _pre_diff_lines, _without_comments
 
 __all__ = ['_GPG_VERIFY_RE', '_VALIDPGPKEYS_WITH_CONTENT_RE', '_has_checksum_in_post_diff', 'detect_gpg_verification_removed', 'detect_verification_evidence']
 
@@ -18,7 +18,7 @@ _VALIDPGPKEYS_WITH_CONTENT_RE = re.compile(
 
 def _has_checksum_in_post_diff(diff_text: str) -> bool:
     """Check whether the post-diff end-state declares checksums."""
-    post = "\n".join(_post_diff_lines(diff_text))
+    post = _without_comments("\n".join(_post_diff_lines(diff_text)))
     return bool(_CHECKSUM_ARRAY_RE.search(post))
 
 def detect_gpg_verification_removed(diff_text: str) -> bool:
@@ -30,10 +30,10 @@ def detect_gpg_verification_removed(diff_text: str) -> bool:
     declaration, so the old check missed the removal entirely and H024/H078
     stayed silent while verification was gone.
     """
-    pre = "\n".join(_pre_diff_lines(diff_text))
+    pre = _without_comments("\n".join(_pre_diff_lines(diff_text)))
     if not _VALIDPGPKEYS_WITH_CONTENT_RE.search(pre):
         return False
-    post = "\n".join(_post_diff_lines(diff_text))
+    post = _without_comments("\n".join(_post_diff_lines(diff_text)))
     return not bool(_VALIDPGPKEYS_WITH_CONTENT_RE.search(post))
 
 def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") -> list[str]:
@@ -50,12 +50,13 @@ def detect_verification_evidence(diff_text: str, checksum_behavior: str = "") ->
     if checksum_behavior not in (
         "changed_from_sha256_to_skip",
         "checksum_array_emptied",
+        "checksum_entry_removed",
         "checksum_array_removed",
     ):
         if _has_checksum_in_post_diff(diff_text):
             evidence.append("checksum_present")
 
-    post = "\n".join(_post_diff_lines(diff_text))
+    post = _without_comments("\n".join(_post_diff_lines(diff_text)))
     if _VALIDPGPKEYS_WITH_CONTENT_RE.search(post):
         evidence.append("validpgpkeys_declared")
     if _GPG_VERIFY_RE.search(post):

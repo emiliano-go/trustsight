@@ -20,6 +20,10 @@ supplies them), so the join logic is testable without a live corpus:
   prior maintainer history adopts many dormant packages at once.  It reads
   the maintainer-event timeline, so it is a DB-backed rule invoked from the
   sweep beside G006, not from :func:`correlate`.
+* **G011 Maintainer Package Creation Burst** (MEDIUM, HIGH with a
+  placeholder majority): a first-seen account creates many unrelated
+  brand-new packages in the recorded window.  It reads the cycle-event
+  window, so it is a DB-backed rule invoked from the sweep beside G008.
 * **G009 Watchlisted Subject** (INFO, weight 0): a package named directly on
   the operator's hand-curated watchlist, or one whose maintainer is.  It is the
   sanctioned home for profile-page facts the RPC metadata does not carry, and
@@ -41,12 +45,14 @@ rule reference.
 
 from __future__ import annotations
 
+import math
 import time
 from collections import defaultdict
 
 __all__ = ["correlate", "shared_gained_host", "shared_added_literal",
            "coordinated_adoption", "shared_upstream_dependency",
-           "first_seen_adoption_burst", "watchlisted_maintainer",
+           "first_seen_adoption_burst", "package_creation_burst",
+           "watchlisted_maintainer",
            "shared_payload_signal", "shared_fetch_target",
            "shared_adoption_window"]
 
@@ -787,6 +793,75 @@ def shared_adoption_window(records, min_packages: int = 3,
                    "maintainer_count": len(accounts),
                    "dormant_count": dormant_count},
     }]
+
+
+def package_creation_burst(records, config=None) -> list[dict]:
+    """G011: a first-seen maintainer creates many packages in one window.
+
+    A brand-new package is not adoption: nobody loses a package, and a
+    maintainer launching a family is ordinary.  The signal is the collective
+    shape: a first-seen account creating several unrelated packages quickly.
+    A majority of H104 placeholders escalates it, because reserving names in
+    bulk is the name-squatting shape H104 exists to surface; a bare burst
+    stays MEDIUM.  Established accounts are ignored, which is what keeps a
+    long-standing maintainer's multi-package launch out.
+
+    The records come from :func:`trustsight.db.brand_new_packages_since`:
+    the window spans cycles, not just the current one.  Alert-only, like the
+    other adoption/window joins: the campaign state is the escalation, not a
+    member score.
+    """
+    thresholds = _thresholds(config)
+    g011 = _section(thresholds.get("g011"))
+    min_packages = max(1, _safe_int(g011.get("min_packages", 5), 5))
+    try:
+        placeholder_share = float(g011.get("placeholder_share", 0.5))
+    except (TypeError, ValueError, OverflowError):
+        placeholder_share = 0.5
+    if not math.isfinite(placeholder_share):
+        placeholder_share = 0.5
+    placeholder_share = min(1.0, max(0.0, placeholder_share))
+    escalation = bool(g011.get("placeholder_escalation", True))
+
+    by_maintainer: dict[str, dict[str, bool]] = defaultdict(dict)
+    for record in records or ():
+        if not isinstance(record, dict) or not record.get("brand_new"):
+            continue
+        maintainer = _maintainer_key(record.get("maintainer"))
+        package = str(record.get("package", "") or "")
+        if not maintainer or not package:
+            continue
+        if record.get("maintainer_established"):
+            continue
+        by_maintainer[maintainer][package] = bool(record.get("placeholder"))
+
+    out: list[dict] = []
+    for maintainer, packages in sorted(by_maintainer.items()):
+        members = sorted(packages)
+        if len(members) < min_packages:
+            continue
+        if _one_related_cluster(members):
+            continue
+        placeholder_count = sum(packages.values())
+        share = placeholder_count / len(members)
+        severity = ("HIGH" if escalation and share >= placeholder_share
+                    else "MEDIUM")
+        out.append({
+            "rule_id": "G011",
+            "name": "Maintainer Package Creation Burst",
+            "severity": severity,
+            "category": "correlation",
+            "match": (f"first-seen maintainer {maintainer} created "
+                      f"{len(members)} packages in the window "
+                      f"({placeholder_count} placeholder)"),
+            "params": {
+                "maintainer": maintainer,
+                "maintainers": [maintainer],
+                "members": members,
+                "placeholder_count": placeholder_count,
+            },
+        })
+    return out
 
 
 def correlate(records, config=None) -> list[dict]:

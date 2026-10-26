@@ -5,7 +5,7 @@
 TrustSight uses rules to detect structural signals in PKGBUILD diffs. The
 inventory is the R-series regex rules, the H-series heuristics, sabotage rules S001-S008, crossfire
 rules X001-X034, integrity-change rules C001-C032, dependency rules
-D001-D005, temporal rules T001-T003 and T006-T007, correlation rules G001-G010 and G012-G014, entropy
+D001-D005, temporal rules T001-T003 and T006-T007, correlation rules G001-G011 and G012-G014, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
 rules U001-U010, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
 unverifiable rules W001-W012.
@@ -60,7 +60,7 @@ generated from it by `scripts/build_rules_index.py`.
 | [Unverifiable](unverifiable.md) | `unverifiable` | 12 | Not a claim about the recipe but about the analysis: something the package will run that this run could not read. Weight 0 always, and always shown. |
 | [Meta and Confluence](meta.md) | `meta` | 6 | A claim about other findings: a declared practice contradicted by structure, or a composition only visible from the whole profile. |
 | [Entropy](entropy.md) | `entropy` | 3 | The added content is statistically abnormal - a distribution outlier, not a known pattern. Suspicion, never a verdict. |
-| [Correlation](correlation.md) | `correlation` | 13 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
+| [Correlation](correlation.md) | `correlation` | 14 | The pattern is across packages, not inside one: a host, literal or adopter shared by several packages in a window. |
 | [Artifact](artifact.md) | `artifact` | 8 | The built package does not match the recipe: the L9 artifact layer, off by default, never blended into the static score. |
 | [Indicators](indicator.md) | `indicator` | 1 | A declared surface matches an entry in signed external data: the IOC list, or a federated publisher's indicator set.  Outside the heuristic score and alerted at maximum priority. |
 | [Upstream Manifests](upstream-manifests.md) | `upstream-manifests` | 8 | A committed dependency manifest changed: a dependency moved, a new remote source entered the recipe's reach, or the resolver is being redirected.  Read from the repository, never fetched. |
@@ -156,6 +156,7 @@ is deliberately non-contiguous; see
 | [G008](correlation.md#g008) | First-Seen Account Adoption Burst | Correlation | HIGH | [Correlation](correlation.md) |
 | [G009](correlation.md#g009) | Watchlisted Subject | Correlation | INFO | [Correlation](correlation.md) |
 | [G010](correlation.md#g010) | Shared First-Seen Host | Correlation | INFO | [Correlation](correlation.md) |
+| [G011](correlation.md#g011) | Maintainer Package Creation Burst | Correlation | MEDIUM | [Correlation](correlation.md) |
 | [G012](correlation.md#g012) | Shared Payload Signal | Correlation | HIGH | [Correlation](correlation.md) |
 | [G013](correlation.md#g013) | Shared Fetch Target | Correlation | HIGH | [Correlation](correlation.md) |
 | [G014](correlation.md#g014) | Shared Adoption Window | Correlation | HIGH | [Correlation](correlation.md) |

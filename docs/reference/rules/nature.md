@@ -238,13 +238,13 @@ Rule definitions in `rules.toml` control matching behavior (pattern, target, sco
 
 ## G-series: **Correlation** Cross-Package Joins
 
-**Count:** 13 rules (G001-G010 and G012-G014; G006/G007/G009/G010 weight 0)
+**Count:** 14 rules (G001-G011 and G012-G014; G006/G007/G009/G010/G011 weight 0)
 
-**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. G008 (first-seen account adoption burst) is the collective dormant-target join; G009 (watchlisted maintainer) names a package whose operator-curated watchlist entry matches, and G010 (shared first-seen host) is the G001 join restricted to a host the corpus has not met before, both weight 0. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
+**Mechanism:** Joins across packages over the corpus database, windowed and clustered. G's input is the **set** of recent analyses: D walks one package's dependency graph, T reads one package's history, and G asks what several packages share. It fires one aggregate finding with a member list, so a campaign is one alert instead of N. G001 to G004 are the joins; G005 is the impersonation-campaign trigger; G006 (neighborhood elevation under an active campaign) and G007 (corroboration of a run inside an active campaign) are weight 0, because a set membership must not inflate any one member's score. G008 (first-seen account adoption burst) is the collective dormant-target join; G011 (maintainer package creation burst) pools first-seen accounts creating unrelated brand-new packages, with an H104 placeholder-majority escalation; G009 (watchlisted maintainer) names a package whose operator-curated watchlist entry matches, and G010 (shared first-seen host) is the G001 join restricted to a host the corpus has not met before, both weight 0. The full immune-import reading is on [Correlation: Rule Nature](../nature/correlation.md).
 
 **What you can tune:**
 
-- Per-rule thresholds: `g_host.min_packages`, `g_blob.min_length`/`min_packages`, `g_adopt.min_members`, and the cycle window
+- Per-rule thresholds: `g_host.min_packages`, `g_blob.min_length`/`min_packages`, `g_adopt.min_members`, `g011.min_packages`/`window_days`/`placeholder_share`, and the cycle window
 
 **What you cannot tune:**
 
@@ -392,7 +392,7 @@ The taxonomy is a reading aid, not a partition, and a divergence found later is 
 | X | **Crossfire** | Evasion detection | Severity only | Severity-based | When tokenizer reports evasion |
 | E | **Entropy** | Distribution of added content | Thresholds (ship empty) | Severity-based | When a configured distribution threshold is crossed |
 | T | **Temporal** | Ecosystem history and ledgers | Severity, thresholds | Severity-based | When history makes the change anomalous |
-| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based (G006/G007/G009/G010 weight 0) | At cycle end; G007 also on a run inside an active campaign |
+| G | **Correlation** | Cross-package joins over the cycle | N/M/window per rule | Severity-based (G006/G007/G009/G010/G011 weight 0) | At cycle end; G007 also on a run inside an active campaign |
 | I | **Indicator** | Membership in signed external data | Curator keys, cadence | Outside the score | On an indicator match |
 | M | **Meta** | Other rules' findings | Layer count, per-layer ceiling | Severity-based; M002/M003 weight 0 | After the ownership resolver |
 | A | **Artifact** | Built package manifest | Enable flag only | Outside the score (L9) | Only in the optional build lane |

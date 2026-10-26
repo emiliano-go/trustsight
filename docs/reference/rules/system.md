@@ -1350,6 +1350,10 @@ See [G009: Watchlisted Subject](correlation.md#g009).
 
 See [G010: Shared First-Seen Host](correlation.md#g010).
 
+### G011 {#g011}
+
+See [G011: Maintainer Package Creation Burst](correlation.md#g011).
+
 ### G012 {#g012}
 
 See [G012: Shared Payload Signal](correlation.md#g012).

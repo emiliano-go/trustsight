@@ -521,6 +521,15 @@
     "capability": "correlation",
     "target": "programmatic (cycle records)"
   },
+  "g011": {
+    "uid": "TS-0280",
+    "name": "Maintainer Package Creation Burst",
+    "canonical": true,
+    "severity_text": "MEDIUM (weight 0); HIGH when the placeholder share is met",
+    "severity": "MEDIUM",
+    "capability": "correlation",
+    "target": "programmatic (cycle events + latest H021/H104)"
+  },
   "g012": {
     "uid": "TS-0275",
     "name": "Shared Payload Signal",

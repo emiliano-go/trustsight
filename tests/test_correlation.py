@@ -3,6 +3,7 @@
 from trustsight.analysis.correlation import (
     coordinated_adoption,
     correlate,
+    package_creation_burst,
     shared_added_literal,
     shared_gained_host,
     watchlisted_maintainer,
@@ -647,3 +648,77 @@ def test_shared_adoption_window_counts_a_package_once():
          "last_modified": old},
     ]
     assert shared_adoption_window(records) == []
+
+
+def _g011_records(*, maintainer="new@example", packages=5, placeholders=0,
+                  established=False, brand_new=True):
+    names = ("alpha", "bravo", "charlie", "delta", "echo", "foxtrot")
+    return [
+        {"package": names[i], "maintainer": maintainer,
+         "brand_new": brand_new, "placeholder": i < placeholders,
+         "maintainer_established": established}
+        for i in range(packages)
+    ]
+
+
+def test_package_creation_burst_escalates_on_placeholder_majority():
+    found = package_creation_burst(_g011_records(placeholders=3))
+    assert [f["rule_id"] for f in found] == ["G011"]
+    assert found[0]["severity"] == "HIGH"
+    assert found[0]["params"]["placeholder_count"] == 3
+    assert found[0]["params"]["members"] == [
+        "alpha", "bravo", "charlie", "delta", "echo"]
+
+
+def test_package_creation_burst_stays_medium_for_a_bare_burst():
+    found = package_creation_burst(_g011_records(placeholders=2))
+    assert found[0]["severity"] == "MEDIUM"
+
+
+def test_package_creation_burst_needs_the_package_floor():
+    assert package_creation_burst(_g011_records(packages=4)) == []
+
+
+def test_package_creation_burst_ignores_established_accounts():
+    assert package_creation_burst(
+        _g011_records(packages=5, established=True)) == []
+
+
+def test_package_creation_burst_ignores_a_variant_family():
+    records = [
+        {"package": name, "maintainer": "new@example", "brand_new": True,
+         "placeholder": True, "maintainer_established": False}
+        for name in ("appattic", "appattic-bin", "appattic-qt",
+                     "appattic-docs", "appattic-git")
+    ]
+    assert package_creation_burst(records) == []
+
+
+def test_package_creation_burst_requires_brand_new():
+    assert package_creation_burst(_g011_records(brand_new=False)) == []
+
+
+def test_package_creation_burst_honours_the_placeholder_share():
+    config = {"thresholds": {"g011": {"placeholder_share": 0.8}}}
+    assert package_creation_burst(
+        _g011_records(placeholders=3), config)[0]["severity"] == "MEDIUM"
+    assert package_creation_burst(
+        _g011_records(placeholders=4), config)[0]["severity"] == "HIGH"
+
+
+def test_package_creation_burst_can_disable_escalation():
+    config = {"thresholds": {"g011": {"placeholder_escalation": False}}}
+    assert package_creation_burst(
+        _g011_records(placeholders=5), config)[0]["severity"] == "MEDIUM"
+
+
+def test_package_creation_burst_is_silent_on_the_benign_triage_shape():
+    import json
+    from pathlib import Path
+
+    fixture = json.loads(
+        (Path(__file__).parent / "fixtures" / "g011" / "benign-bursts.json")
+        .read_text()
+    )
+    assert len(fixture["records"]) == 65
+    assert package_creation_burst(fixture["records"]) == []

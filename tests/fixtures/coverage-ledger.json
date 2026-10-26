@@ -1723,6 +1723,18 @@
       "strata": [],
       "uid": "TS-0266"
     },
+    "G011": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "G011",
+      "pseudo": false,
+      "reason": "needs observation history or warm state; measured by the history/warm replay when available",
+      "series": "G",
+      "sources": {},
+      "state": "cold_only",
+      "strata": [],
+      "uid": "TS-0280"
+    },
     "G012": {
       "expected_strata": [],
       "fires": 0,

@@ -7,7 +7,7 @@ Mechanics (target, severity, weight, condition) live on the
 half: where the G rules come from and how to read one.
 
 <!-- generated: nature-rules -->
-**Rules in this nature:** [G001](../rules/correlation.md#g001), [G002](../rules/correlation.md#g002), [G003](../rules/correlation.md#g003), [G004](../rules/correlation.md#g004), [G005](../rules/correlation.md#g005), [G006](../rules/correlation.md#g006), [G007](../rules/correlation.md#g007), [G008](../rules/correlation.md#g008), [G009](../rules/correlation.md#g009), [G010](../rules/correlation.md#g010), [G012](../rules/correlation.md#g012), [G013](../rules/correlation.md#g013), [G014](../rules/correlation.md#g014) (13 rules).
+**Rules in this nature:** [G001](../rules/correlation.md#g001), [G002](../rules/correlation.md#g002), [G003](../rules/correlation.md#g003), [G004](../rules/correlation.md#g004), [G005](../rules/correlation.md#g005), [G006](../rules/correlation.md#g006), [G007](../rules/correlation.md#g007), [G008](../rules/correlation.md#g008), [G009](../rules/correlation.md#g009), [G010](../rules/correlation.md#g010), [G011](../rules/correlation.md#g011), [G012](../rules/correlation.md#g012), [G013](../rules/correlation.md#g013), [G014](../rules/correlation.md#g014) (14 rules).
 <!-- /generated: nature-rules -->
 
 ## Where it comes from
@@ -46,8 +46,8 @@ the primed state end.
   (first-seen adoption burst) are the sharp, scoring signals; the
   host/literal/dependency/adopter joins score the cluster, and the
   neighbourhood, corroboration, watchlist, first-seen-host and multi-account
-  payload joins (G006, G007, G009, G010, G012-G014) are weight 0 on the
-  member. G012-G014 still prime campaign state; the escalation is the
+  payload joins (G006, G007, G009, G010, G011-G014) are weight 0 on the
+  member. G011-G014 still prime campaign state; the escalation is the
   campaign alert, not an inflated member score.
 - The evidence names the members and the shared **class** (a host, a literal
   length, a maintainer), never the shared content's meaning: a literal is
@@ -72,6 +72,7 @@ the primed state end.
 | G008 First-Seen Account Adoption Burst | clonal recognition | a first-seen account adopted many dormant packages at once |
 | G009 Watchlisted Subject | operator memory | a package, or its maintainer, is on the operator's curated watchlist; weight 0 |
 | G010 Shared First-Seen Host | clonal recognition (novelty join) | enough unrelated packages gained the same host the corpus had not met before; weight 0 |
+| G011 Maintainer Package Creation Burst | clonal recognition (creation window) | a first-seen account created many unrelated brand-new packages; an H104 placeholder majority escalates it |
 | G012 Shared Payload Signal | clonal recognition (shared rule) | several maintainers' unrelated packages fired the same specific payload rule |
 | G013 Shared Fetch Target | clonal recognition (shared endpoint) | several maintainers' unrelated packages fetched the same canonical URL |
 | G014 Shared Adoption Window | clonal recognition (multi-account) | several maintainers adopted unrelated dormant packages in one window |

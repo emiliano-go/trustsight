@@ -30,9 +30,10 @@ agrees that something is a campaign. Today that is the correlation family:
 
 - **G005 - Impersonation Campaign.** One account publishing many name-clones
   of popular packages (`yyay` next to `yay`). This is the strongest trigger.
-- **G001/G002/G003/G004/G008.** Many unrelated packages sharing a gained host,
-  an added literal, an upstream dependency, or an adopter, or a first-seen
-  account sweeping dormant packages.
+- **G001/G002/G003/G004/G008/G011.** Many unrelated packages sharing a gained
+  host, an added literal, an upstream dependency, or an adopter, a first-seen
+  account sweeping dormant packages, or a first-seen account creating many
+  brand-new packages.
 
 Only those corroborating rules prime campaign state. The report-only members
 of the family never do: **G006/G007** are context, **G009** is the operator's
@@ -40,9 +41,11 @@ watchlist note, and **G010** is a first-seen-host census. A weight-0
 observation must not take one of the bounded campaign slots a real cluster may
 need.
 
-Each G rule reads this cycle's transitions. G001/G002/G003/G004 feeds are
+Each G rule reads a bounded transition window. G001/G002/G003/G004 feeds are
 cleared at cycle start, so a host, literal or adoption recorded in an earlier
-cycle cannot re-fire the join or keep a lapsed campaign primed. A G002 campaign
+cycle cannot re-fire the join or keep a lapsed campaign primed. G011 reads the
+recorded `cycle_events` window instead, because a creation burst can span
+several cycles. A G002 campaign
 is keyed by a digest of the shared literal (never its content); a G004 campaign
 by the dependency *and* its host.
 

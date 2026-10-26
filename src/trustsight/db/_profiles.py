@@ -7,7 +7,7 @@ from ._common import log
 from ._connection import get_connection
 from ._packages import _RESERVED_NAMES
 
-__all__ = ['alert_history', 'checkpoint_wal', 'forget_package', 'forget_prune', 'get_package_profile', 'introduction_rate_history', 'latest_cycle_time', 'maintainer_activity_history', 'record_alerts', 'record_cycle_events', 'save_package_profile']
+__all__ = ['alert_history', 'brand_new_packages_since', 'checkpoint_wal', 'forget_package', 'forget_prune', 'get_package_profile', 'introduction_rate_history', 'latest_cycle_time', 'maintainer_activity_history', 'record_alerts', 'record_cycle_events', 'save_package_profile']
 
 def get_package_profile(package_name: str) -> Optional[dict]:
     """Return the package profile for *package_name*, or None."""
@@ -67,6 +67,80 @@ def record_cycle_events(events: list[dict]) -> None:
             events,
         )
         conn.commit()
+
+def brand_new_packages_since(cycle_time: int) -> list[dict]:
+    """Packages added at or after *cycle_time*, with H021/H104 state.
+
+    G011 pools brand-new packages by maintainer across a window, not just
+    across one cycle: the observed placeholder burst spans several cycles,
+    and the current cycle's ``processed`` set cannot see the earlier members.
+    ``cycle_events`` supplies the window and the maintainer; the latest
+    analysis supplies the H021 (brand-new) and H104 (placeholder) facts.
+
+    A package with no recorded H021 is not brand-new to the AUR, even when
+    this watcher has only just seen it.  A placeholder flag comes from the
+    latest analysis, so a recipe that was later filled in does not stay
+    counted as a placeholder.
+
+    ``maintainer_established`` is true when the account has any cycle event
+    before the window or is already known to the seed.  That is the gate
+    that keeps a long-standing maintainer's legitimate multi-package launch
+    out of the finding.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """WITH latest AS (
+                   SELECT package_id, MAX(id) AS history_id
+                   FROM analysis_history
+                   GROUP BY package_id
+               ),
+               firsts AS (
+                   SELECT maintainer, MIN(cycle_time) AS first_cycle
+                   FROM cycle_events
+                   WHERE maintainer != ''
+                   GROUP BY maintainer
+               )
+               SELECT ce.package_name AS package,
+                      ce.maintainer AS maintainer,
+                      MIN(ce.cycle_time) AS cycle_time,
+                      f.first_cycle,
+                      MAX(CASE WHEN tr.rule_id = 'H021' THEN 1 ELSE 0 END)
+                          AS brand_new,
+                      MAX(CASE WHEN tr.rule_id = 'H104' THEN 1 ELSE 0 END)
+                          AS placeholder
+               FROM cycle_events ce
+               JOIN firsts f ON f.maintainer = ce.maintainer
+               JOIN packages p ON p.name = ce.package_name
+               JOIN latest l ON l.package_id = p.id
+               JOIN triggered_rules tr ON tr.history_id = l.history_id
+               WHERE ce.status = 'added'
+                 AND ce.cycle_time >= ?
+                 AND ce.maintainer != ''
+               GROUP BY ce.package_name, ce.maintainer, f.first_cycle""",
+            (int(cycle_time),),
+        ).fetchall()
+    if not rows:
+        return []
+
+    from ._maintainers import is_maintainer_globally_novel
+
+    seen: dict[str, bool] = {}
+    out: list[dict] = []
+    for row in rows:
+        record = dict(row)
+        maintainer = record["maintainer"]
+        if maintainer not in seen:
+            seen[maintainer] = not is_maintainer_globally_novel(maintainer)
+        first_cycle = record.pop("first_cycle", None)
+        record["brand_new"] = bool(record.get("brand_new"))
+        record["placeholder"] = bool(record.get("placeholder"))
+        record["maintainer_established"] = bool(
+            seen[maintainer]
+            or (first_cycle is not None and int(first_cycle) < int(cycle_time))
+        )
+        out.append(record)
+    return out
+
 
 def introduction_rate_history(cycles: int | None = None) -> list[dict]:
     """Per-cycle introduction counts, oldest first (Class D H073).

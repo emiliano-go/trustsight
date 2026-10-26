@@ -422,9 +422,15 @@ def _variable_table_with_spans(
     # tables so no reader sees a stale or shredded value (A6).
     ever_kept: set[str] = set()
     reportable: dict[str, int] = {}
+    shell_lines = _assignments_are_shell(additions)
     i = 0
     while i < len(additions):
         line = additions[i]
+        # A heredoc body is content: a Python `install = subprocess.run(` or
+        # a unit file's `KEY=value` is not an assignment the shell makes.
+        if not shell_lines[i]:
+            i += 1
+            continue
         # Arrays first: ``source=(... )`` may span multiple added lines.
         arr_match = _ARRAY_ASSIGNMENT_RE.match(line)
         if arr_match:

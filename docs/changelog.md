@@ -11,6 +11,35 @@
 ### Fixed
 
 - **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
+- **The corpus first-seen path now matches the review path.** A first
+  analysis still reads H091 checksum parity, the placeholder and name-shadow
+  checks, the M-series annotations, and the install scriptlet; previously it
+  skipped them because it was a parallel implementation. Dynamic and
+  epoch/pkgrel versions now come from the shared full-version reader, the
+  corpus records its recipe/dependency index on first sight, dependency
+  coverage uses the added-name gap, declared source names are passed to the
+  tree scan, and an unread `.install` is a tree gap rather than complete
+  coverage. The dependency walk also finishes before the parent's stage
+  tracking starts, so a child's failed stage cannot leak into the parent's
+  coverage. The synthetic install hunk rejects path names that could forge a
+  diff header.
+
+- **The 2026-10-26 watcher false-positive batch, with true-positive twins.**
+  X013 accepts a registry assignment that names only the public npm/PyPI
+  hosts while a private registry still fires. X024 no longer reads `PATH` as
+  the tail of a build-tool variable such as `ELECTRON_OVERRIDE_DIST_PATH`, and
+  a PATH prepend built from a local toolchain directory under `$HOME`/`$srcdir`
+  is quiet while an undefined variable still fires. X014 keeps `ENV`
+  case-sensitive, so Python's `env=` is not the shell startup variable.
+  H100 only accepts a path-like `install=` value, and interpreter heredocs are
+  data for shell rules (Python's `install =`, `env=` and prose no longer fire
+  H100/X014/X033). H042 treats a relative helper file with a directory
+  component as inside the build tree; H032 ignores creating `$HOME` itself;
+  R058 checks the destination rather than an absolute source copied with
+  `-t`; and C001 ignores JavaScript text from a `node -p` version probe.
+  Every fix ships with its true-positive twin in
+  `tests/regressions/test_fp_triage_2026_10_26.py`.
+
 - **Dependency arrays are no longer truncated at 60 lines.** The span limit is now a soft trigger: when the closing paren is still in the diff the array keeps its later additions, while an array whose closer is absent is still dropped at the file boundary. Post-state validation also folds the recipe's scalars, so `depends=("${_lib}-x")` is compared by its resolved value rather than skipping validation. A long closed array is the reproducer: a dependency added after line 60 was invisible to every D-rule.
 - **D005 owns absolute `provides`/`replaces` claims, and D003 covers transfer clients.** H064/D004 still report a claim added in the diff; D005 now reports the same claim when it was already in the recipe, with sonames and variants suppressed. D003's `[patterns] network_tools` list adds `axel`, `lftp`, `ftp`, `tftp`, `socat`, `netcat`/`ncat`/`nc`, `telnet`, `sshpass` and `openssh`; existing `patterns.toml` files are repaired in place only when they still carry the exact old list.
 

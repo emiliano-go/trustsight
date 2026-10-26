@@ -14,6 +14,7 @@ carrier rules H084/H085/H089/H093/H095 stay on their own surfaces.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Callable
 
@@ -121,6 +122,9 @@ def emit_pacman_hook(ctx: GraphContext, add: Callable) -> None:
                 return
 
 
+_HOME_ROOT_RE = re.compile(r"^(?:\$?\{?HOME\}?|~)/?$")
+
+
 def emit_home_rc(ctx: GraphContext, add: Callable) -> None:
     """H032: a write into a user's home or shell rc file."""
     context = ctx.line_context
@@ -132,6 +136,10 @@ def emit_home_rc(ctx: GraphContext, add: Callable) -> None:
         for t in _raw_targets(_strip_comment(line[1:])):
             t_clean = t.strip().strip("\"'")
             if _is_staged(t_clean):
+                continue
+            # `mkdir -p "$HOME"` creates the directory tools put caches in;
+            # it is not a file dropped into somebody's profile.
+            if _HOME_ROOT_RE.match(t_clean):
                 continue
             base = os.path.basename(t_clean)
             if _HOME_PREFIX_RE.search(t_clean) or _RC_BASENAME_RE.match(base):

@@ -13,17 +13,21 @@ from typing import Optional
 
 from ..analysis.base import _aggregate_pinning, _has_install_hook
 from ..analysis.buildfetch import has_unpinned_build_deps
-from ..analysis.composition import maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
+from ..analysis.composition import _meta_annotations, maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
 from ..analysis.crossfile import metadata_recipe_divergence
 from ..analysis.longitudinal import longitudinal_findings
 from ..analysis.ioc_match import ioc_baseline_matches
+from ..analysis.dependencies import name_shadow_findings
 from ..analysis.maintainer import _check_untrusted_maintainer_takeover
+from ..analysis.meta import alert_volume_finding, m_series_findings
+from ..analysis.placeholder import placeholder_finding
 from ..analysis.structural import (
     _structural_findings,
     partial_install_files,
+    recipe_checksum_parity_finding,
     unchanged_upstream_host,
 )
-from ..analysis.version import any_version_scalar_moved, pkgver_move_in_diff
+from ..analysis.version import any_version_scalar_moved, full_version_from_pkgbuild, pkgver_move_in_diff
 from ..buckets import classify_urls
 from ..changes import change_delta
 from ..config import (
@@ -80,7 +84,7 @@ from ..coverage import (
     unresolved_source_lines,
 )
 from ..diffdoc import diff_shape_fp, parse_diff_lines
-from ..scoring import calculate_score, prebuilt_declared
+from ..scoring import calculate_score, declared_claims, prebuilt_declared
 from ..schema import (
     with_changes,
     DiffSummary,
@@ -89,18 +93,26 @@ from ..schema import (
     TemporalContext,
     fact_to_dict,
 )
+from ..analysis.pipeline._tree import (
+    _added_dependency_names,
+    _deps_not_scanned,
+    _scriptlet_files_unread,
+)
 from ..tokenizer import tokenize_and_resolve_indexed
 from .properties import extract_properties, metadata_divergence, update_properties
 from ..tokenizer import split_lines
 
 log = logging.getLogger(__name__)
 
-_PKGVER_RE = re.compile(r'^pkgver\s*=\s*["\']?([^\s"\']+)', re.MULTILINE)
+def _extract_pkgver(pkgbuild: str | None) -> str:
+    """The declared full version, using the shared resolver.
 
-
-def _extract_pkgver(pkgbuild: str) -> str:
-    m = _PKGVER_RE.search(pkgbuild)
-    return m.group(1) if m else ""
+    The old local regex read the first ``pkgver=`` line anywhere in the
+    file, including inside a function or heredoc, and returned dynamic
+    values literally.  The shared reader resolves the recipe's own fields
+    and includes epoch/pkgrel, matching the review path.
+    """
+    return full_version_from_pkgbuild(pkgbuild or "")
 
 
 def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str:
@@ -127,6 +139,9 @@ def _make_diff_text(old_text: str, new_text: str, context_lines: int = 3) -> str
     return "\n".join(diff_lines) + ("\n" if diff_lines else "")
 
 
+_INSTALL_NAME_RE = re.compile(r"^[A-Za-z0-9@._+-]{1,255}$")
+
+
 def _install_diff_text(install_text: str, filename: str) -> str:
     """An added-file hunk for the ``.install`` scriptlet, for the corpus diff.
 
@@ -142,6 +157,12 @@ def _install_diff_text(install_text: str, filename: str) -> str:
     """
     if not isinstance(install_text, str) or not install_text:
         return ""
+    filename = str(filename or "").replace("\r", "").replace("\n", "").strip()
+    if not _INSTALL_NAME_RE.match(filename):
+        # A tar member name is not a trusted diff path: a newline or header
+        # in it could forge another file's hunk.  Refuse the synthetic hunk
+        # rather than analyse an invented path.
+        return ""
     lines = split_lines(install_text)
     if not lines:
         return ""
@@ -150,6 +171,48 @@ def _install_diff_text(install_text: str, filename: str) -> str:
         f"--- /dev/null\n+++ b/{filename}\n"
         f"@@ -0,0 +1,{len(lines)} @@\n{body}\n"
     )
+
+
+def _install_hunk_findings(
+    install_text: str | None,
+    install_name: str | None,
+    pkg_name: str,
+    new_pkgbuild: str,
+    tree_manifest: list[tuple[str, bytes]] | None,
+    config: dict,
+) -> list[dict]:
+    """Run the diff rules over the scriptlet on a first-seen package.
+
+    The update path appends the hook to the PKGBUILD diff; the first-seen
+    path has no PKGBUILD diff, but the scriptlet still ships and can still
+    run root commands.  Only the synthetic install hunk is fed here.
+    """
+    diff = _install_diff_text(install_text or "", install_name or f"{pkg_name}.install")
+    if not diff:
+        return []
+    source_changes = extract_urls_from_diff(diff)
+    resolved, _unresolved, resolved_indices = tokenize_and_resolve_indexed(diff)
+    raw_lines, raw_indices = get_raw_diff_lines_indexed(diff)
+    findings = apply_rules(
+        resolved,
+        raw_lines,
+        include_experimental=config.get("rules", {}).get("experimental", False),
+        line_map=map_diff_lines(diff),
+        resolved_indices=resolved_indices,
+        raw_indices=raw_indices,
+    )
+    findings.extend(_structural_findings(
+        diff, source_changes, {},
+        package_name=pkg_name,
+        config=config,
+        current_text=new_pkgbuild,
+        tree_manifest=tree_manifest,
+        delta=change_delta(diff, pkg_name, current_text=new_pkgbuild),
+    ))
+    findings.extend(apply_structural_rules(
+        diff, current_text=new_pkgbuild, package_name=pkg_name,
+    ))
+    return findings
 
 
 def _diff_summary(diff_text: str) -> DiffSummary:
@@ -262,7 +325,10 @@ class _StoredFact:
         self.coverage_gaps = ()
 
 
-def _walk_corpus_dependencies(pkg_name, depth, config, seen, record: bool = False):
+def _walk_corpus_dependencies(
+    pkg_name, depth, config, seen, record: bool = False,
+    added_names: set[str] | None = None,
+):
     """The dependency closure, from results the corpus already has.
 
     ``seen`` is deliberately **not** shared across the packages of a corpus
@@ -273,20 +339,41 @@ def _walk_corpus_dependencies(pkg_name, depth, config, seen, record: bool = Fals
     parent reporting an empty closure - an arbitrary attribution that reads
     as "this package has no AUR dependencies". Lookups are cheap enough that
     per-package walks are the right trade here.
+
+    ``added_names`` is the same added-dependency set the review path uses to
+    distinguish "not in the AUR" from "AUR package not reached".  Without it
+    a depth ceiling can leave a newly added dependency unread while the
+    report says the closure was complete.
     """
     from ..depth import DepthResult, default_metadata, resolve_depth, walk_dependencies
 
     resolved = resolve_depth(depth, config)
+    provider = default_metadata()
     if resolved == 0:
-        return DepthResult()
-
-    return walk_dependencies(
-        pkg_name,
-        depth=resolved,
-        metadata=default_metadata(),
-        analyse=lambda name: _corpus_dependency_fact(name, record=record),
-        already_seen=set(seen) if seen else None,
+        result = DepthResult()
+    else:
+        result = walk_dependencies(
+            pkg_name,
+            depth=resolved,
+            metadata=provider,
+            analyse=lambda name: _corpus_dependency_fact(name, record=record),
+            already_seen=set(seen) if seen else None,
+        )
+    if added_names:
+        reported = {report.name for report in result.reports}
+        try:
+            result.added_aur_unreported = any(
+                name not in reported and provider.is_aur(name)
+                for name in added_names
+            )
+        except Exception:
+            log.debug("added-dependency metadata check failed", exc_info=True)
+            result.metadata_unavailable = True
+    result.metadata_unavailable = (
+        result.metadata_unavailable
+        or not getattr(provider, "available", True)
     )
+    return result
 
 
 def analyze_package_text(
@@ -348,16 +435,6 @@ def analyze_package_text(
         A fully-scored PackageFact.
     """
     config = load_config()
-    # The corpus path must fail closed on a degraded stage exactly as the
-    # review paths do: without this, a refused rule or a failed checksum
-    # read produced a clean-looking corpus entry.
-    begin_stage_tracking()
-    # Before either producer builds a fact: a truncated walk has to reach
-    # `gaps_from`, because the band downgrade is decided inside
-    # calculate_score and carried on the fact rather than re-derived.
-    depth_result = _walk_corpus_dependencies(
-        pkg_name, depth, config, _depth_seen, record=record
-    )
     old_maintainer: Optional[str] = None
 
     new_version = _extract_pkgver(new_pkgbuild)
@@ -388,6 +465,36 @@ def analyze_package_text(
                 breaks = update_properties(conn, pkg_name, props, observed_at, floor=floor)
         except Exception:
             log.warning("property tracking failed for %s", pkg_name, exc_info=True)
+
+    # Build the diff before walking the closure: the walk needs the added
+    # dependency names to tell an unreached AUR package from an official one,
+    # and the per-package walk must not share the review path's seen set.
+    diff_text = ""
+    if old_pkgbuild is not None:
+        diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
+        if install_text and install_text != old_install_text:
+            # The install scriptlet the snapshot carried: scanned here so the
+            # corpus path reaches the root-fetch/write shapes only the git path
+            # saw before.  The hunk carries the scriptlet's REAL basename (the
+            # snapshot knows it); naming it after the package invents a file
+            # the recipe never ships and sends C024 after a phantom mismatch.
+            # Only a scriptlet whose text CHANGED is presented: re-adding an
+            # unchanged hook to every diff made R007 (and the hook-content
+            # rules) fire on every update of any package that merely HAS an
+            # install file - the git path only ever shows real modifications.
+            diff_text += _install_diff_text(
+                install_text, install_name or f"{pkg_name}.install")
+    recipe_diff = diff_text or _make_diff_text("", new_pkgbuild)
+    added_names = _added_dependency_names(recipe_diff)
+    depth_result = _walk_corpus_dependencies(
+        pkg_name, depth, config, _depth_seen, record=record,
+        added_names=added_names,
+    )
+    # The dependency walk recursively analyses packages, and every recursive
+    # analysis starts its own thread-local stage record.  Start the root's
+    # record after the walk, or the parent inherits the last dependency's
+    # failures.  The root's own failures are still recorded below.
+    begin_stage_tracking()
 
     # H092 - the metadata and the recipe describe different packages.
     metadata_findings: list[dict] = []
@@ -447,9 +554,21 @@ def analyze_package_text(
         triggered_rules.extend(
             _temporal_findings(temporal, pkg_name, True)
         )
+        parity = recipe_checksum_parity_finding(new_pkgbuild)
+        if parity:
+            triggered_rules.append(parity)
+        placeholder = placeholder_finding(new_pkgbuild)
+        if placeholder:
+            triggered_rules.append(placeholder)
+        triggered_rules.extend(name_shadow_findings(new_pkgbuild, pkg_name))
         if tree_manifest:
             from ..analysis.delivery import scan_tree_manifest
-            triggered_rules.extend(scan_tree_manifest(tree_manifest, [], pkg_name))
+            triggered_rules.extend(scan_tree_manifest(
+                tree_manifest, resolved_source_urls(new_pkgbuild), pkg_name))
+        triggered_rules.extend(_install_hunk_findings(
+            install_text, install_name, pkg_name, new_pkgbuild,
+            tree_manifest, config,
+        ))
         if archive_trailer_finding:
             triggered_rules.append(archive_trailer_finding)
         triggered_rules.extend(
@@ -498,11 +617,22 @@ def analyze_package_text(
             clamp_text(new_pkgbuild) or "", file="PKGBUILD")
         from ..analysis.pipeline._tree import _has_noextract
 
+        triggered_rules.extend(_meta_annotations(triggered_rules, config))
+        prebuilt = prebuilt_declared(new_pkgbuild)
+        triggered_rules.extend(m_series_findings(
+            triggered_rules, config,
+            claims=declared_claims(prebuilt=prebuilt),
+        ))
+        volume = alert_volume_finding(triggered_rules, config)
+        if volume:
+            triggered_rules.append(volume)
+        tree_analyzed = bool(tree_manifest) and not _scriptlet_files_unread(
+            recipe_diff, tree_manifest)
         gaps = gaps_from(
-            tree_analyzed=bool(tree_manifest),
+            tree_analyzed=tree_analyzed,
             snapshot_refused=snapshot_refused,
             upstream_manifest_incomplete=upstream_manifest_incomplete,
-            deps_not_scanned=depth_result.truncated,
+            deps_not_scanned=_deps_not_scanned(depth_result, added_names),
             ruleset_drifted=bool(drifted_shipped_rules()),
             degraded_stages=stage_failures(),
             unresolved_assignments=bool(unresolved_assignments),
@@ -510,7 +640,7 @@ def analyze_package_text(
         )
         score, breakdown, risk = calculate_score(
             triggered_rules, {}, novelty, config, coverage_gaps=gaps,
-            prebuilt=prebuilt_declared(new_pkgbuild),
+            prebuilt=prebuilt,
         )
 
         fact = PackageFact(
@@ -529,7 +659,7 @@ def analyze_package_text(
             first_seen=True,
             comparison_base="none",
             temporal_source=temporal.source,
-            tree_analyzed=bool(tree_manifest),
+            tree_analyzed=tree_analyzed,
             coverage_gaps=gaps,
             dependencies=list(depth_result.reports),
             depth_truncated=depth_result.truncated,
@@ -559,21 +689,21 @@ def analyze_package_text(
             update_package_version(pkg_name, new_version)
             if maintainer:
                 update_package_maintainer(pkg_name, maintainer)
-        return fact
+            from ..recipedoc import parse_recipe
+            from ..db import record_recipe_document
 
-    diff_text = _make_diff_text(old_pkgbuild, new_pkgbuild)
-    if install_text and install_text != old_install_text:
-        # The install scriptlet the snapshot carried: scanned here so the
-        # corpus path reaches the root-fetch/write shapes only the git path
-        # saw before.  The hunk carries the scriptlet's REAL basename (the
-        # snapshot knows it); naming it after the package invents a file
-        # the recipe never ships and sends C024 after a phantom mismatch.
-        # Only a scriptlet whose text CHANGED is presented: re-adding an
-        # unchanged hook to every diff made R007 (and the hook-content
-        # rules) fire on every update of any package that merely HAS an
-        # install file - the git path only ever shows real modifications.
-        diff_text += _install_diff_text(
-            install_text, install_name or f"{pkg_name}.install")
+            try:
+                recipe = parse_recipe(new_pkgbuild or "", file="PKGBUILD")
+                record_recipe_document(pkg_name, recipe.scalars, recipe.arrays)
+            except Exception:
+                note_stage_failure("recipe-index")
+            dependency_changes = extract_dependency_changes(
+                recipe_diff, pkg_name, current_text=new_pkgbuild,
+            )
+            record_dependency_names(sorted(
+                name for names in dependency_changes.values() for name in names
+            ))
+        return fact
 
     max_bytes = config.get("diff", {}).get("max_diff_bytes", 5_242_880)
     diff_text, diff_truncated = truncate_diff(diff_text, max_bytes)
@@ -670,7 +800,8 @@ def analyze_package_text(
     if tree_manifest:
         from ..analysis.delivery import scan_tree_manifest
         triggered_rules.extend(
-            scan_tree_manifest(tree_manifest, source_changes.added_urls, pkg_name)
+            scan_tree_manifest(
+                tree_manifest, resolved_source_urls(new_pkgbuild), pkg_name)
         )
     from ..override import suppress_acknowledged_url_findings
 
@@ -717,15 +848,7 @@ def analyze_package_text(
     if takeover:
         triggered_rules.append(takeover)
 
-    categories = {r.get("category", "") for r in triggered_rules
-                  if r.get("category") and r["rule_id"] != "H027"}
-    if len(categories) >= 3:
-        triggered_rules.append(stamp({
-            "rule_id": "H027", "name": "Capability Density Anomaly",
-            "severity": "INFO", "category": "meta",
-            "match": f"rule hits span {len(categories)} distinct capability categories",
-            "params": {"n_categories": len(categories)},
-        }))
+    triggered_rules.extend(_meta_annotations(triggered_rules, config))
 
     if effective_observation_count() > 0:
         typosquat = naming_typosquat_finding(
@@ -762,19 +885,31 @@ def analyze_package_text(
     partial_files = partial_install_files(diff_text)
     from ..analysis.pipeline._tree import _has_noextract
 
+    prebuilt = prebuilt_declared(new_pkgbuild)
+    triggered_rules.extend(m_series_findings(
+        triggered_rules, config,
+        claims=declared_claims(
+            verification_evidence, aggregate_pinning, source_buckets,
+            prebuilt=prebuilt),
+    ))
+    volume = alert_volume_finding(triggered_rules, config)
+    if volume:
+        triggered_rules.append(volume)
+    tree_analyzed = bool(tree_manifest) and not _scriptlet_files_unread(
+        recipe_diff, tree_manifest)
     gaps = gaps_from(
         diff_truncated=diff_truncated,
         scan_truncated=scan_truncated,
         partial_hunks=len(cut_hunks),
         partial_files=partial_files,
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=tree_analyzed,
         unresolved_sources=unresolved_sources,
         long_lines=long_lines,
         parse_time_substitutions=parse_time_subs,
         snapshot_refused=snapshot_refused,
         upstream_manifest_incomplete=upstream_manifest_incomplete,
         unpinned_build_deps=has_unpinned_build_deps(diff_text, new_pkgbuild),
-        deps_not_scanned=depth_result.truncated,
+        deps_not_scanned=_deps_not_scanned(depth_result, added_names),
         ruleset_drifted=bool(drifted_shipped_rules()),
         degraded_stages=stage_failures(),
         unresolved_assignments=bool(unresolved_assignments),
@@ -788,7 +923,7 @@ def analyze_package_text(
         verification_evidence=verification_evidence,
         pinning_level=aggregate_pinning,
         coverage_gaps=gaps,
-        prebuilt=prebuilt_declared(new_pkgbuild),
+        prebuilt=prebuilt,
     )
 
     fact = PackageFact(
@@ -822,7 +957,7 @@ def analyze_package_text(
         # package's corpus result.
         correlation_ran=True,
         comparison_base="recorded",
-        tree_analyzed=bool(tree_manifest),
+        tree_analyzed=tree_analyzed,
         coverage_gaps=gaps,
         dependencies=list(depth_result.reports),
         depth_truncated=depth_result.truncated,

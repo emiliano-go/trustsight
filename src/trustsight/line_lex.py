@@ -288,7 +288,17 @@ _HEREDOC_TO_INTERPRETER_RE = re.compile(
     r"(?:/(?:usr/)?bin/)?"
     r"(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b(?!\s*>)"
     r"|\|\s*(?:/(?:usr/)?bin/)?(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b"
-    r"|(?:\A\s*|[;&|]\s*)(?:python[23]?|perl|ruby|node)\b(?!\s*>)",
+    r"|(?:\A\s*|[;&|]\s*)(?:python[23]?|perl|ruby|node|php|lua)\b(?!\s*>)",
+    re.IGNORECASE,
+)
+
+#: A heredoc whose body is a program in another language.  The shell hands
+#: the text to that interpreter; its `KEY=value`/`install=` lines are data to
+#: the shell rules, not assignments or commands.
+_HEREDOC_TO_NON_SHELL_RE = re.compile(
+    r"(?:\A\s*|[;&|]\s*|\b(?:env|exec|command|sudo|nohup)\s+)"
+    r"(?:/(?:usr/)?bin/)?"
+    r"(?:python[23]?|perl|ruby|node|php|lua)\b(?!\s*>)",
     re.IGNORECASE,
 )
 
@@ -362,7 +372,7 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
             # `cat <<'EOF' | sh` puts it after the redirect.  Reading
             # only the left half meant the piped form - which is how
             # the shape is usually written - stayed classified as data.
-            is_data = not (
+            is_data = bool(_HEREDOC_TO_NON_SHELL_RE.search(content)) or not (
                 _HEREDOC_TO_INTERPRETER_RE.search(content)
                 or _HEREDOC_PIPED_RE.search(content)
                 or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)

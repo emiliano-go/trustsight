@@ -166,6 +166,12 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
             # package.  `electron44`'s launcher was read as a C001 signal.
             if path.startswith(("/usr/", "/bin/", "/sbin/", "/opt/")):
                 continue
+            # A command substitution's inner text is not a path.  The
+            # `node -p "try { require('./package.json')… } catch …"` version
+            # probe produced a "path" made of JavaScript, which C001 then
+            # read as a new execution on an ordinary version bump.
+            if any(ch in path for ch in " \t{}()?[]'\""):
+                continue
             base = os.path.basename(path)
             # Only a *script-like* execution is a capability: `python -m
             # unittest` in a newly added check() is ordinary test

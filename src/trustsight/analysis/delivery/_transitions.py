@@ -13,6 +13,19 @@ from ...rules import _PRINTER_LINE_RE, _blank_quoted, _printer_quote_body_indice
 
 __all__ = ['_FLOATING_PATH_RE', '_SOURCE_ARRAY_NAME_RE', '_URL_HOST_RE', '_pinning_of', '_recipe_states', '_registered_domain_of', '_source_urls_by_local_name', 'install_hook_notice_only', 'install_hook_transition', 'pinning_lost', 'source_name_host_swaps']
 
+_HOOK_PATH_RE = re.compile(r"^[A-Za-z0-9@._+/-]{1,255}$")
+
+
+def _hook_name(value: str) -> str:
+    """An `install=` value, only when it can name a file in the repo."""
+    text = str(value or "").strip().strip("\"'")
+    if not text or not _HOOK_PATH_RE.match(text):
+        return ""
+    if text.startswith("/") or ".." in text.split("/"):
+        return ""
+    return text
+
+
 _SOURCE_ARRAY_NAME_RE = re.compile(r"^source(?:_[a-z0-9_]+)?$")
 
 _URL_HOST_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://([^/'\"]+)")
@@ -179,8 +192,8 @@ def install_hook_transition(
     declaration's own line.
     """
     pre, post = _recipe_states(diff_text)
-    old_hook = pre.scalars.get("install", "")
-    new_hook = post.scalars.get("install", "")
+    old_hook = _hook_name(pre.scalars.get("install", ""))
+    new_hook = _hook_name(post.scalars.get("install", ""))
     doc = parse_diff_lines(split_lines(diff_text))
     hook_in_diff = any(
         f.path.endswith(".install") and f.status != "removed"

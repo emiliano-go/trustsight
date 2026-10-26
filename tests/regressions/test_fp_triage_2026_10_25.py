@@ -274,6 +274,14 @@ def test_h049_a_subset_org_change_is_a_representation_change():
     ]) == []
 
 
+def test_h049_a_case_only_org_change_is_not_a_source_move():
+    from trustsight.analysis.longitudinal import _h049_findings
+
+    assert _h049_findings([
+        _break("source_orgs", {"github.com/Unpackerr"}, {"github.com/unpackerr"}),
+    ]) == []
+
+
 def test_h049_an_owner_or_host_change_still_fires():
     from trustsight.analysis.longitudinal import _h049_findings
 

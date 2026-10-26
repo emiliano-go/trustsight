@@ -80,9 +80,19 @@ def _deserialize(value: str):
 
 
 def _changed_by(break_) -> tuple[set, set]:
-    """Return the (old, new) element sets of a break."""
+    """Return the (old, new) element sets of a break.
+
+    Forge owners are case-insensitive, but rows written before the extractor
+    normalised them still hold the original case.  Comparing those literally
+    made the one-time representation change from ``github.com/Owner`` to
+    ``github.com/owner`` look like a source move; normalise both sides here
+    so a real owner change still fires and a case-only change does not.
+    """
     old = set(_deserialize(break_.old_value) or ())
     new = set(_deserialize(break_.new_value) or ())
+    if break_.key == "source_orgs":
+        old = {str(value).lower() for value in old}
+        new = {str(value).lower() for value in new}
     return old, new
 
 

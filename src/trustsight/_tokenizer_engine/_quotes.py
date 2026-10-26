@@ -2,6 +2,8 @@
 
 import re
 
+from ..line_lex import QuoteState, advance_quote_state
+
 __all__ = ['_ANSI_C_ESCAPES', '_ANSI_C_OPENER_RE', '_ANSI_C_QUOTE_RE', '_EMPTY_QUOTE_CONCAT_RE', '_ESCAPE_REMOVABLE', '_PRINTF_LITERAL_RE', '_STRUCTURAL_METACHARS', '_WORD_ADJACENT', '_decode_ansi_c', '_quotes_removable', '_strip_shell_quotes', 'reconstruct_literals', 'split_lines']
 
 _ANSI_C_QUOTE_RE = re.compile(r"\$'((?:\\.|[^'\\])*)'")
@@ -128,7 +130,9 @@ def _strip_shell_quotes(text: str) -> str:
         content = text[i + 1 : j]
         pre = text[i - 1] if i > 0 else ""
         post = text[j + 1] if j + 1 < n else ""
-        if _quotes_removable(content, pre, post):
+        if q == "'" and ("`" in content or "$" in content):
+            out.append(text[i : j + 1])
+        elif _quotes_removable(content, pre, post):
             out.append(content)
         else:
             out.append(text[i : j + 1])
@@ -216,6 +220,82 @@ def _decode_ansi_c(body: str) -> str:
             out.append(e)
             i += 1
     return "".join(out)
+
+def _quote_close(text: str, quote: str) -> int | None:
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote in ('"', "`", "ansi") and ch == "\\" and i + 1 < len(text):
+            i += 2
+            continue
+        if quote == "ansi" and ch == "'":
+            return i
+        if quote != "ansi" and ch == quote:
+            return i
+        i += 1
+    return None
+
+
+def _unescape_double(text: str) -> str:
+    out: list[str] = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch == "\\" and i + 1 < len(text) and text[i + 1] in '$`"\\\n':
+            out.append(text[i + 1])
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
+def reconstruct_literals_stateful(
+    text: str, state: QuoteState | None = None,
+) -> tuple[str, bool, QuoteState, bool]:
+    """Reconstruct *text* in the quote context it really starts in.
+
+    The return value is ``(rebuilt, fully, next_state, quoted_data)``.  A
+    line that begins inside a quote is rebuilt from that context instead of
+    being treated as fresh shell input.  Suffix code after the closing quote
+    is reconstructed normally; content inside the quote is not re-parsed as
+    a command.
+    """
+    state = state or QuoteState()
+    if not state.open:
+        result, fully = reconstruct_literals(text)
+        return result, fully, advance_quote_state(text, state), False
+    top = state.frames[-1]
+    if top in ("'", '"', "ansi", "`"):
+        close = _quote_close(text, top)
+        if close is None:
+            executes = top in ('"', "`") and ("$(" in text or "`" in text)
+            return text, True, advance_quote_state(text, state), not executes
+        content = text[:close]
+        suffix = text[close + 1:]
+        if top == "ansi":
+            try:
+                content = _decode_ansi_c(content)
+            except ValueError:
+                return text, False, advance_quote_state(text, state), True
+        elif top == '"':
+            content = _unescape_double(content)
+        rebuilt_suffix, fully = reconstruct_literals(suffix)
+        # The line is data when the only thing after the closing quote is
+        # whitespace or a comment.  A command substitution inside a double
+        # quote runs even though the rest of the line is quoted, so it is
+        # still code and must reach the command rules.
+        suffix_is_data = not suffix.lstrip().startswith("#") and not suffix.strip()
+        executes = top in ('"', "`") and ("$(" in content or "`" in content)
+        return (
+            content + rebuilt_suffix,
+            fully,
+            advance_quote_state(text, state),
+            suffix_is_data and not executes,
+        )
+    result, fully = reconstruct_literals(text)
+    return result, fully, advance_quote_state(text, state), False
+
 
 def reconstruct_literals(text: str) -> tuple[str, bool]:
     """Reconstruct obfuscated shell literals back to plain text.

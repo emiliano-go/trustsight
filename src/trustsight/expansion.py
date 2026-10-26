@@ -106,6 +106,10 @@ def _glob_tokens(pat: str) -> tuple[tuple[str, object], ...]:
     i = 0
     while i < len(pat):
         char = pat[i]
+        if char == "\\" and i + 1 < len(pat):
+            tokens.append(("lit", pat[i + 1]))
+            i += 2
+            continue
         if char == "*":
             # Adjacent stars are one star: ``**`` is not globstar here.
             while i + 1 < len(pat) and pat[i + 1] == "*":
@@ -524,6 +528,20 @@ def _expand_one_unbounded(
         if op == "+":
             return word if value else ""
         return value if value else None
+
+    # -default  +alternate  =default  ?message (no colon: only unset
+    # triggers the operator; an empty value is a set value).
+    m = re.match(r"^(\w+)([-+=?])(.*)$", body)
+    if m:
+        name, op, word = m.group(1), m.group(2), m.group(3)
+        value = vars_.get(name)
+        if op == "-":
+            return value if value is not None else word
+        if op == "+":
+            return word if value is not None else ""
+        if op == "=":
+            return value if value is not None else word
+        return value if value is not None else None
 
     # :offset:length  /  :offset
     m = re.match(r"^(\w+):(\d+)(?::(\d+))?$", body)

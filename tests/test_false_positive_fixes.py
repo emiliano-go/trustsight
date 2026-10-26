@@ -140,7 +140,7 @@ def _heredoc_install(line, extra="true\n"):
             "+post_install() {\n"
             "+  cat <<MSG\n"
             f"+  {line}\n"
-            "+  MSG\n"
+            "+MSG\n"
             f"+  {extra}"
             "+}\n")
 
@@ -174,7 +174,7 @@ def test_c017_still_scans_a_heredoc_piped_to_a_shell():
             "+post_install() {\n"
             "+  cat <<SCRIPT | sh\n"
             "+  install -Dm644 x \"$HOME/.x\"\n"
-            "+  SCRIPT\n"
+            "+SCRIPT\n"
             "+}\n")
     assert "C017" in _ids(diff)
 

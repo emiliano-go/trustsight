@@ -541,12 +541,15 @@ def test_no_live_pattern_is_slow_on_a_full_length_line():
         "a" * n, " " * n, "1" * n, "/" * n, "a " * (n // 2),
         "a." * (n // 2), "$" * n, "-" * n, "curl " + "a" * (n - 5),
     ]
+    # Measure CPU time, not wall time: a loaded CI runner can deschedule a
+    # linear search past any wall-clock bound, which made this gate fail on a
+    # different rule each run.
     slow = []
     for name, compiled in _live_patterns():
         for text in inputs:
-            start = time.perf_counter()
+            start = time.process_time()
             compiled.search(text)
-            if time.perf_counter() - start > 0.05:
+            if time.process_time() - start > 0.05:
                 slow.append(name)
                 break
     assert not slow, f"slow on a full-length line: {slow}"

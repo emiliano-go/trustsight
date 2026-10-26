@@ -6,22 +6,22 @@ from collections import deque
 from functools import lru_cache
 import shlex
 from .._heredoc import parse_opener
-from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _join_logical, _split_top_level
+from ..line_lex import QuoteState
+from ._common import _ARRAY_ASSIGNMENT_RE, _ARRAY_ELEMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _declaration_options, _join_logical, _split_top_level
 from ._expansion import resolve_expansions
-from ._quotes import reconstruct_literals
+from ._quotes import reconstruct_literals, reconstruct_literals_stateful
 
 __all__ = ['_DIFF_TARGET_LINE_RE', '_SHELL_SOURCE_FILE_RE', '_assignments_are_shell', '_collect_array_entries', '_join_line_continuations_cached', '_split_with_lines', '_strip_outer_quotes', '_substitute', '_substitute_with_resolve', '_table_bytes', '_variable_table', '_variable_table_with_spans', 'join_line_continuations']
 
-def _substitute_with_resolve(
+def _substitute_with_resolve_state(
     text: str,
     var_table: dict[str, str],
     array_table: dict[str, list[str]] | None = None,
-) -> tuple[str, bool]:
-    """Resolve $var, ${var...} and ${arr[i]} references in *text*, returning
-    (resolved, fully_resolved).  H065 literal reconstruction runs on the
-    resolved line, so obfuscated forms reach rules in their plain-text
-    shape while the line is marked unresolved when reconstruction fails."""
+    quote_before: QuoteState | None = None,
+) -> tuple[str, bool, QuoteState, bool]:
+    """Resolve a line and reconstruct it in its actual quote context."""
     array_table = array_table or {}
+    state = quote_before or QuoteState()
 
     def replacer(match: re.Match) -> str:
         var = match.group(1) or match.group(2)
@@ -30,23 +30,32 @@ def _substitute_with_resolve(
             return arr[0] if arr else match.group(0)
         return var_table.get(var, match.group(0))
 
-    # First resolve simple ${var} and $var.
     resolved = _VAR_REF_RE.sub(replacer, text)
     if len(resolved) > _MAX_LINE_LEN:
-        return text, False
-    # Then resolve parameter expansions (${var//pat/rep}, ${arr[i]}, etc.).
+        return text, False, state, state.open
     ok = True
     if "${" in resolved:
         resolved, ok = resolve_expansions(resolved, var_table, array_table)
         if len(resolved) > _MAX_LINE_LEN:
-            return text, False
-    # H065: reconstruct obfuscated literals as data, never executed.
-    reconstructed, fully = reconstruct_literals(resolved)
+            return text, False, state, state.open
+    reconstructed, fully, after, quoted = reconstruct_literals_stateful(
+        resolved, state,
+    )
     if len(reconstructed) > _MAX_LINE_LEN:
-        return text, False
-    # Partial expansion is kept: a resolved ${arr[0]} -> curl still helps
-    # rules see the downloader even when ${url} on the same line is unknown.
-    return reconstructed, ok and fully
+        return text, False, state, quoted
+    return reconstructed, ok and fully, after, quoted
+
+
+def _substitute_with_resolve(
+    text: str,
+    var_table: dict[str, str],
+    array_table: dict[str, list[str]] | None = None,
+) -> tuple[str, bool]:
+    """Resolve $var, ${var...} and ${arr[i]} references in *text*."""
+    result, fully, _after, _quoted = _substitute_with_resolve_state(
+        text, var_table, array_table,
+    )
+    return result, fully
 
 def join_line_continuations(lines: list[str]) -> list[str]:
     """Cached on the lines: ten call sites join the same diff.
@@ -126,7 +135,7 @@ def _collect_array_entries(
         return start_idx, [], []
     # *rest* is the text after the opening ``(`` on the first line; the
     # opener itself is represented by the initial depth of 1.
-    rest = m.group(3)
+    rest = m.group("value")
     depth = 1
     in_single = in_double = False
     refused = False
@@ -166,13 +175,13 @@ def _collect_array_entries(
                 or (ch == "$" and j + 1 < len(line) and line[j + 1] == "(")
             ):
                 refused = True
+            if not in_single and not comment and ch == "\\" and j + 1 < len(line):
+                content.append(ch)
+                content.append(line[j + 1])
+                j += 2
+                boundary = False
+                continue
             if in_double:
-                if ch == "\\" and j + 1 < len(line):
-                    content.append(ch)
-                    content.append(line[j + 1])
-                    j += 2
-                    boundary = False
-                    continue
                 if ch == '"':
                     in_double = False
                 content.append(ch)
@@ -281,7 +290,7 @@ def _substitute(
     return reconstructed if len(reconstructed) <= limit else text
 
 _SHELL_SOURCE_FILE_RE = re.compile(
-    r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh|profile|bashrc))$",
+    r"(?:^|/)(?:PKGBUILD|[^/]*\.(?:install|sh|bash|zsh|profile|bashrc|bash_profile|zshrc|zprofile|zshenv))$",
     re.IGNORECASE,
 )
 
@@ -301,24 +310,8 @@ def _opens_a_comment(line: str, index: int) -> bool:
         or line[index - 1] in ";|&("
     )
 
-def _heredoc_delimiters(line: str) -> list[str]:
-    r"""Delimiters a shell opens on *line*, quote- and comment-aware.
-
-    The previous reader was a bare regex over the whole line, so a ``<<EOF``
-    inside a comment or a quoted message pushed a delimiter bash never
-    pushed, and an arithmetic shift (``1 << 2``) named its right operand as
-    the delimiter.  Every following line was then classified as heredoc
-    data, which stops `_assignments_are_shell` folding assignments.  The
-    scan also missed the shapes bash does open - a backslash-quoted
-    delimiter (``<<\EOF``) - and those bodies were read as shell code, so
-    their ``ExecStart=`` lines were folded away and never matched.
-
-    The opener scan now agrees with :func:`trustsight.line_lex._scan` on
-    what bash executes: quoted text and comments are data, ``<<<`` is a
-    here-string with no body, a backslash-quoted delimiter opens, and an
-    arithmetic shift does not.
-    """
-    found: list[str] = []
+def _heredoc_openers(line: str) -> list[tuple[str, bool]]:
+    found: list[tuple[str, bool]] = []
     quote = ""
     index = 0
     while index < len(line):
@@ -331,6 +324,9 @@ def _heredoc_delimiters(line: str) -> list[str]:
                 quote = ""
             index += 1
             continue
+        if char == "\\" and index + 1 < len(line):
+            index += 2
+            continue
         if char in "'\"":
             quote = char
             index += 1
@@ -338,19 +334,22 @@ def _heredoc_delimiters(line: str) -> list[str]:
         if char == "#" and _opens_a_comment(line, index):
             break
         if line.startswith("<<<", index):
-            # Consume all three, or the second `<<` reads the following
-            # word as a delimiter for a heredoc bash never opened.
             index += 3
             continue
         if line.startswith("<<", index):
             opener = parse_opener(line, index)
             if opener is not None:
-                delimiter, _strip_tabs, end = opener
-                found.append(delimiter)
+                delimiter, strip_tabs, end = opener
+                found.append((delimiter, strip_tabs))
                 index = end
                 continue
         index += 1
     return found
+
+
+def _heredoc_delimiters(line: str) -> list[str]:
+    r"""Delimiters a shell opens on *line*, quote- and comment-aware."""
+    return [delimiter for delimiter, _strip_tabs in _heredoc_openers(line)]
 
 def _assignments_are_shell(lines: list[str]) -> list[bool]:
     """Per line: may a `KEY=value` here be folded away as an assignment?
@@ -368,7 +367,7 @@ def _assignments_are_shell(lines: list[str]) -> list[bool]:
     shell = True
     # Bash reads the bodies in opener order, so two openers on one line
     # are a queue: A's body comes before B's.
-    delimiters: deque[str] = deque()
+    delimiters: deque[tuple[str, bool]] = deque()
     for line in lines:
         header = _DIFF_TARGET_LINE_RE.match(line)
         if header:
@@ -379,17 +378,14 @@ def _assignments_are_shell(lines: list[str]) -> list[bool]:
             continue
         body = line[1:] if line[:1] in ("+", "-", " ") else line
         if delimiters:
-            # Inside a heredoc the text is *content*, whatever the file is:
-            # `cat > "$pkgdir/…/e.service" <<EOF` with an `ExecStart=` line
-            # inside is a directive being written, not a shell assignment,
-            # and folding it away removed it from matching exactly as it did
-            # for a unit file shipped whole.
             flags.append(False)
-            if body.strip() == delimiters[0]:
+            delimiter, strip_tabs = delimiters[0]
+            probe = body.lstrip("\t") if strip_tabs else body
+            if probe == delimiter:
                 delimiters.popleft()
             continue
         flags.append(shell)
-        delimiters.extend(_heredoc_delimiters(body))
+        delimiters.extend(_heredoc_openers(body))
     return flags
 
 def _variable_table(
@@ -401,6 +397,7 @@ def _variable_table(
 
 def _variable_table_with_spans(
     additions: list[str],
+    shell_lines: list[bool] | None = None,
 ) -> tuple[dict[str, str], dict[str, list[str]], dict]:
     """The variable tables plus each value's source line index.
 
@@ -422,7 +419,10 @@ def _variable_table_with_spans(
     # tables so no reader sees a stale or shredded value (A6).
     ever_kept: set[str] = set()
     reportable: dict[str, int] = {}
-    shell_lines = _assignments_are_shell(additions)
+    if shell_lines is None:
+        shell_lines = _assignments_are_shell(additions)
+    if len(shell_lines) != len(additions):
+        raise ValueError("shell_lines must parallel additions")
     i = 0
     while i < len(additions):
         line = additions[i]
@@ -434,7 +434,7 @@ def _variable_table_with_spans(
         # Arrays first: ``source=(... )`` may span multiple added lines.
         arr_match = _ARRAY_ASSIGNMENT_RE.match(line)
         if arr_match:
-            name, op = arr_match.group(1), arr_match.group(2)
+            name, op = arr_match.group("name"), arr_match.group("op")
             close_idx, entries, entry_lines, refused = _collect_array_entries(
                 additions, i
             )
@@ -470,12 +470,41 @@ def _variable_table_with_spans(
                     }
             i = close_idx + 1
             continue
+        element_match = _ARRAY_ELEMENT_RE.match(line)
+        if element_match:
+            name = element_match.group("name")
+            index = element_match.group("index")
+            op = element_match.group("op")
+            value = _split_top_level(element_match.group("value").strip())[0].strip()
+            value = _strip_outer_quotes(value)
+            slot = int(index) if index.isdigit() else -1
+            if (
+                0 <= slot < _MAX_ARRAY_ENTRIES
+                and "$(" not in value
+                and "`" not in value
+                and len(value) <= _MAX_VALUE_LEN
+            ):
+                entries = array_table.setdefault(name, [])
+                while len(entries) <= slot:
+                    entries.append("")
+                entries[slot] = entries[slot] + value if op == "+=" else value
+                ever_kept.add(name)
+            else:
+                array_table.pop(name, None)
+                array_spans.pop(name, None)
+                reportable.setdefault(name, i)
+            i += 1
+            continue
         scalar_match = _ASSIGNMENT_RE.match(line)
         if scalar_match:
+            options = _declaration_options(scalar_match)
+            if "n" in options or "a" in options or "A" in options:
+                i += 1
+                continue
             name, op, value = (
-                scalar_match.group(1),
-                scalar_match.group(2),
-                scalar_match.group(3).strip(),
+                scalar_match.group("name"),
+                scalar_match.group("op"),
+                scalar_match.group("value").strip(),
             )
             # In `U=x; curl $U | bash` the shell assigns, then runs a
             # second command: only the first command's value is assigned.

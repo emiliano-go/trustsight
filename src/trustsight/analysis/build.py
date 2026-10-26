@@ -1,3 +1,4 @@
+import bisect
 import re
 
 from ..buckets import canonical_host
@@ -21,7 +22,8 @@ from ..rules import (
 )
 from ..tokenizer import (
     join_line_continuations,
-    reconstruct_lines,
+    joined_indexed,
+    reconstruct_lines_stateful,
     resolve_added_lines,
 )
 from .base import _code_rule_enabled, mask_to_pkgbuild, mask_to_recipe
@@ -763,13 +765,17 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
         # The composed HIGH requires the reconstructed line to reveal an
         # executable action (H065 composition).
         raw_lines = join_line_continuations(split_lines(diff_text))
+        raw_blocks = joined_indexed(split_lines(diff_text))
+        starts = [start for start, _text in raw_blocks]
+        texts = [text for _start, text in raw_blocks]
         indicators = _obfuscation_indicators(config)
         density = _obfuscation_density_threshold(config)
         action_re = _reconstructs_to_action_re(config)
         for i, line in enumerate(lines):
             if not line.startswith("+") or not scopes.within(i, _CRITICAL_FUNCTIONS):
                 continue
-            raw_body = _strip_comment(raw_lines[i])
+            block = bisect.bisect_right(starts, i) - 1
+            raw_body = _strip_comment(texts[block] if block >= 0 else raw_lines[i])
             body = _strip_comment(line)
             count = sum(1 for p in indicators if p.search(raw_body))
             if count >= density:
@@ -830,8 +836,10 @@ def _reconstruction_findings(diff_text, config, add) -> None:
     # One round-trip for every line's reconstruction rather than one per
     # line: the body walk is O(lines) and would otherwise be the sandbox's
     # dominant cost on ordinary text.
-    rebuilt_pairs = reconstruct_lines(bodies)
-    for body, (rebuilt, fully) in zip(bodies, rebuilt_pairs):
+    rebuilt_pairs = reconstruct_lines_stateful(bodies)
+    for body, (rebuilt, fully, quoted) in zip(bodies, rebuilt_pairs):
+        if quoted:
+            continue
         if not fully:
             # An ANSI-C quote that survived reconstruction is the
             # inconclusive case, whether or not anything else on the line

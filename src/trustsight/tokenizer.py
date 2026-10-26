@@ -30,6 +30,7 @@ __all__ = [
     "join_line_continuations",
     "joined_indexed",
     "reconstruct_lines",
+    "reconstruct_lines_stateful",
     "reconstruct_literals",
     "resolve_added_lines",
     "resolve_removed_lines",
@@ -90,6 +91,18 @@ def strip_boms(lines: list[str]) -> list[str]:
 def reconstruct_literals(text: str) -> tuple[str, bool]:
     """Reconstruct obfuscated literals as data; returns (text, fully)."""
     return tuple(request("reconstruct_literals", text))
+
+
+def reconstruct_lines_stateful(
+    lines: list[str],
+) -> list[tuple[str, bool, bool]]:
+    """Reconstruct *lines* in sequence, carrying quote state across them.
+
+    Returns ``(rebuilt, fully, quoted_data)`` per line.  ``quoted_data`` says
+    the line is entirely inside a multi-line quote and should not be read as
+    a command.
+    """
+    return [tuple(item) for item in request("reconstruct_lines_stateful", lines)]
 
 
 def reconstruct_lines(lines: list[str]) -> list[tuple[str, bool]]:

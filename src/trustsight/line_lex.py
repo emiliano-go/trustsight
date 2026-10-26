@@ -18,7 +18,26 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from ._heredoc import parse_opener
+from .expansion import _MAX_LINE_LEN as _MAX_TOKENIZER_LINE
 from .config import ANY_EXECUTOR as _ANY_EXECUTOR
+from .config import SCRIPT_EXECUTOR as _SCRIPT_EXECUTOR
+
+@dataclass(frozen=True)
+class QuoteState:
+    """The shell quote context at a line boundary.
+
+    Frames are ordinary quote states (single, double, ANSI-C, backtick) and
+    command-substitution frames (``$(``).  The stack is what lets a quoted
+    word inside a command substitution be data while the substitution itself
+    is code.
+    """
+
+    frames: tuple[str, ...] = ()
+
+    @property
+    def open(self) -> bool:
+        return bool(self.frames)
+
 
 @dataclass(frozen=True)
 class LexedLine:
@@ -43,6 +62,10 @@ class LexedLine:
     #: whole functions.  Bash supplies the bodies in this order, so two
     #: openers on one line are one queue, not a stack.
     heredoc_openers: tuple[tuple[str, bool], ...] = ()
+    quote_before: QuoteState = QuoteState()
+    quote_after: QuoteState = QuoteState()
+    quoted_data: bool = False
+    truncated: bool = False
 
 
 def _diff_boundary(line: str) -> bool:
@@ -88,11 +111,23 @@ def strip_comment_stateful(line: str, quote: str = "") -> tuple[str, str]:
     while index < len(line):
         ch = line[index]
         if quote:
+            if quote == "ansi":
+                if ch == "\\" and index + 1 < len(line):
+                    index += 2
+                    continue
+                if ch == "'":
+                    quote = ""
+                index += 1
+                continue
             if ch == "\\" and quote == '"':
                 index += 2
                 continue
             if ch == quote:
                 quote = ""
+        elif ch == "$" and index + 1 < len(line) and line[index + 1] == "'":
+            quote = "ansi"
+            index += 2
+            continue
         elif ch in "'\"":
             quote = ch
         elif _opens_a_comment(line, index):
@@ -132,38 +167,62 @@ def _lex_lines_cached(
 ) -> tuple[LexedLine, ...]:
     """The lexical scan, reused across readers of the same lines."""
     out: list[LexedLine] = []
-    in_single = in_double = in_backtick = False
-    sub_depth = 0
+    state = QuoteState()
     # FIFO: bash reads heredoc bodies in the order their openers appear,
     # so `cat <<A <<B` supplies A's body before B's.
     delims: deque[tuple[str, bool]] = deque()
+    diff_lines = any(_diff_boundary(line) for line in lines)
     for line in lines:
         if fragment:
-            in_single = in_double = in_backtick = False
-            sub_depth = 0
+            state = QuoteState()
             if delims and _diff_boundary(line):
                 delims.clear()
         if delims:
             delimiter, strip_tabs = delims[0]
-            probe = line.lstrip("\t") if strip_tabs else line
             # A diff line keeps its +/- prefix, which is not part of the
             # shell text: ``+EOF`` terminates the heredoc ``EOF``.
-            probe = probe.lstrip("+-")
+            probe = line[1:] if line[:1] in "+-" or (
+                diff_lines and line[:1] == " "
+            ) else line
+            if strip_tabs:
+                probe = probe.lstrip("\t")
             blank = " " * len(line)
-            if probe.strip() == delimiter:
+            if probe == delimiter:
                 delims.popleft()
-            out.append(LexedLine(line, blank, 0, False, False, True))
+            out.append(LexedLine(
+                line, blank, 0, False, False, True,
+                quote_before=state, quote_after=state, quoted_data=True,
+            ))
             continue
+        # A single line past the tokenizer bound is scanned only up to the
+        # bound.  The tail is left as code and the quote state is reset, so
+        # a crafted line cannot hide the rest of the recipe behind a quote
+        # that opens past the ceiling.  ``truncated`` records that refusal.
+        truncated = len(line) > _MAX_TOKENIZER_LINE
+        scan_line = line[:_MAX_TOKENIZER_LINE] if truncated else line
         # Fast path for the ordinary line: nothing that could change the
         # lexical state, so the character loop is skipped.  A pathological
         # multi-megabyte line otherwise pays that loop in every scope
         # classifier that re-lexes the same diff.
-        if not any(ch in line for ch in "{}#'\"\\`<"):
-            out.append(LexedLine(line, line, 0, False, False, False))
+        if not state.open and not any(ch in line for ch in "{}#'\"\\`<"):
+            if truncated:
+                out.append(LexedLine(
+                    line, line, 0, False, False, False,
+                    quote_before=state, quote_after=QuoteState(),
+                    truncated=True,
+                ))
+            else:
+                out.append(LexedLine(
+                    line, line, 0, False, False, False,
+                    quote_before=state, quote_after=state,
+                ))
             continue
-        code, in_single, in_double, in_backtick, sub_depth, openers = _scan(
-            line, in_single, in_double, in_backtick, sub_depth
-        )
+        code, after, openers, quoted = _scan(scan_line, state)
+        if truncated:
+            code += line[_MAX_TOKENIZER_LINE:]
+            after = QuoteState()
+            openers = []
+            quoted = False
         delims.extend(openers)
         out.append(LexedLine(
             text=line,
@@ -173,89 +232,197 @@ def _lex_lines_cached(
             closes_line=code.rstrip().endswith("}"),
             heredoc_body=False,
             heredoc_openers=tuple(openers),
+            quote_before=state,
+            quote_after=after,
+            quoted_data=quoted,
+            truncated=truncated,
         ))
+        state = after
     return tuple(out)
 
+def advance_quote_state(line: str, state: QuoteState | None = None) -> QuoteState:
+    """Return the shell quote state after *line*, without exposing code."""
+    return _scan(line, state or QuoteState())[1]
 
-def _scan(line, in_single, in_double, in_backtick, sub_depth):
-    """Return ``(code, states..., heredoc openers)`` for one line."""
+
+def _scan(line: str, state: QuoteState) -> tuple[str, QuoteState, list[tuple[str, bool]], bool]:
+    """Scan one shell line, returning code, state, heredoc openers and data flag."""
     out: list[str] = []
+    stack = list(state.frames)
     i, n = 0, len(line)
     openers: list[tuple[str, bool]] = []
+    quoted = bool(stack)
+
+    def code_context() -> bool:
+        return not stack or stack[-1] in ("$(", "`")
+
     while i < n:
         ch = line[i]
-        if in_single:
-            if ch == "'":
-                in_single = False
+        top = stack[-1] if stack else ""
+
+        if top == "'":
             out.append(" ")
+            if ch == "'":
+                stack.pop()
             i += 1
             continue
-        if in_backtick:
-            if ch == "`":
-                in_backtick = False
-            out.append(ch)
-            i += 1
-            continue
-        if in_double:
-            if sub_depth > 0:
-                if ch == "\\" and i + 1 < n:
-                    out.append(line[i:i + 2])
-                    i += 2
-                    continue
-                if ch == "(":
-                    sub_depth += 1
-                elif ch == ")":
-                    sub_depth -= 1
-                out.append(ch)
-                i += 1
+        if top == "ansi":
+            if ch == "\\" and i + 1 < n:
+                out.append("  ")
+                i += 2
                 continue
+            out.append(" ")
+            if ch == "'":
+                stack.pop()
+            i += 1
+            continue
+        if top == '"':
             if ch == "\\" and i + 1 < n:
                 out.append("  ")
                 i += 2
                 continue
             if ch == '"':
-                in_double = False
+                stack.pop()
                 out.append(" ")
                 i += 1
                 continue
             if ch == "$" and i + 1 < n and line[i + 1] == "(":
-                sub_depth = 1
+                stack.append("$(")
                 out.append("$(")
                 i += 2
                 continue
             if ch == "`":
-                in_backtick = True
-                out.append(ch)
+                stack.append("`")
+                out.append("`")
+                quoted = True
                 i += 1
                 continue
             out.append(" ")
             i += 1
             continue
+        if top == "`":
+            if ch == "\\" and i + 1 < n:
+                out.append("  ")
+                i += 2
+                continue
+            if ch == "`":
+                stack.pop()
+                out.append("`")
+                i += 1
+                continue
+            if ch == "'":
+                stack.append("'")
+                out.append(" ")
+                quoted = True
+                i += 1
+                continue
+            if ch == '"':
+                stack.append('"')
+                out.append(" ")
+                quoted = True
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and line[i + 1] == "'":
+                stack.append("ansi")
+                out.append("  ")
+                quoted = True
+                i += 2
+                continue
+            if ch == "$" and i + 1 < n and line[i + 1] == "(":
+                stack.append("$(")
+                out.append("$(")
+                i += 2
+                continue
+            if ch == "#" and _opens_a_comment(line, i):
+                out.append(" " * (n - i))
+                break
+            out.append(ch)
+            i += 1
+            continue
+        if top == "$(":
+            if ch == "\\" and i + 1 < n:
+                out.append("  ")
+                i += 2
+                continue
+            if ch == ")":
+                stack.pop()
+                out.append(")")
+                i += 1
+                continue
+            if ch == "'":
+                stack.append("'")
+                out.append(" ")
+                quoted = True
+                i += 1
+                continue
+            if ch == '"':
+                stack.append('"')
+                out.append(" ")
+                quoted = True
+                i += 1
+                continue
+            if ch == "$" and i + 1 < n and line[i + 1] == "'":
+                stack.append("ansi")
+                out.append("  ")
+                quoted = True
+                i += 2
+                continue
+            if ch == "$" and i + 1 < n and line[i + 1] == "(":
+                stack.append("$(")
+                out.append("$(")
+                i += 2
+                continue
+            if ch == "`":
+                stack.append("`")
+                out.append("`")
+                quoted = True
+                i += 1
+                continue
+            if ch == "#" and _opens_a_comment(line, i):
+                out.append(" " * (n - i))
+                break
+            out.append(ch)
+            i += 1
+            continue
+
+        # Code context.
         if ch == "\\" and i + 1 < n:
             out.append("  ")
             i += 2
             continue
         if ch == "'":
-            in_single = True
+            stack.append("'")
+            quoted = True
             out.append(" ")
             i += 1
             continue
         if ch == '"':
-            in_double = True
+            stack.append('"')
+            quoted = True
             out.append(" ")
             i += 1
             continue
+        if ch == "$" and i + 1 < n and line[i + 1] == "'":
+            stack.append("ansi")
+            quoted = True
+            out.append("  ")
+            i += 2
+            continue
+        if ch == "$" and i + 1 < n and line[i + 1] == "(":
+            stack.append("$(")
+            out.append("$(")
+            i += 2
+            continue
         if ch == "`":
-            in_backtick = True
-            out.append(ch)
+            stack.append("`")
+            quoted = True
+            out.append("`")
             i += 1
             continue
         if ch == "#" and _opens_a_comment(line, i):
             out.append(" " * (n - i))
             break
         if line.startswith("<<<", i):
-            # A here-string: consume all three, or the second `<<` would
-            # read the word after it as a heredoc delimiter.
             out.append("<<<")
             i += 3
             continue
@@ -269,7 +436,8 @@ def _scan(line, in_single, in_double, in_backtick, sub_depth):
                 continue
         out.append(ch)
         i += 1
-    return "".join(out), in_single, in_double, in_backtick, sub_depth, openers
+
+    return "".join(out), QuoteState(tuple(stack)), openers, quoted
 
 
 # ---------------------------------------------------------------------------
@@ -283,12 +451,21 @@ def _scan(line, in_single, in_double, in_backtick, sub_depth):
 
 _HEREDOC_OPEN_RE = re.compile(r"(?<!<)<<(?!<)(-)?\s*['\"]?(\w+)['\"]?")
 
+_HEREDOC_WRAPPER = (
+    r"(?:\A\s*|[;&|]\s*|"
+    r"\b(?:env|exec|command|sudo|nohup|timeout|nice)\s+"
+    r"(?:(?:-[ugUpChrtTDR]\s+\S+|\S+=\S*|"
+    r"\d+(?:\.\d+)?[smhd]?|-\S+)\s+)*)"
+)
+
 _HEREDOC_TO_INTERPRETER_RE = re.compile(
-    r"(?:\A\s*|[;&|]\s*|\b(?:env|exec|command|sudo|nohup)\s+)"
-    r"(?:/(?:usr/)?bin/)?"
-    r"(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b(?!\s*>)"
-    r"|\|\s*(?:/(?:usr/)?bin/)?(?:ba|z|da|k|a|mk|pdk|ya|po)?sh\b"
-    r"|(?:\A\s*|[;&|]\s*)(?:python[23]?|perl|ruby|node|php|lua)\b(?!\s*>)",
+    _HEREDOC_WRAPPER
+    + r"(?:/(?:usr/)?bin/)?(?:"
+    + _SCRIPT_EXECUTOR
+    + r")\b(?!\s*>)"
+    + r"|\|\s*(?:/(?:usr/)?bin/)?(?:"
+    + _SCRIPT_EXECUTOR
+    + r")\b",
     re.IGNORECASE,
 )
 
@@ -296,9 +473,9 @@ _HEREDOC_TO_INTERPRETER_RE = re.compile(
 #: the text to that interpreter; its `KEY=value`/`install=` lines are data to
 #: the shell rules, not assignments or commands.
 _HEREDOC_TO_NON_SHELL_RE = re.compile(
-    r"(?:\A\s*|[;&|]\s*|\b(?:env|exec|command|sudo|nohup)\s+)"
-    r"(?:/(?:usr/)?bin/)?"
-    r"(?:python[23]?|perl|ruby|node|php|lua)\b(?!\s*>)",
+    _HEREDOC_WRAPPER
+    + r"(?:/(?:usr/)?bin/)?(?:python[23]?|perl|ruby|node|php|lua(?:jit)?"
+    + r"|tclsh|wish)\b(?!\s*>)",
     re.IGNORECASE,
 )
 
@@ -354,13 +531,20 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     # line_lex._scan and turned `# upstream uses the <<EOF form` above a
     # fetch into a fake delimiter that blanked every following line - and
     # with it H069/H072/H082/H083 for the whole function.
-    lexed = lex_lines(list(lines))
+    lexed = lex_lines(list(lines), fragment=True)
     for i, line in enumerate(lines):
         content = line[1:] if line[:1] in ("+", "-") else line
-        stripped = content.strip()
-        if delims and stripped == delims[0][0]:
-            delims.popleft()
-            continue
+        if _diff_boundary(line):
+            # A partial hunk can leave a heredoc open.  Its body cannot
+            # continue into the next file or hunk; carrying the queue there
+            # blanked unrelated payload lines.
+            delims.clear()
+        if delims:
+            delimiter, strip_tabs = delims[0]
+            probe = content.lstrip("\t") if strip_tabs else content
+            if probe == delimiter:
+                delims.popleft()
+                continue
         if delims:
             if delims[0][1]:
                 body.add(i)
@@ -406,13 +590,17 @@ def _printed_heredoc_body_indices_cached(
 ) -> frozenset[int]:
     body: set[int] = set()
     delims: deque[tuple[str, bool]] = deque()
-    lexed = lex_lines(list(lines))
+    lexed = lex_lines(list(lines), fragment=True)
     for i, line in enumerate(lines):
         content = line[1:] if line[:1] in ("+", "-") else line
-        stripped = content.strip()
-        if delims and stripped == delims[0][0]:
-            delims.popleft()
-            continue
+        if _diff_boundary(line):
+            delims.clear()
+        if delims:
+            delimiter, strip_tabs = delims[0]
+            probe = content.lstrip("\t") if strip_tabs else content
+            if probe == delimiter:
+                delims.popleft()
+                continue
         if delims:
             if delims[0][1]:
                 body.add(i)

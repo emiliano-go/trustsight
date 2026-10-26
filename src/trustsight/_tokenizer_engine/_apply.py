@@ -6,12 +6,18 @@ from ._common import (
     _ASSIGNMENT_RE,
     _MAX_LINE_LEN,
     _VAR_REF_RE,
+    _is_diff_header,
     _join_logical,
+    _join_side,
     _memoised,
     _split_top_level,
 )
 from ._quotes import split_lines
-from ._variables import _assignments_are_shell, _substitute_with_resolve, _variable_table, join_line_continuations
+from ._variables import (
+    _assignments_are_shell,
+    _substitute_with_resolve_state,
+    _variable_table_with_spans,
+)
 
 __all__ = ['_TRAVERSAL_RE', '_joined_indexed', '_resolve_added_lines', '_resolve_removed_lines', 'collapse_traversal', 'resolve_added_lines', 'resolve_removed_lines', 'strip_leading_bom', 'tokenize_and_resolve', 'tokenize_and_resolve_indexed']
 
@@ -62,6 +68,36 @@ def resolve_removed_lines(diff_text: str) -> list[str]:
         lambda: _resolve_removed_lines(diff_text),
     )
 
+def _side_content(
+    lines: list[str], marker: str
+) -> tuple[list[str], list[int]]:
+    """Content lines visible on one side, including unchanged context."""
+    content: list[str] = []
+    indices: list[int] = []
+    for index, raw in enumerate(lines):
+        if _is_diff_header(raw):
+            continue
+        line = strip_leading_bom(raw)
+        this_marker = line[0] if line[:1] in ("+", "-") else ""
+        if this_marker and this_marker != marker:
+            continue
+        content.append(line[1:] if this_marker else line)
+        indices.append(index)
+    return content, indices
+
+
+def _side_table(
+    lines: list[str], marker: str
+) -> tuple[dict[str, str], dict[str, list[str]], dict[str, str]]:
+    content, indices = _side_content(lines, marker)
+    shell_at = _assignments_are_shell(lines)
+    shell_lines = [shell_at[index] for index in indices]
+    var_table, array_table, _spans = _variable_table_with_spans(
+        content, shell_lines=shell_lines
+    )
+    return var_table, array_table, _alias_table(content)
+
+
 def _resolve_side_lines(diff_text: str, marker: str) -> list[str]:
     """Diff lines with each *marker*-prefixed line replaced by its resolved
     form (``+`` for additions, ``-`` for removals).
@@ -70,28 +106,24 @@ def _resolve_side_lines(diff_text: str, marker: str) -> list[str]:
     its enclosing function via
     :func:`~trustsight.rules._classify_enclosing_function`.  Rules scoped to
     ``build()`` or ``pkgver()`` need that positional information.
-
-    Substitution is applied per line rather than by zipping against
-    :func:`tokenize_and_resolve`, whose output omits assignment lines: any
-    added assignment made the two sequences different lengths and shifted
-    every following line onto the wrong position.
     """
-    lines = join_line_continuations(split_lines(diff_text))
-    side_lines = [ln[1:] for ln in lines if ln.startswith(marker) and ln[1:].strip()]
-    var_table, array_table = _variable_table(side_lines)
-    alias_table = _alias_table(side_lines)
+    lines = split_lines(diff_text)
+    var_table, array_table, alias_table = _side_table(lines, marker)
+    side_logical = {item[0]: item[1:] for item in _join_side(lines, marker)}
     resolved_lines = []
-    for line in lines:
-        if line.startswith(marker):
-            r, _ok = _substitute_with_resolve(line[1:], var_table, array_table)
-            r = collapse_traversal(_expand_aliases(r, alias_table))
-            if len(r) > _MAX_LINE_LEN:
-                # A6: an expansion past the line bound is left unresolved,
-                # never truncated.
-                r = line[1:]
-            resolved_lines.append(marker + r)
-        else:
+    for index, line in enumerate(lines):
+        if index not in side_logical:
             resolved_lines.append(line)
+            continue
+        text, quote_before, _quote_after = side_logical[index]
+        r, _ok, _after, _quoted = _substitute_with_resolve_state(
+            text, var_table, array_table, quote_before,
+        )
+        r = strip_leading_bom(r)
+        r = collapse_traversal(_expand_aliases(r, alias_table))
+        if len(r) > _MAX_LINE_LEN:
+            r = line[1:] if line[:1] in ("+", "-") else line
+        resolved_lines.append(marker + r)
     return resolved_lines
 
 
@@ -128,28 +160,23 @@ def tokenize_and_resolve_indexed(
     keyed on those raw indexes, so a caller can attach a correct
     file/line to every resolved-rule finding.
     """
-    joined = _joined_indexed(split_lines(diff_text))
+    lines = split_lines(diff_text)
     additions = []
     addition_indices = []
-    for raw_index, line in joined:
-        if line.startswith("+"):
-            content = line[1:]
-            if content.strip():
-                additions.append(content)
-                addition_indices.append(raw_index)
+    addition_states = []
+    for raw_index, text, quote_before, _quote_after in _join_side(lines, "+"):
+        content = strip_leading_bom(text)
+        if content.strip():
+            additions.append(content)
+            addition_indices.append(raw_index)
+            addition_states.append(quote_before)
 
-    var_table, array_table = _variable_table(additions)
-    # This is a second resolver, parallel to `_resolve_added_lines`, and it
-    # is what feeds every `match_target = "resolved"` rule - R001 among them.
-    # Alias expansion added in only one of the two would be the same defect
-    # the aliases themselves exploit: a spelling that one path understands
-    # and the other does not.
-    alias_table = _alias_table(additions)
+    var_table, array_table, alias_table = _side_table(lines, "+")
 
     # An assignment whose value is statically known contributes its value
     # to the table rather than a command line to match against; anything
     # else is a candidate for resolution.
-    shell_at = _assignments_are_shell(split_lines(diff_text))
+    shell_at = _assignments_are_shell(lines)
 
     def _folds_away(line: str) -> bool:
         """True when *line* is nothing but an assignment declaration.
@@ -162,20 +189,32 @@ def tokenize_and_resolve_indexed(
         their narrow scopes.
         """
         m = _ASSIGNMENT_RE.match(line)
-        if not m or "$(" in m.group(3) or "`" in m.group(3):
+        if not m:
+            return False
+        value = m.group("value")
+        if "$(" in value or "`" in value:
             return False
         return len(_split_top_level(line)) <= 1
 
     candidates = [
-        (addition_indices[k], line)
+        (addition_indices[k], line, addition_states[k])
         for k, line in enumerate(additions)
         if not (shell_at[addition_indices[k]] and _folds_away(line))
     ]
 
     resolved = []
     unresolved_out = []
-    for _raw_index, line in candidates:
-        r, ok = _substitute_with_resolve(line, var_table, array_table)
+    candidate_indices = []
+    for raw_index, line, quote_before in candidates:
+        r, ok, _after, quoted = _substitute_with_resolve_state(
+            line, var_table, array_table, quote_before,
+        )
+        # A line that is wholly quoted data is not a command.  Reconstructing
+        # it is still useful for H065, but handing it to the command rules
+        # would turn ordinary prose inside a multi-line string into a finding.
+        if quoted:
+            continue
+        candidate_indices.append(raw_index)
         expanded = collapse_traversal(_expand_aliases(r, alias_table))
         if len(expanded) > _MAX_LINE_LEN:
             # A6: an expansion past the line bound is left unresolved, never
@@ -188,7 +227,6 @@ def tokenize_and_resolve_indexed(
         # reference that survived substitution ($var nobody declared).
         if not ok or _VAR_REF_RE.search(expanded):
             unresolved_out.append(line)
-    candidate_indices = [raw_index for raw_index, _line in candidates]
     return resolved, unresolved_out, candidate_indices
 
 def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:

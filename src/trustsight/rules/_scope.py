@@ -1,6 +1,7 @@
 """Extracted from rules.py: _scope."""
 
 import re
+import shlex
 from functools import lru_cache
 import threading
 from ..config import load_rules
@@ -473,6 +474,51 @@ _HEREDOC_BODY_EXCLUDED_RULES = frozenset({"R058"})
 _MESSAGE_LINE_EXCLUDED_RULES = frozenset({"R001", "R002", "R003", "R045"})
 
 
+_R058_SURFACE_RE = re.compile(r"^[\"']?(?:/etc|/boot|/usr/bin|/usr/lib)/")
+
+
+def _r058_destination_is_surface(item: str) -> bool:
+    """R058's absolute path must be the destination, not a source operand.
+
+    `install -m755 "/usr/bin/tool" -t "resources/binaries"` copies an
+    existing system binary into the source tree; the absolute path is the
+    source.  The rule's broad regex matched it anyway.  Parse the simple
+    command forms the rule targets and check where the write lands.
+    """
+    body = item.lstrip("+").lstrip()
+    try:
+        tokens = shlex.split(body)
+    except ValueError:
+        return True  # unreadable quoting: keep the finding
+    if not tokens:
+        return True
+    verb = tokens[0].rsplit("/", 1)[-1]
+    args = tokens[1:]
+    if verb == "dd":
+        for arg in args:
+            if arg.startswith("of="):
+                return bool(_R058_SURFACE_RE.match(arg[3:]))
+        return True
+    if verb == "tee":
+        files = [arg for arg in args if not arg.startswith("-")]
+        return any(_R058_SURFACE_RE.match(arg) for arg in files)
+    if verb not in {"install", "cp", "mv"}:
+        return True
+    destination = ""
+    for i, arg in enumerate(args):
+        if arg == "-t" and i + 1 < len(args):
+            destination = args[i + 1]
+            break
+        if arg.startswith("--target-directory="):
+            destination = arg.split("=", 1)[1]
+            break
+    if not destination:
+        non_options = [arg for arg in args if not arg.startswith("-")]
+        if non_options:
+            destination = non_options[-1]
+    return bool(_R058_SURFACE_RE.match(destination))
+
+
 def apply_rules(
     resolved_strings: list[str],
     raw_diff_lines: list[str],
@@ -721,6 +767,8 @@ def apply_rules(
                     stripped_item = item.lstrip("+").lstrip()
                     if _METADATA_SCALAR_RE.match(stripped_item):
                         continue
+                if rule["id"] == "R058" and not _r058_destination_is_surface(item):
+                    continue
                 if rule["id"] == "R007":
                     # See the note above: a source=() mention of the file
                     # name is a reference, not a modification.  Headers and

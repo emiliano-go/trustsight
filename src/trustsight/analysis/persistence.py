@@ -133,6 +133,47 @@ def _is_staged(target: str) -> bool:
     return bool(_STAGED_PREFIX_RE.match(target.strip().strip("\"'")))
 
 
+_X042_ASSIGN_RE = re.compile(
+    r"^\s*(?:local\s+|export\s+|declare\s+-\w+\s+)?"
+    r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$"
+)
+
+
+def _relative_target(target: str, lines: list[str], index: int) -> bool:
+    """True for a write that stays inside the current build tree.
+
+    A relative path (`resources/.cache`) is in the tree the build is
+    running in.  A variable path is in the tree when the variable was
+    assigned a relative path; a variable with no visible assignment is
+    unknown and keeps H042 firing.
+    """
+    value = target.strip().strip("\"'")
+    if not value or value.startswith(("/", "~", "..", "%h")):
+        return False
+    # A bare hidden name (`.evil.sh`) has always been H042's claim.  A
+    # relative path with a directory component (resources/x/.mise-version)
+    # is a helper file inside the build tree, and a variable resolving to
+    # one is the same shape.
+    if not value.startswith("$"):
+        return "/" in value.rstrip("/")
+    match = re.match(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)", value)
+    if match is None or match.group(1).upper() in {
+            "HOME", "PKGDIR", "SRCDIR", "STARTDIR", "BUILDDIR"}:
+        return False
+    name = match.group(1)
+    for previous in range(index - 1, max(-1, index - 50), -1):
+        text = lines[previous]
+        text = text[1:] if text[:1] in "+-" else text
+        assignment = _X042_ASSIGN_RE.match(text)
+        if not assignment or assignment.group(1) != name:
+            continue
+        assigned = assignment.group(2).strip().strip("\"'")
+        return bool(assigned) and not assigned.startswith(
+            ("/", "~", "$", "..", "%h")
+        )
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Path classification
 # ---------------------------------------------------------------------------
@@ -228,7 +269,8 @@ def edge_hidden_drop(ctx, add) -> None:
             continue
         for t in _raw_targets(_strip_comment(line[1:])):
             t_clean = t.strip().strip("\"'")
-            if _is_staged(t_clean) or _HIDDEN_EXEMPT_RE.search(t_clean):
+            if (_is_staged(t_clean) or _HIDDEN_EXEMPT_RE.search(t_clean)
+                    or _relative_target(t_clean, lines, i)):
                 continue
             if _WW_DIR_RE.search(t_clean) or _HOME_PREFIX_RE.search(t_clean):
                 continue

@@ -11,7 +11,7 @@ from ...config import (
 from ...deps import _strip_comment
 from ._common import _DATA_CONSUMER, _EXEC_WRAPPER, _SHELL
 
-__all__ = ['X009_RE', 'X010_RE', 'X011_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
+__all__ = ['_x013_is_trusted_registry', 'X009_RE', 'X010_RE', 'X011_RE', 'X011_STANDDOWN_RE', 'X012_CONSUMER_RE', 'X012_RE', 'X013_RE', 'X013_STANDDOWN_RE', 'X014_RE', 'X014_STANDDOWN_RE', 'X015_RE', 'X018_RE', 'X019_RE', '_DISTRO_INSTALL_RE', '_X009_CLIENT_RE', '_X016_CONSUMER_RE', '_X016_FETCH_RE', '_X016_KNOWN_EXECUTOR_RE', '_consumer_after_override', '_consumer_at']
 
 X009_RE = re.compile(
     r"\b(?:" + _OTHER_FETCH_CLIENT + r")\b[^\n|;&]*+"
@@ -161,9 +161,36 @@ X013_RE = re.compile(
     re.IGNORECASE,
 )
 
+_X013_REGISTRY_ASSIGN_RE = re.compile(
+    r"(?:npm_config_registry|PIP_INDEX_URL|PIP_EXTRA_INDEX_URL)\s*=",
+    re.IGNORECASE,
+)
+_X013_TRUSTED_REGISTRY_HOSTS = frozenset({
+    "registry.npmjs.org", "registry.yarnpkg.com", "pypi.org",
+    "files.pythonhosted.org",
+})
+_X013_URL_RE = re.compile(r"https?://([^/\s\"'})]+)", re.IGNORECASE)
+
+
+def _x013_is_trusted_registry(body: str, match: re.Match) -> bool:
+    """True for a registry assignment that names only public defaults.
+
+    X013 owns a *redirected* fetch.  `npm_config_registry=…registry.npmjs.org`
+    and `PIP_INDEX_URL=https://pypi.org/simple` point at the registry the
+    package manager would already use; they are configuration, not a trust
+    substitution.  An untrusted host, or a value with no literal URL, keeps
+    the finding.
+    """
+    if not _X013_REGISTRY_ASSIGN_RE.search(match.group(0)):
+        return False
+    urls = _X013_URL_RE.findall(body[match.end():])
+    return bool(urls) and all(host.lower().rstrip(".") in _X013_TRUSTED_REGISTRY_HOSTS
+                              for host in urls)
+
+
 X014_RE = re.compile(
     r"\b(?:export\s+|declare\s+-x\s+)?"
-    r"(?P<var>BASH_ENV|ENV|PROMPT_COMMAND|PS0|PS4"
+    r"(?P<var>BASH_ENV|(?-i:ENV)|PROMPT_COMMAND|PS0|PS4"
     r"|SHELLOPTS|BASHOPTS|BASH_FUNC_\w+%%"
     r"|GIT_SSH_COMMAND|GIT_EXTERNAL_DIFF|GIT_PAGER|GIT_EDITOR"
     r"|LESSOPEN|LESSCLOSE|PAGER|EDITOR|VISUAL"

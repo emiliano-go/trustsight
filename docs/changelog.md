@@ -4,9 +4,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **A one-off H104 snapshot backfill.** `scripts/backfill_h104.py` scans a watcher database's `pkgbuild_snapshots`, attaches H104 to each package's most recent analysis, and updates the stored fact. It is idempotent and dry-run capable; the incremental watcher never revisits a removed placeholder package.
+
 ### Fixed
 
 - **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
+- **Dependency arrays are no longer truncated at 60 lines.** The span limit is now a soft trigger: when the closing paren is still in the diff the array keeps its later additions, while an array whose closer is absent is still dropped at the file boundary. Post-state validation also folds the recipe's scalars, so `depends=("${_lib}-x")` is compared by its resolved value rather than skipping validation. A long closed array is the reproducer: a dependency added after line 60 was invisible to every D-rule.
+- **D005 owns absolute `provides`/`replaces` claims, and D003 covers transfer clients.** H064/D004 still report a claim added in the diff; D005 now reports the same claim when it was already in the recipe, with sonames and variants suppressed. D003's `[patterns] network_tools` list adds `axel`, `lftp`, `ftp`, `tftp`, `socat`, `netcat`/`ncat`/`nc`, `telnet`, `sshpass` and `openssh`; existing `patterns.toml` files are repaired in place only when they still carry the exact old list.
 
 - **The test suite no longer warns about an invalid escape sequence.** `_heredoc_delimiters`'s docstring is a raw string: it documents ``<<\EOF`` as a literal, so Python 3.14 no longer emits `SyntaxWarning: "\E" is an invalid escape sequence`. A new `tests/test_syntax_floor.py` gate compiles every shipped module with warnings recorded and fails on any parser-rejected escape, so the class cannot return.
 

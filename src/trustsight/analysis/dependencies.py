@@ -14,7 +14,9 @@ from ..db import (
 from ..deps import (
     declared_package_names,
     extract_dependency_changes,
+    is_ignorable,
     is_related_package,
+    normalize_dependency,
 )
 from ..novelty import is_dependency_novel, typosquat_target
 from .base import _code_rule_enabled, _rarities_of
@@ -147,16 +149,19 @@ def name_shadow_findings(text: str, package_name: str,
 
     H064/D004 own *newly added* ``provides``/``replaces``/``conflicts``; this
     rule owns the name a recipe carries now, including one whose target only
-    became an official package later.  Two signals:
+    became an official package later.  Three signals:
 
     * a ``pkgname`` output that is exactly an established package - the AUR
       package claims a name pacman already resolves elsewhere;
+    * a ``provides``/``replaces`` entry naming an established package
+      unrelated to this one, whether it was added in this diff or has been
+      there all along (sonames and variants are suppressed);
     * a ``conflicts`` entry naming an established package unrelated to this
       one (a variant such as ``foo-git`` conflicting ``foo`` is the ordinary
       pattern and is suppressed).
 
     *skip* holds names already reported by the diff-time rules, so an added
-    conflict is not reported twice.  Weight 0 until the benign corpus
+    claim is not reported twice.  Weight 0 until the benign corpus
     calibrates it; cold start (no pacman, no observations) fires nothing.
     """
     if not text:
@@ -194,12 +199,36 @@ def name_shadow_findings(text: str, package_name: str,
             emit(name, "pkgname",
                  f"pkgname '{name}' is an established package")
 
-    conflicts = {
-        entry
-        for field, entries in doc.arrays.items()
-        if field == "conflicts" or field.startswith("conflicts_")
-        for entry in entries
-    }
+    def field_entries(field: str) -> tuple[str, ...]:
+        return tuple(
+            entry
+            for key, values in doc.arrays.items()
+            if key == field or key.startswith(field + "_")
+            for entry in values
+        )
+
+    # Absolute provides/replaces: the same claim H064/D004 see only when it
+    # is *added*.  A reservation or rename that predates the diff still
+    # redirects installs of the name, so it belongs to the absolute-state
+    # rule.  The fold drops an entry that cannot be resolved rather than
+    # guessing at a name.
+    from ..changes import _resolve_relational
+
+    claimed: set[str] = set()
+    for field in ("provides", "replaces"):
+        for entry in _resolve_relational(field_entries(field), doc.scalars):
+            name = normalize_dependency(entry)
+            if not name or name in skip or name in claimed:
+                continue
+            if is_ignorable(name) or is_related_package(name, package_name):
+                continue
+            if is_established_package(name):
+                claimed.add(name)
+                emit(name, field,
+                     f"{field} claims '{name}', an established package "
+                     f"unrelated to '{package_name}'")
+
+    conflicts = field_entries("conflicts")
     for name in sorted(conflicts):
         if name in skip or is_related_package(name, package_name):
             continue
@@ -243,9 +272,14 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
         delta=delta, current_text=current_text,
     )
 
+    # H064/D004 own a claim added in this diff; D005 owns the claim the
+    # recipe carries now.  Hand the diff-time names over so a fresh claim is
+    # reported once, on the rule that describes the change.
+    diff_claims: set[str] = set()
+    for field in ("provides", "replaces", "conflicts"):
+        diff_claims.update(added_deps.get(field, ()))
     for shadow in name_shadow_findings(
-        current_text or "", package_name,
-        skip=set(added_deps.get("conflicts", ())),
+        current_text or "", package_name, skip=diff_claims,
     ):
         add(shadow["rule_id"], shadow["name"], shadow["severity"],
             shadow["category"], shadow["match"],

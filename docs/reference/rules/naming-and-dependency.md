@@ -175,6 +175,12 @@ excluded from the finding. `waycentral-git` moving `git` from `depends` to
 `makedepends` while keeping a `git+https://` source is a packaging
 correction, not a fetch capability.
 
+The list also covers transfer clients (`axel`, `lftp`, `ftp`, `tftp`,
+`socat`, `netcat`/`ncat`/`nc`, `telnet`, `sshpass`, `openssh`). It is
+`[patterns] network_tools`, so an operator can tune it; an existing
+`patterns.toml` is repaired in place only while it still carries the exact
+shipped list.
+
 ### H064: Provides/Replaces Scope Expansion {#h064}
 
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
@@ -273,6 +279,6 @@ A placeholder reserves a name in the AUR while installing nothing - it builds, r
 
 <!-- name: Official-Repo Name Shadow -->
 
-- **Condition:** A ``pkgname`` output is exactly an established package, or a ``conflicts`` entry names an established package unrelated to this one.
+- **Condition:** A ``pkgname`` output is exactly an established package, a ``provides`` or ``replaces`` entry names an established package unrelated to this one, or a ``conflicts`` entry does.
 
-H064 and D004 own the *added* ``provides``/``replaces``/``conflicts``. This rule owns the name the recipe carries now: a split output whose name pacman already resolves elsewhere, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` conflicting ``foo`` is suppressed - so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.
+H064 and D004 own the *added* ``provides``/``replaces``/``conflicts``. This rule owns the claim the recipe carries now: a split output whose name pacman already resolves elsewhere, a reservation or rename that predates the diff, or a conflict whose target became an official package after the recipe declared it. The variant carve-out is the ordinary pattern - ``foo-git`` providing or conflicting ``foo`` is suppressed - and a soname (``libfoo.so``) is not a package claim, so the finding names a name claim that stands alone. "Established" is official-repo membership, falling back to the dependency observation proxy exactly as H064 does, and cold start fires nothing. Weight 0 until the benign corpus calibrates it; the recipe's current text is read on the fresh path, the incremental path and ``trustsight lint``.

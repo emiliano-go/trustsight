@@ -6,6 +6,8 @@
 
 ### Fixed
 
+- **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
+
 - **The test suite no longer warns about an invalid escape sequence.** `_heredoc_delimiters`'s docstring is a raw string: it documents ``<<\EOF`` as a literal, so Python 3.14 no longer emits `SyntaxWarning: "\E" is an invalid escape sequence`. A new `tests/test_syntax_floor.py` gate compiles every shipped module with warnings recorded and fails on any parser-rejected escape, so the class cannot return.
 
 ## [0.25.0] - 2026-10-25

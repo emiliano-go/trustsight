@@ -29,7 +29,7 @@ __all__ = [
 ]
 
 #: Bound on the resolve loop: a crafted recipe can chain substitutions, and
-#: eight links is far past anything makepkg packaging does in practice.
+#: sixteen links is far past anything makepkg packaging does in practice.
 _MAX_EXPANSION_PASSES = 16
 
 #: Bound on the whole-text resolve loop.  Separate from the brace-only cap
@@ -370,6 +370,31 @@ def _strip_affix(val: str, op: str, pat: str,
     return val
 
 
+def _split_substitution(rest: str) -> tuple[str, str]:
+    """Split ``pat/rep`` at the first *unescaped* ``/``.
+
+    Bash spells a literal slash in a pattern as ``\\/``.  The old
+    ``[^/]*`` form stopped at the backslash and silently applied the wrong
+    pattern: ``${p//\\//_}`` returned the value unchanged instead of
+    replacing its slashes, and reported the expansion as fully resolved.
+    Other backslashes are left in place, so the glob compiler sees exactly
+    what it saw before.
+    """
+    pattern: list[str] = []
+    index = 0
+    while index < len(rest):
+        char = rest[index]
+        if char == "\\" and index + 1 < len(rest) and rest[index + 1] == "/":
+            pattern.append("/")
+            index += 2
+            continue
+        if char == "/":
+            return "".join(pattern), rest[index + 1:]
+        pattern.append(char)
+        index += 1
+    return "".join(pattern), ""
+
+
 def _expand_one_unbounded(
     body: str,
     vars_: dict[str, str],
@@ -402,9 +427,10 @@ def _expand_one_unbounded(
         return arr[i] if 0 <= i < len(arr) else ""
 
     # //pat/rep  |  //pat  (delete)  |  /pat/rep
-    m = re.match(r"^(\w+)(//|/)([^/]*)(?:/(.*))?$", body)
+    m = re.match(r"^(\w+)(//|/)(.*)$", body)
     if m:
-        name, mode, pat, rep = m.group(1), m.group(2), m.group(3), m.group(4) or ""
+        name, mode, rest = m.group(1), m.group(2), m.group(3)
+        pat, rep = _split_substitution(rest)
         val = vars_.get(name)
         if val is None:
             # Bash treats an unset scalar in ${var/pat/rep} as empty.
@@ -484,6 +510,20 @@ def _expand_one_unbounded(
     if m:
         name, _, default = m.group(1), m.group(2), m.group(3)
         return vars_.get(name) or default
+
+    # :+alt  /  :?message
+    #
+    # ``:+`` substitutes a literal when the value is set and non-empty;
+    # ``:?`` is an assertion, so when the value is unset or empty the shell
+    # aborts.  A resolver must not invent a value for an abort: returning
+    # None leaves the expansion unreconstructed and the caller fail-closed.
+    m = re.match(r"^(\w+):([+?])(.*)$", body)
+    if m:
+        name, op, word = m.group(1), m.group(2), m.group(3)
+        value = vars_.get(name)
+        if op == "+":
+            return word if value else ""
+        return value if value else None
 
     # :offset:length  /  :offset
     m = re.match(r"^(\w+):(\d+)(?::(\d+))?$", body)

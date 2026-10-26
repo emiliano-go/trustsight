@@ -132,3 +132,29 @@ def test_a_fragment_ends_a_heredoc_at_each_boundary(boundary):
     lexed = lex_lines(lines, fragment=True)
     assert lexed[1].heredoc_body
     assert not lexed[3].heredoc_body
+
+
+def test_multiple_heredocs_are_tracked_in_opener_order():
+    """Bash supplies the bodies in opener order, not stack order.
+
+    Both readers used to keep only the first opener, so the second body was
+    read as shell code and its assignment-shaped lines were folded away.
+    """
+    lines = ["+cat > x <<A <<B", "+first", "+A", "+second", "+B", "+echo done"]
+    lexed = lex_lines(lines)
+    assert lexed[0].heredoc_openers == (("A", False), ("B", False))
+    assert [i for i, line in enumerate(lexed) if line.heredoc_body] == [1, 2, 3, 4]
+
+
+def test_a_herestring_does_not_open_a_heredoc():
+    """``<<<word`` is one redirect; the second ``<<`` is not an opener."""
+    lexed = lex_lines(["cat <<<word", "echo still-code"])
+    assert lexed[0].heredoc_openers == ()
+    assert not lexed[1].heredoc_body
+
+
+def test_a_quoted_delimiter_with_spaces_is_one_opener():
+    lexed = lex_lines(["cat <<'END MARK'", "body", "END MARK", "done"])
+    assert lexed[0].heredoc_openers == (("END MARK", False),)
+    assert lexed[1].heredoc_body
+    assert not lexed[3].heredoc_body

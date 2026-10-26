@@ -13,6 +13,7 @@ ARCHIVE_EXCLUDED_PATHS = frozenset({
 CRITICAL_PATHS = frozenset({
     "scripts/security_gates.py",
     "src/trustsight/tokenizer.py",
+    "src/trustsight/_heredoc.py",
     "src/trustsight/_tokenizer_engine/__init__.py",
     "src/trustsight/_tokenizer_engine/_common.py",
     "src/trustsight/_tokenizer_engine/_quotes.py",

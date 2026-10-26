@@ -310,7 +310,7 @@ def _opens_a_comment(line: str, index: int) -> bool:
     )
 
 def _heredoc_delimiters(line: str) -> list[str]:
-    """Delimiters a shell opens on *line*, quote- and comment-aware.
+    r"""Delimiters a shell opens on *line*, quote- and comment-aware.
 
     The previous reader was a bare regex over the whole line, so a ``<<EOF``
     inside a comment or a quoted message pushed a delimiter bash never

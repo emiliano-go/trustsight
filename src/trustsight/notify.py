@@ -166,17 +166,27 @@ def _alert_entries(cycle) -> list[dict]:
     but the published entry used to be just ``(package, rule_id)``, so a feed
     could say "ownership changed" without naming either side.  Carry the
     finding's transition onto the entry, and fall back to the per-package
-    detail when the finding names only one side (H074) or none.  Only keys
-    with a value are added, and the payload trimmer still bounds the document.
+    detail when the finding names only one side (H074) or none.  H046 is the
+    dependency-side equivalent: the dependent did not change, so without its
+    ``dep`` the entry cannot say which adopted dependency exposed it.  Only
+    keys with a value are added, and the payload trimmer still bounds the
+    document.
     """
     transitions: dict[tuple[str, str], dict] = {}
+    dependencies: dict[tuple[str, str], dict] = {}
     for finding in (getattr(cycle, "cluster_findings", None) or ()):
         if not isinstance(finding, dict):
             continue
-        extra = _transition(finding.get("params"))
+        rule_id = str(finding.get("rule_id", ""))
+        params = finding.get("params")
+        if rule_id == "H046" and isinstance(params, dict):
+            dep = params.get("dep")
+            if isinstance(dep, str) and dep:
+                for member in _member_list(finding, "members"):
+                    dependencies[(str(member), rule_id)] = {"dependency": dep}
+        extra = _transition(params)
         if not extra:
             continue
-        rule_id = str(finding.get("rule_id", ""))
         for member in _member_list(finding, "members"):
             transitions[(str(member), rule_id)] = extra
     detail = getattr(cycle, "detail", {}) or {}
@@ -191,6 +201,8 @@ def _alert_entries(cycle) -> list[dict]:
                        "diff_sha256"}
         })
         entry.update(transitions.get((package, rule_id), {}))
+        entry.update(dependencies.get((package, rule_id), {}))
+
         # A finding that carries only one side still gets both when the cycle
         # recorded the previous maintainer.
         if rule_id in _OWNERSHIP_RULES and fields:

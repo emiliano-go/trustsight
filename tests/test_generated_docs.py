@@ -87,3 +87,19 @@ def test_every_page_matches_its_sources():
     assert stale == [], (
         f"stale pages: {stale}; run python scripts/build_rules_index.py"
     )
+
+
+def test_generated_rule_pages_do_not_publish_source_markers():
+    """Section metadata comments are source markers, not prose.
+
+    A marker left in a generated page is invisible in a browser but shows up
+    in copy/paste, search indexes and raw HTML.  The generator consumes all
+    three markers (uid, name, anchor); none may reach the published page.
+    """
+    markers = ("<!-- uid:", "<!-- name:", "<!-- anchor:")
+    offenders = [
+        page.name
+        for page in (ROOT / "docs" / "reference" / "rules").glob("*.md")
+        if any(marker in page.read_text() for marker in markers)
+    ]
+    assert offenders == [], f"source markers leaked into generated pages: {offenders}"

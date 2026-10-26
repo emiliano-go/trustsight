@@ -55,8 +55,6 @@ severity weights and the reserved identifier ranges.
 
 ### H006: New Make/Opt/Check Dependency {#h006}
 
-<!-- name: New Make/Opt/Check Dependency -->
-
 H006 is retained as a documentation anchor for a retired rule. It emits no
 finding: a network-capable `makedepends` addition is scored by [D003](#d003),
 and an `optdepends` addition is reported as a fact, never scored, without
@@ -67,8 +65,6 @@ corpus state.
 - **Target:** programmatic (package name against seeded candidate list)
 - **Severity:** HIGH (weight 25) - corpus rate 0.00 % (0/202, package-name scan)
 - **Category:** `naming`
-
-<!-- name: Package-Name Typosquat -->
 
 - **Condition:** The package's own name is Damerau-Levenshtein distance ≤2 of an **established, far-more-popular** package - AND is not an expected variant (`-git`, `-bin`, `-debug`, `-lts`, etc.) of that package.
 
@@ -98,8 +94,6 @@ Symmetric edit-distance is a census generator: `foo-git`, `foo-bin`, `foo-lts`, 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
 
-<!-- name: Novel Dependency Added -->
-
 - **Description:** A dependency name appears that has never been observed anywhere in the AUR. Either a typo or a package created specifically to be pulled in.
 
 MEDIUM rather than HIGH: "never observed in the AUR" reads accumulated instrument history, so it is a prior - a quiet or cold corpus can make an ordinary new dependency look novel - and it is evidence to weigh, not a high-severity finding on its own. It stays scored, so poisoning the corpus can quiet it but never silence the structural rules.
@@ -121,8 +115,6 @@ Three classes of name are never considered novel, each an observed false positiv
 - **Severity:** HIGH (weight 25)
 - **Category:** `dependency`
 
-<!-- name: Typosquatted Dependency -->
-
 - **Description:** A novel dependency name within one or two edits (Damerau-Levenshtein, so transpositions count) of a popular package: `openss1` for `openssl`, `cur1` for `curl`.
 
 D002 **refines D001**: only a name D001 has already found to be globally unknown is compared, and D002 is reported instead of D001 when it matches. That ordering is what makes the check both affordable and correct. A precomputed table of confusable pairs cannot work, because a table built from existing package names can only contain names that must *not* fire, while the names that should fire do not exist yet.
@@ -139,8 +131,6 @@ Popularity is taken from `observation_count`, so no separate package list is shi
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `dependency`
-
-<!-- name: Dependency Hijack Via Provides -->
 
 - **Description:** `provides=` or `replaces=` declares an **established package unrelated to this one**. `provides=('openssl')` or `replaces=('sudo')` installs this package in front of the real one, satisfying every dependency on it.
 
@@ -161,8 +151,6 @@ The ecosystem carve-out matters: thousands of unrelated packages share `python-`
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency`
-
-<!-- name: New Network-Using Makedepends -->
 
 - **Description:** `makedepends` gains a network-capable tool (`curl`, `wget`, `git`, `python-requests`, …) that was not there before, meaning the build can now fetch code that no checksum covers.
 
@@ -185,8 +173,6 @@ shipped list.
 
 - **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
 - **Category:** `dependency`
-
-<!-- name: Provides/Replaces Scope Expansion -->
 
 - **Condition:** A newly claimed `provides`, `replaces` or `conflicts` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).
 
@@ -219,8 +205,6 @@ has the config for a package set that is mostly kernels.
 - **Severity:** HIGH (weight 25) for a security-relevant library, MEDIUM (weight 15) otherwise
 - **Category:** `dependency`
 
-<!-- name: Dependency Vendored Into Source -->
-
 - **Condition:** A dependency was removed and a new source entry appeared whose project name matches the removed dependency name.
 
 Narrowed to that mechanical case on purpose. Vendoring a library bypasses the
@@ -231,8 +215,6 @@ is what raises the severity.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
-
-<!-- name: Name/Host Consensus Divergence -->
 
 - **Condition:** An ecosystem-prefixed package (`python-`, `ruby-`, `nodejs-`, ...) is sourced from neither its ecosystem's canonical hosts nor a known forge.
 
@@ -255,8 +237,6 @@ it. The finding names the prefix and the host so the reader can judge that call.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
 
-<!-- name: Name/Repo Divergence -->
-
 - **Condition:** The package name and the repository it is built from share no meaningful token. A leading name token that is the acronym of consecutive words in the repository path (for example `qsc` for `Qualcomm Software Center`) counts as a match.
 
 ### H104: Placeholder Package {#h104}
@@ -264,8 +244,6 @@ it. The finding names the prefix and the host so the reader can judge that call.
 - **Target:** programmatic (recipe text, 2-of-3 signals)
 - **Severity:** INFO (weight 0, report-only)
 - **Category:** `naming`
-
-<!-- name: Placeholder Package -->
 
 - **Condition:** **Two of three** signals: `pkgver` is `0.0.0`; every `package`/`package_*` body ships nothing (only `echo`/`printf`/`true`/`:`, no install verb and no write into `$pkgdir`); and the declared checksum is a dummy sentinel (`DUMMY-FOR-INITIALIZATION`, a single repeated character, `SKIP`) or there is neither a source nor a checksum.
 
@@ -276,8 +254,6 @@ A placeholder reserves a name in the AUR while installing nothing - it builds, r
 - **Target:** programmatic (recipe text: pkgname/conflicts against official repos)
 - **Severity:** MEDIUM (weight 0, report-only)
 - **Category:** `dependency`
-
-<!-- name: Official-Repo Name Shadow -->
 
 - **Condition:** A ``pkgname`` output is exactly an established package, a ``provides`` or ``replaces`` entry names an established package unrelated to this one, or a ``conflicts`` entry does.
 

@@ -44,8 +44,6 @@ severity weights and the reserved identifier ranges.
 - **Severity:** INFO (weight 0) - report-only co-occurrence flag
 - **Category:** `meta`
 
-<!-- name: Capability Density Anomaly -->
-
 - **Condition:** A single diff has rule hits in **3+ distinct capability
   categories** (e.g. `network` + `filesystem` + `execution` + `encoding`).
 
@@ -72,8 +70,6 @@ domains has a density that is itself a pattern.
 - **Severity:** INFO (weight 0)
 - **Category:** `meta`
 
-<!-- name: Attack-Chain Composition -->
-
 - **Condition:** The findings on one package span at least `[thresholds] h043.attack_chain_stages` (default 3) distinct kill-chain stages.
 
 Stages: takeover (H026, H044, H074), mass adoption (H045, H073), install hook
@@ -99,8 +95,6 @@ three distinct stages.
 - **Target:** programmatic (the package's own findings, no new detection)
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
-
-<!-- name: Naming/Deception Cluster -->
 
 - **Condition:** The findings on one package carry at least `[thresholds] h098.min_signals` (default 2) distinct naming/deception signals.
 
@@ -141,8 +135,6 @@ two naming/deception signals.
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
 
-<!-- name: Maintainer Change With Signing Key Change -->
-
 - **Condition:** The maintainer changed and `validpgpkeys` moved (H078)
   in the same diff.
 
@@ -159,8 +151,6 @@ composition H098 uses.
   MEDIUM (weight 15) when `optdepends` does.
 - **Category:** `composition`
 
-<!-- name: Dependency Removal During A Build Change -->
-
 - **Condition:** `checkdepends` or `optdepends` loses an entry while
   `build()`, `prepare()` or `check()` changed in the same diff.
 
@@ -175,8 +165,6 @@ fire-rate gate clears `checkdepends` for HIGH.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `composition`
-
-<!-- name: Install Script Not Declared -->
 
 - **Condition:** A diff adds or modifies a `*.install` file while the
   recipe has no `install=` scalar naming it. pacman never runs the hook,

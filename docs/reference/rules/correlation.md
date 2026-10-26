@@ -56,8 +56,6 @@ This is a reference page. For how weight and scope work, see
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
 
-<!-- name: Shared Gained Host -->
-
 - **Condition:** The same gained canonical host appears in `[thresholds] g_host.min_packages` (default 5) distinct packages within the cycle window.
 
 atomic-arch's signature: a new CDN added by many unrelated packages at once.
@@ -70,8 +68,6 @@ outputs of one pkgbase are one project, not several unrelated packages.
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
-
-<!-- name: Shared Added Literal -->
 
 - **Condition:** An identical added literal above `[thresholds] g_blob.min_length` (default 256) characters appears in `g_blob.min_packages` (default 2) unrelated packages in the window.
 
@@ -96,8 +92,6 @@ shared literal.
 - **Severity:** MEDIUM (weight 15); HIGH (weight 25) when escalated
 - **Category:** `correlation`
 
-<!-- name: Coordinated Adoption -->
-
 - **Condition:** Among the packages processed in a cycle, one maintainer key is joined to at least `[thresholds] g_adopt.min_members` (default 3) packages with a recorded adoption predicate.
 
 Adoption is the temporal engine's own predicate - H044 (ownership transition) or H086 (orphan-to-maintained) - recorded per package, not a bare maintainer-change. A package absent from the previous snapshot is a first observation, not an adoption, so a newly published package cannot join the group. The finding's `predicates` names which T instance the group joined on; H074 (mass adoption) is the cross-package aggregation this rule performs.
@@ -116,8 +110,6 @@ not proven to be one family and stays a finding (fail-open to the alert).
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
 
-<!-- name: Shared Upstream Dependency -->
-
 - **Condition:** The same upstream dependency (and host), added to a committed manifest, appears in at least `[thresholds] g_dep.min_packages` (default 2) packages in the window.
 
 The committed-manifest counterpart to G001: a dependency name and remote host that many packages gain in the same window is the same-new-upstream-dependency campaign shape. It reads the recorded `upstream_dep_additions` view, which the corpus writer clears at cycle start and repopulates with the dependencies each processed package added; a prior cycle's row cannot re-fire the join. Split outputs of one pkgbase are one project, not several unrelated packages.
@@ -127,8 +119,6 @@ The committed-manifest counterpart to G001: a dependency name and remote host th
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
-
-<!-- name: Impersonation Campaign -->
 
 - **Condition:** One maintainer publishes at least `[thresholds] g_impersonation.min_members` (default 3) packages in the window whose names resemble a *far* more popular AUR package (the corpus H029 check over AUR vote counts).
 
@@ -140,8 +130,6 @@ The registry-impersonation campaign shape: many near-identical name-clones of po
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
 
-<!-- name: Neighborhood Under Campaign Alert -->
-
 - **Condition:** While a campaign is active (see [Campaign Alert Mode](../../explanation/campaign-alert-mode.md)), a package in the window *gains* a host or domain in that campaign's scope, without itself being corroborated.
 
 The cytokine effect: an alerted neighborhood raises the surrounding tissue's readiness. It is reported, never scored, in v1 - "touches an alerted neighborhood" names a context, not a behaviour - and it never forbids a clean verdict. Only *gained* hosts count.
@@ -152,8 +140,6 @@ The cytokine effect: an alerted neighborhood raises the surrounding tissue's rea
 - **Severity:** INFO, weight 0 (report-only)
 - **Category:** `correlation`
 
-<!-- name: Campaign Corroboration -->
-
 - **Condition:** A review run whose package, or a host it newly gained, stands in the scope of an active campaign.
 
 Trained immunity, reported: while a campaign is primed, a package in its scope is named as corroborated - one `G007` entry carrying `campaign_id`, weight 0. It adds no points: the bonus it replaced measured scope *breadth*, not corroboration, and the benign corpus carries no active campaign, so the points were never measured against the false-positive rate. Inert when no campaign is active. See [Campaign Alert Mode](../../explanation/campaign-alert-mode.md).
@@ -163,8 +149,6 @@ Trained immunity, reported: while a campaign is primed, a package in its scope i
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
-
-<!-- name: First-Seen Account Adoption Burst -->
 
 - **Condition:** An account with no prior maintainer history in the local database adopts at least `[thresholds] g008.min_packages` (default 5) packages within `[thresholds] g008.window_days` (default 7) days, and at least `[thresholds] g008.min_dormant` (default 3) of those targets are dormant (last git activity older than `[thresholds] g008.dormant_days` (default 180) days).
 
@@ -177,8 +161,6 @@ The dormant-target clause is the FP killer. A legitimate new maintainer adopts a
 - **Target:** programmatic (cycle records)
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
-
-<!-- name: Watchlisted Subject -->
 
 - **Condition:** A package whose name, or whose maintainer's salted hash, appears on the operator's watchlist (`[thresholds] g009`, enabled by default; `~/.config/trustsight/watchlist.json` unless `g009.path` names another file).
 
@@ -194,8 +176,6 @@ The operator's file is unioned with an imported, signed `watchlist-*` release (`
 - **Severity:** INFO (weight 0)
 - **Category:** `correlation`
 
-<!-- name: Shared First-Seen Host -->
-
 - **Condition:** The same canonical source host, first seen in the corpus at or after `[thresholds] g010.window_days` (default 7) days ago, is gained by at least `[thresholds] g010.min_packages` (default 5) packages within the window.
 
 The G001 shape with the novelty join instead of the gained-host join: only a host the corpus has not met before counts, so one honest newcomer per window is the AUR being the AUR and five is a distribution infrastructure. Trusted-forge and official hosts stand down, as do split outputs of one pkgbase and one maintainer's long-prefix name family. Weight 0 and never campaign-priming: a first contact is a statement about newness, never about intent, so G010 names the coordination and never scores, gates, notifies alone, or escalates a member (the Contact Ledger's plural-contact rule: strangers in company are a signal, strangers alone are a census).
@@ -205,8 +185,6 @@ The G001 shape with the novelty join instead of the gained-host join: only a hos
 - **Target:** programmatic (cycle events + latest H021/H104)
 - **Severity:** MEDIUM (weight 0); HIGH when the placeholder share is met
 - **Category:** `correlation`
-
-<!-- name: Maintainer Package Creation Burst -->
 
 - **Condition:** A first-seen maintainer creates at least `[thresholds] g011.min_packages` (default 5) unrelated brand-new packages (H021) within `[thresholds] g011.window_days` (default 7) days. The finding is MEDIUM; it escalates to HIGH when H104 placeholders are at least `[thresholds] g011.placeholder_share` (default 0.5) of the members.
 
@@ -222,8 +200,6 @@ This is the cross-package signal H104 exists for. Individually a placeholder is 
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
 
-<!-- name: Shared Payload Signal -->
-
 - **Condition:** The same specific payload rule fired in at least `[thresholds] g012.min_packages` (default 3) unrelated packages from at least `g012.min_maintainers` (default 2) distinct maintainers in one cycle.
 
 A per-package rule names one package's payload. This is the cross-account join: three unrelated maintainers shipping the same payload technique in one window is a campaign, not three coincidences. Only the curated payload allowlist counts (`R001`, `R002`, `R003`, `R008`, `H017`, `H035`, `H041`, `H075`, `H090`, `C016`, `C032`, `S001`-`S008`); broad practice rules such as `R010` (uses curl) or `H001` (checksum `SKIP`) are deliberately excluded so ordinary ecosystem churn cannot read as coordination.
@@ -236,8 +212,6 @@ The join runs over this cycle's recorded rule ids, so a prior cycle cannot re-fi
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
 
-<!-- name: Shared Fetch Target -->
-
 - **Condition:** The same canonical URL reported by a payload finding appears in at least `[thresholds] g013.min_packages` (default 2) unrelated packages from at least `g013.min_maintainers` (default 2) distinct maintainers in one cycle.
 
 G012 joins on the rule; this joins on the endpoint. Two different payload rules that fetch the same URL meet here. The URL is read from the finding's already-bounded `reason` and `evidence` text - nothing is fetched and nothing is resolved - and a URL that cannot be parsed is dropped rather than guessed at. The canonical key keeps the scheme, lower-cased host, non-default port and path, and drops the query and fragment: that is the part an attacker can vary for free, and two packages pointing at the same endpoint should meet.
@@ -249,8 +223,6 @@ This is the build-time complement to G001/G010, which read `source=` host transi
 - **Target:** programmatic (cycle records)
 - **Severity:** HIGH (weight 25)
 - **Category:** `correlation`
-
-<!-- name: Shared Adoption Window -->
 
 - **Condition:** At least `[thresholds] g014.min_packages` (default 3) unrelated dormant packages were adopted in one cycle by at least `g014.min_maintainers` (default 2) distinct maintainers.
 

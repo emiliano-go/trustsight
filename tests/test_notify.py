@@ -112,6 +112,25 @@ def test_ownership_alerts_accept_the_h026_parameter_names():
     }]
 
 
+def test_dependency_alerts_name_the_adopted_dependency():
+    """H046 flags a dependent; without ``dependency`` the entry is unreadable."""
+    cycle = _cycle(
+        new_alerts=[("dependent", "H046")],
+        cluster_findings=[{
+            "rule_id": "H046",
+            "params": {
+                "members": ["dependent"],
+                "dep": "pyside6",
+                "maintainer": "sonicdesktop",
+            },
+        }],
+    )
+    assert alert_payload(cycle)["alerts"] == [{
+        "package": "dependent", "rule_id": "H046",
+        "dependency": "pyside6",
+    }]
+
+
 def test_alerts_fall_back_to_the_cycle_detail_for_a_maintainer_change():
     """H074 names only the adopter; the previous owner is in the detail."""
     cycle = _cycle(

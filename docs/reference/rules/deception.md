@@ -40,8 +40,6 @@ severity weights and the reserved identifier ranges.
 - **Severity:** FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)
 - **Category:** `injection`
 
-<!-- name: LLM Prompt Injection -->
-
 - **Pattern:** `\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\s+(?:this|that|the|these|those|all|any|it|them|above|previous|prior|suspicious|following|everything|anything)\b`
 - **Comments:** scanned (`include_comments`)
 - **Description:** Detects template-shaped text addressed to whoever *reads* the PKGBUILD rather than to the shell that runs it: instruction overrides ("ignore the previous instructions"), role markers (`system:`, `assistant:`), tag-like injections (`<system>`, `<instructions>`), personas ("you are a helpful model..."), suppression orders ("do not flag/warn/analyze") and pre-declared verdicts ("mark this as safe"). Comment lines are scanned, unlike every rule that describes what the shell executes, because this is reviewer-facing text. Calibrated at 22/22 labelled injection fixtures with 0 fires across the historical v1 benign corpus. This is a **reviewer-directed template tripwire**, not proof of an author's intent or a general prompt-injection detector: a match requires reviewer scrutiny, and a non-match establishes nothing. The finding contributes weight 0; its signal is the unsuppressible FATAL entry in `score_breakdown` and the FATAL name in the verdict label.
@@ -51,8 +49,6 @@ severity weights and the reserved identifier ranges.
 - **Target:** `raw_line`
 - **Severity:** FATAL (weight 0; names itself in the verdict label, e.g. `Low (FATAL: R012)`)
 - **Category:** `unicode`
-
-<!-- name: Unicode Bidi Override -->
 
 - **Pattern:** `[\u202A-\u202E\u2066-\u2069\u2060-\u2064\U000E0000-\U000E007F]|(?<![^\x00-\x7F])[\u200B-\u200F\uFEFF](?![^\x00-\x7F])`
 - **Description:** Detects directionality overrides, isolates, invisible operators, tag characters, and zero-width joiners placed between ASCII neighbours. These codepoints can make displayed text differ from executed text. The ASCII-neighbour restriction preserves attacks hidden inside ASCII commands or URLs while dropping legitimate use in localized `GenericName[...]` lines.
@@ -67,15 +63,11 @@ The rule splits deceptive codepoints into two classes, because they are not equa
 
 ### H012: Strace detection attempt (TracerPid check) {#h012}
 
-<!-- name: Strace detection attempt (TracerPid check) -->
-
 H012 is retained as a documentation anchor for a reserved `runtime` id. No
 code emits it: reading `TracerPid` is post-install behaviour a static diff
 cannot observe. [H067](#h067) claims the static anti-analysis probe.
 
 ### H013: Strace log truncated (possible flood evasion) {#h013}
-
-<!-- name: Strace log truncated (possible flood evasion) -->
 
 H013 is retained as a documentation anchor for a reserved `runtime` id. No
 code emits it; it is held alongside [H012](#h012).
@@ -84,8 +76,6 @@ code emits it; it is held alongside [H012](#h012).
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `anti_analysis`
-
-<!-- name: Anti-Analysis Check -->
 
 - **Condition:** A build or install function probes for a debugger (`TracerPid`), a VM (`systemd-detect-virt`, DMI or hypervisor strings), a sandbox, or CI (`$CI`, `$GITHUB_ACTIONS`, `$CONTAINER`, `/.dockerenv`), from `[patterns] anti_analysis_probes`. The udev/chroot guard
 `systemd-detect-virt --chroot` is excluded: it asks whether udev is present,
@@ -101,8 +91,6 @@ Fire rate: 0 on the v1 corpus.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `deception`
-
-<!-- name: Source Domain Resembles Declared Upstream -->
 
 - **Condition:** The recipe's declared `url=` is on a trusted forge or official
   project, and an added `source=` URL's registrable domain is one or two

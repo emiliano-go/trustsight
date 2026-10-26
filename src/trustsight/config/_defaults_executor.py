@@ -1,7 +1,7 @@
 """Extracted from config.py: _defaults_executor."""
 
 
-__all__ = ['ANY_EXECUTOR', 'GETENT_ENUMERATION_FRAGMENT', 'CATALOGUED_FETCH_ALTERNATIVES', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'STRUCTURED_EXTRACTOR', '_SUBCOMMAND_OPTS']
+__all__ = ['ANY_EXECUTOR', 'GETENT_ENUMERATION_FRAGMENT', 'CATALOGUED_FETCH_ALTERNATIVES', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'STRUCTURED_EXTRACTOR', '_SUBCOMMAND_OPTS']
 
 DEFAULT_FOREIGN_PKG_MANAGERS = [
     r"\b(?:pip|pip3)\s+install\b",
@@ -392,11 +392,33 @@ DEFAULT_PARSE_TIME_FETCH = [
 ]
 
 DEFAULT_NETWORK_TOOLS = [
-    "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+    "curl", "wget", "aria2", "axel", "lftp", "ftp", "tftp", "socat",
+    "netcat", "ncat", "nc", "telnet", "sshpass", "openssh",
+    "git", "subversion", "mercurial", "rsync",
     "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
     "python-pip", "python-uv", "ruby-net-http", "nodejs", "npm", "pnpm",
     "yarn", "bun", "uv", "cargo", "go",
 ]
+
+#: Lists shipped before the transfer-client expansion.  ``patterns.toml`` is
+#: written once at install and never synced, so an existing install keeps its
+#: old list forever; the repair swaps an exact shipped table for the new one
+#: and leaves any user edit alone.  Oldest first.
+LEGACY_NETWORK_TOOL_LISTS = (
+    [
+        "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+        "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
+        "ruby-net-http", "nodejs", "npm", "yarn", "cargo", "go",
+    ],
+    [
+        "curl", "wget", "aria2", "git", "subversion", "mercurial", "rsync",
+        "python-requests", "python-httpx", "python-urllib3", "python-aiohttp",
+        "python-pip", "python-uv", "ruby-net-http", "nodejs", "npm", "pnpm",
+        "yarn", "bun", "uv", "cargo", "go",
+    ],
+)
+
+LEGACY_NETWORK_TOOLS = LEGACY_NETWORK_TOOL_LISTS[-1]
 
 DEFAULT_VARIANT_SUFFIXES = (
     "-git", "-bin", "-svn", "-hg", "-bzr", "-cvs", "-nightly",

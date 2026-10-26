@@ -967,3 +967,81 @@ def test_d004_does_not_treat_a_conflict_as_a_provides_claim(
         HEADER + "+conflicts=('openssl')\n", all_enabled, rules)
     assert "D004" in fired(
         HEADER + "+provides=('openssl')\n", all_enabled, rules)
+
+
+# --- long arrays and post-state validation ---
+
+@pytest.mark.parametrize("count", [59, 60, 100, 200])
+def test_a_long_closed_array_keeps_a_late_addition(count):
+    """The 60-line bound used to truncate a real meta-package's array."""
+    body = "".join(f"  dep{i}\n" for i in range(count))
+    diff = HEADER + " depends=(\n" + body + "+  evilpkg\n )\n"
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == {"evilpkg"}
+
+
+def test_an_unterminated_long_array_is_still_dropped():
+    """No closer in the diff means the hunk boundary is ambiguous."""
+    body = "".join(f"  dep{i}\n" for i in range(100))
+    diff = HEADER + (
+        " depends=(\n" + body
+        + "+  evilpkg\n"
+        + "+package() {\n+  if [[ ! -f x ]]; then\n+    echo hi\n+  fi\n+}\n"
+    )
+    assert extract_dependency_changes(diff, "mypkg")["depends"] == set()
+
+
+def test_post_validation_resolves_a_scalar_dependency():
+    current = (
+        "pkgname=mypkg\npkgver=1\npkgrel=1\narch=(any)\n"
+        '_lib=libfoo\ndepends=("${_lib}-x")\npackage() { :; }\n'
+    )
+    diff = HEADER + '+_lib=libfoo\n+depends=("${_lib}-x")\n'
+    assert extract_dependency_changes(
+        diff, "mypkg", current_text=current
+    )["depends"] == {"libfoo-x"}
+
+
+def test_post_validation_keeps_claims_when_an_entry_is_unresolved():
+    current = (
+        "pkgname=mypkg\npkgver=1\npkgrel=1\narch=(any)\n"
+        'depends=("${unknown}-x" "newdep")\npackage() { :; }\n'
+    )
+    diff = HEADER + '+depends=("${unknown}-x" "newdep")\n'
+    assert "newdep" in extract_dependency_changes(
+        diff, "mypkg", current_text=current
+    )["depends"]
+
+
+@pytest.mark.parametrize("tool", [
+    "axel", "lftp", "ftp", "tftp", "socat", "netcat", "ncat", "nc",
+    "telnet", "sshpass", "openssh",
+])
+def test_d003_covers_transfer_clients(enabled, rules, tool):
+    diff = HEADER + f"+makedepends=('{tool}')\n"
+    assert "D003" in fired(diff, enabled, rules)
+
+
+def test_d005_reports_a_pre_existing_provides_claim(seeded_db, all_enabled, rules):
+    """H064/D004 only see a claim that was added; D005 owns the one already
+    in the recipe."""
+    current = (
+        "pkgname=mypkg\npkgver=2\npkgrel=1\narch=(any)\n"
+        "provides=('openssl')\npackage() { :; }\n"
+    )
+    fact = scan_diff(
+        HEADER + "-pkgver=1\n+pkgver=2\n", rules=rules, config=all_enabled,
+        package_name="mypkg", current_text=current,
+    )
+    assert "D005" in {e.rule_id for e in fact.score_breakdown}
+
+
+def test_d005_does_not_double_report_a_new_claim(seeded_db, all_enabled, rules):
+    current = (
+        "pkgname=mypkg\npkgver=2\npkgrel=1\narch=(any)\n"
+        "provides=('openssl')\npackage() { :; }\n"
+    )
+    fact = scan_diff(
+        HEADER + "+provides=('openssl')\n", rules=rules, config=all_enabled,
+        package_name="mypkg", current_text=current,
+    )
+    assert "D005" not in {e.rule_id for e in fact.score_breakdown}

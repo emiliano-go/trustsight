@@ -157,7 +157,29 @@ def _dispatch(op: str, payload: object) -> object:
     if op == "reconstruct_literals":
         return list(engine.reconstruct_literals(payload))
     if op == "reconstruct_lines":
-        return [list(engine.reconstruct_literals(line)) for line in payload]
+        from ..line_lex import QuoteState
+        from .._tokenizer_engine._quotes import reconstruct_literals_stateful
+
+        state = QuoteState()
+        out = []
+        for line in payload:
+            rebuilt, fully, state, _quoted = reconstruct_literals_stateful(
+                line, state,
+            )
+            out.append([rebuilt, fully])
+        return out
+    if op == "reconstruct_lines_stateful":
+        from ..line_lex import QuoteState
+        from .._tokenizer_engine._quotes import reconstruct_literals_stateful
+
+        state = QuoteState()
+        out = []
+        for line in payload:
+            rebuilt, fully, state, quoted = reconstruct_literals_stateful(
+                line, state,
+            )
+            out.append([rebuilt, fully, quoted])
+        return out
     raise _UnknownOp(f"unknown op: {op!r}")
 
 

@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- **Multi-line quotes are reconstructed in context, and quoted data is not a command.** A line that opens inside a `"`/`'`/`$'…'` string continuing from a context or earlier added line is now rebuilt from that state rather than treated as fresh shell input. Command rules skip a line that is entirely quoted data, while `$(…)` and backticks inside double quotes still run. H065 uses the same stateful pass, so a continuation line cannot be reported as obfuscation. The leaf lexer also caps each line at the tokenizer bound and resets quote state past the cap, so an oversized line cannot hide the following recipe behind a late quote or heredoc.
 - **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
 - **The corpus first-seen path now matches the review path.** A first
   analysis still reads H091 checksum parity, the placeholder and name-shadow

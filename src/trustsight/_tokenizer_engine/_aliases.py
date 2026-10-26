@@ -7,7 +7,9 @@ __all__ = ['_ALIAS_DEF_RE', '_ALIAS_USE_PREFIX', '_MAX_ALIASES', '_MAX_ALIAS_LEN
 
 _ALIAS_DEF_RE = re.compile(r"^\s*alias\s+(?!-)(.+)$")
 
-_ALIAS_USE_PREFIX = re.compile(r"(^|[;&|(){}]|&&|\|\||\bthen\b|\bdo\b|\belse\b)(\s*)$")
+_ALIAS_USE_PREFIX = re.compile(
+    r"(^|[;&|(){}]|&&|\|\||\b(?:then|do|else|if|while|until|for|time)\b|!)(\s*)$"
+)
 
 _MAX_ALIASES = 64
 

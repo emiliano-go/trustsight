@@ -16,12 +16,46 @@ from __future__ import annotations
 __all__ = ["parse_opener"]
 
 
-def _name_start(char: str) -> bool:
-    return char.isascii() and (char.isalpha() or char == "_")
+def _inside_arithmetic(line: str, index: int) -> bool:
+    before = line[:index]
+    return before.count("$((") > before.count("))") or (
+        before.count("((") > before.count("))")
+    )
 
 
-def _name_char(char: str) -> bool:
-    return char.isascii() and (char.isalnum() or char == "_")
+def _delimiter_word(line: str, start: int) -> tuple[str, int] | None:
+    out: list[str] = []
+    quote = ""
+    index = start
+    while index < len(line):
+        char = line[index]
+        if quote:
+            if char == "\\" and quote == '"' and index + 1 < len(line):
+                out.append(line[index + 1])
+                index += 2
+                continue
+            if char == quote:
+                quote = ""
+                index += 1
+                continue
+            out.append(char)
+            index += 1
+            continue
+        if char in "'\"":
+            quote = char
+            index += 1
+            continue
+        if char == "\\" and index + 1 < len(line):
+            out.append(line[index + 1])
+            index += 2
+            continue
+        if char in " \t;|&<>()":
+            break
+        out.append(char)
+        index += 1
+    if quote or not out:
+        return None
+    return "".join(out), index
 
 
 def parse_opener(line: str, index: int) -> tuple[str, bool, int] | None:
@@ -29,16 +63,12 @@ def parse_opener(line: str, index: int) -> tuple[str, bool, int] | None:
 
     Returns ``(delimiter, strip_tabs, end)``, or ``None`` when this ``<<``
     is not an opener.  A here-string (``<<<``) and an arithmetic shift
-    (``1 << 2``) open nothing: the word after ``<<`` must be a shell
-    delimiter, quoted or unquoted.  A quoted delimiter may hold any text up
-    to its closing quote; an unquoted one is an identifier, optionally
-    backslash-quoted (``<<\\EOF``).
+    (``1 << 2``) open nothing.
     """
     if not line.startswith("<<", index):
         return None
     end = index + 2
     if end < len(line) and line[end] == "<":
-        # <<< is a here-string and has no body.
         return None
     strip_tabs = False
     if end < len(line) and line[end] == "-":
@@ -46,27 +76,10 @@ def parse_opener(line: str, index: int) -> tuple[str, bool, int] | None:
         end += 1
     while end < len(line) and line[end] in " \t":
         end += 1
-    if end >= len(line):
+    if end >= len(line) or _inside_arithmetic(line, index):
         return None
-    char = line[end]
-    if char in "'\"":
-        close = line.find(char, end + 1)
-        if close == -1:
-            return None
-        delimiter = line[end + 1 : close]
-        return (delimiter, strip_tabs, close + 1) if delimiter else None
-    if char == "\\":
-        start = end + 1
-        if start >= len(line) or not _name_start(line[start]):
-            return None
-        end = start + 1
-        while end < len(line) and _name_char(line[end]):
-            end += 1
-        return line[start:end], strip_tabs, end
-    if not _name_start(char):
+    word = _delimiter_word(line, end)
+    if word is None:
         return None
-    start = end
-    end += 1
-    while end < len(line) and _name_char(line[end]):
-        end += 1
-    return line[start:end], strip_tabs, end
+    delimiter, close = word
+    return delimiter, strip_tabs, close

@@ -3,7 +3,7 @@
 import re
 import threading
 
-__all__ = ['_ARRAY_ASSIGNMENT_RE', '_ASSIGNMENT_RE', '_MAX_ARRAY_ENTRIES', '_MAX_EXPANSION_PASSES', '_MAX_LINE_LEN', '_MAX_TABLE_BYTES', '_MAX_VALUE_LEN', '_MEMO_ENTRIES', '_VAR_REF_RE', '_join_logical', '_memo', '_memoised', '_split_top_level', '_tail_continues']
+__all__ = ['_ARRAY_ASSIGNMENT_RE', '_ARRAY_ELEMENT_RE', '_ASSIGNMENT_RE', '_MAX_ARRAY_ENTRIES', '_MAX_EXPANSION_PASSES', '_MAX_LINE_LEN', '_MAX_TABLE_BYTES', '_MAX_VALUE_LEN', '_MEMO_ENTRIES', '_VAR_REF_RE', '_is_diff_header', '_join_logical', '_join_side', '_memo', '_memoised', '_split_top_level', '_tail_continues']
 
 # The bounds live with the shared resolver so the analysis and the worker
 # read one value; re-exported here for the engine's own imports.
@@ -82,42 +82,104 @@ def _backslash_continues(tail: str) -> bool:
     return bool(run) and run % 2 == 1
 
 
+def _is_diff_header(line: str) -> bool:
+    return line.startswith(("diff --git ", "@@ ", "--- ", "+++ ")) or line in (
+        "---",
+        "+++",
+    )
+
+
+def _opens_comment(line: str, index: int) -> bool:
+    return line[index] == "#" and (
+        index == 0
+        or line[index - 1].isspace()
+        or line[index - 1] in ";|&("
+    )
+
+
+def _lexical_tail_is_data(line: str) -> bool:
+    """True when the end of *line* is inside a quote, backtick or comment."""
+    in_single = in_double = in_backtick = False
+    i = 0
+    while i < len(line):
+        char = line[i]
+        if in_single:
+            if char == "'":
+                in_single = False
+            i += 1
+            continue
+        if in_backtick:
+            if char == "\\" and i + 1 < len(line):
+                i += 2
+                continue
+            if char == "`":
+                in_backtick = False
+            i += 1
+            continue
+        if in_double:
+            if char == "\\" and i + 1 < len(line):
+                i += 2
+                continue
+            if char == '"':
+                in_double = False
+            elif char == "`":
+                in_backtick = True
+            i += 1
+            continue
+        if char == "\\" and i + 1 < len(line):
+            i += 2
+            continue
+        if char == "'":
+            in_single = True
+        elif char == '"':
+            in_double = True
+        elif char == "`":
+            in_backtick = True
+        elif char == "#" and _opens_comment(line, i):
+            return True
+        i += 1
+    return in_single or in_double or in_backtick
+
+
+def _continuation_kind(body: str, heredoc_body: bool) -> str:
+    if heredoc_body or _lexical_tail_is_data(body):
+        return ""
+    if _backslash_continues(body):
+        return "backslash"
+    if _tail_continues(body.rstrip()):
+        return "operator"
+    return ""
+
+
 def _join_logical(lines: list[str]) -> list[tuple[int, str]]:
-    """Every logical line as ``(first_raw_index, marker + joined_text)``.
+    """Every logical line as ``(first_raw_index, marker + joined_text)``."""
+    from ..line_lex import lex_lines
 
-    The one implementation both joiners use, so the rule path and the
-    coverage path cannot disagree about which physical lines the shell runs
-    as one.  Two properties are bash's, not style choices:
-
-    - A backslash-newline is removed and **nothing else is**.  The space in
-      ``curl \\`` + newline + ``https://...`` separates two words at build
-      time, so it stays; the previous ``rstrip`` glued them into
-      ``curlhttps://...``.
-    - A line continues only when the backslash is the last character and is
-      not itself escaped.  ``echo \\ `` (backslash, space) and ``echo \\\\``
-      (two backslashes) end the command, and joining them invented a
-      command boundary the shell does not have.
-    """
+    lexed = lex_lines(lines)
     out: list[tuple[int, str]] = []
     parts: list[str] | None = None
     marker = ""
     start_index = -1
     for index, line in enumerate(lines):
+        if _is_diff_header(line):
+            if parts is not None:
+                out.append((start_index, marker + "".join(parts)))
+                parts, marker, start_index = None, "", -1
+            out.append((index, line))
+            continue
         this_marker = line[0] if line[:1] in ("+", "-") else ""
         body = line[1:] if this_marker else line
         if parts is not None and this_marker == marker:
-            # Verbatim, exactly as the shell reads it: a backslash-newline
-            # is removed, not replaced with whitespace.
             parts.append(body)
         else:
             if parts is not None:
                 out.append((start_index, marker + "".join(parts)))
             parts, marker, start_index = [body], this_marker, index
-        tail = parts[-1]
-        if _backslash_continues(tail):
-            parts[-1] = tail[:-1]
-        elif _tail_continues(tail.rstrip()):
-            pass  # still accumulating: an operator promises more input
+        kind = _continuation_kind(body, lexed[index].heredoc_body)
+        if kind == "backslash":
+            parts[-1] = parts[-1][:-1]
+        elif kind == "operator":
+            pass
         else:
             out.append((start_index, marker + "".join(parts)))
             parts, marker, start_index = None, "", -1
@@ -125,19 +187,83 @@ def _join_logical(lines: list[str]) -> list[tuple[int, str]]:
         out.append((start_index, marker + "".join(parts)))
     return out
 
+
+def _join_side(
+    lines: list[str], marker: str
+) -> list[tuple[int, str, object, object]]:
+    """Logical lines for one diff side, including unchanged context.
+
+    A context line is shared by both sides: a context line ending in a
+    continuation is completed by the following added line on the new side
+    (and by the following removed line on the old side).  Opposite markers
+    still form a hard boundary.
+    """
+    from ..line_lex import lex_lines
+
+    lexed = lex_lines(lines)
+    out: list[tuple[int, str, object, object]] = []
+    parts: list[str] | None = None
+    first_side_index = -1
+    first_state = None
+    end_state = None
+    for index, line in enumerate(lines):
+        if _is_diff_header(line):
+            if parts is not None:
+                out.append((first_side_index, "".join(parts), first_state, end_state))
+                parts, first_side_index, first_state = None, -1, None
+            continue
+        this_marker = line[0] if line[:1] in ("+", "-") else ""
+        if this_marker and this_marker != marker:
+            if parts is not None:
+                out.append((first_side_index, "".join(parts), first_state, end_state))
+                parts, first_side_index, first_state = None, -1, None
+            continue
+        body = line[1:] if this_marker else line
+        if parts is not None:
+            parts.append(body)
+        else:
+            parts = [body]
+        if this_marker == marker and first_side_index < 0:
+            first_side_index = index
+            first_state = lexed[index].quote_before
+        end_state = lexed[index].quote_after
+        kind = _continuation_kind(body, lexed[index].heredoc_body)
+        if kind == "backslash":
+            parts[-1] = parts[-1][:-1]
+        elif kind == "operator":
+            pass
+        else:
+            if first_side_index >= 0:
+                out.append((first_side_index, "".join(parts), first_state, end_state))
+            parts, first_side_index, first_state = None, -1, None
+    if parts is not None and first_side_index >= 0:
+        out.append((first_side_index, "".join(parts), first_state, end_state))
+    return out
+
+_DECLARATION_OPTIONS = r"(?P<opts>(?:(?:--?|\+\+?)[A-Za-z]+\s+){0,4})"
+
 _ASSIGNMENT_RE = re.compile(
     r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+"
-    # Scalar option run (`declare -rx x=`, `declare +x`).  Only `r`/`x`
-    # keep scalar-assignment semantics; `-n` is a nameref and `-a`/`-A`
-    # are arrays - recording them as scalars collapsed the nameref
-    # `declare -n R=C` to a literal and hid the X002 command it aliases.
-    r"(?:(?:--?|\+\+?)[rx]+\s+){0,4})?(\w+)\s*(\+?=)\s*(.*)"
+    + _DECLARATION_OPTIONS
+    + r")?(?P<name>\w+)\s*(?P<op>\+?=)\s*(?P<value>.*)"
 )
 
 _ARRAY_ASSIGNMENT_RE = re.compile(
     r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+"
-    r"(?:(?:--?|\+\+?)[rx]+\s+){0,4})?(\w+)\s*(\+?=)\s*\((.*)"
+    + _DECLARATION_OPTIONS
+    + r")?(?P<name>\w+)\s*(?P<op>\+?=)\s*\((?P<value>.*)"
 )
+
+_ARRAY_ELEMENT_RE = re.compile(
+    r"^\s*(?:(?:local|export|declare|readonly|typeset)\s+"
+    + _DECLARATION_OPTIONS
+    + r")?(?P<name>\w+)\[(?P<index>[^\]]{0,40})\]\s*"
+    r"(?P<op>\+?=)\s*(?P<value>.*)"
+)
+
+
+def _declaration_options(match: re.Match) -> str:
+    return match.group("opts") or ""
 
 _VAR_REF_RE = re.compile(r"\$\{(\w+)\}(?!\[)|\$(\w+)")
 

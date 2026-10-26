@@ -137,6 +137,16 @@ Measured against the 8393-diff benign corpus. All are enabled by default.
 | H018 | Patch From Outside Build Tree | HIGH | 0.00 % | 0/8393 | Asks *where* the input comes from rather than whether it is declared in `source=()`. The broader "not in source()" form measured 2.13 % |
 | H019 | Source URL HTTPS→HTTP Downgrade | MEDIUM | 0.03 % | 1/8393 | `transset-df`: a genuine https to http downgrade |
 
+## Cycle-level correlation (G011)
+
+G011 reads recorded cycles, not one diff, so it has no static per-diff fire
+rate comparable to the tables above. Its benign calibration is the 65-record
+H104 triage shape in `tests/fixtures/g011/benign-bursts.json`: the 18
+`nabbisen` reservations, six `tiouo` aliases and 41 single-package
+maintainers produce **0** G011 findings. A first-seen maintainer with five
+placeholder packages produces one HIGH finding; the same burst with fewer
+placeholders stays MEDIUM.
+
 ## Temporal context rules (H020-H022)
 
 These rules inspect git commit timestamps rather than diff content, so they

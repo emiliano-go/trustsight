@@ -1,6 +1,7 @@
 import tomllib
 
 from trustsight.config import (
+    DEFAULT_THRESHOLDS,
     GETENT_ENUMERATION_FRAGMENT,
     configured_baseline_tag,
     configured_ioc_tag,
@@ -1106,3 +1107,9 @@ def test_refresh_legacy_network_tools_repairs_an_older_shipped_list(
 
     assert config_module._refresh_legacy_network_tools() is True
     assert "openssh" in path.read_text()
+
+
+def test_g011_thresholds_ship():
+    assert "[g011]" in DEFAULT_THRESHOLDS
+    assert "placeholder_share = 0.5" in DEFAULT_THRESHOLDS
+    assert "placeholder_escalation = true" in DEFAULT_THRESHOLDS

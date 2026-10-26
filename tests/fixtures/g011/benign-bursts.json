@@ -1,0 +1,460 @@
+{
+  "description": "Benign creation-burst shapes from the H104 triage: 18 nabbisen reservations, six tiouo aliases, and 41 single-package maintainers. Derived from the 2026-10-26 triage, not a live database dump.",
+  "records": [
+    {
+      "package": "nabbisen-reservation-01",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-02",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-03",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-04",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-05",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-06",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-07",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-08",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-09",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-10",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-11",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-12",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-13",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-14",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-15",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-16",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-17",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "nabbisen-reservation-18",
+      "maintainer": "nabbisen",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen-bin",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen-git",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen-nightly",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen-common",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "pollen-docs",
+      "maintainer": "tiouo",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-01",
+      "maintainer": "single-maintainer-01",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-02",
+      "maintainer": "single-maintainer-02",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-03",
+      "maintainer": "single-maintainer-03",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-04",
+      "maintainer": "single-maintainer-04",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-05",
+      "maintainer": "single-maintainer-05",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-06",
+      "maintainer": "single-maintainer-06",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-07",
+      "maintainer": "single-maintainer-07",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-08",
+      "maintainer": "single-maintainer-08",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-09",
+      "maintainer": "single-maintainer-09",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-10",
+      "maintainer": "single-maintainer-10",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-11",
+      "maintainer": "single-maintainer-11",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-12",
+      "maintainer": "single-maintainer-12",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-13",
+      "maintainer": "single-maintainer-13",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-14",
+      "maintainer": "single-maintainer-14",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-15",
+      "maintainer": "single-maintainer-15",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-16",
+      "maintainer": "single-maintainer-16",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-17",
+      "maintainer": "single-maintainer-17",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-18",
+      "maintainer": "single-maintainer-18",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-19",
+      "maintainer": "single-maintainer-19",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-20",
+      "maintainer": "single-maintainer-20",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-21",
+      "maintainer": "single-maintainer-21",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-22",
+      "maintainer": "single-maintainer-22",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-23",
+      "maintainer": "single-maintainer-23",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-24",
+      "maintainer": "single-maintainer-24",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-25",
+      "maintainer": "single-maintainer-25",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-26",
+      "maintainer": "single-maintainer-26",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-27",
+      "maintainer": "single-maintainer-27",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-28",
+      "maintainer": "single-maintainer-28",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-29",
+      "maintainer": "single-maintainer-29",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-30",
+      "maintainer": "single-maintainer-30",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-31",
+      "maintainer": "single-maintainer-31",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-32",
+      "maintainer": "single-maintainer-32",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-33",
+      "maintainer": "single-maintainer-33",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-34",
+      "maintainer": "single-maintainer-34",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-35",
+      "maintainer": "single-maintainer-35",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-36",
+      "maintainer": "single-maintainer-36",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-37",
+      "maintainer": "single-maintainer-37",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-38",
+      "maintainer": "single-maintainer-38",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-39",
+      "maintainer": "single-maintainer-39",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    },
+    {
+      "package": "single-package-40",
+      "maintainer": "single-maintainer-40",
+      "brand_new": true,
+      "placeholder": true,
+      "maintainer_established": true
+    },
+    {
+      "package": "single-package-41",
+      "maintainer": "single-maintainer-41",
+      "brand_new": true,
+      "placeholder": false,
+      "maintainer_established": false
+    }
+  ]
+}

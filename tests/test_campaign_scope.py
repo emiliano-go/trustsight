@@ -494,3 +494,23 @@ def test_neighbourhood_treats_a_bare_rule_string_as_one_value(db):
     out = _neighborhood_elevation(
         [{"package": "neighbour", "rules": "R001"}])
     assert [f["rule_id"] for f in out] == ["G006"]
+
+
+def test_g011_campaign_is_typed_by_maintainer(db):
+    from trustsight.full_aur.pipeline import _campaign_identity
+
+    finding = {
+        "rule_id": "G011",
+        "params": {
+            "maintainer": "new@example",
+            "maintainers": ["new@example"],
+            "members": ["pkg-a", "pkg-b"],
+            "placeholder_count": 2,
+        },
+    }
+    campaign_id, scope = _campaign_identity(finding)
+    assert campaign_id == "G011:new@example"
+    assert scope == {
+        "package_names": ["pkg-a", "pkg-b"],
+        "maintainers": ["new@example"],
+    }

@@ -37,6 +37,7 @@ from ..config import load_config, load_naming
 from ..db import (
     activate_campaign,
     active_campaigns,
+    brand_new_packages_since,
     checkpoint_wal,
     clear_correlation_feeds,
     get_connection,
@@ -118,7 +119,7 @@ _IMPERSONATION_GATED_RULES = frozenset({"H052", "H055"})
 #: G rules that corroborate a campaign.  The report-only members of the
 #: family (G006/G007/G009/G010) never prime campaign state.
 _CAMPAIGN_RULES = frozenset(
-    {"G001", "G002", "G003", "G004", "G005", "G008",
+    {"G001", "G002", "G003", "G004", "G005", "G008", "G011",
      "G012", "G013", "G014"})
 
 #: The analysed diff a notification may carry.  The notification already has
@@ -765,7 +766,11 @@ def _run_corpus_sweep(
 
     # the G-series cross-package correlation, over the
     # cycle's records (collective input, so it runs here and not per package).
-    from ..analysis.correlation import correlate, first_seen_adoption_burst
+    from ..analysis.correlation import (
+        correlate,
+        first_seen_adoption_burst,
+        package_creation_burst,
+    )
 
     records = _correlation_records(new_meta, old_meta, processed, popular,
                                    source_repos, detail)
@@ -775,6 +780,17 @@ def _run_corpus_sweep(
     # from an established one; it runs before campaign activation so a burst
     # primes campaign state like any other G-series cluster.
     findings.extend(first_seen_adoption_burst(records, config))
+    # G011 spans cycles: the observed placeholder burst was spread over
+    # several cycles, so this reads the recorded window rather than the
+    # current cycle's processed set.
+    g011 = (config.get("thresholds", {}) or {}).get("g011", {}) or {}
+    try:
+        creation_window_days = max(0, int(g011.get("window_days", 7)))
+    except (TypeError, ValueError, OverflowError):
+        creation_window_days = 7
+    creation_since = int(time.time()) - creation_window_days * 86400
+    findings.extend(package_creation_burst(
+        brand_new_packages_since(creation_since), config))
     # The Contact Ledger records every first-contact this cycle introduced
     # (weight 0, warm-only), then G010 joins the first-seen hosts across the
     # window.  Nothing here scores: contact_ledger is state, not a rule.

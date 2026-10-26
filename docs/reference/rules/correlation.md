@@ -44,6 +44,7 @@ This is a reference page. For how weight and scope work, see
 | [G008](#g008) | First-Seen Account Adoption Burst | HIGH |
 | [G009](#g009) | Watchlisted Subject | INFO |
 | [G010](#g010) | Shared First-Seen Host | INFO |
+| [G011](#g011) | Maintainer Package Creation Burst | MEDIUM |
 | [G012](#g012) | Shared Payload Signal | HIGH |
 | [G013](#g013) | Shared Fetch Target | HIGH |
 | [G014](#g014) | Shared Adoption Window | HIGH |
@@ -198,6 +199,22 @@ The operator's file is unioned with an imported, signed `watchlist-*` release (`
 - **Condition:** The same canonical source host, first seen in the corpus at or after `[thresholds] g010.window_days` (default 7) days ago, is gained by at least `[thresholds] g010.min_packages` (default 5) packages within the window.
 
 The G001 shape with the novelty join instead of the gained-host join: only a host the corpus has not met before counts, so one honest newcomer per window is the AUR being the AUR and five is a distribution infrastructure. Trusted-forge and official hosts stand down, as do split outputs of one pkgbase and one maintainer's long-prefix name family. Weight 0 and never campaign-priming: a first contact is a statement about newness, never about intent, so G010 names the coordination and never scores, gates, notifies alone, or escalates a member (the Contact Ledger's plural-contact rule: strangers in company are a signal, strangers alone are a census).
+
+### G011: Maintainer Package Creation Burst {#g011}
+
+- **Target:** programmatic (cycle events + latest H021/H104)
+- **Severity:** MEDIUM (weight 0); HIGH when the placeholder share is met
+- **Category:** `correlation`
+
+<!-- name: Maintainer Package Creation Burst -->
+
+- **Condition:** A first-seen maintainer creates at least `[thresholds] g011.min_packages` (default 5) unrelated brand-new packages (H021) within `[thresholds] g011.window_days` (default 7) days. The finding is MEDIUM; it escalates to HIGH when H104 placeholders are at least `[thresholds] g011.placeholder_share` (default 0.5) of the members.
+
+The burst is read from the recorded `cycle_events` window and each package's latest analysis, not from one cycle's processed set: the observed placeholder burst was spread over several cycles, so a current-cycle-only join would miss most of it. H021 keeps the membership to packages that are actually new to the AUR; a package this watcher has only just seen is not a creation burst.
+
+Established maintainers are silent. The account must have no prior cycle event and must be new to the seed, which keeps a long-standing maintainer's legitimate multi-package launch out of the finding. A single package and a naming/variant family also stand down; the latter uses the same relatedness pass as G003.
+
+This is the cross-package signal H104 exists for. Individually a placeholder is inert; a first-seen account reserving many names at once is the shape worth review. The finding is alert-only: it names the maintainer and members, primes campaign state, and does not inflate a member's score. A bare burst stays MEDIUM; the placeholder majority is the escalation, never a bare count.
 
 ### G012: Shared Payload Signal {#g012}
 

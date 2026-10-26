@@ -491,6 +491,7 @@ own project's names from firing a scope-expansion rule.
 | `g008.min_packages` / `g008.window_days` / `g008.min_dormant` / `g008.dormant_days` | G008 | `5` / `7` / `3` / `180` | First-seen account adoption floor, its window, the dormant-target floor and the dormancy age. |
 | `g009.enabled` / `g009.path` | G009 | `true` / empty | Whether the watchlist is consulted, and the watchlist file (`~/.config/trustsight/watchlist.json` when empty). The file holds maintainer entries under `entries` (salted hashes) and package entries under `packages` (plain names). A non-string `path` is ignored (the default file is used), and the file is read under a 1 MiB cap: an oversized or malformed file is treated as absent, never as an analysis error. |
 | `g010.min_packages` / `g010.window_days` | G010 | `5` / `7` | Packages that must share one first-seen host, and the first-seen window. |
+| `g011.min_packages` / `g011.window_days` / `g011.placeholder_share` / `g011.placeholder_escalation` | G011 | `5` / `7` / `0.5` / `true` | Brand-new packages a first-seen maintainer must create in the window, the window, the H104 share that escalates the finding to HIGH, and whether that escalation is enabled. |
 | `m002.min_layers` | M002 | `3` | Distinct evidence categories that must fire (none above the alert bar) before M002 escalates the reported band one step. |
 
 A malformed threshold value (a non-numeric string, `null`, or a list where a
@@ -501,7 +502,7 @@ or length is clamped to zero.
 The E-series thresholds (`e001`/`e002`/`e003`) ship **empty** by design: the
 series is silent until a threshold is set from the first corpus measurement
 (`scripts/entropy_calibrate.py` prints conservative floors in the calibration
-CI job). The `g003`, `g008`, `g009`, `g010` and `t006` tables ship in
+CI job). The `g003`, `g008`, `g009`, `g010`, `g011` and `t006` tables ship in
 `thresholds.toml`. The older G keys (`g_host`, `g_blob`, `g_adopt`), the T
 keys (`t_key`, `t_dom`), `m002` and `cofire_pairs` are honoured if you add them,
 with the code defaults in the table above.

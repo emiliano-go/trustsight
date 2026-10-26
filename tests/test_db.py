@@ -1,6 +1,7 @@
 import pytest
 
 from trustsight.db import (
+    brand_new_packages_since,
     get_all_packages,
     get_connection,
     get_history,
@@ -10,6 +11,7 @@ from trustsight.db import (
     get_triggered_rules,
     init_db,
     insert_analysis,
+    record_cycle_events,
     update_package_version,
     upsert_package,
 )
@@ -1428,3 +1430,66 @@ def test_record_observed_domain_strips_the_bracket(db):
     record_observed_domain("GMAIL.COM>")
 
     assert domain_first_seen("gmail.com") is not None
+
+
+def test_brand_new_packages_since_joins_the_latest_analysis(db):
+    pid = upsert_package("new-pkg", "0.0.0")
+    insert_analysis(
+        pid, "", "0.0.0", "", "", 0, "", "{}",
+        [{"rule_id": "H021", "severity": "INFO"},
+         {"rule_id": "H104", "severity": "INFO"}],
+    )
+    record_cycle_events([{
+        "package_name": "new-pkg", "cycle_time": 1000, "status": "added",
+        "maintainer": "new@example", "last_modified": 0,
+    }])
+
+    assert brand_new_packages_since(900) == [{
+        "package": "new-pkg", "maintainer": "new@example",
+        "cycle_time": 1000, "brand_new": True, "placeholder": True,
+        "maintainer_established": False,
+    }]
+
+
+def test_brand_new_packages_since_marks_a_prior_maintainer_established(db):
+    prior = upsert_package("old-pkg", "1.0")
+    insert_analysis(
+        prior, "", "1.0", "", "", 0, "", "{}",
+        [{"rule_id": "H021", "severity": "INFO"}],
+    )
+    new = upsert_package("new-pkg", "0.0.0")
+    insert_analysis(
+        new, "", "0.0.0", "", "", 0, "", "{}",
+        [{"rule_id": "H021", "severity": "INFO"}],
+    )
+    record_cycle_events([
+        {"package_name": "old-pkg", "cycle_time": 100, "status": "added",
+         "maintainer": "known@example", "last_modified": 0},
+        {"package_name": "new-pkg", "cycle_time": 1000, "status": "added",
+         "maintainer": "known@example", "last_modified": 0},
+    ])
+
+    rows = brand_new_packages_since(900)
+    assert [row["package"] for row in rows] == ["new-pkg"]
+    assert rows[0]["maintainer_established"] is True
+
+
+def test_brand_new_packages_since_uses_the_latest_recipe_state(db):
+    pid = upsert_package("fixed-pkg", "1.0")
+    insert_analysis(
+        pid, "", "0.0.0", "", "", 0, "", "{}",
+        [{"rule_id": "H021", "severity": "INFO"},
+         {"rule_id": "H104", "severity": "INFO"}],
+    )
+    insert_analysis(
+        pid, "0.0.0", "1.0", "", "", 0, "", "{}",
+        [{"rule_id": "H021", "severity": "INFO"}],
+    )
+    record_cycle_events([{
+        "package_name": "fixed-pkg", "cycle_time": 1000, "status": "added",
+        "maintainer": "new@example", "last_modified": 0,
+    }])
+
+    rows = brand_new_packages_since(900)
+    assert rows[0]["brand_new"] is True
+    assert rows[0]["placeholder"] is False

@@ -51,6 +51,8 @@ DIFFDOC_SCHEMA_VERSION = 2
 #: because the failure mode of a forgotten bump is a wrong analysis.
 _TOKENIZER_FILES = (
     "tokenizer.py",
+    "line_lex.py",
+    "_heredoc.py",
     "_tokenizer_engine/__init__.py",
     "_tokenizer_engine/_common.py",
     "_tokenizer_engine/_quotes.py",

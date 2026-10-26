@@ -2,13 +2,15 @@
 
 import itertools
 import re
+from collections import deque
 from functools import lru_cache
 import shlex
+from .._heredoc import parse_opener
 from ._common import _ARRAY_ASSIGNMENT_RE, _ASSIGNMENT_RE, _MAX_ARRAY_ENTRIES, _MAX_LINE_LEN, _MAX_TABLE_BYTES, _MAX_VALUE_LEN, _VAR_REF_RE, _join_logical, _split_top_level
 from ._expansion import resolve_expansions
 from ._quotes import reconstruct_literals
 
-__all__ = ['_DIFF_TARGET_LINE_RE', '_HEREDOC_OPENER_RE', '_SHELL_SOURCE_FILE_RE', '_assignments_are_shell', '_collect_array_entries', '_join_line_continuations_cached', '_split_with_lines', '_strip_outer_quotes', '_substitute', '_substitute_with_resolve', '_table_bytes', '_variable_table', '_variable_table_with_spans', 'join_line_continuations']
+__all__ = ['_DIFF_TARGET_LINE_RE', '_SHELL_SOURCE_FILE_RE', '_assignments_are_shell', '_collect_array_entries', '_join_line_continuations_cached', '_split_with_lines', '_strip_outer_quotes', '_substitute', '_substitute_with_resolve', '_table_bytes', '_variable_table', '_variable_table_with_spans', 'join_line_continuations']
 
 def _substitute_with_resolve(
     text: str,
@@ -285,16 +287,6 @@ _SHELL_SOURCE_FILE_RE = re.compile(
 
 _DIFF_TARGET_LINE_RE = re.compile(r"^\+\+\+ (?:b/)?(.+?)(?:\t.*)?$")
 
-#: A heredoc opener, anchored where it is tried.  The delimiter is a shell
-#: word - quoted (any content) or unquoted (an identifier) - never the
-#: numeric right operand of an arithmetic shift (`x=$((1 << 2))`), which the
-#: old `\w+` form read as a heredoc named `2` and used to blank every line
-#: after it.
-_HEREDOC_OPENER_RE = re.compile(
-    r"<<-?[ \t]*(?:'([^'\n]+)'|\"([^\"\n]+)\"|\\([A-Za-z_][A-Za-z0-9_]*)"
-    r"|([A-Za-z_][A-Za-z0-9_]*))"
-)
-
 def _opens_a_comment(line: str, index: int) -> bool:
     """True when ``line[index]`` is an unquoted ``#`` that starts a comment.
 
@@ -346,16 +338,16 @@ def _heredoc_delimiters(line: str) -> list[str]:
         if char == "#" and _opens_a_comment(line, index):
             break
         if line.startswith("<<<", index):
+            # Consume all three, or the second `<<` reads the following
+            # word as a delimiter for a heredoc bash never opened.
             index += 3
             continue
         if line.startswith("<<", index):
-            match = _HEREDOC_OPENER_RE.match(line, index)
-            if match:
-                delimiter = (match.group(1) or match.group(2)
-                             or match.group(3) or match.group(4))
-                if delimiter:
-                    found.append(delimiter)
-                index = match.end()
+            opener = parse_opener(line, index)
+            if opener is not None:
+                delimiter, _strip_tabs, end = opener
+                found.append(delimiter)
+                index = end
                 continue
         index += 1
     return found
@@ -374,32 +366,30 @@ def _assignments_are_shell(lines: list[str]) -> list[bool]:
     """
     flags: list[bool] = []
     shell = True
-    delimiter = ""
+    # Bash reads the bodies in opener order, so two openers on one line
+    # are a queue: A's body comes before B's.
+    delimiters: deque[str] = deque()
     for line in lines:
         header = _DIFF_TARGET_LINE_RE.match(line)
         if header:
             path = header.group(1).strip()
             shell = path == "/dev/null" or bool(_SHELL_SOURCE_FILE_RE.search(path))
-            delimiter = ""
+            delimiters.clear()
             flags.append(shell)
             continue
         body = line[1:] if line[:1] in ("+", "-", " ") else line
-        if delimiter:
+        if delimiters:
             # Inside a heredoc the text is *content*, whatever the file is:
             # `cat > "$pkgdir/…/e.service" <<EOF` with an `ExecStart=` line
             # inside is a directive being written, not a shell assignment,
             # and folding it away removed it from matching exactly as it did
             # for a unit file shipped whole.
             flags.append(False)
-            if body.strip() == delimiter:
-                delimiter = ""
+            if body.strip() == delimiters[0]:
+                delimiters.popleft()
             continue
         flags.append(shell)
-        openers = _heredoc_delimiters(body)
-        if openers:
-            # Bash reads bodies in opener order; this reader tracks one at a
-            # time, so the first is the delimiter whose body comes next.
-            delimiter = openers[0]
+        delimiters.extend(_heredoc_delimiters(body))
     return flags
 
 def _variable_table(

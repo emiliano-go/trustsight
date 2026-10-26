@@ -13,13 +13,12 @@ they execute; a heredoc body does not, and neither does a comment.
 """
 
 import re
+from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
 
+from ._heredoc import parse_opener
 from .config import ANY_EXECUTOR as _ANY_EXECUTOR
-
-_HEREDOC_SHAPE_RE = re.compile(r"<<-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
-
 
 @dataclass(frozen=True)
 class LexedLine:
@@ -37,11 +36,13 @@ class LexedLine:
     opens_brace: bool
     closes_line: bool
     heredoc_body: bool
-    #: The first heredoc this line opens, quote- and comment-aware:
-    #: ``(delimiter, strip_tabs)``.  A ``<<`` inside a comment or a quoted
-    #: string is prose, not an opener - the payload scanner downstream
-    #: used to disagree with this lexer and blanked whole functions.
-    heredoc_opener: tuple[str, bool] | None = None
+    #: Every heredoc this line opens, in bash's body order, quote- and
+    #: comment-aware: ``(delimiter, strip_tabs)``.  A ``<<`` inside a
+    #: comment or a quoted string is prose, not an opener - the payload
+    #: scanner downstream used to disagree with this lexer and blanked
+    #: whole functions.  Bash supplies the bodies in this order, so two
+    #: openers on one line are one queue, not a stack.
+    heredoc_openers: tuple[tuple[str, bool], ...] = ()
 
 
 def _diff_boundary(line: str) -> bool:
@@ -133,22 +134,24 @@ def _lex_lines_cached(
     out: list[LexedLine] = []
     in_single = in_double = in_backtick = False
     sub_depth = 0
-    heredoc: str | None = None
-    heredoc_tabs = False
+    # FIFO: bash reads heredoc bodies in the order their openers appear,
+    # so `cat <<A <<B` supplies A's body before B's.
+    delims: deque[tuple[str, bool]] = deque()
     for line in lines:
         if fragment:
             in_single = in_double = in_backtick = False
             sub_depth = 0
-            if heredoc is not None and _diff_boundary(line):
-                heredoc = None
-        if heredoc is not None:
-            probe = line.lstrip("\t") if heredoc_tabs else line
+            if delims and _diff_boundary(line):
+                delims.clear()
+        if delims:
+            delimiter, strip_tabs = delims[0]
+            probe = line.lstrip("\t") if strip_tabs else line
             # A diff line keeps its +/- prefix, which is not part of the
             # shell text: ``+EOF`` terminates the heredoc ``EOF``.
             probe = probe.lstrip("+-")
             blank = " " * len(line)
-            if probe.strip() == heredoc:
-                heredoc = None
+            if probe.strip() == delimiter:
+                delims.popleft()
             out.append(LexedLine(line, blank, 0, False, False, True))
             continue
         # Fast path for the ordinary line: nothing that could change the
@@ -158,11 +161,10 @@ def _lex_lines_cached(
         if not any(ch in line for ch in "{}#'\"\\`<"):
             out.append(LexedLine(line, line, 0, False, False, False))
             continue
-        code, in_single, in_double, in_backtick, sub_depth, opener = _scan(
+        code, in_single, in_double, in_backtick, sub_depth, openers = _scan(
             line, in_single, in_double, in_backtick, sub_depth
         )
-        if opener is not None:
-            heredoc, heredoc_tabs = opener
+        delims.extend(openers)
         out.append(LexedLine(
             text=line,
             code=code,
@@ -170,16 +172,16 @@ def _lex_lines_cached(
             opens_brace="{" in code,
             closes_line=code.rstrip().endswith("}"),
             heredoc_body=False,
-            heredoc_opener=opener,
+            heredoc_openers=tuple(openers),
         ))
     return tuple(out)
 
 
 def _scan(line, in_single, in_double, in_backtick, sub_depth):
-    """Return ``(code, states..., heredoc)`` for one line."""
+    """Return ``(code, states..., heredoc openers)`` for one line."""
     out: list[str] = []
     i, n = 0, len(line)
-    opener: tuple[str, bool] | None = None
+    openers: list[tuple[str, bool]] = []
     while i < n:
         ch = line[i]
         if in_single:
@@ -251,16 +253,23 @@ def _scan(line, in_single, in_double, in_backtick, sub_depth):
         if ch == "#" and _opens_a_comment(line, i):
             out.append(" " * (n - i))
             break
-        if ch == "<" and i + 1 < n and line[i + 1] == "<" and opener is None:
-            match = _HEREDOC_SHAPE_RE.match(line, i)
-            if match:
-                opener = (match.group(2), match.group(0).startswith("<<-"))
-                out.append(" " * (match.end() - i))
-                i = match.end()
+        if line.startswith("<<<", i):
+            # A here-string: consume all three, or the second `<<` would
+            # read the word after it as a heredoc delimiter.
+            out.append("<<<")
+            i += 3
+            continue
+        if ch == "<" and i + 1 < n and line[i + 1] == "<":
+            opener = parse_opener(line, i)
+            if opener is not None:
+                delimiter, strip_tabs, end = opener
+                openers.append((delimiter, strip_tabs))
+                out.append(" " * (end - i))
+                i = end
                 continue
         out.append(ch)
         i += 1
-    return "".join(out), in_single, in_double, in_backtick, sub_depth, opener
+    return "".join(out), in_single, in_double, in_backtick, sub_depth, openers
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +338,7 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     The exemption is therefore decided per heredoc, by where it goes.
     """
     body: set[int] = set()
-    delims: list[tuple[str, bool]] = []
+    delims: deque[tuple[str, bool]] = deque()
     # The lexer owns opener detection: a `<<` inside a comment or a quoted
     # string is prose.  Scanning the raw line here disagreed with
     # line_lex._scan and turned `# upstream uses the <<EOF form` above a
@@ -339,15 +348,15 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
     for i, line in enumerate(lines):
         content = line[1:] if line[:1] in ("+", "-") else line
         stripped = content.strip()
-        if delims and stripped == delims[-1][0]:
-            delims.pop()
+        if delims and stripped == delims[0][0]:
+            delims.popleft()
             continue
         if delims:
-            if delims[-1][1]:
+            if delims[0][1]:
                 body.add(i)
             continue
-        opener = lexed[i].heredoc_opener
-        if opener is not None:
+        openers = lexed[i].heredoc_openers
+        if openers:
             # The destination may be named on either side of the
             # delimiter: `bash <<EOF` puts it before, and
             # `cat <<'EOF' | sh` puts it after the redirect.  Reading
@@ -358,7 +367,8 @@ def _heredoc_body_indices_cached(lines: tuple[str, ...]) -> frozenset[int]:
                 or _HEREDOC_PIPED_RE.search(content)
                 or _HEREDOC_TO_EXECUTING_CONFIG_RE.search(content)
             )
-            delims.append((opener[0], is_data))
+            for delimiter, _strip_tabs in openers:
+                delims.append((delimiter, is_data))
     return frozenset(body)
 
 
@@ -385,26 +395,27 @@ def _printed_heredoc_body_indices_cached(
     lines: tuple[str, ...],
 ) -> frozenset[int]:
     body: set[int] = set()
-    delims: list[tuple[str, bool]] = []
+    delims: deque[tuple[str, bool]] = deque()
+    lexed = lex_lines(list(lines))
     for i, line in enumerate(lines):
         content = line[1:] if line[:1] in ("+", "-") else line
         stripped = content.strip()
-        if delims and stripped == delims[-1][0]:
-            delims.pop()
+        if delims and stripped == delims[0][0]:
+            delims.popleft()
             continue
         if delims:
-            if delims[-1][1]:
+            if delims[0][1]:
                 body.add(i)
             continue
-        for m in _HEREDOC_OPEN_RE.finditer(content):
-            if not m.group(2):
-                continue
-            printed = bool(
-                _PRINTED_HEREDOC_OPENER_RE.match(content)
-                and not _HEREDOC_PIPED_RE.search(content[m.end():])
-            )
-            delims.append((m.group(2), printed))
-            break
+        openers = lexed[i].heredoc_openers
+        if not openers:
+            continue
+        printed = bool(
+            _PRINTED_HEREDOC_OPENER_RE.match(content)
+            and not _HEREDOC_PIPED_RE.search(content)
+        )
+        for delimiter, _strip_tabs in openers:
+            delims.append((delimiter, printed))
     return frozenset(body)
 
 

@@ -101,6 +101,13 @@ def _strip_shell_quotes(text: str) -> str:
             out.append(nxt if nxt in _ESCAPE_REMOVABLE else text[i : i + 2])
             i += 2
             continue
+        if c == "$" and i + 1 < n and text[i + 1] == '"':
+            # ``$"..."`` is bash's locale-translated double-quoted string.
+            # Drop the ``$`` and let the quote flow through the ordinary
+            # pair handling; keeping the ``$`` turned ``$"curl"`` into
+            # ``$curl``, so the literal command name never reached R001.
+            i += 1
+            c = '"'
         if c not in "'\"":
             out.append(c)
             i += 1

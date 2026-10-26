@@ -466,17 +466,17 @@ def _drop_unclosed_arrays(
     return kept
 
 
-def _resolve_relational(
+def _fold_scalars(
     entries: tuple[str, ...], scalars: dict[str, str]
 ) -> tuple[str, ...]:
-    """Relational-array entries with the recipe's scalars folded in.
+    """Literal array entries with the recipe's scalars folded in.
 
-    The array table keeps entries literal (``${pkgbase%-bin}``), so two
-    semantically identical ``provides`` arrays diff as a gain and a loss.
-    makepkg's implicit ``pkgbase=$pkgname`` default is applied when no
-    explicit ``pkgbase`` is declared.  An entry that still holds an
-    unexpanded ``${``/``$(`` after substitution is dropped rather than
-    diffed raw, following the fold model of ``deps.declared_package_names``.
+    The array table keeps entries literal (``${pkgbase%-bin}``), so a
+    reader comparing values has to apply the same fold the relational
+    arrays use.  makepkg's implicit ``pkgbase=$pkgname`` default is applied
+    when no explicit ``pkgbase`` is declared.  Unresolved entries are
+    returned as they stand; the caller decides whether that is "unknown"
+    (dependency validation) or "drop" (relational diffing).
     """
     import re
 
@@ -484,22 +484,33 @@ def _resolve_relational(
 
     table = dict(scalars)
     table.setdefault("pkgbase", (table.get("pkgname") or "").strip())
-    resolved_entries: list[str] = []
+    folded: list[str] = []
     for entry in entries:
         # Braced forms first: resolve_expansions handles ${pkgbase%-bin}
         # against the table; a naive $name replace would shred the `${`.
         value, _ok = resolve_expansions(entry, table)
-        if "${" in value or "$(" in value:
-            continue
         value = re.sub(
             r"\$([A-Za-z_][A-Za-z0-9_]*)",
             lambda m: table.get(m.group(1), m.group(0)),
             value,
         )
-        if "${" in value or "$(" in value:
-            continue
-        resolved_entries.append(value)
-    return tuple(resolved_entries)
+        folded.append(value)
+    return tuple(folded)
+
+
+def _resolve_relational(
+    entries: tuple[str, ...], scalars: dict[str, str]
+) -> tuple[str, ...]:
+    """Relational-array entries with the recipe's scalars folded in.
+
+    An entry that still holds an unexpanded ``${``/``$(`` after
+    substitution is dropped rather than diffed raw, following the fold
+    model of ``deps.declared_package_names``.
+    """
+    return tuple(
+        value for value in _fold_scalars(entries, scalars)
+        if "${" not in value and "$(" not in value
+    )
 
 
 def _family(arrays: dict, base_names) -> tuple[str, ...]:

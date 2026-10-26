@@ -70,6 +70,8 @@ from ._defaults_executor import (
     GETENT_ENUMERATION_FRAGMENT,
     H067_LEGACY_SYSTEMD_DETECT_VIRT,
     H067_SYSTEMD_DETECT_VIRT_PROBE,
+    LEGACY_NETWORK_TOOL_LISTS,
+    LEGACY_NETWORK_TOOLS,
     NETWORK_CLIENT,
     NETWORK_CLIENT_ALTERNATIVES,
     OTHER_FETCH_CLIENT,
@@ -200,6 +202,41 @@ def _refresh_legacy_recon_commands() -> bool:
     _log.info("repaired the legacy H040 getent fragment in patterns.toml")
     return True
 
+def _refresh_legacy_network_tools() -> bool:
+    """Repair the shipped D003 list when it still has the pre-expansion set.
+
+    ``patterns.toml`` is written once at install and never synced, so an
+    install from before the transfer-client expansion keeps the old list
+    forever.  The parsed value must equal the exact legacy list: a user who
+    added or removed an entry keeps their table untouched.
+    """
+    path = CONFIG_DIR / "patterns.toml"
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    try:
+        parsed = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    current = (parsed.get("patterns") or {}).get("network_tools")
+    legacy = next(
+        (table for table in LEGACY_NETWORK_TOOL_LISTS
+         if current == list(table)),
+        None,
+    )
+    if legacy is None:
+        return False
+    old_block = "network_tools = " + _toml_str_list(legacy)
+    new_block = "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS)
+    if old_block not in text:
+        return False
+    path.write_text(text.replace(old_block, new_block, 1), encoding="utf-8")
+    _toml_cache.pop("patterns.toml", None)
+    _log.info("repaired the legacy D003 network_tools list in patterns.toml")
+    return True
+
+
 def _refresh_legacy_anti_analysis_probes() -> bool:
     """Repair the stale shipped H067 ``systemd-detect-virt`` probe.
 
@@ -238,6 +275,7 @@ def ensure_default_configs():
     _refresh_legacy_iocs()
     _refresh_legacy_recon_commands()
     _refresh_legacy_anti_analysis_probes()
+    _refresh_legacy_network_tools()
     _refresh_legacy_review_limit()
     # Append any shipped rules the user's file is missing.  The file is
     # written once at install time, so an older install can lack rules
@@ -1104,4 +1142,4 @@ def _review_policy_material(config: dict) -> dict:
     return {"name": policy.name, "threshold": policy.threshold}
 
 
-__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'DEFAULT_WATCHLIST_TAG', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'configured_release_channel', 'configured_release_key', 'configured_ioc_tag', 'configured_watchlist_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']
+__all__ = ['ANY_EXECUTOR', 'CACHE_DIR', 'CATALOGUED_FETCH_ALTERNATIVES', 'CONFIG_DIR', 'DATA_DIR', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_BASELINE_TAG', 'DEFAULT_CONFIG', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_DOMAINS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_HOSTS', 'DEFAULT_IOCS', 'DEFAULT_IOC_TAG', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NAMING', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_NOVELTY_WEIGHTS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_PATTERNS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_RELEASE_CHANNEL', 'DEFAULT_RELEASE_KEY', 'DEFAULT_RULES', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_DIVERGENCE_ALLOW', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_THRESHOLDS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'DEFAULT_WATCHLIST_TAG', 'EXEC_WRAPPER', 'GETENT_ENUMERATION_FRAGMENT', 'INT_WEIGHT_GROUPS', 'KNOWN_BOOL_KEYS', 'LEGACY_DEFAULT_REVIEW_LIMIT', 'LEGACY_IOCS_STUBS', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'LEGACY_RULE_PATTERNS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'Path', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'SHIPPED_RULESET_VERSION', 'STRUCTURAL_MATCHES', 'STRUCTURAL_SEVERITY_CEILING', 'STRUCTURED_EXTRACTOR', '_LEGACY_REVIEW_LIMIT_RE', '_RULESET_VERSION_RE', '_SEMANTIC_FIELDS', '_STRUCTURAL_CLAMPED', '_SUBCOMMAND_OPTS', '_free_hosting_pattern', '_free_registrar_tld_pattern', '_log', '_refresh_legacy_iocs', '_refresh_legacy_recon_commands', '_refresh_legacy_review_limit', '_replace_rule_block', '_review_policy_material', '_rule_blocks', '_shipped_rule_fields', '_shipped_rules_cache', '_standard_port_pattern', '_toml_cache', '_toml_escape_str', '_toml_str_list', '_toml_value', 'clamp_structural_severity', 'config_fingerprint', 'configured_baseline_tag', 'configured_release_channel', 'configured_release_key', 'configured_ioc_tag', 'configured_watchlist_tag', 'copy', 'drifted_shipped_rules', 'enforce_fatal_rules', 'ensure_default_configs', 'ensure_dirs', 'load_config', 'load_domains', 'load_hosts', 'load_ioc_sources', 'load_iocs', 'load_naming', 'load_patterns', 'load_rules', 'load_structural_rules', 'load_thresholds', 'load_toml', 'local_ruleset_version', 'logging', 'missing_shipped_rules', 'os', 'outdated_shipped_rules', 're', 'ruleset_age_drift', 'set_config', 'shipped_fatal_rule_ids', 'shipped_rules', 'sync_rules', 'tomllib', 'write_default_file']

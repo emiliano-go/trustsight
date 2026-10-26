@@ -55,9 +55,16 @@ _QUOTED_RE = re.compile(r"""['"]([^'"]+)['"]""")
 # diff hunk leaves an array looking unterminated.
 _PACKAGE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9@._+-]*$")
 
-# Longest dependency array worth believing before assuming the closing
-# paren fell outside the hunk.
+# Longest dependency array worth believing before checking whether the
+# closing paren is actually in this diff.  The count is a soft trigger: a
+# real meta-package can carry hundreds of entries, while an array whose
+# closer fell outside the hunk must not read the rest of the file as
+# dependencies.
 _MAX_ARRAY_SPAN = 60
+
+#: How far the "is the closer in this diff?" lookahead scans.  A dependency
+#: array longer than this is not a PKGBUILD; stopping bounds a hostile diff.
+_MAX_ARRAY_LOOKAHEAD = 4096
 
 
 def _is_package_name(token: str) -> bool:
@@ -276,6 +283,33 @@ def declared_package_names(recipe_text: str) -> set[str]:
     return {name for name in names if name and "$" not in name}
 
 
+def _array_closes_later(parsed, start: int, file_name: str,
+                        wanted: str) -> bool:
+    """True when *field*'s closing paren is still ahead in this file.
+
+    A hunk can cut an array off before its ``)``.  The old fixed line count
+    could not tell that shape from a genuinely long array, and truncated
+    every ``depends``/``optdepends`` array past 60 lines - losing a real
+    addition after the bound.  The closer's presence is the actual
+    question: if it is in the diff, keep reading; if the next array opener
+    or file boundary arrives first, the array is unterminated and the field
+    is dropped.
+    """
+    for later in parsed[start : start + _MAX_ARRAY_LOOKAHEAD]:
+        if later.file != file_name or os.path.basename(later.file) != "PKGBUILD":
+            return False
+        if later.raw.startswith(("diff --git ", "+++", "---")):
+            return False
+        if later.side in ("add", "remove") and later.side != wanted:
+            continue
+        body = later.content if later.side in ("add", "remove") else later.raw
+        if _ARRAY_START_RE.match(body) or _UNTRACKED_ARRAY_START_RE.match(body):
+            return False
+        if _closes_array(_strip_comment(body)):
+            return True
+    return False
+
+
 def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     """Dependency names on one side of the diff, keyed by field.
 
@@ -287,9 +321,11 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
     found: dict[str, set[str]] = {f: set() for f in DEP_FIELDS}
     field: str | None = None
     span = 0
+    span_checked = False
+    parsed = list(parse_diff_lines(lines).lines)
     # *marker* is still "+" or "-"; the typed side is derived from it.
     wanted = "add" if marker == "+" else "remove"
-    for line in parse_diff_lines(lines).lines:
+    for index, line in enumerate(parsed):
         # Dependency arrays exist only in the PKGBUILD.  A commit diff also
         # carries a LICENSE, a .patch and a companion CMakeLists, and letting
         # those be read as the continuation of a `depends=(` a hunk left open
@@ -308,6 +344,8 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
         # attributed to the *previous* file.
         if line.raw.startswith("diff --git ") or line.raw.startswith(("+++", "---")):
             field = None
+            span = 0
+            span_checked = False
             continue
         if line.raw.startswith("@@"):
             # A hunk header names the line that opened its section.  When
@@ -320,9 +358,11 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
             if opener:
                 field = opener.group(1)
                 span = 0
+                span_checked = False
             elif _UNTRACKED_ARRAY_START_RE.match(header):
                 field = None
                 span = 0
+                span_checked = False
             continue
         if line.side in ("add", "remove") and line.side != wanted:
             continue
@@ -339,6 +379,7 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
             field = match.group(1)
             body = body[match.end():]
             span = 0
+            span_checked = False
         elif field is None:
             continue
         elif _UNTRACKED_ARRAY_START_RE.match(body):
@@ -352,9 +393,12 @@ def _side_names(lines: list[str], marker: str) -> dict[str, set[str]]:
             # paren is simply not in the patch.  Without a bound, every
             # later line in the file would be read as a dependency.
             span += 1
-            if span > _MAX_ARRAY_SPAN:
-                field = None
-                continue
+            if span > _MAX_ARRAY_SPAN and not span_checked:
+                span_checked = True
+                if not _array_closes_later(
+                        parsed, index, line.file, wanted):
+                    field = None
+                    continue
 
         body = _strip_comment(body)
 
@@ -422,16 +466,18 @@ def _post_dependency_names(recipe, field: str) -> set[str] | None:
         if key == field or key.startswith(field + "_")
         for entry in values
     ]
-    if any("$" in entry for entry in entries):
-        return None
+    # Lazy import: changes imports this module lazily inside change_delta,
+    # and the scalar fold is its shared helper.
     if field in ("provides", "replaces", "conflicts"):
-        # Lazy import: changes imports this module lazily inside
-        # change_delta, and the relational fold is its shared helper.
         from .changes import _resolve_relational
 
         entries = list(_resolve_relational(tuple(entries), recipe.scalars))
-        if any("$" in entry for entry in entries):
-            return None
+    else:
+        from .changes import _fold_scalars
+
+        entries = list(_fold_scalars(tuple(entries), recipe.scalars))
+    if any("$" in entry for entry in entries):
+        return None
     return {normalize_dependency(entry) for entry in entries}
 
 

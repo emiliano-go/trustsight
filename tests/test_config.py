@@ -1046,3 +1046,63 @@ def test_generated_shipped_pattern_history_is_current():
         rule_id: set(patterns)
         for rule_id, patterns in HISTORICAL_RULE_PATTERNS.items()
     }
+
+
+def test_refresh_legacy_network_tools_repairs_the_old_list(tmp_path, monkeypatch):
+    """Installs that predate the transfer-client expansion keep the old list."""
+    import trustsight.config as config_module
+    from trustsight.config import DEFAULT_NETWORK_TOOLS, LEGACY_NETWORK_TOOLS
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new = "network_tools = " + config_module._toml_str_list(DEFAULT_NETWORK_TOOLS)
+    old = "network_tools = " + config_module._toml_str_list(LEGACY_NETWORK_TOOLS)
+    path.write_text(path.read_text().replace(new, old))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_network_tools() is True
+    assert "openssh" in path.read_text()
+    assert config_module._refresh_legacy_network_tools() is False
+
+
+def test_refresh_legacy_network_tools_preserves_custom_entries(
+        tmp_path, monkeypatch):
+    import trustsight.config as config_module
+    from trustsight.config import DEFAULT_NETWORK_TOOLS, LEGACY_NETWORK_TOOLS
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new = "network_tools = " + config_module._toml_str_list(DEFAULT_NETWORK_TOOLS)
+    old = "network_tools = " + config_module._toml_str_list(LEGACY_NETWORK_TOOLS)
+    custom = old.replace("]", '    "custom-tool",\n]', 1)
+    path.write_text(path.read_text().replace(new, custom))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_network_tools() is False
+    repaired = path.read_text()
+    assert "custom-tool" in repaired
+    assert "openssh" not in repaired
+
+
+def test_refresh_legacy_network_tools_repairs_an_older_shipped_list(
+        tmp_path, monkeypatch):
+    """The watcher and long-lived installs may carry either shipped table."""
+    import trustsight.config as config_module
+    from trustsight.config import (
+        DEFAULT_NETWORK_TOOLS,
+        LEGACY_NETWORK_TOOL_LISTS,
+    )
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new = "network_tools = " + config_module._toml_str_list(DEFAULT_NETWORK_TOOLS)
+    oldest = "network_tools = " + config_module._toml_str_list(
+        LEGACY_NETWORK_TOOL_LISTS[0])
+    path.write_text(path.read_text().replace(new, oldest))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_network_tools() is True
+    assert "openssh" in path.read_text()

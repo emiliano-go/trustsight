@@ -121,7 +121,7 @@ Measured against the 8393-diff benign corpus with the published 215,504-name dep
 |------|------|-----|-----------|------|-------|
 | D001 | Novel Dependency Added | HIGH | 0.27 % | 10/8393 | The hits are real package names that nothing else in the AUR depends on (`kde-rounded-corners-x11`, `python-hindsight-client`, `python-parallel-web`, `python-pytest-enabler`, `python2-pytest-flake8`, `python2-gevent-eventemitter`, `udfclient-fuse3`), not parser noise |
 | D002 | Typosquatted Dependency | HIGH | 0.00 % | 0/8393 | Refined by D001; bounded by edit-distance threshold |
-| D003 | New Network-Using Makedepends | MEDIUM | 0.48 % | 18/8393 | Almost all `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates |
+| D003 | New Network-Using Makedepends | MEDIUM | 0.46 % | 39/8393 | Mostly `git` added to fetch submodules, the legitimate case the MEDIUM severity anticipates; the transfer-client expansion (2026-10-26) raised the count without changing the rate. |
 | D004 | Dependency Hijack Via Provides | HIGH | 0.05 % | 2/8393 | 2084 corpus diffs declare `provides` or `replaces`; `jpegli-git` conflicts `libjxl` and `llama.cpp-cuda-git` provides `ggml`, both established unrelated names |
 | H030 | Dependency-Set Expansion | MEDIUM | 0.13 % | 5/8393 | Measured with the published seed. Well under the 30% gate. |
 

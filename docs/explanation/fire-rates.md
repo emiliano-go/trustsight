@@ -69,8 +69,8 @@ Per-rule rates are below. The aggregate figures the security model cites are:
 | benign diffs scoring 0 | 72.8% |
 | benign diffs above the 20-point threshold | 7.0% |
 | percentile at which 20 sits | 93.0th |
-| malicious 5th percentile | 60 |
-| malicious minimum | 50 |
+| malicious 5th percentile | 40 |
+| malicious minimum | 20 |
 
 These are a **point-in-time measurement**, taken after
 [B10](../security.md#b10-positive-evidence-is-reported-never-credited) removed

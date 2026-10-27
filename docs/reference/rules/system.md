@@ -1756,4 +1756,4 @@ Measured against the TrustSight test corpus.
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
 | Benign zero-rate | 72.8 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 30 | 95th percentile score on benign corpus. |
-| CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |
+| CRITICAL p5 | 40 | 5th percentile score on CRITICAL-class corpus. |

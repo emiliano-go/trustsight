@@ -699,3 +699,19 @@ def test_the_feed_sink_is_skipped_without_a_key(monkeypatch):
     finally:
         ntfy.stop()
         feed.stop()
+
+
+def test_headline_prefers_the_cause_of_an_h046_cascade():
+    """H046 is derived from another package's adoption.
+
+    When the cycle carries both, the headline must name the transition a
+    reader can act on, not the dependent package the graph happened to list
+    most often.
+    """
+    cycle = CycleResult(
+        over_threshold=[],
+        new_alerts=([("funiculi", "H046")] * 7
+                    + [("pulseaudio-dlna-cygn", "H044")] * 2),
+    )
+    body = alert_payload(cycle)
+    assert body["title"].startswith("TrustSight: H044 on pulseaudio-dlna-cygn")

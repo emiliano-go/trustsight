@@ -458,11 +458,19 @@ def analyze_package_text(
     if record:
         try:
             props = extract_properties(new_pkgbuild, srcinfo)
+            # The pre-image under the same extractor: a stored baseline from an
+            # older extractor must not read as a source/version change.
+            previous_props = (
+                extract_properties(old_pkgbuild) if old_pkgbuild else None
+            )
             floor = int(
                 load_thresholds().get("longitudinal", {}).get("stability_floor", 10)
             )
             with get_connection() as conn:
-                breaks = update_properties(conn, pkg_name, props, observed_at, floor=floor)
+                breaks = update_properties(
+                    conn, pkg_name, props, observed_at, floor=floor,
+                    previous=previous_props,
+                )
         except Exception:
             log.warning("property tracking failed for %s", pkg_name, exc_info=True)
 

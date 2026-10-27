@@ -143,6 +143,7 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
         _H072_BENIGN_EXEC,
         _collect_executions,
         _declared_source_basenames,
+        _matches_declared_source,
         _FETCH_CLIENT_RE,
         _recipe_lines,
         resolve_added_lines,
@@ -180,6 +181,6 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
             if "." not in base and "/" not in path:
                 continue
             if base and base not in _H072_BENIGN_EXEC \
-                    and base not in source_basenames:
+                    and not _matches_declared_source(base, source_basenames):
                 return f"an execution of {path}"
     return None

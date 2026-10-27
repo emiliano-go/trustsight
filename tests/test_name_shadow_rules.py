@@ -81,3 +81,22 @@ def test_skip_prevents_double_report_for_a_provides_claim():
     assert name_shadow_findings(
         _recipe("mything", 'provides=("bash")\n'), "mything",
         skip={"bash"}) == []
+
+
+def test_pkgname_does_not_shadow_itself_without_official_membership(monkeypatch):
+    """The observation fallback counts the package's own corpus row.
+
+    Without pacman, every established-by-observation package read as a shadow
+    of its own name.  That arm now requires exact repository membership; the
+    dependency-name arms keep the fallback.
+    """
+    import trustsight.db as db
+    import trustsight.db._dependencies as deps
+
+    monkeypatch.setattr(db, "official_package_names", lambda: frozenset())
+    monkeypatch.setattr(deps, "dependency_observation_count", lambda name: 100)
+
+    assert name_shadow_findings(_recipe("lotti-bin"), "lotti-bin") == []
+    findings = name_shadow_findings(
+        _recipe("mything", 'provides=("lotti-bin")\n'), "mything")
+    assert {f["params"]["kind"] for f in findings} == {"provides"}

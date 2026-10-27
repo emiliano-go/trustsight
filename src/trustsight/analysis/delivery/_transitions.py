@@ -215,10 +215,18 @@ def _pinning_of(url: str) -> str:
     (`/latest/`, `/HEAD`); every other archive carries its version in the
     path by convention.
     """
-    fragment = url.split("#", 1)[1] if "#" in url else ""
     # Any `transport+address` spelling (`git+`, `hg+`, `bzr+lp:`) is a VCS
     # fetch: floating without a commit/tag fragment, whatever the transport.
-    if re.match(r"\w+\+", url) or url.startswith("git://") or fragment:
+    # A plain archive URL with a `#` is not a VCS fetch: `${pkgver##*.}` in a
+    # version-derived archive path made the `#` look like a fragment, so a
+    # pinned archive read as a moving branch (H101 on every such release).
+    is_vcs = bool(
+        re.match(r"\w+\+", url)
+        or url.startswith("git://")
+        or re.search(r"\.git(?:[#?]|$)", url)
+    )
+    fragment = url.split("#", 1)[1] if is_vcs and "#" in url else ""
+    if is_vcs:
         if fragment.startswith(("commit=", "tag=")):
             return "pinned"
         return "floating"

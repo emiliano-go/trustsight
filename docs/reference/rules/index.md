@@ -43,14 +43,14 @@ generated from it by `scripts/build_rules_index.py`.
 <!-- generated: legend -->
 | Category | Slug | Rules | What a rule here claims |
 |----------|------|-------|-------------------------|
-| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 39 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
+| [Fetch and Execution](fetch-and-execution.md) | `fetch-and-execution` | 40 | Code reaches the machine and runs: a fetch, an execution, or the path between the two. |
 | [Obfuscation](obfuscation.md) | `obfuscation` | 8 | The recipe hides what it does from a reader by encoding, indirection, or runtime assembly. |
 | [Deception and Anti-Analysis](deception.md) | `deception` | 6 | The recipe targets whoever reviews it rather than the shell that runs it, or checks whether it is being watched. |
-| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 22 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
+| [Install and Persistence](install-and-persist.md) | `install-and-persist` | 23 | Something survives the build: a root-time hook, a unit, a privileged bit, a file in the user's profile. |
 | [Staging and Reconnaissance](staging-and-recon.md) | `staging-and-recon` | 10 | The build steps outside its staging roots, hides a drop, or profiles the host it is running on. |
 | [Integrity and Verification](integrity.md) | `integrity` | 46 | A verification the recipe used to carry is weakened, removed, or cannot cover what it claims to. |
-| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 12 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
-| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 14 | Who owns the package, or a long-stable declared property, changed. |
+| [Naming and Dependencies](naming-and-dependency.md) | `naming-and-dependency` | 13 | A name is claimed or a dependency set changes in a way that redirects what gets installed. |
+| [Maintainer and Metadata](maintainer-and-metadata.md) | `maintainer-and-metadata` | 15 | Who owns the package, or a long-stable declared property, changed. |
 | [Temporal Context](temporal.md) | `temporal` | 8 | How recently the package or this revision appeared, independent of any diff content. |
 | [Composition](composition.md) | `composition` | 6 | Distinct kinds of finding co-occurred; the combination is the signal. H027 and H043 annotate at weight 0; H098 scores the naming/deception cluster. |
 | [Count-Based](count-based.md) | `count-based` | 5 | A count of indicators crossed a fixed threshold within one artifact or one cluster. |
@@ -264,6 +264,10 @@ is deliberately non-contiguous; see
 | [H102](composition.md#h102) | Maintainer Change With Signing Key Change | Heuristic | HIGH | [Composition](composition.md) |
 | [H103](integrity.md#h103) | Metadata And Recipe Disagree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H104](naming-and-dependency.md#h104) | Placeholder Package | Heuristic | INFO | [Naming and Dependencies](naming-and-dependency.md) |
+| [H105](maintainer-and-metadata.md#h105) | Adopted Source Executed | Heuristic | HIGH | [Maintainer and Metadata](maintainer-and-metadata.md) |
+| [H106](naming-and-dependency.md#h106) | Registry Or Index Override | Heuristic | MEDIUM | [Naming and Dependencies](naming-and-dependency.md) |
+| [H107](fetch-and-execution.md#h107) | Credential Store Access With Egress | Heuristic | HIGH | [Fetch and Execution](fetch-and-execution.md) |
+| [H108](install-and-persist.md#h108) | Service Or Cron Enable Command | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
 | [M001](meta.md#m001) | Claim Contradicted By Structure | Meta | HIGH | [Meta and Confluence](meta.md) |
 | [M002](meta.md#m002) | Weak Signal Across Layers | Meta | MEDIUM | [Meta and Confluence](meta.md) |
 | [M003](meta.md#m003) | Composition Not Owned Elsewhere | Meta | MEDIUM | [Meta and Confluence](meta.md) |

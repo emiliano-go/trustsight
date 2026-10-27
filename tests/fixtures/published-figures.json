@@ -1,7 +1,7 @@
 {
   "tests": {
-    "count": 7936,
-    "files": 195
+    "count": 7985,
+    "files": 200
   },
   "seed": {
     "source_urls": 185902,
@@ -9,7 +9,7 @@
     "dependency_names": 215504
   },
   "calibration": {
-    "labelled_fixtures": 207,
+    "labelled_fixtures": 210,
     "corpus_diffs": 8393,
     "benign_zero_rate_pct": 72.8,
     "benign_p95": 30,
@@ -25,10 +25,10 @@
       "about **1 in 15** review workload items",
       "185,902 known source URLs",
       "36,912 hashed maintainer identities and 215,504 dependency names",
-      "207 self-authored, labelled malicious fixtures"
+      "210 self-authored, labelled malicious fixtures"
     ],
     "docs/index.md": [
-      "260 documented detection rules across eleven families"
+      "264 documented detection rules across eleven families"
     ],
     "docs/explanation/fire-rates.md": [
       "| benign 95th percentile | 30 |",
@@ -47,7 +47,7 @@
       "| Benign flag rate | 7.0% |",
       "| Benign p95 | 30 |",
       "The 72.8% zero-rate means 72.8% of benign diffs score 0, while **7.0% exceed the 20-point threshold**",
-      "207 self-authored fixtures"
+      "210 self-authored fixtures"
     ],
     "docs/tutorial/reading-a-report.md": [
       "**72.8 % of diffs score 0**",
@@ -104,7 +104,7 @@
       "215,504 dependency names"
     ],
     "docs/reference/evidence-tiers.md": [
-      "(207 labelled fixtures)"
+      "(210 labelled fixtures)"
     ]
   }
 }

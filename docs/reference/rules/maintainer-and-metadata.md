@@ -40,13 +40,12 @@ severity weights and the reserved identifier ranges.
 | [H074](#h074) | Adopt-then-Modify | MEDIUM |
 | [H086](#h086) | Adopted From Orphan | MEDIUM |
 | [H088](#h088) | Adopted, Recipe Rewritten, Unpinned Fetch | HIGH |
+| [H105](#h105) | Adopted Source Executed | HIGH |
 <!-- /generated: page-index -->
 
 ### C006: Maintainer Change With New Source Domain {#c006}
 
 - **Severity:** HIGH (weight 25)
-
-<!-- name: Maintainer Change With New Source Domain -->
 
 - **Condition:** The maintainer changed **and** at least one added source URL is on a domain not present among the removed URLs.
 - **Description:** Either signal alone is routine; maintainers change hands, domains migrate. Together they are the shape of an account takeover redirecting sources to attacker-controlled infrastructure. Requires maintainer metadata, so it fires only in the live path, not in offline corpus replay.
@@ -56,8 +55,6 @@ severity weights and the reserved identifier ranges.
 - **Target:** programmatic (maintainer delta + global novelty)
 - **Severity:** HIGH (weight 25) - always on; corpus rate TBD (requires live git history)
 - **Category:** `maintainer`
-
-<!-- name: New Maintainer Without Prior History -->
 
 - **Condition:** `maintainer_changed` is true **AND** the new maintainer is
   **globally novel** (never seen in the database across any package).
@@ -91,8 +88,6 @@ to mean something - gated identically to the other novelty signals via
 - **Severity:** MEDIUM (weight 15), INFO for a bare `epoch=0`
 - **Category:** `version`
 
-<!-- name: Epoch Introduced -->
-
 - **Condition:** A diff introduces `epoch=` where the previous revision had none. Under `--full-recipe` there is no previous revision, so the finding says `epoch=N present` rather than claiming the field is new.
 
 An epoch overrides normal version comparison, so introducing one forces an
@@ -107,8 +102,6 @@ Fire rate: 14 on the v1 corpus (0.37 %).
 - **Severity:** INFO (weight 0)
 - **Category:** `version`
 
-<!-- name: Epoch Removed With Version Unchanged -->
-
 - **Condition:** A diff drops `epoch=` while `pkgver` and `pkgrel` are
   unchanged by resolved value.
 
@@ -121,16 +114,12 @@ silently disappeared. `H063` owns the introduction; `C030` the removal.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
 
-<!-- name: Long-Stable Property Changed -->
-
 - **Condition:** A tracked property with no more specific rule (`license`, `install_hook_present`) changed after a long stable run.
 
 ### H049: Source Origin Changed {#h049}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `source`
-
-<!-- name: Source Origin Changed -->
 
 - **Condition:** A long-stable `source_hosts` or `source_orgs` set changed to a non-empty set.
 
@@ -153,16 +142,12 @@ licence file added from a different host no longer reads as a source move
 - **Severity:** INFO (weight 0)
 - **Category:** `context`
 
-<!-- name: Version Scheme Changed -->
-
 - **Condition:** The package's version scheme changed (semver to date, and so on). Context only, by design.
 
 ### H051: Package Description Changed {#h051}
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `integrity`
-
-<!-- name: Package Description Changed -->
 
 - **Condition:** A long-stable `pkgdesc` token set changed.
 
@@ -176,8 +161,6 @@ prompt.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `build`
 
-<!-- name: Build System Changed -->
-
 - **Condition:** Long-stable `build_system_markers` or `build_line_count` changed.
 
 A declared `pkgver`/`pkgrel`/`epoch` move is the ordinary reason a build
@@ -189,8 +172,6 @@ prompt.
 
 - **Severity:** HIGH (weight 25)
 - **Category:** `maintainer`
-
-<!-- name: Untrusted Maintainer Takeover (corpus path) -->
 
 - **Condition:** An ownership transition whose incoming maintainer maintained no package at all in the previous snapshot.
 
@@ -205,8 +186,6 @@ established packagers carries H044 alone.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `maintainer`
 
-<!-- name: Ownership Transition -->
-
 - **Condition:** A package that existed in the previous snapshot changed to a different, non-empty maintainer.
 
 A move to an empty maintainer is abandonment, which H046 and H060 handle as
@@ -216,8 +195,6 @@ orphan state rather than as a takeover.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `adoption`
-
-<!-- name: Maintainer Baseline Deviation -->
 
 - **Condition:** A maintainer's activity this cycle deviates from their own recorded baseline by at least `[thresholds] h058.z_score` (default 2.0), once `h058.min_history_cycles` (default 3) cycles of their history exist.
 
@@ -250,8 +227,6 @@ package is still analysed on its own for content.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `maintainer`
 
-<!-- name: Adopt-then-Modify -->
-
 - **Condition:** A package adopted this cycle also changed version in the same cycle, within `[thresholds] h074.window_days` (default 14).
 
 H074 is the exception to the novelty ceiling described in
@@ -264,8 +239,6 @@ without a version change is quiet, and so is a change outside the window.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `maintainer`
-
-<!-- name: Adopted From Orphan -->
 
 - **Condition:** The AUR reported this package as orphaned on a previous run, and now reports a maintainer.
 
@@ -293,8 +266,6 @@ week, which is why this is MEDIUM. Its weight is in the
 - **Severity:** HIGH (weight 25)
 - **Category:** `takeover`
 
-<!-- name: Adopted, Recipe Rewritten, Unpinned Fetch -->
-
 - **Condition:** All three of [H086](#h086) (adopted from orphan), [H087](integrity.md#h087) (recipe changed without upstream) and a build-time registry resolution (the `unpinned_build_deps` coverage gap's trigger) hold for the same diff.
 
 This is the June 2026 campaign's chain in one rule, and it exists because none
@@ -320,3 +291,23 @@ conditions hold, because the analysis genuinely could not see what will run.
 H088 is a finding about this change; the gap is a statement about what was
 never examined, and [B2](../../security.md#b2-an-unflagged-verdict-is-never-issued-for-an-analysis-that-was-incomplete)
 keeps them separate.
+
+### H105: Adopted Source Executed {#h105}
+
+- **Target:** programmatic (takeover state + source identity + execution finding)
+- **Severity:** HIGH (weight 25)
+- **Category:** `maintainer`
+
+- **Condition:** A recorded takeover or adoption (`H086`, `H044`, `H074`, or a maintainer transition) coincides with a source identity the package did not use before and an execution of code fetched from that source (`H082`, `H083`, `H072`, `H081`, `H075`, or `H090`).
+
+H088 catches the registry variant: an adopted recipe that now resolves code
+from `npm`, `bun`, `pip` or another registry. This rule catches the declared
+source variant used by the 2018 acroread and 2025 CHAOS RAT attacks: the
+recipe points at an attacker-controlled repository or file and then runs it
+during the build.
+
+The source identity is the host plus the first path components, so a move
+from `github.com/upstream/project` to `github.com/attacker/project` is a new
+source even though both are GitHub. A benign adopter moving to a new upstream
+can still be reviewed; the rule requires the execution sink, not merely the
+source change.

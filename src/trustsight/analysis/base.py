@@ -92,6 +92,7 @@ _CODE_RULE_DEFAULTS = {
     "D001": True, "D002": True, "D003": True, "D004": True,
     "H015": True,
     "H016": True, "H017": True, "H018": True, "H019": True,
+    "H106": True, "H108": True,
 }
 
 #: Pre-rename name of the ``[code_rules]`` config table.  Kept readable so an

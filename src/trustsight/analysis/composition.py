@@ -83,16 +83,30 @@ def edge_recon(ctx, add) -> None:
 # stage.
 _STAGE_OF = {
     "H026": "takeover", "H044": "takeover", "H074": "takeover",
+    # The June 2026 chain is a takeover, a recipe-only change and a
+    # registry resolution.  H086/H087/H088 name those three parts; the
+    # stage map predates them, so H043 could not annotate the campaign it
+    # was written for.
+    "H086": "takeover", "H088": "takeover", "H105": "takeover",
+    "H087": "integrity_removed",
+    "W002": "registry",
+    "H106": "registry",
+    "H107": "exfil",
+    "H108": "persistence",
     "H045": "mass_adoption", "H073": "mass_adoption",
     "H023": "install_hook", "H017": "install_hook",
+    "H100": "install_hook",
     "R001": "foreign_fetch", "H035": "foreign_fetch", "H066": "foreign_fetch",
+    "H075": "foreign_fetch",
     "H068": "payload", "H069": "payload",
     "H036": "obfuscation", "H065": "obfuscation",
     "H067": "anti_analysis", "H080": "anti_analysis",
     "H072": "write_then_exec", "H081": "write_then_exec",
+    "C032": "write_then_exec",
     "H038": "staging",
     "H040": "recon",
     "H039": "persistence", "H062": "persistence", "H076": "persistence",
+    "H093": "persistence", "H095": "persistence",
     "H041": "exfil", "H071": "exfil",
     "H042": "hidden_drop",
     "H034": "foreign_fetch",

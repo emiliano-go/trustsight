@@ -34,8 +34,6 @@ weights and the reserved identifier ranges.
 - **Severity:** tiered by the indicator's confidence: `confirmed` is FATAL, `high` is CRITICAL, `medium` is HIGH, an untiered entry is MEDIUM. A `pkgbuild_pattern` entry is capped at CRITICAL whatever its tier, because a regex names a shape rather than an exact artefact.
 - **Category:** `ioc`
 
-<!-- name: Known Indicator of Compromise -->
-
 - **Condition:** A declared surface exactly matches an entry in `iocs.toml`, or an added line matches a `pkgbuild_pattern` entry.
 
 Five surfaces are read: the package's own name; names added to

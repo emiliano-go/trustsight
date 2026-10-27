@@ -5,7 +5,7 @@
 Mechanics live on the
 
 <!-- generated: nature-rules -->
-**Rules in this nature:** [D001](../rules/naming-and-dependency.md#d001), [D002](../rules/naming-and-dependency.md#d002), [D003](../rules/naming-and-dependency.md#d003), [D004](../rules/naming-and-dependency.md#d004), [D005](../rules/naming-and-dependency.md#d005), [H006](../rules/naming-and-dependency.md#h006), [H029](../rules/naming-and-dependency.md#h029-rule), [H048](../rules/naming-and-dependency.md#h048), [H053](../rules/naming-and-dependency.md#h053), [H059](../rules/naming-and-dependency.md#h059), [H064](../rules/naming-and-dependency.md#h064), [H104](../rules/naming-and-dependency.md#h104) (12 rules).
+**Rules in this nature:** [D001](../rules/naming-and-dependency.md#d001), [D002](../rules/naming-and-dependency.md#d002), [D003](../rules/naming-and-dependency.md#d003), [D004](../rules/naming-and-dependency.md#d004), [D005](../rules/naming-and-dependency.md#d005), [H006](../rules/naming-and-dependency.md#h006), [H029](../rules/naming-and-dependency.md#h029-rule), [H048](../rules/naming-and-dependency.md#h048), [H053](../rules/naming-and-dependency.md#h053), [H059](../rules/naming-and-dependency.md#h059), [H064](../rules/naming-and-dependency.md#h064), [H104](../rules/naming-and-dependency.md#h104), [H106](../rules/naming-and-dependency.md#h106) (13 rules).
 <!-- /generated: nature-rules -->
 [Naming and Dependencies system page](../rules/naming-and-dependency.md).
 

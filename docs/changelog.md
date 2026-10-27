@@ -5516,6 +5516,6 @@ separate reconciliation.
 [0.21.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.21.0
 [0.22.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.22.0
 [0.23.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.23.0
-[Unreleased]: https://github.com/emiliano-go/trustsight/compare/v0.24.1...HEAD
+[0.25.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.25.0
 [0.24.0]: https://github.com/emiliano-go/trustsight/releases/tag/v0.24.0
 [0.24.1]: https://github.com/emiliano-go/trustsight/releases/tag/v0.24.1

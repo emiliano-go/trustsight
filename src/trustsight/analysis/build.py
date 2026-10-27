@@ -286,6 +286,90 @@ def _foreign_pkg_re(config=None) -> re.Pattern:
     return re.compile("|".join(frags), re.IGNORECASE)
 
 
+# H106: an override that points a package manager at a different registry.
+# The override line is suspicious; a resolution in the same function makes
+# it a delivery chain rather than a configuration mention.
+_REGISTRY_OVERRIDE_RE = re.compile(
+    r"\b(?:npm_config_registry|PIP_INDEX_URL|UV_INDEX|GOPROXY|GONOSUMDB|"
+    r"GOPRIVATE|CARGO_REGISTRIES_[A-Z0-9_]+)\s*="
+    r"|\bnpm\s+[^\n;|]*--registry\b"
+    r"|\b(?:npm|pnpm|yarn)\s+config\s+set\s+registry\b"
+    r"|(?:^|\s)registry\s*=\s*\S+"
+    r"|\bpip3?\s+[^\n;|]*--(?:index-url|extra-index-url)\b"
+    r"|\buv\s+[^\n;|]*--index(?:-url)?\b"
+    r"|\bgem\s+sources\s+--add\b"
+    r"|\bcomposer\s+config\s+repositories\b",
+    re.IGNORECASE,
+)
+
+_SERVICE_ENABLE_RE = re.compile(
+    r"\bsystemctl\s+(?:--user\s+)?enable\b"
+    r"|\bloginctl\s+enable-linger\b"
+    r"|\bcrontab\b(?!\s+-l\b)"
+    r"|\bat\s+(?!-l\b)"
+    r"|\bsystemd-run\s+--unit\b"
+    r"|\bupdate-rc\.d\b"
+    r"|\bchkconfig\b",
+    re.IGNORECASE,
+)
+
+
+_REGISTRY_INSTALL_RE = re.compile(
+    r"\b(?:npm|pnpm|yarn|bun)\s+(?:install|add|ci|exec)\b"
+    r"|\b(?:pip|pip3|uv|poetry|pipenv|conda)\s+(?:install|add|sync|run)\b"
+    r"|\bpython3?\s+-m\s+pip3?\s+install\b"
+    r"|\bcargo\s+(?:install|fetch|update)\b"
+    r"|\bgo\s+(?:install|get|mod\s+download)\b"
+    r"|\bgem\s+install\b"
+    r"|\bcomposer\s+(?:install|require|update)\b",
+    re.IGNORECASE,
+)
+
+
+
+def _service_enable_findings(ctx, add) -> None:
+    """H108: build/install code enables a service or cron job."""
+    lines = ctx.lines
+    scopes = ctx.scopes
+    for i, line in enumerate(lines):
+        if not line.startswith("+"):
+            continue
+        scope = scopes.within(i, _CRITICAL_FUNCTIONS + _INSTALL_HOOKS)
+        if scope is None:
+            continue
+        body = _strip_comment(line[1:])
+        if _PRINTER_LINE_RE.match(body):
+            body = _blank_quoted(body)
+        if _SERVICE_ENABLE_RE.search(body):
+            add("H108", "Service Or Cron Enable Command", "HIGH", "persistence",
+                f"{scope}() enables a service or cron job: {body.strip()[:90]}",
+                position=scope, body=body.strip()[:90])
+
+def _registry_override_findings(ctx, add) -> None:
+    """H106: build/install code redirects a package manager's registry."""
+    lines = ctx.lines
+    scopes = ctx.scopes
+    for i, line in enumerate(lines):
+        if not line.startswith("+"):
+            continue
+        scope = scopes.within(i, _CRITICAL_FUNCTIONS + _INSTALL_HOOKS)
+        if scope is None:
+            continue
+        body = _strip_comment(line[1:])
+        if not _REGISTRY_OVERRIDE_RE.search(body):
+            continue
+        resolves = any(
+            _REGISTRY_INSTALL_RE.search(_strip_comment(other[1:]))
+            for j, other in enumerate(lines)
+            if j != i and other.startswith("+")
+            and scopes.within(j, (scope,)) is not None
+        )
+        add("H106", "Registry Or Index Override",
+            "HIGH" if resolves else "MEDIUM", "dependency",
+            f"{scope}() overrides a package-manager registry: {body.strip()[:90]}",
+            position=scope, body=body.strip()[:90])
+
+
 def _obfuscation_indicators(config=None) -> list[re.Pattern]:
     """Compile the H036 obfuscation indicators from patterns.toml."""
     patterns = load_patterns().get("patterns", {})
@@ -700,6 +784,11 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
         add("H025", "Build Environment Subversion", "MEDIUM", "build",
             "CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function",
             detail="CFLAGS, LDFLAGS, MAKEFLAGS, or PATH modified inside a build function")
+
+    if _code_rule_enabled(config, "H106"):
+        _registry_override_findings(ctx, add)
+    if _code_rule_enabled(config, "H108"):
+        _service_enable_findings(ctx, add)
 
     wanted = ({r for r in ("H015", "H016", "H017", "H018", "H019")
                if _code_rule_enabled(config, r)}

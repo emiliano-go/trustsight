@@ -1049,6 +1049,55 @@ def test_generated_shipped_pattern_history_is_current():
     }
 
 
+def test_refresh_legacy_foreign_pkg_managers_repairs_the_old_list(
+        tmp_path, monkeypatch):
+    """Installs that predate the one-shot-runner expansion keep the old list."""
+    import trustsight.config as config_module
+    from trustsight.config import (
+        DEFAULT_FOREIGN_PKG_MANAGERS,
+        LEGACY_FOREIGN_PKG_MANAGER_LISTS,
+    )
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new = "foreign_pkg_managers = " + config_module._toml_str_list(
+        DEFAULT_FOREIGN_PKG_MANAGERS)
+    old = "foreign_pkg_managers = " + config_module._toml_str_list(
+        LEGACY_FOREIGN_PKG_MANAGER_LISTS[0])
+    path.write_text(path.read_text().replace(new, old))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_foreign_pkg_managers() is True
+    assert "npx" in path.read_text()
+    assert config_module._refresh_legacy_foreign_pkg_managers() is False
+
+
+def test_refresh_legacy_foreign_pkg_managers_preserves_custom_entries(
+        tmp_path, monkeypatch):
+    import trustsight.config as config_module
+    from trustsight.config import (
+        DEFAULT_FOREIGN_PKG_MANAGERS,
+        LEGACY_FOREIGN_PKG_MANAGER_LISTS,
+    )
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "patterns.toml"
+    new = "foreign_pkg_managers = " + config_module._toml_str_list(
+        DEFAULT_FOREIGN_PKG_MANAGERS)
+    old = "foreign_pkg_managers = " + config_module._toml_str_list(
+        LEGACY_FOREIGN_PKG_MANAGER_LISTS[0])
+    custom = old.replace("]", '    "custom-runner",\n]', 1)
+    path.write_text(path.read_text().replace(new, custom))
+    config_module._toml_cache.pop("patterns.toml", None)
+
+    assert config_module._refresh_legacy_foreign_pkg_managers() is False
+    repaired = path.read_text()
+    assert "custom-runner" in repaired
+    assert "npx" not in repaired
+
+
 def test_refresh_legacy_network_tools_repairs_the_old_list(tmp_path, monkeypatch):
     """Installs that predate the transfer-client expansion keep the old list."""
     import trustsight.config as config_module

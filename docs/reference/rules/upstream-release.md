@@ -43,8 +43,6 @@ weights and the reserved identifier ranges.
 - **Severity:** MEDIUM
 - **Category:** `upstream-ci`
 
-<!-- name: CI Exfil Shape -->
-
 - **Condition:** A signed federation finding reports that the repository this
   recipe declares as its upstream (`url=`) gained a workflow matching the
   GhostAction exfil shape: a `${{ secrets.` reference paired with an outbound
@@ -62,8 +60,6 @@ A miss is uninformative, as with every indicator.
 - **Severity:** MEDIUM
 - **Category:** `upstream-ci`
 
-<!-- name: Git-History Credential Sweep -->
-
 - **Condition:** The same federation channel, the history-sweep shape: a
   workflow that materializes full history (`fetch-depth: 0`) and greps the
   commit history for credential patterns.
@@ -77,8 +73,6 @@ the signed `upstream_repo` entry is the only source.
 - **Target:** committed .github/workflows/* files
 - **Severity:** LOW (weight 0)
 - **Category:** `upstream-ci`
-
-<!-- name: New CI Surface Committed -->
 
 - **Condition:** The diff adds a file under `.github/workflows/`
   (`*.yml` or `*.yaml`) to the package repository.
@@ -94,8 +88,6 @@ committed beside the recipe is a surface worth naming.
 - **Target:** declared source=() transport and access mode
 - **Severity:** MEDIUM
 - **Category:** `source`
-
-<!-- name: Unauditable Upstream -->
 
 - **Condition:** A gained `source=()` entry the public cannot inspect, in one
   of these shapes: embedded credentials in the authority

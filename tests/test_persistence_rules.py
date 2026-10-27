@@ -338,6 +338,27 @@ def test_h043_silent_below_threshold():
     assert not any(r["rule_id"] == "H043" for r in meta)
 
 
+def test_h043_sees_the_june_takeover_registry_chain():
+    """H043 exists for this shape but its map predated H086/H087/W002."""
+    rules = [_stage_stub(r) for r in ("H086", "H087", "W002")]
+    meta = _meta_annotations(rules)
+    assert any(r["rule_id"] == "H043" for r in meta)
+
+
+def test_h043_maps_the_extended_delivery_and_persistence_rules():
+    from trustsight.analysis.composition import _STAGE_OF
+
+    assert _STAGE_OF["H075"] == "foreign_fetch"
+    assert _STAGE_OF["C032"] == "write_then_exec"
+    assert _STAGE_OF["H100"] == "install_hook"
+    assert _STAGE_OF["H093"] == "persistence"
+    assert _STAGE_OF["H095"] == "persistence"
+    assert _STAGE_OF["H105"] == "takeover"
+    assert _STAGE_OF["H106"] == "registry"
+    assert _STAGE_OF["H107"] == "exfil"
+    assert _STAGE_OF["H108"] == "persistence"
+
+
 def test_h043_never_counts_meta_rules_as_stages():
     rules = [_stage_stub(r) for r in ("H040", "H027", "H043", "H024")]
     meta = _meta_annotations(rules)

@@ -274,6 +274,7 @@ experimental = false
 # H018  a patch applied from outside the build tree (a URL, an absolute
 #       path, or process substitution)
 # H019  a source= URL downgraded from https to http
+# H106  build/install code points a package manager at another registry
 D001 = true
 D002 = true
 D003 = true
@@ -282,6 +283,8 @@ H016 = true
 H017 = true
 H018 = true
 H019 = true
+H106 = true
+H108 = true
 
 # H015 reports that a critical build function was modified.  It is INFO
 # severity, so it carries weight 0 and cannot move a score: it fires on

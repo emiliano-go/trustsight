@@ -1,22 +1,36 @@
 """Extracted from config.py: _defaults_executor."""
 
 
-__all__ = ['ANY_EXECUTOR', 'GETENT_ENUMERATION_FRAGMENT', 'CATALOGUED_FETCH_ALTERNATIVES', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'STRUCTURED_EXTRACTOR', '_SUBCOMMAND_OPTS']
+__all__ = ['ANY_EXECUTOR', 'GETENT_ENUMERATION_FRAGMENT', 'CATALOGUED_FETCH_ALTERNATIVES', 'DECOMPRESSOR', 'DEFAULT_ANTI_ANALYSIS_PROBES', 'DEFAULT_CONFUSABLE_CHARS', 'DEFAULT_CONFUSABLE_DOMAINS', 'DEFAULT_COVERT_EGRESS_CLIENTS', 'DEFAULT_COVERT_EGRESS_ENDPOINTS', 'DEFAULT_ECOSYSTEM_PREFIXES', 'DEFAULT_FOREIGN_PKG_MANAGERS', 'DEFAULT_FREE_HOSTING_DOMAINS', 'DEFAULT_FREE_REGISTRAR_TLDS', 'DEFAULT_H029_MIN_OBSERVATIONS', 'DEFAULT_H029_PLAIN_MIN_OBSERVATIONS', 'DEFAULT_KNOWN_SUFFIXES', 'DEFAULT_MANIFEST_FILENAMES', 'DEFAULT_NETWORK_TOOLS', 'DEFAULT_OBFUSCATION_INDICATORS', 'DEFAULT_PARSE_TIME_FETCH', 'DEFAULT_PASTE_HOSTS', 'DEFAULT_RECON_COMMANDS', 'DEFAULT_SECURITY_RELEVANT_FLAGS', 'DEFAULT_SECURITY_RELEVANT_LIBRARIES', 'DEFAULT_SOURCE_SCHEMES', 'DEFAULT_STANDARD_PORTS', 'DEFAULT_UPLOAD_FLAGS', 'DEFAULT_VARIANT_SUFFIXES', 'EXEC_WRAPPER', 'LEGACY_FOREIGN_PKG_MANAGER_LISTS', 'LEGACY_NETWORK_TOOL_LISTS', 'LEGACY_NETWORK_TOOLS', 'NETWORK_CLIENT', 'NETWORK_CLIENT_ALTERNATIVES', 'OTHER_FETCH_CLIENT', 'PACKAGE_MANAGER_INSTALL', 'PAYLOAD_PRODUCER', 'SCRIPT_EXECUTOR', 'SHELL_EXECUTOR', 'STRUCTURED_EXTRACTOR', '_SUBCOMMAND_OPTS']
 
-DEFAULT_FOREIGN_PKG_MANAGERS = [
-    r"\b(?:pip|pip3)\s+install\b",
-    r"\bnpm\s+(?:install|add)\b",
-    r"\bbun\s+(?:install|add)\b",
-    r"\bpnpm\s+(?:install|add)\b",
-    r"\byarn\s+(?:install|add)\b",
-    r"\bcargo\s+install\b",
-    r"\bgem\s+install\b",
-    r"\bgo\s+install\b",
-    r"\bdnf\s+install\b",
-    r"\byum\s+install\b",
-    r"\bpacman\s+-[SU]\b",
-    r"\bapt(?:-get)?\s+install\b",
-    r"\bmake\s+install\b(?!\s+DESTDIR)",
+LEGACY_FOREIGN_PKG_MANAGER_LISTS = [
+    (
+        r"\b(?:pip|pip3)\s+install\b",
+        r"\bnpm\s+(?:install|add)\b",
+        r"\bbun\s+(?:install|add)\b",
+        r"\bpnpm\s+(?:install|add)\b",
+        r"\byarn\s+(?:install|add)\b",
+        r"\bcargo\s+install\b",
+        r"\bgem\s+install\b",
+        r"\bgo\s+install\b",
+        r"\bdnf\s+install\b",
+        r"\byum\s+install\b",
+        r"\bpacman\s+-[SU]\b",
+        r"\bapt(?:-get)?\s+install\b",
+        r"\bmake\s+install\b(?!\s+DESTDIR)",
+    ),
+]
+
+DEFAULT_FOREIGN_PKG_MANAGERS = list(LEGACY_FOREIGN_PKG_MANAGER_LISTS[0]) + [
+    # One-shot runners resolve and execute a package with no install step.
+    r"\bnpx\s+", r"\bbunx\s+", r"\bpnpx\s+",
+    r"\bpipx\s+", r"\buvx\s+", r"\bpython3?\s+-m\s+pip3?\s+install\b",
+    r"\bpkgx\s+", r"\bnix\s+run\b",
+    r"\bdeno\s+(?:run|install|cache)\b",
+    # Container runtimes and the run-a-remote-module verbs.
+    r"\b(?:docker|podman)\s+(?:run|pull)\b",
+    r"\bcargo\s+script\b", r"\bbun\s+x\b", r"\buv\s+run\b",
+    r"\bpoetry\s+run\b", r"\bpipenv\s+run\b", r"\bconda\s+run\b",
 ]
 
 SHELL_EXECUTOR = r"(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)"

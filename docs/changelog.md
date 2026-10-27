@@ -10,6 +10,22 @@
 
 ### Fixed
 
+- **The 2026-10-27 watcher false-positive batch, with true-positive twins.**
+  H042 no longer reads a dot-suffixed file written through a command
+  substitution (`sed -i … "$(_get_app_dir)/name.desktop"`) as a hidden drop;
+  a real leading-dot write outside the build trees still fires. C001 exempts
+  a package manager's own registry fetch (`cargo fetch --locked`) and a
+  network-client name used as an `install`/test operand (`yt-dlp`, `[ -f
+  yt-dlp ]`), while `curl …` and `yt-dlp <url>` in a build function still
+  count. H059 resolves bash substring expansion (`${var::1}`) and treats a
+  still-unresolved repository URL as unknown rather than divergent. A URL
+  inside a `.install` hook is a runtime endpoint, not a declared source, so it
+  no longer charges SOURCE_BUCKET/NOVELTY (H106/H035 still see it).
+  Project-owned release hosts (`files.grass.io`, `eda.gowinsemi.cn`,
+  `git.bnema.dev`, `git.timfalken.com`) join the official bucket. The harness
+  URL check strips a `git+`/`hg+` transport prefix before comparing a finding
+  with `source=()`. Regression cases and their positive twins are in
+  `tests/regressions/test_fp_triage_2026_10_27.py`.
 - **Multi-line quotes are reconstructed in context, and quoted data is not a command.** A line that opens inside a `"`/`'`/`$'…'` string continuing from a context or earlier added line is now rebuilt from that state rather than treated as fresh shell input. Command rules skip a line that is entirely quoted data, while `$(…)` and backticks inside double quotes still run. H065 uses the same stateful pass, so a continuation line cannot be reported as obfuscation. The leaf lexer also caps each line at the tokenizer bound and resets quote state past the cap, so an oversized line cannot hide the following recipe behind a late quote or heredoc.
 - **The tokenizer resolves more bash forms and fewer false "unresolved" boundaries.** `${v:+alt}` and `${v:?message}` now resolve when `v` is set; `:?` stays unresolved when unset because the shell aborts. `$"..."` is read as the quoted string rather than `$...`, and `${p//\//_}` substitutes on escaped slashes instead of silently returning the value unchanged. Multiple heredocs on one line are tracked in opener order by one shared parser, so the second body is data in both readers; `<<<word` no longer opens a phantom heredoc, and a quoted delimiter with spaces is one opener.
 - **The corpus first-seen path now matches the review path.** A first

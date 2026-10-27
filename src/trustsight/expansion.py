@@ -543,6 +543,18 @@ def _expand_one_unbounded(
             return value if value is not None else word
         return value if value is not None else None
 
+    # ::length - a substring from offset 0 with an explicit length.  Bash
+    # permits the empty offset form `${var::1}`, which the offset rule below
+    # cannot read because it requires a digit after the first colon.  A value
+    # the resolver cannot see stays unresolved, never guessed.
+    m = re.match(r"^(\w+)::(\d+)$", body)
+    if m:
+        name, length = m.group(1), int(m.group(2))
+        val = vars_.get(name)
+        if val is None:
+            return None
+        return val[:length]
+
     # :offset:length  /  :offset
     m = re.match(r"^(\w+):(\d+)(?::(\d+))?$", body)
     if m:

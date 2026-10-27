@@ -175,6 +175,10 @@ def _is_documentation_source(token: str) -> bool:
 #: from (a project homepage, a bug tracker, a vendor CDN named in the URL).
 _URL_DECL_RE = re.compile(r"^\s*(?:url|[A-Za-z0-9_]*_url)\s*=")
 
+def _is_install_hook_path(path: str) -> bool:
+    """True for the ``.install`` hook file: runtime commands, not origins."""
+    return path.endswith(".install")
+
 def extract_urls_from_diff(diff_text: str) -> SourceChanges:
     """Extract added and removed URLs from a diff."""
     added_urls: set[str] = set()
@@ -251,7 +255,12 @@ def extract_urls_from_diff(diff_text: str) -> SourceChanges:
             if url_host_is_non_routable(cleaned):
                 continue
             target.add(cleaned)
-            if is_declaration or (
+            # A URL in an install hook is a runtime endpoint, not a declared
+            # source artifact: `pip --extra-index-url` in post_install is not
+            # a `source=()` entry, and charging it SOURCE_BUCKET/NOVELTY read
+            # as a provenance change on an ordinary release.  It stays in
+            # `target` so the install-hook rules still see it.
+            if is_declaration or _is_install_hook_path(line.file) or (
                 prefix == "+" and _is_documentation_source(cleaned)
             ):
                 declared_urls.add(cleaned)

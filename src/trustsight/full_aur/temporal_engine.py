@@ -601,6 +601,11 @@ def _name_repo_divergence_findings(snapshot: HistorySnapshot) -> list[dict]:
         repos = source_repos.get(name) or set()
         if not repos:
             continue
+        # An unresolved expansion leaves a URL that names no real repository.
+        # Tokenising it says "nothing in common", which is not evidence of
+        # divergence: absence of a resolved repo is unknown, not a finding.
+        if any("$" in repo or "{" in repo for repo in repos):
+            continue
         stem_parts = _package_stem(name).split("-")
         tokens = {t for t in stem_parts if len(t) >= 3}
         if len(tokens) < 2:

@@ -25,6 +25,16 @@ _CACHE_ENV_RE = re.compile(
     r"|YARN_CACHE_FOLDER|PNPM_HOME)\s*="
 )
 
+#: Verbs whose operands are files being written, not commands being run, and
+#: the shell keywords that introduce a test instead of a command.
+_WRITE_VERBS = frozenset({
+    "install", "cp", "mv", "ln", "mkdir", "tee", "dd", "sed", "rsync",
+    "test", "[", "[[",
+})
+_SHELL_KEYWORDS = frozenset({
+    "if", "then", "elif", "else", "while", "until", "do", "done", "fi", "!",
+})
+
 _DISGUISABLE_COMMANDS = frozenset({
     "sudo", "su", "doas", "curl", "wget", "aria2c", "sh", "bash", "zsh",
     "dash", "fish", "python", "python3", "perl", "ruby", "node", "php",
@@ -129,6 +139,50 @@ def diff_structure_findings(doc, add) -> None:
                 f"{file.path} is added with no content",
                 file=file.path)
 
+def _non_executing_client(body: str, match) -> bool:
+    """True when a fetch-client name is not a command being run on *body*.
+
+    Two benign shapes made C001 fire on ordinary version bumps:
+
+    * ``cargo fetch --locked`` is a registry resolution (W002's claim), not a
+      payload fetch, so a package manager's own ``fetch`` verb is exempt.
+    * ``install -Dm755 yt-dlp ...`` and ``[ -f yt-dlp ]`` name a bundled file.
+      A client token that is an operand of a write/test verb is not an
+      execution, even though the bare word scan sees it.
+    """
+    from ..crossfire._common import _split_commands
+    from ..delivery import _PACKAGE_MANAGER_FETCH_RE
+
+    offset = 0
+    for part in _split_commands(body):
+        start = body.find(part, offset)
+        if start < 0:
+            start = offset
+        end = start + len(part)
+        if start <= match.start() < end:
+            stripped = part.lstrip()
+            shift = len(part) - len(stripped)
+            head = ""
+            for token in stripped.split():
+                word = token.strip("\"'({")
+                if not word or word in _SHELL_KEYWORDS:
+                    continue
+                if re.match(r"[A-Za-z_][A-Za-z0-9_]*=", word):
+                    continue
+                head = word
+                break
+            if head in _WRITE_VERBS and match.group(0) != head:
+                return True
+            pm = _PACKAGE_MANAGER_FETCH_RE.match(stripped)
+            if pm is not None:
+                relative = match.start() - start - shift
+                if pm.start() <= relative < pm.end():
+                    return True
+            return False
+        offset = end
+    return False
+
+
 def capability_in_diff(diff_text: str, current_text: str | None = None) -> str | None:
     """A new fetch or non-source execution added in a critical function.
 
@@ -159,7 +213,7 @@ def capability_in_diff(diff_text: str, current_text: str | None = None) -> str |
             continue
         body = strip_comment(line[1:])
         client = _FETCH_CLIENT_RE.search(body)
-        if client:
+        if client and not _non_executing_client(body, client):
             return f"a network fetch ({client.group(0)[:40]})"
         for path in _collect_executions(body):
             # A standard system path is not a new capability: the system

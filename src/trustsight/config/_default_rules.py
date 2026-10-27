@@ -657,6 +657,15 @@ domains = [
     # Gentoo's developer host: a project-controlled mirror for patchsets,
     # not a raw paste or file-drop service.
     "gentoo.org",
+    # Project-owned release hosts that were classified `unknown`: a routine
+    # release from the vendor's own domain paid SOURCE_BUCKET and NOVELTY on
+    # top of the real source-origin change H049 already reports.  Each is a
+    # host under the package's own `url=` domain, named exactly so the intent
+    # is visible rather than trusting the whole registered domain.
+    "files.grass.io",
+    "eda.gowinsemi.cn",
+    "git.bnema.dev",
+    "git.timfalken.com",
 ]
 
 [raw_hosting]

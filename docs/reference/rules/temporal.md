@@ -44,8 +44,6 @@ severity weights and the reserved identifier ranges.
 - **Severity:** INFO (weight 0)
 - **Category:** `temporal`
 
-<!-- name: Very Recent Update -->
-
 - **Condition:** AUR HEAD commit is less than 72 hours old.
 
 Packages updated moments ago have not been visible to the community long enough
@@ -58,8 +56,6 @@ source domains - recency escalates suspicion.
 - **Severity:** INFO (weight 0)
 - **Category:** `temporal`
 
-<!-- name: Brand New Package -->
-
 - **Condition:** The package's first commit on AUR is less than 30 days old.
 
 A package that barely exists has no reputation. An established package with a
@@ -70,8 +66,6 @@ recent update is routine; a package uploaded last week has zero track record.
 - **Target:** programmatic (commit timestamp gap)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
-
-<!-- name: Stale Package Revived -->
 
 - **Condition:** The previously analyzed commit is more than 365 days older than
   the new HEAD - an abandoned package that suddenly has activity.
@@ -86,8 +80,6 @@ offered is worth a medium-weight flag, independent of any diff signal.
 - **Target:** programmatic (ecosystem signing-key ledger)
 - **Severity:** HIGH (weight 25)
 - **Category:** `temporal`
-
-<!-- name: Signing-Key Novelty -->
 
 - **Condition:** A `validpgpkeys` fingerprint added in this diff has never
   been observed in the ecosystem key index.
@@ -106,8 +98,6 @@ on every key a new install sees.
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
 
-<!-- name: Maintainer Domain Novelty -->
-
 - **Condition:** The maintainer email's domain first appeared in the
   ecosystem within the observation window (`[thresholds] t_dom.window_days`,
   default 30) - a domain never seen before first appears now, and one first
@@ -122,8 +112,6 @@ prior footprint. Cold index declines, like T001.
 - **Severity:** HIGH (weight 25)
 - **Category:** `temporal`
 
-<!-- name: Signing Key Rotated -->
-
 - **Condition:** A `validpgpkeys` key is removed *and* a different one is
   added in the same diff.
 
@@ -136,8 +124,6 @@ rotation of trust inside one commit is its own fact - so it fires cold.
 - **Target:** programmatic (AUR LastModified vs git tip commit date)
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `temporal`
-
-<!-- name: Metadata-Git Divergence -->
 
 - **Condition:** The AUR `LastModified` timestamp is ahead of the git tip
   commit date by at least `[thresholds] t006.min_divergence_hours` (default
@@ -155,8 +141,6 @@ where push logs survive even when git history does not.
 - **Target:** programmatic (AUR maintainer vs git commit identities)
 - **Severity:** INFO (weight 0)
 - **Category:** `temporal`
-
-<!-- name: Packager Not In History -->
 
 - **Condition:** The AUR maintainer name does not appear in any commit
   message, author identity or committer identity in the retained git

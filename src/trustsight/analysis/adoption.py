@@ -28,11 +28,102 @@ Three rules here, and the third is the one that matters:
 from __future__ import annotations
 
 import re
+from urllib.parse import urlparse
 
 from ..diffdoc import parse_diff_lines
+from ..findings import stamp
 from ..tokenizer import join_line_continuations, split_lines
 from ..rules import clamp_text
 from .buildfetch import BUILD_FUNCTIONS, registry_resolutions
+
+#: Findings that already prove the diff executes code fetched from a source.
+_SOURCE_EXECUTION_RULES = frozenset({
+    "H082", "H083", "H072", "H081", "H075", "H090",
+})
+
+_URL_ASSIGN_RE = re.compile(
+    r"^\s*url\s*=\s*['\"]?([^'\"\s]+)", re.IGNORECASE | re.MULTILINE)
+
+
+def _source_identity(url: str) -> tuple[str, ...]:
+    """A coarse origin identity: host plus the first two path components.
+
+    The host alone is not enough: a campaign can keep github.com and change
+    the owner/repository (the CHAOS-RAT shape).  The first two path
+    components distinguish ``upstream/project`` from ``attacker/project``
+    without guessing at forge-specific APIs.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return ()
+    host = (parsed.hostname or "").lower()
+    parts = [part for part in parsed.path.split("/") if part]
+    if len(parts) >= 2:
+        repository = re.sub(
+            r"\.(?:tar\.(?:gz|xz|bz2|zst)|tgz|zip|git)$", "", parts[1],
+            flags=re.IGNORECASE)
+        return (host, parts[0], repository)
+    return (host, *parts[:2])
+
+
+def source_takeover_finding(
+    *,
+    package_name: str,
+    findings: list[dict],
+    adopted: bool,
+    maintainer_changed: bool,
+    added_urls: tuple[str, ...],
+    removed_urls: tuple[str, ...],
+    current_text: str | None,
+) -> dict | None:
+    """H105: a takeover adds a source and executes code from it.
+
+    Adoption alone is ordinary; a new upstream source is ordinary; executing
+    a declared source file can be ordinary too.  The conjunction is the
+    CHAOS-RAT / 2018 acroread shape: a package changes hands or is newly
+    controlled, points at a source identity the package did not use before,
+    and the build runs code from that source.  H088 owns the registry variant;
+    this is the declared-source variant.
+
+    The caller supplies *adopted* (H086/orphan state) or
+    *maintainer_changed* (H044/H026-style transition).  The source identity
+    is compared with the recipe's ``url=`` and the sources removed by this
+    diff, so an honest adopter moving upstream still has a path to quiet.
+    """
+    if not (adopted or maintainer_changed) or not added_urls:
+        return None
+    executed = any(
+        str(finding.get("rule_id")) in _SOURCE_EXECUTION_RULES
+        for finding in findings if isinstance(finding, dict)
+    )
+    if not executed:
+        return None
+
+    previous = set()
+    for url in removed_urls:
+        previous.add(_source_identity(url))
+    if current_text:
+        match = _URL_ASSIGN_RE.search(current_text)
+        if match:
+            previous.add(_source_identity(match.group(1)))
+    new = [(url, _source_identity(url)) for url in added_urls]
+    new = [(url, identity) for url, identity in new
+           if identity and identity not in previous]
+    if not new:
+        return None
+
+    url, _identity = new[0]
+    return stamp({
+        "rule_id": "H105",
+        "name": "Adopted Source Executed",
+        "severity": "HIGH",
+        "category": "takeover",
+        "match": (f"{package_name} adds source {url[:100]} and executes "
+                  "code from it after an ownership change"),
+        "params": {"source": url[:200]},
+    })
+
 
 _DEP_FIELDS = ("depends", "makedepends", "checkdepends", "optdepends")
 
@@ -197,3 +288,50 @@ def adoption_findings(
             f"upstream move, and {function}() now resolves dependencies from a "
             f"registry: {command[:80]}",
             package=package_name, position=function, body=command[:80])
+
+
+#: Findings that already prove network egress or an upload in this change.
+_EGRESS_RULES = frozenset({"H016", "H017", "H041", "H071", "H075", "H082", "H090"})
+
+_CREDENTIAL_PATH_RE = re.compile(
+    r"(?:~|\$HOME|\$\{HOME\})/\.(?:ssh|aws|gnupg|docker|netrc|npmrc|config/gh)\b"
+    r"|\b(?:id_rsa|id_ed25519|known_hosts|\.npmrc|\.netrc|\.docker/config\.json|"
+    r"Cookies|Login Data|Local Storage|/etc/shadow|/proc/[^\s]+/environ)\b",
+    re.IGNORECASE,
+)
+_CREDENTIAL_READ_RE = re.compile(
+    r"\b(?:cat|cp|tar|base64|grep|sed|awk|find|curl|wget|scp|rsync|"
+    r"python3?|openssl|gpg|strings|printenv|env)\b",
+    re.IGNORECASE,
+)
+
+
+def credential_egress_finding(
+    *, package_name: str, findings: list[dict], diff_text: str
+) -> dict | None:
+    """H107: a build/install step reads a credential store and sends data out.
+
+    Reading a config file is ordinary; sending data is ordinary in isolation.
+    The conjunction is a credential-stealer step written directly in the
+    recipe rather than hidden in an external binary.  No egress finding, no
+    H107: the rule must not accuse a package merely for reading its own
+    configuration.
+    """
+    if not any(str(f.get("rule_id")) in _EGRESS_RULES
+               for f in findings if isinstance(f, dict)):
+        return None
+    for line in parse_diff_lines(join_line_continuations(split_lines(clamp_text(diff_text)))).lines:
+        if line.side != "add" or line.raw.startswith("+++"):
+            continue
+        body = line.content
+        if _CREDENTIAL_PATH_RE.search(body) and _CREDENTIAL_READ_RE.search(body):
+            return stamp({
+                "rule_id": "H107",
+                "name": "Credential Store Access With Egress",
+                "severity": "HIGH",
+                "category": "exfil",
+                "match": (f"{package_name} reads a credential path while the "
+                          "same change has network egress or an upload"),
+                "params": {"path": body.strip()[:120]},
+            })
+    return None

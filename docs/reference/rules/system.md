@@ -1642,6 +1642,22 @@ See [H103: Metadata And Recipe Disagree](integrity.md#h103).
 
 See [H104: Placeholder Package](naming-and-dependency.md#h104).
 
+### H105 {#h105}
+
+See [H105: Adopted Source Executed](maintainer-and-metadata.md#h105).
+
+### H106 {#h106}
+
+See [H106: Registry Or Index Override](naming-and-dependency.md#h106).
+
+### H107 {#h107}
+
+See [H107: Credential Store Access With Egress](fetch-and-execution.md#h107).
+
+### H108 {#h108}
+
+See [H108: Service Or Cron Enable Command](install-and-persist.md#h108).
+
 ### X024 {#x024}
 
 See [X024: Indirect Sensitive Assignment](crossfire.md#x024).
@@ -1740,4 +1756,4 @@ Measured against the TrustSight test corpus.
 | R013 (unicode bidi) | 88 % | Misses some bidi variants. |
 | Benign zero-rate | 72.8 % | Percentage of benign diffs scoring 0. |
 | Benign p95 | 30 | 95th percentile score on benign corpus. |
-| CRITICAL p5 | 60 | 5th percentile score on CRITICAL-class corpus. |
+| CRITICAL p5 | 40 | 5th percentile score on CRITICAL-class corpus. |

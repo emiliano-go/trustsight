@@ -1,27 +1,48 @@
 {
   "acpid2-evil-fork.diff": {
-    "fidelity": "approximate",
-    "source": "https://archive.archlinux.org/aur-mirror/2021/acpid2-evil-fork",
     "description": "Fork of acpid2 that added curl|bash in post_upgrade()",
+    "fidelity": "approximate",
     "must_fire": [
       "R001"
     ],
     "must_not_fire": [],
-    "relabelled": "H004 dropped 2026-08-03: the diff contains no sudo; the label predated H004 becoming a command-position code rule"
+    "relabelled": "H004 dropped 2026-08-03: the diff contains no sudo; the label predated H004 becoming a command-position code rule",
+    "source": "https://archive.archlinux.org/aur-mirror/2021/acpid2-evil-fork"
+  },
+  "acroread-2018-07.diff": {
+    "description": "2018 acroread orphan adoption: a new source script is declared and executed during prepare().",
+    "fidelity": "representative",
+    "min_score": 65,
+    "must_fire": [
+      "H001",
+      "H083"
+    ],
+    "source": "https://thehackernews.com/2018/07/arch-linux-aur-malware.html"
+  },
+  "chaos-rat-2025-07.diff": {
+    "description": "2025 CHAOS RAT browser-lookalike package: an attacker source repository is declared and its installer is executed.",
+    "fidelity": "representative",
+    "min_score": 20,
+    "must_fire": [
+      "H001",
+      "C003",
+      "H015",
+      "W001"
+    ],
+    "source": "https://www.bleepingcomputer.com/news/security/arch-linux-pulls-aur-packages-that-installed-chaos-rat-malware/"
   },
   "fake-browser-bin.diff": {
-    "fidelity": "approximate",
-    "source": "AUR comments 2023",
     "description": "Typosquat bin package with base64 payload in prepare()",
+    "fidelity": "approximate",
     "must_fire": [
       "R003"
     ],
-    "must_not_fire": []
+    "must_not_fire": [],
+    "source": "AUR comments 2023"
   },
   "kernel-dkms-backdoor.diff": {
-    "fidelity": "approximate",
-    "source": "Hypothetical but representative",
     "description": "DKMS package that writes to /etc/modules-load.d/ and sets SUID",
+    "fidelity": "approximate",
     "must_fire": [
       "R059",
       "H015",
@@ -30,17 +51,27 @@
     "must_not_fire": [
       "R017"
     ],
-    "relabelled": "R017 -> R059 (setuid bit), H007 -> H076 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)"
+    "relabelled": "R017 -> R059 (setuid bit), H007 -> H076 (the symlink lands in /usr/lib/systemd/system-sleep, outside $pkgdir)",
+    "source": "Hypothetical but representative"
   },
   "libjpeg-turbo-skid.diff": {
-    "fidelity": "approximate",
-    "source": "Arch Linux bug tracker FS#42091",
     "description": "Compromised AUR upload that removed validpgpkeys and set SKIP",
+    "fidelity": "approximate",
     "must_fire": [
       "H001",
       "H024"
     ],
     "must_not_fire": [],
-    "relabelled": "R026 -> H001 (checksum set to SKIP), H005 -> H024 (validpgpkeys removed)"
+    "relabelled": "R026 -> H001 (checksum set to SKIP), H005 -> H024 (validpgpkeys removed)",
+    "source": "Arch Linux bug tracker FS#42091"
+  },
+  "russian-spam-2026-06.diff": {
+    "description": "June 2026 Russian shell-rc spam: an install hook appends a PATH change to the user profile.",
+    "fidelity": "representative",
+    "min_score": 40,
+    "must_fire": [
+      "H032"
+    ],
+    "source": "https://lists.archlinux.org/archives/list/aur-general@lists.archlinux.org/message/2YQSHTC27MOKDDKHZTH2BJGTEN2CYC7W/"
   }
 }

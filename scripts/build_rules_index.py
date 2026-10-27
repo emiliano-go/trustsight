@@ -58,7 +58,7 @@ NATURE_RE = re.compile(
     rf"{re.escape(NATURE_START)}\n.*?\n{re.escape(NATURE_END)}", re.S
 )
 
-META = re.compile(r"^<!-- (uid|anchor): (.*) -->$")
+META = re.compile(r"^<!-- (uid|anchor|name): (.*) -->$")
 
 SERIES_NAMES = {
     "C": "Integrity-change",

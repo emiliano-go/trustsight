@@ -57,7 +57,7 @@ from ...rules import (
     clamp_text,
     get_raw_diff_lines_indexed,
 )
-from ..adoption import adoption_findings
+from ..adoption import adoption_findings, credential_egress_finding, source_takeover_finding
 from ..buildfetch import has_unpinned_build_deps
 from ...changes import change_delta
 from ...coverage import (
@@ -688,6 +688,26 @@ def analyze_package(
     placeholder = placeholder_finding(head_pkgbuild)
     if placeholder:
         triggered_rules.append(placeholder)
+
+    h105 = source_takeover_finding(
+        package_name=pkg_name,
+        findings=triggered_rules,
+        adopted=was_orphaned == 1 and (bool(new_maintainer) or aur_orphaned is False),
+        maintainer_changed=maintainer_changed,
+        added_urls=source_changes.added_urls,
+        removed_urls=source_changes.removed_urls,
+        current_text=head_pkgbuild,
+    )
+    if h105:
+        triggered_rules.append(h105)
+
+    h107 = credential_egress_finding(
+        package_name=pkg_name,
+        findings=triggered_rules,
+        diff_text=diff_text,
+    )
+    if h107:
+        triggered_rules.append(h107)
 
     triggered_rules.extend(_meta_annotations(triggered_rules, config))
 

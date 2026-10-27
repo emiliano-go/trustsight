@@ -1,7 +1,7 @@
 {
   "tests": {
-    "count": 7936,
-    "files": 195
+    "count": 7985,
+    "files": 200
   },
   "seed": {
     "source_urls": 185902,
@@ -9,15 +9,15 @@
     "dependency_names": 215504
   },
   "calibration": {
-    "labelled_fixtures": 207,
+    "labelled_fixtures": 210,
     "corpus_diffs": 8393,
     "benign_zero_rate_pct": 72.8,
     "benign_p95": 30,
-    "malicious_p5": 60,
-    "malicious_minimum": 50,
+    "malicious_p5": 40,
+    "malicious_minimum": 20,
     "benign_above_threshold_pct": 7.0,
     "threshold_percentile": 93.0,
-    "separation_margin": 30,
+    "separation_margin": 10,
     "ruleset_trigger_rate_pct": 31.1
   },
   "doc_claims": {
@@ -25,44 +25,44 @@
       "about **1 in 15** review workload items",
       "185,902 known source URLs",
       "36,912 hashed maintainer identities and 215,504 dependency names",
-      "207 self-authored, labelled malicious fixtures"
+      "210 self-authored, labelled malicious fixtures"
     ],
     "docs/index.md": [
-      "260 documented detection rules across eleven families"
+      "264 documented detection rules across eleven families"
     ],
     "docs/explanation/fire-rates.md": [
       "| benign 95th percentile | 30 |",
       "| benign diffs scoring 0 | 72.8% |",
       "| benign diffs above the 20-point threshold | 7.0% |",
       "| percentile at which 20 sits | 93.0th |",
-      "| malicious 5th percentile | 60 |",
-      "| malicious minimum | 50 |",
+      "| malicious 5th percentile | 40 |",
+      "| malicious minimum | 20 |",
       "about **1 in 15** updates would be flagged for review"
     ],
     "docs/explanation/benchmarks-and-methodology.md": [
       "- **Benign** p95 = 30",
-      "- Gap = +30 points",
+      "- Gap = +10 points",
       "| Benign zero-rate | 72.8% |",
       "| Ruleset trigger rate | 31.1% |",
       "| Benign flag rate | 7.0% |",
       "| Benign p95 | 30 |",
       "The 72.8% zero-rate means 72.8% of benign diffs score 0, while **7.0% exceed the 20-point threshold**",
-      "207 self-authored fixtures"
+      "210 self-authored fixtures"
     ],
     "docs/tutorial/reading-a-report.md": [
       "**72.8 % of diffs score 0**",
       "benign packages score **30**",
-      "5th percentile of **60** and a minimum of **50**",
+      "5th percentile of **40** and a minimum of **20**",
       "sits at the 93.0th, so about **7.0%**"
     ],
     "docs/guides/using-in-ci.md": [
       "| Benign | p95 (95th percentile) | **30** |",
       "| Zero-rate (benign scored 0) | percentage | **72.8%** |",
-      "the published figures separate the two tails by 30 points: benign p95 = 30, CRITICAL p5 = 60, measured on the locked 8,393-diff corpus"
+      "the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus"
     ],
     "docs/explanation/index.md": [
       "The benign p95 (95th percentile of benign package scores) is 30",
-      "The 30-point gap between these two measured percentiles",
+      "The 10-point gap between these two measured percentiles",
       "**72.8% zero-rate** on the 8,393-diff locked corpus",
       "**benign p95 = 30**"
     ],
@@ -74,9 +74,9 @@
       "| benign diffs scoring 0 | 72.8% |",
       "| benign diffs above 20 | 7.0% |",
       "| percentile that 20 now sits at | 93.0th |",
-      "| malicious 5th percentile | 60 |",
-      "| malicious minimum | 50 |",
-      "**benign p95 (30) stays below malicious p5 (60)**, a margin of 30",
+      "| malicious 5th percentile | 40 |",
+      "| malicious minimum | 20 |",
+      "**benign p95 (30) stays below malicious p5 (40)**, a margin of 10",
       "**The 7.0% benign flag rate is a security property"
     ],
     "docs/reference/configuration.md": [
@@ -88,7 +88,7 @@
     "docs/reference/rules/system.md": [
       "| Benign zero-rate | 72.8 % |",
       "| Benign p95 | 30 |",
-      "| CRITICAL p5 | 60 |"
+      "| CRITICAL p5 | 40 |"
     ],
     "docs/guides/tuning-false-positives.md": [
       "zero-rate of **72.8%**",
@@ -104,7 +104,7 @@
       "215,504 dependency names"
     ],
     "docs/reference/evidence-tiers.md": [
-      "(207 labelled fixtures)"
+      "(210 labelled fixtures)"
     ]
   }
 }

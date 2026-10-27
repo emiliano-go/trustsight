@@ -1,11 +1,11 @@
 {
-  "catalog_size": 288,
+  "catalog_size": 295,
   "corpus_content_sha256": "a4cbea4ef14029c97d7746e2be080a2e5c931502429ee261d974810b35f5cafc",
   "counts": {
     "adversarial_only": 18,
     "cold_only": 41,
-    "measured": 161,
-    "zero_fire": 68
+    "measured": 162,
+    "zero_fire": 71
   },
   "rules": {
     "A001": {
@@ -4609,6 +4609,67 @@
       "state": "zero_fire",
       "strata": [],
       "uid": "TS-0273"
+    },
+    "H105": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "H105",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "H",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0282"
+    },
+    "H106": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "H106",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "H",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0281"
+    },
+    "H107": {
+      "expected_strata": [],
+      "fires": 0,
+      "id": "H107",
+      "pseudo": false,
+      "reason": "no benign shape in the locked corpus yet; add a shape stratum, never a rule-targeted sample",
+      "series": "H",
+      "sources": {},
+      "state": "zero_fire",
+      "strata": [],
+      "uid": "TS-0283"
+    },
+    "H108": {
+      "expected_strata": [],
+      "fires": 5,
+      "id": "H108",
+      "pseudo": false,
+      "reason": "",
+      "series": "H",
+      "sources": {
+        "cold": {
+          "fires": 5,
+          "strata": [
+            "bin_repack",
+            "large_electron",
+            "persist_surface"
+          ]
+        }
+      },
+      "state": "measured",
+      "strata": [
+        "bin_repack",
+        "large_electron",
+        "persist_surface"
+      ],
+      "uid": "TS-0284"
     },
     "M001": {
       "expected_strata": [],

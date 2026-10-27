@@ -44,8 +44,6 @@ severity weights and the reserved identifier ranges.
 - **Severity:** INFO (weight 0) - report-only co-occurrence flag
 - **Category:** `meta`
 
-<!-- name: Capability Density Anomaly -->
-
 - **Condition:** A single diff has rule hits in **3+ distinct capability
   categories** (e.g. `network` + `filesystem` + `execution` + `encoding`).
 
@@ -72,15 +70,15 @@ domains has a density that is itself a pattern.
 - **Severity:** INFO (weight 0)
 - **Category:** `meta`
 
-<!-- name: Attack-Chain Composition -->
-
 - **Condition:** The findings on one package span at least `[thresholds] h043.attack_chain_stages` (default 3) distinct kill-chain stages.
 
-Stages: takeover (H026, H044, H074), mass adoption (H045, H073), install hook
-(H023, H017), foreign fetch (R001, H035, H066, H034), payload (H068, H069),
-obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072),
-staging (H038), recon (H040), persistence (H039, H062, H076), exfil (H041,
-H071), hidden drop (H042), integrity removed (H091) and sabotage (S001-S008).
+Stages: takeover (H026, H044, H074, H086, H088, H105), mass adoption
+(H045, H073), install hook (H023, H017, H100), foreign fetch (R001, H035,
+H066, H034, H075), registry (W002, H106), payload (H068, H069),
+obfuscation (H036, H065), anti-analysis (H067), write-then-execute (H072,
+H081, C032), staging (H038), recon (H040), persistence (H039, H062, H076,
+H093, H095, H108), exfil (H041, H071, H107), hidden drop (H042), integrity removed
+(H087, H091) and sabotage (S001-S008).
 Later rules also map onto these stages, including R041, R054, R144, the
 H080-H083/H089-H091 additions and the X001-X034 crossfire rules; the
 authoritative rule-to-stage map is `_STAGE_OF` in `analysis/composition.py`.
@@ -99,8 +97,6 @@ three distinct stages.
 - **Target:** programmatic (the package's own findings, no new detection)
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
-
-<!-- name: Naming/Deception Cluster -->
 
 - **Condition:** The findings on one package carry at least `[thresholds] h098.min_signals` (default 2) distinct naming/deception signals.
 
@@ -141,8 +137,6 @@ two naming/deception signals.
 - **Severity:** HIGH (weight 25)
 - **Category:** `meta`
 
-<!-- name: Maintainer Change With Signing Key Change -->
-
 - **Condition:** The maintainer changed and `validpgpkeys` moved (H078)
   in the same diff.
 
@@ -159,8 +153,6 @@ composition H098 uses.
   MEDIUM (weight 15) when `optdepends` does.
 - **Category:** `composition`
 
-<!-- name: Dependency Removal During A Build Change -->
-
 - **Condition:** `checkdepends` or `optdepends` loses an entry while
   `build()`, `prepare()` or `check()` changed in the same diff.
 
@@ -175,8 +167,6 @@ fire-rate gate clears `checkdepends` for HIGH.
 
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `composition`
-
-<!-- name: Install Script Not Declared -->
 
 - **Condition:** A diff adds or modifies a `*.install` file while the
   recipe has no `install=` scalar naming it. pacman never runs the hook,

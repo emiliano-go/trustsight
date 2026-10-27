@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from ..analysis.base import _aggregate_pinning, _has_install_hook
+from ..analysis.adoption import credential_egress_finding, source_takeover_finding
 from ..analysis.buildfetch import has_unpinned_build_deps
 from ..analysis.composition import _meta_annotations, maintainer_keyring_composition, naming_cluster_annotation, naming_typosquat_finding
 from ..analysis.crossfile import metadata_recipe_divergence
@@ -855,6 +856,26 @@ def analyze_package_text(
     )
     if takeover:
         triggered_rules.append(takeover)
+
+    h105 = source_takeover_finding(
+        package_name=pkg_name,
+        findings=triggered_rules,
+        adopted=False,
+        maintainer_changed=maintainer_changed,
+        added_urls=source_changes.added_urls,
+        removed_urls=source_changes.removed_urls,
+        current_text=new_pkgbuild,
+    )
+    if h105:
+        triggered_rules.append(h105)
+
+    h107 = credential_egress_finding(
+        package_name=pkg_name,
+        findings=triggered_rules,
+        diff_text=diff_text,
+    )
+    if h107:
+        triggered_rules.append(h107)
 
     triggered_rules.extend(_meta_annotations(triggered_rules, config))
 

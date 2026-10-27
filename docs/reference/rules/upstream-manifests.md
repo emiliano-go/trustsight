@@ -60,8 +60,6 @@ This is a reference page. For how weight and scope work, see
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
 
-<!-- name: Manifest Added Or Removed -->
-
 - **Condition:** A known manifest (from `[patterns] manifest_filenames`) is
   added to or removed from the repository in the diff.
 
@@ -73,8 +71,6 @@ surface is, but its mere presence is not a claim about intent.
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
-
-<!-- name: Upstream Dependency Delta -->
 
 - **Condition:** A manifest's parsed dependency set gains or loses a name.
 
@@ -88,8 +84,6 @@ reported as counts and named top-level dependencies, not a full delta.
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
-
-<!-- name: New Remote Source In Manifest -->
 
 - **Condition:** A manifest gains a `source_kind=git` dependency, or a
   non-default-registry dependency, whose canonical host was not present in
@@ -106,8 +100,6 @@ manifest-introduced host exactly like a declared one. The claim is precise:
 - **Target:** committed manifest files
 - **Severity:** MEDIUM (weight 15)
 - **Category:** `dependency-manifest`
-
-<!-- name: Registry Redirect -->
 
 - **Condition:** A committed file redirects the resolver away from its
   default: a pip `--index-url`/`--extra-index-url`, `pip.conf`/`pip.ini` or
@@ -126,8 +118,6 @@ other way to see.
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
 
-<!-- name: Dependency Surface Jump -->
-
 - **Condition:** A manifest's dependency count multiplies past
   `[thresholds] u005.jump_factor` (default 3x) in one update.
 
@@ -140,8 +130,6 @@ across packages, not a per-package verdict.
 - **Target:** committed manifest files
 - **Severity:** INFO (weight 0)
 - **Category:** `dependency-manifest`
-
-<!-- name: Manifest Changed Without Its Lockfile -->
 
 - **Condition:** A declaration manifest (`go.mod`, `Cargo.toml`,
   `package.json`, `pyproject.toml`/`requirements*.txt`, `pubspec.yaml`,
@@ -156,8 +144,6 @@ promoted.
 
 ### U011: Upstream Origin Changed {#u011}
 
-<!-- name: Upstream Origin Changed -->
-
 - **Condition:** A dependency present in both the old and new manifest changes origin (source kind or registry/host) while at least one side names one.
 
 The declared origin moved under a dependency that already existed: a
@@ -167,8 +153,6 @@ different place, which is the manifest-level counterpart of a source host
 move. A dependency that merely appears or disappears is owned by U001/U002.
 
 ### U012: Lockfile Integrity Weakened {#u012}
-
-<!-- name: Lockfile Integrity Weakened -->
 
 - **Condition:** A dependency in a committed lockfile loses its integrity value, or its integrity algorithm is downgraded (e.g. `sha512` to `sha256`), or the lockfile itself is removed.
 

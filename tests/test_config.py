@@ -1113,3 +1113,66 @@ def test_g011_thresholds_ship():
     assert "[g011]" in DEFAULT_THRESHOLDS
     assert "placeholder_share = 0.5" in DEFAULT_THRESHOLDS
     assert "placeholder_escalation = true" in DEFAULT_THRESHOLDS
+
+
+def test_load_domains_fills_missing_shipped_hosts(tmp_path, monkeypatch):
+    """An old install's trusted_domains.toml is an overlay, not a replacement.
+
+    The file is written once at install time.  Without the shipped defaults
+    beside it, every host a later release classified (``files.pythonhosted.org``,
+    Qoder's OSS bucket) stays ``unknown`` and charges SOURCE_BUCKET forever.
+    """
+    import trustsight.config as config_module
+    from trustsight.buckets import classify_url
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "trusted_domains.toml"
+    text = path.read_text()
+    for host in ("files.pythonhosted.org",
+                 "qoder-ide.oss-accelerate.aliyuncs.com"):
+        text = text.replace(f'    "{host}",\n', "")
+    path.write_text(text)
+    config_module._toml_cache.pop("trusted_domains.toml", None)
+    config_module._DOMAIN_TABLE_CACHE = None
+
+    official = load_domains()["official_projects"]["domains"]
+    assert "files.pythonhosted.org" in official
+    assert "qoder-ide.oss-accelerate.aliyuncs.com" in official
+    assert classify_url(
+        "https://files.pythonhosted.org/packages/g/graphifyy/x.tar.gz")[0] == "official"
+    assert classify_url(
+        "https://qoder-ide.oss-accelerate.aliyuncs.com/qodercli/x.tar.gz")[0] == "official"
+
+
+def test_load_domains_keeps_user_added_hosts(tmp_path, monkeypatch):
+    import trustsight.config as config_module
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    path = cfg_dir / "trusted_domains.toml"
+    text = path.read_text()
+    path.write_text(text.replace(
+        "[trusted_forges]\ndomains = [\n",
+        "[trusted_forges]\ndomains = [\n    \"git.example.test\",\n", 1))
+    config_module._toml_cache.pop("trusted_domains.toml", None)
+    config_module._DOMAIN_TABLE_CACHE = None
+
+    domains = load_domains()["trusted_forges"]["domains"]
+    assert "git.example.test" in domains
+    assert "github.com" in domains
+
+
+def test_config_fingerprint_covers_the_effective_trust_table(tmp_path, monkeypatch):
+    import trustsight.config as config_module
+
+    cfg_dir = _cfg_dirs(tmp_path, monkeypatch)
+    ensure_default_configs()
+    before = config_module.config_fingerprint()
+    path = cfg_dir / "trusted_domains.toml"
+    path.write_text(path.read_text().replace(
+        "[trusted_forges]\ndomains = [\n",
+        "[trusted_forges]\ndomains = [\n    \"git.example.test\",\n", 1))
+    config_module._toml_cache.pop("trusted_domains.toml", None)
+    config_module._DOMAIN_TABLE_CACHE = None
+    assert config_module.config_fingerprint() != before

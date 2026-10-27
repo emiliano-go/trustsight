@@ -117,6 +117,7 @@ from ._common import (
     _heredoc_body_indices,
     _heredoc_body_indices_cached,
     _is_directory_path,
+    _matches_declared_source,
     _norm_path,
     _not_a_path,
     _printed_heredoc_body_indices,
@@ -641,8 +642,8 @@ def edge_undeclared_provenance_execution(ctx, add) -> None:
             if not bare or "/" in bare:
                 continue
             base = bare
-            if (base in source_basenames or base in written
-                    or base in _H072_BENIGN_EXEC):
+            if (_matches_declared_source(base, source_basenames)
+                    or base in written or base in _H072_BENIGN_EXEC):
                 continue
             if _FETCH_CLIENT_RE.search(body):
                 continue  # H082 owns the fetch-then-execute chain

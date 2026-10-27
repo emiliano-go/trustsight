@@ -296,7 +296,10 @@ def _headline(cycle, detail, iocs, campaign_cluster, impersonation) -> str:
         counts: dict[str, int] = {}
         for _, rule in cycle.new_alerts:
             counts[rule] = counts.get(rule, 0) + 1
-        rule = sorted(counts, key=lambda r: (-counts[r], r))[0]
+        # H046 is derived from another package's adoption.  When the cycle
+        # also carries the transition that caused it, lead with the cause:
+        # "H046 on a dependent +9 more" hides the adoption a reader can act on.
+        rule = sorted(counts, key=lambda r: (r == "H046", -counts[r], r))[0]
         packages = sorted({package for package, rid in cycle.new_alerts if rid == rule})
         extra = len(cycle.new_alerts) - 1
         tail = f" +{extra} more" if extra else ""

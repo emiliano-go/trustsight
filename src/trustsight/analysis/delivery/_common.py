@@ -1,5 +1,6 @@
 """Extracted from delivery.py: _common."""
 
+import fnmatch
 import os
 import re
 import shlex
@@ -10,6 +11,7 @@ from ...config import (
 )
 from ...coverage import note_stage_failure
 from ...diffdoc import parse_diff_lines
+from ...expansion import resolve_text
 from ...line_lex import (
     _HEREDOC_OPEN_RE,
     _HEREDOC_PIPED_RE,
@@ -268,6 +270,9 @@ def _norm_path(p: str) -> str:
 def _source_basename(url: str) -> str:
     """Return the declared filename for a source URL, or '' when unparseable."""
     path = re.sub(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", "", url)
+    # An unresolved expansion can carry a `#` (`${pkgver##*.}`); splitting on
+    # it would cut the path at the expansion instead of the real fragment.
+    path = re.sub(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*", "", path)
     path = re.split(r"[?#]", path, maxsplit=1)[0]
     base = os.path.basename(path.rstrip("/"))
     return base
@@ -316,10 +321,12 @@ def _unpinned_source_basenames(
         [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
 
     def _subst(ent: str) -> str:
-        for key in sorted(_vars, key=len, reverse=True):
-            value = _vars[key]
-            ent = ent.replace("${" + key + "}", value).replace("$" + key, value)
-        return ent
+        # Reuse the shared resolver: a single-pass `${key}` replacement left
+        # `${pkgname%-bin}`, `${pkgver%.*}`, `${pkgver##*.}` and nested
+        # variables unresolved, so a declared source was not recognised under
+        # the name the build executes (X033) and the executed file was read as
+        # a new capability (C001).
+        return resolve_text(ent, _vars)
 
     files = files_at_line(lines)
     # suffix -> {"sources": [basename|None], "checksums": {type: [item]}}
@@ -445,6 +452,42 @@ def _declared_source_basenames(
         _declared_source_basenames_cached(diff_text, False)
     )
 
+
+def _names_a_member_or_pattern(base: str, names) -> bool:
+    """True when *base* names a member of *names*, literally or as a pattern.
+
+    `bash r$i.sh` inside a loop and `bash "$f"` after `for f in *.sh` name a
+    *set* of files rather than one, so an equality test finds nothing.  A
+    variable stands for an unknown run of characters exactly as a `*` does,
+    and both become one wildcard here; a pattern that is *only* a wildcard
+    names every file, which is not a claim about any of them.
+
+    A full `${...}` expansion becomes the wildcard, including the modifier
+    spellings (`${pkgver%.*}`, `${pkgver##*.}`, `${name%-bin}`): reading only
+    `${word}` left those literal, so a declared AppImage did not match the
+    file the build executes.
+    """
+    if base in names:
+        return True
+    if not ("$" in base or "*" in base or "?" in base):
+        return False
+    pattern = re.sub(r"\$\{[^}]*\}|\$[A-Za-z_][A-Za-z0-9_]*", "*", base)
+    if pattern.strip("*") in ("", "."):
+        return False
+    return any(fnmatch.fnmatchcase(name, pattern) for name in names)
+
+
+def _matches_declared_source(base: str, declared) -> bool:
+    """True when *base* names a file the recipe declared in ``source=()``.
+
+    A ``source=`` entry may be parameterised (``"${pkgname}-x86_64"``) while
+    the recipe executes the arch-aware form (``./${pkgname}-${CARCH}``): both
+    name the same file, but a plain set-membership test sees two different
+    strings.
+    """
+    return _names_a_member_or_pattern(base, declared)
+
+
 #: Archive suffixes whose extraction yields a directory under ``$srcdir``.
 #: One suffix is stripped, longest-first, case-insensitively.  Single-file
 #: compressions (``.gz``/``.xz``/...) and non-extracting formats (``.deb``,
@@ -556,10 +599,12 @@ def _declared_source_entries_cached(text: str, whole_file: bool) -> frozenset[tu
         [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
 
     def _subst(ent: str) -> str:
-        for key in sorted(_vars, key=len, reverse=True):
-            value = _vars[key]
-            ent = ent.replace("${" + key + "}", value).replace("$" + key, value)
-        return ent
+        # Reuse the shared resolver: a single-pass `${key}` replacement left
+        # `${pkgname%-bin}`, `${pkgver%.*}`, `${pkgver##*.}` and nested
+        # variables unresolved, so a declared source was not recognised under
+        # the name the build executes (X033) and the executed file was read as
+        # a new capability (C001).
+        return resolve_text(ent, _vars)
 
     files = files_at_line(lines)
     entries_out: set[tuple[str, bool]] = set()

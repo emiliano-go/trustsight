@@ -1,6 +1,5 @@
 """Extracted from delivery.py: _buildtree."""
 
-import fnmatch
 import os
 import re
 import shlex
@@ -23,7 +22,7 @@ from ..build import (
     _REMOTE_PROC_SUBST_RE,
     _recipe_lines,
 )
-from ._common import _BUILD_FUNCTIONS, _ELF_MAGIC, _EXECUTION_RE, _H072_BENIGN_EXEC, _IMPLICIT_BUILD_INPUTS, _SCOPE_FUNCTIONS, _collect_writes, _declared_source_basenames, _find_line, _heredoc_body_indices, _norm_path, _source_basename
+from ._common import _BUILD_FUNCTIONS, _ELF_MAGIC, _EXECUTION_RE, _H072_BENIGN_EXEC, _IMPLICIT_BUILD_INPUTS, _SCOPE_FUNCTIONS, _collect_writes, _declared_source_basenames, _find_line, _heredoc_body_indices, _matches_declared_source, _names_a_member_or_pattern, _norm_path, _source_basename
 
 __all__ = ['_ARRAY_BINDING_RE', '_COMMITTED_CARRIER_RE', '_COMMITTED_PAYLOAD_RE', '_EXECSTART_RE', '_INSTALL_CMD_RE', '_LOOP_BINDING_RE', '_PATH_ASSIGN_RE', '_PATH_BUILD_DIR_RE', '_POSITIONAL_NAMES', '_SET_POSITIONAL_RE', '_STARTDIR_PATH_RE', '_TEST_DIR_RE', '_TEST_NAME_RE', '_committed_execution_findings', '_implicit_build_input', '_installed_executables', '_is_test_fixture', '_loop_bindings', '_matches_committed', 'scan_tree_manifest']
 
@@ -155,37 +154,10 @@ def _loop_bindings(body: str) -> dict[str, list[str]]:
             add(match.group("avar"), match.group("awords"))
     return bindings
 
-def _names_a_member_or_pattern(base: str, names) -> bool:
-    """True when *base* names a member of *names*, literally or as a pattern.
-
-    `bash r$i.sh` inside a loop and `bash "$f"` after `for f in *.sh` name a
-    *set* of files rather than one, so an equality test finds nothing.  A
-    variable stands for an unknown run of characters exactly as a `*` does,
-    and both become one wildcard here; a pattern that is *only* a wildcard
-    names every file, which is not a claim about any of them.
-    """
-    if base in names:
-        return True
-    if not ("$" in base or "*" in base or "?" in base):
-        return False
-    pattern = re.sub(r"\$\{?\w+\}?", "*", base)
-    if pattern.strip("*") in ("", "."):
-        return False
-    return any(fnmatch.fnmatchcase(name, pattern) for name in names)
-
 def _matches_committed(base: str, manifest_basenames) -> bool:
     """True when *base* names a file committed to the repository."""
     return _names_a_member_or_pattern(base, manifest_basenames)
 
-def _matches_declared_source(base: str, declared) -> bool:
-    """True when *base* names a file the recipe declared in ``source=()``.
-
-    A ``source=`` entry may be parameterised (``"${pkgname}-x86_64"``) while
-    the recipe executes the arch-aware form (``./${pkgname}-${CARCH}``): both
-    name the same file, but a plain set-membership test sees two different
-    strings.
-    """
-    return _names_a_member_or_pattern(base, declared)
 
 def _committed_execution_findings(diff_text, tree_manifest, add, current_text=None) -> None:
     """An execution whose target is a repo-committed file the recipe never

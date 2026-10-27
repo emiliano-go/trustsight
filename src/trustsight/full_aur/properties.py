@@ -13,6 +13,7 @@ import re
 
 from ..differ import resolved_source_urls
 from ..differ._sources import _is_documentation_source
+from ..expansion import resolve_text, text_variable_table
 from ..recipedoc import _function_body_segments
 from ..tokenizer import split_lines
 from dataclasses import dataclass
@@ -177,6 +178,11 @@ def extract_properties(new_pkgbuild: str, srcinfo: Optional[str] = None) -> dict
     # version_scheme
     pkgver_match = _PKGVER_RE.search(new_pkgbuild)
     pkgver = pkgver_match.group(1) if pkgver_match else ""
+    if pkgver:
+        # A variable-driven version (`pkgver="${_pkgver}+${_subver}"`) is a
+        # semver, not a new scheme.  Read the resolved value so H050 does not
+        # fire on the shape of the assignment.
+        pkgver = resolve_text(pkgver, text_variable_table(new_pkgbuild))
     props["version_scheme"] = _classify_version(pkgver)
 
     # pkgdesc_tokens
@@ -346,12 +352,21 @@ def _build_function_bodies(pkgbuild: str) -> str:
 # Property update step
 # ---------------------------------------------------------------------------
 
+#: Properties whose extractor reads ``.SRCINFO`` when it is supplied.  The
+#: pre-image is re-extracted from the previous PKGBUILD alone (the pipeline
+#: does not carry the previous ``.SRCINFO``), so these two are excluded from
+#: the stale-baseline repair: comparing a srcinfo-derived new value with a
+#: PKGBUILD-only old value would invent a dependency/licence change.
+_SRCINFO_DEPENDENT_KEYS = frozenset({"depends", "license"})
+
+
 def update_properties(
     conn,
     package: str,
     extracted: dict[str, Any],
     observed_at: str,
     floor: int = STABILITY_FLOOR_DEFAULT,
+    previous: dict[str, Any] | None = None,
 ) -> list[PropertyBreak]:
     """Record property state; return the breaks that just occurred.
 
@@ -360,6 +375,14 @@ def update_properties(
     Every changed value is appended to ``property_transitions``, whatever
     its stability weight: the timeline is the raw observation log, and the
     weight only decides whether a break is scored.
+
+    *previous* is the property table extracted from the immediately preceding
+    recipe with the **current** extractor.  When a stored row disagrees with
+    the new value but the pre-image already held the new value, the row is a
+    stale baseline from an older extractor (or a pre-normalisation spelling),
+    not a change: the row is repaired and no break is emitted.  This keeps a
+    fixed extractor from firing a one-off H049/H050 on every package it
+    upgrades, without deleting history or suppressing a real move.
     """
     breaks: list[PropertyBreak] = []
     for key, value in extracted.items():
@@ -386,6 +409,25 @@ def update_properties(
                 "WHERE package_name=? AND property_key=?", (package, key),
             )
             continue
+
+        # The stored baseline can be older than the current extractor.  Read
+        # the same property from the pre-image with this extractor: if the
+        # previous recipe already held the new value, nothing changed and the
+        # row is repaired in place.  Otherwise the pre-image value is the
+        # honest "old" side of the transition, not the stale stored spelling.
+        if (previous is not None and key in previous
+                and key not in _SRCINFO_DEPENDENT_KEYS):
+            prior = previous[key]
+            prior_hash = value_hash(prior)
+            if prior_hash == h:
+                conn.execute(
+                    "UPDATE package_properties SET value_hash=?, value=?, "
+                    "stable_for_n = stable_for_n + 1 "
+                    "WHERE package_name=? AND property_key=?",
+                    (h, ser, package, key),
+                )
+                continue
+            old_hash, old_ser = prior_hash, canonical(prior)
 
         conn.execute(
             "INSERT INTO property_transitions "

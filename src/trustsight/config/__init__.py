@@ -1021,9 +1021,69 @@ def _free_hosting_pattern() -> str:
     joined = "|".join(re.escape(str(d)) for d in domains)
     return f'https?://[^/\\s]*\\.(?:{joined})(?:[:/]|["\\x27\\s)]|$)'
 
+#: The shipped trust tables, parsed once.  ``trusted_domains.toml`` is written
+#: on first install and never rewritten, so an older file is missing every
+#: host a later release added.  Treating the user's file as an overlay on these
+#: defaults keeps the effective table current; the file stays the place the
+#: operator adds their own entries.
+_DEFAULT_DOMAIN_TABLE = tomllib.loads(DEFAULT_DOMAINS)
+_DOMAIN_TABLE_CACHE: tuple[tuple, dict] | None = None
+
+
+def _merge_shipped_domains(user: dict) -> dict:
+    """Union the shipped domain lists under the user's file.
+
+    Shipped entries are appended when the user's section omits them; user
+    entries keep their order and win on duplicates.  Sections the user added
+    are preserved verbatim.
+    """
+    merged: dict = {}
+    for section, table in _DEFAULT_DOMAIN_TABLE.items():
+        values = list(table.get("domains", ()))
+        for value in user.get(section, {}).get("domains", ()):
+            if value not in values:
+                values.append(value)
+        merged[section] = {**table, "domains": values}
+    for section, table in user.items():
+        merged.setdefault(section, table)
+    return merged
+
+
 def load_domains() -> dict:
-    """Load trusted domains from trusted_domains.toml"""
-    return load_toml("trusted_domains.toml", copy_result=False)
+    """Load trusted domains from trusted_domains.toml, filled from defaults.
+
+    The on-disk file is a user overlay, not a full replacement: a file written
+    by an older release lacks the hosts later releases classified.  Merging at
+    read time is what keeps those hosts from scoring ``unknown`` forever.  The
+    result is cached by ``(path, mtime, size)`` because classification asks
+    for it per URL.
+    """
+    global _DOMAIN_TABLE_CACHE
+    user = load_toml("trusted_domains.toml", copy_result=False)
+    path = CONFIG_DIR / "trusted_domains.toml"
+    try:
+        st = path.stat()
+        stamp: tuple = (str(path), st.st_mtime_ns, st.st_size)
+    except OSError:
+        stamp = ()
+    if _DOMAIN_TABLE_CACHE is not None and _DOMAIN_TABLE_CACHE[0] == stamp:
+        return _DOMAIN_TABLE_CACHE[1]
+    merged = _merge_shipped_domains(user)
+    missing = sorted(
+        f"{section}:{domain}"
+        for section, table in _DEFAULT_DOMAIN_TABLE.items()
+        for domain in table.get("domains", ())
+        if domain not in user.get(section, {}).get("domains", ())
+    )
+    if missing:
+        _log.info(
+            "trusted_domains.toml is missing %d shipped entr%s; using the "
+            "shipped defaults beside the user's entries: %s",
+            len(missing), "y" if len(missing) == 1 else "ies",
+            ", ".join(missing),
+        )
+    _DOMAIN_TABLE_CACHE = (stamp, merged)
+    return merged
 
 def load_patterns() -> dict:
     """Load pattern tables from patterns.toml (H035/H036/D003)."""
@@ -1106,6 +1166,10 @@ def config_fingerprint() -> str:
         "severity_weights": config.get("severity_weights", {}),
         "source_bucket_weights": config.get("source_bucket_weights", {}),
         "novelty_weights": config.get("novelty_weights", {}),
+        # The trust tables decide which hosts are classified official/forge,
+        # which in turn silences SOURCE_BUCKET and C011 for that host.  Two
+        # operators with different effective tables are different instruments.
+        "trusted_domains": load_domains(),
         # C011's allowlist changes which prebuilt packages are reported, so
         # two operators with different lists are different instruments.
         "source_host_divergence": config.get("source_host_divergence", {}),

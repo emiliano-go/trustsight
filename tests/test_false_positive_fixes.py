@@ -7,6 +7,7 @@ for a fix.
 
 from __future__ import annotations
 
+import difflib
 import sys
 from pathlib import Path
 
@@ -975,3 +976,81 @@ def test_c021_still_fires_when_the_test_runner_is_removed():
             "-build() { make; }\n-checkdepends=('python-pytest' 'python-pytest-cov')\n"
             "+build() { make all; }\n+checkdepends=('python-pytest-cov')\n")
     assert "C021" in _ids(diff, current_text=new)
+
+
+# --- 2026-10-26 watcher alerts: declaration resolution and shell expansion ---
+
+
+_LOTTI_OLD = """\
+pkgname=lotti-bin
+pkgver=1.1.61+4449
+pkgrel=1
+_ghurl="https://github.com/matthiasn/lotti"
+source=(
+    "${pkgname%-bin}-${pkgver}.tar.gz::${_ghurl}/releases/download/${pkgver//_/+}/linux.x64.tar.gz"
+    "${pkgname%-bin}.sh"
+)
+sha256sums=('aaaa' 'bbbb')
+prepare() {
+    sed -i "s/@runname@/${pkgname%-bin}/g" "${srcdir}/${pkgname%-bin}.sh"
+}
+"""
+
+_LOTTI_NEW = """\
+pkgname=lotti-bin
+_pkgver=1.1.63
+_subver=4451
+pkgver="${_pkgver}+${_subver}"
+pkgrel=1
+_ghurl="https://github.com/matthiasn/lotti"
+source=(
+    "${pkgname%-bin}-${pkgver}-x86_64.AppImage::${_ghurl}/releases/download/${pkgver}/Lotti-${_pkgver}-x86_64.AppImage"
+    "${pkgname%-bin}.sh"
+)
+sha256sums=('cccc' 'bbbb')
+prepare() {
+    sed -i "s/@runname@/parecord/g" "${srcdir}/${pkgname%-bin}.sh"
+    chmod +x "${srcdir}/${pkgname%-bin}-${pkgver}-${CARCH}.AppImage"
+    "${srcdir}/${pkgname%-bin}-${pkgver}-${CARCH}.AppImage" --appimage-extract > /dev/null
+}
+"""
+
+
+def _lotti_diff():
+    return "".join(difflib.unified_diff(
+        _LOTTI_OLD.splitlines(True), _LOTTI_NEW.splitlines(True),
+        "a/PKGBUILD", "b/PKGBUILD"))
+
+
+def test_x033_and_c001_do_not_fire_on_a_declared_appimage():
+    ids = _ids(_lotti_diff(), current_text=_LOTTI_NEW)
+    assert "X033" not in ids
+    assert "C001" not in ids
+
+
+def test_variable_driven_pkgver_keeps_its_version_scheme():
+    from trustsight.full_aur.properties import extract_properties
+
+    assert extract_properties(_LOTTI_NEW)["version_scheme"] == "semver"
+
+
+def test_h101_does_not_fire_on_an_expansion_in_an_archive_url():
+    old = """\
+pkgname=pulseaudio-dlna-cygn
+pkgver=0.6.1
+pkgrel=3
+source=(
+  "${pkgname}-${pkgver}.tar.gz::https://github.com/Cygn/pulseaudio-dlna/archive/${pkgver}.tar.gz"
+)
+"""
+    new = """\
+pkgname=pulseaudio-dlna-cygn
+pkgver=0.6.6.1
+pkgrel=1
+source=(
+  "${pkgname}-${pkgver}.tar.gz::https://github.com/Cygn/pulseaudio-dlna/archive/pulseaudio-dlna-${pkgver%.*}-${pkgver##*.}.tar.gz"
+)
+"""
+    diff = "".join(difflib.unified_diff(
+        old.splitlines(True), new.splitlines(True), "a/PKGBUILD", "b/PKGBUILD"))
+    assert "H101" not in _ids(diff, current_text=new)

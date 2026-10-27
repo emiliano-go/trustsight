@@ -287,3 +287,47 @@ def test_transition_rows_are_capped_per_key():
         "SELECT MIN(id) FROM property_transitions WHERE package_name='pkg'"
     ).fetchone()[0]
     assert oldest == 5
+
+
+# --- stale-baseline repair: the pre-image is the old side, not the old row ---
+
+def test_stale_baseline_is_repaired_from_the_preimage_without_a_break():
+    """An extractor change (empty -> resolved hosts) is not a source move.
+
+    The stored row was written before the extractor resolved `${url}`.  The
+    previous recipe already named the same host, so the first update after the
+    upgrade must repair the row, not fire H049.
+    """
+    import json
+
+    c = conn()
+    _breaks(c, "pkg", "t0", source_hosts=frozenset())
+    for i in range(1, 12):
+        _breaks(c, "pkg", f"t{i}", source_hosts=frozenset())
+
+    breaks = update_properties(
+        c, "pkg", {"source_hosts": frozenset({"github.com"})}, "t12",
+        previous={"source_hosts": frozenset({"github.com"})})
+    assert breaks == []
+    row = c.execute(
+        "SELECT value, stable_for_n FROM package_properties "
+        "WHERE package_name='pkg' AND property_key='source_hosts'"
+    ).fetchone()
+    assert json.loads(row[0]) == ["github.com"]
+    assert row[1] > 0, "repair reset the stability counter"
+
+
+def test_preimage_still_fires_on_a_real_source_move():
+    """The repair must not hide a genuine host change."""
+    import json
+
+    c = conn()
+    _breaks(c, "pkg", "t0", source_hosts=frozenset())
+    for i in range(1, 12):
+        _breaks(c, "pkg", f"t{i}", source_hosts=frozenset())
+
+    breaks = update_properties(
+        c, "pkg", {"source_hosts": frozenset({"gitlab.com"})}, "t12",
+        previous={"source_hosts": frozenset({"github.com"})})
+    assert [b.key for b in breaks] == ["source_hosts"]
+    assert json.loads(breaks[0].old_value) == ["github.com"]

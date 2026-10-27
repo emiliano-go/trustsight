@@ -1137,8 +1137,8 @@ def test_load_domains_fills_missing_shipped_hosts(tmp_path, monkeypatch):
     config_module._DOMAIN_TABLE_CACHE = None
 
     official = load_domains()["official_projects"]["domains"]
-    assert "files.pythonhosted.org" in official
-    assert "qoder-ide.oss-accelerate.aliyuncs.com" in official
+    assert {"files.pythonhosted.org",
+            "qoder-ide.oss-accelerate.aliyuncs.com"} <= set(official)
     assert classify_url(
         "https://files.pythonhosted.org/packages/g/graphifyy/x.tar.gz")[0] == "official"
     assert classify_url(
@@ -1159,8 +1159,7 @@ def test_load_domains_keeps_user_added_hosts(tmp_path, monkeypatch):
     config_module._DOMAIN_TABLE_CACHE = None
 
     domains = load_domains()["trusted_forges"]["domains"]
-    assert "git.example.test" in domains
-    assert "github.com" in domains
+    assert {"git.example.test", "github.com"} <= set(domains)
 
 
 def test_config_fingerprint_covers_the_effective_trust_table(tmp_path, monkeypatch):

@@ -39,9 +39,12 @@ from .fetch import (
     save_resume_state,
 )
 from .metadata import (
+    clear_current_dump,
     diff_metadata,
     fetch_metadata,
     load_metadata,
+    metadata_unchanged,
+    release_memory,
     save_metadata,
 )
 
@@ -90,6 +93,18 @@ from ._pipeline_limits import (  # noqa: F401
     _iter_prefetched,
     _corpus_progress,
 )
+
+def _persist_metadata(metadata: dict) -> None:
+    """Write the snapshot and its slim index unless the dump was unchanged.
+
+    A 304 already left that snapshot on disk; rewriting 78 MB of identical
+    JSON every quiet cycle is pure CPU and I/O.
+    """
+    if metadata_unchanged():
+        log.info("AUR metadata unchanged; keeping the stored snapshot")
+        return
+    save_metadata(metadata, _meta_snapshot_path())
+
 
 def _run_corpus_sweep(
     new_meta: dict,
@@ -265,6 +280,10 @@ def run_baseline_build(
         # A cycle can write thousands of rows; leave the WAL small
         # instead of waiting for the next manual vacuum.
         checkpoint_wal()
+        # Drop the parsed dump before trimming: the next fetch replaces it,
+        # and holding it across the sleep pinned ~360 MB between cycles.
+        clear_current_dump()
+        release_memory()
 
 
 def _run_baseline_build(
@@ -304,7 +323,7 @@ def _run_baseline_build(
         result.refused = True
         return result
 
-    old_meta = load_metadata(_meta_snapshot_path())
+    old_meta = load_metadata(_meta_snapshot_path(), slim=True)
 
     # Resume state is loaded unconditionally: a capped or interrupted cycle
     # continues where it left off.  ``--resume`` stays accepted but is implied.
@@ -385,7 +404,7 @@ def _run_baseline_build(
             # sentinel is kept, not cleared: --since is re-passed on every
             # cycle, so clearing it would make the next cycle look like a
             # different replay and restart the whole backfill.
-            save_metadata(new_meta, _meta_snapshot_path())
+            _persist_metadata(new_meta)
             _set_since_cursor(None)
             clear_resume_state()
             result.backfilling = False
@@ -399,7 +418,7 @@ def _run_baseline_build(
         # sweep never runs on this path, so its read-the-feed-first ordering
         # is untouched.
         _record_cycle_feed(new_meta, old_meta, added, changed, removed)
-        save_metadata(new_meta, _meta_snapshot_path())
+        _persist_metadata(new_meta)
         clear_resume_state()
         return result
 
@@ -789,7 +808,7 @@ def _run_baseline_build(
             # Caught up: join the live delta path.  The origin sentinel is
             # kept, not cleared, so the --since re-passed next cycle is not
             # mistaken for a new replay (see the guard above the day walk).
-            save_metadata(new_meta, _meta_snapshot_path())
+            _persist_metadata(new_meta)
             _set_since_cursor(None)
             result.backfilling = False
             _log("Backfill caught up; joining the live delta stream")
@@ -807,7 +826,7 @@ def _run_baseline_build(
         new_meta, old_meta, processed, scores, popular, detail)
     _report_expired_campaigns(_log)
     _record_cycle_feed(new_meta, old_meta, added, changed, removed)
-    save_metadata(new_meta, _meta_snapshot_path())
+    _persist_metadata(new_meta)
     clear_resume_state()
     result.cluster_findings = cluster_findings
     result.processed = len(processed)

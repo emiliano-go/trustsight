@@ -109,12 +109,14 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     # A corpus cycle writes thousands of rows.  The default autocheckpoint
     # (1000 pages, ~4 MB) copies the WAL back into the database every few
     # megabytes, and on an encrypted volume that copy dominated the run;
-    # defer it to 10000 pages (~40 MB) and cap the file so one burst cannot
+    # defer it to 2000 pages (~8 MB) and cap the file so one burst cannot
     # grow the WAL without bound.  cache_size is raised from the 2 MB default
-    # so a cycle's hot pages are not evicted between writes.
-    conn.execute("PRAGMA wal_autocheckpoint=10000")
-    conn.execute("PRAGMA journal_size_limit=67108864")
-    conn.execute("PRAGMA cache_size=-65536")
+    # so a cycle's hot pages are not evicted between writes, but kept to
+    # 32 MB: the watcher runs on small hosts and the OS page cache already
+    # holds the snapshot.
+    conn.execute("PRAGMA wal_autocheckpoint=2000")
+    conn.execute("PRAGMA journal_size_limit=16777216")
+    conn.execute("PRAGMA cache_size=-32768")
     return conn
 
 @contextmanager

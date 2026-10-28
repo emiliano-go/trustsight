@@ -1357,3 +1357,61 @@ def test_corpus_walk_marks_an_unreached_added_aur_dependency(monkeypatch):
         "root", 1, {}, None, added_names={"new-aur-dep"},
     )
     assert result.added_aur_unreported is True
+
+
+def test_slim_index_roundtrip_and_staleness(tmp_path):
+    """The delta path reads a ~15 MB sidecar, not the 78 MB snapshot."""
+    from trustsight.full_aur.metadata import (
+        load_metadata,
+        save_metadata,
+        slim_path,
+    )
+
+    full = tmp_path / "meta.json"
+    meta = {
+        "a": {
+            "Name": "a", "Version": "1.0", "LastModified": 10,
+            "Maintainer": "alice", "Description": "x" * 512,
+        },
+        "b": {"Name": "b", "Version": "2.0", "LastModified": 20},
+    }
+    save_metadata(meta, full)
+    assert slim_path(full).exists()
+    assert load_metadata(full, slim=True) == {
+        "a": {"LastModified": 10, "Version": "1.0", "Maintainer": "alice"},
+        "b": {"LastModified": 20, "Version": "2.0", "Maintainer": None},
+    }
+    # The full snapshot is untouched by the slim view.
+    assert load_metadata(full) == meta
+
+    # A rewritten snapshot invalidates the sidecar; the fallback rebuilds it.
+    full.write_text('{"snapshot_time": 1, "packages": {"c": {"Version": "3"}}}')
+    assert load_metadata(full, slim=True) == {
+        "c": {"LastModified": None, "Version": "3", "Maintainer": None},
+    }
+    assert load_metadata(full, slim=True) == {
+        "c": {"LastModified": None, "Version": "3", "Maintainer": None},
+    }
+
+
+def test_slim_diff_matches_full_diff():
+    """Slimming the old snapshot cannot change the delta."""
+    from trustsight.full_aur.metadata import diff_metadata, slim_metadata
+
+    old = {
+        "same": {"Version": "1", "LastModified": 1, "Description": "d"},
+        "moved": {"Version": "1", "LastModified": 1, "Maintainer": "a"},
+        "gone": {"Version": "1", "LastModified": 1},
+    }
+    new = {
+        "same": {"Version": "1", "LastModified": 1, "Description": "changed"},
+        "moved": {"Version": "2", "LastModified": 2, "Maintainer": "b"},
+        "fresh": {"Version": "1", "LastModified": 3},
+    }
+    assert diff_metadata(old, new) == diff_metadata(slim_metadata(old), new)
+
+
+def test_release_memory_is_best_effort():
+    from trustsight.full_aur.metadata import release_memory
+
+    release_memory()

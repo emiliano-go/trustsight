@@ -145,7 +145,7 @@ def run_watch(
             if result.refused:
                 from .metadata import load_metadata
 
-                if load_metadata() is None and _pipeline()._since_cursor() is None:
+                if load_metadata(slim=True) is None and _pipeline()._since_cursor() is None:
                     try:
                         watch_state.record_failure("no corpus snapshot")
                     except Exception:

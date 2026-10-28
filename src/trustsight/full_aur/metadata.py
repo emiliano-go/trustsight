@@ -18,6 +18,11 @@ from typing import Optional
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+#: Fields the delta path reads from the previous snapshot.  Everything else in
+#: an AUR entry is dead weight for a watch cycle, and a full snapshot parse is
+#: ~360 MB; the slim sidecar carries only these and parses in ~0.1 s.
+SLIM_FIELDS = ("LastModified", "Version", "Maintainer")
+
 log = logging.getLogger(__name__)
 
 _METADATA_URL = "https://aur.archlinux.org/packages-meta-ext-v1.json.gz"
@@ -100,10 +105,48 @@ _snapshot_cache_lock = threading.Lock()
 #: the 429 storm a backfill otherwise runs into.
 _current_dump: Optional[dict] = None
 
+#: True when the last ``fetch_metadata`` reused the stored snapshot because the
+#: dump answered 304.  The caller can then skip rewriting 78 MB of identical
+#: JSON, and the slim sidecar it wrote last cycle is still valid.
+_unchanged = False
+
 
 def current_dump() -> Optional[dict]:
     """The metadata dump this process fetched, if it fetched one."""
     return _current_dump
+
+
+def clear_current_dump() -> None:
+    """Drop the parsed dump so a watch cycle does not hold two of them.
+
+    The dump is only needed while a cycle analyses; the next fetch replaces
+    it anyway.  Keeping it across the sleep pinned ~360 MB for nothing.
+    """
+    global _current_dump
+    _current_dump = None
+
+
+def metadata_unchanged() -> bool:
+    """True when the last fetch was a 304 over a snapshot already on disk."""
+    return _unchanged
+
+
+def release_memory() -> None:
+    """Return freed heap pages to the OS.
+
+    A cycle parses two ~360 MB snapshots and drops both; glibc keeps the freed
+    pages in its arena and RSS stays high.  ``malloc_trim(0)`` releases them.
+    Best-effort and glibc-only: other platforms and allocators simply no-op.
+    """
+    import gc
+
+    gc.collect()
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except Exception:  # noqa: BLE001 - trimming is an optimisation, never a failure
+        return
 
 
 def _stat_key(path: Path) -> tuple[str, int, int] | None:
@@ -154,8 +197,12 @@ def _write_validators(etag: str | None, last_modified: str | None) -> None:
         log.debug("could not persist metadata validators", exc_info=True)
 
 
-def gunzip_capped(raw: bytes, limit: int = MAX_DECOMPRESSED_BYTES) -> bytes:
-    """Decompress *raw*, refusing to materialise more than *limit* bytes."""
+def gunzip_capped(raw: bytes, limit: int = MAX_DECOMPRESSED_BYTES) -> bytearray:
+    """Decompress *raw*, refusing to materialise more than *limit* bytes.
+
+    Returns the ``bytearray`` directly: ``json.loads`` accepts it, and copying
+    it to ``bytes`` first doubled the peak for a 78 MB snapshot.
+    """
     out = bytearray()
     with gzip.GzipFile(fileobj=io.BytesIO(raw)) as fh:
         while True:
@@ -167,7 +214,7 @@ def gunzip_capped(raw: bytes, limit: int = MAX_DECOMPRESSED_BYTES) -> bytes:
                 raise DecompressionTooLarge(
                     f"gzip stream exceeds {limit} bytes decompressed"
                 )
-    return bytes(out)
+    return out
 
 
 def fetch_metadata(on_progress=None) -> dict:
@@ -183,6 +230,8 @@ def fetch_metadata(on_progress=None) -> dict:
     and the expected content length.
     """
     log.info("fetching AUR metadata from %s", _METADATA_URL)
+    global _unchanged
+    _unchanged = False
     # Conditional GET: the dump is ~60 MB gzipped and is refreshed every few
     # minutes, so a refresh that changed nothing should not move it again.
     etag, last_modified = _read_validators()
@@ -198,6 +247,7 @@ def fetch_metadata(on_progress=None) -> dict:
             existing = load_metadata()
             if existing is not None:
                 log.info("AUR metadata unchanged (304); reusing the stored snapshot")
+                _unchanged = True
                 return existing
             # Validators without a snapshot: a --since replay advances no
             # snapshot while the ETag file was already written, so taking
@@ -267,10 +317,16 @@ def fetch_metadata(on_progress=None) -> dict:
     finally:
         if hasattr(resp, "close"):
             resp.close()
-    data = json.loads(gunzip_capped(body))
+    # Decompress into a bytearray and drop the compressed body before parsing:
+    # the two buffers and the parsed objects would otherwise be live together.
+    decompressed = gunzip_capped(body)
+    del body
+    data = json.loads(decompressed)
+    del decompressed
     metadata: dict[str, dict] = {}
     for entry in data:
         metadata[entry["Name"]] = entry
+    del data
     _write_validators(response_etag, response_last_modified)
     global _current_dump
     _current_dump = metadata
@@ -298,6 +354,72 @@ def diff_metadata(old: dict, new: dict) -> dict[str, str]:
     return changes
 
 
+def slim_metadata(metadata: dict) -> dict[str, dict]:
+    """Reduce a snapshot to the fields the delta path reads."""
+    return {
+        name: {field: entry.get(field) for field in SLIM_FIELDS}
+        for name, entry in metadata.items()
+    }
+
+
+def slim_path(path: Path) -> Path:
+    """The sidecar carrying the slim view of the snapshot at *path*."""
+    return path.with_suffix(".slim.json")
+
+
+def save_slim(metadata: dict, path: Path | None = None) -> Path:
+    """Persist the slim delta index beside the full snapshot.
+
+    Written after the full snapshot, stamped with its ``(mtime_ns, size)`` so a
+    stale sidecar is never mistaken for a current one.
+    """
+    path = path or default_metadata_path()
+    target = slim_path(path)
+    stat = _stat_key(path)
+    if stat is None:
+        return target
+    payload = {
+        "source_mtime_ns": stat[1],
+        "source_size": stat[2],
+        "packages": {
+            name: [entry.get(field) for field in SLIM_FIELDS]
+            for name, entry in metadata.items()
+        },
+    }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(target.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    os.replace(tmp, target)
+    return target
+
+
+def load_slim(path: Path | None = None) -> dict | None:
+    """Load the slim sidecar, or None if absent, stale or corrupt."""
+    path = path or default_metadata_path()
+    target = slim_path(path)
+    stat = _stat_key(path)
+    if stat is None:
+        return None
+    try:
+        with open(target, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    if (data.get("source_mtime_ns"), data.get("source_size")) != (stat[1], stat[2]):
+        return None
+    packages = data.get("packages")
+    if not isinstance(packages, dict):
+        return None
+    return {
+        name: dict(zip(SLIM_FIELDS, values))
+        for name, values in packages.items()
+        if isinstance(values, list)
+    }
+
+
 def save_metadata(metadata: dict, path: Path | None = None) -> Path:
     """Persist a metadata snapshot to disk.
 
@@ -306,6 +428,9 @@ def save_metadata(metadata: dict, path: Path | None = None) -> Path:
     colon and comma.  ``os.replace`` keeps a crash from leaving a
     half-written snapshot that the next run would read as a smaller,
     complete-looking corpus.
+
+    The slim delta index is refreshed alongside it, best-effort: a sidecar
+    failure must never lose the snapshot.
     """
     path = path or default_metadata_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -316,14 +441,37 @@ def save_metadata(metadata: dict, path: Path | None = None) -> Path:
     os.replace(tmp, path)
     with _snapshot_cache_lock:
         _snapshot_cache.clear()
+    try:
+        save_slim(metadata, path)
+    except OSError:
+        log.debug("could not write the slim metadata index", exc_info=True)
     log.info("saved metadata snapshot (%d packages) to %s", len(metadata), path)
     return path
 
 
-def load_metadata(path: Path | None = None) -> dict | None:
-    """Load a previously saved metadata snapshot, or return None."""
+def load_metadata(path: Path | None = None, *, slim: bool = False) -> dict | None:
+    """Load a previously saved metadata snapshot, or return None.
+
+    ``slim=True`` returns only :data:`SLIM_FIELDS` per package, read from the
+    sidecar when it is current.  That is the delta path's view: it compares
+    ``LastModified``/``Version`` and reads ``Maintainer``, so parsing the full
+    360 MB snapshot bought nothing.
+    """
+    if slim:
+        slim_view = load_slim(path)
+        if slim_view is not None:
+            return slim_view
     snapshot = load_snapshot(path)
-    return None if snapshot is None else snapshot[0]
+    if snapshot is None:
+        return None
+    if not slim:
+        return snapshot[0]
+    slim_view = slim_metadata(snapshot[0])
+    try:
+        save_slim(snapshot[0], path)
+    except OSError:
+        log.debug("could not write the slim metadata index", exc_info=True)
+    return slim_view
 
 
 def load_snapshot(path: Path | None = None) -> tuple[dict, int | None] | None:

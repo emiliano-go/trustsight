@@ -57,6 +57,12 @@ services:
       # cycle ran, not only what it did.
       TRUSTSIGHT_LOG_TIMESTAMPS: "1"
       TMPDIR: "/tmp"
+      # A cycle parses and drops two ~360 MB metadata snapshots.  glibc keeps
+      # the freed pages in per-thread arenas; capping arenas at 2 and trimming
+      # at the top of the heap keeps RSS near the live set instead of the peak.
+      # The watcher also calls malloc_trim(0) at the end of every cycle.
+      MALLOC_ARENA_MAX: "2"
+      MALLOC_TRIM_THRESHOLD_: "131072"
       # Secret-file form of the feed key.  Prefer this (or a Docker secret)
       # over putting the private key in the environment, which is visible to
       # `docker inspect`.

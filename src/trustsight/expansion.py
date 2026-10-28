@@ -437,8 +437,13 @@ def _expand_one_unbounded(
         pat, rep = _split_substitution(rest)
         val = vars_.get(name)
         if val is None:
-            # Bash treats an unset scalar in ${var/pat/rep} as empty.
-            return ""
+            # An unset scalar in ${var/pat/rep} is empty in bash, but the
+            # resolver does not know whether the variable is genuinely empty
+            # or simply outside the lines it read.  Returning "" here turned
+            # `_arch="${CARCH/aarch64/arm64}"` into an empty token and emitted
+            # a phantom source URL (`nvim-linux-.tar.gz`) that novelty then
+            # scored as a first-seen host.  Unknown stays unresolved.
+            return None
         # Refuse before allocating: ``regex.sub`` can emit one copy of *rep*
         # per input character, so ``${x//a/<huge>}`` is O(value x replace).
         # One substitution may not exceed a line, and a pattern may not be a

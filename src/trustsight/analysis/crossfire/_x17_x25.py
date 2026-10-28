@@ -8,7 +8,7 @@ from ...config import (
 )
 from ._common import _EXEC_WRAPPER
 
-__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath']
+__all__ = ['_x024_is_benign_path_suffix', '_x024_is_trusted_path_append', 'X017_RE', 'X021_RE', 'X024_RE', '_BUILD_MANIFEST_RE', '_CONTENT_WRITE_VERB_RE', '_FUNC_CONTINUATION_BODY_RE', '_FUNC_CONTINUATION_RE', '_HEREDOC_OPEN_RE', '_INDIRECT_VALUE_RE', '_MANIFEST_ARG_RE', '_MANIFEST_COMMAND_RE', '_SENSITIVE_VAR_RE', '_X017_FIND_RE', '_X017_SCRIPT_DANGER_RE', '_X021_RUN_POSITIONAL_RE', '_X021_SET_GLOB_RE', '_X022_CONFIG_FLAG_RE', '_X022_PAYLOAD_RE', '_X022_WRITE_RE', '_X024_VALUE_VAR_RE', '_multiline_function_shadow_lines', '_normalise_dest', '_redirect_target', '_x017_find_runs_a_script', '_x024_is_passthrough', '_x024_is_test_pythonpath', '_x024_is_git_provenance']
 
 _X017_FIND_RE = re.compile(
     r"\bfind\b[^\n;&|]{0,200}?-(?:exec|ok)(?:dir)?\s+"
@@ -215,6 +215,24 @@ _X024_BENIGN_BUILD_PATHS = frozenset({
     "CMAKE_INCLUDE_PATH", "CMAKE_PROGRAM_PATH", "CMAKE_FRAMEWORK_PATH",
     "PKG_CONFIG_PATH", "PKG_CONFIG_LIBDIR", "ACLOCAL_PATH", "GIT_EXEC_PATH",
 })
+
+#: The value half of a git-provenance assignment.  Anchored and linear: the
+#: previous form started with an unbounded variable name, which backtracked
+#: quadratically on a full-length line of `a.a.a...`.
+_X024_GIT_VALUE_RE = re.compile(
+    r"\$\(\s*git\s+(?:config|ls-tree|rev-parse|submodule)\b",
+    re.IGNORECASE,
+)
+
+
+def _x024_is_git_provenance(body: str, match: re.Match) -> bool:
+    """True when the indirect value comes from the recipe's own git metadata."""
+    tail = body[match.start():match.start() + 256]
+    eq = tail.find("=")
+    if eq < 0:
+        return False
+    value = tail[eq + 1:].lstrip(" \t\"'(")
+    return bool(_X024_GIT_VALUE_RE.match(value))
 
 
 def _x024_is_benign_build_path(body: str, match: re.Match) -> bool:

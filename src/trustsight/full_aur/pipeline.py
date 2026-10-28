@@ -59,6 +59,7 @@ from ._pipeline_helpers import (  # noqa: F401
     _MAX_NOTIFY_DIFF_BYTES,
     _recipe_digest,
     _notify_diff,
+    _is_routine_bump,
     _since_cursor,
     _set_since_cursor,
     _meta_snapshot_path,
@@ -122,12 +123,17 @@ def _run_corpus_sweep(
     from .temporal_engine import read_cycle_history
 
     history = read_cycle_history(processed)
+    routine_only = {
+        name for name, entry in (detail or {}).items()
+        if entry.get("routine_only")
+    }
     findings = run_corpus_sweep(
         new_meta,
         old_meta,
         source_repos=source_repos,
         prior_history=history["prior_history"],
         maintainer_history=history["maintainer_history"],
+        routine_only=routine_only,
         now=int(time.time()),
     )
 
@@ -644,6 +650,10 @@ def _run_baseline_build(
             "rules": [f["rule_id"] for f in findings],
             "payload_urls": payload_targets,
             "findings": findings,
+            # H058 stands down only when every member of a maintainer's batch
+            # is a routine version/checksum bump.  Computed here, where both
+            # recipe texts are in hand.
+            "routine_only": _is_routine_bump(old_pkgbuild or "", new_pkgbuild),
             **_notify_diff(old_pkgbuild or "", new_pkgbuild),
         }
         return "ok"

@@ -566,18 +566,21 @@ def edge_hidden_fetch(ctx, add) -> None:
     shell) so one command is scored once.
     """
     config = ctx.config
-    from .network import claims_pipe_to_shell, claims_upload_line
+    from .network import claims_pipe_to_shell, claims_upload_line, is_metadata_fetch
 
     declared = ctx.declared_urls_full
     declared_hosts = ctx.declared_hosts
     for i, line in enumerate(ctx.lines):
         if not line.startswith("+") or not ctx.scopes.within(i, _CRITICAL_FUNCTIONS):
             continue
-        if claims_upload_line(_strip_comment(line[1:]), config):
+        body = _strip_comment(line[1:])
+        if claims_upload_line(body, config):
             continue
-        if claims_pipe_to_shell(_strip_comment(line[1:])):
+        if claims_pipe_to_shell(body):
             continue
-        for url in fetch_addresses(_strip_comment(line[1:])):
+        if is_metadata_fetch(body):
+            continue
+        for url in fetch_addresses(body):
             if "://" in url:
                 undeclared = normalize_url(url) not in declared
             else:

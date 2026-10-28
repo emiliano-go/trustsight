@@ -112,10 +112,10 @@ For teams that want a statistical gate, TrustSight publishes benchmark distribut
 |-------|--------|-------|
 | CRITICAL | p5 (5th percentile) | **40** |
 | Benign | p95 (95th percentile) | **30** |
-| Zero-rate (benign scored 0) | percentage | **72.8%** |
+| Zero-rate (benign scored 0) | percentage | **73.0%** |
 | Test count | total | Run `uv run --extra dev pytest` for the current checkout |
 
-**The gate:** the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus. The calibration gates re-measure both percentiles on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the separation gate). This is a claim about two percentiles, not about the distributions as a whole: 7.0% of benign diffs score above the 20-point threshold and some score above 30, which is why the operational threshold is 20 and not 30.
+**The gate:** the published figures separate the two tails by 10 points: benign p95 = 30, CRITICAL p5 = 40, measured on the locked 8,393-diff corpus. The calibration gates re-measure both percentiles on every push and fail the build if the benign p95 stops being strictly below the malicious p5 (the separation gate). This is a claim about two percentiles, not about the distributions as a whole: 6.8% of benign diffs score above the 20-point threshold and some score above 30, which is why the operational threshold is 20 and not 30.
 
 To set up your own gate:
 

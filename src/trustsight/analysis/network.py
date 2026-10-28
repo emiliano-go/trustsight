@@ -44,6 +44,26 @@ _SOURCE_ARRAY_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
 # the regex form was quadratic on a line with no scheme at all.
 _URL_STOP_CHARS = frozenset(" \t\r\n'\")")
 
+#: A client whose stdout is piped into a text utility yields a value, not a
+#: file on disk.  A release-digest lookup (``curl ... | jq ... | awk ...``) is
+#: metadata verification: nothing it returns is executed, so it is not the
+#: payload fetch H016 and H082 describe.
+TEXT_PIPE_CONSUMER_RE = re.compile(
+    r"\|\s*(?:jq|awk|gawk|sed|grep|egrep|fgrep|cut|head|tail|sort|uniq|tr|wc)\b"
+)
+
+#: The fetch wrote its result to a file (``-o``/``--output``/``-O``/``>``).
+#: When it did, the bytes land on disk and the metadata stand-down does not
+#: apply.  `tee` is deliberately not in TEXT_PIPE_CONSUMER_RE for this reason.
+_SAVED_OUTPUT_RE = re.compile(
+    r"(?:^|\s)(?:-o|--output)\s*\S|(?:^|\s)-O\b|(?<![0-9])>"
+)
+
+
+def is_metadata_fetch(body: str) -> bool:
+    """True when *body* fetches a value through a text utility, not a file."""
+    return bool(TEXT_PIPE_CONSUMER_RE.search(body)) and not _SAVED_OUTPUT_RE.search(body)
+
 # ---------------------------------------------------------------------------
 # Shared: source-array URL tokens
 # ---------------------------------------------------------------------------

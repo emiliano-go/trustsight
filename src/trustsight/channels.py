@@ -353,7 +353,8 @@ def _release_channel_feed(feed: dict, prefix: str,
     )
 
     channel = release.channel_for_url(feed.get("url") or "")
-    assert channel is not None  # caller checked
+    if channel is None:
+        raise RuntimeError("release channel URL did not resolve")
     # Refuse a channel with no usable pinned key before any download; see
     # pull_baseline_seed for the reasoning.
     release._channel_pubkey(channel, None)

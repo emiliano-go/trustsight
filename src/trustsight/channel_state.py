@@ -15,10 +15,13 @@ behaviour the version notice already has.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 
 from .bounded_io import read_file_capped
+
+log = logging.getLogger(__name__)
 
 MAX_CHANNEL_STATE_BYTES = 1024 * 1024
 
@@ -63,7 +66,7 @@ def record_pull(kind: str, tag: str | None, channel: str = "") -> None:
         }
         _path().write_text(json.dumps(data), encoding="utf-8")
     except Exception:  # noqa: BLE001 - the record is best-effort
-        pass
+        log.debug("could not record %s pull", kind, exc_info=True)
 
 
 def pulled(kind: str) -> dict | None:

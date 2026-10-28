@@ -10,6 +10,22 @@
 
 ### Fixed
 
+- **The 2026-10-28 watcher false-positive batch, with true-positive twins.**
+  H082/H016 no longer pair a release-digest lookup (`curl … | jq …` into a
+  text utility, never saved) with a later execution; a named output or a pipe
+  to a shell still fires. H017 treats an escaped `\$(...)` inside a quoted
+  `echo` as printed text. H072 exempts the package's own `$pkgdir` output.
+  X002 ignores `case` arm labels such as `0.*|1.*)`. X024 ignores a path read
+  from the recipe's own git metadata (`git config`/`ls-tree`/`rev-parse`).
+  Four vendor release hosts (`repo.secureblue.dev`, `repo.yandex.ru`,
+  `nebula.gg`, `downloads.sejda-cdn.com`) join the official bucket, which
+  also stops NOVELTY charging them. NOVELTY leaves an unresolved substitution
+  unresolved instead of scoring an empty token. H058 stands down on a batch
+  of routine version/checksum bumps, and keeps the finding when any member is
+  not routine. The pinned corpus now measures a 73.0% benign zero-rate, a
+  6.8% flag rate and a 31.0% ruleset trigger rate; the published figures move
+  with it. Regression cases and their positive twins are in
+  `tests/regressions/test_fp_triage_2026_10_28.py`.
 - **The 2026-10-27 watcher false-positive batch, with true-positive twins.**
   H042 no longer reads a dot-suffixed file written through a command
   substitution (`sed -i … "$(_get_app_dir)/name.desktop"`) as a hidden drop;

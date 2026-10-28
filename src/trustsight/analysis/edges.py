@@ -22,6 +22,7 @@ from ..buckets import canonical_host
 from ..deps import _strip_comment
 from ..differ import extract_source_array_urls, urls_from_pkgbuild_text
 from ..diffdoc import parse_diff_lines
+from ..coverage import note_stage_failure
 from ..findings import stamp
 from ..novelty import normalize_url
 from ..recipedoc import parse_recipe
@@ -355,10 +356,7 @@ def edge_committed_payload(name: str, head: bytes) -> dict | None:
     """
     if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
         return None
-    try:
-        text = head.decode("utf-8", errors="replace")
-    except Exception:
-        return None
+    text = head.decode("utf-8", errors="replace")
     if name.lower().endswith((".patch", ".diff")):
         text = "\n".join(
             ln.content for ln in parse_diff_lines(split_lines(text)).lines
@@ -459,15 +457,13 @@ def edge_scriptlet_top_level_execution(name: str, head: bytes) -> dict | None:
     """
     if not _SCRIPTLET_CARRIER_RE.search(name.rstrip("/")):
         return None
-    try:
-        text = head.decode("utf-8", errors="replace")
-    except Exception:
-        return None
+    text = head.decode("utf-8", errors="replace")
     from ..recipedoc import parse_recipe
 
     try:
         parse_recipe(text)
     except Exception:
+        note_stage_failure("scriptlet-parse")
         return None
     for number, body in _top_level_lines(text):
         match = (_SOURCE_EXEC_RE.search(body)

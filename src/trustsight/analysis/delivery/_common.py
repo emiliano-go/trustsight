@@ -24,19 +24,18 @@ from ...line_lex import (
     _printed_heredoc_body_indices_cached,
 )
 from ...tokenizer import split_lines
-from ..build import (
-    _CRITICAL_FUNCTIONS,
-    _INSTALL_HOOKS,
-)
+from ..build import _CRITICAL_FUNCTIONS, _SCOPE_FUNCTIONS
 from ...rules import find_line_in_diff
 
 __all__ = ['_BUILD_FUNCTIONS', '_BUILD_ONLY_PATH_RE', '_BUILD_ROOT_RE', '_CMD_START', '_COPY_WRITE_RE', '_DECODER_WRITE_RE', '_DESCRIPTIVE_FIELD_RE', '_ELF_MAGIC', '_EXECUTION_RE', '_EXEC_PREFIX', '_GENERATION_WRITE_RE', '_H072_BENIGN_EXEC', '_HEREDOC_OPEN_RE', '_HEREDOC_PATH_BEFORE_RE', '_HEREDOC_PIPED_RE', '_HEREDOC_TO_EXECUTING_CONFIG_RE', '_HEREDOC_TO_INTERPRETER_RE', '_IMPLICIT_BUILD_INPUTS', '_INTERPRETER_WRITE_RE', '_MACHO_MAGICS', '_NOT_A_PATH_RE', '_PATCH_APPLY_RE', '_PE_MAGIC', '_PRINTED_HEREDOC_OPENER_RE', '_PRODUCER_REDIRECT_RE', '_SCOPE_FUNCTIONS', '_SHEBANG_MAGIC', '_SRCINFO_SOURCE_RE', '_VCS_SOURCE_RE', '_collect_writes', '_declared_extraction_dirs', '_declared_extraction_dirs_cached', '_declared_source_basenames', '_declared_source_basenames_cached', '_declared_source_entries_cached', '_find_line', '_heredoc_body_indices', '_heredoc_body_indices_cached', '_is_directory_path', '_norm_path', '_not_a_path', '_printed_heredoc_body_indices', '_printed_heredoc_body_indices_cached', '_source_basename']
 
-_SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
-
 def _find_line(diff_text: str, fragment: str) -> int | None:
     """Return a 1-based diff line whose added content contains *fragment*."""
     return find_line_in_diff(diff_text, re.escape(fragment[:60]))
+
+def _subst(ent: str, table: dict[str, str]) -> str:
+    """Resolve one source entry against the recipe's own variable table."""
+    return resolve_text(ent, table)
 
 _ELF_MAGIC = b"\x7fELF"
 
@@ -320,13 +319,6 @@ def _unpinned_source_basenames(
     _vars, _arrs = _variable_table(
         [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
 
-    def _subst(ent: str) -> str:
-        # Reuse the shared resolver: a single-pass `${key}` replacement left
-        # `${pkgname%-bin}`, `${pkgver%.*}`, `${pkgver##*.}` and nested
-        # variables unresolved, so a declared source was not recognised under
-        # the name the build executes (X033) and the executed file was read as
-        # a new capability (C001).
-        return resolve_text(ent, _vars)
 
     files = files_at_line(lines)
     # suffix -> {"sources": [basename|None], "checksums": {type: [item]}}
@@ -385,7 +377,7 @@ def _unpinned_source_basenames(
                     # VCS sources consume a checksum slot; keep the slot.
                     _group()["sources"].append(None)
                     continue
-                ent = _subst(ent)
+                ent = _subst(ent, _vars)
                 base = (ent.split("::", 1)[0] if "::" in ent
                         else _source_basename(ent))
                 _group()["sources"].append(base or None)
@@ -598,13 +590,6 @@ def _declared_source_entries_cached(text: str, whole_file: bool) -> frozenset[tu
     _vars, _arrs = _variable_table(
         [ln[1:] if ln[:1] in ("+", " ") else ln for ln in lines])
 
-    def _subst(ent: str) -> str:
-        # Reuse the shared resolver: a single-pass `${key}` replacement left
-        # `${pkgname%-bin}`, `${pkgver%.*}`, `${pkgver##*.}` and nested
-        # variables unresolved, so a declared source was not recognised under
-        # the name the build executes (X033) and the executed file was read as
-        # a new capability (C001).
-        return resolve_text(ent, _vars)
 
     files = files_at_line(lines)
     entries_out: set[tuple[str, bool]] = set()
@@ -665,7 +650,7 @@ def _declared_source_entries_cached(text: str, whole_file: bool) -> frozenset[tu
             if not ent:
                 continue
             is_vcs = bool(_VCS_SOURCE_RE.search(ent))
-            ent = _subst(ent)
+            ent = _subst(ent, _vars)
             base = ent.split("::", 1)[0] if "::" in ent else _source_basename(ent)
             if base:
                 entries_out.add((base, is_vcs))

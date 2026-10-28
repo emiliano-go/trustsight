@@ -12,6 +12,7 @@ from ..db import (
     is_established_package,
     top_dependency_names,
 )
+from ..coverage import note_stage_failure
 from ..deps import (
     declared_package_names,
     extract_dependency_changes,
@@ -173,6 +174,7 @@ def name_shadow_findings(text: str, package_name: str,
     try:
         doc = parse_recipe(text, file="PKGBUILD")
     except Exception:
+        note_stage_failure("name-shadow-parse")
         return []
 
     skip = skip or set()
@@ -266,7 +268,7 @@ def _dependency_findings(diff_text, package_name, config, add, current_text=None
             # Sorted: the names come out of a set, and the finding text is
             # part of the recorded analysis, so its order must not depend
             # on the set's internal layout.
-            novel = sorted(d for d, r in zip(all_new, rarities) if r > 0.5)
+            novel = sorted(d for d, r in zip(all_new, rarities, strict=True) if r > 0.5)
             add("H030", "Dependency-Set Expansion", "MEDIUM", "dependency",
                 f"diff adds {len(novel)} novel/rare deps: {novel}",
                 n_novel=len(novel), novel_names=", ".join(novel))

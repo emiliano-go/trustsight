@@ -4,10 +4,7 @@ import re
 from ...config import (
     _SUBCOMMAND_OPTS as _SUBCOMMAND_OPTS,
 )
-from ...config import (
-    DEFAULT_ANTI_ANALYSIS_PROBES,
-    load_patterns,
-)
+from ...config import DEFAULT_ANTI_ANALYSIS_PROBES
 from ...deps import _strip_comment
 from ...rules import (
     MAX_RULE_LINE_BYTES,
@@ -15,6 +12,7 @@ from ...rules import (
     _classify_enclosing_function,
 )
 from ...tokenizer import resolve_added_lines
+from ..base import compile_configured_patterns
 from ..build import (
     _recipe_lines,
 )
@@ -24,9 +22,8 @@ __all__ = ['_anti_analysis_findings', '_anti_analysis_probes']
 
 def _anti_analysis_probes(config=None) -> list[re.Pattern]:
     """Compile the H067 anti-analysis probe fragments from patterns.toml."""
-    patterns = load_patterns().get("patterns", {})
-    frags = patterns.get("anti_analysis_probes") or DEFAULT_ANTI_ANALYSIS_PROBES
-    return [re.compile(p, re.IGNORECASE) for p in frags]
+    return compile_configured_patterns(
+        "anti_analysis_probes", DEFAULT_ANTI_ANALYSIS_PROBES)
 
 def _anti_analysis_findings(diff_text, config, add, current_text=None) -> None:
     """A build/install line probing for debuggers, VMs, sandboxes or CI.

@@ -243,6 +243,16 @@ _SCALAR_LINE_RE = re.compile(
     r"^([+\- ])\s*(pkgver|pkgrel|epoch)\s*=\s*(.+?)\s*$", re.IGNORECASE
 )
 
+def _resolved_scalar(doc, scalar: str, table: dict[str, str],
+                     prefixes: frozenset[str]) -> str | None:
+    """Resolve one version scalar from the diff side named by *prefixes*."""
+    for line in doc.lines:
+        match = _SCALAR_LINE_RE.match(line.raw)
+        if (match and match.group(1) in prefixes
+                and match.group(2).lower() == scalar):
+            return resolve_text(_strip_value(match.group(3)), table)
+    return None
+
 
 def any_version_scalar_moved(
     diff_text: str, current_text: str | None = None
@@ -270,16 +280,9 @@ def any_version_scalar_moved(
     old_prefixes = frozenset({"-", " "})
     new_prefixes = frozenset({"+", " "})
 
-    def resolved(scalar: str, table: dict[str, str], prefixes: frozenset[str]) -> str | None:
-        for line in doc.lines:
-            match = _SCALAR_LINE_RE.match(line.raw)
-            if match and match.group(1) in prefixes and match.group(2).lower() == scalar:
-                return resolve_text(_strip_value(match.group(3)), table)
-        return None
-
     for scalar in ("pkgver", "pkgrel", "epoch"):
-        old_val = resolved(scalar, old_table, old_prefixes)
-        new_val = resolved(scalar, new_table, new_prefixes)
+        old_val = _resolved_scalar(doc, scalar, old_table, old_prefixes)
+        new_val = _resolved_scalar(doc, scalar, new_table, new_prefixes)
         if old_val is not None and new_val is not None and old_val != new_val:
             return True
     if current_text:
@@ -381,10 +384,9 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
     """Return ``(removed, value)``: was ``epoch=`` dropped with pkgver/pkgrel
     unchanged by resolved value?
 
-, low priority: epoch removal is usually legitimate (a rebase
-    onto a version that no longer needs the prefix), so this is
-    annotation-tier.  It matters only because the ordering override silently
-    disappears.
+    Low priority: epoch removal is usually legitimate (a rebase onto a
+    version that no longer needs the prefix), so this is annotation-tier.
+    It matters only because the ordering override silently disappears.
     """
     doc = parse_diff_lines(split_lines(diff_text or ""))
     lines = [line.raw for line in doc.lines]
@@ -402,18 +404,9 @@ def _epoch_removed_unchanged(diff_text: str) -> tuple[bool, str | None]:
     old_table = variable_table(lines, frozenset({"-", " "}))
     new_table = variable_table(lines, frozenset({"+", " "}))
 
-    def resolved(scalar: str, table: dict[str, str],
-                 prefixes: frozenset[str]) -> str | None:
-        for line in doc.lines:
-            match = _SCALAR_LINE_RE.match(line.raw)
-            if match and match.group(1) in prefixes \
-                    and match.group(2).lower() == scalar:
-                return resolve_text(_strip_value(match.group(3)), table)
-        return None
-
     for scalar in ("pkgver", "pkgrel"):
-        old_val = resolved(scalar, old_table, frozenset({"-", " "}))
-        new_val = resolved(scalar, new_table, frozenset({"+", " "}))
+        old_val = _resolved_scalar(doc, scalar, old_table, frozenset({"-", " "}))
+        new_val = _resolved_scalar(doc, scalar, new_table, frozenset({"+", " "}))
         if old_val is not None and new_val is not None and old_val != new_val:
             return False, None
 
@@ -435,11 +428,11 @@ def _epoch_findings(diff_text: str, config, add, whole_recipe: bool = False,
     support: the epoch is merely present.  The finding is kept (the reader
     still wants to know the field is there), but it says what it knows.
 
-    With *delta* the introduction is read from the shared ``ChangeDelta``
-``epoch`` absent pre and present post. The line number
-    still comes from the diff so the citation is unchanged.
+    With *delta* the introduction is read from the shared ``ChangeDelta``:
+    ``epoch`` absent pre and present post.  The line number still comes from
+    the diff so the citation is unchanged.
     """
-    # , low priority: epoch dropped while pkgver/pkgrel stood still.
+    # Low priority: epoch dropped while pkgver/pkgrel stood still.
     # Checked before H063's early return: a removal is never an introduction.
     removed, removed_value = _epoch_removed_unchanged(diff_text)
     if removed:

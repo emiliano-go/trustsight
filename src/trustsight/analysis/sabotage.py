@@ -32,6 +32,7 @@ from __future__ import annotations
 import re
 
 from ..deps import _strip_comment
+from .base import _CMD
 from ..tokenizer import join_line_continuations, resolve_added_lines
 from ..rules import clamp_text
 
@@ -75,9 +76,6 @@ _HOME_ALT = r"~|\$\{?HOME\}?|\$\{?XDG_[A-Z_]+\}?"
 #: dozen rules share, and it stayed invisible until the probe alphabet
 #: learned to include a newline. A command word follows spaces or tabs on
 #: its own line, and the newline boundary is already the lookbehind's job.
-_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)[ \t]*"
-
-
 
 
 # ---------------------------------------------------------------------------

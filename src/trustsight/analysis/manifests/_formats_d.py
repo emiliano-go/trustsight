@@ -82,7 +82,6 @@ def _clojure(text: str) -> ManifestDoc | None:
     for m in _CLOJURE_GIT_RE.finditer(text):
         deps.append(Dep(_coord_before(text, m.start()), None, "git", _host(m.group(1))))
     return ManifestDoc("", "clojure", tuple(deps))
-    return ManifestDoc("", "clojure", tuple(deps))
 
 def _dune_project(text: str) -> ManifestDoc | None:
     deps: list[Dep] = []

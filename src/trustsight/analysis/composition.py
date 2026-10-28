@@ -22,12 +22,12 @@ import re
 
 from ..config import (
     DEFAULT_RECON_COMMANDS,
-    load_patterns,
     load_thresholds,
 )
 from ..deps import _strip_comment
 from ..findings import stamp
 from ..novelty import package_typosquat_match
+from .base import compile_configured_patterns
 from .delivery import (
     _SCOPE_FUNCTIONS,
     _find_line,
@@ -40,9 +40,7 @@ from .delivery import (
 
 def _recon_probes(config=None) -> list[re.Pattern]:
     """Compile the H040 recon-command fragments from patterns.toml."""
-    patterns = load_patterns().get("patterns", {})
-    frags = patterns.get("recon_commands") or DEFAULT_RECON_COMMANDS
-    return [re.compile(p, re.IGNORECASE) for p in frags]
+    return compile_configured_patterns("recon_commands", DEFAULT_RECON_COMMANDS)
 
 
 def edge_recon(ctx, add) -> None:

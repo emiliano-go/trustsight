@@ -22,27 +22,16 @@ __all__ = ['crossfire_techniques']
 _GREP_CMD_RE = re.compile(
     r"(?:^|[;&|]\s*)\s*(?:[\w./-]+=\S+\s+)*grep\b")
 
-def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
-    """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
+def _resolved_vocabulary(clamped: str, lines: list[str], readable: list[str],
+                         current_text: str | None):
+    """Resolve the names and lines the crossfire predicates compare against.
 
-    Returned as data rather than findings so X007 can count techniques
-    without re-deriving them, and so a caller can ask "what evasion is in
-    this diff" without going through the scorer.
+    Returns ``(resolvable_names, scalar_values, resolved_lines)``.  A failed
+    resolution degrades to an empty table and the raw lines, but records the
+    stage failure so the run cannot present as complete.
     """
-    clamped = clamp_text(diff_text) or ""
-    raw_lines = split_lines(clamped)
-    lines = join_line_continuations(raw_lines)
-    from ...rules import _classify_enclosing_function
     from ...tokenizer import resolve_added_lines, variable_table
 
-    enclosing = _classify_enclosing_function(lines)
-    files = files_at_line(lines)
-    # Names the tokenizer reduced to a literal value. A command word that
-    # resolves is not an evasion; one that does not is the whole point.
-    readable = [
-        ln[1:] for ln in lines
-        if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
-    ]
     try:
         var_table, array_table = variable_table(readable)
         # A variable defined outside every hunk (an unchanged `local
@@ -102,6 +91,31 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
         log.debug("line resolution failed", exc_info=True)
         note_stage_failure("variable-resolution")
         resolved_lines = list(lines)
+    return resolvable, scalar_values, resolved_lines
+
+
+def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
+    """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
+
+    Returned as data rather than findings so X007 can count techniques
+    without re-deriving them, and so a caller can ask "what evasion is in
+    this diff" without going through the scorer.
+    """
+    clamped = clamp_text(diff_text) or ""
+    raw_lines = split_lines(clamped)
+    lines = join_line_continuations(raw_lines)
+    from ...rules import _classify_enclosing_function
+
+    enclosing = _classify_enclosing_function(lines)
+    files = files_at_line(lines)
+    # Names the tokenizer reduced to a literal value. A command word that
+    # resolves is not an evasion; one that does not is the whole point.
+    readable = [
+        ln[1:] for ln in lines
+        if (ln.startswith("+") or ln.startswith(" ")) and not ln.startswith("+++")
+    ]
+    resolvable, scalar_values, resolved_lines = _resolved_vocabulary(
+        clamped, lines, readable, current_text)
     carried = _continuation_lines(raw_lines, len(lines))
     #: X011 stands down inside a dependency array: the words there are a
     #: description, not a command the build runs.

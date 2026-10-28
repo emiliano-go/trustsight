@@ -6,6 +6,7 @@ from ..persistence import (
     _raw_targets,
     _WW_DIR_RE,
 )
+from ...coverage import note_stage_failure
 from ...findings import stamp
 from ...line_lex import _printed_heredoc_body_indices, strip_comment, unwrap_shell_cexec
 from ...recipedoc import parse_recipe
@@ -56,6 +57,7 @@ def partial_install_files(diff_text: str) -> list[str]:
     try:
         doc = parse_diff_lines(split_lines(diff_text))
     except Exception:
+        note_stage_failure("install-partial-check")
         return []
     cuts = {path for path, *_rest in doc.cut_hunks()}
     partial: list[str] = []
@@ -105,6 +107,7 @@ def install_script_findings(doc, dead_hooks: frozenset[str] = frozenset()) -> li
         try:
             recipe = parse_recipe(text, origins=origins)
         except Exception:
+            note_stage_failure("install-script-parse")
             continue
         for name in _hook_names(recipe):
             body = recipe.functions.get(name, "")

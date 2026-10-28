@@ -8,6 +8,7 @@ from ..build import (
     _INTERPRETER_FETCH,
 )
 from ...config import NETWORK_CLIENT
+from ...coverage import note_stage_failure
 from ...findings import stamp
 from ...recipedoc import recipe_states
 from ...rules import find_line_in_diff
@@ -113,6 +114,7 @@ def array_order_changes(diff_text: str, config: dict | None = None,
         post_arrays = _drop_unclosed_arrays(
             post.arrays, "\n".join(doc.post_lines()))
     except Exception:
+        note_stage_failure("checksum-array-parse")
         if pre is None or post is None:
             return []
         pre_arrays, post_arrays = pre.arrays, post.arrays
@@ -333,7 +335,7 @@ def addendum4_findings(diff_text, scope_doc, pre, post, source_changes,
 
                 declared = parse_recipe(post_text).scalars.get("install", "")
             except Exception:  # noqa: BLE001 - a refusal keeps the diff read
-                pass
+                note_stage_failure("checksum-install-parse")
         declared_base = declared.rsplit("/", 1)[-1] if declared else ""
         # A variable-bearing declaration cannot be basename-compared without
         # resolution; treat it as declaring rather than guess a mismatch.

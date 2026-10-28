@@ -483,10 +483,7 @@ def emit_committed_build_path(name: str, head: bytes) -> dict | None:
     """H093: a committed companion runs a build-only path (manifest scope)."""
     if not _COMMITTED_CARRIER_RE.search(name.rstrip("/")):
         return None
-    try:
-        text = head.decode("utf-8", errors="replace")
-    except Exception:
-        return None
+    text = head.decode("utf-8", errors="replace")
     if name.lower().endswith((".patch", ".diff")):
         text = "\n".join(
             ln.content for ln in parse_diff_lines(split_lines(text)).lines

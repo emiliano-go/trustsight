@@ -1,11 +1,10 @@
 """- network-surface rules.
 
 H031/H033/H034/H071 share one question: does the PKGBUILD's declared or
-executed network surface carry an injection or a covert channel?  All four
-are code rules because each needs more than a regex:
+executed network surface carry an injection or a covert channel?  H031 now
+lives in :mod:`trustsight.analysis.url_engine`; the remaining rules here are
+code rules because each needs more than a regex:
 
-- H031 needs the literal ``pkgver``/``_pkgver`` value and its interpolation
-  into a source URL;
 - H033 needs both sides of the diff: which commit a repository ref resolved
   to before, and which one it resolves to now;
 - H034 needs the raw source array with its scheme tokens (``git+https://``,
@@ -33,17 +32,14 @@ from ..config import (
 from ..deps import _strip_comment
 from ..line_lex import lex_lines
 from ..tokenizer import join_line_continuations, resolve_added_lines
-from .base import iter_scheme_urls, mask_to_recipe
+from .base import compile_configured_patterns, iter_scheme_urls, mask_to_recipe
 from .version import any_version_scalar_moved
-from .build import _CRITICAL_FUNCTIONS, _INSTALL_HOOKS
-from .delivery import _find_line
+from .build import _SCOPE_FUNCTIONS
+from .delivery import _SRCINFO_SOURCE_RE, _find_line
 from ..diffdoc import parse_diff_lines
 from ..tokenizer import split_lines
 
-_SCOPE_FUNCTIONS = frozenset(_CRITICAL_FUNCTIONS) | frozenset(_INSTALL_HOOKS)
-
 _SOURCE_ARRAY_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*\(")
-_SRCINFO_SOURCE_RE = re.compile(r"^\s*source(?:_[a-z0-9_]+)?\s*=\s*(\S.*)$")
 # URL tokens are found by scanning for "://" (see base.iter_scheme_urls);
 # the regex form was quadratic on a line with no scheme at all.
 _URL_STOP_CHARS = frozenset(" \t\r\n'\")")
@@ -114,53 +110,6 @@ def _exotic_protocol_findings(diff_text, config, add) -> None:
             add("H034", "Exotic Source Protocol", "MEDIUM", "network",
                 f"source URL uses non-allowlisted scheme {scheme}: {url[:70]}",
                 url=url[:70], scheme=scheme)
-            return
-
-
-# ---------------------------------------------------------------------------
-# H031 - version-in-URL injection
-# ---------------------------------------------------------------------------
-
-_PKGVER_ASSIGN_RE = re.compile(
-    r"^\s*(?:(?:local|export|readonly)\s+)?(_?pkgver)\s*=\s*(.+)"
-)
-# Version characters: anything else in an interpolated value is
-# an injection candidate.
-_SAFE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+\-]+$")
-
-
-def _version_in_url_findings(diff_text, config, add) -> None:
-    """``pkgver``/``_pkgver`` interpolated into a source URL with a value
-    carrying characters outside ``[A-Za-z0-9._+-]`` (H031).
-
-    A literal version like ``1.2.3`` or ``2026.08.01`` is safe.  A value
-    containing ``;``, whitespace, ``/`` or other delimiters that is then
-    substituted into a fetched URL is an injection vector.
-    """
-    bad_values: dict[str, str] = {}
-    for line in resolve_added_lines(diff_text):
-        if not line.startswith("+"):
-            continue
-        match = _PKGVER_ASSIGN_RE.match(line[1:])
-        if not match:
-            continue
-        name, value = match.group(1), match.group(2).strip()
-        value = value.strip("\"'")
-        if not _SAFE_VERSION_RE.match(value):
-            bad_values[name] = value
-
-    if not bad_values:
-        return
-    for _, url in _source_url_tokens(diff_text):
-        for name, value in bad_values.items():
-            braced = re.search(r"\$\{" + re.escape(name) + r"\}", url)
-            bare = re.search(r"\$" + re.escape(name) + r"(?![\w])", url)
-            if not (braced or bare):
-                continue
-            add("H031", "Version-In-URL Injection", "MEDIUM", "network",
-                f"{name}={value!r} carries injection chars and is "
-                f"interpolated into a source URL: {url[:70]}",
-                url=url[:70], variable=name, value=value[:40])
             return
 
 
@@ -374,7 +323,7 @@ def edge_covert_egress(ctx, add) -> None:
     clients = _covert_clients(ctx.config)
     endpoints = _covert_endpoints(ctx.config)
 
-    for i, line in enumerate(lines):
+    for line in lines:
         if not line.startswith("+"):
             continue
         body = _strip_comment(line[1:])
@@ -612,9 +561,7 @@ _HTTP_CLIENT_RE = re.compile(
 
 
 def _upload_flags(config=None) -> list[re.Pattern]:
-    patterns = load_patterns().get("patterns", {})
-    frags = patterns.get("upload_flags") or DEFAULT_UPLOAD_FLAGS
-    return [re.compile(f, re.IGNORECASE) for f in frags]
+    return compile_configured_patterns("upload_flags", DEFAULT_UPLOAD_FLAGS)
 
 
 def _paste_hosts(config) -> frozenset[str]:

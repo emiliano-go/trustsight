@@ -563,16 +563,17 @@ def test_generator_truncation_is_returned_not_inferred():
     """
     import inspect
 
-    from trustsight.analysis import pipeline
+    from trustsight.analysis.pipeline import _analyze
     from trustsight.sandbox import git_project
 
     source = inspect.getsource(git_project.generate_diff_bounded)
     assert "truncated = True" in source
     assert source.rstrip().endswith("return unified, summary, truncated")
 
-    git_path = inspect.getsource(pipeline.analyze_package)
-    assert "generated_truncated" in git_path
-    assert "combined_truncated or generated_truncated" in git_path
+    assemble = inspect.getsource(_analyze._assemble_diff)
+    assert "generated_truncated" in assemble
+    assert "combined_truncated or generated_truncated" in assemble
+    assert "_assemble_diff(" in inspect.getsource(_analyze.analyze_package)
 
 
 def test_the_two_value_generator_still_works_for_old_callers():

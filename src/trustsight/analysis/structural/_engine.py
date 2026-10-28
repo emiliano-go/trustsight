@@ -1,6 +1,7 @@
 """Extracted from structural.py: _engine."""
 
 import re
+from ...coverage import note_stage_failure
 from ...differ import (
     _touched_checksum_arrays,
     checksum_array_parity_in_text,
@@ -61,6 +62,49 @@ _ARCH_SCOPED_ADDED_SUMS = re.compile(
     r"^\+.*(?:md5|sha1|sha224|sha256|sha384|sha512|b2)sums?_[A-Za-z0-9_]+",
     re.IGNORECASE | re.MULTILINE,
 )
+
+def _backup_array_finding(scope_pre, scope_post, add) -> None:
+    """C029: a backup=() array gained an entry."""
+    if scope_pre is None or scope_post is None:
+        return
+    from ...recipedoc import array_diff
+
+    delta = array_diff(
+        scope_pre.arrays.get("backup", ()),
+        scope_post.arrays.get("backup", ()),
+    )
+    if delta.gained:
+        add("C029", "Backup Array Gains Entries", "INFO", "persistence",
+            "backup=() gained " + ", ".join(delta.gained),
+            array="backup", gained=", ".join(delta.gained))
+
+
+def _package_fetch_finding(scope_post, add) -> None:
+    """C015: package() fetches a source instead of prepare/build doing it."""
+    if scope_post is None:
+        return
+    client = _package_fetch_client(scope_post.functions.get("package", ""))
+    if client:
+        add("C015", "Fetch In package()", "HIGH", "network",
+            f"package() fetches with '{client}'; sources must be "
+            "fetched in prepare/build where checksums apply",
+            span=scope_post.function_spans.get("package"),
+            client=client[:40])
+
+
+def _scope_findings(scope_doc, diff_text, current_text, add) -> list[dict]:
+    """C014/C016/C017 and L1 structure findings from the scope parse."""
+    from ..edges import _dead_hook_files, _declared_install_basename
+
+    if scope_doc is None:
+        return []
+    declared = _declared_install_basename(diff_text, current_text)
+    dead = _dead_hook_files(
+        {i: f.path for i, f in enumerate(scope_doc.files)}, declared)
+    findings = install_script_findings(scope_doc, dead_hooks=dead)
+    diff_structure_findings(scope_doc, add)
+    return findings
+
 
 def _structural_findings(
     diff_text: str,
@@ -201,6 +245,7 @@ def _structural_findings(
         scope_doc = parse_diff_lines(split_lines(diff_text))
         scope_pre, scope_post = recipe_states(scope_doc)
     except Exception:
+        note_stage_failure("structural-scope-parse")
         scope_pre = scope_post = None
 
     # C014 (re-filed from H099): a checksum array
@@ -217,7 +262,7 @@ def _structural_findings(
             span=span, array=name,
             gained=", ".join(delta.gained), lost=", ".join(delta.lost))
 
-    # , mildest shape: an isolated checksum insertion whose index does
+    # Mildest shape: an isolated checksum insertion whose index does
     # not match the index at which the corresponding source entry appeared, so
     # the hash/source positional pairing shifted without a reorder.  Scored
     # below the reorder shape (LOW).
@@ -235,51 +280,11 @@ def _structural_findings(
                 span=spans[0] if spans else None, array=name,
                 checksum_index=ck_idx, source_index=src_idx)
 
-    # , low priority: backup= gains an entry (annotation-tier).
-    # backup-listed files get config-file treatment on upgrade, so a new entry
-    # changes what pacman preserves; the value is real but niche, so INFO.
-    if scope_pre is not None and scope_post is not None:
-        from ...recipedoc import array_diff
+    _backup_array_finding(scope_pre, scope_post, add)
 
-        delta = array_diff(
-            scope_pre.arrays.get("backup", ()),
-            scope_post.arrays.get("backup", ()),
-        )
-        if delta.gained:
-            add("C029", "Backup Array Gains Entries", "INFO", "persistence",
-                "backup=() gained "
-                + ", ".join(delta.gained),
-                array="backup", gained=", ".join(delta.gained))
+    _package_fetch_finding(scope_post, add)
 
-    # C015 (re-filed from H100): a fetch in
-    # package().  Sources belong in prepare/build, where the checksum
-    # arrays apply; fetching at artifact-assembly time bypasses that
-    # accounting.  Reads RecipeDoc.functions only - the whole body, never a
-    # Line walk. (H076 already owns the write-outside-$pkgdir half of
-    # for package(), so no second rule is filed for it.)
-    if scope_post is not None:
-        client = _package_fetch_client(
-            scope_post.functions.get("package", ""))
-        if client:
-                add("C015", "Fetch In package()", "HIGH", "network",
-                    f"package() fetches with '{client}'; sources must be "
-                    "fetched in prepare/build where checksums apply",
-                    span=scope_post.function_spans.get("package"),
-                    client=client[:40])
-
-    # C016/C017 (re-filed from H102/H103): a
-    # complete .install script's hook bodies, read as functions.  Hooks the
-    # recipe does not wire up are dead: behavior claims inside them stand
-    # down (patent-bin's rc write in a hook install= never names).
-    if scope_doc is not None:
-        from ..edges import _dead_hook_files, _declared_install_basename
-        declared = _declared_install_basename(diff_text, current_text)
-        dead = _dead_hook_files(
-            {i: f.path for i, f in enumerate(scope_doc.files)}, declared)
-        findings.extend(install_script_findings(scope_doc, dead_hooks=dead))
-        # the L1 structural rules over the typed DiffFile
-        # metadata (mode, rename) and empty-file shape.
-        diff_structure_findings(scope_doc, add)
+    findings.extend(_scope_findings(scope_doc, diff_text, current_text, add))
 
     # G1/G3/G4/G5/G6/G7 predicates over the same parse.
     addendum4_findings(diff_text, scope_doc, scope_pre, scope_post,

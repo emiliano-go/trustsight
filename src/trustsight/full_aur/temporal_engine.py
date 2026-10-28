@@ -89,6 +89,7 @@ class HistorySnapshot:
     prior_history: list = field(default_factory=list)
     maintainer_history: list = field(default_factory=list)
     edges: dict[str, set[str]] | None = None
+    routine_only: frozenset[str] = field(default_factory=frozenset)
     now: int = 0
 
     @classmethod
@@ -101,6 +102,7 @@ class HistorySnapshot:
         prior_history: list | None = None,
         maintainer_history: list | None = None,
         edges: dict[str, set[str]] | None = None,
+        routine_only: set[str] | frozenset[str] | None = None,
         now: int = 0,
     ) -> "HistorySnapshot":
         """Capture the cycle's derived history in one object.
@@ -125,6 +127,7 @@ class HistorySnapshot:
             prior_history=prior_history or [],
             maintainer_history=maintainer_history or [],
             edges=edges,
+            routine_only=frozenset(routine_only or ()),
             now=now,
         )
 
@@ -743,6 +746,11 @@ def _maintainer_deviation_findings(snapshot: HistorySnapshot) -> list[dict]:
                 continue
             if len({_package_stem(base) for base in bases}) == 1:
                 continue
+        # A batch of routine version/checksum bumps is maintenance, not a
+        # surge.  Every member must be routine: an unknown or non-routine
+        # package keeps the finding (fail closed).
+        if members and all(name in snapshot.routine_only for name in members):
+            continue
         out.append(_cluster(
             "H058",
             "Maintainer Baseline Deviation",
@@ -980,6 +988,7 @@ def run_corpus_sweep(
     prior_history: list[dict] | None = None,
     maintainer_history: list[dict] | None = None,
     edges: dict[str, set[str]] | None = None,
+    routine_only: set[str] | None = None,
     now: int = 0,
 ) -> list[dict]:
     """Run the cycle-scope temporal instances over one metadata cycle."""
@@ -990,6 +999,7 @@ def run_corpus_sweep(
         prior_history=prior_history,
         maintainer_history=maintainer_history,
         edges=edges,
+        routine_only=routine_only,
         now=now,
     )
     return run_cycle_instances(snapshot)

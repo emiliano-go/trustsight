@@ -12,7 +12,7 @@ from ._common import _DECEPTIVE_SPACE_RE, _FENCE_RE, _command_words, _continuati
 from ._x01_x08 import (X001_RE, X002_SHAPES, X003_SHAPES, X004_SHAPES, X006_SHAPES,
                        X034_ARCHIVE_RE, X034_EXECUTOR_RE)
 from ._x09_x16 import X009_RE, X010_RE, X011_RE, X011_STANDDOWN_RE, X012_RE, X013_RE, X013_STANDDOWN_RE, X014_RE, X014_STANDDOWN_RE, X015_RE, X018_RE, X019_RE, _DISTRO_INSTALL_RE, _X009_CLIENT_RE, _X016_CONSUMER_RE, _X016_FETCH_RE, _X016_KNOWN_EXECUTOR_RE, _consumer_after_override, _consumer_at, _x013_is_trusted_registry
-from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
+from ._x17_x25 import X017_RE, X021_RE, X024_RE, _BUILD_MANIFEST_RE, _CONTENT_WRITE_VERB_RE, _HEREDOC_OPEN_RE, _MANIFEST_COMMAND_RE, _X017_FIND_RE, _X021_RUN_POSITIONAL_RE, _X021_SET_GLOB_RE, _X022_CONFIG_FLAG_RE, _X022_PAYLOAD_RE, _X022_WRITE_RE, _multiline_function_shadow_lines, _normalise_dest, _redirect_target, _x017_find_runs_a_script, _x024_is_benign_build_path, _x024_is_git_provenance, _x024_is_passthrough, _x024_is_test_pythonpath, _x024_is_trusted_path_append, _x024_is_benign_path_suffix
 
 __all__ = ['crossfire_techniques']
 
@@ -21,6 +21,29 @@ __all__ = ['crossfire_techniques']
 #: will execute.
 _GREP_CMD_RE = re.compile(
     r"(?:^|[;&|]\s*)\s*(?:[\w./-]+=\S+\s+)*grep\b")
+
+#: A `case` block's arm labels are data the shell matches against, not
+#: commands it runs.  Reading `0.*|1.*)` as a command word made X002 fire
+#: CRITICAL on an ordinary install-hook version guard.  The label test is a
+#: linear scan, not a regex: the alternation form invites backtracking on a
+#: full-length line.
+_CASE_OPEN_RE = re.compile(r"case\b")
+_CASE_CLOSE_RE = re.compile(r"esac\b")
+
+
+def _is_case_label(line: str) -> bool:
+    """True for a bare `case` arm label such as `0.*|1.*)` or `*)`."""
+    text = line.strip()
+    if not text.endswith(")"):
+        return False
+    body = text[:-1].strip()
+    if not body:
+        return False
+    for alternative in body.split("|"):
+        word = alternative.strip().strip("()")
+        if not word or any(ch in word for ch in " \t(){}"):
+            return False
+    return True
 
 def _resolved_vocabulary(clamped: str, lines: list[str], readable: list[str],
                          current_text: str | None):
@@ -147,6 +170,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     manifest_open = False
     positional_glob = False
     written_configs: dict[str, tuple[int, str]] = {}
+    case_depth = 0
 
     for index, line in enumerate(lines):
         if not line.startswith("+") or line.startswith("+++"):
@@ -156,6 +180,14 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
             continue
 
         stripped = raw.strip()
+        if _CASE_OPEN_RE.match(stripped):
+            case_depth += 1
+            continue
+        if _CASE_CLOSE_RE.match(stripped):
+            case_depth = max(0, case_depth - 1)
+            continue
+        if case_depth > 0 and _is_case_label(raw):
+            continue
         if manifest_delims and stripped == manifest_delims[-1]:
             manifest_delims.pop()
             manifest_open = False
@@ -416,6 +448,7 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
                 and not _x024_is_passthrough(x024_body, indirect)
                 and not _x024_is_benign_build_path(x024_body, indirect)
                 and not _x024_is_benign_path_suffix(x024_body, indirect)
+                and not _x024_is_git_provenance(x024_body, indirect)
                 and not _x024_is_test_pythonpath(
                     x024_body, indirect, enclosing.get(index))
                 and not _x024_is_trusted_path_append(

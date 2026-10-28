@@ -471,7 +471,7 @@ _HEREDOC_BODY_EXCLUDED_RULES = frozenset({"R058"})
 #: output.  A real pipeline never sits on a pure printer line: context
 #: ``message`` already excludes any line with an unquoted chain or
 #: redirect, so `echo x; curl … | bash` stays code.
-_MESSAGE_LINE_EXCLUDED_RULES = frozenset({"R001", "R002", "R003", "R045"})
+_MESSAGE_LINE_EXCLUDED_RULES = frozenset({"R001", "R002", "R003", "R045", "R010"})
 
 
 _R058_SURFACE_RE = re.compile(r"^[\"']?(?:/etc|/boot|/usr/bin|/usr/lib)/")

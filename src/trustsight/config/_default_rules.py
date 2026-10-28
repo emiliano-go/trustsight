@@ -666,6 +666,16 @@ domains = [
     "eda.gowinsemi.cn",
     "git.bnema.dev",
     "git.timfalken.com",
+    # Vendors that publish their own prebuilt artifacts from a CDN or a
+    # distribution host on their own registered domain.  Classified
+    # `unknown` they charged C005/SOURCE_BUCKET/NOVELTY on every routine
+    # release.  The package's `url=` is on a different domain, so the
+    # declared-upstream rule cannot recover these; each host is named
+    # exactly rather than trusting the whole registered domain.
+    "repo.secureblue.dev",
+    "repo.yandex.ru",
+    "nebula.gg",
+    "downloads.sejda-cdn.com",
 ]
 
 [raw_hosting]

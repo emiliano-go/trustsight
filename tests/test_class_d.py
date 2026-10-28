@@ -698,6 +698,36 @@ def test_h058_cross_name_org_batch_is_not_a_deviation(thresholds):
                  source_repos=repos) == []
 
 
+def test_h058_routine_only_batch_is_not_a_deviation(thresholds):
+    """A batch of routine version/checksum bumps is maintenance, not a surge."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = [f"p{i}" for i in range(6)]
+    old = _snapshot(names, "alice")
+    new = copy.deepcopy(old)
+    for name in names:
+        new[name]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 1}]
+    assert _fire("H058", new, old, maintainer_history=history,
+                 routine_only=set(names)) == []
+
+
+def test_h058_one_non_routine_member_keeps_the_finding(thresholds):
+    """Uncertain or non-routine is never suppressed: fail closed."""
+    thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
+    names = [f"p{i}" for i in range(6)]
+    old = _snapshot(names, "alice")
+    new = copy.deepcopy(old)
+    for name in names:
+        new[name]["LastModified"] = NOW + 1
+    history = [{"maintainer": "alice", "cycle_time": 1, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 2, "activity": 1},
+               {"maintainer": "alice", "cycle_time": 3, "activity": 1}]
+    assert _fire("H058", new, old, maintainer_history=history,
+                 routine_only=set(names[:-1])) != []
+
+
 def test_h058_cross_name_distinct_owners_still_fire(thresholds):
     thresholds({"h058": {"min_history_cycles": 3, "z_score": 2.0, "min_activity": 2}})
     names = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta"]

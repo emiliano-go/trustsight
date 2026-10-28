@@ -3,6 +3,7 @@
 import difflib
 import hashlib
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
@@ -122,6 +123,60 @@ def _notify_diff(old_text: str, new_text: str) -> dict:
     else:
         out["diff_truncated"] = True
     return out
+
+
+_ROUTINE_SCALAR_RE = re.compile(
+    r"^\s*(?:pkgver|pkgrel|epoch)\s*=[^\n]*$", re.IGNORECASE)
+_ROUTINE_SUMS_LINE_RE = re.compile(
+    r"^\s*(?:sha(?:1|224|256|384|512)sums|b2sums|md5sums|ck)"
+    r"(?:_[A-Za-z0-9_]+)?\s*=\s*\(\s*['\"]?[0-9a-fA-F]{32,128}['\"]?\s*\)?\s*$")
+_ROUTINE_SUM_ENTRY_RE = re.compile(
+    r"^\s*['\"]?[0-9a-fA-F]{32,128}['\"]?\s*\)?\s*$")
+
+
+def _is_routine_bump(old_text: str, new_text: str) -> bool:
+    """True when the recipe changed only version scalars and checksums.
+
+    H058 measures a maintainer's activity volume.  A batch of routine
+    version bumps is maintenance, not the xz-style surge the rule exists for,
+    so the batch can stand down when every member is routine.  The test is
+    deliberately fail-closed: any source, dependency, install, function or
+    URL change, any removed checksum, and any change that cannot be classed
+    keeps the finding.
+
+    Only PKGBUILD bytes are compared.  A checksum *replacement* is routine;
+    an entry that disappears is not, so the added and removed checksum-entry
+    counts must balance.
+    """
+    if not old_text or not new_text or old_text == new_text:
+        return False
+    old_lines = old_text.split("\n")
+    new_lines = new_text.split("\n")
+    if old_lines and old_lines[-1] == "":
+        old_lines.pop()
+    if new_lines and new_lines[-1] == "":
+        new_lines.pop()
+    entry_added = entry_removed = 0
+    changed = False
+    for line in difflib.unified_diff(old_lines, new_lines, n=0, lineterm=""):
+        if line.startswith(("---", "+++", "@@")):
+            continue
+        marker, body = line[:1], line[1:]
+        if marker not in "+-":
+            continue
+        if not body.strip():
+            continue
+        changed = True
+        if _ROUTINE_SCALAR_RE.match(body) or _ROUTINE_SUMS_LINE_RE.match(body):
+            continue
+        if _ROUTINE_SUM_ENTRY_RE.match(body):
+            if marker == "+":
+                entry_added += 1
+            else:
+                entry_removed += 1
+            continue
+        return False
+    return changed and entry_added == entry_removed
 
 
 def _since_cursor() -> Optional[int]:

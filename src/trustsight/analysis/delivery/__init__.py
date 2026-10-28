@@ -212,7 +212,7 @@ def edge_write_execute(ctx, add) -> None:
     """
     source_basenames = ctx.source_basenames
 
-    writes_by_fn: dict[str, list[tuple[str, str]]] = {}
+    writes_by_fn: dict[str, list[tuple[str, str, str]]] = {}
     h069_claimed: set[tuple[str, str]] = set()
 
     for i, line in enumerate(ctx.lines):
@@ -226,12 +226,22 @@ def edge_write_execute(ctx, add) -> None:
         body = _strip_comment(line[1:])
 
         for kind, path in _collect_writes(body, fn):
-            writes_by_fn.setdefault(fn, []).append((kind, path))
+            writes_by_fn.setdefault(fn, []).append((kind, path, body))
 
         for path in _collect_executions(body):
             base = os.path.basename(path)
-            for (kind, wpath) in list(writes_by_fn.get(fn, [])):
+            for (kind, wpath, wbody) in list(writes_by_fn.get(fn, [])):
                 if wpath != path and os.path.basename(wpath) != base:
+                    continue
+                # The package's own output is not a delivered payload: a
+                # recipe that installs its binary into $pkgdir and then runs
+                # it to emit man pages or completions is generating
+                # documentation, not executing foreign bytes.  The write path
+                # is normalised (/usr/bin/x), so the raw line carries the
+                # $pkgdir provenance.
+                if (_PKGDIR_TARGET_RE.search(wbody or "")
+                        or _PKGDIR_TARGET_RE.search(path or "")
+                        or _PKGDIR_TARGET_RE.search(body or "")):
                     continue
                 if (fn, wpath) in h069_claimed:
                     continue
@@ -255,7 +265,7 @@ _INPUT_FILE_RE = re.compile(
 
 def _collect_fetch_candidates(ctx):
     """Collect fetched/cloned paths and unattributed fetches for H082."""
-    from ..network import claims_pipe_to_shell, claims_upload_line
+    from ..network import claims_pipe_to_shell, claims_upload_line, is_metadata_fetch
 
     config = ctx.config
     lines = ctx.lines
@@ -310,7 +320,8 @@ def _collect_fetch_candidates(ctx):
                         (base, line.startswith("+")))
         if (client and (not outputs or "://" not in body)
                 and not claims_pipe_to_shell(body)
-                and not claims_upload_line(body, config)):
+                and not claims_upload_line(body, config)
+                and not is_metadata_fetch(body)):
             pending_fetch.append(
                 (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
     return fetched_by_fn, cloned_by_fn, pending_fetch
@@ -688,7 +699,7 @@ def edge_unread_execution(ctx, add) -> None:
         add("W001", "Executes Code This Analysis Did Not Read", "INFO",
             "unverifiable",
             f"{fn}() runs {raw}, which is neither declared in source=() nor "
-            f"committed to this repository, so its content was never read",
+            f"readable from the AUR recipe, so its content was never read",
             line=_find_line(ctx.diff_text, raw[:60]), position=fn, path=raw)
         return
 

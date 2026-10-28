@@ -467,6 +467,11 @@ def build_novelty_context(
         )
 
     for url in added_urls:
+        # An unresolved expansion leaves a token, not an address.  Scoring it
+        # as "first seen" charged novelty for a URL the recipe never emitted
+        # (and recorded a phantom row); an unresolved URL is unknown, not new.
+        if any(marker in url for marker in ("$", "{", "}")):
+            continue
         first_for_pkg, first_global = check_url_novelty(
             url, package_id, record=record
         )

@@ -58,12 +58,24 @@ def _has_unquoted_command_chain(line: str) -> bool:
             if char == "'":
                 quote = ""
         elif quote == '"':
+            if char == "\\":
+                # An escaped character inside double quotes is literal:
+                # `echo "\$(curl ...)"` prints the substitution, it does not
+                # run it.  An unescaped `"$(id)"` still executes and is caught
+                # by the branch below.
+                i += 2
+                continue
             if char == '"':
                 quote = ""
             elif char == "`" or (char == "$" and i + 1 < n and line[i + 1] == "("):
                 return True
         elif char in "\"'":
             quote = char
+        elif char == "\\":
+            # The same escape outside quotes: `echo \$(curl ...)` is text,
+            # while `echo $(curl ...)` is a substitution.
+            i += 2
+            continue
         elif char in ";&|`" or (char == "$" and i + 1 < n and line[i + 1] == "("):
             return True
         i += 1

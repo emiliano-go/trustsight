@@ -12,7 +12,6 @@ import re
 
 from ..config import load_ioc_sources
 from ..deps import extract_dependency_changes
-from ..diffdoc import parse_diff_lines
 from ..ioc_baseline import (
     IocMatch,
     active_iocs,
@@ -24,15 +23,13 @@ from ..ioc_baseline import (
 )
 from .ioc_paths import touched_paths
 from .buildfetch import registry_install_names
-from .ioc import _added_bodies, _digests_in, _hosts_in
+from .ioc import _HEX_RE, _added_bodies, _digests_in, _hosts_in, _line_of
 from ..tokenizer import split_lines
 
 _CHECKSUM_ARRAY_RE = re.compile(
     r"\b(?:sha256sums|sha512sums|md5sums|b2sums)\s*=\s*\(",
     re.IGNORECASE,
 )
-_HEX_RE = re.compile(r"(?<![0-9a-fA-F])([0-9a-fA-F]{32,128})(?![0-9a-fA-F])")
-
 _DEP_FIELDS = ("depends", "makedepends", "optdepends", "checkdepends",
                "provides", "replaces", "conflicts")
 
@@ -60,14 +57,39 @@ def _value_in_body(pattern: str, body: str) -> bool:
     return bool(re.search(pattern, body, re.IGNORECASE))
 
 
-def _find_line(diff_text: str, needle: str) -> int | None:
-    """1-based diff line carrying *needle* on an added line."""
-    lowered = needle.lower()
-    for i, line in enumerate(parse_diff_lines(split_lines(diff_text)).lines):
-        if line.side == "add" and not line.raw.startswith("+++"):
-            if lowered in line.raw.lower():
-                return i + 1
-    return None
+def _match_body(body: str, diff_text: str, want_domains: bool,
+                pattern_hits, source_allowed, add) -> None:
+    """Emit baseline matches for one added body."""
+    if want_domains:
+        for host, origin in _hosts_in(body):
+            for m in match_domain(host):
+                if source_allowed(m.source):
+                    surface = "source_host" if origin == "url" else "referenced_host"
+                    add(m, surface, _line_of(diff_text, host))
+
+    checksum_digests = {d.lower() for d in _checksum_digests(body)}
+    for digest in checksum_digests:
+        for m in match_hash(digest):
+            if source_allowed(m.source):
+                add(m, "checksum_array", _line_of(diff_text, digest))
+
+    for digest in _digests_in(body):
+        if digest.lower() in checksum_digests:
+            continue
+        for m in match_hash(digest):
+            if source_allowed(m.source):
+                add(m, "artifact_hash", _line_of(diff_text, digest))
+
+    if pattern_hits and body.strip():
+        for entry, compiled in pattern_hits:
+            if compiled.search(body):
+                add(IocMatch(
+                    type=entry.type, value=entry.value, source=entry.source,
+                    confidence=entry.confidence, provenance=entry.provenance,
+                    campaign=entry.campaign, added=entry.added,
+                    surface="added_line",
+                    line=_line_of(diff_text, body.strip()[:60]),
+                ), "added_line", _line_of(diff_text, body.strip()[:60]))
 
 
 def ioc_baseline_matches(
@@ -142,7 +164,7 @@ def ioc_baseline_matches(
         for name in declared.get(field, ()):
             for m in match_package(name):
                 if source_allowed(m.source):
-                    add(m, field, _find_line(diff_text, name))
+                    add(m, field, _line_of(diff_text, name))
 
     # Names a build step installs from a registry.  A `package` indicator
     # otherwise reaches only the AUR package name, pkgbase and the
@@ -153,8 +175,8 @@ def ioc_baseline_matches(
     for _fn, command, name in registry_install_names(scan_text):
         for m in match_package(name):
             if source_allowed(m.source):
-                add(m, "build_install", _find_line(diff_text, name) or
-                    _find_line(diff_text, command[:40]))
+                add(m, "build_install", _line_of(diff_text, name) or
+                    _line_of(diff_text, command[:40]))
 
     # The same surface over the *resolved* lines.  `registry_install_names`
     # reads the raw text, and the wave-3 campaign spelled `bun add` and the
@@ -168,15 +190,15 @@ def ioc_baseline_matches(
             for _fn, command, name in registry_install_names(resolved):
                 for m in match_package(name):
                     if source_allowed(m.source):
-                        add(m, "build_install", _find_line(diff_text, name) or
-                            _find_line(diff_text, command[:40]))
+                        add(m, "build_install", _line_of(diff_text, name) or
+                            _line_of(diff_text, command[:40]))
 
     # Domains, hashes, paths and patterns from visible text.
     if want_paths:
         for path, _status in touched_paths(diff_text, current_text):
             for m in match_file_path(path):
                 if source_allowed(m.source):
-                    add(m, "file_path", _find_line(diff_text, path))
+                    add(m, "file_path", _line_of(diff_text, path))
 
     pattern_hits = [
         (entry, compiled)
@@ -185,36 +207,7 @@ def ioc_baseline_matches(
     ] if any(e.type == "pkgbuild_pattern" for e in active) else []
 
     for body in _added_bodies(scan_text):
-        if want_domains:
-            for host, origin in _hosts_in(body):
-                for m in match_domain(host):
-                    if source_allowed(m.source):
-                        surface = "source_host" if origin == "url" else "referenced_host"
-                        add(m, surface, _find_line(diff_text, host))
-
-        # Hashes inside checksum arrays first, then any other hex digest.
-        for digest in _checksum_digests(body):
-            for m in match_hash(digest):
-                if source_allowed(m.source):
-                    add(m, "checksum_array", _find_line(diff_text, digest))
-
-        for digest in _digests_in(body):
-            # Avoid double-reporting digests already found in checksum arrays.
-            if digest.lower() in {d.lower() for d in _checksum_digests(body)}:
-                continue
-            for m in match_hash(digest):
-                if source_allowed(m.source):
-                    add(m, "artifact_hash", _find_line(diff_text, digest))
-
-        if pattern_hits and body.strip():
-            for entry, compiled in pattern_hits:
-                if compiled.search(body):
-                    add(IocMatch(
-                        type=entry.type, value=entry.value, source=entry.source,
-                        confidence=entry.confidence, provenance=entry.provenance,
-                        campaign=entry.campaign, added=entry.added,
-                        surface="added_line",
-                        line=_find_line(diff_text, body.strip()[:60]),
-                    ), "added_line", _find_line(diff_text, body.strip()[:60]))
+        _match_body(body, diff_text, want_domains, pattern_hits,
+                    source_allowed, add)
 
     return matches

@@ -100,7 +100,7 @@ def _cargo_config(text: str) -> ManifestDoc | None:
     # a dep can then select by name, and [registry] default = "<name>".
     registries = data.get("registries") or {}
     if isinstance(registries, dict):
-        for name, table in registries.items():
+        for table in registries.values():
             if isinstance(table, dict) and table.get("index"):
                 redirects.append(("cargo-registries",
                                   _host(table["index"]) or table["index"]))
@@ -246,6 +246,79 @@ def _pnpm_lock(text: str) -> ManifestDoc | None:
             deps.append(Dep(name, None, "git", _host(url)))
     return ManifestDoc("", "npm", tuple(deps))
 
+def _pyproject_uv(uv: dict, deps: list[Dep]) -> list[tuple[str, str]]:
+    """uv indexes, sources, and dependency overrides."""
+    redirects: list[tuple[str, str]] = []
+    for index in uv.get("index", ()) or ():
+        if isinstance(index, dict) and index.get("url"):
+            if not _is_default_registry(index["url"]):
+                redirects.append(("uv-index", _host(index["url"]) or index["url"]))
+    for name, src in (uv.get("sources") or {}).items():
+        deps.extend(_source_dep(name, src))
+    for key in ("dev-dependencies", "constraint-dependencies",
+                "override-dependencies", "build-constraint-dependencies"):
+        for raw in _as_list(uv.get(key)):
+            dep = _pep508(str(raw))
+            if dep and dep.name:
+                deps.append(dep)
+    return redirects
+
+
+def _pyproject_extra_tools(tool: dict, deps: list[Dep]) -> list[tuple[str, str]]:
+    """pdm, hatch, flit and pixi dependency tables."""
+    redirects: list[tuple[str, str]] = []
+    pdm = tool.get("pdm") or {}
+    dev = pdm.get("dev-dependencies")
+    for values in dev.values() if isinstance(dev, dict) else ():
+        for raw in _as_list(values):
+            dep = _pep508(str(raw))
+            if dep and dep.name:
+                deps.append(dep)
+    hatch = tool.get("hatch") or {}
+    envs = hatch.get("envs") if isinstance(hatch, dict) else None
+    if isinstance(envs, dict):
+        for entry in envs.values():
+            if isinstance(entry, dict):
+                for raw in _as_list(entry.get("dependencies")):
+                    dep = _pep508(str(raw))
+                    if dep and dep.name:
+                        deps.append(dep)
+    flit = tool.get("flit") or {}
+    flit_meta = flit.get("metadata") if isinstance(flit, dict) else None
+    if isinstance(flit_meta, dict):
+        for raw in _as_list(flit_meta.get("requires")):
+            dep = _pep508(str(raw))
+            if dep and dep.name:
+                deps.append(dep)
+        extra = flit_meta.get("requires-extra")
+        for values in extra.values() if isinstance(extra, dict) else ():
+            for raw in _as_list(values):
+                dep = _pep508(str(raw))
+                if dep and dep.name:
+                    deps.append(dep)
+    pixi = tool.get("pixi")
+    if isinstance(pixi, dict):
+        _add_pixi(pixi, deps, redirects)
+    return redirects
+
+
+def _pyproject_poetry_extras(poetry: dict, deps: list[Dep]) -> list[tuple[str, str]]:
+    """Poetry plugins, build constraints, and named sources."""
+    redirects: list[tuple[str, str]] = []
+    for table in (poetry.get("requires-plugins"), poetry.get("build-constraints")):
+        if isinstance(table, dict):
+            for name, value in table.items():
+                deps.append(Dep(name, value if isinstance(value, str) else None,
+                                "registry", None))
+    source = poetry.get("source")
+    for _name, table in (source.items() if isinstance(source, dict) else ()):
+        if isinstance(table, dict) and table.get("url"):
+            if not _is_default_registry(table["url"]):
+                redirects.append(("poetry-source",
+                                  _host(table["url"]) or table["url"]))
+    return redirects
+
+
 def _pyproject(text: str) -> ManifestDoc | None:
     data = load_toml(text)
     deps: list[Dep] = []
@@ -289,71 +362,12 @@ def _pyproject(text: str) -> ManifestDoc | None:
                     deps.append(Dep(name, value.get("version"), "path", None))
                 else:
                     deps.append(Dep(name, value.get("version"), "registry", None))
-    # uv / poetry index redirects and uv source overrides
     uv = (data.get("tool") or {}).get("uv") or {}
-    for index in uv.get("index", ()) or ():
-        if isinstance(index, dict) and index.get("url"):
-            if not _is_default_registry(index["url"]):
-                redirects.append(("uv-index", _host(index["url"]) or index["url"]))
-    for name, src in (uv.get("sources") or {}).items():
-        deps.extend(_source_dep(name, src))
-    for key in ("dev-dependencies", "constraint-dependencies",
-                "override-dependencies", "build-constraint-dependencies"):
-        for raw in _as_list(uv.get(key)):
-            dep = _pep508(str(raw))
-            if dep and dep.name:
-                deps.append(dep)
-    # pdm dev groups
-    pdm = (data.get("tool") or {}).get("pdm") or {}
-    for values in (pdm.get("dev-dependencies") or {}).values() \
-            if isinstance(pdm.get("dev-dependencies"), dict) else ():
-        for raw in _as_list(values):
-            dep = _pep508(str(raw))
-            if dep and dep.name:
-                deps.append(dep)
-    # hatch environments
-    hatch = (data.get("tool") or {}).get("hatch") or {}
-    envs = hatch.get("envs") if isinstance(hatch, dict) else None
-    if isinstance(envs, dict):
-        for entry in envs.values():
-            if isinstance(entry, dict):
-                for raw in _as_list(entry.get("dependencies")):
-                    dep = _pep508(str(raw))
-                    if dep and dep.name:
-                        deps.append(dep)
-    # flit metadata requirements
-    flit = (data.get("tool") or {}).get("flit") or {}
-    flit_meta = flit.get("metadata") if isinstance(flit, dict) else None
-    if isinstance(flit_meta, dict):
-        for key in ("requires", "requires-python"):
-            if key == "requires-python":
-                continue
-            for raw in _as_list(flit_meta.get(key)):
-                dep = _pep508(str(raw))
-                if dep and dep.name:
-                    deps.append(dep)
-        for values in (flit_meta.get("requires-extra") or {}).values() \
-                if isinstance(flit_meta.get("requires-extra"), dict) else ():
-            for raw in _as_list(values):
-                dep = _pep508(str(raw))
-                if dep and dep.name:
-                    deps.append(dep)
-    # poetry plugin + build constraints
-    for table in (poetry.get("requires-plugins"), poetry.get("build-constraints")):
-        if isinstance(table, dict):
-            for name, value in table.items():
-                deps.append(Dep(name, value if isinstance(value, str) else None,
-                                "registry", None))
-    # pixi in pyproject ([tool.pixi])
+    redirects.extend(_pyproject_uv(uv, deps))
     tool = data.get("tool")
-    if isinstance(tool, dict) and isinstance(tool.get("pixi"), dict):
-        _add_pixi(tool["pixi"], deps, redirects)
-    poetry_source = poetry.get("source")
-    for _name, table in (poetry_source.items()
-                         if isinstance(poetry_source, dict) else ()):
-        if isinstance(table, dict) and table.get("url"):
-            if not _is_default_registry(table["url"]):
-                redirects.append(("poetry-source", _host(table["url"]) or table["url"]))
+    if isinstance(tool, dict):
+        redirects.extend(_pyproject_extra_tools(tool, deps))
+    redirects.extend(_pyproject_poetry_extras(poetry, deps))
     return ManifestDoc("", "pip", tuple(deps), redirects=tuple(redirects))
 
 def _poetry_dep_tables(poetry: dict):

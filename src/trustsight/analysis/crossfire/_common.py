@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import re
 from ...deps import _strip_comment
+from ..base import _CMD
 from ._ownership import _ownership_yields
 
 __all__ = ['_ACCOUNT_OPTION_RE', '_ARRAY_ASSIGN_OPEN_RE', '_ARRAY_VAR_RE', '_ASSIGNMENT_RE', '_CMD', '_CONFUSABLE_CHARS', '_DATA_CONSUMER', '_DECEPTIVE_SPACE_RE', '_DEP_ARRAY_OPEN_RE', '_EVALUATION_RE', '_EXECUTING_SCOPES', '_EXEC_WRAPPER', '_FENCE_RE', '_FIRST_WORD_RE', '_FOR_LOOP_RE', '_H032_CLAIMS_RE', '_HOME_ALIASES', '_INTERPRETER_DECODE', '_LITERAL_WORD_RE', '_NUMERIC_RE', '_PATH_LOOKUP_ASSIGN_RE', '_PIPE_WRAPPER_RE', '_PLAIN_VAR_RE', '_PRIVILEGE_WRAPPERS', '_REDIRECT_RE', '_SHELL', '_SHELL_CMD', '_SHELL_NAME', '_STAGED_RE', '_WORD_VAR_RE', '_WRAPPERS', '_WRITE_COMMAND_RE', '_WRITE_PREFIX', '_command_words', '_confusable_class', '_continuation_lines', '_dependency_array_lines', '_executes', '_home_alias_hit', '_loop_variable_names', '_opens_a_value', '_path_lookup_names', '_pipeline_sink', '_quote_open_at_end', '_resolved_records', '_resolves_to_a_literal', '_split_commands', '_unquoted_paren_delta', '_word_around', 'log']
@@ -39,8 +40,6 @@ def _executes(function: str | None) -> bool:
     chooses.
     """
     return function is not None
-
-_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)[ \t]*"
 
 _SHELL_CMD = r"(?:ba|z|da|k|mk|pdk|ya|po|a)?sh|busybox\s+(?:ash|sh)"
 
@@ -418,16 +417,19 @@ _PATH_LOOKUP_ASSIGN_RE = re.compile(
     r"(?:which|type\s+-p|command\s+-v)\s+[A-Za-z0-9_.+-]+\s*\)",
 )
 
+def _matched_names(lines: list[str], pattern: re.Pattern) -> set[str]:
+    """Names captured by *pattern* on any of *lines*."""
+    return {match.group(1) for line in lines
+            if (match := pattern.match(line))}
+
+
 def _path_lookup_names(lines: list[str]) -> set[str]:
     """Variables assigned the result of a PATH lookup."""
-    names = set()
-    for line in lines:
-        match = _PATH_LOOKUP_ASSIGN_RE.match(line)
-        if match:
-            names.add(match.group(1))
-    return names
+    return _matched_names(lines, _PATH_LOOKUP_ASSIGN_RE)
+
 
 _FOR_LOOP_RE = re.compile(r"^\s*for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b")
+
 
 def _loop_variable_names(lines: list[str]) -> set[str]:
     """Variables bound by a `for … in` loop.
@@ -438,12 +440,8 @@ def _loop_variable_names(lines: list[str]) -> set[str]:
     hidden string.  The tokenizer does not fold a loop binding, so without
     this X002 scored the build target CRITICAL.
     """
-    names: set[str] = set()
-    for line in lines:
-        match = _FOR_LOOP_RE.match(line)
-        if match:
-            names.add(match.group(1))
-    return names
+    return _matched_names(lines, _FOR_LOOP_RE)
+
 
 _ARRAY_ASSIGN_OPEN_RE = re.compile(
     r"^\s*[A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]{0,40}\])?\+?=\s*\("

@@ -53,6 +53,7 @@ def _scriptlet_files_unread(diff_text: str, tree_manifest) -> bool:
         resolved = "\n".join(resolve_added_lines(diff_text))
     except Exception:
         log.debug("scriptlet name resolution failed", exc_info=True)
+        note_stage_failure("scriptlet-resolution")
         names = raw_names
     else:
         names = {n for n in raw_names if "$" not in n}

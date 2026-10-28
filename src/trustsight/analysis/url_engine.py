@@ -22,12 +22,15 @@ from ..rules import find_line_in_diff
 from ..tokenizer import resolve_added_lines
 from .base import _code_rule_enabled
 from .network import (
-    _PKGVER_ASSIGN_RE,
-    _SAFE_VERSION_RE,
     _declared_dlagent_schemes,
     _source_schemes,
     _source_url_tokens,
 )
+
+_PKGVER_ASSIGN_RE = re.compile(
+    r"^\s*(?:(?:local|export|readonly)\s+)?(_?pkgver)\s*=\s*(.+)"
+)
+_SAFE_VERSION_RE = re.compile(r"^[A-Za-z0-9._+\-]+$")
 
 
 @dataclass

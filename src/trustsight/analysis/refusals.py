@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import re
 
+from ..coverage import note_stage_failure
+
 #: The functions an unresolved assignment must be *referenced from* to be
 # in an executable position. Top-level metadata is not.
 _EXECUTABLE_FUNCTIONS = ("build", "prepare", "check", "package")
@@ -281,6 +283,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
         doc = parse_diff(diff_text)
         post = _recipe_post_doc(doc)
     except Exception:
+        note_stage_failure("refusal-parse")
         return
     if current_text:
         try:
@@ -393,7 +396,7 @@ def refusal_findings(diff_text: str, config, add, current_text=None,
             decoder_present = any(
                 rid in techniques for rid in ("X001", "X023"))
         except Exception:
-            pass
+            note_stage_failure("refusal-crossfire")
     floor = int(_thresholds(config).get("x029", {}).get("min_length", 256))
     if not decoder_present:
         scanned = "\n".join(post.functions.values())

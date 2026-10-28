@@ -634,6 +634,36 @@ def watchlisted_maintainer(records, config=None) -> list[dict]:
     return out
 
 
+def _shared_groups(records, field: str, normalize, min_packages: int,
+                   min_maintainers: int):
+    """Yield ``(key, members, accounts)`` for a cross-package shared signal."""
+    groups: dict[str, dict[str, dict]] = defaultdict(dict)
+    maintainers: dict[str, set[str]] = defaultdict(set)
+    for record in records or ():
+        if not isinstance(record, dict):
+            continue
+        package = str(record.get("package", "") or "")
+        if not package:
+            continue
+        maintainer = _maintainer_key(record.get("maintainer"))
+        for raw in _seq(record.get(field)):
+            key = normalize(raw)
+            if not key:
+                continue
+            groups[key][package] = record
+            if maintainer:
+                maintainers[key].add(maintainer)
+    for key, members in sorted(groups.items()):
+        if len(members) < min_packages:
+            continue
+        accounts = sorted(maintainers[key])
+        if len(accounts) < min_maintainers:
+            continue
+        if _one_project(members.values()) or _one_related_cluster(members):
+            continue
+        yield key, members, accounts
+
+
 def shared_payload_signal(records, min_packages: int = 3,
                           min_maintainers: int = 2) -> list[dict]:
     """G012: the same specific payload rule across unrelated maintainers.
@@ -649,38 +679,21 @@ def shared_payload_signal(records, min_packages: int = 3,
 
     min_packages = max(1, _safe_int(min_packages, 3))
     min_maintainers = max(1, _safe_int(min_maintainers, 2))
-    by_rule: dict[str, dict[str, dict]] = defaultdict(dict)
-    maintainers: dict[str, set[str]] = defaultdict(set)
-    for record in records or ():
-        if not isinstance(record, dict):
-            continue
-        package = str(record.get("package", "") or "")
-        if not package:
-            continue
-        maintainer = _maintainer_key(record.get("maintainer"))
-        for rule_id in _seq(record.get("rules")):
-            signal = str(rule_id)
-            if signal not in SHARED_PAYLOAD_RULES:
-                continue
-            by_rule[signal][package] = record
-            if maintainer:
-                maintainers[signal].add(maintainer)
+
+    def signal(raw) -> str | None:
+        rule_id = str(raw)
+        return rule_id if rule_id in SHARED_PAYLOAD_RULES else None
+
     out: list[dict] = []
-    for signal, members in sorted(by_rule.items()):
-        if len(members) < min_packages:
-            continue
-        accounts = sorted(maintainers[signal])
-        if len(accounts) < min_maintainers:
-            continue
-        if _one_project(members.values()) or _one_related_cluster(members):
-            continue
+    for signal_id, members, accounts in _shared_groups(
+            records, "rules", signal, min_packages, min_maintainers):
         out.append({
             "rule_id": "G012",
             "name": "Shared Payload Signal",
             "severity": "HIGH", "category": "correlation",
             "match": (f"{len(members)} packages from {len(accounts)} "
-                      f"maintainer(s) all fired {signal} in the window"),
-            "params": {"members": sorted(members), "signal": signal,
+                      f"maintainer(s) all fired {signal_id} in the window"),
+            "params": {"members": sorted(members), "signal": signal_id,
                        "maintainers": accounts,
                        "maintainer_count": len(accounts)},
         })
@@ -701,31 +714,13 @@ def shared_fetch_target(records, min_packages: int = 2,
 
     min_packages = max(1, _safe_int(min_packages, 2))
     min_maintainers = max(1, _safe_int(min_maintainers, 2))
-    by_url: dict[str, dict[str, dict]] = defaultdict(dict)
-    maintainers: dict[str, set[str]] = defaultdict(set)
-    for record in records or ():
-        if not isinstance(record, dict):
-            continue
-        package = str(record.get("package", "") or "")
-        if not package:
-            continue
-        maintainer = _maintainer_key(record.get("maintainer"))
-        for url in _seq(record.get("payload_urls")):
-            target = canonical_payload_url(str(url))
-            if not target:
-                continue
-            by_url[target][package] = record
-            if maintainer:
-                maintainers[target].add(maintainer)
+
+    def target(raw) -> str | None:
+        return canonical_payload_url(str(raw)) or None
+
     out: list[dict] = []
-    for url, members in sorted(by_url.items()):
-        if len(members) < min_packages:
-            continue
-        accounts = sorted(maintainers[url])
-        if len(accounts) < min_maintainers:
-            continue
-        if _one_project(members.values()) or _one_related_cluster(members):
-            continue
+    for url, members, accounts in _shared_groups(
+            records, "payload_urls", target, min_packages, min_maintainers):
         out.append({
             "rule_id": "G013",
             "name": "Shared Fetch Target",

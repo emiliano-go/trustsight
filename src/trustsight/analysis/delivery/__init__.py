@@ -253,6 +253,69 @@ def edge_write_execute(ctx, add) -> None:
 _INPUT_FILE_RE = re.compile(
     r"(?:^|\s)(?:-i|--input-file)[= ](\"[^\"]+\"|'[^']+'|\S+)")
 
+def _collect_fetch_candidates(ctx):
+    """Collect fetched/cloned paths and unattributed fetches for H082."""
+    from ..network import claims_pipe_to_shell, claims_upload_line
+
+    config = ctx.config
+    lines = ctx.lines
+    scopes = ctx.scopes
+    declared_urls = ctx.declared_urls
+    heredoc_body = ctx.heredoc_body
+    fetched_by_fn: dict[str, list[tuple[str, bool]]] = {}
+    cloned_by_fn: dict[str, list[tuple[str, bool]]] = {}
+    #: path -> basenames of the URLs a heredoc wrote into that file
+    #: (`cat > urls <<EOF` + URL lines): `wget -i urls` fetches those
+    #: addresses without one appearing on the client's own line.
+    url_inputs: dict[str, list[str]] = {}
+    heredoc_path = ""
+    #: (phase rank, line index, client, fetch scope) for fetches whose
+    #: destination the grammar cannot name.
+    pending_fetch: list[tuple[int, int, str, str]] = []
+
+    for i, line in enumerate(lines):
+        if line.startswith("-"):
+            continue
+        fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
+        if i in heredoc_body:
+            if fn is not None and heredoc_path and len(line) <= MAX_RULE_LINE_BYTES:
+                for u in _LINE_URL_RE.findall(line):
+                    base = _source_basename(u)
+                    if base:
+                        url_inputs.setdefault(heredoc_path, []).append(base)
+            continue
+        if fn is None:
+            continue
+        if len(line) > MAX_RULE_LINE_BYTES:
+            continue
+        body = _strip_comment(line[1:])
+        writes = [w for _k, w in _collect_writes(body, fn) if w]
+        heredoc_path = _norm_path(writes[-1]) if writes else ""
+        outputs = _collect_fetch_outputs(body, declared_urls)
+        for path in outputs:
+            fetched_by_fn.setdefault(fn, []).append(
+                (path, line.startswith("+")))
+        for directory in _clone_destinations(body):
+            cloned_by_fn.setdefault(fn, []).append(
+                (directory, line.startswith("+")))
+        client = _FETCH_CLIENT_RE.search(body)
+        if client and client.group(0).lower() in _NON_FILE_FETCH_CLIENTS:
+            client = None
+        if client and _PACKAGE_MANAGER_FETCH_RE.search(body):
+            client = None
+        if client:
+            for m in _INPUT_FILE_RE.finditer(body):
+                for base in url_inputs.get(_norm_path(m.group(1)), ()):
+                    fetched_by_fn.setdefault(fn, []).append(
+                        (base, line.startswith("+")))
+        if (client and (not outputs or "://" not in body)
+                and not claims_pipe_to_shell(body)
+                and not claims_upload_line(body, config)):
+            pending_fetch.append(
+                (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
+    return fetched_by_fn, cloned_by_fn, pending_fetch
+
+
 def edge_fetch_then_execute(ctx, add) -> None:
     """A downloader writes a file and the same function later executes it (H082).
 
@@ -281,85 +344,12 @@ def edge_fetch_then_execute(ctx, add) -> None:
     benign build-artifact basenames are exempt for the same reason the
     attributed arm exempts them.
     """
-    from ..network import claims_pipe_to_shell, claims_upload_line
-
     diff_text = ctx.diff_text
-    config = ctx.config
     lines = ctx.lines
     scopes = ctx.scopes
     source_basenames = ctx.source_basenames
-    declared_urls = ctx.declared_urls
     heredoc_body = ctx.heredoc_body
-
-    #: Fetched paths pair with executions across the diff boundary, so each
-    #: entry carries whether the fetch line itself was added: a chain fires
-    #: only when the fetch or the execution (or both) is new - two context
-    #: halves are pre-existing code, not a chain this diff created.  Fetches
-    #: are collected in a pre-pass over every non-removed line so that an
-    #: execution added *above* a pre-existing fetch still pairs with it
-    #: (bypass dbf38ba3); within one function the pairing is by name, not by
-    #: line order, because either order lands bytes on disk that the other
-    #: line then runs.
-    fetched_by_fn: dict[str, list[tuple[str, bool]]] = {}
-    cloned_by_fn: dict[str, list[tuple[str, bool]]] = {}
-    #: path -> basenames of the URLs a heredoc wrote into that file
-    #: (`cat > urls <<EOF` + URL lines): `wget -i urls` fetches those
-    #: addresses without one appearing on the client's own line.
-    url_inputs: dict[str, list[str]] = {}
-    #: The write the current line's heredoc (if any) is filling.
-    heredoc_path = ""
-    #: (phase rank, line index, client, fetch scope) for fetches whose
-    #: destination the grammar cannot name.  A scheme-bearing URL is left
-    #: to H016/H082's attributed arm, so one command is not scored twice -
-    #: unless the only scheme URL on the line is a declared source, which is
-    #: a decoy argument and names no output of this fetch.
-    pending_fetch: list[tuple[int, int, str, str]] = []
-
-    for i, line in enumerate(lines):
-        if line.startswith("-"):
-            continue
-        fn = scopes.within(i, _FETCH_SCOPE_FUNCTIONS)
-        if i in heredoc_body:
-            # A heredoc that wrote a file (`cat > urls <<EOF`) fills it
-            # with its body; a URL line there is the address `wget -i urls`
-            # fetches, with none on the client's own line.
-            if fn is not None and heredoc_path and len(line) <= MAX_RULE_LINE_BYTES:
-                for u in _LINE_URL_RE.findall(line):
-                    base = _source_basename(u)
-                    if base:
-                        url_inputs.setdefault(heredoc_path, []).append(base)
-            continue
-        if fn is None:
-            continue
-        if len(line) > MAX_RULE_LINE_BYTES:
-            continue
-        body = _strip_comment(line[1:])
-        writes = [w for _k, w in _collect_writes(body, fn) if w]
-        heredoc_path = _norm_path(writes[-1]) if writes else ""
-        outputs = _collect_fetch_outputs(body, declared_urls)
-        for path in outputs:
-            fetched_by_fn.setdefault(fn, []).append(
-                (path, line.startswith("+")))
-        for directory in _clone_destinations(body):
-            cloned_by_fn.setdefault(fn, []).append(
-                (directory, line.startswith("+")))
-        client = _FETCH_CLIENT_RE.search(body)
-        if client and client.group(0).lower() in _NON_FILE_FETCH_CLIENTS:
-            client = None
-        if client and _PACKAGE_MANAGER_FETCH_RE.search(body):
-            # `cargo fetch`/`npm ci` resolve a registry; W002 owns that
-            # boundary and does not pair it with a later script execution.
-            client = None
-        if client:
-            for m in _INPUT_FILE_RE.finditer(body):
-                for base in url_inputs.get(_norm_path(m.group(1)), ()):
-                    fetched_by_fn.setdefault(fn, []).append(
-                        (base, line.startswith("+")))
-        if (client and (not outputs or "://" not in body)
-                and not claims_pipe_to_shell(body)
-                and not claims_upload_line(body, config)):
-            pending_fetch.append(
-                (_PHASE_RANK.get(fn, 9), i, client.group(0)[:40], fn))
+    fetched_by_fn, cloned_by_fn, pending_fetch = _collect_fetch_candidates(ctx)
 
     for i, line in enumerate(lines):
         if line.startswith("-"):

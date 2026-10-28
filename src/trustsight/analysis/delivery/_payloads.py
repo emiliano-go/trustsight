@@ -141,7 +141,7 @@ def _reconstructed_payload_findings(diff_text, config, add) -> None:
     lines = resolve_added_lines(diff_text)
     added = [ln[1:] for ln in lines if ln.startswith("+")]
 
-    for i, line in enumerate(added):
+    for line in added:
         body = _strip_comment(line)
 
         for run in _HEX_RUN_RE.findall(body):

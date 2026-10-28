@@ -4,7 +4,7 @@ import subprocess
 from urllib.parse import urlparse
 
 from ..buckets import PINNING_ORDER, classify_pinning_level
-from ..config import ensure_default_configs
+from ..config import ensure_default_configs, load_patterns
 from ..db import dependency_observation_counts, init_db
 from ..differ import _has_checksum_in_post_diff
 from ..subproc import minimal_env
@@ -12,6 +12,9 @@ from ..subproc import minimal_env
 log = logging.getLogger(__name__)
 
 _initialized_for: str | None = None
+
+#: Command position: start of a line, or just after a shell separator.
+_CMD = r"(?:\A|(?<=[;&|(\n])|(?<=&&)|(?<=\|\|)|^)[ \t]*"
 
 
 def _ensure_init() -> None:
@@ -27,6 +30,13 @@ def _ensure_init() -> None:
         ensure_default_configs()
         init_db()
         _initialized_for = path
+
+
+def compile_configured_patterns(key: str, default) -> list[re.Pattern]:
+    """Compile a configured pattern list, falling back to its shipped default."""
+    patterns = load_patterns().get("patterns", {})
+    fragments = patterns.get(key) or default
+    return [re.compile(fragment, re.IGNORECASE) for fragment in fragments]
 
 
 def _rarities_of(deps: list[str]) -> list[float]:

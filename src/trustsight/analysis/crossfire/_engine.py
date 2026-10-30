@@ -344,7 +344,11 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
             if pattern.search(body):
                 record("X004", line_no, shape, body.strip())
 
-        alias = _home_alias_hit(body)
+        # A printer's quoted text is data, not a write: an install notice
+        # that says `echo "> ~/.config/x"` writes nothing.  X024 already
+        # blanks a printer's quoted text; X005 must do the same (snac).
+        x005_body = _blank_quoted(body) if _PRINTER_LINE_RE.match(body) else body
+        alias = _home_alias_hit(x005_body)
         if alias:
             record("X005", line_no, alias, body.strip())
 

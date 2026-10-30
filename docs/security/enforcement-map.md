@@ -132,7 +132,7 @@ python scripts/security_gates.py
 | `manifest ledger stays weight 0` | B10 | U001/U002/U005/U006 are INFO and U009 is a feed-only LOW; all weigh 0, and only U003/U004 score |
 | `archive listing adds no extraction` | A8 | the manifest layer reads committed files only |
 | `yaml is only ever safe_load` | A5 | package-controlled YAML is parsed with `yaml.safe_load` only |
-| `libgit2 is not the vulnerable version` | A14 | the pygit2 pin bundles libgit2 >= 1.9.5 (delta result-size allocation fix, CVE-2026-53585), read from the runtime version |
+| `libgit2 is not the vulnerable version` | A14 | the pygit2 pin bundles libgit2 >= 1.9.7 (delta result-size allocation fix, CVE-2026-53585, and the libssh2 remote-path command injection, CVE-2026-5917), read from the runtime version, and every declared floor (`pyproject.toml`, both PKGBUILDs, `.SRCINFO`) requires pygit2 >= 1.20.1 so a fresh install cannot resolve the affected 1.9.6 bundle |
 
 How each gate is scoped, and the recurring mistake that lets one pass while its invariant is broken, is set out in [reviewing a security control](../contributing/security-review.md). Read it before adding an invariant or a gate.
 

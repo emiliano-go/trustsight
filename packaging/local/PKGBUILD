@@ -20,7 +20,7 @@ url='https://github.com/emiliano-go/trustsight'
 license=('MIT')
 depends=(
   'python'
-  'python-pygit2'
+  'python-pygit2>=1.20.1'
   'python-tldextract'
   'python-rich'
   'python-typer'

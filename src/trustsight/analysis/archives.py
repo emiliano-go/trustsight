@@ -29,12 +29,27 @@ _ZIP_EOCD = b"PK\x05\x06"
 
 _MIN_GZIP_TRAILER = 8  # CRC32 + ISIZE
 
+#: Output the trailer scan may decompress from one gzip member.  A snapshot
+#: carries a maintainer-committed file, and a highly compressible one costs a
+#: few MiB on the wire while expanding to gigabytes.  Past this the member is
+#: not inspected: the caller's manifest bound already records the archive as
+#: incomplete, and the alternative is materialising the bomb to find its end.
+MAX_GZIP_OUTPUT_BYTES = 256 * 1024 * 1024
 
-def _gzip_member_end(data: bytes, start: int) -> int | None:
+#: Input window for the bounded decompressor.  Small enough that zlib's
+#: unconsumed-tail copy stays cheap, large enough not to syscall per byte.
+_DECOMPRESS_CHUNK = 64 * 1024
+
+
+def _gzip_member_end(
+    data: bytes, start: int, budget: list[int] | None = None,
+) -> int | None:
     """Offset just past the trailer of the gzip member beginning at *start*.
 
     Returns None when the member is malformed (a corrupted header, an
     unterminated deflate stream, or a header that runs off the buffer).
+    *budget*, when given, is the remaining output allowance shared across
+    every member in the file, so concatenation cannot multiply the bound.
     """
     if data[start : start + 3] != _GZIP_HEADER:
         return None
@@ -60,19 +75,52 @@ def _gzip_member_end(data: bytes, start: int) -> int | None:
         return None
 
     decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
+    view = memoryview(data)
+    limit = MAX_GZIP_OUTPUT_BYTES if budget is None else budget[0]
+    produced = 0
+    fed = 0
+    pos = header_end
+    tail = b""
     try:
-        decompressor.decompress(data[header_end:])
+        while True:
+            if tail:
+                chunk = tail
+                tail = b""
+            elif pos < len(view):
+                # Feed a fixed window rather than the whole tail: zlib
+                # returns the unconsumed remainder as a copy, so handing it
+                # the entire body makes a wide archive quadratic in copies.
+                chunk = view[pos:pos + _DECOMPRESS_CHUNK]
+                pos += len(chunk)
+            else:
+                return None  # unterminated deflate stream
+            fed += len(chunk)
+            # Bound the *output*, not only the input: ``decompress`` with no
+            # max_length materialises the whole member, so a few MiB of
+            # zeros is a multi-gigabyte allocation just to learn where the
+            # trailer begins.
+            produced += len(decompressor.decompress(chunk, 1024 * 1024))
+            if produced > limit:
+                return None
+            if decompressor.eof:
+                break
+            tail = decompressor.unconsumed_tail
+            if not tail and pos >= len(view):
+                return None
     except zlib.error:
         return None
-    consumed = len(data[header_end:]) - len(decompressor.unused_data)
+    consumed = fed - len(decompressor.unused_data)
+    if budget is not None:
+        budget[0] -= produced
     return header_end + consumed + _MIN_GZIP_TRAILER
 
 
 def _gzip_trailing_bytes(data: bytes) -> int | None:
     """Offset where trailing non-member data begins, or None when clean."""
     pos = 0
+    budget = [MAX_GZIP_OUTPUT_BYTES]
     while pos < len(data):
-        end = _gzip_member_end(data, pos)
+        end = _gzip_member_end(data, pos, budget)
         if end is None:
             # A byte run past the last valid member that is not a gzip
             # header is appended data.

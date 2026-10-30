@@ -124,6 +124,13 @@ MAX_TAR_MEMBERS = 10_000
 # is not the bound; this is.  A PKGBUILD past this is not a PKGBUILD.
 MAX_TAR_MEMBER_BYTES = 8 * 1024 * 1024
 
+#: Total bytes the archive may *declare* across every member.  A tar header
+#: states a member's size, so a 32 MiB gzip can declare gigabytes and make
+#: the walker seek (and decompress) to the end of a member it never reads.
+#: The count is on declarations, checked before any member body is touched,
+#: so a bomb is refused at its header rather than expanded.
+MAX_TAR_TOTAL_BYTES = 256 * 1024 * 1024
+
 
 def _http_get(url: str) -> Optional[bytes]:
     """Perform a GET request with a polite User-Agent.
@@ -227,11 +234,17 @@ def _pkgbuild_from_tarfile(tf: tarfile.TarFile, name: str) -> Optional[str]:
     """Extract the PKGBUILD text from an open snapshot tarball."""
     pkgbuild_path = f"{name}/PKGBUILD"
     member = None
+    walked = 0
     # Walked lazily and bounded: a snapshot holds a handful of files, and a
     # tar that says otherwise is not one worth reading to the end.
     for seen, m in enumerate(tf):
         if seen >= MAX_TAR_MEMBERS:
             break
+        walked += max(0, int(getattr(m, "size", 0) or 0))
+        if walked > MAX_TAR_TOTAL_BYTES:
+            log.warning("snapshot for %s declares more than %d bytes; refusing",
+                        name, MAX_TAR_TOTAL_BYTES)
+            return None
         if m.name == pkgbuild_path:
             member = m
             break
@@ -270,9 +283,15 @@ def _install_from_tarfile(
     naming the hunk after the package produced a permanent "install= names
     monsoon.install, not it").
     """
+    walked = 0
     for seen, member in enumerate(tf):
         if seen >= MAX_TAR_MEMBERS:
             break
+        walked += max(0, int(getattr(member, "size", 0) or 0))
+        if walked > MAX_TAR_TOTAL_BYTES:
+            log.warning("snapshot for %s declares more than %d bytes; refusing",
+                        name, MAX_TAR_TOTAL_BYTES)
+            return None
         if member.isfile() and member.name.endswith(".install"):
             handle = tf.extractfile(member)
             if handle is None:
@@ -348,8 +367,15 @@ def _snapshot_manifest(
     # symlinks or unreadable members leaves `len(manifest)` at zero while
     # the loop walks the whole archive, so a bound on the list does not
     # bound the work.
+    walked = 0
     for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
         if seen >= max_members:
+            complete = False
+            break
+        walked += max(0, int(getattr(member, "size", 0) or 0))
+        if walked > MAX_TAR_TOTAL_BYTES:
+            # Refuse at the header, before tarfile seeks over the body: a
+            # declared-size bomb is a decompression bomb otherwise.
             complete = False
             break
         if not member.isfile():

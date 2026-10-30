@@ -460,3 +460,25 @@ def test_the_tokenizer_bound_preserves_line_count_and_caps_the_line():
     assert lines[0] == "short"
     assert len(lines[1]) == MAX_TOKENIZER_LINE_BYTES
     assert lines[2] == "short"
+
+
+def test_srcinfo_is_sized_before_the_blob_is_materialised():
+    """``blob.data`` expands the whole object; the cap must precede it."""
+    from types import SimpleNamespace
+
+    from trustsight import srcinfo
+
+    class _Blob:
+        size = srcinfo.MAX_SRCINFO_BYTES + 1
+
+        @property
+        def data(self):
+            raise AssertionError("oversized .SRCINFO blob was materialised")
+
+    entry = SimpleNamespace(oid="x")
+    tree = SimpleNamespace(get=lambda name: entry)
+    commit = SimpleNamespace(tree=tree)
+    repo = SimpleNamespace(
+        get=lambda oid: commit if oid == "commit" else _Blob())
+
+    assert srcinfo.get_srcinfo_from_tree(repo, "commit") == {}

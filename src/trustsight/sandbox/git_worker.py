@@ -32,6 +32,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pygit2
 
@@ -62,6 +63,36 @@ _OID_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 _FETCH_MARKER = "trustsight-last-fetch"
 
 _AUR_HOST = "https://aur.archlinux.org"
+_AUR_HOSTNAME = "aur.archlinux.org"
+
+#: Ports an AUR HTTPS remote may name.  ``None`` is the default 443.
+_AUR_PORTS = (None, 443)
+
+
+def _is_safe_aur_url(url: object) -> bool:
+    """Whether *url* is the AUR over HTTPS, never a shell-backed transport.
+
+    The worker builds this URL from a validated package name, but libgit2 is
+    also handed a *cached* repository's configured remote.  The libssh2
+    backend pastes that path into a remote shell command unescaped
+    (CVE-2026-5917), so an ``ssh://`` remote is a command-execution surface
+    even when the source URL is ours.  Only the one endpoint the worker is
+    allowed to use is accepted.
+    """
+    if not isinstance(url, str) or not url:
+        return False
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    return (
+        parts.scheme == "https"
+        and parts.hostname == _AUR_HOSTNAME
+        and port in _AUR_PORTS
+        and parts.username is None
+        and parts.password is None
+    )
 
 
 class _UnknownOp(Exception):
@@ -346,6 +377,13 @@ def _open_fetch(payload: dict) -> dict:
             shutil.rmtree(path, ignore_errors=True)
             cached = None
         if cached is not None:
+            try:
+                origin_url = cached.remotes["origin"].url
+            except (KeyError, pygit2.GitError):
+                origin_url = ""
+            if not _is_safe_aur_url(origin_url):
+                raise _OpError(
+                    "cached repository's origin is not the AUR HTTPS endpoint")
             if upstream_mtime is not None and _is_current(cached, upstream_mtime):
                 return {"path": str(path), "head": _head_commit_id(cached),
                         "fetched": False, "marker_time": _last_fetch_time(cached),
@@ -371,6 +409,8 @@ def _open_fetch(payload: dict) -> dict:
         )
     os.makedirs(path.parent, exist_ok=True)
     url = f"{_AUR_HOST}/{pkg}.git"
+    if not _is_safe_aur_url(url):
+        raise _OpError("refusing a non-HTTPS AUR remote")
     callbacks = _Callbacks(GIT_TRANSFER_DEADLINE_SECONDS)
     try:
         repo = pygit2.clone_repository(url, str(path), bare=True,

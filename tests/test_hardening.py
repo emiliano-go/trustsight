@@ -442,6 +442,23 @@ def test_seed_archive_rejects_excessive_member_count(tmp_path, monkeypatch):
         db._extract_v2_archive(archive, tmp_path / "out")
 
 
+def test_seed_archive_refuses_a_declared_size_bomb_at_its_header(tmp_path, monkeypatch):
+    """A tiny compressed member can declare gigabytes; charging it after the
+    walk has already skipped the body is a decompression bomb spent."""
+    import tarfile
+    import trustsight.db as db
+
+    monkeypatch.setattr(db._seed, "MAX_SEED_MEMBER_BYTES", 1024)
+    archive = tmp_path / "seed.tar.gz"
+    with tarfile.open(archive, "w:gz") as tf:
+        info = tarfile.TarInfo("trustsight-seed-v2/huge")
+        info.size = 4096
+        tf.addfile(info, io.BytesIO(b"x" * 4096))
+
+    with pytest.raises(ValueError, match="over the"):
+        db._extract_v2_archive(archive, tmp_path / "out")
+
+
 def test_seed_archive_enforces_member_cap_before_whole_archive_listing(tmp_path):
     """getmembers() would materialise the attack before checking its size."""
     import tarfile
@@ -886,3 +903,63 @@ def test_a_non_utf8_diff_path_is_sanitised_not_returned_with_a_surrogate():
     out = _bounded_path("a\udcffb")
     assert "\udcff" not in out
     assert out == "a?b"
+
+
+def _tar_with_declared_sizes(sizes: list[int]) -> io.BytesIO:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        for index, size in enumerate(sizes):
+            info = tarfile.TarInfo(f"demo/file{index}")
+            info.size = size
+            tf.addfile(info, io.BytesIO(b"x" * size))
+    buf.seek(0)
+    return buf
+
+
+def test_a_declared_size_bomb_is_refused_before_the_pkgbuild(monkeypatch):
+    """A header can declare gigabytes inside a 32 MiB gzip.
+
+    The walker must refuse at the declaration, before ``tarfile`` seeks over
+    the body (which is what decompresses it).
+    """
+    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
+    buf = _tar_with_declared_sizes([4096, 4])
+    with tarfile.open(fileobj=buf, mode="r") as tf:
+        assert corpus_fetch._pkgbuild_from_tarfile(tf, "demo") is None
+
+
+def test_a_declared_size_bomb_is_refused_before_an_install_body(monkeypatch):
+    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        info = tarfile.TarInfo("demo/huge")
+        info.size = 4096
+        tf.addfile(info, io.BytesIO(b"x" * 4096))
+        info = tarfile.TarInfo("demo/x.install")
+        info.size = 2
+        tf.addfile(info, io.BytesIO(b"x\n"))
+    buf.seek(0)
+    with tarfile.open(fileobj=buf, mode="r") as tf:
+        assert corpus_fetch._install_from_tarfile(tf, "demo") is None
+
+
+def test_the_snapshot_manifest_refuses_a_declared_size_bomb(monkeypatch):
+    monkeypatch.setattr(corpus_fetch, "MAX_TAR_TOTAL_BYTES", 1024)
+    buf = _tar_with_declared_sizes([4096, 4])
+    with tarfile.open(fileobj=buf, mode="r") as tf:
+        manifest, _texts, complete = corpus_fetch._snapshot_manifest(tf)
+    assert manifest == []
+    assert not complete
+
+
+def test_the_gzip_trailer_scan_bounds_the_output_it_decompresses(monkeypatch):
+    """Finding the trailer must not materialise a compressible payload.
+
+    A maintainer-committed zero file costs a few MiB on the wire and expands
+    to gigabytes; the scan refuses rather than allocating it.
+    """
+    from trustsight.analysis import archives
+
+    bomb = gzip.compress(b"\0" * (8 * 1024 * 1024))
+    monkeypatch.setattr(archives, "MAX_GZIP_OUTPUT_BYTES", 1024)
+    assert archives.check_archive_trailer(bomb) is None

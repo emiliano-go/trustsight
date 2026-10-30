@@ -24,12 +24,14 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
 ]
 dependencies = [
-    # The floor is the release that bundles libgit2 >= 1.9.5.  Earlier
+    # The floor is the release that bundles libgit2 >= 1.9.7.  Earlier
     # libgit2 trusts a sender-controlled delta result size and can allocate
     # gigabytes from a sub-kilobyte pack while cloning a malicious
-    # repository (GHSA-27m5-gxxh-x79j / CVE-2026-53585, plus the other
-    # 1.9.5 fixes).  1.20.0 bundles 1.9.6; 1.20.1 bundles 1.9.7.
-    "pygit2>=1.20.0",
+    # repository (GHSA-27m5-gxxh-x79j / CVE-2026-53585), and 1.9.0-1.9.6
+    # also carry the libssh2 remote-path command injection
+    # (CVE-2026-5917).  1.20.0 bundles the affected 1.9.6; 1.20.1 bundles
+    # the fixed 1.9.7.
+    "pygit2>=1.20.1",
     "tldextract>=5.0",
     "rich>=13.0",
     "typer>=0.12",

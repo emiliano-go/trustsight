@@ -479,3 +479,30 @@ def test_commit_meta_refuses_too_many_ids(cache):
     with pytest.raises(gw._OpError, match="too many"):
         gw._commit_meta({"pkg": "hist", "cache_dir": str(cache),
                          "oids": ["0" * 40] * 65})
+
+
+@pytest.mark.parametrize("url,allowed", [
+    ("https://aur.archlinux.org/demo.git", True),
+    ("https://aur.archlinux.org:443/demo.git", True),
+    ("https://AUR.archlinux.org/demo.git", True),
+    ("ssh://git@aur.archlinux.org/demo.git", False),
+    ("git@aur.archlinux.org:demo.git", False),
+    ("http://aur.archlinux.org/demo.git", False),
+    ("https://aur.archlinux.org.evil.example/demo.git", False),
+    ("https://aur.archlinux.org:22/demo.git", False),
+    ("https://user@aur.archlinux.org/demo.git", False),
+    ("file:///etc/passwd", False),
+    ("", False),
+])
+def test_only_https_aur_remotes_are_accepted(url, allowed):
+    assert gw._is_safe_aur_url(url) is allowed
+
+
+def test_open_fetch_refuses_a_cached_ssh_remote(cache, repo):
+    """CVE-2026-5917: a shell-backed remote is never a fetch target."""
+    repo.remotes.set_url("origin", "ssh://git@evil.example/x.git")
+    with pytest.raises(gw._OpError, match="HTTPS"):
+        gw._open_fetch({
+            "pkg": "demo", "cache_dir": str(cache),
+            "upstream_mtime": int(time.time()) + 3600,
+        })

@@ -32,6 +32,43 @@ def test_vercmp(v1, v2, expected):
     assert _vercmp(v1, v2) == expected
 
 
+@pytest.mark.parametrize("exc", [TypeError("invalid"), ValueError("invalid")])
+def test_vercmp_native_errors_fall_back(monkeypatch, exc):
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(disc, "_get_pyalpm_vercmp", lambda: MagicMock(side_effect=exc))
+    assert disc._vercmp("1.0", "2.0") == disc._simple_vercmp("1.0", "2.0")
+
+
+@pytest.mark.parametrize("returncode,stdout", [
+    (0, "not-a-number"),
+    (1, "0"),
+    (1, ""),
+])
+def test_vercmp_invalid_external_result_falls_back(monkeypatch, returncode, stdout):
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(disc, "_get_pyalpm_vercmp", lambda: None)
+    monkeypatch.setattr(
+        disc.subprocess,
+        "run",
+        lambda *args, **kwargs: MagicMock(returncode=returncode, stdout=stdout),
+    )
+    assert disc._vercmp("1.0", "2.0") == disc._simple_vercmp("1.0", "2.0")
+
+
+@patch("trustsight.discovery.get_aur_package_info")
+def test_find_outdated_uses_fallback_after_native_error(mock_info, monkeypatch):
+    import trustsight.discovery as disc
+
+    mock_info.return_value = {"pkg-a": {"Name": "pkg-a", "Version": "2.0"}}
+    monkeypatch.setattr(disc, "_get_pyalpm_vercmp", lambda: MagicMock(side_effect=TypeError))
+
+    assert disc.find_outdated_from_list([("pkg-a", "1.0")]) == [
+        {"name": "pkg-a", "current_version": "1.0", "latest_version": "2.0"}
+    ]
+
+
 # --- get_installed_from_repo ---
 
 @patch("trustsight.discovery.subprocess.run")
@@ -467,6 +504,31 @@ def test_get_aur_package_info_degrades_on_oversized_rpc(monkeypatch):
     monkeypatch.setattr(disc.urllib.request, "urlopen", fake_urlopen)
     # Nothing raises out; the oversized reply degrades to an empty result.
     assert disc.get_aur_package_info(["somepkg"]) == {}
+
+
+def test_aur_rpc_query_retries_read_deadline_and_returns_none(monkeypatch):
+    import io
+    from contextlib import contextmanager
+
+    import trustsight.bounded_io as bounded_io
+    import trustsight.discovery as disc
+
+    monkeypatch.setattr(
+        bounded_io,
+        "read_capped_with_deadline",
+        MagicMock(side_effect=bounded_io.ReadTimedOut("deadline exceeded")),
+    )
+    monkeypatch.setattr(disc.time, "sleep", lambda seconds: None)
+
+    @contextmanager
+    def fake_urlopen(url, timeout=0):
+        yield io.BytesIO(b"{}")
+
+    urlopen = MagicMock(side_effect=fake_urlopen)
+    monkeypatch.setattr(disc.urllib.request, "urlopen", urlopen)
+
+    assert disc._aur_rpc_query(["somepkg"]) is None
+    assert urlopen.call_count == disc._RPC_MAX_RETRIES + 1
 
 
 @pytest.mark.parametrize("exc", [

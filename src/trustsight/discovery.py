@@ -44,13 +44,15 @@ def _load_rpc_json(resp, limit: int | None = None):
     """
     if limit is None:
         limit = _MAX_RPC_BYTES
-    from .bounded_io import ReadTooLarge, read_capped_with_deadline
+    from .bounded_io import ReadTimedOut, ReadTooLarge, read_capped_with_deadline
     try:
         raw = read_capped_with_deadline(
             resp, limit, "AUR RPC response", _RPC_DEADLINE_SECONDS
         )
     except ReadTooLarge as exc:
         raise _RpcResponseTooLarge(str(exc)) from exc
+    except ReadTimedOut as exc:
+        raise TimeoutError(str(exc)) from exc
     return json.loads(raw)
 
 _OFFICIAL_REPOS = frozenset({
@@ -119,7 +121,7 @@ def _vercmp(v1: str, v2: str) -> int:
         try:
             return native(v1, v2)
         except (TypeError, ValueError):
-            return 0
+            return _simple_vercmp(v1, v2)
 
     # vercmp takes no "--" separator, so a version that looks like a flag
     # cannot be passed safely.  Versions come from the AUR, so they are
@@ -133,12 +135,14 @@ def _vercmp(v1: str, v2: str) -> int:
             ["vercmp", v1, v2], capture_output=True, text=True, check=False,
             timeout=30, env=minimal_env(),
         )
+        if result.returncode != 0:
+            return _simple_vercmp(v1, v2)
         return int(result.stdout.strip())
     except FileNotFoundError:
         logging.warning("vercmp not found; falling back to string comparison")
         return _simple_vercmp(v1, v2)
     except (ValueError, AttributeError):
-        return 0
+        return _simple_vercmp(v1, v2)
 
 
 def _run_pacman(args: list[str]) -> subprocess.CompletedProcess:

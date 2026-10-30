@@ -1210,6 +1210,55 @@ def test_activation_attaches_the_public_campaign_id(monkeypatch):
     assert finding["params"]["campaign_active"] is True
 
 
+def test_m006_reactivation_pressure_reaches_the_cycle_health_log(monkeypatch):
+    from trustsight.full_aur import pipeline
+
+    pressure = [{
+        "source": "campaign", "campaign_id": "camp-123", "count": 3,
+        "span": 2, "min_interval": 5,
+    }]
+    intervals = []
+    monkeypatch.setattr(
+        "trustsight.db.reactivation_pressure",
+        lambda interval: intervals.append(interval) or pressure,
+    )
+    warnings = []
+
+    class Log:
+        def warning(self, *args):
+            warnings.append(args)
+
+    pipeline._report_reactivation_pressure(
+        {"campaign_min_reactivation_observations": 5}, Log())
+    assert intervals == [5]
+    assert len(warnings) == 1
+    assert warnings[0][0] == "%s: %s"
+    assert warnings[0][1] == "M006"
+    assert "camp-123 re-armed 3 time(s)" in warnings[0][2]
+
+
+def test_m006_pipeline_is_quiet_without_pressure_or_when_disabled(monkeypatch):
+    from trustsight.full_aur import pipeline
+
+    intervals = []
+    monkeypatch.setattr(
+        "trustsight.db.reactivation_pressure",
+        lambda interval: intervals.append(interval) or [],
+    )
+    warnings = []
+
+    class Log:
+        def warning(self, *args):
+            warnings.append(args)
+
+    pipeline._report_reactivation_pressure({}, Log())
+    assert intervals == [5]
+    pipeline._report_reactivation_pressure(
+        {"campaign_min_reactivation_observations": 0}, Log())
+    assert intervals == [5]
+    assert warnings == []
+
+
 def test_first_seen_corpus_recipe_reads_h091_checksum_parity():
     """No diff is not "nothing to check": H091 is current-text evidence."""
     from trustsight.config import ensure_default_configs

@@ -172,7 +172,7 @@ shipped list.
 
 ### H064: Provides/Replaces Scope Expansion {#h064}
 
-- **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one
+- **Severity:** HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one; INFO (weight 0) for a conflict with an established-only package
 - **Category:** `dependency`
 
 - **Condition:** A newly claimed `provides`, `replaces` or `conflicts` names an established package (official repo or fallback observations) or a widely-provided one (observation count at or above `[h064] widely_provided_observations`, default 25).

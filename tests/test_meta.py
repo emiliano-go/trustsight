@@ -210,3 +210,28 @@ def test_licensed_escalation_is_attributed(monkeypatch):
     _annotate_licensed(breakdown)
     assert breakdown[0].licensed_by == ("R002",)
     assert breakdown[1].licensed_by == ()
+
+
+def test_m006_reports_reactivation_pressure_with_its_measurements():
+    from trustsight.analysis.meta import campaign_reactivation_notes
+
+    pressure = [{
+        "source": "campaign", "campaign_id": "camp-123", "count": 3,
+        "span": 2, "min_interval": 5,
+    }]
+    rows = campaign_reactivation_notes(pressure)
+    assert len(rows) == 1
+    assert rows[0]["rule_id"] == "M006"
+    assert rows[0]["name"] == "Campaign Re-armed Too Often"
+    assert rows[0]["severity"] == "INFO"
+    assert rows[0]["category"] == "meta"
+    assert rows[0]["params"] == pressure[0]
+    assert "camp-123 re-armed 3 time(s) over 2 observation(s)" in rows[0]["match"]
+
+
+def test_m006_stands_down_without_reactivation_pressure():
+    from trustsight.analysis.meta import campaign_reactivation_notes
+
+    assert campaign_reactivation_notes(None) == []
+    assert campaign_reactivation_notes([]) == []
+    assert campaign_reactivation_notes([None, "not-a-row"]) == []

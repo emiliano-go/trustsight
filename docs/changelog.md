@@ -8,13 +8,21 @@
 
 ### Added
 
+- **H105-H108 cover additional AUR campaign shapes.** New detections cover placeholder-package replacement, foreign package-manager bootstrap, archive/source divergence, and related cross-file delivery behavior, with calibration fixtures and registry history preserved.
+- **G011 reports maintainer package-creation bursts.** Correlation now records a bounded cluster when one maintainer creates an unusual package family in a cycle, without changing the score or hiding the underlying evidence.
 - **Exhaustive live-rule assurance.** All 273 live rules now have explicit registry-to-emitter wiring checks plus positive and negative behavior coverage, including native stateful and pipeline interfaces. The 11 historical registry anchors remain intentionally non-emitting.
 - **A one-off H104 snapshot backfill.** `scripts/backfill_h104.py` scans a watcher database's `pkgbuild_snapshots`, attaches H104 to each package's most recent analysis, and updates the stored fact. It is idempotent and dry-run capable; the incremental watcher never revisits a removed placeholder package.
 
+### Changed
+
+- **Watcher cycles use less memory and CPU.** Repeated recipe, metadata, and analysis work is reduced while cycle state, fail-closed coverage, and alert behavior remain unchanged. Large analysis, configuration, temporal, review, and baseline modules were also separated into cohesive private modules without changing their public interfaces.
+- **Published calibration figures are refreshed.** The locked 8,393-diff corpus now measures a 73.4% benign zero-rate, a 6.6% flag rate above the default threshold, and a 30.9% ruleset trigger rate. Benign p95 remains 30 against malicious p5 of 40.
+
 ### Fixed
 
+- **CLI exit statuses and configuration errors are reliable.** The console entry point now preserves Typer's intended exit status, sweep subcommands are covered end to end, and malformed `lint-rules` TOML produces a clean configuration error rather than a traceback.
 - **Fail-open discovery and baseline-import paths.** Invalid or failed version comparisons now use the deterministic fallback instead of appearing equal, RPC read deadlines follow the bounded retry path, capped archive snapshots report incomplete coverage, and signed baseline metadata is validated before any imported state is committed.
-- **The 2026-10-30 watcher false-positive batches, with true-positive twins.** Tightened malformed trigger shapes while preserving their malicious counterparts and refreshed the published calibration measurements.
+- **The 2026-10-30 watcher false-positive batches, with true-positive twins.** H080 requires indirect expansion in the command word; X002 treats non-shell heredocs as data; H072 does not pair written data artifacts as payloads; H042 abstains on unresolved hidden names and known build-config dotfiles; X005 ignores quoted printer text; R152 ignores comments and inert printed URLs. H001/H003 recognize architecture-keyed and mixed checksum arrays, D002 requires a same-length typo for four-letter names, and C005/C011 recognize curated Debian and Ubuntu mirrors. Every correction retains its malicious positive control.
 - **The 2026-10-28 watcher false-positive batch, with true-positive twins.**
   H082/H016 no longer pair a release-digest lookup (`curl … | jq …` into a
   text utility, never saved) with a later execution; a named output or a pipe

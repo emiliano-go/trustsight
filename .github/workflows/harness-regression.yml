@@ -49,7 +49,7 @@ jobs:
         run: |
           git init ../trustsight-harness
           git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
-          git -C ../trustsight-harness fetch --depth 1 origin 741c0dddfbb786447a8a1ebee40fddf68ed01703
+          git -C ../trustsight-harness fetch --depth 1 origin 0f4ecc3b158d0c56b31fd11008ef5f8f244c1f4b
           git -C ../trustsight-harness checkout --detach FETCH_HEAD
 
       # The harness clones unprivileged user namespaces everywhere (the

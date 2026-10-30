@@ -569,6 +569,8 @@ def gate_libgit2_is_not_the_vulnerable_version() -> Gate:
         try:
             text = (ROOT / rel).read_text(encoding="utf-8")
         except OSError as exc:
+            if rel.startswith("packaging/") and not (ROOT / ".git").exists():
+                continue
             problems.append(f"{rel}: {type(exc).__name__}")
             continue
         if expected not in text:

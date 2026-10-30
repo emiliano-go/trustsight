@@ -129,3 +129,29 @@ def test_review_json_first_metadata_bootstrap_is_an_empty_success(tmp_path, monk
 
     assert result.exit_code == 0
     assert result.stdout == "[]\n"
+
+
+def test_run_converts_a_typer_exit_to_a_status():
+    """The console entry point must not leak typer.Exit as a traceback."""
+    from trustsight.cli import entrypoint
+
+    def _exit_3():
+        raise typer.Exit(code=3)
+
+    with patch("trustsight.cli.app.app", _exit_3):
+        with pytest.raises(SystemExit) as excinfo:
+            entrypoint()
+    assert excinfo.value.code == 3
+
+
+def test_lint_rules_reads_a_bad_toml_without_a_traceback(tmp_path):
+    from trustsight.cli.app import app as cli_app
+
+    bad = tmp_path / "rules.toml"
+    bad.write_text("not = [valid\n")
+
+    result = runner.invoke(cli_app, ["lint-rules", "--file", str(bad)])
+
+    assert result.exit_code == 2
+    assert "Could not read rules file" in result.output
+    assert "Traceback" not in result.output

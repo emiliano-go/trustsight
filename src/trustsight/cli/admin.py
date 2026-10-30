@@ -267,8 +267,15 @@ def register_commands(app: typer.Typer):
             if not path.exists():
                 _print_colored(f"Rules file not found: {path}", "red", stderr=True)
                 raise typer.Exit(code=2)
-            with open(path, "rb") as fh:
-                loaded = tomllib.load(fh)
+            try:
+                with open(path, "rb") as fh:
+                    loaded = tomllib.load(fh)
+            except (tomllib.TOMLDecodeError, OSError) as exc:
+                _print_colored(
+                    f"Could not read rules file {path}: {exc}", "red",
+                    stderr=True,
+                )
+                raise typer.Exit(code=2) from None
             rules = loaded.get("rules", [])
             structural = loaded.get("structural", [])
             source = path

@@ -72,7 +72,7 @@ Issues = "https://github.com/emiliano-go/trustsight/issues"
 Changelog = "https://docs.trustsight.org/changelog/"
 
 [project.scripts]
-trustsight = "trustsight.cli:main"
+trustsight = "trustsight.cli:entrypoint"
 
 [build-system]
 requires = ["hatchling"]

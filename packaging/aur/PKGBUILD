@@ -7,12 +7,13 @@ pkgdesc='Audits AUR PKGBUILD updates before install: structure, commands, novelt
 arch=('any')
 url='https://github.com/emiliano-go/trustsight'
 license=('MIT')
-# The python-pygit2 floor is a security floor, not a preference: pygit2 < 1.20
-# bundles libgit2 versions with the delta result-size allocation flaw.  Kept in
-# step with pyproject.toml by tests/test_pkgbuild.py.
+# The python-pygit2 floor is a security floor, not a preference: pygit2 < 1.20.1
+# bundles libgit2 versions with the delta result-size allocation flaw and the
+# libssh2 remote-path command injection (CVE-2026-5917).  Kept in step with
+# pyproject.toml by tests/test_pkgbuild.py.
 depends=(
   'python'
-  'python-pygit2>=1.20.0'
+  'python-pygit2>=1.20.1'
   'python-tldextract>=5.0'
   'python-rich>=13.0'
   'python-typer>=0.12'

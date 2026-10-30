@@ -23,6 +23,13 @@
 - **CLI exit statuses and configuration errors are reliable.** The console entry point now preserves Typer's intended exit status, sweep subcommands are covered end to end, and malformed `lint-rules` TOML produces a clean configuration error rather than a traceback.
 - **Fail-open discovery and baseline-import paths.** Invalid or failed version comparisons now use the deterministic fallback instead of appearing equal, RPC read deadlines follow the bounded retry path, capped archive snapshots report incomplete coverage, and signed baseline metadata is validated before any imported state is committed.
 - **The 2026-10-30 watcher false-positive batches, with true-positive twins.** H080 requires indirect expansion in the command word; X002 treats non-shell heredocs as data; H072 does not pair written data artifacts as payloads; H042 abstains on unresolved hidden names and known build-config dotfiles; X005 ignores quoted printer text; R152 ignores comments and inert printed URLs. H001/H003 recognize architecture-keyed and mixed checksum arrays, D002 requires a same-length typo for four-letter names, and C005/C011 recognize curated Debian and Ubuntu mirrors. Every correction retains its malicious positive control.
+- **The `pygit2` floor is raised to 1.20.1 (libgit2 1.9.7).** 1.20.0 bundles
+  libgit2 1.9.6, which is exposed to the libssh2 remote-path command injection
+  (CVE-2026-5917) as well as the older delta result-size allocation flaw. The
+  `libgit2 is not the vulnerable version` gate now checks every declared floor
+  (`pyproject.toml`, both PKGBUILDs and `.SRCINFO`) as well as the runtime
+  version, so a lowered floor cannot reintroduce the affected bundle on a fresh
+  install.
 - **The 2026-10-28 watcher false-positive batch, with true-positive twins.**
   H082/H016 no longer pair a release-digest lookup (`curl … | jq …` into a
   text utility, never saved) with a later execution; a named output or a pipe

@@ -101,10 +101,11 @@ def insert_analysis(
             (package_id, old_version, new_version, old_commit, new_commit, final_score, raw_diff, fact_json),
         )
         history_id = cur.lastrowid
-        for rule in triggered_rules:
-            conn.execute(
+        if triggered_rules:
+            conn.executemany(
                 "INSERT INTO triggered_rules (history_id, rule_id, severity) VALUES (?, ?, ?)",
-                (history_id, rule["rule_id"], rule["severity"]),
+                [(history_id, rule["rule_id"], rule["severity"])
+                 for rule in triggered_rules],
             )
         # Advance the observation clock in the same transaction: campaign and
         # override TTLs are measured in recorded observations, so the counter

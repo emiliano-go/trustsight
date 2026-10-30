@@ -14,7 +14,7 @@ pkgbase = trustsight
 	makedepends = git
 	makedepends = python-hypothesis
 	depends = python
-	depends = python-pygit2>=1.20.0
+	depends = python-pygit2>=1.20.1
 	depends = python-tldextract>=5.0
 	depends = python-rich>=13.0
 	depends = python-typer>=0.12

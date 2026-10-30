@@ -21,6 +21,7 @@ implementation behind them did.
 """
 
 import threading
+from collections import OrderedDict
 
 from .sandbox.client import TokenizerUnavailable, request
 
@@ -43,7 +44,46 @@ __all__ = [
 
 
 _line_memo = threading.local()
-_LINE_MEMO_ENTRIES = 4
+_LINE_MEMO_ENTRIES = 8
+
+
+def _copy_value(value):
+    """A caller-owned copy of a cached tokenizer result.
+
+    Strings are immutable, so only the containers are rebuilt.  This is
+    cheaper than the sandbox client's recursive ``_copy`` on a cache hit, and
+    keeps the parent memo authoritative for repeated identical inputs.
+    """
+    if isinstance(value, dict):
+        return {key: _copy_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_copy_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_copy_value(item) for item in value)
+    return value
+
+
+def _memo(kind: str, key, compute):
+    """Memoise *compute* by an immutable key, per thread.
+
+    The tokenizer client already caches by content, but every hit still
+    rebuilds a request and deep-copies the result.  Several stages ask for
+    the same diff tens of times (``resolve_added_lines`` 22x/diff on the
+    calibration corpus), so a small parent-side cache removes that overhead
+    without changing what the child computes.
+    """
+    store = getattr(_line_memo, kind, None)
+    if store is None:
+        store = _line_memo.__dict__.setdefault(kind, OrderedDict())
+    cached = store.get(key)
+    if cached is not None:
+        store.move_to_end(key)
+        return _copy_value(cached)
+    value = compute()
+    store[key] = _copy_value(value)
+    while len(store) > _LINE_MEMO_ENTRIES:
+        store.popitem(last=False)
+    return value
 
 
 def split_lines(text: str) -> list[str]:
@@ -69,28 +109,35 @@ def split_lines(text: str) -> list[str]:
 
 def join_line_continuations(lines: list[str]) -> list[str]:
     """Join backslash-continued logical lines, in the sandbox."""
-    return request("join", lines)
+    return _memo("join", ("l", tuple(lines)),
+                 lambda: request("join", lines))
 
 
 def joined_indexed(lines: list[str]) -> list[tuple[int, str]]:
     """Like :func:`join_line_continuations`, each logical line paired with
     the index of the first raw line that produced it."""
-    return [tuple(pair) for pair in request("joined_indexed", lines)]
+    return _memo(
+        "joined_indexed", ("l", tuple(lines)),
+        lambda: [tuple(pair) for pair in request("joined_indexed", lines)],
+    )
 
 
 def clean_lines(lines: list[str]) -> list[str]:
     """Strip a leading BOM and collapse path traversal, per line."""
-    return request("clean_lines", lines)
+    return _memo("clean_lines", ("l", tuple(lines)),
+                 lambda: request("clean_lines", lines))
 
 
 def strip_boms(lines: list[str]) -> list[str]:
     """Strip a leading byte-order mark, per line."""
-    return request("strip_boms", lines)
+    return _memo("strip_boms", ("l", tuple(lines)),
+                 lambda: request("strip_boms", lines))
 
 
 def reconstruct_literals(text: str) -> tuple[str, bool]:
     """Reconstruct obfuscated literals as data; returns (text, fully)."""
-    return tuple(request("reconstruct_literals", text))
+    return _memo("reconstruct_literals", ("s", text),
+                 lambda: tuple(request("reconstruct_literals", text)))
 
 
 def reconstruct_lines_stateful(
@@ -102,7 +149,11 @@ def reconstruct_lines_stateful(
     the line is entirely inside a multi-line quote and should not be read as
     a command.
     """
-    return [tuple(item) for item in request("reconstruct_lines_stateful", lines)]
+    return _memo(
+        "reconstruct_stateful", ("l", tuple(lines)),
+        lambda: [tuple(item)
+                 for item in request("reconstruct_lines_stateful", lines)],
+    )
 
 
 def reconstruct_lines(lines: list[str]) -> list[tuple[str, bool]]:
@@ -112,30 +163,37 @@ def reconstruct_lines(lines: list[str]) -> list[tuple[str, bool]]:
     child round-trip per line, which is the cost the sandbox exists to
     avoid paying on ordinary text.
     """
-    return [tuple(pair) for pair in request("reconstruct_lines", lines)]
+    return _memo(
+        "reconstruct_lines", ("l", tuple(lines)),
+        lambda: [tuple(pair) for pair in request("reconstruct_lines", lines)],
+    )
 
 
 def resolve_added_lines(diff_text: str) -> list[str]:
     """Diff lines with each added line replaced by its resolved form."""
-    return request("resolve_added", diff_text)
+    return _memo("resolve_added", ("s", diff_text),
+                 lambda: request("resolve_added", diff_text))
 
 
 def resolve_removed_lines(diff_text: str) -> list[str]:
     """Diff lines with each removed line replaced by its resolved form."""
-    return request("resolve_removed", diff_text)
+    return _memo("resolve_removed", ("s", diff_text),
+                 lambda: request("resolve_removed", diff_text))
 
 
 def tokenize_and_resolve_indexed(
     diff_text: str,
 ) -> tuple[list[str], list[str], list[int]]:
     """Resolve added lines and map each back to its raw diff-line index."""
-    resolved, unresolved, indices = request("indexed", diff_text)
-    return resolved, unresolved, indices
+    return _memo(
+        "indexed", ("s", diff_text),
+        lambda: tuple(request("indexed", diff_text)),
+    )
 
 
 def tokenize_and_resolve(diff_text: str) -> tuple[list[str], list[str]]:
     """Resolve added lines, returning (resolved, unresolved)."""
-    resolved, unresolved, _indices = request("indexed", diff_text)
+    resolved, unresolved, _indices = tokenize_and_resolve_indexed(diff_text)
     return resolved, unresolved
 
 
@@ -143,8 +201,10 @@ def variable_table(
     additions: list[str],
 ) -> tuple[dict[str, str], dict[str, list[str]]]:
     """Resolve assignments among added lines into scalar and array tables."""
-    variables, arrays = request("variable_table", additions)
-    return variables, arrays
+    return _memo(
+        "variable_table", ("l", tuple(additions)),
+        lambda: tuple(request("variable_table", additions)),
+    )
 
 
 def variable_table_spans(
@@ -156,5 +216,7 @@ def variable_table_spans(
     maps scalar names to their assignment line and array names to their
     opener, closer and per-entry lines, indexed into *additions*.
     """
-    variables, arrays, spans = request("variable_table_spans", additions)
-    return variables, arrays, spans
+    return _memo(
+        "variable_table_spans", ("l", tuple(additions)),
+        lambda: tuple(request("variable_table_spans", additions)),
+    )

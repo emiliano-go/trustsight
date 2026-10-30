@@ -110,21 +110,33 @@ def _extract_v2_archive(archive: Path, dest: Path) -> Optional[Path]:
         # its length afterwards lets an oversized archive allocate first.
         # Stop the lazy walk at the same bound instead.
         members = []
+        declared = 0
         for member in tf:
             if len(members) >= MAX_SEED_MEMBERS:
                 raise ValueError(
                     f"seed archive contains more than {MAX_SEED_MEMBERS} members; "
                     "refusing to expand"
                 )
+            # The header's declared size is the attacker's number.  Charge it
+            # here, before the next iteration makes tarfile seek over (and
+            # decompress) the body: a small compressed member can declare
+            # gigabytes, so a check after the whole archive is listed is a
+            # decompression bomb already spent.
+            size = max(0, int(getattr(member, "size", 0) or 0))
+            if member.isfile() and size > MAX_SEED_MEMBER_BYTES:
+                raise ValueError(
+                    f"seed archive member {member.name!r} declares {size} "
+                    f"bytes, over the {MAX_SEED_MEMBER_BYTES}-byte limit; "
+                    "refusing to expand"
+                )
+            declared += size
+            if declared > MAX_SEED_BYTES:
+                raise ValueError(
+                    f"seed archive exceeds {MAX_SEED_BYTES} bytes; refusing to expand"
+                )
             members.append(member)
         if not any("trustsight-seed-v2" in m.name for m in members):
             return None
-        # Bounded extraction: the archive itself is small metadata.
-        total = sum(m.size for m in members if m.isfile())
-        if total > MAX_SEED_BYTES:
-            raise ValueError(
-                f"seed archive exceeds {MAX_SEED_BYTES} bytes; refusing to expand"
-            )
         for member in members:
             if member.issym() or member.islnk() or member.isdev() or member.isfifo():
                 raise ValueError(

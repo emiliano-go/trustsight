@@ -124,8 +124,14 @@ def _run_corpus_sweep(
     if old_meta is None:
         return []
 
+    detail_map = detail or {}
     source_repos: dict[str, set[str]] = {}
     for name in processed:
+        known = (detail_map.get(name) or {}).get("source_repos")
+        if known is not None:
+            if known:
+                source_repos[name] = set(known)
+            continue
         snapshot = get_pkgbuild_snapshot(name)
         if not snapshot or not snapshot.get("pkgbuild_text"):
             continue
@@ -139,7 +145,7 @@ def _run_corpus_sweep(
 
     history = read_cycle_history(processed)
     routine_only = {
-        name for name, entry in (detail or {}).items()
+        name for name, entry in detail_map.items()
         if entry.get("routine_only")
     }
     findings = run_corpus_sweep(

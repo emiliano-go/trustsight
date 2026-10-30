@@ -215,6 +215,7 @@ Explanation = [
 Reports = [
   {"In the Wild" = "reports/in-the-wild.md"},
   {"2026-10-14: AUR name-clone waves" = "reports/2026-10-14-aur-name-clone-waves.md"},
+  {"Hot-path performance baseline" = "reports/hot-path-baseline.md"},
 ]
 
 [[project.nav]]

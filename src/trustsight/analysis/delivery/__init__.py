@@ -204,6 +204,25 @@ from ._write_exec import (
     _driver_commands,
 )
 
+_H072_DATA_SUFFIXES = (
+    ".ttf", ".otf", ".ttc", ".woff", ".woff2", ".pfb",
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp",
+    ".desktop", ".service", ".xml", ".json", ".yaml", ".yml",
+    ".toml", ".conf", ".ini", ".css", ".html", ".md", ".txt",
+    ".mo", ".po", ".gz", ".xz", ".zst", ".zip",
+)
+
+
+def _is_data_artifact(name: str) -> bool:
+    """True for a written artifact that is not a program.
+
+    A font/image/config produced by ``package()`` and then passed to a tool
+    is data, not a delivered payload.  H072 is about executing bytes the
+    recipe wrote; a ``.ttf`` is never executed (ttf-google-sans).
+    """
+    return bool(name) and name.lower().endswith(_H072_DATA_SUFFIXES)
+
+
 def edge_write_execute(ctx, add) -> None:
     """H069/H072 predicate over the shared graph context.
 
@@ -244,6 +263,9 @@ def edge_write_execute(ctx, add) -> None:
                         or _PKGDIR_TARGET_RE.search(body or "")):
                     continue
                 if (fn, wpath) in h069_claimed:
+                    continue
+                if _is_data_artifact(base) or _is_data_artifact(
+                        os.path.basename(wpath)):
                     continue
                 h069_claimed.add((fn, wpath))
                 if kind == "generation":

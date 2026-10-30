@@ -117,6 +117,48 @@ def _resolved_vocabulary(clamped: str, lines: list[str], readable: list[str],
     return resolvable, scalar_values, resolved_lines
 
 
+_NON_SHELL_INTERPRETER_RE = re.compile(
+    r"\b(?:python[23]?|perl|ruby|node|php|lua)\b"
+)
+_SHELL_INTERPRETER_RE = re.compile(
+    r"\b(?:bash|sh|zsh|dash|ksh|fish|ash|mksh)\b"
+)
+
+
+def _non_shell_heredoc_body_indices(lines: list[str]) -> set[int]:
+    """Lines inside a heredoc fed to a non-shell interpreter.
+
+    ``python - <<'PY' ... PY`` carries *Python*, not shell.  The body must
+    not feed the command-position predicates: ``sys.argv[1]`` matched X002's
+    ``glob`` shape and read as an obfuscated program name (ttf-google-sans).
+    Shell-fed bodies (``bash <<EOF``, ``cat <<EOF | sh``) stay eligible.
+    """
+    bodies: set[int] = set()
+    delimiter = ""
+    non_shell = False
+    for index, line in enumerate(lines):
+        if not line.startswith(("+", " ")) or line.startswith(("+++", "---")):
+            raw = line
+        else:
+            raw = line[1:]
+        if delimiter:
+            if raw.strip() == delimiter:
+                delimiter = ""
+                non_shell = False
+            elif non_shell:
+                bodies.add(index)
+            continue
+        match = _HEREDOC_OPEN_RE.search(raw)
+        if not match:
+            continue
+        opener = raw[:match.start()]
+        if (_NON_SHELL_INTERPRETER_RE.search(opener)
+                and not _SHELL_INTERPRETER_RE.search(opener)):
+            delimiter = match.group(2)
+            non_shell = True
+    return bodies
+
+
 def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dict[str, list[tuple[int, str, str]]]:
     """``{rule_id: [(line, shape, quoted), ...]}`` for every technique found.
 
@@ -148,7 +190,10 @@ def crossfire_techniques(diff_text: str, current_text: str | None = None) -> dic
     #: instruction to the user, not work scheduled at build time.  Deferred
     #: because `delivery` imports this module's neighbours.
     from ..delivery import _printed_heredoc_body_indices
-    printed_heredoc = _printed_heredoc_body_indices(lines)
+    printed_heredoc = (
+        _printed_heredoc_body_indices(lines)
+        | _non_shell_heredoc_body_indices(lines)
+    )
     #: X015 also stands down in a hook the recipe does not wire up: work
     #: scheduled inside a `.install` file that `install=` never names never
     #: runs (notebook; C024 already names that nit).  Certainty needs the

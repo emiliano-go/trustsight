@@ -433,7 +433,7 @@ def _scope_matches(
 #: rules exist for are declared or fetched, not printed.  Ids rather than a
 #: rule field because a shipped field would not reach an existing install's
 #: rules.toml until a migration.
-_INERT_URL_RULES = frozenset({"R046", "R047"})
+_INERT_URL_RULES = frozenset({"R046", "R047", "R152"})
 
 #: URL-family raw-line rules that must not read the declared upstream
 #: ``url=``/``*_url=`` scalar.  That URL is package metadata, not a fetched
@@ -765,6 +765,10 @@ def apply_rules(
                         continue
                 if rule["id"] in _URL_DECLARATION_RULES:
                     stripped_item = item.lstrip("+").lstrip()
+                    # A URL in a comment is documentation, not a source:
+                    # invoiceninja's `.install` prints the docs link.
+                    if stripped_item.startswith("#"):
+                        continue
                     if _METADATA_SCALAR_RE.match(stripped_item):
                         continue
                 if rule["id"] == "R058" and not _r058_destination_is_surface(item):

@@ -56,6 +56,11 @@ def _recipe_skip_justification(recipe_text: str) -> str:
     except Exception:  # noqa: BLE001 - a refusal justifies nothing
         return ""
     sources = recipe.arrays.get("source", ())
+    if any("PKGBUILD_EXTRAS" in str(s) for s in sources):
+        # A python-packaging sentinel source: the checksum array is a
+        # placeholder for the generated extras, and the real wheel is hashed
+        # in the same array (python-ffmpeg-core/typed-ffmpeg).
+        return "generated extras placeholder"
     if any(_VCS_ENTRY_RE.search(str(s)) or str(s).rstrip("'\"").endswith(".git")
            for s in sources):
         return "vcs source"
@@ -64,6 +69,13 @@ def _recipe_skip_justification(recipe_text: str) -> str:
     keys = list(recipe.arrays) + list(recipe.scalars)
     if any(str(k).upper().startswith("DKMS") for k in keys):
         return "vcs source"
+    # The source archive is unreadable (a build-server archive, a redirect),
+    # but the recipe verifies the extracted payload against a hash list.
+    # ttf-google-sans SKIPs the gitiles tarball and runs `sha256sum -c` over
+    # every font; that is verification, not a disabled checksum.
+    if re.search(r"\b(?:sha256sum|sha512sum|b2sum|md5sum|shasum)\b[^\n]*"
+                 r"(?:-c|--check)", recipe_text):
+        return "verified after extraction"
     return ""
 
 

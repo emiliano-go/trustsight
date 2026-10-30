@@ -1,5 +1,24 @@
-# ruff: noqa: F405
+# ruff: noqa: F401,F405
 from ._build_constants import *  # noqa: F401,F403
+from ._build_flags import (
+    _BUILD_FLAG_ASSIGN_RE,
+    _HARDENING_OFF_RE,
+    _build_flag_findings,
+)
+from ._build_reconstruction import (
+    _OBFUSCATION_MARKER_RE,
+    _REVEALED_RUN_RE,
+    _reconstruction_findings,
+)
+from ._function_shadowing import (
+    _FUNCTION_ASSIGN_RE,
+    _FUNCTION_DEF_RE,
+    _PKGBUILD_ARRAY_VARS,
+    _SHADOWED_NAMES,
+    _function_shadow_findings,
+)
+
+
 def _address_in(text: str) -> str | None:
     """The first remote address in *text*, scheme-bearing or scp-style.
 
@@ -774,261 +793,3 @@ def _build_findings(diff_text, config, add, current_text=None, ctx=None) -> None
                     f"{scopes.label(i, _CRITICAL_FUNCTIONS)}() line has {count} obfuscation indicators: {body.strip()[:80]}",
                     position=enclosing[i], count=count, body=body.strip()[:80])
                 break
-
-
-# ---------------------------------------------------------------------------
-# H065 - obfuscated literal reconstructed
-# ---------------------------------------------------------------------------
-
-# A revealed run this long is a word - a command name, a host, a flag.  A
-# shorter one is punctuation, and ``$'\n'``/``$'\t'`` in a sed or awk program
-# is ordinary shell, not a campaign marker.
-_REVEALED_RUN_RE = re.compile(r"[!-~]{3,}")
-
-# Ordinary quoted data (``depends=('glibc' 'foo')``) is not obfuscation, but
-# quote stripping would make it look as if something was hidden.  Only report
-# H065 when the original line carried one of the reconstruction targets.
-#
-# The partial-quoting arms require an alphanumeric in the quoted interior.
-# A revealed literal is *content* (``b"u"n`` hides ``bun``); the ``::`` that
-# separates the two halves of a makepkg array element is punctuation, so
-# ``"${pkgname}-x86_64"::"${url}/..."`` must not read as a hidden word.
-_OBFUSCATION_MARKER_RE = re.compile(
-    r"(?<=\w)(?:''|\"\")(?=\w)"          # empty-quote concat: b''u''n
-    r"|\$\(\s*printf\s+['\"]"           # $(printf 'literal')
-    r"|\$'"                                # ANSI-C quote (also: fully=False)
-    r"|\w['\"][^'\"\s]*[A-Za-z0-9][^'\"\s]*['\"]"   # partial quoting, left-glued
-    r"|['\"][^'\"\s]*[A-Za-z0-9][^'\"\s]*['\"]\w",  # partial quoting, right-glued
-    re.IGNORECASE,
-)
-
-
-def _reconstruction_findings(diff_text, config, add) -> None:
-    """Report that a line was read in reconstructed form (H065).
-
-    The tokenizer already rebuilds the four obfuscation forms so that
-    H035/R003/R039 match on what the line *means* rather than on how it is
-    spelled.  Doing that silently would leave the report describing text the
-    file does not contain, so the reconstruction is itself a reported fact:
-    weight 0, no score, but the reviewer is told which line was rewritten and
-    into what before any other rule quoted it.
-
-    A literal that could *not* be rebuilt (a malformed ``$'``) is reported
-    too, and as the inconclusive case - unreconstructable input is never
-    read as clean.
-    """
-    raw_lines = parse_diff_lines(join_line_continuations(split_lines(diff_text))).lines
-    bodies = [
-        _strip_comment(line.content)
-        for line in raw_lines
-        if line.side == "add" and not line.raw.startswith("+++")
-    ]
-    # One round-trip for every line's reconstruction rather than one per
-    # line: the body walk is O(lines) and would otherwise be the sandbox's
-    # dominant cost on ordinary text.
-    rebuilt_pairs = reconstruct_lines_stateful(bodies)
-    for body, (rebuilt, fully, quoted) in zip(bodies, rebuilt_pairs, strict=True):
-        if quoted:
-            continue
-        if not fully:
-            # An ANSI-C quote that survived reconstruction is the
-            # inconclusive case, whether or not anything else on the line
-            # was rebuilt - so this is tested before the "nothing changed"
-            # exit, which a wholly unreconstructable line also takes.
-            add("H065", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
-                f"line carries a literal that could not be reconstructed: {body.strip()[:80]}",
-                detail="obfuscated literal could not be fully reconstructed",
-                reconstructed=False, body=body.strip()[:80])
-            return
-        if rebuilt == body:
-            continue
-        if not _OBFUSCATION_MARKER_RE.search(body):
-            continue
-        # Partial quoting is only obfuscation when it hides a command word.
-        # `install -Dm"$mode"` and `install -Dm"755"` are ordinary shell
-        # quoting of an option argument; the command word is unchanged, so
-        # the reconstruction reveals nothing a rule did not already see.
-        # The explicit forms (empty-quote concatenation, printf, ANSI-C)
-        # still report in any position.
-        explicit = any(marker in body for marker in ("''", '""', "$(printf", "$'"))
-        raw_word = body.strip().split(None, 1)[0] if body.strip() else ""
-        rebuilt_word = rebuilt.strip().split(None, 1)[0] if rebuilt.strip() else ""
-        if not explicit and raw_word == rebuilt_word:
-            continue
-        revealed = [
-            token for token in _REVEALED_RUN_RE.findall(rebuilt)
-            if token not in body
-        ]
-        if not revealed:
-            continue
-        add("H065", "Obfuscated Literal Reconstructed", "INFO", "obfuscation",
-            f"obfuscated literal reconstructs to {revealed[0][:40]!r}: {body.strip()[:80]}",
-            detail=f"obfuscated literal reconstructs to {revealed[0][:40]!r}",
-            reconstructed=True, revealed=revealed[0][:40], body=body.strip()[:80])
-        return
-
-
-# ---------------------------------------------------------------------------
-# H079 - the recipe overrides the distribution build flags
-# ---------------------------------------------------------------------------
-
-_BUILD_FLAG_ASSIGN_RE = re.compile(
-    r"^\s*(?:export\s+|declare\s+-x\s+)?"
-    r"(CFLAGS|CXXFLAGS|CPPFLAGS|LDFLAGS|RUSTFLAGS|MAKEFLAGS)\s*(\+?=)\s*(.*)$"
-)
-
-# Turning one of these off removes a mitigation makepkg.conf turned on.
-# ``-D_FORTIFY_SOURCE=0``/``-U_FORTIFY_SOURCE`` are the disabling spellings;
-# a package raising the level is not weakening anything.
-_HARDENING_OFF_RE = re.compile(
-    r"-fno-stack-protector|-U_FORTIFY_SOURCE|-D_FORTIFY_SOURCE\s*=\s*0"
-    r"|-fno-PIE\b|-fno-pie\b|-no-pie\b|-fno-PIC\b|-fno-pic\b"
-    r"|-fcf-protection\s*=\s*none|-fno-stack-clash-protection"
-    r"|-z\s*execstack|-z\s*norelro|-Wl,-z,execstack|-Wl,-z,norelro",
-    re.IGNORECASE,
-)
-
-
-def _build_flag_findings(diff_text, config, add) -> None:
-    """The recipe replaces or weakens the distribution's build flags (H079).
-
-    makepkg exports a hardened flag set (stack protector, FORTIFY_SOURCE,
-    PIE, RELRO).  A recipe that *appends* to it keeps those; one that
-    assigns over it silently drops every mitigation the distribution
-    configured, and one that spells out a disabling flag drops a named one.
-    Either way the binary a user installs is built with weaker mitigations
-    than the same source built through the normal path, and nothing in the
-    package metadata says so.
-
-    Only the recipe's own lines count: a vendored Makefile or configure
-    fragment inside a shipped patch is not the packager's assignment.
-
-    Kept off H025's evidence: H025 reports that a build function *modified*
-    the environment, which is the weaker claim and already covers the
-    in-function case.  H079 adds the two things H025 does not say - a named
-    mitigation being switched off (HIGH, wherever it appears) and a
-    top-level replacement of the whole set (MEDIUM), which H025 cannot see
-    because it is scoped to build functions and which also runs at parse
-    time, before any build step.
-    """
-    lines = mask_to_recipe(join_line_continuations(split_lines(diff_text)))
-    enclosing = _classify_enclosing_function(lines)
-    for i, line in enumerate(parse_diff_lines(lines).lines):
-        if line.side != "add" or line.raw.startswith("+++"):
-            continue
-        body = _strip_comment(line.content)
-        match = _BUILD_FLAG_ASSIGN_RE.match(body)
-        if not match:
-            continue
-        variable, operator, value = match.group(1), match.group(2), match.group(3)
-        if _HARDENING_OFF_RE.search(value):
-            add("H079", "Build Flags Weakened", "HIGH", "integrity",
-                f"{variable} disables a hardening default: {value.strip()[:70]}",
-                line=i + 1, variable=variable, value=value.strip()[:70],
-                detail=f"{variable} disables a hardening default")
-            return
-        # A value that carries no literal flag token (``CFLAGS="${_cflags[@]}"``)
-        # is a set this rule cannot read: whether it still contains the
-        # distribution's flags is not visible here, and claiming a
-        # replacement would be claiming more than the diff shows.
-        if (
-            enclosing.get(i) is None
-            and operator == "="
-            and not re.search(r"\$\{?" + variable + r"\b", value)
-            and re.search(r"(?:^|\s|[\"'])-[A-Za-z]", value)
-        ):
-            add("H079", "Build Flags Weakened", "MEDIUM", "integrity",
-                f"{variable} is replaced at the top level rather than "
-                f"extended, dropping the makepkg.conf set: {value.strip()[:70]}",
-                line=i + 1, variable=variable, value=value.strip()[:70],
-                detail=f"{variable} replaces the distribution flag set at parse time")
-            return
-
-
-# ---------------------------------------------------------------------------
-# H097 - function shadowing
-# ---------------------------------------------------------------------------
-
-_FUNCTION_DEF_RE = re.compile(
-    r"^\s*(?:function\s+)?(\w+)\s*\(\s*\)\s*\{"
-)
-_FUNCTION_ASSIGN_RE = re.compile(
-    r"^\s*(\w+)\s*=\s*\("
-)
-
-# Every shell builtin, makepkg helper, and common utility whose
-# redefinition in a PKGBUILD is suspicious.  Legitimate packages never
-# do this; an attacker who redefines msg() suppresses output, cd()
-# hijacks the working directory, and source() redirects file inclusion.
-# Note: "source" is included for function definitions (source() is
-# suspicious) but excluded from array assignments via _PKGBUILD_ARRAY_VARS
-# because source=() is a legitimate PKGBUILD array declaration.
-_SHADOWED_NAMES = frozenset({
-    # Shell builtins
-    "cd", "echo", "printf", "read", "source", ".", "eval", "exec",
-    "set", "unset", "export", "declare", "local", "typeset",
-    "trap", "kill", "wait", "exit", "return", "break", "continue",
-    "shift", "test", "[", "command", "builtin", "enable", "hash",
-    "type", "which", "getopts", "false", "true",
-    # Makepkg helpers
-    "msg", "msg2", "warning", "error", "die", "plain",
-    # Core utilities commonly called directly
-    "cp", "mv", "rm", "ln", "cat", "grep", "sed", "awk",
-    "find", "xargs", "chmod", "chown", "tar", "gzip", "gunzip",
-    "make", "install", "mkdir", "rmdir", "touch", "head", "tail",
-    "sort", "uniq", "wc", "tr", "cut", "paste", "diff", "patch",
-    "curl", "wget", "git", "ssh", "scp", "rsync",
-    "chmod", "chown", "chgrp", "mktemp", "basename", "dirname",
-    "realpath", "readlink", "stat", "file", "dd", "tee",
-    "env", "nice", "timeout", "nohup", "script", "strace",
-})
-
-# PKGBUILD-specific variable names that are legitimately assigned with =()
-# and must not trigger H097.
-_PKGBUILD_ARRAY_VARS = frozenset({
-    "source", "source_x86_64", "source_aarch64", "source_i686",
-    "sha256sums", "sha512sums", "sha1sums", "md5sums", "b2sums",
-    "sha256sums_x86_64", "sha512sums_x86_64",
-    "depends", "makedepends", "checkdepends", "optdepends",
-    "provides", "conflicts", "replaces",
-    "backup", "options", "install", "changelog",
-    "noextract", "validpgpkeys",
-})
-
-
-def _function_shadow_findings(diff_text, config, add) -> None:
-    """A function or variable is redefined, suppressing or hijacking
-    makepkg logic (H097).
-
-    Redefining msg(), error(), or die() suppresses build output.
-    Redefining cd() hijacks the working directory.  Redefining source()
-    or .() redirects file inclusion.  No benign PKGBUILD does any of
-    these.
-    """
-    lines = mask_to_pkgbuild(resolve_added_lines(diff_text))
-    for i, line in enumerate(lines):
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        body = _strip_comment(line[1:])
-        # Check function definitions: name() { or function name() {
-        m = _FUNCTION_DEF_RE.match(body)
-        if m and m.group(1) in _SHADOWED_NAMES:
-            add("H097", "Function Shadowing", "HIGH", "integrity",
-                f"function '{m.group(1)}' is redefined",
-                line=i + 1, body=body.strip()[:80],
-                func_name=m.group(1),
-                detail=f"redefinition of {m.group(1)} may suppress or "
-                       f"hijack makepkg logic")
-            return
-        # Check array-style assignments: name=()
-        # Exclude PKGBUILD-specific variables (source, sha256sums, etc.)
-        # which are legitimately assigned with =().
-        m = _FUNCTION_ASSIGN_RE.match(body)
-        if m and m.group(1) in _SHADOWED_NAMES and m.group(1) not in _PKGBUILD_ARRAY_VARS:
-            add("H097", "Function Shadowing", "HIGH", "integrity",
-                f"variable '{m.group(1)}' is reassigned as an array",
-                line=i + 1, body=body.strip()[:80],
-                func_name=m.group(1),
-                detail=f"reassignment of {m.group(1)} may suppress or "
-                       f"hijack makepkg logic")
-            return

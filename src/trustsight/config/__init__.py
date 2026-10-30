@@ -27,7 +27,6 @@ from ._default_config import (
     _toml_str_list,
     _toml_value,
 )
-from ._legacy_shipped_patterns import HISTORICAL_RULE_PATTERNS as _HISTORICAL_RULE_PATTERNS
 from ._default_rules import (
     DEFAULT_DOMAINS,
     DEFAULT_RULES,
@@ -68,8 +67,8 @@ from ._defaults_executor import (
     DEFAULT_VARIANT_SUFFIXES,
     EXEC_WRAPPER,
     GETENT_ENUMERATION_FRAGMENT,
-    H067_LEGACY_SYSTEMD_DETECT_VIRT,
-    H067_SYSTEMD_DETECT_VIRT_PROBE,
+    H067_LEGACY_SYSTEMD_DETECT_VIRT as H067_LEGACY_SYSTEMD_DETECT_VIRT,
+    H067_SYSTEMD_DETECT_VIRT_PROBE as H067_SYSTEMD_DETECT_VIRT_PROBE,
     LEGACY_FOREIGN_PKG_MANAGER_LISTS,
     LEGACY_NETWORK_TOOL_LISTS,
     LEGACY_NETWORK_TOOLS,
@@ -86,6 +85,36 @@ from ._defaults_executor import (
 
 _log = logging.getLogger(__name__)
 _DOMAIN_TABLE_CACHE = None
+
+from ._legacy import (  # noqa: E402,F401
+    _LEGACY_REVIEW_LIMIT_RE,
+    _refresh_legacy_anti_analysis_probes,
+    _refresh_legacy_foreign_pkg_managers,
+    _refresh_legacy_iocs,
+    _refresh_legacy_network_tools,
+    _refresh_legacy_recon_commands,
+    _refresh_legacy_review_limit,
+)
+from ._release import (  # noqa: E402,F401
+    _PARSE_WARNED,
+    _release_section,
+    _warn_unparsable_config,
+    configured_baseline_tag,
+    configured_ioc_tag,
+    configured_release_channel,
+    configured_release_key,
+    configured_watchlist_tag,
+)
+from ._rule_sync import (  # noqa: E402,F401
+    LEGACY_RULE_PATTERNS,
+    _replace_rule_block,
+    _rule_blocks,
+    _shipped_rule_fields,
+    drifted_shipped_rules,
+    missing_shipped_rules,
+    outdated_shipped_rules,
+    sync_rules,
+)
 
 CONFIG_DIR = Path.home() / ".config" / "trustsight"
 
@@ -107,170 +136,6 @@ def ensure_dirs():
             os.chmod(d, 0o700)
         except OSError:
             pass
-
-def _refresh_legacy_iocs() -> bool:
-    """Replace an untouched pre-H056 iocs.toml.  True when rewritten."""
-    path = CONFIG_DIR / "iocs.toml"
-    try:
-        if path.read_text() in LEGACY_IOCS_STUBS:
-            path.write_text(DEFAULT_IOCS)
-            _toml_cache.pop("iocs.toml", None)
-            return True
-    except OSError:
-        pass
-    return False
-
-_LEGACY_REVIEW_LIMIT_RE = re.compile(
-    rf"^(\s*default_review_limit\s*=\s*){LEGACY_DEFAULT_REVIEW_LIMIT}(\s*)$"
-)
-
-def _refresh_legacy_review_limit() -> bool:
-    """Repair the stale shipped ``default_review_limit``.  True when rewritten."""
-    path = CONFIG_DIR / "config.toml"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    out: list[str] = []
-    section = ""
-    changed = False
-    for line in text.splitlines(keepends=True):
-        newline = "\n" if line.endswith("\n") else ""
-        body = line[:-1] if newline else line
-        stripped = body.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            section = stripped
-        if section == "[limits]" and _LEGACY_REVIEW_LIMIT_RE.match(body):
-            out.append(_LEGACY_REVIEW_LIMIT_RE.sub(r"\g<1>0\g<2>", body) + newline)
-            changed = True
-        else:
-            out.append(line)
-    if not changed:
-        return False
-    path.write_text("".join(out), encoding="utf-8")
-    _toml_cache.pop("config.toml", None)
-    _log.info("repaired the legacy default_review_limit to 0 (read everything)")
-    return True
-
-_LEGACY_GETENT_FRAGMENT = r"(?:\A\s*|[;&|]\s*)getent\b"
-
-def _refresh_legacy_recon_commands() -> bool:
-    """Repair the stale shipped H040 ``getent`` fragment in patterns.toml.
-
-    The fragment used to fire on targeted lookups (``getent passwd <name>``
-    - the standard provisioning step before ``useradd``) as well as keyless
-    enumeration.  patterns.toml is written once at install and never
-    synced, so existing installs keep the old fragment; when the file still
-    carries it, the one line is swapped in place (the surrounding list, and
-    any user customisation of it, is preserved).  True when rewritten.
-    """
-    path = CONFIG_DIR / "patterns.toml"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    old_line = "    " + _toml_value(_LEGACY_GETENT_FRAGMENT) + ",\n"
-    new_line = "    " + _toml_value(GETENT_ENUMERATION_FRAGMENT) + ",\n"
-    if text.count(old_line) != 1:
-        return False
-    path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
-    _toml_cache.pop("patterns.toml", None)
-    _log.info("repaired the legacy H040 getent fragment in patterns.toml")
-    return True
-
-def _refresh_legacy_network_tools() -> bool:
-    """Repair the shipped D003 list when it still has the pre-expansion set.
-
-    ``patterns.toml`` is written once at install and never synced, so an
-    install from before the transfer-client expansion keeps the old list
-    forever.  The parsed value must equal the exact legacy list: a user who
-    added or removed an entry keeps their table untouched.
-    """
-    path = CONFIG_DIR / "patterns.toml"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    try:
-        parsed = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return False
-    current = (parsed.get("patterns") or {}).get("network_tools")
-    legacy = next(
-        (table for table in LEGACY_NETWORK_TOOL_LISTS
-         if current == list(table)),
-        None,
-    )
-    if legacy is None:
-        return False
-    old_block = "network_tools = " + _toml_str_list(legacy)
-    new_block = "network_tools = " + _toml_str_list(DEFAULT_NETWORK_TOOLS)
-    if old_block not in text:
-        return False
-    path.write_text(text.replace(old_block, new_block, 1), encoding="utf-8")
-    _toml_cache.pop("patterns.toml", None)
-    _log.info("repaired the legacy D003 network_tools list in patterns.toml")
-    return True
-
-
-def _refresh_legacy_foreign_pkg_managers() -> bool:
-    """Repair the shipped H035 list when it still has the pre-expansion set.
-
-    ``patterns.toml`` is written once at install and never synced.  The
-    parsed value must equal the exact legacy list; a user who added or
-    removed an entry keeps their table untouched.
-    """
-    path = CONFIG_DIR / "patterns.toml"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    try:
-        parsed = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return False
-    current = (parsed.get("patterns") or {}).get("foreign_pkg_managers")
-    legacy = next(
-        (table for table in LEGACY_FOREIGN_PKG_MANAGER_LISTS
-         if current == list(table)),
-        None,
-    )
-    if legacy is None:
-        return False
-    old_block = "foreign_pkg_managers = " + _toml_str_list(legacy)
-    new_block = "foreign_pkg_managers = " + _toml_str_list(
-        DEFAULT_FOREIGN_PKG_MANAGERS)
-    if old_block not in text:
-        return False
-    path.write_text(text.replace(old_block, new_block, 1), encoding="utf-8")
-    _toml_cache.pop("patterns.toml", None)
-    _log.info("repaired the legacy H035 foreign_pkg_managers list in patterns.toml")
-    return True
-
-
-def _refresh_legacy_anti_analysis_probes() -> bool:
-    """Repair the stale shipped H067 ``systemd-detect-virt`` probe.
-
-    The probe fired on ``systemd-detect-virt --chroot``, the udev/chroot
-    availability guard an install scriptlet legitimately runs.  patterns.toml
-    is written once at install and never synced, so an existing install keeps
-    the broad fragment; when the file still carries it, that one line is
-    swapped in place and user customisation of the rest is preserved.
-    """
-    path = CONFIG_DIR / "patterns.toml"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-    old_line = "    " + _toml_value(H067_LEGACY_SYSTEMD_DETECT_VIRT) + ",\n"
-    new_line = "    " + _toml_value(H067_SYSTEMD_DETECT_VIRT_PROBE) + ",\n"
-    if text.count(old_line) != 1:
-        return False
-    path.write_text(text.replace(old_line, new_line, 1), encoding="utf-8")
-    _toml_cache.pop("patterns.toml", None)
-    _log.info("repaired the legacy H067 systemd-detect-virt probe in patterns.toml")
-    return True
-
 
 def ensure_default_configs():
     """Write default config files if they do not exist, and add missing shipped rules."""
@@ -407,401 +272,9 @@ def set_config(key: str, value: str):
 
     path.write_text(text)
 
-def _rule_blocks(toml_text: str) -> dict[str, str]:
-    """Map rule id to its raw ``[[rules]]`` block text."""
-    blocks: dict[str, str] = {}
-    for chunk in toml_text.split("[[rules]]")[1:]:
-        block = "[[rules]]" + chunk
-        match = re.search(r'^id\s*=\s*["\']([^"\']+)["\']', block, re.MULTILINE)
-        if match:
-            blocks[match.group(1)] = block.rstrip() + "\n"
-    return blocks
-
-LEGACY_RULE_PATTERNS: dict[str, set[str]] = {
-    # Pre-0.2.1: fired FATAL on U+200B-U+200D regardless of context, so a
-    # localized desktop entry in a benign package scored 100/100.
-    "R013": {r"[\u202A-\u202E\u2066-\u2069\u200B-\u200D\uFEFF]"},
-    # Pre-2026-08-03: one phrasing of one injection family, and comments -
-    # where the payload always lives - were filtered out before matching.
-    # It caught 3 of 22 injection fixtures.
-    "R012": {
-        r"ignore\s+(?:all\s+)?previous\s+(?:instructions|commands|input)",
-        # Pre-2026-10-16: alternative 8 fired on any model name within 60
-        # chars of ignore/approve/skip, so a pkgdesc describing an LLM
-        # tool ("local LLM watches sessions and decides what to approve")
-        # scored FATAL.  The verb must now take an object.
-        r"""\b(?:ignore|disregard|forget|override|bypass)\s+(?:all\s+|any\s+|the\s+)*(?:previous|above|prior|earlier|preceding|foregoing|existing)\b|^[^\S\n]*(?:#[^\S\n]*)?(?:system|assistant)[^\S\n]*:[^\S\n]*\S|</?(?:system|instructions?|admin|prompt|assistant)\s*>|\byou\s+are\s+(?:an?|the)\s+[^.\n]{0,48}?(?:model|assistant|ai\b)|\bnew\s+instructions?\s*:|\bdo(?:\s+not|n['’]t)\s+(?:flag|warn|analy[sz]e|review|scan)\b|\bdo(?:\s+not|n['’]t)\s+report\s+(?:any\s+|the\s+)?(?:security|issues?|concerns?|problems?|findings?|warnings?|anything)\b|\b(?:mark|classify|report|treat|label|approve)\b[^.\n]{0,24}?\bas\s+(?:safe|benign|clean|harmless|trusted|ok)\b|\b(?:claude|chatgpt|gpt-?[0-9]?|copilot|gemini|llm|ai\s+assistant)\b[^.\n]{0,60}?\b(?:ignore|approve|skip|overlook|flag)\b""",
-    },
-    # Pre-0.13.2: quadratic, and therefore refused by the compile-time
-    # safety check once the probe alphabet could see a punctuation-only
-    # literal.  A refused pattern does not raise - the rule silently stops
-    # matching - so an install-file modification would go unreported on
-    # every installation still holding the old text.
-    "R007": {r"\+.*\.install.*"},
-    # Pre-0.13.3: fired on an escaped pipe, which runs no pipeline. The
-    # replacement is strictly narrower, so an install still holding this
-    # one loses nothing but the false positive.
-    "R001": {
-        r"curl.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)"
-    },
-    "R002": {
-        r"wget.*\|\s*(?:/bin/)?(?:bash|sh|python|zsh|dash|busybox\s+sh|source\s+/dev/stdin)"
-    },
-    "R003": {
-        r"base64.*(?:\-d|\-\-decode).*\|",
-        r"base64.*(?:\-d|\-\-decode).*(?<!\\)\|",
-    },
-    "R045": {r"\b(?:xxd|uudecode)\s+[^|]*\|"},
-    # The client list R051 names grew (rclone moveto/move/bisync/copyurl,
-    # npx), then again in 0.18.0 (git's global options before the verb, for
-    # clone/fetch/pull/ls-remote/archive, `git lfs` and `git push`); R057
-    # grew the TLS-off flags of the other catalogued clients.  These
-    # patterns are shipped, not user-authored, so the old spellings are
-    # recorded here and `config sync-rules --update` repairs an install
-    # that still carries one.
-    "R051": {
-        r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b",
-        r"\b(?:curl|wget2?|aria2c|axel|lftp|ncftp(?:get)?|snarf|httpie|elinks|links2?|w3m|lynx|browsh|scp|sftp|rsync|ftp|tftp|ssh(?=\s+(?:-\S+\s+)*[\w.@-]+\s+\S)|nc|ncat|netcat|socat|telnet|openssl\s+s_client|dig|host|nslookup|drill|kdig|git\s+(?:clone|fetch|pull|ls-remote|archive)|svn\s+(?:co|checkout|export)|hg\s+(?:clone|pull|unbundle)|bzr\s+(?:branch|pull|export)|darcs\s+get|fossil\s+clone|cvs\s+(?:[-:]\S+\s+)*(?:co|checkout|export)|s3cmd\s+(?:get|sync|cp)|aws\s+s3\s+(?:cp|sync|mv)|gsutil\s+(?:cp|rsync)|az(?:copy)?\s+(?:storage\s+blob\s+download|copy)|rclone\s+(?:copy|sync|cat|copyto|copyurl|moveto|move|bisync)|ipfs\s+(?:get|cat|dag\s+get)|swift\s+download|rados\s+get|git\s+lfs\s+(?:pull|fetch|checkout)|yt-dlp|youtube-dl|transmission-cli|aria2c(?=\s+[^\n;&|]*magnet:)|b2\s+download-file|restic\s+restore|borg\s+extract|lwp-request|lwp-download|npx|git\s+push|fetch(?=\s+[^\n;&|]*\b(?:https?|ftps?)://))\b",
-    },
-    "R057": {r"(?:curl\s+(?:[^;&|]*\s)?(?:--insecure|-k)\b|wget\s+(?:[^;&|]*\s)?--no-check-certificate\b)"},
-    # R046/R047 are generated from config, but an install that predates the
-    # loopback/RFC1918/link-local exclusions still carries these older
-    # spellings on disk.  Their detection is regenerated before matching, so
-    # a stale spelling is inert; listing it lets `config sync-rules --update`
-    # rewrite the stored text anyway.
-    "R046": {r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}"},
-    "R047": {r'https?://[^/\s:]+:(?!(?:80|443|8080|8443)(?:[/\s"\x27]|$))\d{2,5}'},
-    # R054 was narrowed to writes *outside* the package root.  A `$pkgdir`
-    # staged unit is the package's own content (every daemon ships its
-    # systemd unit that way); firing HIGH on it flagged ordinary packages.
-    # The legacy pattern matched `$pkgdir` too, so it is listed here and
-    # `config sync-rules --update` repairs an install that still carries it.
-    "R054": {r'(?:\b(?:install|cp|mv|ln|tee|dd|rsync|mkdir|cat|printf|echo)\b|>)[^;&|\n]*?(?:[\s"\x27]|\$\{?pkgdir\}?)(?:(?:/etc/(?:cron\.[a-z]+|cron\.d|systemd/(?:system|user)|profile\.d|bash\.bashrc\.d|zsh(?:/zshrc\.d|rc\.d)|X11/(?:Xsession|xinit/xinitrc)\.d|xdg/autostart|dbus-1/(?:system|session)\.d|sudoers\.d|ld\.so\.conf\.d|pam\.d|security/pam_\w+\.conf|NetworkManager/dispatcher\.d|xinetd\.d|(?:init|rc)\.d|logrotate\.d|tmpfiles\.d|sysusers\.d|binfmt\.d|sysctl\.d|environment\.d|polkit-1/(?:rules|actions)\.d|polkit-1/(?:rules|actions)|skel|update-motd\.d|systemd/(?:system|user)-preset)|/usr/lib/systemd/(?:system|user)|/usr/lib/systemd/(?:system|user)-(?:generators|sleep|shutdown)|/usr/share/dbus-1/(?:system|session)-services|/var/spool/cron)/|(?:/etc/(?:rc\.local|profile|bash\.bashrc|ld\.so\.preload|environment|csh\.cshrc|zsh/(?:zshrc|zprofile|zshenv)|X11/xinit/xinitrc|X11/Xsession))(?![\w./-]))'},
-}
-
-# Patterns every earlier release shipped, extracted from the tags by
-# scripts/build_legacy_shipped_patterns.py.  The hand-curated entries above
-# carry the pre-history cases and their explanations; this closes the gap a
-# hand-maintained list kept leaving when a release changed a pattern.
-for _rule_id, _patterns in _HISTORICAL_RULE_PATTERNS.items():
-    LEGACY_RULE_PATTERNS.setdefault(_rule_id, set()).update(_patterns)
-
-def outdated_shipped_rules() -> list[str]:
-    """Ids whose on-disk pattern is a superseded shipped pattern."""
-    path = CONFIG_DIR / "rules.toml"
-    if not path.exists():
-        return []
-    current = {rid: b for rid, b in _rule_blocks(DEFAULT_RULES).items()}
-    outdated = []
-    for rule in load_rules():
-        rid = rule.get("id")
-        if rid not in current or rid not in LEGACY_RULE_PATTERNS:
-            continue
-        if rule.get("pattern") in LEGACY_RULE_PATTERNS[rid]:
-            outdated.append(rid)
-    return outdated
-
-def _shipped_rule_fields() -> dict[str, dict[str, str]]:
-    """Parse the shipped rule blocks into ``{id: {field: value}}``."""
-    parsed: dict[str, dict[str, str]] = {}
-    for rid, block in _rule_blocks(DEFAULT_RULES).items():
-        fields: dict[str, str] = {}
-        for field in _SEMANTIC_FIELDS:
-            match = re.search(rf"^{field}\s*=\s*(.+)$", block, re.MULTILINE)
-            if not match:
-                continue
-            value = match.group(1).strip()
-            # A list field (`scope`) is compared against the parsed Python
-            # value on disk, so normalise it the same way: `str(list)` for
-            # `["a", "b"]` is `"['a', 'b']"`, which a bare strip never
-            # produced - comparing raw TOML text to that reported a drift on
-            # every rule that carries a scope.
-            if value.startswith("["):
-                try:
-                    value = str(tomllib.loads(f"v = {value}")["v"])
-                except (tomllib.TOMLDecodeError, KeyError):
-                    pass
-            fields[field] = value.strip("'\"")
-        parsed[rid] = fields
-    return parsed
-
-def drifted_shipped_rules() -> list[tuple[str, str, str, str]]:
-    """Rules on disk whose semantics differ from the shipped definition.
-
-    Returns ``(rule_id, field, on_disk, shipped)`` tuples.
-
-    ``rules.toml`` is written once, at install time, and only ever gains
-    rules afterwards.  A shipped rule that later changes ``match_target``
-    therefore keeps its original behaviour forever on an existing install.
-    That is not cosmetic: R001 and friends moved to ``match_target =
-    "resolved"`` so that a payload assembled from shell variables is
-    caught, and an install still holding ``raw_line`` silently misses it.
-
-    Reporting only.  These are not auto-corrected, because a rule whose
-    pattern the user has broadened would lose that work if the shipped
-    block were written over it.
-
-    The ``pattern`` field is skipped for the ids in
-    :data:`rules._compiled.GENERATED_PATTERN_RULES`: those patterns are
-    regenerated before matching, so their on-disk text is inert and a
-    difference there is not drift.
-    """
-    path = CONFIG_DIR / "rules.toml"
-    if not path.exists():
-        return []
-    # R013/R046/R047/R048/R152 carry a placeholder in TOML; their real
-    # pattern is regenerated from Unicode data and config before matching
-    # (`rules._compiled.resolve_generated_patterns`).  The on-disk `pattern`
-    # therefore never affects what they detect, so a difference there is not
-    # semantic drift and must not fail the run closed.
-    from ..rules._compiled import GENERATED_PATTERN_RULES
-
-    shipped = _shipped_rule_fields()
-    drift: list[tuple[str, str, str, str]] = []
-    for rule in load_rules():
-        rid = rule.get("id")
-        expected = shipped.get(rid)
-        if not expected:
-            continue
-        for field in _SEMANTIC_FIELDS:
-            if field not in expected:
-                continue
-            if field == "pattern" and rid in GENERATED_PATTERN_RULES:
-                continue
-            default = "raw_line" if field == "match_target" else ""
-            actual = str(rule.get(field, default))
-            if actual != expected[field]:
-                drift.append((rid, field, actual, expected[field]))
-    return drift
-
-def missing_shipped_rules() -> list[str]:
-    """Ids present in ``DEFAULT_RULES`` but absent from the user's file.
-
-    ``write_default_file`` only writes when the file does not exist, so an
-    install that predates a rule addition never receives it.  Without this
-    check, enabling a new rule in ``config.toml`` silently does nothing.
-    """
-    from ..rule_id_history import RETIRED_RULE_IDS
-
-    path = CONFIG_DIR / "rules.toml"
-    if not path.exists():
-        return []
-    existing = {r.get("id") for r in load_rules()}
-    # a retired id is never resurrected by a sync. Its
-    # detection now fires under the survivor, so re-adding the old block
-    # would double-report; the alias in `survivor_id` is what keeps the id
-    # readable.
-    return [rid for rid in _rule_blocks(DEFAULT_RULES)
-            if rid not in existing and rid not in RETIRED_RULE_IDS]
-
-def _replace_rule_block(text: str, rule_id: str, new_block: str) -> str:
-    """Swap the ``[[rules]]`` block for *rule_id* in *text*."""
-    parts = text.split("[[rules]]")
-    out = [parts[0]]
-    for chunk in parts[1:]:
-        block = "[[rules]]" + chunk
-        match = re.search(r'^id\s*=\s*["\']([^"\']+)["\']', block, re.MULTILINE)
-        if match and match.group(1) == rule_id:
-            trailing = len(block) - len(block.rstrip())
-            out.append(new_block.rstrip() + block[len(block.rstrip()):] if trailing else new_block.rstrip())
-        else:
-            out.append(block)
-    return "".join(out)
-
-def sync_rules(update_outdated: bool = False) -> tuple[list[str], list[str]]:
-    """Bring the user's ``rules.toml`` in line with the shipped defaults.
-
-    Appending is always safe, so missing rules are added unconditionally.
-    Replacing is not, so a rule is only rewritten when *update_outdated*
-    is set **and** either its current pattern is one this project shipped
-    before (meaning the user never edited it) **or** its semantic fields
-    other than ``pattern`` (match_target, severity, category) differ from
-    the shipped definition.
-
-    Rules whose pattern was intentionally edited by the user are never
-    overwritten, even if other fields drifted.
-
-    Returns ``(added_ids, updated_ids)``.
-    """
-    path = CONFIG_DIR / "rules.toml"
-    if not path.exists():
-        ensure_default_configs()
-        return [], []
-
-    blocks = _rule_blocks(DEFAULT_RULES)
-    text = path.read_text().rstrip() + "\n"
-
-    updated: list[str] = []
-    if update_outdated:
-        # Update rules with superseded patterns (legacy shipped versions).
-        for rid in outdated_shipped_rules():
-            text = _replace_rule_block(text, rid, blocks[rid])
-            updated.append(rid)
-        # Also update rules whose non-pattern semantic fields drifted from
-        # shipped defaults (match_target, severity, category, scope).  A rule
-        # whose on-disk pattern is no longer the shipped one is skipped
-        # entirely: the user edited it, and replacing the block to fix a
-        # *different* field would discard that pattern (the docstring's
-        # promise).  Patterns are compared parsed-on-both-sides so a raw-text
-        # quirk cannot read as an edit.
-        _NON_PATTERN_FIELDS = ("match_target", "severity", "category", "scope")
-        on_disk_pattern = {
-            r.get("id"): str(r.get("pattern", "")) for r in load_rules()
-        }
-        shipped_pattern = {
-            r.get("id"): str(r.get("pattern", "")) for r in shipped_rules()
-        }
-        for rid, field, _seen, _shipped in drifted_shipped_rules():
-            if rid in updated or field not in _NON_PATTERN_FIELDS:
-                continue
-            if on_disk_pattern.get(rid, "") != shipped_pattern.get(rid, ""):
-                continue
-            text = _replace_rule_block(text, rid, blocks[rid])
-            updated.append(rid)
-
-    added = missing_shipped_rules()
-    for rid in added:
-        text += "\n" + blocks[rid]
-
-    # Stamp the current generation: a file with no marker is
-    # a pre-marker install and would keep reading as age-drifting after a
-    # sync; an old marker is replaced in place.
-    before = text
-    if _RULESET_VERSION_RE.search(text) is None:
-        text = f"# ruleset-version: {SHIPPED_RULESET_VERSION}\n" + text
-    else:
-        text = _RULESET_VERSION_RE.sub(
-            f"# ruleset-version: {SHIPPED_RULESET_VERSION}", text, count=1)
-    marker_changed = text != before
-
-    if added or updated or marker_changed:
-        path.write_text(text)
-    return added, updated
-
 def load_config() -> dict:
     """Load the user config.toml"""
     return load_toml("config.toml")
-
-_PARSE_WARNED: set[str] = set()
-
-def _warn_unparsable_config(exc: Exception) -> None:
-    """Warn once when config.toml cannot be parsed.
-
-    These accessors deliberately do not raise: they run while a URL is built
-    or a command starts, and a broken file must not take the whole tool down.
-    But swallowing the error silently would drop an operator's pinned
-    ``[release] key`` and fall back to the official channel without a word, so
-    say so - once per process.
-    """
-    if str(CONFIG_DIR) in _PARSE_WARNED:
-        return
-    _PARSE_WARNED.add(str(CONFIG_DIR))
-    _log.warning(
-        "config.toml could not be parsed (%s); using shipped defaults, so any "
-        "release channel or key set there is being ignored", exc)
-
-def configured_baseline_tag() -> str | None:
-    """The fallback baseline tag for the release channel, or ``None``.
-
-    Read without creating a config file: the release channel builds a URL
-    during a download and must not materialise operator state as a side
-    effect of a lookup.  An unreadable or absent file falls back to the
-    shipped default; an explicit empty value disables the fallback.
-    """
-    path = CONFIG_DIR / "config.toml"
-    try:
-        with open(path, "rb") as f:
-            section = tomllib.load(f).get("seed") or {}
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        _warn_unparsable_config(exc)
-        section = {}
-    # An explicit key wins, including an empty one: setting ``baseline_tag =
-    # ""`` turns the fallback off and makes a discovery failure fail closed.
-    if "baseline_tag" in section:
-        value = str(section["baseline_tag"] or "").strip()
-    else:
-        value = str(DEFAULT_BASELINE_TAG or "").strip()
-    return value or None
-
-def configured_ioc_tag() -> str | None:
-    """The fallback tag for the dedicated IOC channel, or ``None``.
-
-    Read from ``[baselines.ioc] tag`` without creating a config file, for the
-    same reason as :func:`configured_baseline_tag`: this runs while a download
-    URL is built.  An unset or empty value returns ``None``, which means
-    "resolve the newest ``ioc-*`` release".
-    """
-    path = CONFIG_DIR / "config.toml"
-    try:
-        with open(path, "rb") as f:
-            section = tomllib.load(f).get("baselines", {}).get("ioc") or {}
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        _warn_unparsable_config(exc)
-        section = {}
-    if "tag" in section:
-        value = str(section["tag"] or "").strip()
-    else:
-        value = str(DEFAULT_IOC_TAG or "").strip()
-    return value or None
-
-def configured_watchlist_tag() -> str | None:
-    """The fallback tag for the watchlist channel, or ``None``.
-
-    Read from ``[baselines.watchlist] tag`` without creating a config file,
-    for the same reason as :func:`configured_baseline_tag`: this runs while a
-    download URL is built.  An unset or empty value returns ``None``, which
-    means "resolve the newest ``watchlist-*`` release".
-    """
-    path = CONFIG_DIR / "config.toml"
-    try:
-        with open(path, "rb") as f:
-            section = tomllib.load(f).get("baselines", {}).get("watchlist") or {}
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        _warn_unparsable_config(exc)
-        section = {}
-    if "tag" in section:
-        value = str(section["tag"] or "").strip()
-    else:
-        value = str(DEFAULT_WATCHLIST_TAG or "").strip()
-    return value or None
-
-def _release_section() -> dict:
-    """The ``[release]`` table, read without creating a config file."""
-    path = CONFIG_DIR / "config.toml"
-    try:
-        with open(path, "rb") as f:
-            return tomllib.load(f).get("release") or {}
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        _warn_unparsable_config(exc)
-        return {}
-
-def configured_release_channel() -> str | None:
-    """The followed release channel as an ``owner/repo`` slug, or ``None``.
-
-    ``None`` means the canonical official channel.  Read without creating a
-    config file, for the same reason as :func:`configured_baseline_tag`: this
-    runs while a download URL is built.
-    """
-    section = _release_section()
-    if "channel" in section:
-        value = str(section["channel"] or "").strip()
-    else:
-        value = str(DEFAULT_RELEASE_CHANNEL or "").strip()
-    return value or None
-
-def configured_release_key() -> str | None:
-    """The pinned ed25519 key for a non-official release channel, or ``None``.
-
-    A path to a raw 32-byte key file, or 64 hex characters.  ``None`` means
-    "use the pinned official key"; the caller only consults this for a
-    non-official channel.
-    """
-    section = _release_section()
-    if "key" in section:
-        value = str(section["key"] or "").strip()
-    else:
-        value = str(DEFAULT_RELEASE_KEY or "").strip()
-    return value or None
 
 _shipped_rules_cache: list[dict] | None = None
 

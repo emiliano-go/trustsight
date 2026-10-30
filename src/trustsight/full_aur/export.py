@@ -500,6 +500,24 @@ def import_baseline(
             )
         log.info("signature verified")
 
+    metadata_list = data.get("metadata_snapshot", [])
+    if metadata_list:
+        # The metadata rides *outside* the signed payload - only its hash is
+        # signed - so without this check a validly signed artifact could be
+        # re-published with an attacker's entire AUR metadata snapshot
+        # attached: maintainers, versions, dependency edges, everything
+        # discovery, H045/H052/H064 and `corpus pivot` read.  The signature
+        # would still verify.  Recompute and compare before any persistent
+        # writes, and refuse on mismatch even for an unsigned import: a hash
+        # that does not match its own payload means the artifact is damaged
+        # either way.
+        actual = _metadata_snapshot_hash(metadata_list)
+        if actual != m_hash:
+            raise InvalidSignatureError(
+                "Baseline metadata does not match the signed hash "
+                f"(expected {m_hash[:16]}..., got {actual[:16]}...)."
+            )
+
     imported = {"profiles": 0, "snapshots": 0, "metadata_items": 0,
                 "packages_warmed": 0, "source_urls": 0, "dependency_names": 0,
                 "maintainers": 0}
@@ -562,22 +580,7 @@ def import_baseline(
             continue
         imported["snapshots"] += 1
 
-    metadata_list = data.get("metadata_snapshot", [])
     if metadata_list:
-        # The metadata rides *outside* the signed payload - only its hash is
-        # signed - so without this check a validly signed artifact could be
-        # re-published with an attacker's entire AUR metadata snapshot
-        # attached: maintainers, versions, dependency edges, everything
-        # discovery, H045/H052/H064 and `corpus pivot` read.  The signature
-        # would still verify.  Recompute and compare, and refuse on
-        # mismatch even for an unsigned import: a hash that does not match
-        # its own payload means the artifact is damaged either way.
-        actual = _metadata_snapshot_hash(metadata_list)
-        if actual != m_hash:
-            raise InvalidSignatureError(
-                "Baseline metadata does not match the signed hash "
-                f"(expected {m_hash[:16]}..., got {actual[:16]}...)."
-            )
         meta_dict = {
             pkg["Name"]: pkg for pkg in metadata_list
             if isinstance(pkg, dict) and isinstance(pkg.get("Name"), str)

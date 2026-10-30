@@ -350,6 +350,7 @@ def _snapshot_manifest(
     # bound the work.
     for seen, member in enumerate(tf):  # lazy: getmembers() parses it all
         if seen >= max_members:
+            complete = False
             break
         if not member.isfile():
             continue

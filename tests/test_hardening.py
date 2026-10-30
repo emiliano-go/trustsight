@@ -108,6 +108,50 @@ def test_a_swapped_metadata_snapshot_is_refused(isolated):
     assert not default_metadata_path().exists()
 
 
+def test_swapped_metadata_does_not_overwrite_existing_rows(isolated, monkeypatch):
+    """External metadata is authenticated before any imported row is written."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from trustsight.db import (
+        get_package_profile,
+        get_pkgbuild_snapshot,
+        save_package_profile,
+        save_pkgbuild_snapshot,
+    )
+    from trustsight.full_aur import export
+
+    save_package_profile("demo", last_score=1, last_risk="low")
+    save_pkgbuild_snapshot("demo", pkgbuild_text="pkgname=demo\n", version="1")
+    profile_before = get_package_profile("demo")
+    snapshot_before = get_pkgbuild_snapshot("demo")
+
+    honest = [{"Name": "demo", "Maintainer": "alice"}]
+    forged = [{"Name": "evil-pkg", "Maintainer": "mallory"}]
+    profiles = [{"package_name": "demo", "last_score": 99, "last_risk": "high"}]
+    snapshots = [{"package_name": "demo", "pkgbuild_text": "pkgname=forged\n"}]
+    canonical = canonical_artifact_bytes(
+        profiles, snapshots, _metadata_hash(honest), MANIFEST
+    )
+    private = Ed25519PrivateKey.generate()
+    pubkey_path = isolated / "baseline.pub"
+    pubkey_path.write_bytes(private.public_key().public_bytes_raw())
+    monkeypatch.setattr(export, "_TRUSTED_PUBKEY_FILE", pubkey_path)
+    artifact = {
+        "signature": private.sign(canonical).hex(),
+        **json.loads(canonical),
+        "metadata_snapshot": forged,
+    }
+    path = isolated / "signed-tampered.gz"
+    path.write_bytes(gzip.compress(json.dumps(artifact).encode()))
+
+    with pytest.raises(InvalidSignatureError):
+        import_baseline(str(path))
+
+    assert get_package_profile("demo") == profile_before
+    assert get_pkgbuild_snapshot("demo") == snapshot_before
+    assert not default_metadata_path().exists()
+
+
 def test_a_matching_metadata_snapshot_is_imported(isolated):
     honest = [{"Name": "demo", "Maintainer": "alice"}]
     import_baseline(str(_artifact(isolated, honest)), allow_unsigned=True)
@@ -235,9 +279,10 @@ def _tar_with(members: int) -> tarfile.TarFile:
 
 def test_the_snapshot_manifest_stops_at_its_member_cap():
     """`getmembers()` parses the whole archive first; the walk is lazy now."""
-    manifest, _texts, _complete = corpus_fetch._snapshot_manifest(
+    manifest, _texts, complete = corpus_fetch._snapshot_manifest(
         _tar_with(500), max_members=10)
     assert len(manifest) == 10
+    assert not complete
 
 
 def test_a_missing_pkgbuild_in_a_large_tar_gives_up(monkeypatch):

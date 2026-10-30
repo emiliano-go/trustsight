@@ -228,6 +228,15 @@ def collapse_path_slashes(text: str) -> str:
 _HIDDEN_NAME_RE = re.compile(r"(?:^|/)\.[A-Za-z0-9_][^/]*$")
 _HIDDEN_EXEMPT_RE = re.compile(r"(?:^|/)(?:\.git|\.github|\.gitignore|\.gitmodules)(?:/|$)")
 
+#: Tool configuration files a build legitimately writes into its own tree.
+#: A bare hidden name is normally H042's claim (`.evil.sh`), but `.yarnrc`
+#: and friends are build configuration, not a hidden payload (whalebird-git).
+_HIDDEN_CONFIG_NAMES = frozenset({
+    ".yarnrc", ".yarnrc.yml", ".npmrc", ".gitconfig", ".gitattributes",
+    ".editorconfig", ".dockerignore", ".mailmap", ".clang-format",
+    ".clang-tidy", ".prettierrc", ".eslintrc", ".babelrc", ".env",
+})
+
 _RUNTIME_WRITABLE_RE = re.compile(
     r"^\"?/(?:tmp|var/tmp|dev/shm|run|var/run)(?:/|$)"
     r"|^\$?\{?HOME\}?"
@@ -277,6 +286,8 @@ def edge_hidden_drop(ctx, add) -> None:
                 continue
             base = os.path.basename(t_clean)
             if not _HIDDEN_NAME_RE.search(base):
+                continue
+            if base in _HIDDEN_CONFIG_NAMES:
                 continue
             # An unresolved expansion can synthesize the basename: leavepad's
             # `"$(_get_app_dir)/${pkgname%-bin}.desktop"` lost the suffix

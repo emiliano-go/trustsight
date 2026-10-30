@@ -1,7 +1,16 @@
 """Tests for the repository's security policy synchronization."""
 
+from pathlib import Path
+
 from scripts import security_gates as sg
 from scripts.critical_paths import CRITICAL_PATHS
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def test_every_critical_path_exists():
+    missing = sorted(path for path in CRITICAL_PATHS if not (ROOT / path).is_file())
+    assert missing == [], f"critical paths missing from the checkout: {missing}"
 
 
 def test_critical_path_policy_is_synchronised():

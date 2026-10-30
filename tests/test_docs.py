@@ -301,6 +301,22 @@ DOC_SOURCES = sorted((ROOT / "docs").rglob("*.md")) + [ROOT / "README.md"]
 WRITING_A_RULE_MD = ROOT / "docs" / "contributing" / "writing-a-rule.md"
 
 
+def test_documented_source_paths_exist():
+    """Module splits must not leave readers following paths that no longer exist."""
+    pages = [
+        *(path for path in DOC_SOURCES if path.name != "changelog.md"),
+        *sorted((ROOT / "docs_src").rglob("*.md")),
+        ROOT / "CONTRIBUTING.md",
+    ]
+    missing = []
+    for path in pages:
+        for lineno, line in enumerate(path.read_text().splitlines(), start=1):
+            for source in re.findall(r"src/trustsight/[A-Za-z0-9_/-]+\.py", line):
+                if not (ROOT / source).is_file():
+                    missing.append(f"{path.relative_to(ROOT)}:{lineno}: {source}")
+    assert missing == [], "documented source paths do not exist:\n" + "\n".join(missing)
+
+
 def test_writing_a_rule_local_links_resolve():
     """Examples for rule documentation must not point outside the docs tree."""
     text = WRITING_A_RULE_MD.read_text()
@@ -509,7 +525,7 @@ def _series_bounds() -> dict[str, tuple[int, int]]:
 #: and R is excluded.  P has one gap (`P004` is skipped and documented as
 #: skipped) but is only ever written as the whole family, so its upper bound
 #: is still checkable.
-_WHOLE_FAMILY_SERIES = ("C", "D", "P", "S", "W", "X")
+_WHOLE_FAMILY_SERIES = ("C", "D", "P", "S", "U", "W", "X")
 
 
 def test_documented_series_ranges_end_at_the_highest_shipped_rule():

@@ -108,7 +108,7 @@ Fire rate: 0 on the v1 corpus.
 standard command's search path. Adding the plain source root is common enough
 that it stays silent; deeper paths are more likely to be legitimate project
 layouts, so only single-level subdirectories are flagged. Detected by
-`_path_injection_findings()` in `src/trustsight/analysis/delivery.py`.
+`_path_injection_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
 
 ### H040: Host Reconnaissance {#h040}
 

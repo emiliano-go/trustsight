@@ -52,7 +52,7 @@ a check that samples.
    you what to enumerate.
 2. **Find every site.** `grep` for the call, the constructor, the table write.
    Do not trust the module layout: `analysis/` looked like it went through
-   `rules.py` and did not.
+   `rules/` and did not.
 3. **Ask what an operator would actually run.** If the property is about what
    reaches a terminal, the list is every renderer, including the plain-text
    fallbacks and the ones only reachable with `--json` off.

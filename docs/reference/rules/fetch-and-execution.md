@@ -269,7 +269,7 @@ code emits it; it is held alongside [H009](#h009) for a future runtime probe.
 
 At weight 0 it is context for a reviewer rather than a signal, which is why it is the one rule in this group that is **on by default**.
 
-Function membership comes from `_classify_enclosing_function()` in `rules.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
+Function membership comes from `_classify_enclosing_function()` in `src/trustsight/rules/_scope.py`, **not** from the `@@` hunk header. The calibration corpus is generated with `git diff -W` and a custom `xfuncname`, so its hunk headers name the enclosing function, while the live pygit2 path emits none. A rule tuned on hunk headers would be calibrated against data production never produces.
 
 On by default. See [`[code_rules]`](../configuration.md#code_rules).
 
@@ -461,7 +461,7 @@ undeclared. A `-f` or `-C` flag names the input explicitly and is left to the
 ordinary execution patterns. All 14 diffs in the locked benign corpus that
 commit a build file declare it in `source=()`, so the arm fires on none of
 them. Detected by `_committed_execution_findings()` in
-`src/trustsight/analysis/delivery.py`.
+`src/trustsight/analysis/delivery/_buildtree.py`.
 
 ### H082: Fetch Then Execute {#h082}
 
@@ -472,7 +472,7 @@ them. Detected by `_committed_execution_findings()` in
 
 The **unattributed arm** covers the clients whose output grammar names no file: `sftp`/`ftp`/`ssh`/`nc`, `git fetch`/`pull`, `rclone moveto`/`move`/`bisync`/`copyurl`, `ipfs get`, `aws s3 cp`, `gsutil cp`, `b2 download`, `cvs`, `tftp`, `openssl s_client`, `npx`, a glued or server-decided flag, and a fetch-spec-in-file (`wget -i`, `aria2c -i`, `lftp -f`, `curl --config`). A later execution of an undeclared, non-benign file in the same reachable scope pairs with it; pairing crosses makepkg phases in order (`prepare` -> `build` -> `check` -> `package`), treats a loop variable (`bash "$f"`) as an unknown path, and follows a rename of a fetched file (`awk '1' repo/x.sh > run.me; escript run.me`). Executions under `$pkgdir` are the package's own output and are exempt. A scheme-bearing URL is left to H016 and the attributed arm, so one command is not scored twice.
 
-The execution side is the same sink vocabulary H083 uses: shells, `sh -s < f`, interpreter `< f`, process substitution (`python3 < <(curl ...)`), `/dev/fd/N`, and `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`, `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest. Detected by `_fetch_then_execute_findings()` in `src/trustsight/analysis/delivery.py`.
+The execution side is the same sink vocabulary H083 uses: shells, `sh -s < f`, interpreter `< f`, process substitution (`python3 < <(curl ...)`), `/dev/fd/N`, and `escript`, `fennel`, `zx`, `guile`, `racket`, `pwsh`, `julia`, `Rscript`, `deno`, `bun`, `elixir`, `ts-node` and the rest. Detected by `_fetch_then_execute_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
 
 This is `curl -o stage.sh ... ; bash stage.sh` split across lines so the
 pipe-to-shell regex (R001/R002) never sees the `|`. Files that arrived via
@@ -486,7 +486,7 @@ urllib.request.urlretrieve(url, "x.sh")'` writes a file the next line can run.
 The fetch and the execution are matched by *scope* rather than by enclosing
 function name, so splitting them across helpers does not separate them.
 Detected by `_fetch_then_execute_findings()` in
-`src/trustsight/analysis/delivery.py`.
+`src/trustsight/analysis/delivery/__init__.py`.
 
 ### H083: Downloaded Source File Executed {#h083}
 
@@ -502,7 +502,7 @@ downloaded `configure`, `make` or `Makefile` executed as a script fires too.
 `url=` is attacker-declared, so a host that matches it is not provenance, and
 a `name::url` rename that ships a payload under a benign name fires for the
 same reason. Detected by `edge_source_file_execution()` in
-`src/trustsight/analysis/delivery.py`.
+`src/trustsight/analysis/delivery/__init__.py`.
 
 ### H090: Committed Companion Carries A Fetch-Execute Payload {#h090}
 

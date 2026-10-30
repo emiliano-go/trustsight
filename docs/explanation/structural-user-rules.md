@@ -51,7 +51,7 @@ It never sees a diff line, so a `#` comment, a `pkgdesc` string or a
 `sha256sums` hash cannot satisfy a rule aimed at a source entry unless the
 primitive selected it.
 
-Compilation goes through the same gate as an R-series rule (`rules.py`): a
+Compilation goes through the same gate as an R-series rule (`src/trustsight/rules/`): a
 nested quantifier, a probe over the backtracking budget, or superlinear cost
 growth refuses the pattern. Matching is case-insensitive, like the R-series.
 

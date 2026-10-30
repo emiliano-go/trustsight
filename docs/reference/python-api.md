@@ -400,7 +400,7 @@ The analysis of one package.
 | `layers` | `dict` | The assurance-layer profile (`L1`-`L8`), a projection of `findings`; each `{name, detection, coverage, status, findings}`. See the [report schema](report-schema.md). |
 | `boundaries` | `tuple[AnalysisBoundary, ...]` | The unified analysis boundaries: one per coverage gap and one per W-rendering, each `{kind, gap, w_rule, detail, forbids_clean}`. |
 
-Derived properties: `flagged` (score above the 20-point threshold), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).
+Derived properties: `flagged` (score above the report's configured `review_threshold`, 20 in the default review profile), `fully_vetted` (no coverage gaps), `comparable_versions` (`False` for a VCS package, whose AUR `pkgver` is a build-time placeholder), `coverage_note` (the caveat prefixed to the verdict).
 
 ### The change layer: `report.change_delta`
 
@@ -519,7 +519,7 @@ for dep in report.flagged_dependencies:
 
 | Name | Description |
 |---|---|
-| `FLAG_THRESHOLD` | `20`. Above this, `Report.flagged` is `True`. |
+| `FLAG_THRESHOLD` | `20`, the default review threshold. A report uses its configured `review_threshold`; above that value, `Report.flagged` is `True`. |
 | `RISK_LEVELS` | `("Low", "Medium", "High", "Critical")`, worst last. `Inconclusive` is not on the scale: it is what a band becomes when the analysis cannot support one. |
 | `COVERAGE_GAP_REASONS` | Gap identifier to the plain-English reason a run could not read something. |
 

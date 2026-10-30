@@ -13,6 +13,14 @@
 /src/trustsight/sandbox/expand_worker.py @emiliano-go
 /src/trustsight/sandbox/protocol.py @emiliano-go
 /src/trustsight/scoring.py @emiliano-go
+/src/trustsight/differ/__init__.py @emiliano-go
+/src/trustsight/differ/_common.py @emiliano-go
+/src/trustsight/differ/_bounds.py @emiliano-go
+/src/trustsight/differ/_diff.py @emiliano-go
+/src/trustsight/differ/_sources.py @emiliano-go
+/src/trustsight/differ/_companions.py @emiliano-go
+/src/trustsight/differ/_checksums.py @emiliano-go
+/src/trustsight/differ/_verification.py @emiliano-go
 /src/trustsight/config/__init__.py @emiliano-go
 /src/trustsight/config/_defaults_executor.py @emiliano-go
 /src/trustsight/config/_default_config.py @emiliano-go

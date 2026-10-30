@@ -163,7 +163,7 @@ static corpus. Fire rates vary per database and per run.
 
 These rules are defined in `src/trustsight/analysis/build.py`,
 `src/trustsight/analysis/composition.py`, `src/trustsight/analysis/maintainer.py`,
-and `src/trustsight/analysis/pipeline.py`.
+and `src/trustsight/analysis/pipeline/__init__.py`.
 Fire rates marked "TBD" require a live git
 repository and cannot be measured against the static corpus; H026
 falls in this category.

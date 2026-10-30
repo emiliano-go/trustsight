@@ -30,7 +30,7 @@ severity weights and the reserved identifier ranges.
 | [C032](#c032) | Scriptlet Executes Commands At Top Level | HIGH |
 | [H017](#h017) | Install Hook Fetches Or Executes | HIGH |
 | [H023](#h023) | Install Hook Present | INFO |
-| [H032](#h032) | Write To User Home Or RC | HIGH |
+| [H032](#h032) | Write To User Home Or RC | CRITICAL |
 | [H035](#h035) | Foreign Package Manager In Install Hook | HIGH |
 | [H039](#h039) | Systemd ExecStart From Runtime-Writable Path | HIGH |
 | [H062](#h062) | Pacman Hook Installed | MEDIUM |
@@ -155,7 +155,7 @@ x"`) is output for the reader, not a command, and does not fire.
 
 ### H032: Write To User Home Or RC {#h032}
 
-- **Severity:** HIGH (weight 25)
+- **Severity:** CRITICAL (weight 50) in an install scriptlet; HIGH (weight 25) in a build function
 - **Category:** `persistence`
 
 - **Condition:** A build or install function writes into `$HOME`, `.bashrc`, `.zshrc`, `.profile` or `.config`, outside `$pkgdir` staging.
@@ -204,7 +204,7 @@ added diff lines otherwise (a whole service file in the diff, parsed by
 heuristic). The installed executable must come from an `install` with an
 explicit `7xx` mode or no `-m` flag (install's default is 755). Such files
 arrive through the unseen source tarball, so their content cannot be audited.
-Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery.py`.
+Detected by `_service_binary_findings()` in `src/trustsight/analysis/delivery/__init__.py`.
 
 ### R144: Packaged File Points At A World-Writable Path {#r144}
 
@@ -343,7 +343,7 @@ None of these tools appear in the benign corpus with a build-tree argument.
 ### H100: Install Hook Added Or Retargeted {#h100}
 
 - **Severity:** HIGH (weight 25) when the hook script ships in the same
-  diff; MEDIUM (weight 15) when only the declaration moves.
+  diff; MEDIUM (weight 15) when only the declaration moves; INFO (weight 0) for a notice-only hook.
 - **Category:** `install-and-persist`
 
 - **Condition:** The `install=` scalar appears, or points at a different

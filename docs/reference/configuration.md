@@ -15,7 +15,7 @@ The compatibility standards for shipped defaults, config sync and overrides are 
 | `~/.cache/trustsight/repos/` | Cloned AUR package repositories. |
 | `~/.local/share/trustsight/` | SQLite database (analysis history, source URL tracking, maintainer tracking). |
 
-All directories and default files are created on first run by `ensure_default_configs()` in `src/trustsight/config.py`.
+All directories and default files are created on first run by `ensure_default_configs()` in `src/trustsight/config/__init__.py`.
 
 ---
 
@@ -127,7 +127,7 @@ emitted, not a score.
 |-----|------|---------|-------------|
 | `allow` | array of strings | `["waterfox.com", "torproject.org", "arduino.cc", "cachyos.org", "freedesktop.org", "archlinux.org", "winehq.org"]` | Registered domains (eTLD+1) exempted from C011. Add a legitimate non-forge distribution CDN or mirror here when C011 fires on a prebuilt `-bin` package that sources from it. |
 
-`config.toml` is written once and read verbatim, so an install that predates this table keeps the shipped default (`DEFAULT_SOURCE_DIVERGENCE_ALLOW` in `src/trustsight/config.py`). The table is part of the [configuration fingerprint](../explanation/scoring-philosophy.md): changing it changes which packages C011 reports, so two operators with different lists are different instruments.
+`config.toml` is written once and read verbatim, so an install that predates this table keeps the shipped default (`DEFAULT_SOURCE_DIVERGENCE_ALLOW` in `src/trustsight/config/_default_config.py`). The table is part of the [configuration fingerprint](../explanation/scoring-philosophy.md): changing it changes which packages C011 reports, so two operators with different lists are different instruments.
 
 ### `[rules]`
 
@@ -579,4 +579,4 @@ Defined in `release.offline()`.
 
 ## Default configuration
 
-The full default config is embedded in `src/trustsight/config.py` as `DEFAULT_CONFIG` and written to `~/.config/trustsight/config.toml` on first invocation. Users may edit it freely.
+The full default config is embedded in `src/trustsight/config/_default_config.py` as `DEFAULT_CONFIG` and written to `~/.config/trustsight/config.toml` on first invocation. Users may edit it freely.

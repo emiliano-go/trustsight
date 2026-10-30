@@ -150,7 +150,7 @@ a signal an attacker can assert for free must not lower a score.
 
 ### Sources
 
-- `detect_verification_evidence()` in `src/trustsight/differ.py`.
+- `detect_verification_evidence()` in `src/trustsight/differ/_verification.py`.
 
 ### Evidence
 

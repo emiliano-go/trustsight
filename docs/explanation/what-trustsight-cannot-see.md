@@ -127,7 +127,7 @@ Running the PKGBUILD to resolve variables would produce accurate resolution but 
 
 ## Build-dependency blind spot
 
-Dependency changes (`depends`, `makedepends`, `optdepends`, `checkdepends`) are filtered out of *pattern* matching: `rules.py` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
+Dependency changes (`depends`, `makedepends`, `optdepends`, `checkdepends`) are filtered out of *pattern* matching: `src/trustsight/rules/` strips those lines before any rule runs. Dependencies change frequently and legitimately, so matching patterns inside them produces a false-positive rate too high to be useful.
 
 The [D-series rules](../reference/rules/system.md#d-series) narrow the resulting gap by asking a different question. Rather than pattern-matching the text, they compare the dependency arrays before and after the diff and check each newly added name against every dependency name ever observed in the AUR. A name nobody has ever depended on is rare and worth attention, where "this line mentions a package" is not.
 

@@ -98,8 +98,9 @@ signature workflow:
 | `scripts/security_gates.py` | Executable enforcement of the security model |
 | `src/trustsight/tokenizer.py` | Shell and text resolution behavior |
 | `src/trustsight/scoring.py` | Determinism, severity, and score calculation |
-| `src/trustsight/config.py` | Default settings and shipped rule tables |
-| `src/trustsight/db.py` | Stored state and seed integrity |
+| `src/trustsight/config/` | Default settings and shipped rule tables |
+| `src/trustsight/db/` | Stored state and seed integrity |
+| `src/trustsight/differ/` | Diff parsing and verification evidence extraction |
 | `docs/security.md` | Security claims and invariants |
 | `.github/workflows/security.yml` | CI checks for security invariants |
 | `.github/workflows/calibration.yml` | CI checks for calibration regressions |

@@ -849,8 +849,8 @@
     "canonical": true,
     "capability": "persistence",
     "name": "Write To User Home Or RC",
-    "severity": "HIGH",
-    "severity_text": "HIGH (weight 25)",
+    "severity": "CRITICAL",
+    "severity_text": "CRITICAL (weight 50) in an install scriptlet; HIGH (weight 25) in a build function",
     "target": null,
     "uid": "TS-0088"
   },
@@ -1138,7 +1138,7 @@
     "capability": "dependency",
     "name": "Provides/Replaces Scope Expansion",
     "severity": "HIGH",
-    "severity_text": "HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one",
+    "severity_text": "HIGH (weight 25) for an established package, MEDIUM (weight 15) for a widely-provided one; INFO (weight 0) for a conflict with an established-only package",
     "target": null,
     "uid": "TS-0120"
   },
@@ -1462,7 +1462,7 @@
     "capability": "install-and-persist",
     "name": "Install Hook Added Or Retargeted",
     "severity": "HIGH",
-    "severity_text": "HIGH (weight 25) when the hook script ships in the same\n  diff; MEDIUM (weight 15) when only the declaration moves.",
+    "severity_text": "HIGH (weight 25) when the hook script ships in the same\n  diff; MEDIUM (weight 15) when only the declaration moves; INFO (weight 0) for a notice-only hook.",
     "target": null,
     "uid": "TS-0156"
   },
@@ -1470,8 +1470,8 @@
     "canonical": true,
     "capability": "integrity",
     "name": "Source Pinning Lost",
-    "severity": "MEDIUM",
-    "severity_text": "MEDIUM (weight 15)",
+    "severity": "HIGH",
+    "severity_text": "HIGH (weight 25) when a renamed source loses pinning; MEDIUM (weight 15) when the same local name moves",
     "target": null,
     "uid": "TS-0157"
   },

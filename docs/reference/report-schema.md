@@ -197,7 +197,7 @@ The `PackageFact` dataclass (defined in `src/trustsight/schema.py`) is the core 
 | `lines_added` | `int` | Total insertion count from `pygit2.Diff.stats.insertions`. |
 | `lines_removed` | `int` | Total deletion count from `pygit2.Diff.stats.deletions`. |
 
-Extracted by `generate_diff()` in `src/trustsight/differ.py`.
+Extracted by `generate_diff()` in `src/trustsight/differ/_diff.py`.
 
 ### `source_changes`
 
@@ -205,7 +205,7 @@ Extracted by `generate_diff()` in `src/trustsight/differ.py`.
 |-------|------|-------------|
 | `added_urls` | `list[string]` | HTTP/HTTPS URLs found on added (`+`) diff lines, excluding whole-line comments: a URL in a comment cannot reach the build. |
 | `removed_urls` | `list[string]` | HTTP/HTTPS URLs found on removed (`-`) diff lines, excluding whole-line comments. |
-| `checksum_behavior` | `string` | One of: `"unchanged"`, `"changed_from_sha256_to_skip"`, `"checksum_array_emptied"`, `"checksum_added_or_changed"`. Detected by `detect_checksum_changes()` in `src/trustsight/differ.py`. |
+| `checksum_behavior` | `string` | One of: `"unchanged"`, `"changed_from_sha256_to_skip"`, `"checksum_array_emptied"`, `"checksum_added_or_changed"`. Detected by `detect_checksum_changes()` in `src/trustsight/differ/_checksums.py`. |
 
 ### `source_buckets`
 
@@ -245,7 +245,7 @@ Each entry:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T003` and `T006`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G014`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U010`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W012` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
+| `rule_id` | `string` | Rule or category identifier from the published catalog: the R/H/C/D/S/X families, the M-series meta rules (`M001`-`M006`; M002/M003 weight 0), the E-series entropy rules (`E001`-`E003`, thresholds ship empty), the T-series temporal rules (`T001`-`T003` and `T006`-`T007`), the G-series correlation rules (`G001`-`G011` and `G012`-`G014`), the I-series indicator rules (H056, and future `I` ids), the U-series upstream rules (`U001`-`U012`: committed manifests and upstream release), and the A-series artifact rules (`A001`-`A008`, L9 only), plus `P001`-`P009` (declared practice, always weight 0; P004 is skipped), `W001`-`W012` (unverifiable, always weight 0), or `SOURCE_BUCKET`, `NOVELTY`, `COVERAGE`. |
 | `severity` | `string` | `FATAL`, `CRITICAL`, `HIGH`, `MEDIUM`, `LOW`, or `INFO`. |
 | `weight` | `int` | Contribution to the score. Never negative: nothing lowers a score. `0` for annotations, coverage gaps, every `P` and `W` finding, and unchanged companion content. |
 | `reason` | `string` | Human-readable explanation of why this entry fired. The full string is carried in both JSON and CLI display. |
@@ -280,7 +280,7 @@ The sum of all `weight` values, floored at 0 and capped at 100, equals `final_sc
 
 ## Database storage
 
-The `PackageFact` JSON is stored in the `analysis_history` table under the `fact_json` column (TEXT containing JSON). Triggered rules are stored in the separate `triggered_rules` table keyed by `analysis_history.id`. See `insert_analysis()` in `src/trustsight/db.py`.
+The `PackageFact` JSON is stored in the `analysis_history` table under the `fact_json` column (TEXT containing JSON). Triggered rules are stored in the separate `triggered_rules` table keyed by `analysis_history.id`. See `insert_analysis()` in `src/trustsight/db/_packages.py`.
 
 ---
 

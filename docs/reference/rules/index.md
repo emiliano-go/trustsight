@@ -7,7 +7,7 @@ inventory is the R-series regex rules, the H-series heuristics, sabotage rules S
 rules X001-X034, integrity-change rules C001-C032, dependency rules
 D001-D005, temporal rules T001-T003 and T006-T007, correlation rules G001-G011 and G012-G014, entropy
 rules E001-E003, the indicator rule H056, meta rules M001-M006, upstream
-rules U001-U010, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
+rules U001-U012, artifact rules A001-A008, declared-practice rules P001-P009 (P004 skipped), and
 unverifiable rules W001-W012.
 
 Each rule contributes according to its severity weight, match target and
@@ -191,7 +191,7 @@ is deliberately non-contiguous; see
 | [H029](naming-and-dependency.md#h029-rule) | Package-Name Typosquat | Heuristic | HIGH | [Naming and Dependencies](naming-and-dependency.md) |
 | [H030](count-based.md#h030-rule) | Dependency-Set Expansion | Heuristic | MEDIUM | [Count-Based](count-based.md) |
 | [H031](fetch-and-execution.md#h031) | Version-In-URL Injection | Heuristic | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
-| [H032](install-and-persist.md#h032) | Write To User Home Or RC | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
+| [H032](install-and-persist.md#h032) | Write To User Home Or RC | Heuristic | CRITICAL | [Install and Persistence](install-and-persist.md) |
 | [H033](integrity.md#h033) | Moved Git Ref | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H034](fetch-and-execution.md#h034) | Exotic Source Protocol | Heuristic | MEDIUM | [Fetch and Execution](fetch-and-execution.md) |
 | [H035](install-and-persist.md#h035) | Foreign Package Manager In Install Hook | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
@@ -260,7 +260,7 @@ is deliberately non-contiguous; see
 | [H098](composition.md#h098) | Naming/Deception Cluster | Heuristic | HIGH | [Composition](composition.md) |
 | [H099](integrity.md#h099) | Source Host Swapped Under A Kept Local Name | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H100](install-and-persist.md#h100) | Install Hook Added Or Retargeted | Heuristic | HIGH | [Install and Persistence](install-and-persist.md) |
-| [H101](integrity.md#h101) | Source Pinning Lost | Heuristic | MEDIUM | [Integrity and Verification](integrity.md) |
+| [H101](integrity.md#h101) | Source Pinning Lost | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H102](composition.md#h102) | Maintainer Change With Signing Key Change | Heuristic | HIGH | [Composition](composition.md) |
 | [H103](integrity.md#h103) | Metadata And Recipe Disagree | Heuristic | HIGH | [Integrity and Verification](integrity.md) |
 | [H104](naming-and-dependency.md#h104) | Placeholder Package | Heuristic | INFO | [Naming and Dependencies](naming-and-dependency.md) |

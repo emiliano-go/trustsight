@@ -64,7 +64,7 @@ severity weights and the reserved identifier ranges.
 | [H096](#h096) | Download Agent Override | MEDIUM |
 | [H097](#h097) | Function Shadowing | HIGH |
 | [H099](#h099) | Source Host Swapped Under A Kept Local Name | HIGH |
-| [H101](#h101) | Source Pinning Lost | MEDIUM |
+| [H101](#h101) | Source Pinning Lost | HIGH |
 | [H103](#h103) | Metadata And Recipe Disagree | HIGH |
 | [R049](#r049) | Compiler Plugin Or Loader Override | MEDIUM |
 | [R050](#r050) | Compiler Hardening Disabled | MEDIUM |
@@ -81,8 +81,8 @@ severity weights and the reserved identifier ranges.
 - **Category:** `integrity`
 
 - **Condition:** Fires when a prior SHA-256 checksum is changed to `SKIP`.
-- **Justification:** Severity is downgraded to INFO if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), `validpgpkeys` declaration, or DKMS reference. Justification checked via `is_skip_justified()` in `src/trustsight/differ.py`.
-- **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml` because checksum integrity is foundational to the scoring model.
+- **Justification:** Severity is downgraded to INFO if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), `validpgpkeys` declaration, or DKMS reference. Justification checked via `is_skip_justified()` in `src/trustsight/differ/_sources.py`.
+- **Note:** Hard-coded in `src/trustsight/analysis/structural/_engine.py`. Cannot be disabled through `rules.toml` because checksum integrity is foundational to the scoring model.
 
 ### H002: Checksum Emptied {#h002}
 
@@ -91,7 +91,7 @@ severity weights and the reserved identifier ranges.
 - **Category:** `integrity`
 
 - **Condition:** Fires when an existing SHA-256 checksum array is emptied.
-- **Note:** Hard-coded in `src/trustsight/analysis/structural.py`. Cannot be disabled through `rules.toml`.
+- **Note:** Hard-coded in `src/trustsight/analysis/structural/_engine.py`. Cannot be disabled through `rules.toml`.
 
 ### H005: validpgpkeys Added {#h005}
 
@@ -132,7 +132,7 @@ a top-level flag-set replacement is [H079](#h079).
 - **Severity:** CRITICAL (weight 40)
 
 - **Condition:** A checksum array line is deleted, no replacement checksum line is added, **and** the source URL set is unchanged.
-- **Description:** Distinct from H002 (`sha256sums=()` added, array emptied in place): here the declaration disappears from the file entirely, leaving makepkg with nothing to verify against a source that itself did not change. Detected by `detect_checksum_removed()` in `src/trustsight/differ.py`.
+- **Description:** Distinct from H002 (`sha256sums=()` added, array emptied in place): here the declaration disappears from the file entirely, leaving makepkg with nothing to verify against a source that itself did not change. Detected by `detect_checksum_removed()` in `src/trustsight/differ/_checksums.py`.
 
 ### C005: Binary Artifact From Untrusted Source {#c005}
 
@@ -316,7 +316,7 @@ package dismantled a verification layer it previously had.
 
 **Scope:** DELTA-scoped - fires on `validpgpkeys` *transitioning* from
 populated to empty/absent, following the same structure as
-`detect_checksum_changes` and `detect_checksum_removed` in `differ.py`.
+`detect_checksum_changes` and `detect_checksum_removed` in `src/trustsight/differ/_checksums.py`.
 
 ### H025: Build Environment Subversion {#h025}
 
@@ -714,7 +714,7 @@ array cannot pair a name with the wrong URL.
 
 ### H101: Source Pinning Lost {#h101}
 
-- **Severity:** MEDIUM (weight 15)
+- **Severity:** HIGH (weight 25) when a renamed source loses pinning; MEDIUM (weight 15) when the same local name moves
 - **Category:** `integrity`
 
 - **Condition:** A `source` entry moves from pinned (a `#commit=`/`#tag=`

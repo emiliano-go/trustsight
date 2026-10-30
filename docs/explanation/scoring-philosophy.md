@@ -127,7 +127,7 @@ Low recall is acceptable for these rules. R012 has 17% detection on the labelled
 
 Checksum integrity is foundational to the entire scoring system. Every other signal is evaluated in the context of whether checksums are present or disabled. Allowing users to disable H001 or H002 through `rules.toml` would produce misleading results: a package with `sha256sums=('SKIP')` that otherwise looks clean would score 0, but the missing checksum is itself a risk.
 
-These rules are hard-coded in `src/trustsight/analysis/structural.py` and cannot be disabled through configuration. H001 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
+These rules are hard-coded in `src/trustsight/analysis/structural/_engine.py` and cannot be disabled through configuration. H001 has automatic justification detection: if the diff contains a VCS source (`git+https://`, `.git`), a signature file (`.sig`, `.asc`), a `validpgpkeys` declaration, or a DKMS reference, the severity is downgraded from HIGH (weight 25) to INFO (weight 0). The justification checks whether the checksum skip is structurally explained, not whether it is safe.
 
 ### H004: why sudo detection requires command position
 

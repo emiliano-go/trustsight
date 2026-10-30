@@ -36,7 +36,7 @@ python scripts/security_gates.py
 | `one network host, declared` | A3 | endpoint constants: `aur.archlinux.org` everywhere, `api.github.com` and `github.com` only in `release.py` |
 | `every request has a timeout` | A4 | `urlopen` call sites |
 | `every stream read is bounded` | A4, A14 | source-wide AST scan for a `read()` with no size, plus `read_text`/`read_bytes` in the document cache; `doc_cache.py` reads through `read_file_capped` under `MAX_DOC_CACHE_BYTES` |
-| `artifact reads are bounded before verification` | A4 | `db.py`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
+| `artifact reads are bounded before verification` | A4 | `db/`, `ioc_baseline.py`, `seed_build.py`, `full_aur/export.py` |
 | `rule matching is bounded on hostile input` | A5 | `rules.MAX_RULE_LINE_BYTES` |
 | `H-series intake is frozen` | internal | `categories.RULE_CATEGORIES` |
 | `H-series reduction residue` | internal | `categories.RULE_CATEGORIES`, target 55-65 |
@@ -77,7 +77,7 @@ python scripts/security_gates.py
 | `report rendering is data-driven` | A7 | `verdict.py`, `findings.py` |
 | `no path-based archive extraction` | A8 | `full_aur/fetch.py`, `db._extract_v2_archive` |
 | `release artifacts and tags use the verified commit` | release consistency | `.github/workflows/publishing.yml` builds from the checked-out target and refuses a tag that points elsewhere; `scripts/verify_release.py` rebuilds `HEAD` |
-| `SQL is parameterised` | A9 | `db.py` |
+| `SQL is parameterised` | A9 | `db/` |
 | `terminal output is inert` | A10 | `safe_text.py`, `cli/`, the `full_aur` progress log sink, and the CLI `_StderrHandler` (message and traceback text) |
 | `freshness uses local marker` | A11 | `sandbox/git_project._is_current`, `sandbox/git_project.last_fetch_time` |
 | `a seed cannot rewrite the database` | A12 | `db.import_seed` |
@@ -91,7 +91,7 @@ python scripts/security_gates.py
 | `reserved names are refused by every writer` | A12, A13 | `db.upsert_package`, `db.save_package_profile`, `db.save_pkgbuild_snapshot` |
 | `a baseline supplies state, not rules` | A13 | `full_aur/export.import_baseline` |
 | `incomplete coverage fails closed` | B2 | `coverage.fail_closed` |
-| `a truncated diff cannot read as unflagged` | B2 | `analysis/pipeline.py`, `full_aur/analyze.py` |
+| `a truncated diff cannot read as unflagged` | B2 | `analysis/pipeline/`, `full_aur/analyze.py` |
 | `an unpinned build dependency is a declared gap` | B2, A14 | `analysis/buildfetch.py`, `coverage.UNPINNED_BUILD_DEPS` |
 | `a coverage gap is always shown with the band` | B2 | `coverage.qualified_band`, `scoring.verdict_label` |
 | `every result declares its coverage` | B2 | every `PackageFact(...)` construction |

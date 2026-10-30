@@ -1,7 +1,6 @@
 """Baseline-build implementation, using the facade for patchable globals."""
 
 import json
-import time
 from typing import Callable, Optional
 
 from ._pipeline_helpers import CycleResult
@@ -25,6 +24,7 @@ def _run_baseline_build(
 ) -> CycleResult:
     """The cycle body; the public wrapper checkpoints the WAL."""
     p = _pipeline()
+    time = p.time
     CycleResult = p.CycleResult
     MAX_DEPTH_NODES = p.MAX_DEPTH_NODES
     TemporalContext = p.TemporalContext

@@ -108,6 +108,31 @@ def test_the_libgit2_gate_checks_the_declared_floor_too(tmp_path, monkeypatch):
     assert "1.20.1" in gate.measured
 
 
+def test_the_libgit2_gate_allows_export_ignored_packaging_in_a_release_archive(
+        tmp_path, monkeypatch):
+    from scripts.gates import _layers
+
+    (tmp_path / "pyproject.toml").write_text(
+        'dependencies = ["pygit2>=1.20.1"]\n')
+    monkeypatch.setattr(_layers, "ROOT", tmp_path)
+
+    gate = _layers.gate_libgit2_is_not_the_vulnerable_version()
+    assert gate.passed, gate.measured
+
+
+def test_the_libgit2_gate_requires_packaging_in_a_git_checkout(tmp_path, monkeypatch):
+    from scripts.gates import _layers
+
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        'dependencies = ["pygit2>=1.20.1"]\n')
+    monkeypatch.setattr(_layers, "ROOT", tmp_path)
+
+    gate = _layers.gate_libgit2_is_not_the_vulnerable_version()
+    assert not gate.passed
+    assert "packaging/aur/PKGBUILD" in gate.measured
+
+
 def test_the_libgit2_gate_passes_on_the_shipped_tree():
     from scripts.gates import _layers
 

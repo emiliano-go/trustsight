@@ -32,7 +32,10 @@ jobs:
       - name: Clone the consumers
         run: |
           git clone --depth 1 https://github.com/emiliano-go/trustsight-feed.git ../trustsight-feed
-          git clone --depth 1 https://github.com/emiliano-go/trustsight-harness.git ../trustsight-harness
+          git init ../trustsight-harness
+          git -C ../trustsight-harness remote add origin https://github.com/emiliano-go/trustsight-harness.git
+          git -C ../trustsight-harness fetch --depth 1 origin 0f4ecc3b158d0c56b31fd11008ef5f8f244c1f4b
+          git -C ../trustsight-harness checkout --detach FETCH_HEAD
 
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

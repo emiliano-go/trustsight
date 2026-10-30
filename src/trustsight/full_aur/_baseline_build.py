@@ -58,6 +58,7 @@ def _run_baseline_build(
     _set_since_cursor = p._set_since_cursor
     _since_cursor = p._since_cursor
     analyze_package_text = p.analyze_package_text
+    source_repos_from_pkgbuild = p.source_repos_from_pkgbuild
     clear_correlation_feeds = p.clear_correlation_feeds
     clear_resume_state = p.clear_resume_state
     diff_metadata = p.diff_metadata
@@ -454,6 +455,9 @@ def _run_baseline_build(
             # is a routine version/checksum bump.  Computed here, where both
             # recipe texts are in hand.
             "routine_only": _is_routine_bump(old_pkgbuild or "", new_pkgbuild),
+            # The sweep joins on this; compute it while the recipe is in hand
+            # instead of re-reading the snapshot and re-parsing it per package.
+            "source_repos": sorted(source_repos_from_pkgbuild(new_pkgbuild)),
             **_notify_diff(old_pkgbuild or "", new_pkgbuild),
         }
         return "ok"

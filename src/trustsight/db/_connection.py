@@ -117,6 +117,10 @@ def _new_connection(db_path: Path) -> sqlite3.Connection:
     conn.execute("PRAGMA wal_autocheckpoint=2000")
     conn.execute("PRAGMA journal_size_limit=16777216")
     conn.execute("PRAGMA cache_size=-32768")
+    # Read-heavy corpus queries (properties, history, snapshots) walk a large
+    # file; mapped I/O removes a read syscall per page.  64 MiB is a quarter
+    # of the watcher's page-cache budget and a no-op where mmap is absent.
+    conn.execute("PRAGMA mmap_size=67108864")
     return conn
 
 @contextmanager

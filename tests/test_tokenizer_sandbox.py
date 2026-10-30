@@ -151,9 +151,10 @@ def test_the_content_cache_is_bounded(monkeypatch):
     monkeypatch.setattr(client, "_send", fake)
     monkeypatch.setattr(client, "_CACHE_MAX_ENTRIES", 1)
     _clear_cache()
-    resolve_added_lines("a")
-    resolve_added_lines("b")
-    resolve_added_lines("a")
+    # The client cache, not the tokenizer facade's parent memo.
+    client.request("resolve_added", "a")
+    client.request("resolve_added", "b")
+    client.request("resolve_added", "a")
     assert len(calls) == 3
 
 
@@ -168,8 +169,8 @@ def test_the_byte_budget_counts_the_result_too(monkeypatch):
     monkeypatch.setattr(client, "_send", fake)
     monkeypatch.setattr(client, "_CACHE_MAX_BYTES", 50)
     _clear_cache()
-    resolve_added_lines("a")
-    resolve_added_lines("a")
+    client.request("resolve_added", "a")
+    client.request("resolve_added", "a")
     assert len(calls) == 2
 
 
@@ -182,11 +183,11 @@ def test_reset_after_fork_clears_the_content_cache(monkeypatch):
 
     monkeypatch.setattr(client, "_send", fake)
     _clear_cache()
-    resolve_added_lines("a")
-    resolve_added_lines("a")
+    client.request("resolve_added", "a")
+    client.request("resolve_added", "a")
     assert len(calls) == 1
     client.reset_after_fork()
-    resolve_added_lines("a")
+    client.request("resolve_added", "a")
     assert len(calls) == 2
 
 

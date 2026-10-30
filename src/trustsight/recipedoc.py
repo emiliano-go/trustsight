@@ -24,8 +24,9 @@ Two rules keep this layer honest:
 """
 
 import re
-from collections import Counter
-from dataclasses import dataclass, field
+import threading
+from collections import Counter, OrderedDict
+from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 
 from .diffdoc import DiffDoc
@@ -430,7 +431,28 @@ def _function_body_segments(lines: list[str]) -> list[tuple[str, str]]:
     return [(name, body) for name, body, _opener in _function_segments(lines)]
 
 
-def parse_recipe(
+#: Small per-thread memos.  The same full recipe is parsed many times in one
+#: diff (11x on the calibration corpus), and each parse is two tokenizer
+#: round-trips.  The document is read-only in the analysis path; a copied
+#: top-level container is returned so a caller cannot edit the cached one.
+_RECIPE_MEMO_ENTRIES = 4
+_recipe_memo = threading.local()
+
+
+def _copy_recipe(doc: RecipeDoc) -> RecipeDoc:
+    return replace(
+        doc,
+        scalars=dict(doc.scalars),
+        arrays={name: tuple(values) for name, values in doc.arrays.items()},
+        functions=dict(doc.functions),
+        scalar_spans=dict(doc.scalar_spans),
+        array_spans={name: tuple(spans)
+                     for name, spans in doc.array_spans.items()},
+        function_spans=dict(doc.function_spans),
+    )
+
+
+def _parse_recipe_uncached(
     text: str,
     file: str = "",
     origins: list[tuple[str, int, str]] | None = None,
@@ -512,6 +534,46 @@ def parse_recipe(
     )
 
 
+def parse_recipe(
+    text: str,
+    file: str = "",
+    origins: list[tuple[str, int, str]] | None = None,
+) -> RecipeDoc:
+    """Read a whole PKGBUILD into a :class:`RecipeDoc` (memoised per process).
+
+    The tokenizer does the resolution; this function shapes its output and
+    names what it refused.  A missing tokenizer is a refusal, not an empty
+    recipe: the exception propagates, as it does everywhere else.
+
+    *origins* is parallel to ``split_lines(text)`` and maps each line to
+    ``(file, line, side)``; pass the diff's origins when the text was
+    rebuilt from a diff so spans name real file lines.  Without it, a span
+    is ``(file, index + 1)``.
+
+    Backslash continuations are joined before reading, as the rule engine
+    joins them; provenance maps a joined line back to its first physical
+    line, so a value split across a continuation is still read and its span
+    names where the assignment starts.
+
+    The memo is keyed by the input content and provenance.  It is an
+    optimisation, not an authority: a caller gets a copied document and a
+    tokenizer failure is never cached.
+    """
+    key = (text, file, tuple(origins) if origins is not None else None)
+    store = getattr(_recipe_memo, "recipes", None)
+    if store is None:
+        store = _recipe_memo.__dict__.setdefault("recipes", OrderedDict())
+    cached = store.get(key)
+    if cached is not None:
+        store.move_to_end(key)
+        return _copy_recipe(cached)
+    doc = _parse_recipe_uncached(text, file=file, origins=origins)
+    store[key] = doc
+    while len(store) > _RECIPE_MEMO_ENTRIES:
+        store.popitem(last=False)
+    return _copy_recipe(doc)
+
+
 def recipe_from_post_state(doc: DiffDoc) -> RecipeDoc:
     """The recipe as it stands after a diff, read from the typed diff.
 
@@ -522,14 +584,32 @@ def recipe_from_post_state(doc: DiffDoc) -> RecipeDoc:
     return parse_recipe("\n".join(doc.post_lines()), origins=doc.post_origins())
 
 
+_recipe_states_memo = threading.local()
+
+
 def recipe_states(doc: DiffDoc) -> tuple[RecipeDoc, RecipeDoc]:
     """The ``(pre, post)`` RecipeDocs of what the diff shows.
 
     A diff shows hunks, not a file, so both states are partial: they answer
     change questions (what did this array or scalar gain) and nothing else.
     Their spans carry the real file, line and side of each value.
+
+    The same parsed diff reaches several engines (change delta, structural
+    context, checksums); each used to rebuild both states.  The identity
+    memo keeps the strong reference so an id cannot be reused underneath it.
     """
-    return (
+    store = getattr(_recipe_states_memo, "states", None)
+    if store is None:
+        store = _recipe_states_memo.__dict__.setdefault("states", [])
+    for cached_doc, cached_states in store:
+        if cached_doc is doc:
+            return (_copy_recipe(cached_states[0]),
+                    _copy_recipe(cached_states[1]))
+    states = (
         parse_recipe("\n".join(doc.pre_lines()), origins=doc.pre_origins()),
         parse_recipe("\n".join(doc.post_lines()), origins=doc.post_origins()),
     )
+    # Keep a private copy: the caller owns the returned pair.
+    store.append((doc, (_copy_recipe(states[0]), _copy_recipe(states[1]))))
+    del store[:-_RECIPE_MEMO_ENTRIES]
+    return states

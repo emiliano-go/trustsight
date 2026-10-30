@@ -4,12 +4,17 @@
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-10-30
+
 ### Added
 
+- **Exhaustive live-rule assurance.** All 273 live rules now have explicit registry-to-emitter wiring checks plus positive and negative behavior coverage, including native stateful and pipeline interfaces. The 11 historical registry anchors remain intentionally non-emitting.
 - **A one-off H104 snapshot backfill.** `scripts/backfill_h104.py` scans a watcher database's `pkgbuild_snapshots`, attaches H104 to each package's most recent analysis, and updates the stored fact. It is idempotent and dry-run capable; the incremental watcher never revisits a removed placeholder package.
 
 ### Fixed
 
+- **Fail-open discovery and baseline-import paths.** Invalid or failed version comparisons now use the deterministic fallback instead of appearing equal, RPC read deadlines follow the bounded retry path, capped archive snapshots report incomplete coverage, and signed baseline metadata is validated before any imported state is committed.
+- **The 2026-10-30 watcher false-positive batches, with true-positive twins.** Tightened malformed trigger shapes while preserving their malicious counterparts and refreshed the published calibration measurements.
 - **The 2026-10-28 watcher false-positive batch, with true-positive twins.**
   H082/H016 no longer pair a release-digest lookup (`curl … | jq …` into a
   text utility, never saved) with a later execution; a named output or a pipe

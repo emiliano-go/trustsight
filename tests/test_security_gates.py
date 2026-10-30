@@ -80,3 +80,36 @@ def test_sql_gate_accepts_the_reviewed_identifier_list(monkeypatch, tmp_path):
     _run(monkeypatch, tmp_path,
          "def f(conn, table):\n    conn.execute(f'DELETE FROM {table}')\n")
     assert g.gate_sql_is_parameterised().passed
+
+
+def test_the_libgit2_gate_checks_the_declared_floor_too(tmp_path, monkeypatch):
+    """A fixed runtime wheel does not help a fresh install from a low floor.
+
+    The gate used to read only ``pygit2.LIBGIT2_VERSION``.  Lowering
+    ``pyproject.toml``/PKGBUILD to the affected 1.9.6 bundle then passed on
+    the maintainer's machine while every new install resolved it.
+    """
+    from scripts.gates import _layers
+
+    (tmp_path / "packaging" / "aur").mkdir(parents=True)
+    (tmp_path / "packaging" / "local").mkdir(parents=True)
+    (tmp_path / "pyproject.toml").write_text(
+        'dependencies = ["pygit2>=1.20.0"]\n')
+    (tmp_path / "packaging/aur/PKGBUILD").write_text(
+        "depends=('python-pygit2>=1.20.0')\n")
+    (tmp_path / "packaging/local/PKGBUILD").write_text(
+        "depends=('python-pygit2')\n")
+    (tmp_path / "packaging/aur/.SRCINFO").write_text(
+        "depends = python-pygit2>=1.20.0\n")
+    monkeypatch.setattr(_layers, "ROOT", tmp_path)
+
+    gate = _layers.gate_libgit2_is_not_the_vulnerable_version()
+    assert not gate.passed
+    assert "1.20.1" in gate.measured
+
+
+def test_the_libgit2_gate_passes_on_the_shipped_tree():
+    from scripts.gates import _layers
+
+    gate = _layers.gate_libgit2_is_not_the_vulnerable_version()
+    assert gate.passed, gate.measured

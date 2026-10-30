@@ -519,23 +519,25 @@ def gate_yaml_is_only_safe_load() -> Gate:
     return Gate("yaml is only ever safe_load", not hits, hits)
 
 def gate_libgit2_is_not_the_vulnerable_version() -> Gate:
-    """The bundled libgit2 must carry the 1.9.5 / 1.8.6 fix.
+    """The bundled libgit2, and every declared floor, must carry 1.9.7.
 
-    libgit2 before 1.8.6 / 1.9.5 trusts a sender-controlled delta result
-    size in ``git_delta_apply`` and allocates it before reading any delta
-    instruction, so a sub-kilobyte pack can allocate gigabytes while cloning
-    or fetching a malicious repository (GHSA-27m5-gxxh-x79j /
-    CVE-2026-53585; the same 1.9.5 release fixes CVE-2026-53583..53587).
-    TrustSight clones AUR repositories with pygit2, and transfer-byte caps
-    do not bound an in-process allocation, so the pinned dependency must
-    bundle a patched libgit2.  This reads the version libgit2 actually
-    reports at runtime, not the declared pin.
+    Two remote-code paths are in scope. libgit2 before 1.8.6 / 1.9.5 trusts
+    a sender-controlled delta result size in ``git_delta_apply`` and
+    allocates it before reading any delta instruction (GHSA-27m5-gxxh-x79j /
+    CVE-2026-53585).  libgit2 1.9.0-1.9.6 built with the libssh2 backend
+    pastes the remote repository path into a shell command unescaped, so a
+    crafted URL runs commands on the SSH host (CVE-2026-5917); 1.8.7 and
+    1.9.7 carry the fix.  TrustSight clones AUR repositories with pygit2, so
+    the pin must bundle a patched libgit2 *and* the declared floors must not
+    let a fresh install resolve an older one.  The runtime version alone is
+    not enough: a lowered pyproject/PKGBUILD floor reproduces the vulnerable
+    dependency even on a machine whose current wheel is fixed.
     """
     name = "libgit2 is not the vulnerable version"
     try:
         import pygit2
     except Exception as exc:  # noqa: BLE001 - a missing dep is the failure
-        return Gate(name, False, f"pygit2 not importable: {exc}", ">= 1.9.5")
+        return Gate(name, False, f"pygit2 not importable: {exc}", ">= 1.9.7")
     raw = str(getattr(pygit2, "LIBGIT2_VERSION", "") or "")
     parts: list[int] = []
     for token in raw.split("."):
@@ -550,6 +552,27 @@ def gate_libgit2_is_not_the_vulnerable_version() -> Gate:
         parts.append(0)
     major, minor, patch = parts[0], parts[1], parts[2]
     patched = ((major, minor, patch) >= (1, 10, 0)
-               or (major == 1 and minor == 9 and patch >= 5)
-               or (major == 1 and minor == 8 and patch >= 6))
-    return Gate(name, patched, raw, ">= 1.9.5 (or >= 1.8.6)")
+               or (major == 1 and minor == 9 and patch >= 7)
+               or (major == 1 and minor == 8 and patch >= 7))
+
+    # A floor is the other half of the pin.  If it is lowered, a new install
+    # resolves the affected bundle even though this machine reports a fixed
+    # one.  Check the package metadata the release and AUR actually read.
+    floors = (
+        ("pyproject.toml", "pygit2>=1.20.1"),
+        ("packaging/aur/PKGBUILD", "python-pygit2>=1.20.1"),
+        ("packaging/local/PKGBUILD", "python-pygit2>=1.20.1"),
+        ("packaging/aur/.SRCINFO", "python-pygit2>=1.20.1"),
+    )
+    problems: list[str] = []
+    for rel, expected in floors:
+        try:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+        except OSError as exc:
+            problems.append(f"{rel}: {type(exc).__name__}")
+            continue
+        if expected not in text:
+            problems.append(f"{rel} does not declare {expected}")
+    measured = raw if not problems else f"{raw}; {'; '.join(problems)}"
+    return Gate(name, patched and not problems, measured,
+                ">= 1.9.7 (or >= 1.8.7); pygit2>=1.20.1 floors")

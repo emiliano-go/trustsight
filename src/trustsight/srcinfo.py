@@ -108,6 +108,13 @@ def get_srcinfo_from_tree(repo, commit_oid: str) -> dict[str, list[str]]:
         blob = repo.get(entry.oid)
         if blob is None:
             return {}
+        # ``blob.data`` materialises the whole object, so the byte cap must
+        # be checked against the size libgit2 reports *before* the read.  A
+        # committed .SRCINFO can be any size; the real ones are a few KiB.
+        size = getattr(blob, "size", 0)
+        if not isinstance(size, int) or isinstance(size, bool) \
+                or size < 0 or size > MAX_SRCINFO_BYTES:
+            return {}
         return parse_srcinfo(blob.data.decode("utf-8", errors="replace"))
     except (AttributeError, KeyError, TypeError):
         return {}

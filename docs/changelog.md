@@ -10,6 +10,13 @@
 
 ### Fixed
 
+- **The `pygit2` floor is raised to 1.20.1 (libgit2 1.9.7).** 1.20.0 bundles
+  libgit2 1.9.6, which is exposed to the libssh2 remote-path command injection
+  (CVE-2026-5917) as well as the older delta result-size allocation flaw. The
+  `libgit2 is not the vulnerable version` gate now checks every declared floor
+  (`pyproject.toml`, both PKGBUILDs and `.SRCINFO`) as well as the runtime
+  version, so a lowered floor cannot reintroduce the affected bundle on a fresh
+  install.
 - **The 2026-10-28 watcher false-positive batch, with true-positive twins.**
   H082/H016 no longer pair a release-digest lookup (`curl … | jq …` into a
   text utility, never saved) with a later execution; a named output or a pipe

@@ -534,6 +534,41 @@ def edge_indirect_remote_execution(ctx, add) -> None:
 # names by prefix - all common and benign - so the trailing ``}`` after the
 # bare name is required, which excludes every subscripted or globbing form.
 _INDIRECT_EXPANSION_RE = re.compile(r"\$\{!\w+\}")
+_COMMAND_SEGMENT_SPLIT_RE = re.compile(r"&&|\|\||[;|&()\n]")
+_ASSIGNMENT_TOKEN_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_COMMAND_WRAPPER_WORDS = frozenset(
+    {"env", "sudo", "command", "exec", "nohup", "time", "builtin"}
+)
+
+
+def _indirect_in_command_position(body: str) -> bool:
+    """True when a ``${!name}`` expands to the *command word* of a segment.
+
+    H080 is about the program the recipe runs being chosen indirectly.  The
+    same expansion is ordinary data as an argument: ``printf '%s=%s' "$k"
+    "${!k}" >> file`` names no command.  Split the line at the shell's
+    separators, skip leading assignments and wrappers, and test the first
+    remaining word.
+    """
+    for segment in _COMMAND_SEGMENT_SPLIT_RE.split(body):
+        words = segment.split()
+        index = 0
+        while index < len(words):
+            word = words[index]
+            if _ASSIGNMENT_TOKEN_RE.match(word):
+                index += 1
+                continue
+            if word.rsplit("/", 1)[-1] in _COMMAND_WRAPPER_WORDS:
+                index += 1
+                while index < len(words) and words[index].startswith("-"):
+                    index += 1
+                continue
+            break
+        if index >= len(words):
+            continue
+        if _INDIRECT_EXPANSION_RE.match(words[index].strip("\"'")):
+            return True
+    return False
 
 
 def edge_indirect_expansion(ctx, add) -> None:
@@ -547,7 +582,7 @@ def edge_indirect_expansion(ctx, add) -> None:
             continue
         body = _strip_comment(line.content)
         m = _INDIRECT_EXPANSION_RE.search(body)
-        if not m:
+        if not m or not _indirect_in_command_position(body):
             continue
         add("H080", "Indirect Command Expansion", "CRITICAL", "obfuscation",
             f"a command or shell is named through indirect expansion "

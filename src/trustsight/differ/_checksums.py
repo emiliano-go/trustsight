@@ -17,7 +17,10 @@ _CHECKSUM_VAR_NAMES = (
 _CHECKSUM_VARS = "|".join(_CHECKSUM_VAR_NAMES)
 
 _CHK_DECL_RE = re.compile(
-    r"^\s*(?:" + _CHECKSUM_VARS + r")\s*=\s*", re.IGNORECASE,
+    # The `_x86_64`/`_aarch64` suffix is a real makepkg array
+    # (`b2sums_x86_64`); without it an arch-keyed checksum refresh read as
+    # "unchanged" and left the http source looking unbacked (xsnow-bin).
+    r"^\s*(?:" + _CHECKSUM_VARS + r")(?:_[A-Za-z0-9_]+)?\s*=\s*", re.IGNORECASE,
 )
 
 class _ChecksumArray(NamedTuple):
@@ -184,6 +187,11 @@ def _touched_checksum_arrays(diff_text: str) -> list[_ChecksumArray]:
     return arrays
 
 _CHK_HASH_CHAR_RE = re.compile(r"[0-9A-Za-z+/=]")
+
+#: A real digest, not the letters in SKIP/NONE.  A mixed array (one hash and
+#: one SKIP) has not disabled verification for the artifact: only an array
+#: whose every entry is SKIP is "checksum disabled".
+_CHK_REAL_HASH_RE = re.compile(r"\b[0-9a-fA-F]{16,}\b")
 
 _CHK_SKIP_WORD_RE = re.compile(r"[\'\"]?(?:SKIP|NONE)[\'\"]?")
 
@@ -483,7 +491,11 @@ def detect_checksum_changes(diff_text: str) -> str:
         seen = True
         contents = _resolve_checksum_text(diff_text, array.added_text)
         if _CHK_SKIP_WORD_RE.search(contents):
-            return "changed_from_sha256_to_skip"
+            # A mixed array keeps verification for the entries it hashes;
+            # only an all-SKIP array disabled it (matedit-bin hashes the
+            # tarball and SKIPs only the icon).
+            if not _CHK_REAL_HASH_RE.search(contents):
+                return "changed_from_sha256_to_skip"
         if "(" in array.added_text and not _CHK_HASH_CHAR_RE.search(contents):
             emptied = True
         # An entry removed from an array that survives is the integrity

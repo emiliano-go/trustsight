@@ -639,6 +639,10 @@ domains = [
     "crates.io",
     "registry.npmjs.org",
     "archive.archlinux.org",
+    # Distribution package mirrors: repackaging a distro's own `.deb`/`.rpm`
+    # is a curated channel, not an unknown bucket (xsnow-bin).
+    "debian.org",
+    "ubuntu.com",
     "static.rust-lang.org",
     # The HMMER project's own distribution host (Sean Eddy's lab; hmmer.org
     # redirects to eddylab.org/software/hmmer).  Not listed here it scored

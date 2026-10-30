@@ -121,11 +121,18 @@ def typosquat_target(name: str, candidates: list[str] | None = None) -> str | No
     if len(name) < 4:
         return None
     limit = 1 if len(name) < 8 else 2
+    # Four-letter names sit one insertion away from many unrelated real
+    # packages (`cre2` -> `pcre2`).  Requiring the same length keeps the
+    # transposition/substitution typos (`crul` -> `curl`) and drops the
+    # insertion/deletion coincidences.
+    same_length_only = len(name) < 5
     if candidates is None:
         candidates = top_dependency_names()
     best: tuple[int, str] | None = None
     for candidate in candidates:
         if candidate == name or abs(len(candidate) - len(name)) > limit:
+            continue
+        if same_length_only and len(candidate) != len(name):
             continue
         distance = _damerau_levenshtein(name, candidate, limit)
         if distance <= limit and (best is None or distance < best[0]):

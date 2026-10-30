@@ -267,7 +267,8 @@ def edge_hidden_drop(ctx, add) -> None:
             continue
         if i in heredoc_body:
             continue
-        for t in _raw_targets(_strip_comment(line[1:])):
+        body = _strip_comment(line[1:])
+        for t in _raw_targets(body):
             t_clean = t.strip().strip("\"'")
             if (_is_staged(t_clean) or _HIDDEN_EXEMPT_RE.search(t_clean)
                     or _relative_target(t_clean, lines, i)):
@@ -276,6 +277,16 @@ def edge_hidden_drop(ctx, add) -> None:
                 continue
             base = os.path.basename(t_clean)
             if not _HIDDEN_NAME_RE.search(base):
+                continue
+            # An unresolved expansion can synthesize the basename: leavepad's
+            # `"$(_get_app_dir)/${pkgname%-bin}.desktop"` lost the suffix
+            # expansion and left `.desktop`, which read as a hidden drop.
+            # If the hidden name is the literal tail of a parameter expansion
+            # or the path came from an unresolved command substitution, the
+            # filename is unknown: abstain rather than guess.
+            if "${" in body and re.search(r"\}" + re.escape(base), body):
+                continue
+            if "$(" in t_clean and base.startswith("."):
                 continue
             if base in execs_by_fn.get(fn, set()):
                 continue

@@ -3,13 +3,20 @@
 from pathlib import Path
 
 from scripts import security_gates as sg
-from scripts.critical_paths import CRITICAL_PATHS
+from scripts.critical_paths import ARCHIVE_EXCLUDED_PATHS, CRITICAL_PATHS
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_every_critical_path_exists():
-    missing = sorted(path for path in CRITICAL_PATHS if not (ROOT / path).is_file())
+    # `.gitattributes` keeps some critical paths out of the release tarball,
+    # so the "file is really there" half cannot hold inside it.
+    from_archive = not (ROOT / "packaging").exists()
+    missing = sorted(
+        path for path in CRITICAL_PATHS
+        if not (ROOT / path).is_file()
+        and not (from_archive and path in ARCHIVE_EXCLUDED_PATHS)
+    )
     assert missing == [], f"critical paths missing from the checkout: {missing}"
 
 

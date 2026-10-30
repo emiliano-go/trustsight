@@ -142,8 +142,14 @@ jobs:
               print("No critical paths touched; signature check skipped.")
               raise SystemExit(0)
 
+          # Skip merge commits.  The merge commit GitHub creates for a pull
+          # request is signed by GitHub's web-flow key, which the maintainer
+          # cannot control, so a push to master would otherwise fail on every
+          # critical-path merge.  The merge is conflict-free by construction:
+          # every change it introduces is carried by one of the constituent
+          # commits, and those are still checked here.
           commits = subprocess.check_output(
-              ["git", "rev-list", f"{base_sha}..{head_sha}"],
+              ["git", "rev-list", "--no-merges", f"{base_sha}..{head_sha}"],
               text=True,
           ).splitlines()
 

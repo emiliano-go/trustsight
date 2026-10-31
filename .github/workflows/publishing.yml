@@ -183,7 +183,8 @@ jobs:
           TARGET: ${{ needs.preflight.outputs.target }}
         run: |
           set -eu
-          if gh release view "$TAG" >/dev/null 2>&1; then
+          is_draft=$(gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null || true)
+          if [ -n "$is_draft" ] && [ "$is_draft" != "true" ]; then
             echo "::error::release $TAG already exists"
             exit 1
           fi
@@ -205,9 +206,11 @@ jobs:
             echo "::error::tag $TAG points at $tag_sha, but this release targets $TARGET"
             exit 1
           fi
-          gh release create "$TAG" --draft --generate-notes --title "$TAG"
+          if [ "$is_draft" != "true" ]; then
+            gh release create "$TAG" --draft --generate-notes --title "$TAG"
+          fi
           version="${TAG#v}"
-          gh release upload "$TAG" \
+          gh release upload "$TAG" --clobber \
             "artifacts/release/trustsight-${version}.tar.gz" \
             "artifacts/release/trustsight-${version}.tar.gz.sig" \
             "artifacts/release/SHA256SUMS" \
@@ -215,9 +218,9 @@ jobs:
           mkdir /tmp/release-assets
           gh release download "$TAG" --dir /tmp/release-assets
           (cd /tmp/release-assets && sha256sum --check SHA256SUMS)
-          # The release must contain exactly the manifest, not whatever else
-          # happened to be staged in release/ or packaging/aur/.
-          expected="$(awk '{print $2}' artifacts/release/SHA256SUMS | sort)"
+          # The release must contain exactly the manifest and its entries, not
+          # whatever else happened to be staged in release/ or packaging/aur/.
+          expected="$( { awk '{print $2}' artifacts/release/SHA256SUMS; echo SHA256SUMS; } | sort)"
           actual="$(find /tmp/release-assets -maxdepth 1 -type f -printf '%f\n' | sort)"
           if [ "$expected" != "$actual" ]; then
             echo "::error::release assets do not match SHA256SUMS"

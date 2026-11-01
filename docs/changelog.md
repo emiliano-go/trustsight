@@ -6,7 +6,7 @@
 
 ### Fixed
 
-- **C011 ignores declared documentation sources and exempts one vendor host.** A URL declared as a documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt artifact and can no longer supply C011's divergent host (snishaper-bin). Anomaly's `anoma.ly` is added to `[source_host_divergence] allow` as a C011-only exemption; it is deliberately not in `[official_projects]`, so SOURCE_BUCKET and novelty still report it (hex-bin). Wyrd Company's `repo.wyrd.foo` remains reported: a new, zero-vote vendor host does not meet the official-domain trust bar (wyrwood-bin, toha-bin).
+- **C011 ignores declared documentation sources and exempts one vendor host.** A URL declared as a documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt artifact and can no longer supply C011's divergent host (snishaper-bin). Anomaly's `anoma.ly` is added to `[source_host_divergence] allow` as a C011-only exemption; it is deliberately not in `[official_projects]`, so SOURCE_BUCKET and novelty still report it (hex-bin). Wyrd Company's `repo.wyrd.foo` remains reported: a new, zero-vote vendor host does not meet the official-domain trust bar (wyrwood-bin, toha-bin). The locked benign corpus re-measures at a 74.8% zero-rate and a 29.5% ruleset trigger rate; benign p95 stays 30 against malicious p5 40.
 
 ## [0.26.0] - 2026-10-30
 

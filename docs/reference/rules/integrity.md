@@ -203,7 +203,9 @@ committed binary's presence, not the content of a file the build executes.
   `source=` URL whose registered domain is neither the registered domain of
   the recipe's `url=` scalar nor a host already in a trusted, official or
   raw-hosting bucket. Registered domains are compared (eTLD+1), so a CDN or
-  subdomain under the upstream's own domain is not a divergence.
+  subdomain under the upstream's own domain is not a divergence. A declared
+  documentation source (`LICENSE`, `README`, `COPYING`) is not the prebuilt
+  artifact and cannot supply the divergent host.
 
 A `-bin` package ships a prebuilt binary, so the PKGBUILD is not the thing
 that runs: whatever the source URL serves is. When that URL is on a host
@@ -221,8 +223,12 @@ upstream. Operators can exempt a legitimate non-forge distribution CDN or
 mirror by adding its registered domain to `[source_host_divergence] allow`
 in `config.toml`; the shipped list covers projects that publish prebuilt
 binaries from their own official site while `url=` names a source
- repository. Measured against the v1 benign corpus, C011's benign
-rate is 0.05 %.
+repository. A project-owned release host that is not in
+`[official_projects]` stays in that list: it is a C011-only exemption, so the
+unknown-host prior and novelty still report it. `[official_projects]` is
+reserved for domains that are not a realistic compromise target, because
+membership grants a globally neutral source bucket that any package could
+borrow. Measured against the v1 benign corpus, C011's benign rate is 0.05 %.
 
 ### C013: Source Fork Diverges From Declared Upstream {#c013}
 
